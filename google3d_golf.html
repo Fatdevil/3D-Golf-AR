@@ -51,7 +51,7 @@
   .wind-playslike { font-size: 11px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 6px; text-align: left; color: #cbd5e1; font-weight: 500; line-height: 1.4; }
   
   #controls {
-    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 100;
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 100;
     display: flex; gap: 8px;
   }
   #controls button {
@@ -64,11 +64,13 @@
   #controls button.active { background: rgba(74,222,128,0.3); border-color: #4ade80; color: #4ade80; }
   
   #hole-nav {
-    position: fixed; bottom: 16px; right: 16px; z-index: 100;
-    display: flex; gap: 4px;
+    position: fixed; bottom: 16px; left: 16px; right: 16px; z-index: 100;
+    display: flex; gap: 4px; overflow-x: auto; padding-bottom: 8px; flex-wrap: nowrap;
+    justify-content: flex-start; -ms-overflow-style: none; scrollbar-width: none;
   }
+  #hole-nav::-webkit-scrollbar { display: none; }
   #hole-nav button {
-    width: 36px; height: 36px; border-radius: 8px;
+    flex: 0 0 auto; width: 36px; height: 36px; border-radius: 8px;
     background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.15);
     color: rgba(255,255,255,0.6); font-size: 12px; font-weight: 600;
     font-family: inherit; cursor: pointer; transition: all 0.2s;
@@ -84,6 +86,13 @@
   #error-msg h3 { color: #ef4444; margin-bottom: 8px; }
   #error-msg p { font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }
   #error-msg code { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+  #gps-status {
+    position: fixed; top: 180px; left: 16px; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 30px; font-size: 10px; 
+    font-weight: 600; color: #eab308; display: flex; align-items: center; gap: 6px; z-index: 100;
+  }
 </style>
 </head>
 <body>
@@ -117,14 +126,18 @@
   <div class="wind-playslike" id="wind-playslike" style="display:none;"></div>
 </div>
 
-<div id="controls">
-  <button class="active" id="btn-tee">🏌️ Tee</button>
-  <button id="btn-fairway">🎯 Fairway</button>
-  <button id="btn-green">⛳ Green</button>
-  <button id="btn-flyover">✈️ Flyover</button>
+<div id="gps-status">
+   <div id="gps-status-dot" style="width:8px; height:8px; border-radius:50%; background:#eab308; animation: pulse 1s infinite;"></div>
+   <span id="gps-status-text">Söker satelliter...</span>
 </div>
 
-<div id="hole-nav" style="display:flex; gap:4px; flex-wrap:wrap; max-width: 300px; justify-content: flex-end;">
+<div id="controls">
+  <button class="active" id="btn-2d" style="background:#2563eb; border-color:#3b82f6;">📍 2D Överblick</button>
+  <button id="btn-flyover" style="background:#059669; border-color:#10b981;">🚁 3D Drönare</button>
+  <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.8); border-color:#8b5cf6;">🚶‍♂️ Flytta Mig</button>
+</div>
+
+<div id="hole-nav">
   <button class="active" data-hole="0">1</button>
   <button data-hole="1">2</button>
   <button data-hole="2">3</button>
@@ -156,7 +169,7 @@
 // Google Maps 3D Golf PoC — Valderrama Golf Club
 // ============================================================
 
-const API_KEY = "AIzaSyAX0hFTbQ5utdLQIM4gyXnqZElEMJTM3DU";
+const API_KEY = "DIN_HEMLIGA_API_NYCKEL_HÄR";
 
 // Banans data laddas ni automatiskt via data/valderrama.js (OpenStreetMap)
 // Det genererade datasetet innehåller variabeln 'HOLES' med alla 18 hål,
@@ -169,6 +182,7 @@ var currentUnit = 'metric';
 var currentWind = { speed: 0, direction: 0 };
 var userLocation = null;
 var isSimulatingGPS = false;
+var isMovingMode = false;
 var userMarker = null;
 var rangeLine = null;
 var rangeMarker = null;
@@ -278,6 +292,8 @@ function updateUserMarker() {
 
 function updateSimulatedGPS() {
     if(!isSimulatingGPS) return;
+    document.getElementById('btn-move-me').style.display = 'inline-block'; // Visa fusk-knappen!
+    
     var h = HOLES[currentHole];
     // Slumpa spelaren 30% in på hålet, snett ut i höger-ruffen för realism!
     var fakeLat = h.tee.lat + (h.mid.lat - h.tee.lat) * 0.3;
@@ -291,13 +307,35 @@ function initGPS() {
         navigator.geolocation.watchPosition(
             function(pos) {
                 var realPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                var acc = pos.coords.accuracy; // GPS precisions-radie i meter!
+                
+                var gpsEl = document.getElementById('gps-status');
+                var gpsDot = document.getElementById('gps-status-dot');
+                var gpsText = document.getElementById('gps-status-text');
+                gpsEl.style.display = 'flex';
+                
                 // Är användaren mer än 5km från spaniens solkust just nu? Dra igång simulatorn!
                 var d = haversineDistance(realPos, HOLES[0].tee);
                 if (d > 5000) {
                      isSimulatingGPS = true;
+                     gpsDot.style.background = '#8b5cf6'; // Lila för simulator
+                     gpsDot.style.animation = 'none';
+                     gpsText.style.color = '#c4b5fd';
+                     gpsText.textContent = 'Simulerar GPS (Utv)';
                      updateSimulatedGPS();
                 } else {
                      userLocation = realPos;
+                     if(acc <= 8) { // Om GPS har triangulerat dig till under 8 meters felmarginal = REDO ATT MÄTA!
+                         gpsDot.style.background = '#4ade80';
+                         gpsDot.style.animation = 'none';
+                         gpsText.style.color = '#4ade80';
+                         gpsText.textContent = 'GPS Låst ✓ (' + Math.round(acc) + 'm)';
+                     } else { // Släpar GPS:n eller studsar mellan träd? Visa att den är ostabil!
+                         gpsDot.style.background = '#eab308';
+                         gpsDot.style.animation = 'pulse 1s infinite';
+                         gpsText.style.color = '#eab308';
+                         gpsText.textContent = 'Kalibrerar... (' + Math.round(acc) + 'm)';
+                     }
                      updateUserMarker();
                 }
             },
@@ -436,47 +474,33 @@ async function addOverlays(hole) {
 }
 
 // Camera functions
-function flyToTee() {
+function flyTo2D() {
   if (!map3d) return;
   var hole = HOLES[currentHole];
-  var elev = hole.teeElev || 30;
-  map3d.center = { lat: hole.tee.lat, lng: hole.tee.lng, altitude: elev + 80 };
-  map3d.range = 300;
-  map3d.tilt = 55;
+  var elev = hole.midElev || hole.teeElev || 30;
+  // Istället för exakt 50% (mitten), sätter vi kamerans fokuspunkt på 55% mot greenen.
+  // Eftersom kameran tittar rakt neråt, flyttar detta hela golfhålet *neråt* på skärmen,
+  // vilket skapar perfekt utrymme för våra gigantiska vind/meny-fönster i överkanten!
+  var cLat = hole.tee.lat + (hole.green.lat - hole.tee.lat) * 0.55;
+  var cLng = hole.tee.lng + (hole.green.lng - hole.tee.lng) * 0.55;
+  
+  // Öka utzoomningen något för att garantera marginaler i botten/toppen.
+  var targetAlt = elev + Math.max(800, hole.distance * 3.1);
+  
+  // Panga rakt ner (Tilt 0), orientera hålet framåt på skärmen (Heading mot Green)
+  map3d.center = { lat: cLat, lng: cLng, altitude: targetAlt };
+  map3d.range = 0; // range 0 tvingar center-fokus ovanifrån
+  map3d.tilt = 0;
   map3d.heading = getHeading(hole.tee, hole.green);
+  
   updateHudDist(hole.distance);
   setActiveControl(0);
-}
-
-function flyToFairway() {
-  if (!map3d) return;
-  var hole = HOLES[currentHole];
-  var elev = hole.midElev || 30;
-  map3d.center = { lat: hole.mid.lat, lng: hole.mid.lng, altitude: elev + 60 };
-  map3d.range = 250;
-  map3d.tilt = 60;
-  map3d.heading = getHeading(hole.mid, hole.green);
-  updateHudDist(hole.distance / 2);
-  setActiveControl(1);
-}
-
-function flyToGreen() {
-  if (!map3d) return;
-  var hole = HOLES[currentHole];
-  var elev = hole.greenElev || 30;
-  map3d.center = { lat: hole.green.lat, hole: hole.green.lng, altitude: elev + 40 }; // BUGFIX hole -> lng i nästa rad? wait, let me write properly.
-  map3d.center = { lat: hole.green.lat, lng: hole.green.lng, altitude: elev + 40 };
-  map3d.range = 150;
-  map3d.tilt = 65;
-  map3d.heading = (getHeading(hole.tee, hole.green) + 180) % 360;
-  updateHudDist(0);
-  setActiveControl(2);
 }
 
 function flyoverHole() {
   if (!map3d) return;
   var hole = HOLES[currentHole];
-  setActiveControl(3);
+  setActiveControl(1); // 1 = Flyover btn index
   
   // Bygg en kurvig rutt!
   // OM SPELAREN HAR EN GPS-POSITION PÅ BANAN: Starta drönaren över personens HUVUD och flyg mot pinnen.
@@ -562,7 +586,7 @@ function selectHole(idx) {
   
   clearOverlays();
   addOverlays(hole);
-  flyToTee();
+  flyTo2D();
 }
 
 function setActiveControl(idx) {
@@ -578,10 +602,21 @@ document.getElementById('btn-unit-toggle').addEventListener('click', function() 
     selectHole(currentHole); // Rendera om skyltar med ny måttenhet
 });
 
-document.getElementById('btn-tee').addEventListener('click', flyToTee);
-document.getElementById('btn-fairway').addEventListener('click', flyToFairway);
-document.getElementById('btn-green').addEventListener('click', flyToGreen);
+document.getElementById('btn-2d').addEventListener('click', flyTo2D);
 document.getElementById('btn-flyover').addEventListener('click', flyoverHole);
+
+document.getElementById('btn-move-me').addEventListener('click', function() {
+    isMovingMode = !isMovingMode;
+    if(isMovingMode) {
+        this.style.background = '#8b5cf6';
+        this.style.color = '#fff';
+        this.textContent = '📍 Klicka på kartan...';
+    } else {
+        this.style.background = 'rgba(139,92,246,0.8)';
+        this.style.color = '#fff';
+        this.textContent = '🚶‍♂️ Flytta Mig';
+    }
+});
 
 document.querySelectorAll('#hole-nav button').forEach(function(btn) {
   btn.addEventListener('click', function() {
@@ -635,20 +670,35 @@ async function initMap() {
     map3d = new Map3DElement(config);
     document.getElementById('map-container').appendChild(map3d);
     
+    // Kickstarta mobila GPS-spårningen omedelbart
+    initGPS();
+    
     map3d.addEventListener('gmp-ready', function() {
       addOverlays(HOLES[currentHole]);
-      initGPS(); // Kickstarta mobila GPS-spårningen
     });
     
     // --- KIKARE/RANGEFINDER LOGIK (Klicka var som helst!) ---
     map3d.addEventListener('gmp-click', async (e) => {
-        if(!userLocation) {
-            alert("Vänta på GPS-signal..."); return;
-        }
         var clickPos = e.position; 
         if(!clickPos) return;
         
-        var distMeters = haversineDistance(userLocation, clickPos);
+        // SIMULATOR MODE: Flyttar du gubben?
+        if (isMovingMode) {
+            userLocation = clickPos;
+            updateUserMarker();
+            isMovingMode = false;
+            var btnMove = document.getElementById('btn-move-me');
+            btnMove.style.background = 'rgba(139,92,246,0.8)';
+            btnMove.textContent = '🚶‍♂️ Flytta Mig';
+            // Städa bort laser om det fanns en nyss
+            if(rangeLine) { rangeLine.remove(); rangeLine = null; }
+            if(rangeMarker) { rangeMarker.remove(); rangeMarker = null; }
+            return;
+        }
+        
+        // Felfritt: Om vi inte har GPS, mät från Tee-Point!
+        var originPos = userLocation ? userLocation : HOLES[currentHole].tee;
+        var distMeters = haversineDistance(originPos, clickPos);
         
         if(!rangeLine) {
             rangeLine = document.createElement('gmp-polyline-3d');
@@ -658,7 +708,7 @@ async function initMap() {
             map3d.appendChild(rangeLine);
         }
         rangeLine.coordinates = [
-            { lat: userLocation.lat, lng: userLocation.lng, altitude: 0 },
+            { lat: originPos.lat, lng: originPos.lng, altitude: 0 },
             { lat: clickPos.lat, lng: clickPos.lng, altitude: 0 }
         ];
         
