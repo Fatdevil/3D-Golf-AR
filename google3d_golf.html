@@ -74,6 +74,53 @@
     border: 1px solid rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 30px; font-size: 10px; 
     font-weight: 600; color: #eab308; display: flex; align-items: center; gap: 6px; z-index: 100;
   }
+  
+  #settings-modal {
+    position: fixed; bottom: -400px; left: 0; width: 100%; z-index: 150;
+    background: rgba(15,23,42,0.95); backdrop-filter: blur(16px);
+    border-top-left-radius: 24px; border-top-right-radius: 24px;
+    padding: 32px 24px; color: #fff; transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+  }
+  #settings-modal.open { bottom: 76px; /* Just above tab bar */ }
+  #settings-modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 16px; color: #cbd5e1; }
+  
+  .color-swatches { display: flex; gap: 16px; margin-bottom: 24px; }
+  .swatch {
+    width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
+    border: 3px solid rgba(255,255,255,0.1); transition: all 0.2s;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch.active { border-color: #fff; transform: scale(1.1); box-shadow: 0 0 15px currentColor; }
+  
+  /* BATTERY SAVER TOGGLES */
+  .settings-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .settings-row span { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.8); width: 80%; }
+  
+  .toggle-switch {
+    position: relative; display: inline-block; width: 50px; height: 28px;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255,255,255,0.2); transition: .4s; border-radius: 34px;
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px;
+    background-color: white; transition: .4s; border-radius: 50%;
+  }
+  input:checked + .slider { background-color: #4ade80; }
+  input:checked + .slider:before { transform: translateX(22px); }
+
+  /* OLED POCKET SAVER OVERLAY */
+  #oled-saver-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: #000; z-index: 9999; display: none;
+    flex-direction: column; justify-content: center; align-items: center; color: rgba(255,255,255,0.3);
+    font-size: 14px; text-transform: uppercase; letter-spacing: 2px; user-select: none;
+  }
+  #oled-saver-overlay .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -111,7 +158,41 @@
    <div class="tab active"><span class="icon">⛳</span><span class="label">CADDIE</span></div>
    <div class="tab"><span class="icon">📝</span><span class="label">SCORE</span></div>
    <div class="tab"><span class="icon">🏆</span><span class="label">LEADERBOARD</span></div>
-   <div class="tab"><span class="icon">👤</span><span class="label">PROFIL</span></div>
+   <div class="tab" id="tab-profil" onclick="toggleSettings()"><span class="icon">👤</span><span class="label">PROFIL</span></div>
+</div>
+
+<div id="settings-modal">
+  <h3>Välj Laserfärg</h3>
+  <div class="color-swatches" id="color-swatches">
+    <div class="swatch" data-color="rgba(255,255,255,0.8)" style="background: white; color: white;"></div>
+    <div class="swatch" data-color="#4ade80" style="background: #4ade80; color: #4ade80;"></div>
+    <div class="swatch" data-color="#22d3ee" style="background: #22d3ee; color: #22d3ee;"></div>
+    <div class="swatch" data-color="#ef4444" style="background: #ef4444; color: #ef4444;"></div>
+    <div class="swatch" data-color="#fbbf24" style="background: #fbbf24; color: #fbbf24;"></div>
+  </div>
+  
+  <h3 style="margin-top: 32px;">🔋 Batteri- & Sparläge</h3>
+  
+  <div class="settings-row">
+    <span>📡 GPS Sparläge<br><small style="color:rgba(255,255,255,0.4); font-size:10px; font-weight:normal;">Uppdaterar inte position lika hysteriskt</small></span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="toggle-gps-eco">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="settings-row" style="border:none;">
+    <span>🕶️ OLED Pocket Saver<br><small style="color:rgba(255,255,255,0.4); font-size:10px; font-weight:normal;">Svart skärm efter 15s inaktivitet</small></span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="toggle-oled-saver">
+      <span class="slider"></span>
+    </label>
+  </div>
+</div>
+
+<div id="oled-saver-overlay" ondblclick="wakeUpScreen()">
+    <div class="icon">🍃</div>
+    Dubbel-tappa för att väcka
 </div>
 
 <div id="error-msg">
@@ -142,6 +223,70 @@ var isMovingMode = false;
 var userMarker = null;
 var rangeLine = null;
 var rangeMarker = null;
+
+var userLaserColor = localStorage.getItem('laserColor') || 'rgba(255,255,255,0.8)';
+var isGpsEcoMode = localStorage.getItem('gpsEco') === 'true';
+var isOledSaverMode = localStorage.getItem('oledSaver') === 'true';
+var idleTimer = null;
+
+function toggleSettings() {
+    var modal = document.getElementById('settings-modal');
+    modal.classList.toggle('open');
+}
+
+// GUI Logik för inställningar
+document.getElementById('toggle-gps-eco').checked = isGpsEcoMode;
+document.getElementById('toggle-oled-saver').checked = isOledSaverMode;
+
+document.getElementById('toggle-gps-eco').addEventListener('change', (e) => {
+    isGpsEcoMode = e.target.checked;
+    localStorage.setItem('gpsEco', isGpsEcoMode);
+});
+
+document.getElementById('toggle-oled-saver').addEventListener('change', (e) => {
+    isOledSaverMode = e.target.checked;
+    localStorage.setItem('oledSaver', isOledSaverMode);
+    resetIdleTimer();
+});
+
+// OLED POCKET SAVER LOGIC
+function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    if (!isOledSaverMode) return;
+    
+    idleTimer = setTimeout(() => {
+        document.getElementById('oled-saver-overlay').style.display = 'flex';
+    }, 15000); // 15 sekunder till svart skärm!
+}
+
+function wakeUpScreen() {
+    document.getElementById('oled-saver-overlay').style.display = 'none';
+    resetIdleTimer();
+}
+
+// Lyssna på alla interaktioner för att hålla skärmen vaken
+document.addEventListener('touchstart', resetIdleTimer);
+document.addEventListener('click', resetIdleTimer);
+document.addEventListener('mousemove', resetIdleTimer);
+
+// Starta timern direkt vid laddning
+resetIdleTimer();
+
+// Initiera färg-swatches!
+document.querySelectorAll('.swatch').forEach(s => {
+    if(s.dataset.color === userLaserColor) s.classList.add('active');
+    s.addEventListener('click', (e) => {
+        document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active'));
+        e.target.classList.add('active');
+        userLaserColor = e.target.dataset.color;
+        localStorage.setItem('laserColor', userLaserColor);
+        // Tvinga omedelbar omritning av lasern
+        var backupPos = customLayupPos; 
+        clearOverlays();
+        addOverlays(HOLES[currentHole]);
+        if(backupPos) { customLayupPos = backupPos; refreshDynamicDistances(); }
+    });
+});
 
 function formatDist(meters) {
   return currentUnit === 'metric' ? Math.round(meters) : Math.round(meters * 1.09361);
@@ -181,10 +326,13 @@ function updateWindHUD() {
     var impactClass = tailWindComp > 0.5 ? "w-tail" : (tailWindComp < -0.5 ? "w-head" : "w-cross");
     
     var speedDisp = currentUnit === 'metric' ? Math.round(currentWind.speed) + " m/s" : Math.round(currentWind.speed * 2.23694) + " mph";
-    var impactArrow = tailWindComp > 0.5 ? "↑" : (tailWindComp < -0.5 ? "↓" : (crossWindComp > 0 ? "↗" : "↖"));
+    
+    // Beräkna exakt, steglös vinkel i grader (0 = Medvind direkt mot flaggan, 90 = Sidovind rakt från vänster -> höger)
+    var rotDeg = Math.round((windFlowDir - holeBearing + 360) % 360);
+    var impactArrowHTML = `<span style="display:inline-block; transform: rotate(${rotDeg}deg); transition: transform 0.5s ease-out;">↑</span>`;
     
     document.getElementById('wind-val-compact').className = "wind-main " + impactClass;
-    document.getElementById('wind-val-compact').textContent = speedDisp + " " + impactArrow;
+    document.getElementById('wind-val-compact').innerHTML = speedDisp + " " + impactArrowHTML;
     
     var windImpactMeters = -(tailWindComp * currentWind.speed * 1.5);
     var originPos = userLocation ? userLocation : hole.tee;
@@ -451,7 +599,7 @@ function refreshDynamicDistances() {
 
         // Rita ut de två linjerna (User -> Layup -> Green)
         var l1 = document.createElement('gmp-polyline-3d');
-        l1.setAttribute('stroke-color', 'rgba(255,255,255,0.8)'); // Stark vit för förstaslaget
+        l1.setAttribute('stroke-color', userLaserColor); 
         l1.setAttribute('stroke-width', '3');
         l1.setAttribute('altitude-mode', 'relative-to-ground');
         l1.coordinates = [
@@ -460,7 +608,7 @@ function refreshDynamicDistances() {
         ];
         
         var l2 = document.createElement('gmp-polyline-3d');
-        l2.setAttribute('stroke-color', 'rgba(255,255,255,0.8)'); // Samma tjocklek och färg som slag 1!
+        l2.setAttribute('stroke-color', userLaserColor); 
         l2.setAttribute('stroke-width', '3');
         l2.setAttribute('altitude-mode', 'relative-to-ground');
         l2.coordinates = [
@@ -477,7 +625,7 @@ function refreshDynamicDistances() {
         
         // Par 3: Bara en linje direkt till pinnen!
         var lGreen = document.createElement('gmp-polyline-3d');
-        lGreen.setAttribute('stroke-color', 'rgba(255,255,255,0.8)'); // Samma premium-vita färg på Par 3!
+        lGreen.setAttribute('stroke-color', userLaserColor); 
         lGreen.setAttribute('stroke-width', '3');
         lGreen.setAttribute('altitude-mode', 'relative-to-ground');
         lGreen.coordinates = [
