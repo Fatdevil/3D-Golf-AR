@@ -11,6 +11,34 @@ let activeGreenLon = 0, activeGreenLat = 0, activeHeading = 0;
 
 const btn = document.getElementById('btn-fly');
 
+// Parse URL parameters (from hole guide)
+const urlParams = new URLSearchParams(window.location.search);
+
+if (urlParams.has('tee')) {
+    const teeParts = urlParams.get('tee').split(',');
+    document.getElementById('tee-input').value = `${teeParts[0].trim()}, ${teeParts[1].trim()}`;
+}
+if (urlParams.has('green')) {
+    const greenParts = urlParams.get('green').split(',');
+    document.getElementById('green-input').value = `${greenParts[0].trim()}, ${greenParts[1].trim()}`;
+}
+if (urlParams.has('hole')) {
+    const hudName = document.getElementById('hud-hole-name');
+    if (hudName) hudName.textContent = `Hål ${urlParams.get('hole')}`;
+}
+if (urlParams.has('course')) {
+    const hudCourse = document.getElementById('hud-course-name');
+    if (hudCourse) hudCourse.textContent = decodeURIComponent(urlParams.get('course'));
+}
+if (urlParams.has('par')) {
+    const hudPar = document.getElementById('hud-par');
+    if (hudPar) hudPar.textContent = `PAR ${urlParams.get('par')}`;
+}
+if (urlParams.has('dist')) {
+    const hudDist = document.getElementById('hud-dist');
+    if (hudDist) hudDist.textContent = `${urlParams.get('dist')}m`;
+}
+
 // Starta programmet när HTML är laddat
 document.addEventListener("DOMContentLoaded", () => {
     btn.innerText = "Laddar 3D-motorn...";
@@ -93,8 +121,8 @@ function updateCourseFromUI() {
     let headingDegrees = Cesium.Math.toDegrees(activeHeading);
     if (headingDegrees < 0) headingDegrees += 360;
 
-    // Flytta kameran till Tee Box (Hänger i luften 30 meter ovanför marken för en mer uppslukande känsla)
-    const teePosition = Cesium.Cartesian3.fromDegrees(teeLon, teeLat, 30.0); 
+    // Flytta kameran till Tee Box (15m ovan mark — Norrmjöle är flack norrlandsterräng)
+    const teePosition = Cesium.Cartesian3.fromDegrees(teeLon, teeLat, 15.0); 
     
     currentViewer.camera.setView({
         destination: teePosition,

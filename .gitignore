@@ -1,31 +1,6 @@
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Node
-node_modules/
-package-lock.json
-
-# Xcode
-*.xcodeproj/
-*.xcworkspace/
-build/
-DerivedData/
-*.pbxuser
-*.mode1v3
-*.mode2v3
-*.perspectivev3
-xcuserdata/
-*.xccheckout
-*.moved-aside
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
-.vercel
+*.laz
+*.trj
+*.zip
+data/sundsvall_sls/
+data/kristianstad_sls/
+data/golfbana_sls/

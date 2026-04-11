@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>GreenRead AR — Banguide</title>
+  <meta name="description" content="GreenRead AR — 3D banguide för svenska golfbanor med LiDAR, AR och GPS-avstånd.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    :root {
+      --hud-bg: rgba(10, 20, 12, 0.88);
+      --hud-border: rgba(255,255,255,0.08);
+      --green-accent: #22c55e;
+      --green-dark: #166534;
+      --gold: #facc15;
+      --blue: #3b82f6;
+      --red-flag: #ef4444;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0a0f0c;
+      color: white;
+      overflow: hidden;
+      height: 100dvh;
+      width: 100vw;
+      position: relative;
+    }
+
+    /* ============ SATELLITE MAP CANVAS ============ */
+    #map-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    /* ============ TOP HUD ============ */
+    .top-hud {
+      position: fixed;
+      top: env(safe-area-inset-top, 12px);
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+    }
+
+    /* Distance Stack (Left) — GolfLogix style */
+    .distance-stack {
+      background: var(--hud-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--hud-border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      pointer-events: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      min-width: 100px;
+    }
+
+    .dist-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dist-icon {
+      width: 14px;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .dist-icon svg { width: 14px; height: 14px; }
+    .dist-icon.front svg { stroke: var(--red-flag); }
+    .dist-icon.middle svg { fill: var(--green-accent); }
+    .dist-icon.back svg { stroke: white; }
+
+    .dist-value {
+      font-size: 28px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+      letter-spacing: -1px;
+    }
+
+    .dist-elev {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.5);
+      margin-left: auto;
+    }
+
+    .dist-elev.up { color: #4ade80; }
+    .dist-elev.down { color: #f87171; }
+
+    /* Controls (Right) */
+    .controls-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .ctrl-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--hud-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--hud-border);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+
+    .ctrl-btn:hover { background: rgba(34, 197, 94, 0.2); border-color: var(--green-accent); }
+    .ctrl-btn.active { background: rgba(34, 197, 94, 0.3); border-color: var(--green-accent); }
+    .ctrl-btn svg { width: 20px; height: 20px; }
+
+    /* ============ LANDING ZONE BADGE ============ */
+    .lz-badge {
+      position: absolute;
+      z-index: 15;
+      background: var(--hud-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--hud-border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      text-align: center;
+      pointer-events: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      transform: translate(-50%, -130%);
+    }
+
+    .lz-badge-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .lz-badge-dist {
+      font-size: 22px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: white;
+    }
+
+    .lz-badge-elev {
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .lz-badge::after {
+      content: '';
+      position: absolute;
+      bottom: -7px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 7px 7px 0;
+      border-style: solid;
+      border-color: var(--hud-bg) transparent transparent;
+    }
+
+    /* ============ BOTTOM PANEL ============ */
+    .bottom-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    /* Tab Bar */
+    .tab-bar {
+      display: flex;
+      justify-content: center;
+      gap: 2px;
+      padding: 0 12px 8px;
+      pointer-events: auto;
+    }
+
+    .tab-btn {
+      flex: 1;
+      max-width: 100px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 10px 8px 8px;
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.4);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+      border-radius: 12px 12px 0 0;
+    }
+
+    .tab-btn svg { width: 22px; height: 22px; opacity: 0.4; transition: opacity 0.2s; }
+    .tab-btn.active { color: var(--green-accent); }
+    .tab-btn.active svg { opacity: 1; stroke: var(--green-accent); }
+    .tab-btn:hover { color: rgba(255,255,255,0.7); }
+
+    /* Hole Navigator */
+    .hole-nav {
+      background: var(--hud-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--hud-border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      pointer-events: auto;
+      padding-bottom: max(env(safe-area-inset-bottom, 12px), 16px);
+    }
+
+    .hole-nav-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .hole-nav-btn:hover { background: rgba(34, 197, 94, 0.15); border-color: var(--green-accent); }
+    .hole-nav-btn svg { width: 18px; height: 18px; }
+
+    .hole-nav-center {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 160px;
+    }
+
+    .hole-nav-number {
+      font-size: 36px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hole-nav-info {
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .hole-nav-info .par-badge {
+      color: var(--green-accent);
+      background: rgba(34, 197, 94, 0.15);
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-right: 6px;
+    }
+
+    .hole-nav-course {
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+      font-weight: 500;
+    }
+
+    /* ============ FLYOVER OVERLAY ============ */
+    .flyover-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+    }
+
+    .flyover-overlay.active { display: block; }
+
+    .flyover-overlay iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .flyover-close {
+      position: fixed;
+      top: env(safe-area-inset-top, 20px);
+      right: 20px;
+      z-index: 60;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    /* ============ HOLE SELECTOR OVERLAY ============ */
+    .hole-selector-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(20px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .hole-selector-overlay.active { display: flex; }
+
+    .hole-selector-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 24px;
+    }
+
+    .hole-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      max-width: 360px;
+      width: 100%;
+    }
+
+    .hole-grid-btn {
+      aspect-ratio: 1;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .hole-grid-btn:hover { background: rgba(34, 197, 94, 0.15); border-color: var(--green-accent); }
+    .hole-grid-btn.active { background: rgba(34, 197, 94, 0.25); border-color: var(--green-accent); color: var(--green-accent); }
+    .hole-grid-btn .hole-par { font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.35); }
+    .hole-grid-btn.has-3d::after {
+      content: '3D';
+      font-size: 7px;
+      font-weight: 800;
+      color: var(--gold);
+      letter-spacing: 0.5px;
+    }
+
+    .hole-selector-close {
+      margin-top: 24px;
+      padding: 12px 32px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 100px;
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .hole-selector-close:hover { background: rgba(255,255,255,0.15); }
+
+    /* Scorecard Row in selector */
+    .scorecard-row {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      margin-top: 16px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 12px;
+    }
+
+    .scorecard-item {
+      text-align: center;
+      font-size: 10px;
+      color: rgba(255,255,255,0.4);
+      font-weight: 600;
+    }
+
+    .scorecard-item span { display: block; font-size: 14px; color: white; font-weight: 700; margin-top: 2px; }
+
+    /* ============ STRATEGY TIP ============ */
+    .strategy-tip {
+      position: fixed;
+      bottom: 140px;
+      left: 12px;
+      right: 12px;
+      z-index: 15;
+      background: var(--hud-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--hud-border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      pointer-events: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .strategy-tip.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .strategy-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .strategy-text {
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.7);
+      line-height: 1.4;
+    }
+
+    .strategy-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ============ KEYFRAMES ============ */
+    @keyframes shimmer {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+
+    /* Tee/Green markers on canvas */
+    .map-marker {
+      position: absolute;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .marker-tee {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #60a5fa;
+      border: 2px solid white;
+      box-shadow: 0 0 12px rgba(96, 165, 250, 0.6);
+    }
+
+    .marker-tee::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 2px solid rgba(96, 165, 250, 0.3);
+      animation: pulse-ring 2s ease-out infinite;
+    }
+
+    .marker-green {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Fairway trace line */
+    .fairway-line {
+      position: absolute;
+      z-index: 5;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="map-canvas"></canvas>
+
+  <!-- ========== TOP HUD ========== -->
+  <div class="top-hud">
+    <!-- Distance Stack (Left) -->
+    <div class="distance-stack" id="dist-stack">
+      <div class="dist-row">
+        <div class="dist-icon front">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 2v10M3 5l4-3 4 3"/></svg>
+        </div>
+        <span class="dist-value" id="dist-front">379</span>
+      </div>
+      <div class="dist-row">
+        <div class="dist-icon middle">
+          <svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="4" fill="currentColor"/></svg>
+        </div>
+        <span class="dist-value" id="dist-middle">366</span>
+        <span class="dist-elev down" id="dist-elev">↓ 2m</span>
+      </div>
+      <div class="dist-row">
+        <div class="dist-icon back">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 12V2M3 9l4 3 4-3"/></svg>
+        </div>
+        <span class="dist-value" id="dist-back">355</span>
+      </div>
+    </div>
+
+    <!-- Controls (Right) -->
+    <div class="controls-stack">
+      <button class="ctrl-btn" id="btn-flyover" title="3D Flyover">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M2 12l9-9v5c7 0 10 4 11 9-2-4-5-5-11-5v5L2 12z"/>
+        </svg>
+      </button>
+      <button class="ctrl-btn" id="btn-3d-toggle" title="2D / 3D">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 3L2 8l10 5 10-5-10-5z"/><path d="M2 16l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+      </button>
+      <button class="ctrl-btn" id="btn-hole-select" title="Välj hål">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== STRATEGY TIP ========== -->
+  <div class="strategy-tip" id="strategy-tip">
+    <span class="strategy-icon">💡</span>
+    <span class="strategy-text" id="strategy-text">Driv rakt. Fairwaybunkrar 250-270m. Approach undvik vänster bunker.</span>
+    <button class="strategy-close" id="strategy-close">✕</button>
+  </div>
+
+  <!-- ========== BOTTOM PANEL ========== -->
+  <div class="bottom-panel">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="hole">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Hål</span>
+      </button>
+      <button class="tab-btn" data-tab="flyover">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12l9-9v5c7 0 10 4 11 9-2-4-5-5-11-5v5L2 12z"/></svg>
+        <span>Flyover</span>
+      </button>
+      <button class="tab-btn" data-tab="approach">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12A10 10 0 1 1 12 2"/><path d="M22 4L12 12"/><path d="M16 2l6 2-2 6"/></svg>
+        <span>Approach</span>
+      </button>
+      <button class="tab-btn" data-tab="putt">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="18" r="3"/><path d="M12 2v13"/></svg>
+        <span>Putt</span>
+      </button>
+    </div>
+
+    <div class="hole-nav">
+      <button class="hole-nav-btn" id="btn-prev-hole">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="hole-nav-center" id="hole-nav-center">
+        <span class="hole-nav-number" id="hole-number">01</span>
+        <div class="hole-nav-info">
+          <span class="par-badge" id="hole-par">PAR 4</span>
+          <span id="hole-hcp">Handicap 5</span>
+        </div>
+        <span class="hole-nav-course" id="course-name">Norrmjöle Golfklubb</span>
+      </div>
+      <button class="hole-nav-btn" id="btn-next-hole">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== FLYOVER OVERLAY ========== -->
+  <div class="flyover-overlay" id="flyover-overlay">
+    <button class="flyover-close" id="flyover-close">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <iframe id="flyover-iframe" src="about:blank"></iframe>
+  </div>
+
+  <!-- ========== HOLE SELECTOR OVERLAY ========== -->
+  <div class="hole-selector-overlay" id="hole-selector">
+    <div class="hole-selector-title">Välj hål</div>
+    <div class="hole-grid" id="hole-grid"></div>
+    <div class="scorecard-row" id="scorecard-row">
+      <div class="scorecard-item">UT<span id="sc-out">—</span></div>
+      <div class="scorecard-item">IN<span id="sc-in">—</span></div>
+      <div class="scorecard-item">TOT<span id="sc-total">—</span></div>
+    </div>
+    <button class="hole-selector-close" id="hole-selector-close">Stäng</button>
+  </div>
+
+  <script src="hole_app.js"></script>
+</body>
+</html>
