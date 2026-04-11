@@ -10,73 +10,55 @@
   body { background: #0a0a12; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
   
   #map-container { width: 100vw; height: 100vh; }
-  
-  #hud {
-    position: fixed; top: 16px; left: 16px; z-index: 100;
-    background: rgba(0,0,0,0.8); backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
-    padding: 16px 20px; color: #fff; min-width: 240px;
+    #mobile-top-bar {
+    position: fixed; top: 0; left: 0; width: 100%; z-index: 100;
+    background: linear-gradient(to bottom, rgba(10,12,16,0.95) 0%, rgba(10,12,16,0.6) 50%, transparent 100%);
+    padding: 16px 20px 32px 20px; color: #fff;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    pointer-events: none; /* Låt klick gå rakt igenom förutom på knappar */
   }
-  #hud .logo { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  #hud .logo span { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: #4ade80; }
-  #hud .badge { background: linear-gradient(135deg, #f97316, #ef4444); color: #fff; font-size: 9px; font-weight: 700;
-    padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
-  #hud .divider { border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
-  #hud .row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 12px; }
-  #hud .label { color: rgba(255,255,255,0.45); }
-  #hud .value { color: #fff; font-weight: 600; }
-  .hole-name { font-size: 16px; font-weight: 700; color: #fff; }
-  .hole-par { color: rgba(255,255,255,0.5); font-size: 12px; margin-top: 2px; }
+  .top-left { display: flex; flex-direction: column; gap: 4px; pointer-events: auto; }
+  .top-left .logo { font-size: 10px; font-weight: 700; color: #4ade80; text-shadow: 0 1px 2px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 6px; }
+  .top-left .hole-title { font-size: 18px; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+  .top-left .badgetag { background: #3b82f6; color: #fff; font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 700; cursor: pointer; }
   
-  #dist-hud {
-    position: fixed; top: 16px; right: 16px; z-index: 100;
-    background: rgba(0,0,0,0.8); backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
-    padding: 16px 24px; text-align: center;
-  }
-  .dist-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
-  .dist-unit { font-size: 14px; color: rgba(255,255,255,0.5); margin-left: 4px; }
-  
-  #wind-hud {
-    position: fixed; top: 110px; right: 16px; z-index: 100;
-    background: rgba(0,0,0,0.8); backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
-    padding: 12px 18px; text-align: center; display: none;
-    min-width: 140px;
-  }
-  .wind-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
-  .wind-value { font-size: 22px; font-weight: 700; color: #fff; }
-  .wind-impact { font-size: 12px; font-weight: 600; margin-top: 4px; }
+  .top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; pointer-events: auto; }
+  .top-right .wind-title { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+  .top-right .wind-main { font-size: 20px; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+  .top-right .wind-playslike { font-size: 12px; font-weight: 600; color: #cbd5e1; text-shadow: 0 1px 2px rgba(0,0,0,0.8); background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); margin-top: 4px; display: none; }
   .w-tail { color: #4ade80; } .w-head { color: #ef4444; } .w-cross { color: #eab308; }
-  .wind-playslike { font-size: 11px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 6px; text-align: left; color: #cbd5e1; font-weight: 500; line-height: 1.4; }
-  
-  #controls {
-    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 100;
-    display: flex; gap: 8px;
+
+  #global-tab-bar {
+    position: fixed; bottom: 0; left: 0; width: 100%; height: 76px; z-index: 200;
+    background: rgba(15,23,42,0.95); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex; justify-content: space-around; align-items: center;
+    padding-bottom: 20px; /* Env safe area approx */ padding-top: 8px;
   }
-  #controls button {
-    background: rgba(0,0,0,0.75); backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
-    color: #fff; padding: 10px 18px; font-size: 12px; font-family: inherit;
-    font-weight: 500; cursor: pointer; transition: all 0.2s;
+  .tab { display: flex; flex-direction: column; align-items: center; gap: 4px; color: rgba(255,255,255,0.4); cursor: pointer; transition: all 0.2s; }
+  .tab:hover { color: rgba(255,255,255,0.8); }
+  .tab.active { color: #4ade80; }
+  .tab .icon { font-size: 22px; margin-bottom: 2px; }
+  .tab .label { font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
+
+  #floating-actions {
+    position: fixed; bottom: 95px; right: 16px; z-index: 100;
+    display: flex; flex-direction: column; gap: 12px; pointer-events: none;
   }
-  #controls button:hover { background: rgba(74,222,128,0.2); border-color: #4ade80; }
-  #controls button.active { background: rgba(74,222,128,0.3); border-color: #4ade80; color: #4ade80; }
-  
-  #hole-nav {
-    position: fixed; bottom: 16px; left: 16px; right: 16px; z-index: 100;
-    display: flex; gap: 4px; overflow-x: auto; padding-bottom: 8px; flex-wrap: nowrap;
-    justify-content: flex-start; -ms-overflow-style: none; scrollbar-width: none;
+  #floating-actions button {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(15,23,42,0.9); backdrop-filter: blur(12px); pointer-events: auto;
+    border: 1px solid rgba(255,255,255,0.2); color: #fff; font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
   }
-  #hole-nav::-webkit-scrollbar { display: none; }
-  #hole-nav button {
-    flex: 0 0 auto; width: 36px; height: 36px; border-radius: 8px;
-    background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.15);
-    color: rgba(255,255,255,0.6); font-size: 12px; font-weight: 600;
-    font-family: inherit; cursor: pointer; transition: all 0.2s;
-  }
-  #hole-nav button:hover { border-color: #4ade80; color: #4ade80; }
-  #hole-nav button.active { background: #4ade80; color: #000; border-color: #4ade80; }
+  #floating-actions button:hover { border-color: #4ade80; }
+  #floating-actions button.active { background: rgba(74,222,128,0.2); border-color: #4ade80; color: #4ade80; }
+
+  .hole-picker { display: flex; align-items: center; gap: 12px; margin-top: 4px; pointer-events: auto; }
+  .hole-picker button { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+  .hole-picker button:hover { background: rgba(255,255,255,0.3); border-color:#4ade80; }
+  .hole-title { font-size: 24px; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.8); display: flex; align-items: baseline; gap: 8px; }
+  .par-text { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.6); }
   
   #error-msg {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 200;
@@ -85,11 +67,10 @@
   }
   #error-msg h3 { color: #ef4444; margin-bottom: 8px; }
   #error-msg p { font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }
-  #error-msg code { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 11px; }
   
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
   #gps-status {
-    position: fixed; top: 180px; left: 16px; background: rgba(0,0,0,0.8); backdrop-filter: blur(12px);
+    position: fixed; top: 85px; left: 20px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
     border: 1px solid rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 30px; font-size: 10px; 
     font-weight: 600; color: #eab308; display: flex; align-items: center; gap: 6px; z-index: 100;
   }
@@ -99,63 +80,38 @@
 
 <div id="map-container"></div>
 
-<div id="hud">
-  <div class="logo">
-    <span>⛳ GreenRead AR</span>
-    <span class="badge">Earth 3D</span>
-    <span class="badge" id="btn-unit-toggle" style="cursor:pointer; background:#3b82f6; margin-left:4px;">METRIC</span>
+<div id="mobile-top-bar">
+  <div class="top-left">
+    <div class="logo">⛳ GreenRead <span class="badgetag" id="btn-unit-toggle" style="margin-left:4px;">METRIC</span></div>
+    <div class="hole-picker">
+       <button id="prev-hole">‹</button>
+       <div class="hole-title"><span id="hud-hole-compact">Hål 1</span> <span class="par-text" id="hud-par-compact">Par 4</span></div>
+       <button id="next-hole">›</button>
+    </div>
   </div>
-  <div class="divider"></div>
-  <div class="hole-name" id="hud-hole">Hole 1</div>
-  <div class="hole-par" id="hud-par">Par 4 • 347m • SI 7</div>
-  <div class="divider"></div>
-  <div class="row"><span class="label">Bana</span><span class="value">Valderrama GC</span></div>
-  <div class="row"><span class="label">Typ</span><span class="value">Dogleg left</span></div>
-  <div class="row"><span class="label">Status</span><span class="value" id="hud-status" style="color:#4ade80">Laddar...</span></div>
-</div>
-
-<div id="dist-hud">
-  <div class="dist-label">To Pin</div>
-  <div><span class="dist-value" id="dist-val">347</span><span class="dist-unit" id="dist-unit">m</span></div>
-</div>
-
-<div id="wind-hud">
-  <div class="wind-label">💨 Live Wind</div>
-  <div class="wind-value" id="wind-val">--</div>
-  <div class="wind-impact" id="wind-impact">Calculating...</div>
-  <div class="wind-playslike" id="wind-playslike" style="display:none;"></div>
+  <div class="top-right" id="wind-hud" style="display:none;">
+    <div class="wind-title">💨 Live Wind</div>
+    <div class="wind-main" id="wind-val-compact">--</div>
+    <div class="wind-playslike" id="wind-playslike-compact">⛳ Plays Like: --</div>
+  </div>
 </div>
 
 <div id="gps-status">
    <div id="gps-status-dot" style="width:8px; height:8px; border-radius:50%; background:#eab308; animation: pulse 1s infinite;"></div>
-   <span id="gps-status-text">Söker satelliter...</span>
+   <span id="gps-status-text">Söker...</span>
 </div>
 
-<div id="controls">
-  <button class="active" id="btn-2d" style="background:#2563eb; border-color:#3b82f6;">📍 2D Överblick</button>
-  <button id="btn-flyover" style="background:#059669; border-color:#10b981;">🚁 3D Drönare</button>
-  <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.8); border-color:#8b5cf6;">🚶‍♂️ Flytta Mig</button>
+<div id="floating-actions">
+  <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.9); border-color:#8b5cf6;" title="Flytta Mig">🚶‍♂️</button>
+  <button id="btn-flyover" title="3D Drönare">🚁</button>
+  <button class="active" id="btn-2d" title="2D Vy">📍</button>
 </div>
 
-<div id="hole-nav">
-  <button class="active" data-hole="0">1</button>
-  <button data-hole="1">2</button>
-  <button data-hole="2">3</button>
-  <button data-hole="3">4</button>
-  <button data-hole="4">5</button>
-  <button data-hole="5">6</button>
-  <button data-hole="6">7</button>
-  <button data-hole="7">8</button>
-  <button data-hole="8">9</button>
-  <button data-hole="9">10</button>
-  <button data-hole="10">11</button>
-  <button data-hole="11">12</button>
-  <button data-hole="12">13</button>
-  <button data-hole="13">14</button>
-  <button data-hole="14">15</button>
-  <button data-hole="15">16</button>
-  <button data-hole="16">17</button>
-  <button data-hole="17">18</button>
+<div id="global-tab-bar">
+   <div class="tab active"><span class="icon">⛳</span><span class="label">CADDIE</span></div>
+   <div class="tab"><span class="icon">📝</span><span class="label">SCORE</span></div>
+   <div class="tab"><span class="icon">🏆</span><span class="label">LEADERBOARD</span></div>
+   <div class="tab"><span class="icon">👤</span><span class="label">PROFIL</span></div>
 </div>
 
 <div id="error-msg">
@@ -169,7 +125,7 @@
 // Google Maps 3D Golf PoC — Valderrama Golf Club
 // ============================================================
 
-const API_KEY = "DIN_HEMLIGA_API_NYCKEL_HÄR";
+const API_KEY = "AIzaSyAX0hFTbQ5utdLQIM4gyXnqZElEMJTM3DU";
 
 // Banans data laddas ni automatiskt via data/valderrama.js (OpenStreetMap)
 // Det genererade datasetet innehåller variabeln 'HOLES' med alla 18 hål,
@@ -222,61 +178,32 @@ function updateWindHUD() {
     var tailWindComp = Math.cos(diffRad);
     var crossWindComp = Math.sin(diffRad);
     
-    var impactText = "";
-    var impactClass = "w-cross";
-    
-    if (tailWindComp > 0.5) { impactText = "Rak Medvind ⬆"; impactClass = "w-tail"; }
-    else if (tailWindComp < -0.5) { impactText = "Rak Motvind ⬇"; impactClass = "w-head"; }
-    else { impactText = crossWindComp > 0 ? "Vind V → H ↗" : "Vind H → V ↖"; }
+    var impactClass = tailWindComp > 0.5 ? "w-tail" : (tailWindComp < -0.5 ? "w-head" : "w-cross");
     
     var speedDisp = currentUnit === 'metric' ? Math.round(currentWind.speed) + " m/s" : Math.round(currentWind.speed * 2.23694) + " mph";
+    var impactArrow = tailWindComp > 0.5 ? "↑" : (tailWindComp < -0.5 ? "↓" : (crossWindComp > 0 ? "↗" : "↖"));
     
-    document.getElementById('wind-val').textContent = speedDisp;
-    document.getElementById('wind-impact').textContent = impactText;
-    document.getElementById('wind-impact').className = "wind-impact " + impactClass;
+    document.getElementById('wind-val-compact').className = "wind-main " + impactClass;
+    document.getElementById('wind-val-compact').textContent = speedDisp + " " + impactArrow;
     
-    // --- PLAYS LIKE Kalkylering ---
-    // En tumregel i golf: 1 m/s motvind kräver ca 1.5m mer kraft.
-    // 1 meter upphöjd green kräver ca 1m mer kraft.
     var windImpactMeters = -(tailWindComp * currentWind.speed * 1.5);
+    var originPos = userLocation ? userLocation : hole.tee;
+    var activeLayupPt = customLayupPos ? customLayupPos : hole.mid;
+    var hasLayup = customLayupPos ? true : (hole.par > 3 && hole.mid);
     
-    function formatMod(val) {
-        if(val > 0.5) return "<span style='color:#ef4444'>+" + formatDist(val) + formatUnitStr() + "</span>"; // Rött/ökad sträcka (= svårare)
-        if(val < -0.5) return "<span style='color:#4ade80'>-" + formatDist(Math.abs(val)) + formatUnitStr() + "</span>"; // Grönt/kortare sträcka (= lättare)
-        return "<span style='color:rgba(255,255,255,0.4)'>0" + formatUnitStr() + "</span>";
+    var targetPt = (hasLayup && activeLayupPt) ? activeLayupPt : hole.green;
+    var distTarget = haversineDistance(originPos, targetPt);
+    var elevDiffTarget = 0;
+    if (targetPt === hole.green) elevDiffTarget = Math.round((hole.greenElev || 30) - (hole.teeElev || 30));
+    
+    var pl = distTarget + elevDiffTarget + windImpactMeters;
+    
+    var plBox = document.getElementById('wind-playslike-compact');
+    if (!document.getElementById('wind-hud').style.display || document.getElementById('wind-hud').style.display === 'none') {
+        document.getElementById('wind-hud').style.display = 'flex';
     }
-
-    function buildCaddieText(title, baseDist, diffElev, windImpact) {
-        var pl = baseDist + diffElev + windImpact;
-        var h = "<div style='margin-bottom:8px; font-size:11px;'>";
-        h += "<div style='color:rgba(255,255,255,0.5);font-size:9px;text-transform:uppercase;'>🎯 " + title + "</div>";
-        h += "<div style='display:flex; justify-content:space-between;'><span>Base:</span> <span>" + formatDist(baseDist) + formatUnitStr() + "</span></div>";
-        h += "<div style='display:flex; justify-content:space-between;'><span>Elev:</span> <span>" + formatMod(diffElev) + "</span></div>";
-        h += "<div style='display:flex; justify-content:space-between;'><span>Wind:</span> <span>" + formatMod(windImpact) + "</span></div>";
-        h += "<div style='display:flex; justify-content:space-between; border-top:1px dashed rgba(255,255,255,0.2); margin-top:3px; padding-top:3px; color:#fff; font-weight:700;'><span>Plays Like:</span> <span>" + formatDist(pl) + formatUnitStr() + "</span></div>";
-        h += "</div>";
-        return h;
-    }
-    
-    var distGreenM = haversineDistance(hole.tee, hole.green);
-    var diffGreenM = (hole.greenElev || 0) - (hole.teeElev || 0);
-    
-    var plHtml = buildCaddieText("GREEN", distGreenM, diffGreenM, windImpactMeters);
-
-    if (hole.par > 3 && hole.mid) {
-        var distMidM = haversineDistance(hole.tee, hole.mid);
-        var diffMidM = (hole.midElev || 0) - (hole.teeElev || 0);
-        plHtml += buildCaddieText("SVÄNG", distMidM, diffMidM, windImpactMeters);
-    }
-    
-    var plEl = document.getElementById('wind-playslike');
-    plEl.innerHTML = plHtml;
-    plEl.style.display = 'block';
-}
-
-function updateHudDist(distMeters) {
-  document.getElementById('dist-val').textContent = formatDist(distMeters);
-  document.getElementById('dist-unit').textContent = formatUnitStr();
+    plBox.style.display = 'block';
+    plBox.textContent = `⛳ PLAYS LIKE: ${formatDist(pl)}${formatUnitStr()}`;
 }
 
 function updateUserMarker() {
@@ -288,6 +215,11 @@ function updateUserMarker() {
         map3d.appendChild(userMarker);
     }
     userMarker.setAttribute('position', userLocation.lat + ',' + userLocation.lng + ',0');
+    
+    // NYCKELN TILL DYNAMISK CADDIE:
+    // Tvinga omritning av lasern och vinden för att utgå från fötterna
+    // varje gång GPS-positionen uppdateras!
+    refreshDynamicDistances();
 }
 
 function updateSimulatedGPS() {
@@ -295,10 +227,8 @@ function updateSimulatedGPS() {
     document.getElementById('btn-move-me').style.display = 'inline-block'; // Visa fusk-knappen!
     
     var h = HOLES[currentHole];
-    // Slumpa spelaren 30% in på hålet, snett ut i höger-ruffen för realism!
-    var fakeLat = h.tee.lat + (h.mid.lat - h.tee.lat) * 0.3;
-    var fakeLng = h.tee.lng + (h.mid.lng - h.tee.lng) * 0.3 + 0.0006; 
-    userLocation = { lat: fakeLat, lng: fakeLng };
+    // Simulatorns standardplats är alltid på Tee innan användaren flyttar dig!
+    userLocation = { lat: h.tee.lat, lng: h.tee.lng };
     updateUserMarker();
 }
 
@@ -376,41 +306,23 @@ function clearOverlays() {
   if (!map3d) return;
   var children = Array.from(map3d.querySelectorAll('gmp-marker-3d, gmp-polyline-3d, gmp-polygon-3d'));
   children.forEach(function(c) { c.remove(); });
+  
+  // Återställ globala markörer så de skapas om på det nya hålet
+  globalMidMarker = null;
+  globalGreenMarker = null;
+  userMarker = null;
 }
+
+// Globala systemvariabler för dynamiska markörer och laserlinjer
+var globalMidMarker = null;
+var globalGreenMarker = null;
+var activeLaserLines = []; // Håller koll på fairway->green streck
+var customLayupPos = null; // Den rörliga punkten golfaren klickat på
 
 async function addOverlays(hole) {
   if (!map3d) return;
   
   try {
-    // Fairway center line
-    var fLine = document.createElement('gmp-polyline-3d');
-    fLine.setAttribute('stroke-color', 'rgba(255,255,255,0.5)');
-    fLine.setAttribute('stroke-width', '3');
-    fLine.setAttribute('altitude-mode', 'clamp-to-ground');
-    fLine.setAttribute('draws-occluded-segments', '');
-    var fCoords = hole.fairwayLine.map(function(p) { return { lat: p.lat, lng: p.lng, altitude: 0 }; });
-    // Use 'path' (new API) with fallback to 'coordinates' (deprecated)
-    if ('path' in fLine) { fLine.path = fCoords; } else { fLine.coordinates = fCoords; }
-    map3d.appendChild(fLine);
-
-    // Distance line tee → green (elevated, green glow)
-    var dLine = document.createElement('gmp-polyline-3d');
-    dLine.setAttribute('stroke-color', '#4ade80');
-    dLine.setAttribute('stroke-width', '4');
-    dLine.setAttribute('altitude-mode', 'relative-to-ground');
-    dLine.setAttribute('draws-occluded-segments', '');
-    var dCoords = [
-      { lat: hole.tee.lat, lng: hole.tee.lng, altitude: 20 },
-      { lat: hole.green.lat, lng: hole.green.lng, altitude: 20 },
-    ];
-    if ('path' in dLine) { dLine.path = dCoords; } else { dLine.coordinates = dCoords; }
-    map3d.appendChild(dLine);
-
-    // Green polygon (BORTTAGEN för en mycket lyxigare TV-sändnings-look!)
-    // Vi lämnar 3D-gräset helt öppet så att satellit-fotografiet talar för sig själv.
-
-    // Bunker-polygoner är nu också avstängda, så fototräffsäkerheten ligger på topp
-    // och hindren visualiseras helt av Google Earths naturliga terräng och skuggor!
 
     // --- AR AVSTÅND & HÖJD SKYLTAR ---
     
@@ -435,42 +347,148 @@ async function addOverlays(hole) {
         }
     }
 
-    var distMidMeters = haversineDistance(hole.tee, hole.mid);
-    var distMid = formatDist(distMidMeters) + formatUnitStr();
-    var diffMid = Math.round(midElev - teeElev);
-    var diffStrMid = diffMid > 0 ? " (⬆ +" + formatAltStr(diffMid) + ")" : (diffMid < 0 ? " (⬇ " + formatAltStr(diffMid) + ")" : "");
-
-    var distGreenMeters = haversineDistance(hole.tee, hole.green);
-    var distGreen = formatDist(distGreenMeters) + formatUnitStr();
-    var diffGreen = Math.round(greenElev - teeElev);
-    var diffStrGreen = diffGreen > 0 ? " (⬆ +" + formatAltStr(diffGreen) + ")" : (diffGreen < 0 ? " (⬇ " + formatAltStr(diffGreen) + ")" : "");
-
-    // Dogleg Maker (Svävar 8m i luften över banan) -- ENDAST på Par 4 och 5!
-    if (hole.par > 3) {
-        var midM = document.createElement('gmp-marker-3d');
-        midM.setAttribute('position', hole.mid.lat + ',' + hole.mid.lng + ',8');
-        midM.setAttribute('altitude-mode', 'relative-to-ground');
-        midM.setAttribute('extruded', 'true');
-        midM.setAttribute('label', 'SVÄNG ' + distMid + diffStrMid);
-        map3d.appendChild(midM);
+    // Initiera globala markörer om de inte existerar
+    if (!globalMidMarker) {
+        globalMidMarker = document.createElement('gmp-marker-3d');
+        globalMidMarker.setAttribute('altitude-mode', 'relative-to-ground');
+        globalMidMarker.setAttribute('extruded', 'true');
+        map3d.appendChild(globalMidMarker);
+    }
+    if (!globalGreenMarker) {
+        globalGreenMarker = document.createElement('gmp-marker-3d');
+        globalGreenMarker.setAttribute('altitude-mode', 'relative-to-ground');
+        globalGreenMarker.setAttribute('extruded', 'true');
+        map3d.appendChild(globalGreenMarker);
     }
 
-    // Green marker
-    var pinM = document.createElement('gmp-marker-3d');
-    pinM.setAttribute('position', hole.green.lat + ',' + hole.green.lng + ',8');
-    pinM.setAttribute('altitude-mode', 'relative-to-ground');
-    pinM.setAttribute('extruded', 'true');
-    pinM.setAttribute('label', 'GREEN ' + distGreen + diffStrGreen);
-    map3d.appendChild(pinM);
+    // Placera ut dem fysiskt på banan
+    if (hole.par > 3 && hole.mid) {
+        globalMidMarker.setAttribute('position', hole.mid.lat + ',' + hole.mid.lng + ',8');
+        globalMidMarker.style.display = 'block';
+    } else {
+        globalMidMarker.style.display = 'none'; // Göm svängpunkten om Par 3
+    }
+    globalGreenMarker.setAttribute('position', hole.green.lat + ',' + hole.green.lng + ',8');
 
-    console.log('Overlays added for hole', hole.num);
-    
-    // UI HUD måste ritas om nu när vi vet exakt höjd!
-    updateWindHUD();
+    // Beräkna fysiken utifrån golfarens fötter
+    refreshDynamicDistances();
     
   } catch(e) {
     console.error('Error adding overlays:', e);
   }
+}
+
+// ====================================================================
+// DYNAMISK CADDIE MOTOR
+// Denna körs varje gång GPS uppdateras (eller när hålet byts, eller map-click)
+// ====================================================================
+function refreshDynamicDistances() {
+    if(!map3d || !HOLES[currentHole]) return;
+    
+    var hole = HOLES[currentHole];
+    // GIVETVIS utgår vi från spelaren, precis som du föreslog!
+    var originPos = userLocation ? userLocation : hole.tee;
+    // Approximation: Vi utgår från att spelaren står på fairway ungefär lika högt som tee om vi saknar live-höjd
+    var originElev = hole.teeElev || 30; 
+
+    // Rensa gamla aktiv lasrar
+    activeLaserLines.forEach(function(l) { l.remove(); });
+    activeLaserLines = [];
+
+    // --- MATEMATIK TILL GREEN ---
+    var distToGreen = haversineDistance(originPos, hole.green);
+    var diffGreen = Math.round((hole.greenElev || 30) - originElev);
+    if(globalGreenMarker) {
+        var altTextGreen = diffGreen > 0 ? `(+${formatAltStr(diffGreen)})` : (diffGreen < 0 ? `(${formatAltStr(diffGreen)})` : `(±0m)`);
+        globalGreenMarker.setAttribute('label', '⛳ ' + formatDist(distToGreen) + formatUnitStr() + ' ' + altTextGreen);
+    }
+
+    // --- MATEMATIK TILL LAYUP/MITT ---
+    // Nya UX Logiken:
+    // 1. Om man manuellt klickat, visa ALLTID layup.
+    // 2. Annars, visa bara the default "Dogleg" om vi är nära Tee (< 35m).
+    // När användaren går iväg från Tee, försvinner doglegen och det går tillbaka rak laser!
+    var distFromTee = haversineDistance(originPos, hole.tee);
+    
+    var activeLayupPt = null;
+    var hasLayup = false;
+
+    if (customLayupPos) {
+        activeLayupPt = customLayupPos;
+        hasLayup = true;
+    } else if (distFromTee < 35 && hole.par > 3 && hole.mid) {
+        activeLayupPt = hole.mid;
+        hasLayup = true;
+    }
+    if(hasLayup && activeLayupPt) {
+        var preLayupDist = haversineDistance(originPos, activeLayupPt);
+        var postLayupDist = haversineDistance(activeLayupPt, hole.green);
+        
+        var diffMid = 0;
+        var hasElevData = false;
+        
+        if (customLayupPos) {
+            if (customLayupPos.elev !== undefined) {
+                diffMid = Math.round(customLayupPos.elev - originElev);
+                hasElevData = true;
+            }
+        } else {
+            diffMid = Math.round((hole.midElev || 30) - originElev);
+            hasElevData = true;
+        }
+        
+        if(globalMidMarker) {
+            globalMidMarker.setAttribute('position', activeLayupPt.lat + ',' + activeLayupPt.lng + ',8');
+            globalMidMarker.style.display = 'block';
+            
+            var altTextMid = '';
+            if (hasElevData) {
+                altTextMid = diffMid > 0 ? `(+${formatAltStr(diffMid)})` : (diffMid < 0 ? `(${formatAltStr(diffMid)})` : `(±0m)`);
+            }
+            
+            globalMidMarker.setAttribute('label', '📍 ' + formatDist(preLayupDist) + formatUnitStr() + (altTextMid ? ' ' + altTextMid : '') + '  ➡️  ⛳ ' + formatDist(postLayupDist) + formatUnitStr());
+        }
+
+        // Rita ut de två linjerna (User -> Layup -> Green)
+        var l1 = document.createElement('gmp-polyline-3d');
+        l1.setAttribute('stroke-color', 'rgba(255,255,255,0.8)'); // Stark vit för förstaslaget
+        l1.setAttribute('stroke-width', '3');
+        l1.setAttribute('altitude-mode', 'relative-to-ground');
+        l1.coordinates = [
+            {lat: originPos.lat, lng: originPos.lng, altitude: 4},
+            {lat: activeLayupPt.lat, lng: activeLayupPt.lng, altitude: 4}
+        ];
+        
+        var l2 = document.createElement('gmp-polyline-3d');
+        l2.setAttribute('stroke-color', 'rgba(255,255,255,0.8)'); // Samma tjocklek och färg som slag 1!
+        l2.setAttribute('stroke-width', '3');
+        l2.setAttribute('altitude-mode', 'relative-to-ground');
+        l2.coordinates = [
+            {lat: activeLayupPt.lat, lng: activeLayupPt.lng, altitude: 4},
+            {lat: hole.green.lat, lng: hole.green.lng, altitude: 4}
+        ];
+
+        map3d.appendChild(l1);
+        map3d.appendChild(l2);
+        activeLaserLines.push(l1, l2);
+    } else {
+        // Dölj svängnings-markören om vi har lämnat Tee och gått över till "Rak-laser"-moden!
+        if (globalMidMarker) globalMidMarker.style.display = 'none';
+        
+        // Par 3: Bara en linje direkt till pinnen!
+        var lGreen = document.createElement('gmp-polyline-3d');
+        lGreen.setAttribute('stroke-color', 'rgba(255,255,255,0.8)'); // Samma premium-vita färg på Par 3!
+        lGreen.setAttribute('stroke-width', '3');
+        lGreen.setAttribute('altitude-mode', 'relative-to-ground');
+        lGreen.coordinates = [
+            {lat: originPos.lat, lng: originPos.lng, altitude: 4},
+            {lat: hole.green.lat, lng: hole.green.lng, altitude: 4}
+        ];
+        map3d.appendChild(lGreen);
+        activeLaserLines.push(lGreen);
+    }
+
+    updateWindHUD(); // Synkronisera Live-Wind Physics (Plays Like)
 }
 
 // Camera functions
@@ -493,7 +511,6 @@ function flyTo2D() {
   map3d.tilt = 0;
   map3d.heading = getHeading(hole.tee, hole.green);
   
-  updateHudDist(hole.distance);
   setActiveControl(0);
 }
 
@@ -502,17 +519,26 @@ function flyoverHole() {
   var hole = HOLES[currentHole];
   setActiveControl(1); // 1 = Flyover btn index
   
-  // Bygg en kurvig rutt!
-  // OM SPELAREN HAR EN GPS-POSITION PÅ BANAN: Starta drönaren över personens HUVUD och flyg mot pinnen.
+  // Sätt drönarens flygväg EXAKT efter de vita strecken på gräset
+  var originPos = userLocation ? userLocation : hole.tee;
+  
+  var distFromTeeForDrone = haversineDistance(originPos, hole.tee);
+  var activeLayupPt = null;
+  var hasLayup = false;
+
+  if (customLayupPos) {
+      activeLayupPt = customLayupPos;
+      hasLayup = true;
+  } else if (distFromTeeForDrone < 35 && hole.par > 3 && hole.mid) {
+      activeLayupPt = hole.mid;
+      hasLayup = true;
+  }
+  
   var path = [];
-  if (userLocation) {
-      path = [userLocation, hole.green];
+  if (hasLayup && activeLayupPt) {
+      path = [originPos, activeLayupPt, hole.green]; // Flyg via svängningspunkten/layup!
   } else {
-      if (hole.fairwayLine && hole.fairwayLine.length > 0) {
-          path = hole.fairwayLine.slice();
-      } else {
-          path = [hole.tee, hole.green];
-      }
+      path = [originPos, hole.green]; // Par 3: Flyg directly till pinnen!
   }
   
   var startTime = Date.now();
@@ -560,26 +586,22 @@ function flyoverHole() {
     }
     map3d.heading = map3d._lastHeading;
     
-    updateHudDist(hole.distance * (1 - Math.pow(ease, 1.5)));
-    
     if (t < 1) requestAnimationFrame(animate);
   }
   animate();
 }
 
 function selectHole(idx) {
+  if(idx < 0) idx = HOLES.length - 1;
+  if(idx >= HOLES.length) idx = 0;
+  
   currentHole = idx;
-  var hole = HOLES[idx];
-  document.getElementById('hud-hole').textContent = hole.name;
+  var hole = HOLES[currentHole];
   
-  var dStr = formatDist(hole.distance) + formatUnitStr();
-  document.getElementById('hud-par').textContent = 'Par ' + hole.par + ' • ' + dStr + ' • SI ' + hole.si;
-  updateHudDist(hole.distance);
-  updateWindHUD(); // Korrigera vind mot nya hålets vinkel
+  document.getElementById('hud-hole-compact').textContent = `Hål ${currentHole + 1}`;
+  document.getElementById('hud-par-compact').textContent = `Par ${hole.par}`;
   
-  document.querySelectorAll('#hole-nav button').forEach(function(b, i) {
-    b.classList.toggle('active', i === idx);
-  });
+  customLayupPos = null; // Nollställ spelarens manuella sikte
   
   // När hålet ändras måste simulatorn flytta spelaren!
   if(isSimulatingGPS) updateSimulatedGPS();
@@ -590,8 +612,10 @@ function selectHole(idx) {
 }
 
 function setActiveControl(idx) {
-  document.querySelectorAll('#controls button').forEach(function(b, i) {
-    b.classList.toggle('active', i === idx);
+  document.querySelectorAll('#floating-actions button').forEach(function(b, i) {
+    if(b.id !== 'btn-move-me') {
+       b.classList.toggle('active', i === idx + 1); // +1 because btn-move-me is index 0
+    }
   });
 }
 
@@ -605,23 +629,20 @@ document.getElementById('btn-unit-toggle').addEventListener('click', function() 
 document.getElementById('btn-2d').addEventListener('click', flyTo2D);
 document.getElementById('btn-flyover').addEventListener('click', flyoverHole);
 
+document.getElementById('prev-hole').addEventListener('click', function() { selectHole(currentHole - 1); });
+document.getElementById('next-hole').addEventListener('click', function() { selectHole(currentHole + 1); });
+
 document.getElementById('btn-move-me').addEventListener('click', function() {
     isMovingMode = !isMovingMode;
     if(isMovingMode) {
         this.style.background = '#8b5cf6';
         this.style.color = '#fff';
-        this.textContent = '📍 Klicka på kartan...';
+        this.title = '📍 Klicka på kartan...';
     } else {
         this.style.background = 'rgba(139,92,246,0.8)';
         this.style.color = '#fff';
-        this.textContent = '🚶‍♂️ Flytta Mig';
+        this.title = '🚶‍♂️ Flytta Mig';
     }
-});
-
-document.querySelectorAll('#hole-nav button').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    selectHole(parseInt(this.getAttribute('data-hole')));
-  });
 });
 
 // ============================================================
@@ -640,8 +661,6 @@ if (typeof HOLES !== 'undefined' && HOLES.length > 0) {
 
 async function initMap() {
   try {
-    document.getElementById('hud-status').textContent = 'Laddar API...';
-    
     // Importera nödvändiga Google Maps JS bibliotek (Alpha channel)
     const maps3dLib = await window.google.maps.importLibrary('maps3d');
     const elevLib = await window.google.maps.importLibrary('elevation');
@@ -689,43 +708,33 @@ async function initMap() {
             isMovingMode = false;
             var btnMove = document.getElementById('btn-move-me');
             btnMove.style.background = 'rgba(139,92,246,0.8)';
-            btnMove.textContent = '🚶‍♂️ Flytta Mig';
+            btnMove.title = '🚶‍♂️ Flytta Mig';
             // Städa bort laser om det fanns en nyss
             if(rangeLine) { rangeLine.remove(); rangeLine = null; }
             if(rangeMarker) { rangeMarker.remove(); rangeMarker = null; }
             return;
         }
         
-        // Felfritt: Om vi inte har GPS, mät från Tee-Point!
-        var originPos = userLocation ? userLocation : HOLES[currentHole].tee;
-        var distMeters = haversineDistance(originPos, clickPos);
+        // ========================================================
+        // TVÅ-STEGS LASER: Du sätter ut en strategisk 'Layup'-punkt!
+        // ========================================================
+        customLayupPos = clickPos;
+        refreshDynamicDistances();
         
-        if(!rangeLine) {
-            rangeLine = document.createElement('gmp-polyline-3d');
-            rangeLine.setAttribute('stroke-color', '#ef4444'); // Laserröd
-            rangeLine.setAttribute('stroke-width', '4');
-            rangeLine.setAttribute('altitude-mode', 'clamp-to-ground');
-            map3d.appendChild(rangeLine);
+        // Hämta in exakt höjdmeter för punkten du klickade på (live-kalkylering)
+        if (window.elevationService) {
+            window.elevationService.getElevationForLocations({
+                locations: [clickPos]
+            }).then(({results}) => {
+                if (results && results[0]) {
+                    customLayupPos.elev = results[0].elevation;
+                    refreshDynamicDistances(); // Rita om lasern NÄR vi fått tillbaks höjden!
+                }
+            }).catch(e => console.warn("Elevation fetch failed for custom layup:", e));
         }
-        rangeLine.coordinates = [
-            { lat: originPos.lat, lng: originPos.lng, altitude: 0 },
-            { lat: clickPos.lat, lng: clickPos.lng, altitude: 0 }
-        ];
-        
-        if(!rangeMarker) {
-            rangeMarker = document.createElement('gmp-marker-3d');
-            rangeMarker.setAttribute('altitude-mode', 'relative-to-ground');
-            rangeMarker.setAttribute('extruded', 'true');
-            map3d.appendChild(rangeMarker);
-        }
-        rangeMarker.setAttribute('position', clickPos.lat + ',' + clickPos.lng + ',8');
-        var distStr = formatDist(distMeters) + formatUnitStr();
-        rangeMarker.setAttribute('label', '📍 ' + distStr);
     });
 
     selectHole(0);
-    document.getElementById('hud-status').textContent = 'Klar ✓';
-    document.getElementById('hud-status').style.color = '#4ade80';
 
   } catch(e) {
     console.error('Init error:', e);
