@@ -1,6 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment & secrets
+.env
+.env.local
+.env.production
+
+# Vercel
+.vercel/
+
+# LiDAR / large data (processed externally)
 *.laz
+*.las
 *.trj
 *.zip
-data/sundsvall_sls/
-data/kristianstad_sls/
-data/golfbana_sls/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

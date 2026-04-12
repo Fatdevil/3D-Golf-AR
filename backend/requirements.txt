@@ -1,8 +1,0 @@
-laspy>=2.5.0
-numpy>=1.24.0
-scipy>=1.10.0
-lazrs>=0.6.0  # Krävs för att laspy ska kunna läsa komprimerade .laz-filer
-fastapi>=0.100.0
-uvicorn>=0.23.0
-requests>=2.31.0
-pyproj>=3.6.0
