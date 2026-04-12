@@ -53,6 +53,15 @@
   }
   #floating-actions button:hover { border-color: #4ade80; }
   #floating-actions button.active { background: rgba(74,222,128,0.2); border-color: #4ade80; color: #4ade80; }
+  #btn-rangefinder.active { background: rgba(239,68,68,0.3); border-color: #ef4444; color: #ef4444; }
+  #btn-rangefinder.active:hover { border-color: #f87171; }
+  #rangefinder-badge {
+    position: fixed; bottom: 95px; right: 72px; z-index: 100;
+    background: rgba(239,68,68,0.9); color: #fff; font-size: 11px; font-weight: 800;
+    padding: 4px 10px; border-radius: 20px; display: none;
+    font-family: 'Inter', sans-serif; letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(239,68,68,0.4);
+  }
 
   .hole-picker { display: flex; align-items: center; gap: 12px; margin-top: 4px; pointer-events: auto; }
   .hole-picker button { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; transition: all 0.2s; }
@@ -150,9 +159,11 @@
 
 <div id="floating-actions">
   <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.9); border-color:#8b5cf6;" title="Flytta Mig">🚶‍♂️</button>
+  <button id="btn-rangefinder" title="Rangefinder — mät avstånd">🎯</button>
   <button id="btn-flyover" title="3D Drönare">🚁</button>
   <button class="active" id="btn-2d" title="2D Vy">📍</button>
 </div>
+<div id="rangefinder-badge">🎯 MÄTLÄGE — tryck 🎯 för att rensa</div>
 
 <div id="global-tab-bar">
    <div class="tab active"><span class="icon">⛳</span><span class="label">CADDIE</span></div>
@@ -169,6 +180,15 @@
     <div class="swatch" data-color="#22d3ee" style="background: #22d3ee; color: #22d3ee;"></div>
     <div class="swatch" data-color="#ef4444" style="background: #ef4444; color: #ef4444;"></div>
     <div class="swatch" data-color="#fbbf24" style="background: #fbbf24; color: #fbbf24;"></div>
+  </div>
+  
+  <h3 style="margin-top: 24px;">🎯 Rangefinder-färg</h3>
+  <div class="color-swatches" id="rangefinder-swatches">
+    <div class="swatch rf-swatch" data-color="#ef4444" style="background: #ef4444; color: #ef4444;"></div>
+    <div class="swatch rf-swatch" data-color="rgba(255,255,255,0.8)" style="background: white; color: white;"></div>
+    <div class="swatch rf-swatch" data-color="#fbbf24" style="background: #fbbf24; color: #fbbf24;"></div>
+    <div class="swatch rf-swatch" data-color="#4ade80" style="background: #4ade80; color: #4ade80;"></div>
+    <div class="swatch rf-swatch" data-color="#a78bfa" style="background: #a78bfa; color: #a78bfa;"></div>
   </div>
   
   <h3 style="margin-top: 32px;">🔋 Batteri- & Sparläge</h3>
@@ -229,6 +249,12 @@ var isGpsEcoMode = localStorage.getItem('gpsEco') === 'true';
 var isOledSaverMode = localStorage.getItem('oledSaver') === 'true';
 var idleTimer = null;
 
+// ========== RANGEFINDER (SNIPER MODE) ==========
+var isRangefinderMode = false;
+var rangefinderPins = [];      // { marker, line } objects
+var MAX_RANGEFINDER_PINS = 5;
+var rangefinderColor = localStorage.getItem('rangefinderColor') || '#ef4444';
+
 function toggleSettings() {
     var modal = document.getElementById('settings-modal');
     modal.classList.toggle('open');
@@ -272,11 +298,11 @@ document.addEventListener('mousemove', resetIdleTimer);
 // Starta timern direkt vid laddning
 resetIdleTimer();
 
-// Initiera färg-swatches!
-document.querySelectorAll('.swatch').forEach(s => {
+// Initiera CADDIE färg-swatches
+document.querySelectorAll('#color-swatches .swatch').forEach(s => {
     if(s.dataset.color === userLaserColor) s.classList.add('active');
     s.addEventListener('click', (e) => {
-        document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active'));
+        document.querySelectorAll('#color-swatches .swatch').forEach(sw => sw.classList.remove('active'));
         e.target.classList.add('active');
         userLaserColor = e.target.dataset.color;
         localStorage.setItem('laserColor', userLaserColor);
@@ -285,6 +311,21 @@ document.querySelectorAll('.swatch').forEach(s => {
         clearOverlays();
         addOverlays(HOLES[currentHole]);
         if(backupPos) { customLayupPos = backupPos; refreshDynamicDistances(); }
+    });
+});
+
+// Initiera RANGEFINDER färg-swatches
+document.querySelectorAll('.rf-swatch').forEach(s => {
+    if(s.dataset.color === rangefinderColor) s.classList.add('active');
+    s.addEventListener('click', (e) => {
+        document.querySelectorAll('.rf-swatch').forEach(sw => sw.classList.remove('active'));
+        e.target.classList.add('active');
+        rangefinderColor = e.target.dataset.color;
+        localStorage.setItem('rangefinderColor', rangefinderColor);
+        // Uppdatera existerande rangefinder-pins live
+        rangefinderPins.forEach(p => {
+            if(p.line) p.line.setAttribute('stroke-color', rangefinderColor);
+        });
     });
 });
 
@@ -751,6 +792,12 @@ function selectHole(idx) {
   
   customLayupPos = null; // Nollställ spelarens manuella sikte
   
+  // Rensa rangefinder vid hålbyte
+  clearRangefinderPins();
+  isRangefinderMode = false;
+  document.getElementById('btn-rangefinder').classList.remove('active');
+  document.getElementById('rangefinder-badge').style.display = 'none';
+  
   // När hålet ändras måste simulatorn flytta spelaren!
   if(isSimulatingGPS) updateSimulatedGPS();
   
@@ -776,6 +823,31 @@ document.getElementById('btn-unit-toggle').addEventListener('click', function() 
 
 document.getElementById('btn-2d').addEventListener('click', flyTo2D);
 document.getElementById('btn-flyover').addEventListener('click', flyoverHole);
+
+// ========== RANGEFINDER TOGGLE ==========
+document.getElementById('btn-rangefinder').addEventListener('click', function() {
+    if (isRangefinderMode) {
+        // STÄNG AV — rensa alla pins på en gång
+        clearRangefinderPins();
+        isRangefinderMode = false;
+        this.classList.remove('active');
+        document.getElementById('rangefinder-badge').style.display = 'none';
+    } else {
+        // SLÅPÅ — rangefinder mode
+        isRangefinderMode = true;
+        this.classList.add('active');
+        document.getElementById('rangefinder-badge').style.display = 'block';
+        document.getElementById('rangefinder-badge').textContent = '🎯 MÄTLÄGE — klicka för att mäta';
+    }
+});
+
+function clearRangefinderPins() {
+    rangefinderPins.forEach(function(p) {
+        if(p.marker) p.marker.remove();
+        if(p.line) p.line.remove();
+    });
+    rangefinderPins = [];
+}
 
 document.getElementById('prev-hole').addEventListener('click', function() { selectHole(currentHole - 1); });
 document.getElementById('next-hole').addEventListener('click', function() { selectHole(currentHole + 1); });
@@ -857,9 +929,62 @@ async function initMap() {
             var btnMove = document.getElementById('btn-move-me');
             btnMove.style.background = 'rgba(139,92,246,0.8)';
             btnMove.title = '🚶‍♂️ Flytta Mig';
-            // Städa bort laser om det fanns en nyss
             if(rangeLine) { rangeLine.remove(); rangeLine = null; }
             if(rangeMarker) { rangeMarker.remove(); rangeMarker = null; }
+            return;
+        }
+        
+        // ========================================================
+        // RANGEFINDER MODE: Plotta ut laser-mätningar (max 5)
+        // ========================================================
+        if (isRangefinderMode) {
+            if (rangefinderPins.length >= MAX_RANGEFINDER_PINS) return; // Max nått
+            
+            var originPos = userLocation ? userLocation : HOLES[currentHole].tee;
+            var dist = haversineDistance(originPos, clickPos);
+            var pinIndex = rangefinderPins.length + 1;
+            
+            // Laser-linje från spelare till punkt
+            var laserLine = document.createElement('gmp-polyline-3d');
+            laserLine.setAttribute('stroke-color', rangefinderColor);
+            laserLine.setAttribute('stroke-width', '2');
+            laserLine.setAttribute('altitude-mode', 'relative-to-ground');
+            laserLine.coordinates = [
+                {lat: originPos.lat, lng: originPos.lng, altitude: 3},
+                {lat: clickPos.lat, lng: clickPos.lng, altitude: 3}
+            ];
+            map3d.appendChild(laserLine);
+            
+            // Markör med avstånd
+            var pin = document.createElement('gmp-marker-3d');
+            pin.setAttribute('altitude-mode', 'relative-to-ground');
+            pin.setAttribute('extruded', 'true');
+            pin.setAttribute('position', clickPos.lat + ',' + clickPos.lng + ',6');
+            pin.setAttribute('label', '🎯 [' + pinIndex + '] ' + formatDist(dist) + formatUnitStr());
+            map3d.appendChild(pin);
+            
+            rangefinderPins.push({ marker: pin, line: laserLine, pos: clickPos });
+            
+            // Uppdatera badge
+            document.getElementById('rangefinder-badge').textContent = 
+                '🎯 ' + rangefinderPins.length + '/' + MAX_RANGEFINDER_PINS + ' — tryck 🎯 för att rensa';
+            
+            // Hämta elevation och uppdatera label
+            if (window.elevationService) {
+                var capturedPin = pin;
+                var capturedDist = dist;
+                var capturedIdx = pinIndex;
+                window.elevationService.getElevationForLocations({
+                    locations: [clickPos]
+                }).then(({results}) => {
+                    if (results && results[0]) {
+                        var originElev = HOLES[currentHole].teeElev || 30;
+                        var diff = Math.round(results[0].elevation - originElev);
+                        var elevStr = diff > 0 ? '(+' + formatAltStr(diff) + ')' : (diff < 0 ? '(' + formatAltStr(diff) + ')' : '(±0m)');
+                        capturedPin.setAttribute('label', '🎯 [' + capturedIdx + '] ' + formatDist(capturedDist) + formatUnitStr() + ' ' + elevStr);
+                    }
+                }).catch(e => console.warn('Elevation fetch failed for rangefinder pin:', e));
+            }
             return;
         }
         
@@ -876,7 +1001,7 @@ async function initMap() {
             }).then(({results}) => {
                 if (results && results[0]) {
                     customLayupPos.elev = results[0].elevation;
-                    refreshDynamicDistances(); // Rita om lasern NÄR vi fått tillbaks höjden!
+                    refreshDynamicDistances();
                 }
             }).catch(e => console.warn("Elevation fetch failed for custom layup:", e));
         }
