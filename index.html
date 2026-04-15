@@ -130,6 +130,56 @@
     font-size: 14px; text-transform: uppercase; letter-spacing: 2px; user-select: none;
   }
   #oled-saver-overlay .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+
+  /* GIMMIE BUTTON */
+  #gimmie-btn {
+    position: fixed; top: 150px; left: 50%; transform: translateX(-50%); z-index: 500;
+    background: linear-gradient(135deg, #10b981, #059669); color: white;
+    padding: 14px 28px; border-radius: 30px; font-weight: 800; font-size: 16px;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4); border: 2px solid white;
+    cursor: pointer; display: none; text-transform: uppercase;
+    animation: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  @keyframes bounceIn { 0% { transform: translate(-50%, 50px); opacity: 0; } 100% { transform: translate(-50%, 0); opacity: 1; } }
+  #gimmie-btn span { font-size: 12px; font-weight: 500; display: block; text-transform: none; opacity: 0.9; }
+
+  /* TRACKMAN STYLE SCORECARD MODAL */
+  #scorecard-modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000;
+    background: rgba(35, 40, 45, 0.95); backdrop-filter: blur(10px);
+    display: none; flex-direction: column; color: white; overflow-x: auto; overflow-y: auto; padding: 40px;
+    font-family: 'Inter', sans-serif;
+  }
+  #scorecard-modal.open { display: flex; }
+  .sc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .sc-title { font-size: 42px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; text-align: center; width: 100%; color: rgba(255,255,255,0.9); }
+  .sc-subtitle { font-size: 16px; color: rgba(255,255,255,0.6); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .sc-close { position: absolute; top: 30px; right: 40px; background: rgba(255,255,255,0.1); border: none; width: 44px; height: 44px; border-radius: 50%; color: white; font-size: 20px; cursor: pointer; transition: 0.2s; }
+  .sc-close:hover { background: rgba(255,255,255,0.2); }
+  
+  .sc-table { width: 100%; border-collapse: collapse; font-size: 16px; background: rgba(0,0,0,0.2); min-width: 1200px; }
+  .sc-table th, .sc-table td { text-align: center; padding: 12px 6px; border-right: 1px solid rgba(255,255,255,0.05); }
+  .sc-table th { color: rgba(255,255,255,0.9); font-weight: 700; font-size: 14px; text-transform: uppercase; border-bottom: 2px solid rgba(255,255,255,0.2); }
+  .sc-table td { border-bottom: 1px solid rgba(255,255,255,0.05); color: rgba(255,255,255,0.9); }
+  .sc-table td.sc-row-header { text-align: left; padding-left: 16px; font-weight: 600; color: rgba(255,255,255,0.7); width: 180px; text-transform: capitalize; }
+  
+  .sc-table tr.sc-player-row { background: rgba(255,255,255,0.05); }
+  .sc-table tr.sc-player-row td { padding: 16px 6px; font-weight: 700; font-size: 18px; }
+  .sc-table tr.sc-player-row td.sc-row-header { color: #fff; font-size: 20px; text-transform: uppercase; border-left: 4px solid #4ade80; }
+  
+  .score-circ { display: inline-flex; align-items: center; justify-content: center; margin: 0 auto; line-height: 1; }
+  .score-birdie { border: 1px solid rgba(255,255,255,0.8); border-radius: 50%; width: 32px; height: 32px; }
+  .score-eagle { border: 3px double rgba(255,255,255,0.8); border-radius: 50%; width: 34px; height: 34px; }
+  .score-par { color: #fff; }
+  .score-bogey { border: 1px solid rgba(255,255,255,0.8); width: 32px; height: 32px; border-radius: 4px; }
+  .score-double { border: 3px double rgba(255,255,255,0.8); width: 34px; height: 34px; border-radius: 4px; }
+  
+  .sc-legend { display: flex; justify-content: center; gap: 30px; margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.5); }
+  .sc-legend div { display: flex; align-items: center; gap: 8px; }
+  .sc-legend .shape { width: 14px; height: 14px; border: 1px solid rgba(255,255,255,0.5); }
+  .sc-legend .shape-circ { border-radius: 50%; }
+  .sc-legend .shape-dbl { border: 3px double rgba(255,255,255,0.5); }
+
 </style>
 </head>
 <body>
@@ -141,7 +191,7 @@
     <div class="logo">⛳ GreenRead <span class="badgetag" id="btn-unit-toggle" style="margin-left:4px;">METRIC</span></div>
     <div class="hole-picker">
        <button id="prev-hole">‹</button>
-       <div class="hole-title"><span id="hud-hole-compact">Hål 1</span> <span class="par-text" id="hud-par-compact">Par 4</span></div>
+       <div class="hole-title"><span id="hud-hole-compact">Hål 1</span> <span class="par-text" id="hud-par-compact">Par 4 | Slag 1</span></div>
        <button id="next-hole">›</button>
     </div>
   </div>
@@ -157,6 +207,11 @@
    <span id="gps-status-text">Söker...</span>
 </div>
 
+<div id="lm-status" style="position:fixed; top: 120px; left: 16px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; z-index: 1000; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1);">
+   <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+   <span id="lm-status-text" style="text-transform: uppercase;">LM Frånkopplad</span>
+</div>
+
 <div id="floating-actions">
   <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.9); border-color:#8b5cf6;" title="Flytta Mig">🚶‍♂️</button>
   <button id="btn-shot" title="AUTO SHOT" style="background:rgba(234,179,8,0.9); border-color:#eab308;">🏌️</button>
@@ -169,10 +224,35 @@
 <div id="rangefinder-badge">🎯 MÄTLÄGE — tryck 🎯 för att rensa</div>
 
 <div id="global-tab-bar">
-   <div class="tab active"><span class="icon">⛳</span><span class="label">CADDIE</span></div>
-   <div class="tab"><span class="icon">📝</span><span class="label">SCORE</span></div>
+   <div class="tab active" id="tab-caddie" onclick="document.getElementById('scorecard-modal').classList.remove('open');"><span class="icon">⛳</span><span class="label">CADDIE</span></div>
+   <div class="tab" id="tab-score" onclick="openScorecard()"><span class="icon">📝</span><span class="label">SCORE</span></div>
    <div class="tab"><span class="icon">🏆</span><span class="label">LEADERBOARD</span></div>
    <div class="tab" id="tab-profil" onclick="toggleSettings()"><span class="icon">👤</span><span class="label">PROFIL</span></div>
+</div>
+
+<!-- Gimmie Button Overlay -->
+<button id="gimmie-btn" onclick="takeGimmie()">Hålat! (Gimmie)<span>Lägger till 1 putt</span></button>
+
+<button id="unplayable-btn" onclick="takeUnplayableLie()" style="display:none; position: fixed; top: 180px; left: 50%; transform: translateX(-50%); z-index: 10000; background: rgba(239, 68, 68, 0.9); color: white; border: 2px solid #f87171; padding: 12px 24px; border-radius: 12px; font-weight: 800; text-transform: uppercase;">Ospelbart (Ta Dropp)</button>
+
+<!-- Scorecard Modal -->
+<div id="scorecard-modal">
+  <button class="sc-close" onclick="document.getElementById('scorecard-modal').classList.remove('open')">✕</button>
+  <div class="sc-header">
+    <div class="sc-title">PLAYER SCORECARD</div>
+  </div>
+  
+  <div class="sc-subtitle" id="sc-course-name">CLUB DE GOLF VALDERRAMA</div>
+  
+  <div id="sc-tables-container" style="overflow-x: auto; padding-bottom: 20px;"></div>
+  
+  <div class="sc-legend">
+    <div><div class="shape shape-circ shape-dbl"></div> Eagle or better</div>
+    <div><div class="shape shape-circ"></div> Birdie</div>
+    <div>Par</div>
+    <div><div class="shape"></div> Bogey</div>
+    <div><div class="shape shape-dbl"></div> Double Bogey or worse</div>
+  </div>
 </div>
 
 <div id="simulator-panel" style="display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:400; background:rgba(15,23,42,0.95); padding:16px; border-radius:12px; border:1px solid #4ade80; color:#fff; width:300px; backdrop-filter:blur(10px); pointer-events:auto;">
@@ -295,9 +375,17 @@ var userMarker = null;
 var rangeLine = null;
 var rangeMarker = null;
 
+// GAMEPLAY STATE
+var currentStroke = 1;
+var scorecard = new Array(18).fill(null);
+
+var isWaterDropMode = false;
+var waterDropLine = null;
+
 var userLaserColor = localStorage.getItem('laserColor') || 'rgba(255,255,255,0.8)';
 var isGpsEcoMode = localStorage.getItem('gpsEco') === 'true';
 var isOledSaverMode = localStorage.getItem('oledSaver') === 'true';
+var puttingMode = localStorage.getItem('puttingMode') || 'tour_pro';
 var idleTimer = null;
 
 // ========== RANGEFINDER (SNIPER MODE) ==========
@@ -551,6 +639,11 @@ function clearOverlays() {
   globalMidMarker = null;
   globalGreenMarker = null;
   userMarker = null;
+  
+  if (window.gimmeZoneMarker) {
+      window.gimmeZoneMarker.remove();
+      window.gimmeZoneMarker = null;
+  }
 }
 
 // Globala systemvariabler för dynamiska markörer och laserlinjer
@@ -600,6 +693,21 @@ async function addOverlays(hole) {
         globalGreenMarker.setAttribute('extruded', 'true');
         map3d.appendChild(globalGreenMarker);
     }
+    
+    // GIMME ZONE (2.4m Cirle)
+    if (!window.gimmeZoneMarker) {
+        window.gimmeZoneMarker = document.createElement('gmp-polygon-3d');
+        window.gimmeZoneMarker.setAttribute('fill-color', 'rgba(255,255,255,0.05)');
+        window.gimmeZoneMarker.setAttribute('stroke-color', 'rgba(255,255,255,0.8)');
+        window.gimmeZoneMarker.setAttribute('stroke-width', '2');
+        window.gimmeZoneMarker.setAttribute('altitude-mode', 'clamp-to-ground');
+        map3d.appendChild(window.gimmeZoneMarker);
+    }
+    var circleCoords = [];
+    for (var i = 0; i < 36; i++) {
+        circleCoords.push(projectOffset(hole.green, 2.4, i * 10)); // 2.4m radie
+    }
+    window.gimmeZoneMarker.outerCoordinates = circleCoords;
 
     // Placera ut dem fysiskt på banan
     if (hole.par > 3 && hole.mid) {
@@ -857,6 +965,97 @@ function projectOffset(fromPos, distance, headingDeg) {
     return { lat: lat2 * 180 / Math.PI, lng: lng2 * 180 / Math.PI };
 }
 
+// ====================================================================
+// COLLISION DETECTION (Ray-Casting Point in Polygon)
+// ====================================================================
+function isPointInPolygon(point, vs) {
+    var x = point.lng, y = point.lat;
+    var inside = false;
+    for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+        var xi = vs[i].lng, yi = vs[i].lat;
+        var xj = vs[j].lng, yj = vs[j].lat;
+        var intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+function getTerrainAt(lat, lng) {
+    var pt = { lat: lat, lng: lng };
+    var hole = HOLES[currentHole];
+    
+    // Check custom drawn hazards first (Overlay Editor)
+    if (hole.hazards) {
+        for (var i = hole.hazards.length - 1; i >= 0; i--) {
+            var hz = hole.hazards[i];
+            if (isPointInPolygon(pt, hz.path)) {
+                return { type: hz.type, height: hz.height || null };
+            }
+        }
+    }
+    
+    // Check original bunkers (legacy valderrama.js format)
+    if (hole.bunkers) {
+        for (var i = 0; i < hole.bunkers.length; i++) {
+            if (isPointInPolygon(pt, hole.bunkers[i])) {
+                return { type: 'SAND', height: null };
+            }
+        }
+    }
+    
+    return { type: 'FAIRWAY', height: null }; // Default back-stop
+}
+
+// ====================================================================
+// SKYTRAK / LAUNCH MONITOR BRIDGE (WebSocket)
+// ====================================================================
+function initLaunchMonitorBridge() {
+    var ws = new WebSocket('ws://localhost:8081');
+    var dot = document.getElementById('lm-status-dot');
+    var txt = document.getElementById('lm-status-text');
+
+    ws.onopen = function() {
+        console.log("[📡 GSPro Bridge] Ansluten till lokala bryggan.");
+        txt.textContent = "LM Brygga Redo";
+        dot.style.background = "#eab308";
+    };
+
+    ws.onmessage = function(event) {
+        try {
+            var msg = JSON.parse(event.data);
+            
+            if (msg.type === 'status') {
+                txt.textContent = msg.data.message;
+                dot.style.background = msg.data.color;
+            } 
+            else if (msg.type === 'shot') {
+                console.log("[🏌️‍♂️ LIVE SHOT MOTTAGET]", msg.data);
+                
+                // Mappa inkommande data och blinka UI
+                dot.style.background = "#38bdf8";
+                setTimeout(() => dot.style.background = "#4ade80", 500);
+
+                // Dölj menyn automatiskt om den är öppen
+                document.getElementById('simulator-panel').style.display = 'none';
+                
+                // Aktivera!
+                animatePhysicsShot(msg.data);
+            }
+        } catch(e) {
+            console.error("Fel vid tolkning av WS:", e);
+        }
+    };
+
+    ws.onclose = function() {
+        console.warn("[🔴 GSPro Bridge] Tappade kontakt med bryggan, försöker igen...");
+        txt.textContent = "LM Brygga Nere";
+        dot.style.background = "#ef4444";
+        setTimeout(initLaunchMonitorBridge, 5000);
+    };
+}
+// Starta anslutning
+initLaunchMonitorBridge();
+
 function triggerPhysicsShot() {
     if (!window.GolfPhysics) return alert("Fysikmotorn laddades inte.");
     var speed = parseFloat(document.getElementById('sim-speed').value);
@@ -881,15 +1080,35 @@ function animatePhysicsShot(launchData) {
     
     var hole = HOLES[currentHole];
     var originPos = userLocation ? userLocation : hole.tee;
+    var previousUserLocation = Object.assign({}, originPos); // Spara vart vi slog ifrån!
+    
     // Använd caddie-laserns slutpunkt bara för riktning/heading!
     var targetPosForHeading = customLayupPos || hole.green; 
     
     var baseHeading = getHeading(originPos, targetPosForHeading);
     
+    // Göm caddielinjer och markörer under slaget
+    activeLaserLines.forEach(function(l) { l.remove(); });
+    activeLaserLines = [];
+    if (globalMidMarker) globalMidMarker.style.display = 'none';
+    if (globalGreenMarker) globalGreenMarker.style.display = 'none';
+    
     console.log("SIMULATING PHYSICS... ⛳ SPEED: " + launchData.ballSpeedMph + " MPH");
     
-    // Beräkna fysiken
-    var result = window.GolfPhysics.simulateFlight(launchData);
+    var envCtx = {
+        originPos: originPos,
+        baseHeading: baseHeading,
+        checkCollisionCallback: function(localX, localY, currentZ) {
+            var dist = Math.sqrt(localX*localX + localY*localY);
+            var localAngle = Math.atan2(localX, localY) * 180 / Math.PI;
+            var globalHead = baseHeading + localAngle;
+            var latLng = projectOffset(originPos, dist, globalHead);
+            return getTerrainAt(latLng.lat, latLng.lng);
+        }
+    };
+    
+    // Beräkna fysiken synkront (inkluderar skogskrockar och bouncetyp via callback!)
+    var result = window.GolfPhysics.simulateFlight(launchData, envCtx);
     if (!result || !result.path || result.path.length < 2) return alert("Fysikberäkning misslyckades.");
     
     var localPath = result.path;
@@ -1022,12 +1241,79 @@ function animatePhysicsShot(launchData) {
             console.log("⛳ SLAG AVSLUTAT ⛳");
             console.log("CARRY: " + Math.round(metrics.carryMeters) + " m");
             console.log("TOTAL: " + Math.round(metrics.totalMeters) + " m");
-            console.log("APEX : " + Math.round(metrics.apexMeters) + " m");
-            console.log("BOUNCES: " + metrics.bounceCount);
+            
+            var oldPos = previousUserLocation;
+            var newPos = { lat: currentPoint.lat, lng: currentPoint.lng };
+            var distToGreenFromLanding = haversineDistance(newPos, hole.green);
+            
+            // ==========================================
+            // OFFICIELLA GOLF-REGLER & STRAFF
+            // ==========================================
+            if (metrics.finalTerrainType === 'WATER') {
+                currentStroke++; // Spelat slag
+                setTimeout(() => alert("🔴 VATTENHINDER! (1 Pliktslag).\\nBack-on-the-line dropp: Klicka på den markerade blåa linjen bakom vattenhindret för att droppa!"), 200);
+                startWaterDropMode(hole.green, newPos);
+                document.getElementById('hud-par-compact').textContent = `Par ${hole.par} | Slag ${currentStroke} (Dropper)`;
+                return; 
                 
-            setTimeout(function(){
-                refreshDynamicDistances();
-            }, 3500);
+            } else if (metrics.finalTerrainType === 'OB') {
+                currentStroke += 2; // +1 för slaget, +1 för straff
+                userLocation = oldPos; // Stroke & Distance
+                updateUserMarker();
+                setTimeout(() => alert("🔴 OUT OF BOUNDS!\\nRegelverk (Stroke & Distance): 1 pliktslag.\\nDu har flyttats tillbaka och spelar från föregående plats."), 200);
+                
+            } else {
+                // Vanligt tryggt slag!
+                userLocation = newPos;
+                updateUserMarker();
+                currentStroke++;
+                
+                // GIMME ZONE AUTOMATIK (Tapping in) - Oberoende av Green om vi nästan är i hålet!
+                if (distToGreenFromLanding <= 2.4) {
+                    setTimeout(() => alert(`🎯 Gimme! Bollen rullade till ${distToGreenFromLanding.toFixed(1)}m. Du är klar!`), 100);
+                    takeGimmie();
+                    return;
+                }
+                
+                // TOUR PRO PUTTING-KONTROLL (Kräver faktiskt att man är PÅ greenen)
+                if (puttingMode === 'tour_pro' && metrics.finalTerrainType === 'GREEN') {
+                    executePuttingAlgorithm(distToGreenFromLanding);
+                    return; // Gå inte in i vanligt slagläge (Vänta på nästa hål)
+                }
+            }
+            
+            // Kolla MAX SCORE (Par x 2)
+            if (currentStroke >= hole.par * 2) {
+                setTimeout(() => {
+                    alert(`🚨 MAX SCORE UPPNÅDD (Plocka upp bollen!).\\nDu fick tyvärr ${hole.par * 2} slag på deta hål.`);
+                    scorecard[currentHole] = hole.par * 2;
+                    if (currentHole < HOLES.length - 1) {
+                        currentHole++;
+                        selectHole(currentHole);
+                    } else {
+                        alert("Rundan är färdigspelad! Öppna markör panelen för att granska scoren.");
+                        renderScorecard();
+                        document.getElementById('scorecard-modal').classList.add('open');
+                    }
+                }, 500);
+                return;
+            }
+            
+            // Uppdatera GUI för vanliga slag
+            document.getElementById('hud-par-compact').textContent = `Par ${hole.par} | Slag ${currentStroke}`;
+            
+            // Kolla om vi är tillräckligt nära för Manuell/Tap-in Gimmie (max 15m)
+            if (distToGreenFromLanding <= 15 && distToGreenFromLanding > 2.4) {
+                var btn = document.getElementById('gimmie-btn');
+                btn.style.display = 'block';
+                btn.innerHTML = `Ligger ${Math.round(distToGreenFromLanding)}m från flaggan<br/><span style="font-weight:800; font-size:14px;">TA GIMMIE (1 Putt)</span>`;
+                // Uppdatera gimmie-btn onclick till vår nya globala funktion
+                btn.onclick = takeGimmie;
+            } else {
+                document.getElementById('gimmie-btn').style.display = 'none';
+            }
+            
+            refreshDynamicDistances();
         }
     }
     requestAnimationFrame(anim);
@@ -1162,6 +1448,63 @@ function animateShot() {
     anim();
 }
 
+// ==========================================
+// TOUR PRO PUTTING ALGORITM (PGA Statistik)
+// ==========================================
+function executePuttingAlgorithm(distMeters) {
+    // Visa snygg HUD notis istället för alert
+    document.getElementById('hud-status').textContent = 'TOUR PRO PUTTING...';
+    document.getElementById('hud-status').style.color = '#fcd34d';
+    
+    setTimeout(() => {
+        var roll = Math.random(); // 0.0 till 1.0 (Virtuella Tärningen!)
+        var putts = 2; // Standard är alltid 2 puttar på tour
+        
+        if (distMeters <= 1.0) {
+            putts = 1;
+        } else if (distMeters <= 1.5) {
+            if (roll < 0.85) putts = 1;
+        } else if (distMeters <= 2.5) {
+            if (roll < 0.60) putts = 1;
+        } else if (distMeters <= 4.0) {
+            if (roll < 0.35) putts = 1;
+        } else if (distMeters <= 8.0) {
+            if (roll < 0.15) putts = 1;
+            else if (roll > 0.99) putts = 3; // 1% risk för 3-putt pga stress!
+        } else if (distMeters > 12.0) {
+            if (roll < 0.02) putts = 1; // Mirakel-putt!
+            else if (roll > 0.80) putts = 3; // 20% risk för 3-putt på extrema avstånd
+        } else {
+            // 8 till 12 meter snitt
+            if (roll < 0.08) putts = 1;
+            else if (roll > 0.90) putts = 3; // 10% risk för 3-putt
+        }
+        
+        var message = `Slutade ${distMeters.toFixed(1)}m från koppen.\\n`;
+        if (putts === 1) message += "MÄSTERLIG 1-PUTT! 🔥";
+        else if (putts === 2) message += "Stabil 2-putt för säkert spel.";
+        else message += "Katastrof... En 3-putt 🤬";
+        
+        alert(`🎯 TOUR PRO RESULTAT:\\n` + message);
+        
+        currentStroke += (putts - 1); // Vi lägger bara till putt-slagen (1 slag är redan räknat som Approach)
+        takeGimmie(); // Återkallar takeGimmie för att forsla fram hålet (den adderar +1 internt för sista putten)
+        
+    }, 1500); // 1.5 sekunder spänning!
+}
+
+// ==========================================
+// UNPLAYABLE LIE
+// ==========================================
+function takeUnplayableLie() {
+    var hole = HOLES[currentHole];
+    currentStroke++; // +1 Penalty
+    setTimeout(() => alert("🔴 OSPELBART (1 Pliktslag).\\nKlicka på den markerade dropp-linjen (eller vart som helst bakåt i banans riktning) för att flytta bollen."), 100);
+    startWaterDropMode(hole.green, userLocation);
+    document.getElementById('hud-par-compact').textContent = `Par ${hole.par} | Slag ${currentStroke} (Dropper)`;
+    document.getElementById('unplayable-btn').style.display = 'none';
+}
+
 function selectHole(idx) {
   if(idx < 0) idx = HOLES.length - 1;
   if(idx >= HOLES.length) idx = 0;
@@ -1169,8 +1512,13 @@ function selectHole(idx) {
   currentHole = idx;
   var hole = HOLES[currentHole];
   
+  // RESET STATE TILL TEE
+  currentStroke = 1;
+  userLocation = null;
+  document.getElementById('gimmie-btn').style.display = 'none';
+  
   document.getElementById('hud-hole-compact').textContent = `Hål ${currentHole + 1}`;
-  document.getElementById('hud-par-compact').textContent = `Par ${hole.par}`;
+  document.getElementById('hud-par-compact').textContent = `Par ${hole.par} | Slag 1`;
   
   customLayupPos = null; // Nollställ spelarens manuella sikte
   
@@ -1186,6 +1534,102 @@ function selectHole(idx) {
   clearOverlays();
   addOverlays(hole);
   flyTo2D();
+}
+
+// ====================================================================
+// SCORECARD & GIMMIE SYSTEM
+// ====================================================================
+function takeGimmie() {
+    // currentStroke representerar slaget vi *skulle* ha slagit.
+    // Eftersom detta är en "1 Putt Gimmie", så blir totalen exakt currentStroke.
+    scorecard[currentHole] = currentStroke;
+    
+    // Gå till nästa hål!
+    selectHole(currentHole + 1);
+}
+
+function openScorecard() {
+    document.getElementById('scorecard-modal').classList.add('open');
+    renderScorecard();
+}
+
+function renderScorecard() {
+    var container = document.getElementById('sc-tables-container');
+    
+    var rowHtml = `<table class="sc-table">
+        <tr>
+            <th class="sc-row-header" style="width: 15%">Hole</th>`;
+    // Headers 1-9, OUT, 10-18, IN, Total, Net
+    for (let i = 1; i <= 9; i++) rowHtml += `<th>${i}</th>`;
+    rowHtml += `<th>OUT</th>`;
+    for (let i = 10; i <= 18; i++) rowHtml += `<th>${i}</th>`;
+    rowHtml += `<th>IN</th><th>Total</th><th>Net</th></tr>`;
+    
+    // Par Row
+    rowHtml += `<tr><td class="sc-row-header">Par</td>`;
+    let outPar = 0, inPar = 0;
+    for (let i = 0; i < 9; i++) {
+        outPar += HOLES[i].par;
+        rowHtml += `<td>${HOLES[i].par}</td>`;
+    }
+    rowHtml += `<td>${outPar}</td>`;
+    for (let i = 9; i < 18; i++) {
+        inPar += HOLES[i].par;
+        rowHtml += `<td>${HOLES[i].par}</td>`;
+    }
+    rowHtml += `<td>${inPar}</td><td>${outPar + inPar}</td><td></td></tr>`;
+    
+    // Player Row (JOE)
+    rowHtml += `<tr class="sc-player-row">
+        <td class="sc-row-header">
+            DITT NAMN<br><span style="font-size:10px; font-weight:400; color:rgba(255,255,255,0.5);">Hcp 0, Valderrama</span>
+        </td>`;
+        
+    let outScore = 0, inScore = 0;
+    let hasOut = false, hasIn = false;
+    
+    for (let i = 0; i < 9; i++) {
+        let diff = scorecard[i] !== null ? (scorecard[i] - HOLES[i].par) : 0;
+        let val = scorecard[i] !== null ? scorecard[i] : '';
+        if (scorecard[i] !== null) { outScore += scorecard[i]; hasOut = true; }
+        
+        let cClass = "score-par";
+        if (val !== '') {
+            if (diff <= -2) cClass = "score-eagle";
+            else if (diff === -1) cClass = "score-birdie";
+            else if (diff === 1) cClass = "score-bogey";
+            else if (diff >= 2) cClass = "score-double";
+        }
+        rowHtml += `<td><span class="${val !== '' ? cClass + ' score-circ' : ''}">${val}</span></td>`;
+    }
+    rowHtml += `<td>${hasOut ? outScore : ''}</td>`;
+    
+    for (let i = 9; i < 18; i++) {
+        let diff = scorecard[i] !== null ? (scorecard[i] - HOLES[i].par) : 0;
+        let val = scorecard[i] !== null ? scorecard[i] : '';
+        if (scorecard[i] !== null) { inScore += scorecard[i]; hasIn = true; }
+        
+        let cClass = "score-par";
+        if (val !== '') {
+            if (diff <= -2) cClass = "score-eagle";
+            else if (diff === -1) cClass = "score-birdie";
+            else if (diff === 1) cClass = "score-bogey";
+            else if (diff >= 2) cClass = "score-double";
+        }
+        rowHtml += `<td><span class="${val !== '' ? cClass + ' score-circ' : ''}">${val}</span></td>`;
+    }
+    
+    let isFinished = hasOut || hasIn;
+    let totScore = outScore + inScore;
+    let net = totScore > 0 ? (totScore - (outPar + inPar)) : 0;
+    let netStr = totScore > 0 ? (net > 0 ? `+${net}` : (net === 0 ? "E" : net)) : "";
+    
+    rowHtml += `<td>${hasIn ? inScore : ''}</td>`;
+    rowHtml += `<td>${isFinished ? totScore : ''}</td>`;
+    rowHtml += `<td style="color:#4ade80;">${isFinished ? totScore + ' (' + netStr + ')' : ''}</td></tr>`;
+    
+    rowHtml += `</table>`;
+    container.innerHTML = rowHtml;
 }
 
 function setActiveControl(idx) {
@@ -1262,6 +1706,88 @@ if (typeof HOLES !== 'undefined' && HOLES.length > 0) {
     fetchLiveWeather(HOLES[0].tee.lat, HOLES[0].tee.lng);
 }
 
+function openScorecard() {
+    renderScorecard();
+    document.getElementById('scorecard-modal').classList.add('open');
+}
+
+function renderScorecard() {
+    var outPar = 0; var outScore = 0;
+    var inPar = 0; var inScore = 0;
+    
+    var html = '<table class="sc-table">';
+    html += '<tr><th>HOLE</th>';
+    for(var i=1; i<=9; i++) html += '<th>'+i+'</th>';
+    html += '<th>OUT</th></tr>';
+    
+    html += '<tr><td class="sc-row-header">PAR</td>';
+    for(var i=0; i<9; i++) {
+        var hPar = HOLES[i] ? HOLES[i].par : 4;
+        outPar += hPar;
+        html += '<td>'+hPar+'</td>';
+    }
+    html += '<td>'+outPar+'</td></tr>';
+    
+    html += '<tr class="sc-player-row"><td class="sc-row-header">GOLFER</td>';
+    for(var i=0; i<9; i++) {
+        var hPar = HOLES[i] ? HOLES[i].par : 4;
+        var s = scorecard[i];
+        if (s !== null) {
+            outScore += s;
+            html += '<td><div class="score-circ '+(s<hPar-1?'score-eagle':s<hPar?'score-birdie':s>hPar+1?'score-double':s>hPar?'score-bogey':'score-par')+'">'+s+'</div></td>';
+        } else {
+            html += '<td>-</td>';
+        }
+    }
+    html += '<td>'+outScore+'</td></tr>';
+    
+    if (HOLES.length > 9) {
+        html += '<tr style="height:20px;"></tr>';
+        html += '<tr><th>HOLE</th>';
+        for(var i=10; i<=18; i++) html += '<th>'+i+'</th>';
+        html += '<th>IN</th><th>TOT</th></tr>';
+        
+        html += '<tr><td class="sc-row-header">PAR</td>';
+        for(var i=9; i<18; i++) {
+            var hPar = HOLES[i] ? HOLES[i].par : 4;
+            inPar += hPar;
+            html += '<td>'+hPar+'</td>';
+        }
+        html += '<td>'+inPar+'</td><td>'+(outPar+inPar)+'</td></tr>';
+        
+        html += '<tr class="sc-player-row"><td class="sc-row-header">GOLFER</td>';
+        for(var i=9; i<18; i++) {
+            var hPar = HOLES[i] ? HOLES[i].par : 4;
+            var s = scorecard[i];
+            if (s !== null) {
+                inScore += s;
+                html += '<td><div class="score-circ '+(s<hPar-1?'score-eagle':s<hPar?'score-birdie':s>hPar+1?'score-double':s>hPar?'score-bogey':'score-par')+'">'+s+'</div></td>';
+            } else {
+                html += '<td>-</td>';
+            }
+        }
+        html += '<td>'+inScore+'</td><td>'+(outScore+inScore)+'</td></tr>';
+    }
+    
+    html += '</table>';
+    
+    var parSoFar = 0;
+    var scoreSoFar = 0;
+    for(var i=0; i<HOLES.length; i++) {
+        if(scorecard[i] !== null) {
+            parSoFar += HOLES[i].par;
+            scoreSoFar += scorecard[i];
+        }
+    }
+    var diff = scoreSoFar - parSoFar;
+    var diffStr = diff > 0 ? '+'+diff : (diff === 0 ? 'E' : diff);
+    if(scoreSoFar === 0) diffStr = '--';
+    
+    html += `<div style="text-align:center; font-size: 24px; margin-top:20px; font-weight: 800; color:#4ade80;">SCORE: ${diffStr}</div>`;
+    
+    document.getElementById('sc-tables-container').innerHTML = html;
+}
+
 async function initMap() {
   try {
     // Importera nödvändiga Google Maps JS bibliotek (Alpha channel)
@@ -1303,6 +1829,20 @@ async function initMap() {
     map3d.addEventListener('gmp-click', async (e) => {
         var clickPos = e.position; 
         if(!clickPos) return;
+        
+        // WATER DROP MODE: Klicka på (eller nära) dropp-linjen!
+        if (isWaterDropMode) {
+            isWaterDropMode = false;
+            if (waterDropLine) waterDropLine.remove();
+            
+            userLocation = clickPos;
+            updateUserMarker();
+            currentStroke++; // +1 Penalty = Droppslaget!
+            
+            document.getElementById('hud-par-compact').textContent = `Par ${HOLES[currentHole].par} | Slag ${currentStroke}`;
+            refreshDynamicDistances();
+            return;
+        }
         
         // SIMULATOR MODE: Flyttar du gubben?
         if (isMovingMode) {

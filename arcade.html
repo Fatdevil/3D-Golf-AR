@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Golf Arcade Mode 👾</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Inter', sans-serif; }
+  canvas { display: block; }
+  
+  #ui-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+  }
+  
+  .score-hud {
+      background: rgba(15, 23, 42, 0.8);
+      color: #fff;
+      padding: 15px 30px;
+      margin: 20px auto;
+      border-radius: 20px;
+      font-size: 28px;
+      font-weight: 900;
+      text-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+      border: 2px solid #4ade80;
+      pointer-events: auto;
+  }
+  
+  #score-popup {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 80px;
+      font-weight: 900;
+      color: #fcd34d;
+      text-shadow: 0px 5px 20px rgba(251, 191, 36, 0.8), 0 0 5px #000;
+      opacity: 0;
+      transition: 0.2s;
+      pointer-events: none;
+      z-index: 999;
+  }
+  
+  .controls {
+      background: rgba(15, 23, 42, 0.95);
+      padding: 20px;
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+  }
+  
+  .controls input {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      width: 80px;
+      background: #1e293b;
+      color: white;
+  }
+  
+  .controls button {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 18px;
+      font-weight: 800;
+      border-radius: 8px;
+      cursor: pointer;
+      text-transform: uppercase;
+      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+      transition: transform 0.1s;
+  }
+  .controls button:active { transform: scale(0.95); }
+  
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Hämta vår grymma Fysikmotor! -->
+<script src="physics.js"></script>
+</head>
+<body>
+
+<div id="ui-layer">
+    <div class="score-hud">SCORE: <span id="score-val">0</span></div>
+    <div id="score-popup">+500 POP!</div>
+    
+    <div class="controls">
+        <input type="number" id="in-speed" value="130" title="Ball Speed (mph)">
+        <input type="number" id="in-la" value="18" title="Launch Angle (deg)">
+        <input type="number" id="in-hla" value="0" title="Horizontal Angle (deg)">
+        <button onclick="fireShot()">🔥 SHOOT</button>
+    </div>
+</div>
+
+<script>
+    // 1. THREE.JS INITIALIZATION
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB); // Himmel
+    scene.fog = new THREE.Fog(0x87CEEB, 50, 400);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    // Kamera strax bakom och över bollen
+    camera.position.set(0, 2, 5); 
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // Ljus
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(50, 100, 50);
+    dirLight.castShadow = true;
+    dirLight.shadow.camera.top = 100;
+    dirLight.shadow.camera.bottom = -100;
+    dirLight.shadow.camera.left = -100;
+    dirLight.shadow.camera.right = 100;
+    scene.add(dirLight);
+
+    // 2. SKAPA GOLV (Gräs)
+    const planeGeo = new THREE.PlaneGeometry(1000, 1000);
+    const planeMat = new THREE.MeshLambertMaterial({ color: 0x4ade80 });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // 3. SKAPA BOLLEN
+    const ballGeo = new THREE.SphereGeometry(0.3, 16, 16); // Bollen känns marginellt större i arkad
+    const ballMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
+    const ball = new THREE.Mesh(ballGeo, ballMat);
+    ball.castShadow = true;
+    ball.position.set(0, 0.3, 0);
+    scene.add(ball);
+
+    // 4. SKAPA MÅLTAVLOR (Targets)
+    const targets = [];
+    function createTarget(x, z) {
+        const tGeo = new THREE.BoxGeometry(3, 4, 3);
+        // Slumpmässig neonfärg
+        const color = new THREE.Color().setHSL(Math.random(), 1.0, 0.5);
+        const tMat = new THREE.MeshLambertMaterial({ color: color });
+        const target = new THREE.Mesh(tGeo, tMat);
+        target.position.set(x, 2, z); // z-axeln går hitåt, framåt är negativ z i Three.js
+        target.castShadow = true;
+        scene.add(target);
+        
+        targets.push({ mesh: target, active: true, radius: 2.5 });
+    }
+
+    // Bygg en liten pyramid av block 60 meter fram!
+    createTarget(0, -60);
+    createTarget(-4, -60);
+    createTarget(4, -60);
+    createTarget(-2, -60);
+    createTarget(2, -60);
+    createTarget(0, -70);
+    createTarget(-10, -50);
+    createTarget(10, -50);
+
+    // Belys "Tee-boxen"
+    const teeBoxGeo = new THREE.BoxGeometry(4, 0.1, 4);
+    const teeBoxMat = new THREE.MeshLambertMaterial({ color: 0x22c55e });
+    const teeBox = new THREE.Mesh(teeBoxGeo, teeBoxMat);
+    teeBox.position.set(0, 0.05, 0);
+    scene.add(teeBox);
+
+    // SPEL LOGIK
+    let isFlying = false;
+    let flightData = null;
+    let flightTick = 0;
+    let points = 0;
+
+    function fireShot() {
+        if(isFlying) return; // Låt bollen landa
+        
+        // Återställ bollen
+        ball.position.set(0, 0.3, 0);
+        
+        var vSpeed = parseFloat(document.getElementById('in-speed').value) || 120;
+        var vLa = parseFloat(document.getElementById('in-la').value) || 15;
+        var vHla = parseFloat(document.getElementById('in-hla').value) || 0;
+        
+        var launchConfig = {
+            ballSpeedObj: { value: vSpeed, unit: "MPH" },
+            launchAngle: vLa,
+            horizontalAngle: vHla,
+            totalSpin: 2500, // Standardspin
+            spinAxis: 0
+        };
+        
+        // Enkel environment context (inget dör, FAIRWAY som mark)
+        var envCtx = {
+            checkCollisionCallback: function(x, y, z) { return { type: 'FAIRWAY' }; },
+            hasTreeCollision: function(x, y, z) { return false; }
+        };
+        
+        // Simulera The Matrix med vår super-algoritm!
+        flightData = simulateFlight(launchConfig, {speedAmp:0, heading:0}, envCtx);
+        
+        flightTick = 0;
+        isFlying = true;
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Om bollen flyger, hämta nästa punkt i trajectory
+        if (isFlying && flightData && flightTick < flightData.trajectory.length) {
+            
+            // Vi spelar p fram 3 ticks per frame för att det ska gå snabbt nog visuellt!
+            var step = 3; 
+            var newTick = Math.min(flightTick + step, flightData.trajectory.length - 1);
+            
+            var point = flightData.trajectory[newTick];
+            
+            // Konvertera Fysik (localX: Framåt, localY: Sida, currentZ: Höjd) till ThreeJS
+            // X = Sida (localY)
+            // Y = Höjd (currentZ)
+            // Z = Framåt (Negativ localX)
+            ball.position.set(point.localY, point.currentZ + 0.3, -point.localX);
+            
+            // Följ bollen med kameran!
+            camera.position.x = ball.position.x;
+            camera.position.y = Math.max(2, ball.position.y + 2);
+            camera.position.z = ball.position.z + 10;
+            camera.lookAt(ball.position);
+            
+            // COLLISION DETECTION! Krockar bollen med ett block?
+            for(let i=0; i<targets.length; i++) {
+                let t = targets[i];
+                if(t.active) {
+                    let d = ball.position.distanceTo(t.mesh.position);
+                    if(d < t.radius) {
+                        t.active = false;
+                        scene.remove(t.mesh); // PANG! Block försvinner.
+                        
+                        points += 500;
+                        document.getElementById('score-val').textContent = points;
+                        
+                        // Popp-effekt
+                        let pop = document.getElementById('score-popup');
+                        pop.style.opacity = '1';
+                        pop.style.transform = 'translate(-50%, -60%) scale(1.2)';
+                        setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -50%) scale(1)'; }, 500);
+                    }
+                }
+            }
+            
+            flightTick = newTick;
+            
+            if (flightTick === flightData.trajectory.length - 1) {
+                isFlying = false; // Bollen har stannat
+                setTimeout(() => {
+                    // Återställ kameran
+                    camera.position.set(0, 2, 5);
+                    camera.lookAt(0,0,0);
+                }, 2000);
+            }
+        }
+
+        renderer.render(scene, camera);
+    }
+    
+    // Resize resulterar..
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+
+</body>
+</html>

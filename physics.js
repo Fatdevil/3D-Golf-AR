@@ -14,11 +14,11 @@ window.GolfPhysics = (function() {
     const AREA = Math.PI * RADIUS * RADIUS;
 
     const GROUND = {
-        restitution: 0.45,
-        bounceFriction: 0.18,
+        restitution: 0.20,
+        bounceFriction: 0.30,
         rollingDecel: 0.8,
         spinDampingPerBounce: 0.75,
-        minBounceVerticalSpeed: 0.5,
+        minBounceVerticalSpeed: 1.0,
         stopSpeed: 0.1
     };
 
@@ -68,7 +68,8 @@ window.GolfPhysics = (function() {
                 return { dp: currentV, dv: [0, 0, 0] };
             }
             let dirXY = [vXY[0]/speedXY, vXY[1]/speedXY, 0];
-            let accel = vecScale(dirXY, -GROUND.rollingDecel);
+            let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
+            let accel = vecScale(dirXY, -currentDecel);
             return { dp: currentV, dv: accel };
         }
 
@@ -127,8 +128,9 @@ window.GolfPhysics = (function() {
     /**
      * Konverterar mänsklig input (Simulatordata) till matematisk 3D flight path
      * @param {Object} input - { ballSpeedMph, launchAngleDeg, totalSpinRpm, spinAxisDeg, azimDeg }
+     * @param {Object} envCtx - { checkCollisionCallback }
      */
-    function simulateFlight(input) {
+    function simulateFlight(input, envCtx) {
         // Initiera state variabler
         let speedMS = input.ballSpeedMph * 0.44704; // mph -> m/s
         let launchRads = input.launchAngleDeg * Math.PI / 180;
@@ -172,7 +174,8 @@ window.GolfPhysics = (function() {
             apexMeters: 0,
             flightTime: 0,
             totalTime: 0,
-            bounceCount: 0
+            bounceCount: 0,
+            finalTerrainType: 'FAIRWAY' // Default
         };
 
         let t = 0;
@@ -180,6 +183,52 @@ window.GolfPhysics = (function() {
 
         // Simulator-loop
         while (state.phase !== "stopped" && t < 25.0) { // Safety break efter max 25 sek in-miljö
+            
+            // Kolla luft-kollisioner (Träd) innan vi flyttar oss
+            if (envCtx && envCtx.checkCollisionCallback && state.phase === "flight") {
+                let terrain = envCtx.checkCollisionCallback(state.pos[0], state.pos[1], state.pos[2]);
+                if (terrain && terrain.type === 'TREE') {
+                    let treeHeight = terrain.height || 15.0;
+                    
+                    if (state.pos[2] < treeHeight && state.pos[2] > 0.1) {
+                        // Distans som bollen just färdats (grovt) under denna tick (dt)
+                        let speed = vecMag(state.vel);
+                        let distTraveled = speed * dt;
+                        
+                        // Vi skiljer på "stammar" och "Krona/Lövverk"
+                        const TRUNK_GAP_HEIGHT = 2.5;
+                        let hitProbabilityPerMeter = 0;
+                        
+                        if (state.pos[2] < TRUNK_GAP_HEIGHT) {
+                            // Punch-out läge! Bara 5% risk per meter att träffa en solid stam.
+                            hitProbabilityPerMeter = 0.05;
+                        } else {
+                            // Upp i lövverket! Mycket högre risk (t.ex. 40% risk att fastna per meter).
+                            hitProbabilityPerMeter = 0.40;
+                        }
+                        
+                        let currentTickRisk = distTraveled * hitProbabilityPerMeter;
+                        
+                        if (Math.random() < currentTickRisk) {
+                            // KROCK I TRÄDEN!
+                            console.log(`🏌️‍♂️🌲 KROCK! Bollen fastnade i skogen på höjd: ${state.pos[2].toFixed(1)}m`);
+                            state.vel[0] *= 0.1; // Döda fart framåt x
+                            state.vel[1] *= 0.1; // Döda fart framåt y
+                            // Fall neråt genom lövverket
+                            if (state.pos[2] > TRUNK_GAP_HEIGHT) {
+                                state.vel[2] = -2.0; 
+                            } else {
+                                state.vel[2] = -1.0; // Mjukare bounce mot stam
+                            }
+                            state.spin = [0,0,0]; // Spin äts upp av träd/grenar
+                        }
+                    }
+                }
+            }
+            
+            let prevPos = [...state.pos];
+            let prevVel = [...state.vel];
+            
             stepRK4(state, dt);
             t += dt;
             
@@ -188,50 +237,100 @@ window.GolfPhysics = (function() {
 
             // Markkontakt och Fysik-övergång
             if (state.pos[2] <= 0 && state.phase !== "stopped") {
-                state.pos[2] = 0; // Kläm mot marknivån Z=0
+                
+                // 1. Beräkna den exakta tidpunkten då bollen korsade Z=0 mellan förra och nya steget
+                let travelZ = prevPos[2] - state.pos[2];
+                let f = travelZ > 0.0001 ? prevPos[2] / travelZ : 0; // andel av steget tills Z=0
+                
+                // 2. Interpolera en exakt nerslagspunkt
+                let impactPos = [
+                    prevPos[0] + (state.pos[0] - prevPos[0]) * f,
+                    prevPos[1] + (state.pos[1] - prevPos[1]) * f,
+                    0
+                ];
+                let impactVel = [
+                    prevVel[0] + (state.vel[0] - prevVel[0]) * f,
+                    prevVel[1] + (state.vel[1] - prevVel[1]) * f,
+                    prevVel[2] + (state.vel[2] - prevVel[2]) * f
+                ];
+                
+                let rawUncorrectedZ = state.pos[2]; // Spara för loggen
+
+                state.pos = [...impactPos];
+                state.vel = [...impactVel];
+                
+                // Bestäm markens fysikegenskaper
+                let impactTerrainType = 'FAIRWAY';
+                if (envCtx && envCtx.checkCollisionCallback) {
+                    let impactRes = envCtx.checkCollisionCallback(impactPos[0], impactPos[1], 0);
+                    if (impactRes && impactRes.type) impactTerrainType = impactRes.type;
+                }
+                
+                let cRestitution = GROUND.restitution;
+                let cFriction = GROUND.bounceFriction;
+                let cRollingDecel = GROUND.rollingDecel;
+                
+                if (impactTerrainType === 'GREEN') {
+                    cRestitution = 0.15; cFriction = 0.50; cRollingDecel = 0.5;
+                } else if (impactTerrainType === 'TEE') {
+                    cRestitution = 0.30; cFriction = 0.40; cRollingDecel = 0.8;
+                } else if (impactTerrainType === 'ROUGH') {
+                    cRestitution = 0.10; cFriction = 0.70; cRollingDecel = 1.8;
+                } else if (impactTerrainType === 'SAND') {
+                    cRestitution = 0.05; cFriction = 0.90; cRollingDecel = 3.0; // Splatt
+                } else if (impactTerrainType === 'WASTE') {
+                    cRestitution = 0.12; cFriction = 0.75; cRollingDecel = 2.5; // Hård grussand
+                } else if (impactTerrainType === 'WATER') {
+                    state.phase = "stopped";
+                    metrics.finalTerrainType = 'WATER';
+                    continue; // Plask!
+                } else if (impactTerrainType === 'OB') {
+                    state.phase = "stopped";
+                    metrics.finalTerrainType = 'OB';
+                    continue; // Död (Utanför banan)!
+                }
+                
+                state.rollingDecel = cRollingDecel;
+                metrics.finalTerrainType = impactTerrainType;
                 
                 if (state.phase === "flight" || state.phase === "bounce") {
                     if (state.phase === "flight") {
                         metrics.carryMeters = Math.sqrt(state.pos[0]*state.pos[0] + state.pos[1]*state.pos[1]);
-                        metrics.flightTime = t;
+                        metrics.flightTime = t - dt + f * dt;
+                        
+                        console.log(`⛳ IMPACT DATA (${impactTerrainType}) ⛳`);
+                        console.log("Impact Vel Z: " + state.vel[2].toFixed(2) + " m/s");
+                        console.log("Spinn vid impact: " + ((vecMag(state.spin)*60)/(2*Math.PI)).toFixed(0) + " RPM");
                     }
                     
-                    if (Math.abs(state.vel[2]) > GROUND.minBounceVerticalSpeed) {
+                    if (Math.abs(state.vel[2]) > GROUND.minBounceVerticalSpeed && impactTerrainType !== 'SAND') {
                         state.phase = "bounce";
                         metrics.bounceCount++;
                         
-                        state.vel[2] = Math.abs(state.vel[2]) * GROUND.restitution;
+                        state.vel[2] = Math.abs(state.vel[2]) * cRestitution;
                         
-                        // Fysiskt korrekt spin-bite på gräset.
-                        const GRIP = 0.85; // Betydligt högre grepp (Receptiv Tour-Green!)
+                        // Fysiskt korrekt spin-bite
+                        const GRIP = 0.85; 
 
-                        // Hastighet för bollens nedre kontaktpunkt relativt marken
-                        // Backspin (sX > 0) gör att undersidan rör sig FRAMÅT (+Y) => Friction drar bakåt.
-                        // Sidespin (sZ < 0) ger rotering runt Z-axeln, men spinAxis tiltar X/Z.
-                        // Spin kring Y (-sZ pga orientering) ger rullning VÄNSTER (-X) => Friction drar höger.
                         let vContactY = state.vel[1] + (state.spin[0] * RADIUS);
                         let vContactX = state.vel[0] - (state.spin[1] * RADIUS);
                         
-                        // Imperfekt slippning reducerar farten baserat på kontakthastigheten:
                         let deltaVY = -(vContactY) / 3.5 * GRIP;
                         let deltaVX = -(vContactX) / 3.5 * GRIP;
 
-                        // Applicera impulsen på bollens färdhastighet (Det som ger Wedge-Check!)
                         state.vel[1] += deltaVY;
                         state.vel[0] += deltaVX;
 
-                        // Motsvarande impuls suger ut spinnen ur bollen
                         state.spin[0] += (2.5 * deltaVY / RADIUS);
                         state.spin[1] -= (2.5 * deltaVX / RADIUS); 
 
-                        // Klassisk bounceFriction för att dämpa ytterligare vid hårda stötar
-                        state.vel[0] *= (1 - GROUND.bounceFriction);
-                        state.vel[1] *= (1 - GROUND.bounceFriction);
+                        state.vel[0] *= (1 - cFriction);
+                        state.vel[1] *= (1 - cFriction);
                         
                         state.spin = vecScale(state.spin, GROUND.spinDampingPerBounce);
                     } else {
                         state.phase = "roll";
-                        state.vel[2] = 0; // Införlivas nu i rull-algoritmen
+                        state.vel[2] = 0; 
                     }
                 }
 
