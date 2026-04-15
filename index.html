@@ -159,6 +159,9 @@
 
 <div id="floating-actions">
   <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.9); border-color:#8b5cf6;" title="Flytta Mig">🚶‍♂️</button>
+  <button id="btn-shot" title="AUTO SHOT" style="background:rgba(234,179,8,0.9); border-color:#eab308;">🏌️</button>
+  <button id="btn-sim" title="Fysik Simulator" style="background:rgba(15,23,42,0.9); border-color:#4ade80; color:#4ade80;" onclick="document.getElementById('simulator-panel').style.display = document.getElementById('simulator-panel').style.display === 'none' ? 'block' : 'none';">💻</button>
+  <button id="btn-cam-dash" title="Kamera Lab" style="background:rgba(15,23,42,0.9); border-color:#38bdf8; color:#38bdf8;" onclick="document.getElementById('camera-panel').style.display = document.getElementById('camera-panel').style.display === 'none' ? 'block' : 'none';">🎥</button>
   <button id="btn-rangefinder" title="Rangefinder — mät avstånd">🎯</button>
   <button id="btn-flyover" title="3D Drönare">🚁</button>
   <button class="active" id="btn-2d" title="2D Vy">📍</button>
@@ -170,6 +173,53 @@
    <div class="tab"><span class="icon">📝</span><span class="label">SCORE</span></div>
    <div class="tab"><span class="icon">🏆</span><span class="label">LEADERBOARD</span></div>
    <div class="tab" id="tab-profil" onclick="toggleSettings()"><span class="icon">👤</span><span class="label">PROFIL</span></div>
+</div>
+
+<div id="simulator-panel" style="display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:400; background:rgba(15,23,42,0.95); padding:16px; border-radius:12px; border:1px solid #4ade80; color:#fff; width:300px; backdrop-filter:blur(10px); pointer-events:auto;">
+  <h3 style="margin-bottom:12px; color:#4ade80; font-size:14px; text-transform:uppercase; text-align:center;">⚙️ Fysik Simulator (RK4)</h3>
+  <div style="margin-bottom:10px;">
+    <label style="font-size:12px; color:#aaa;">Speed (mph): <span id="sim-speed-val" style="color:white;float:right;font-weight:bold;">165</span></label>
+    <input type="range" id="sim-speed" min="40" max="190" value="165" style="width:100%;" oninput="document.getElementById('sim-speed-val').innerText=this.value">
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="font-size:12px; color:#aaa;">Launch Angle (deg): <span id="sim-launch-val" style="color:white;float:right;font-weight:bold;">11</span></label>
+    <input type="range" id="sim-launch" min="2" max="60" value="11" style="width:100%;" oninput="document.getElementById('sim-launch-val').innerText=this.value">
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="font-size:12px; color:#aaa;">Backspin (rpm): <span id="sim-spin-val" style="color:white;float:right;font-weight:bold;">2600</span></label>
+    <input type="range" id="sim-spin" min="500" max="11000" step="100" value="2600" style="width:100%;" oninput="document.getElementById('sim-spin-val').innerText=this.value">
+  </div>
+  <div style="margin-bottom:16px;">
+    <label style="font-size:12px; color:#aaa;">Spin Axis (L/R tilt): <span id="sim-axis-val" style="color:white;float:right;font-weight:bold;">0</span></label>
+    <input type="range" id="sim-axis" min="-30" max="30" value="0" style="width:100%;" oninput="document.getElementById('sim-axis-val').innerText=this.value">
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button onclick="triggerPhysicsShot()" style="flex:1; padding:10px; background:#4ade80; color:#0f172a; font-weight:800; border:none; border-radius:6px; cursor:pointer;">SIMULATE SHOT</button>
+  </div>
+</div>
+
+<div id="camera-panel" style="display:none; position:fixed; top:80px; left:20px; z-index:400; background:rgba(15,23,42,0.95); padding:16px; border-radius:12px; border:1px solid #38bdf8; color:#fff; width:280px; backdrop-filter:blur(10px); pointer-events:auto;">
+  <h3 style="margin-bottom:12px; color:#38bdf8; font-size:14px; text-transform:uppercase; text-align:center;">🎥 Kamera Lab</h3>
+  <div style="margin-bottom:10px;">
+    <label style="font-size:12px; color:#aaa;">Läge:</label>
+    <select id="cam-mode" style="width:100%; margin-top:4px; padding:4px; background:#0f172a; color:white; border:1px solid #333;">
+      <option value="drone">Drone Follow (Följ bollen)</option>
+      <option value="static">Static (Fast på Tee)</option>
+    </select>
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="font-size:12px; color:#aaa;">Altitude (m): <span id="cam-height-val" style="color:white;float:right;font-weight:bold;">3</span></label>
+    <input type="range" id="cam-height" min="1" max="150" value="3" style="width:100%;" oninput="document.getElementById('cam-height-val').innerText=this.value">
+  </div>
+  <div style="margin-bottom:10px;">
+    <label style="font-size:12px; color:#aaa;">Avstånd bakom (m): <span id="cam-back-val" style="color:white;float:right;font-weight:bold;">4</span></label>
+    <input type="range" id="cam-back" min="0" max="150" value="4" style="width:100%;" oninput="document.getElementById('cam-back-val').innerText=this.value">
+  </div>
+  <div style="margin-bottom:16px;">
+    <label style="font-size:12px; color:#aaa;">Offset Höger (m): <span id="cam-right-val" style="color:white;float:right;font-weight:bold;">3</span></label>
+    <input type="range" id="cam-right" min="-100" max="100" value="3" style="width:100%;" oninput="document.getElementById('cam-right-val').innerText=this.value">
+  </div>
+  <button onclick="document.getElementById('camera-panel').style.display='none';" style="width:100%; padding:10px; background:#38bdf8; color:#0f172a; font-weight:800; border:none; border-radius:6px; cursor:pointer;">STÄNG KAMERA LAB</button>
 </div>
 
 <div id="settings-modal">
@@ -220,6 +270,7 @@
   <p id="error-text"></p>
 </div>
 
+<script src="physics.js"></script>
 <script src="data/valderrama.js"></script>
 <script>
 // ============================================================
@@ -780,6 +831,337 @@ function flyoverHole() {
   animate();
 }
 
+// ====================================================================
+// SHOT TRACER & Fysik (Framtidsförberett för Caddie)
+// ====================================================================
+const CLUBS = {
+    DRIVER: { name: 'Driver', apexHeight: 32 },
+    IRON_7: { name: 'Järn 7', apexHeight: 26 },
+    WEDGE: { name: 'Wedge', apexHeight: 22 }
+};
+
+var shotTracerLine = null;
+var shotMarker = null;
+var isAnimatingShot = false;
+
+function projectOffset(fromPos, distance, headingDeg) {
+    var R = 6378137.0; 
+    var hRads = headingDeg * Math.PI / 180;
+    var dRads = distance / R;
+    var lat1 = fromPos.lat * Math.PI / 180;
+    var lng1 = fromPos.lng * Math.PI / 180;
+    
+    var lat2 = Math.asin(Math.sin(lat1)*Math.cos(dRads) + Math.cos(lat1)*Math.sin(dRads)*Math.cos(hRads));
+    var lng2 = lng1 + Math.atan2(Math.sin(hRads)*Math.sin(dRads)*Math.cos(lat1), Math.cos(dRads)-Math.sin(lat1)*Math.sin(lat2));
+    
+    return { lat: lat2 * 180 / Math.PI, lng: lng2 * 180 / Math.PI };
+}
+
+function triggerPhysicsShot() {
+    if (!window.GolfPhysics) return alert("Fysikmotorn laddades inte.");
+    var speed = parseFloat(document.getElementById('sim-speed').value);
+    var launch = parseFloat(document.getElementById('sim-launch').value);
+    var spin = parseFloat(document.getElementById('sim-spin').value);
+    var axis = parseFloat(document.getElementById('sim-axis').value);
+
+    var launchData = {
+        ballSpeedMph: speed,
+        launchAngleDeg: launch,
+        totalSpinRpm: spin,
+        spinAxisDeg: axis,
+        azimDeg: 0
+    };
+    
+    document.getElementById('simulator-panel').style.display = 'none';
+    animatePhysicsShot(launchData);
+}
+
+function animatePhysicsShot(launchData) {
+    if(!map3d || isAnimatingShot) return;
+    
+    var hole = HOLES[currentHole];
+    var originPos = userLocation ? userLocation : hole.tee;
+    // Använd caddie-laserns slutpunkt bara för riktning/heading!
+    var targetPosForHeading = customLayupPos || hole.green; 
+    
+    var baseHeading = getHeading(originPos, targetPosForHeading);
+    
+    console.log("SIMULATING PHYSICS... ⛳ SPEED: " + launchData.ballSpeedMph + " MPH");
+    
+    // Beräkna fysiken
+    var result = window.GolfPhysics.simulateFlight(launchData);
+    if (!result || !result.path || result.path.length < 2) return alert("Fysikberäkning misslyckades.");
+    
+    var localPath = result.path;
+    var metrics = result.metrics;
+    
+    // Projicera RK4 banan till Lat/Lng över Map3D
+    var globalPath = localPath.map(function(pt) {
+        var dist = Math.sqrt(pt.x*pt.x + pt.y*pt.y);
+        // Negativ pt.x innebär vänster om centrum, atan2(1,1) -> ~45 deg
+        var localAngle = Math.atan2(pt.x, pt.y) * 180 / Math.PI; 
+        var globalHead = baseHeading + localAngle;
+        var latLng = projectOffset(originPos, dist, globalHead);
+        
+        return { 
+            lat: latLng.lat, 
+            lng: latLng.lng, 
+            altitude: pt.z + 0.1, // Nära marken
+            distY: pt.y 
+        };
+    });
+
+    isAnimatingShot = true;
+    if (activeLaserLines) {
+        activeLaserLines.forEach(function(l) { l.remove(); });
+    }
+    
+    if (window.tracerSegments) {
+        window.tracerSegments.forEach(function(s) { 
+            if(s.parentNode) s.parentNode.removeChild(s); 
+        });
+    }
+    if (shotMarker && shotMarker.parentNode) shotMarker.parentNode.removeChild(shotMarker);
+
+    window.tracerSegments = [];
+    for (var i = 0; i < globalPath.length - 1; i++) {
+        var seg = document.createElement('gmp-polyline-3d');
+        seg.setAttribute('stroke-color', userLaserColor);
+        seg.setAttribute('stroke-width', '4');
+        seg.setAttribute('altitude-mode', 'relative-to-ground');
+        seg.coordinates = [globalPath[i], globalPath[i+1]];
+        window.tracerSegments.push(seg);
+    }
+    
+    shotMarker = document.createElement('gmp-polyline-3d');
+    shotMarker.setAttribute('altitude-mode', 'relative-to-ground');
+    shotMarker.setAttribute('stroke-color', '#ffffff');
+    shotMarker.setAttribute('stroke-width', '24'); 
+    map3d.appendChild(shotMarker);
+
+    var lastDrawnSegment = -1;
+    var startTime = Date.now();
+    var duration = localPath[localPath.length-1].time * 1000; // RK4 tiden! 
+    if (duration < 1000) duration = 1000;
+
+    // Hämta inställningar från Kamera Lab
+    var cModeEl = document.getElementById('cam-mode');
+    var cMode = cModeEl ? cModeEl.value : 'drone';
+    var cHeight = parseFloat(document.getElementById('cam-height') ? document.getElementById('cam-height').value : 3);
+    var cBack = parseFloat(document.getElementById('cam-back') ? document.getElementById('cam-back').value : 4);
+    var cRight = parseFloat(document.getElementById('cam-right') ? document.getElementById('cam-right').value : 3);
+
+    var startElev = hole.teeElev || 30;
+    var endElev = hole.greenElev || 30;
+    var offsetAngle = Math.atan2(cRight, cBack) * 180 / Math.PI;
+
+    if (cMode === 'static') {
+        var staticBackPos = projectOffset(originPos, Math.max(0.1, cBack), baseHeading + 180);
+        var staticFinalPos = projectOffset(staticBackPos, Math.abs(cRight), baseHeading + (cRight > 0 ? 90 : -90));
+        map3d.center = { 
+            lat: staticFinalPos.lat, 
+            lng: staticFinalPos.lng, 
+            altitude: startElev + cHeight 
+        };
+        map3d.heading = baseHeading - offsetAngle;
+        map3d.tilt = 80;
+        map3d.range = 0; // range 0 eliminerar Map3Ds automat-jordklämning!
+    }
+
+    function anim() {
+        var t = Math.min(1, (Date.now() - startTime) / duration);
+        var progress = t; 
+        
+        var currentIndex = Math.floor(progress * (globalPath.length - 1));
+        if (currentIndex < 0) currentIndex = 0;
+        
+        var currentPoint = globalPath[currentIndex];
+        
+        if (currentIndex > lastDrawnSegment && currentIndex < window.tracerSegments.length) {
+            for (var s = lastDrawnSegment + 1; s <= currentIndex; s++) {
+                map3d.appendChild(window.tracerSegments[s]);
+            }
+            lastDrawnSegment = currentIndex;
+        }
+
+        shotMarker.coordinates = [
+            currentPoint,
+            { lat: currentPoint.lat + 0.000001, lng: currentPoint.lng, altitude: currentPoint.altitude } 
+        ];
+        
+        if (cMode === 'drone') {
+            var localAngle = Math.atan2(localPath[currentIndex].x, localPath[currentIndex].y) * 180 / Math.PI;
+            var droneHeading = baseHeading + localAngle;
+            
+            var groundElevInterpolated = startElev + (endElev - startElev) * progress;
+            var currentBallHeight = Math.max(0, currentPoint.altitude);
+            
+            // Fäst kamera-målet (center) EXAKT på bollen i 3D-rymden
+            map3d.center = { 
+                lat: currentPoint.lat, 
+                lng: currentPoint.lng, 
+                altitude: groundElevInterpolated + currentBallHeight 
+            };
+            
+            // Läs in de dynamiska förskjutningarna (beräknade en gång innan loopen)
+            var groundDist = Math.max(0.1, Math.sqrt(cBack*cBack + cRight*cRight));
+            var hypoRange = Math.sqrt(groundDist*groundDist + cHeight*cHeight);
+            var tiltDeg = 90 - (Math.atan2(cHeight, groundDist) * 180 / Math.PI);
+            var offsetAngle = Math.atan2(cRight, cBack) * 180 / Math.PI;
+
+            // Google Maps 3D sköter nu automatiskt utplaceringen av kameran
+            map3d.heading = droneHeading - offsetAngle; 
+            map3d.tilt = tiltDeg; 
+            map3d.range = hypoRange; 
+        }
+
+        if (t < 1) {
+            requestAnimationFrame(anim);
+        } else {
+            isAnimatingShot = false;
+            console.log("⛳ SLAG AVSLUTAT ⛳");
+            console.log("CARRY: " + Math.round(metrics.carryMeters) + " m");
+            console.log("TOTAL: " + Math.round(metrics.totalMeters) + " m");
+            console.log("APEX : " + Math.round(metrics.apexMeters) + " m");
+            console.log("BOUNCES: " + metrics.bounceCount);
+                
+            setTimeout(function(){
+                refreshDynamicDistances();
+            }, 3500);
+        }
+    }
+    requestAnimationFrame(anim);
+}
+
+function animateShot() {
+    if(!map3d || isAnimatingShot) return;
+    var hole = HOLES[currentHole];
+    var originPos = userLocation ? userLocation : hole.tee;
+    
+    // Lista ut vart vi slår: Layup-punkt, aktivt rangefinder-klick, eller Green?
+    var targetPos = hole.green; 
+    if (customLayupPos) {
+        targetPos = customLayupPos;
+    } else if (hole.par > 3 && hole.mid) {
+        var distToMid = haversineDistance(originPos, hole.mid);
+        // Slå mot svängen/layup om vi inte nästan har passerat den!
+        if (distToMid > 40) {
+            targetPos = hole.mid; 
+        }
+    }
+    
+    var dist = haversineDistance(originPos, targetPos);
+    if (dist < 1) return; // För nära
+    
+    // Caddie rekommenderar klubba utifrån längd!
+    var selectedClub = CLUBS.WEDGE;
+    if (dist > 180) selectedClub = CLUBS.DRIVER;
+    else if (dist > 120) selectedClub = CLUBS.IRON_7;
+
+    isAnimatingShot = true;
+    setActiveControl(1); // Visual active (använder index för shot btn om vi vill)
+    
+    // Göm caddielinjerna medan vi tittar på slaget!! De stör bilden.
+    if (activeLaserLines) {
+        activeLaserLines.forEach(function(l) { l.remove(); });
+    }
+    
+    var startElev = hole.teeElev || 30; // Approximation
+    var endElev = targetPos.elev !== undefined ? targetPos.elev : (hole.greenElev || 30);
+    
+    // Bygg upp växande Polyline Tracer (i 30 fragment)
+    if (window.tracerSegments) {
+        window.tracerSegments.forEach(s => s.remove());
+    }
+    window.tracerSegments = [];
+    if (shotMarker) shotMarker.remove();
+    
+    // Skapa en "golfboll" genom att rita ett extremt kort men tjockt vitt streck (som tvingas bli en lysande prick)
+    shotMarker = document.createElement('gmp-polyline-3d');
+    shotMarker.setAttribute('altitude-mode', 'relative-to-ground');
+    shotMarker.setAttribute('stroke-color', '#ffffff');
+    shotMarker.setAttribute('stroke-width', '24'); // 24px är tillräckligt stort för att de flesta ska uppleva det som en boll
+    
+    map3d.appendChild(shotMarker);
+
+    var startTime = Date.now();
+    var duration = 4000; // 4 sekunders boll-resa
+    var headingDirection = getHeading(originPos, targetPos);
+    
+    // PRE-CALCULATE PARABOLA PATH
+    var fullPath = [];
+    var steps = 30; // 30 punkter blir en tillräckligt slät kurva utan att belasta WebGL
+    for (var i = 0; i <= steps; i++) {
+        var p = i / steps;
+        var pLat = originPos.lat + (targetPos.lat - originPos.lat) * p;
+        var pLng = originPos.lng + (targetPos.lng - originPos.lng) * p;
+        var pHeight = 4 * selectedClub.apexHeight * p * (1 - p);
+        // DOM-objekten är satta till 'relative-to-ground', så vi ska BARA addera höjden över markytan!
+        fullPath.push({ lat: pLat, lng: pLng, altitude: pHeight + 2 });
+    }
+    
+    // Skapa 30 separata fragment av tracern som kan appliceras snabbt medan bollen rör sig!
+    for (var i = 0; i < steps; i++) {
+        var seg = document.createElement('gmp-polyline-3d');
+        seg.setAttribute('stroke-color', userLaserColor);
+        seg.setAttribute('stroke-width', '4');
+        seg.setAttribute('altitude-mode', 'relative-to-ground');
+        seg.coordinates = [fullPath[i], fullPath[i+1]];
+        window.tracerSegments.push(seg);
+    }
+    var lastDrawnSegment = -1;
+
+    // Placera kameran bakom spelaren, snett till höger och tittandes lite inåt vänster
+    map3d.center = originPos;
+    map3d.heading = headingDirection; 
+    map3d.tilt = 82; // Skarpare 'TV-spels'-vinkel längs med marken
+    map3d.range = 25; // Frys kameran här för en äkta Simulator-känsla!
+    
+    function anim() {
+        var t = Math.min(1, (Date.now() - startTime) / duration);
+        var ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t; // ease-in-out curve
+        var progress = t; // Linjär hastighet framåt
+        
+        var lat = originPos.lat + (targetPos.lat - originPos.lat) * progress;
+        var lng = originPos.lng + (targetPos.lng - originPos.lng) * progress;
+        
+        var parabolaHeight = 4 * selectedClub.apexHeight * progress * (1 - progress);
+        var groundElevInterpolated = startElev + (endElev - startElev) * progress;
+        var altFromGround = 2 + parabolaHeight; 
+        
+        // RITA TRACERN BEHIND THE BALL! Lägg till segment om vi passerat dem!
+        var currentSegmentIndex = Math.floor(progress * steps);
+        if (currentSegmentIndex > lastDrawnSegment && currentSegmentIndex < steps) {
+            for (var s = lastDrawnSegment + 1; s <= currentSegmentIndex; s++) {
+                map3d.appendChild(window.tracerSegments[s]);
+            }
+            lastDrawnSegment = currentSegmentIndex;
+        }
+
+        // Uppdatera polyline-bollen: Ett extremt kort streck ser ut som en lysande orb/boll i 3D
+        // OBS: shotMarker har altitude-mode 'relative-to-ground', lägg inte till groundElev!
+        shotMarker.coordinates = [
+            { lat: lat, lng: lng, altitude: altFromGround },
+            { lat: lat + 0.000001, lng: lng, altitude: altFromGround } // Obetydlig sträcka framåt
+        ];
+        
+        // Kameran lämnas orörd (Broadcast mode)
+        
+        if (t < 1) {
+            requestAnimationFrame(anim);
+        } else {
+            isAnimatingShot = false;
+            // Fördröj caddielinjernas återkomst med 3.5 sekunder så du kan beundra slaget ifred!
+            setTimeout(function() {
+                if (!isAnimatingShot) {
+                    refreshDynamicDistances();
+                }
+            }, 3500);
+        }
+    }
+    anim();
+}
+
 function selectHole(idx) {
   if(idx < 0) idx = HOLES.length - 1;
   if(idx >= HOLES.length) idx = 0;
@@ -823,6 +1205,7 @@ document.getElementById('btn-unit-toggle').addEventListener('click', function() 
 
 document.getElementById('btn-2d').addEventListener('click', flyTo2D);
 document.getElementById('btn-flyover').addEventListener('click', flyoverHole);
+document.getElementById('btn-shot').addEventListener('click', animateShot);
 
 // ========== RANGEFINDER TOGGLE ==========
 document.getElementById('btn-rangefinder').addEventListener('click', function() {
