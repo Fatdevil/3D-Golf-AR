@@ -28,17 +28,7 @@
   .top-right .wind-playslike { font-size: 12px; font-weight: 600; color: #cbd5e1; text-shadow: 0 1px 2px rgba(0,0,0,0.8); background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); margin-top: 4px; display: none; }
   .w-tail { color: #4ade80; } .w-head { color: #ef4444; } .w-cross { color: #eab308; }
 
-  #global-tab-bar {
-    position: fixed; bottom: 0; left: 0; width: 100%; height: 76px; z-index: 200;
-    background: rgba(15,23,42,0.95); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.08);
-    display: flex; justify-content: space-around; align-items: center;
-    padding-bottom: 20px; /* Env safe area approx */ padding-top: 8px;
-  }
-  .tab { display: flex; flex-direction: column; align-items: center; gap: 4px; color: rgba(255,255,255,0.4); cursor: pointer; transition: all 0.2s; }
-  .tab:hover { color: rgba(255,255,255,0.8); }
-  .tab.active { color: #4ade80; }
-  .tab .icon { font-size: 22px; margin-bottom: 2px; }
-  .tab .label { font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
+
 
   #floating-actions {
     position: fixed; bottom: 95px; right: 16px; z-index: 100;
@@ -91,7 +81,7 @@
     padding: 32px 24px; color: #fff; transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
   }
-  #settings-modal.open { bottom: 76px; /* Just above tab bar */ }
+  #settings-modal.open { bottom: 85px; /* Just above telemetry console */ }
   #settings-modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 16px; color: #cbd5e1; }
   
   .color-swatches { display: flex; gap: 16px; margin-bottom: 24px; }
@@ -180,6 +170,25 @@
   .sc-legend .shape-circ { border-radius: 50%; }
   .sc-legend .shape-dbl { border: 3px double rgba(255,255,255,0.5); }
 
+  /* TELEMETRY CONSOLE FLOOR */
+  #telemetry-panel {
+    position: fixed; bottom: 0; left: 0; width: 100%;
+    background: rgba(10, 15, 28, 0.95); backdrop-filter: blur(20px);
+    border-top: 2px solid rgba(255,255,255,0.08);
+    display: flex; justify-content: space-around; padding: 12px 20px 24px 20px; /* Extra padding i botten för skärmbredden */
+    z-index: 1000;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+    transition: box-shadow 0.3s ease;
+  }
+  #telemetry-panel.highlight { box-shadow: 0 -10px 40px rgba(74,222,128,0.2); }
+  .tm-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; border-right: 1px solid rgba(255,255,255,0.05); }
+  .tm-cell:last-child { border-right: none; }
+  .tm-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .tm-value { font-size: 26px; font-weight: 900; color: #fff; font-family: 'Courier New', Courier, monospace; letter-spacing: -1px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: baseline; gap: 4px; }
+  .tm-unit { font-size: 11px; color: #cbd5e1; font-weight: 600; font-family: 'Inter', sans-serif; letter-spacing: 0px; margin-left: 2px;}
+  .tm-cell:nth-child(2) .tm-value { color: #f97316; } /* Orange accent Ball Speed */
+  .tm-cell:nth-child(6) .tm-value { color: #4ade80; } /* Green accent Total */
+
 </style>
 </head>
 <body>
@@ -220,15 +229,21 @@
   <button id="btn-rangefinder" title="Rangefinder — mät avstånd">🎯</button>
   <button id="btn-flyover" title="3D Drönare">🚁</button>
   <button class="active" id="btn-2d" title="2D Vy">📍</button>
+  <button id="btn-score" title="Scorecard" style="background:rgba(15,23,42,0.9); border-color:#eab308; color:#eab308;" onclick="openScorecard()">📝</button>
+  <button id="btn-profil" title="Inställningar" style="background:rgba(15,23,42,0.9); border-color:#94a3b8; color:#94a3b8;" onclick="toggleSettings()">⚙️</button>
 </div>
 <div id="rangefinder-badge">🎯 MÄTLÄGE — tryck 🎯 för att rensa</div>
 
-<div id="global-tab-bar">
-   <div class="tab active" id="tab-caddie" onclick="document.getElementById('scorecard-modal').classList.remove('open');"><span class="icon">⛳</span><span class="label">CADDIE</span></div>
-   <div class="tab" id="tab-score" onclick="openScorecard()"><span class="icon">📝</span><span class="label">SCORE</span></div>
-   <div class="tab"><span class="icon">🏆</span><span class="label">LEADERBOARD</span></div>
-   <div class="tab" id="tab-profil" onclick="toggleSettings()"><span class="icon">👤</span><span class="label">PROFIL</span></div>
+<div id="telemetry-panel">
+  <div class="tm-cell"><div class="tm-label">Club Speed</div><div class="tm-value" id="tm-club">--<span class="tm-unit">mph</span></div></div>
+  <div class="tm-cell"><div class="tm-label">Ball Speed</div><div class="tm-value" id="tm-ball">--<span class="tm-unit">mph</span></div></div>
+  <div class="tm-cell"><div class="tm-label">Launch Angle</div><div class="tm-value" id="tm-launch">--<span class="tm-unit">deg</span></div></div>
+  <div class="tm-cell"><div class="tm-label">Spin Rate</div><div class="tm-value" id="tm-spin">--<span class="tm-unit">rpm</span></div></div>
+  <div class="tm-cell"><div class="tm-label">Carry</div><div class="tm-value" id="tm-carry">--<span class="tm-unit" id="tm-unit-carry">m</span></div></div>
+  <div class="tm-cell"><div class="tm-label">Total</div><div class="tm-value" id="tm-total">--<span class="tm-unit" id="tm-unit-total">m</span></div></div>
 </div>
+
+
 
 <!-- Gimmie Button Overlay -->
 <button id="gimmie-btn" onclick="takeGimmie()">Hålat! (Gimmie)<span>Lägger till 1 putt</span></button>
@@ -242,7 +257,7 @@
     <div class="sc-title">PLAYER SCORECARD</div>
   </div>
   
-  <div class="sc-subtitle" id="sc-course-name">CLUB DE GOLF VALDERRAMA</div>
+  <div class="sc-subtitle" id="sc-course-name">--</div>
   
   <div id="sc-tables-container" style="overflow-x: auto; padding-bottom: 20px;"></div>
   
@@ -272,6 +287,10 @@
   <div style="margin-bottom:16px;">
     <label style="font-size:12px; color:#aaa;">Spin Axis (L/R tilt): <span id="sim-axis-val" style="color:white;float:right;font-weight:bold;">0</span></label>
     <input type="range" id="sim-axis" min="-30" max="30" value="0" style="width:100%;" oninput="document.getElementById('sim-axis-val').innerText=this.value">
+  </div>
+  <div style="margin-bottom:16px; padding: 10px; background: rgba(234, 179, 8, 0.1); border: 1px solid #eab308; border-radius: 6px;">
+    <label style="font-size:12px; color:#eab308; font-weight: bold;">⚡ ARCADE BOOST MULTIPLIER: <span id="sim-boost-val" style="color:white;float:right;font-weight:bold;">1.0x</span></label>
+    <input type="range" id="sim-boost" min="1.0" max="5.0" step="0.1" value="1.0" style="width:100%;" oninput="document.getElementById('sim-boost-val').innerText=this.value+'x'">
   </div>
   <div style="display:flex; gap:8px;">
     <button onclick="triggerPhysicsShot()" style="flex:1; padding:10px; background:#4ade80; color:#0f172a; font-weight:800; border:none; border-radius:6px; cursor:pointer;">SIMULATE SHOT</button>
@@ -351,17 +370,50 @@
 </div>
 
 <script src="physics.js"></script>
-<script src="data/valderrama.js"></script>
 <script>
 // ============================================================
-// Google Maps 3D Golf PoC — Valderrama Golf Club
+// Google Maps 3D Golf PoC — DYNAMIC PLATFORM CORE
 // ============================================================
 
 const API_KEY = "AIzaSyAX0hFTbQ5utdLQIM4gyXnqZElEMJTM3DU";
 
-// Banans data laddas ni automatiskt via data/valderrama.js (OpenStreetMap)
-// Det genererade datasetet innehåller variabeln 'HOLES' med alla 18 hål,
-// exakta green-polygoner, dogleg-fairways och utvalda bunkrar!
+// GLobala ban-variabler som populeras av "Spelkassetten" (JSON)
+window.HOLES = [];
+window.COURSE_NAME = "";
+
+// The Bootstrap Function - laddar in kassetten innan kartan startar!
+function loadGameCartridge() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const courseId = urlParams.get('course') || 'valderrama';
+    
+    if (courseId === 'valderrama') {
+        // Ladda orginalspelet
+        let s = document.createElement('script');
+        s.src = 'data/valderrama.js';
+        s.onload = () => { bootGoogleMaps(); };
+        document.head.appendChild(s);
+    } else if (courseId.startsWith('custom_')) {
+        // Ladda UGC (User Generated Content)
+        let key = courseId.replace('custom_', '');
+        try {
+            let dbRaw = localStorage.getItem('creator_courses') || '{}';
+            let db = JSON.parse(dbRaw);
+            let courseData = db[courseId];
+            if(!courseData) throw new Error("Banan finns inte i din profil.");
+            
+            window.COURSE_NAME = courseData.name;
+            window.HOLES = courseData.holes;
+            bootGoogleMaps();
+        } catch(e) {
+            alert('Kunde inte ladda UGC banan: ' + e.message);
+            window.location.href = 'hub.html';
+        }
+    } else {
+        alert("Ogiltigt ban-ID.");
+        window.location.href = 'hub.html';
+    }
+}
+
 
 var currentHole = 0;
 var map3d = null;
@@ -1038,6 +1090,13 @@ function initLaunchMonitorBridge() {
                 // Dölj menyn automatiskt om den är öppen
                 document.getElementById('simulator-panel').style.display = 'none';
                 
+                // Applicera ARCADE BOOST om det är en live-slag!
+                var boost = parseFloat(document.getElementById('sim-boost') ? document.getElementById('sim-boost').value : 1.0) || 1.0;
+                if(boost > 1.0) {
+                    msg.data.ballSpeedMph = msg.data.ballSpeedMph * boost;
+                    console.log("⚡ ARCADE BOOST APPLICERAD! Speed multiplicerad: " + boost + "x");
+                }
+                
                 // Aktivera!
                 animatePhysicsShot(msg.data);
             }
@@ -1062,9 +1121,10 @@ function triggerPhysicsShot() {
     var launch = parseFloat(document.getElementById('sim-launch').value);
     var spin = parseFloat(document.getElementById('sim-spin').value);
     var axis = parseFloat(document.getElementById('sim-axis').value);
+    var boost = parseFloat(document.getElementById('sim-boost').value) || 1.0;
 
     var launchData = {
-        ballSpeedMph: speed,
+        ballSpeedMph: speed * boost,
         launchAngleDeg: launch,
         totalSpinRpm: spin,
         spinAxisDeg: axis,
@@ -1319,6 +1379,37 @@ function animatePhysicsShot(launchData) {
     requestAnimationFrame(anim);
 }
 
+// ==========================================
+// TELEMETRY GUESSTIMATOR (MOCK SKYTRAK)
+// ==========================================
+function generateMockTelemetry(club, distanceMeters) {
+    let distanceYards = distanceMeters * 1.09361;
+    let carryYards = distanceYards * 0.95; 
+    
+    let speedDivisor = 1.75;
+    let baseSpin = 4000;
+    let baseLaunch = 14.0;
+    
+    if(club.id === 'DRIVER') { speedDivisor = 1.72; baseSpin = 2500; baseLaunch = 12.5; }
+    else if(club.id === 'WOOD_3') { speedDivisor = 1.65; baseSpin = 3500; baseLaunch = 10.5; }
+    else if(club.id === 'IRON_4') { speedDivisor = 1.55; baseSpin = 4800; baseLaunch = 14.1; }
+    else if(club.id === 'IRON_7') { speedDivisor = 1.45; baseSpin = 7000; baseLaunch = 18.2; }
+    else if(club.id === 'WEDGE' || club.id === 'SAND_WEDGE') { speedDivisor = 1.30; baseSpin = 9500; baseLaunch = 28.5; }
+    
+    let ballSpeedMph = carryYards / speedDivisor;
+    let clubSpeedMph = ballSpeedMph / 1.44; 
+    let noise = (Math.random() - 0.5) * 0.05;
+    
+    return {
+        clubSpeed: parseFloat((clubSpeedMph * (1 + noise)).toFixed(1)),
+        ballSpeed: parseFloat((ballSpeedMph * (1 + noise)).toFixed(1)),
+        launch: parseFloat((baseLaunch * (1 + noise)).toFixed(1)),
+        spin: Math.round(baseSpin * (1 + noise*2)),
+        carry: currentUnit === 'metric' ? Math.round(distanceMeters * 0.95) : Math.round(carryYards),
+        total: currentUnit === 'metric' ? Math.round(distanceMeters) : Math.round(distanceYards)
+    };
+}
+
 function animateShot() {
     if(!map3d || isAnimatingShot) return;
     var hole = HOLES[currentHole];
@@ -1386,6 +1477,12 @@ function animateShot() {
         fullPath.push({ lat: pLat, lng: pLng, altitude: pHeight + 2 });
     }
     
+    // START TELEMETRY PANEL
+    var tMetrics = generateMockTelemetry(selectedClub, dist);
+    document.getElementById('telemetry-panel').classList.add('highlight');
+    document.getElementById('tm-unit-carry').textContent = currentUnit === 'metric' ? 'm' : 'y';
+    document.getElementById('tm-unit-total').textContent = currentUnit === 'metric' ? 'm' : 'y';
+    
     // Skapa 30 separata fragment av tracern som kan appliceras snabbt medan bollen rör sig!
     for (var i = 0; i < steps; i++) {
         var seg = document.createElement('gmp-polyline-3d');
@@ -1407,6 +1504,14 @@ function animateShot() {
         var t = Math.min(1, (Date.now() - startTime) / duration);
         var ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t; // ease-in-out curve
         var progress = t; // Linjär hastighet framåt
+        
+        // Rolling Numbers Effect for Telemetry
+        document.getElementById('tm-club').innerHTML   = (tMetrics.clubSpeed * t).toFixed(1) + '<span class="tm-unit">mph</span>';
+        document.getElementById('tm-ball').innerHTML   = (tMetrics.ballSpeed * t).toFixed(1) + '<span class="tm-unit">mph</span>';
+        document.getElementById('tm-launch').innerHTML = (tMetrics.launch * t).toFixed(1) + '<span class="tm-unit">deg</span>';
+        document.getElementById('tm-spin').innerHTML   = Math.round(tMetrics.spin * t) + '<span class="tm-unit">rpm</span>';
+        document.getElementById('tm-carry').innerHTML  = Math.round(tMetrics.carry * Math.min(1, t*1.2)) + '<span class="tm-unit" id="tm-unit-carry">'+(currentUnit==='metric'?'m':'y')+'</span>';
+        document.getElementById('tm-total').innerHTML  = Math.round(tMetrics.total * t) + '<span class="tm-unit" id="tm-unit-total">'+(currentUnit==='metric'?'m':'y')+'</span>';
         
         var lat = originPos.lat + (targetPos.lat - originPos.lat) * progress;
         var lng = originPos.lng + (targetPos.lng - originPos.lng) * progress;
@@ -1437,12 +1542,22 @@ function animateShot() {
             requestAnimationFrame(anim);
         } else {
             isAnimatingShot = false;
+            
+            // Snap to exact values
+            document.getElementById('tm-club').innerHTML   = tMetrics.clubSpeed.toFixed(1) + '<span class="tm-unit">mph</span>';
+            document.getElementById('tm-ball').innerHTML   = tMetrics.ballSpeed.toFixed(1) + '<span class="tm-unit">mph</span>';
+            document.getElementById('tm-launch').innerHTML = tMetrics.launch.toFixed(1) + '<span class="tm-unit">deg</span>';
+            document.getElementById('tm-spin').innerHTML   = tMetrics.spin + '<span class="tm-unit">rpm</span>';
+            document.getElementById('tm-carry').innerHTML  = tMetrics.carry + '<span class="tm-unit" id="tm-unit-carry">'+(currentUnit==='metric'?'m':'y')+'</span>';
+            document.getElementById('tm-total').innerHTML  = tMetrics.total + '<span class="tm-unit" id="tm-unit-total">'+(currentUnit==='metric'?'m':'y')+'</span>';
+            
             // Fördröj caddielinjernas återkomst med 3.5 sekunder så du kan beundra slaget ifred!
             setTimeout(function() {
+                document.getElementById('telemetry-panel').classList.remove('highlight'); // Remove pulse
                 if (!isAnimatingShot) {
                     refreshDynamicDistances();
                 }
-            }, 3500);
+            }, 5000);
         }
     }
     anim();
@@ -1568,28 +1683,45 @@ function renderScorecard() {
     // Par Row
     rowHtml += `<tr><td class="sc-row-header">Par</td>`;
     let outPar = 0, inPar = 0;
-    for (let i = 0; i < 9; i++) {
-        outPar += HOLES[i].par;
-        rowHtml += `<td>${HOLES[i].par}</td>`;
+    
+    // Dynamiskt antal front-9 hål (upp till 9)
+    let maxFront = Math.min(9, HOLES.length);
+    for (let i = 0; i < maxFront; i++) {
+        let hp = HOLES[i] ? HOLES[i].par : 4;
+        outPar += hp;
+        rowHtml += `<td>${hp}</td>`;
     }
+    // Fyll ut till 9 columner om det fattas
+    for (let i = maxFront; i < 9; i++) rowHtml += `<td>-</td>`;
     rowHtml += `<td>${outPar}</td>`;
-    for (let i = 9; i < 18; i++) {
-        inPar += HOLES[i].par;
-        rowHtml += `<td>${HOLES[i].par}</td>`;
+    
+    // Dynamiskt antal back-9 hål
+    let maxBack = Math.min(18, HOLES.length);
+    for (let i = 9; i < maxBack; i++) {
+        let hp = HOLES[i] ? HOLES[i].par : 4;
+        inPar += hp;
+        rowHtml += `<td>${hp}</td>`;
+    }
+    // Fyll ut till 9 columner
+    for (let i = maxBack; i < 18; i++) {
+        if(i >= 9) rowHtml += `<td>-</td>`;
     }
     rowHtml += `<td>${inPar}</td><td>${outPar + inPar}</td><td></td></tr>`;
     
     // Player Row (JOE)
+    // Sätt course name dynamiskt om custom creator skapat!
+    var cName = typeof window.COURSE_NAME !== 'undefined' ? window.COURSE_NAME : "VALDERRAMA (ORIGINAL)";
     rowHtml += `<tr class="sc-player-row">
         <td class="sc-row-header">
-            DITT NAMN<br><span style="font-size:10px; font-weight:400; color:rgba(255,255,255,0.5);">Hcp 0, Valderrama</span>
+            DITT NAMN<br><span style="font-size:10px; font-weight:400; color:rgba(255,255,255,0.5);">Hcp 0, ${cName}</span>
         </td>`;
         
     let outScore = 0, inScore = 0;
     let hasOut = false, hasIn = false;
     
-    for (let i = 0; i < 9; i++) {
-        let diff = scorecard[i] !== null ? (scorecard[i] - HOLES[i].par) : 0;
+    for (let i = 0; i < maxFront; i++) {
+        let hp = HOLES[i] ? HOLES[i].par : 4;
+        let diff = scorecard[i] !== null ? (scorecard[i] - hp) : 0;
         let val = scorecard[i] !== null ? scorecard[i] : '';
         if (scorecard[i] !== null) { outScore += scorecard[i]; hasOut = true; }
         
@@ -1602,10 +1734,12 @@ function renderScorecard() {
         }
         rowHtml += `<td><span class="${val !== '' ? cClass + ' score-circ' : ''}">${val}</span></td>`;
     }
+    for (let i = maxFront; i < 9; i++) rowHtml += `<td></td>`;
     rowHtml += `<td>${hasOut ? outScore : ''}</td>`;
     
-    for (let i = 9; i < 18; i++) {
-        let diff = scorecard[i] !== null ? (scorecard[i] - HOLES[i].par) : 0;
+    for (let i = 9; i < maxBack; i++) {
+        let hp = HOLES[i] ? HOLES[i].par : 4;
+        let diff = scorecard[i] !== null ? (scorecard[i] - hp) : 0;
         let val = scorecard[i] !== null ? scorecard[i] : '';
         if (scorecard[i] !== null) { inScore += scorecard[i]; hasIn = true; }
         
@@ -1617,6 +1751,9 @@ function renderScorecard() {
             else if (diff >= 2) cClass = "score-double";
         }
         rowHtml += `<td><span class="${val !== '' ? cClass + ' score-circ' : ''}">${val}</span></td>`;
+    }
+    for (let i = maxBack; i < 18; i++) {
+        if(i >= 9) rowHtml += `<td></td>`;
     }
     
     let isFinished = hasOut || hasIn;
@@ -1715,13 +1852,18 @@ function renderScorecard() {
     var outPar = 0; var outScore = 0;
     var inPar = 0; var inScore = 0;
     
+    // Sätt course name dynamiskt om custom creator skapat!
+    var cName = typeof COURSE_NAME !== 'undefined' ? COURSE_NAME : "VALDERRAMA (ORIGINAL)";
+    document.getElementById('sc-course-name').textContent = cName.toUpperCase();
+    
     var html = '<table class="sc-table">';
     html += '<tr><th>HOLE</th>';
-    for(var i=1; i<=9; i++) html += '<th>'+i+'</th>';
+    var maxFront = Math.min(9, HOLES.length);
+    for(var i=1; i<=maxFront; i++) html += '<th>'+i+'</th>';
     html += '<th>OUT</th></tr>';
     
     html += '<tr><td class="sc-row-header">PAR</td>';
-    for(var i=0; i<9; i++) {
+    for(var i=0; i<maxFront; i++) {
         var hPar = HOLES[i] ? HOLES[i].par : 4;
         outPar += hPar;
         html += '<td>'+hPar+'</td>';
@@ -1729,7 +1871,7 @@ function renderScorecard() {
     html += '<td>'+outPar+'</td></tr>';
     
     html += '<tr class="sc-player-row"><td class="sc-row-header">GOLFER</td>';
-    for(var i=0; i<9; i++) {
+    for(var i=0; i<maxFront; i++) {
         var hPar = HOLES[i] ? HOLES[i].par : 4;
         var s = scorecard[i];
         if (s !== null) {
@@ -1788,7 +1930,7 @@ function renderScorecard() {
     document.getElementById('sc-tables-container').innerHTML = html;
 }
 
-async function initMap() {
+async function bootGoogleMaps() {
   try {
     // Importera nödvändiga Google Maps JS bibliotek (Alpha channel)
     const maps3dLib = await window.google.maps.importLibrary('maps3d');
@@ -1940,14 +2082,14 @@ async function initMap() {
 
 // Load the Google Maps JS API with beta channel
 var script = document.createElement('script');
-script.src = 'https://maps.googleapis.com/maps/api/js?key=' + API_KEY + '&v=alpha&libraries=maps3d&callback=initMap';
+script.src = 'https://maps.googleapis.com/maps/api/js?key=' + API_KEY + '&v=alpha&libraries=maps3d&callback=loadGameCartridge';
 script.async = true;
 script.defer = true;
 script.onerror = function(e) {
   console.error('Script load error:', e);
   showError('Kunde inte ladda Google Maps JavaScript API.<br>Kontrollera din internetanslutning och API-nyckel.');
 };
-window.initMap = initMap;
+window.loadGameCartridge = loadGameCartridge;
 document.head.appendChild(script);
 </script>
 </body>

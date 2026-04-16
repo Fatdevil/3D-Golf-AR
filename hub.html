@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Golf OS - Hub</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+
+body {
+  margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc;
+  min-height: 100vh;
+  background-image: radial-gradient(circle at 15% 50%, rgba(16, 185, 129, 0.15), transparent 25%),
+                    radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.15), transparent 25%);
+  overflow-x: hidden;
+}
+.max-w { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
+.header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px; }
+.header .logo { font-size: 32px; font-weight: 900; letter-spacing: -1px; background: linear-gradient(135deg, #4ade80, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.profile-chip { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+.profile-avatar { width: 36px; height: 36px; border-radius: 50%; background: #38bdf8; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #0f172a; }
+.grid-layout { display: grid; grid-template-columns: 1fr 340px; gap: 30px; }
+@media(max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
+.card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; padding: 30px; backdrop-filter: blur(20px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; overflow: hidden; }
+.card h2 { margin: 0 0 20px 0; font-weight: 800; font-size: 22px; color: #e2e8f0; }
+.course-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 16px; margin-bottom: 12px; transition: all 0.2s; cursor: pointer; border: 1px solid transparent; }
+.course-item:hover { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); transform: translateY(-2px); }
+.course-info h4 { margin: 0 0 4px 0; font-size: 16px; color: #fff; }
+.course-info p { margin: 0; font-size: 12px; color: #94a3b8; }
+.btn-play { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+.btn-play:hover { background: #059669; }
+.action-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-radius: 20px; text-decoration: none; color: #fff; font-weight: 800; font-size: 18px; text-align: center; gap: 10px; transition: all 0.2s; border: 1px solid rgba(255,255,255,0.1); }
+.action-btn.creator { background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(79,70,229,0.2)); border-color: rgba(139,92,246,0.4); }
+.action-btn.creator:hover { background: rgba(139,92,246,0.4); }
+.action-btn.arcade { background: linear-gradient(135deg, rgba(234,179,8,0.2), rgba(239,68,68,0.2)); border-color: rgba(234,179,8,0.4); margin-top: 20px; }
+.action-btn.arcade:hover { background: rgba(234,179,8,0.4); }
+.action-btn.optimizer { background: linear-gradient(135deg, rgba(14,165,233,0.2), rgba(56,189,248,0.2)); border-color: rgba(14,165,233,0.4); margin-top: 20px; }
+.action-btn.optimizer:hover { background: rgba(14,165,233,0.4); }
+.icon-large { font-size: 32px; }
+
+/* --- LANDING PAGE CSS --- */
+#landing-view { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.2), #0f172a 70%); }
+.hero-title { font-size: 64px; font-weight: 900; letter-spacing: -2px; margin-bottom: 20px; background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero-subtitle { font-size: 22px; color: #cbd5e1; max-width: 600px; margin-bottom: 40px; line-height: 1.5; }
+.btn-premium { background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 20px; font-weight: 800; padding: 18px 40px; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px; }
+.btn-premium:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 15px 40px rgba(16, 185, 129, 0.6); }
+.pricing-tag { margin-top: 15px; font-size: 14px; color: #94a3b8; }
+
+/* --- STRIPE MODAL CSS --- */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 9999; }
+.stripe-modal { background: #fff; border-radius: 16px; width: 100%; max-width: 400px; padding: 30px; color: #0f172a; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); animation: slideUp 0.3s ease-out; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.stripe-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+.stripe-header h3 { margin: 0; font-size: 18px; font-weight: 700; display:flex; align-items:center; gap:8px;}
+.stripe-input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 15px; font-family: inherit; font-size: 16px; box-sizing: border-box;}
+.stripe-btn { width: 100%; background: #0f172a; color: #fff; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.stripe-btn:hover { background: #1e293b; }
+.close-modal { background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; }
+</style>
+</head>
+<body>
+
+<!-- THE LANDING PAGE VIEW -->
+<div id="landing-view">
+    <div style="font-weight: 900; font-size: 24px; color:#4ade80; margin-bottom: 40px; letter-spacing: -1px;">GOLF OS.</div>
+    <div class="hero-title">The World Is Your<br>Golf Course.</div>
+    <div class="hero-subtitle">Stop paying $250/yr for clunky PC software. Play photorealistic 3D golf directly in your browser.</div>
+    <button class="btn-premium" onclick="openStripeModal()">Start 7-Day Free Trial</button>
+    <div class="pricing-tag">Then just $5 / month. Cancel anytime.</div>
+</div>
+
+<!-- MOCK STRIPE CHECKOUT MODAL -->
+<div class="modal-overlay" id="checkout-modal">
+    <div class="stripe-modal">
+        <div class="stripe-header">
+            <h3><span style="color:#6366f1; font-weight:900;">stripe</span> Checkout</h3>
+            <button class="close-modal" onclick="closeStripeModal()">&times;</button>
+        </div>
+        <div style="font-size:14px; color:#64748b; margin-bottom: 20px;">
+            Subscribe to <strong>The Golf OS Pro</strong><br>
+            <span style="font-size: 24px; font-weight: 800; color:#0f172a;">$5.00</span> / month
+            <div style="font-size: 12px; color:#10b981; margin-top:4px;">First 7 days free</div>
+        </div>
+        <input type="text" class="stripe-input" placeholder="Email address" value="stellan@example.com">
+        <input type="text" class="stripe-input" placeholder="Card Information (Mock)" value="**** **** **** 4242">
+        <button class="stripe-btn" onclick="processPayment()">Start Trial</button>
+        <p style="font-size:11px; color:#94a3b8; text-align:center; margin-top:15px;">By confirming, you agree to our Terms of Service.</p>
+    </div>
+</div>
+
+<!-- THE DASHBOARD VIEW -->
+<div id="dashboard-view" style="display:none;">
+<div class="max-w">
+  <header class="header">
+    <div class="logo">GOLF OS.</div>
+    <div class="profile-chip">
+      <div class="profile-avatar">ST</div>
+      <div>
+        <div style="font-weight: 800; font-size: 14px;">Stellan</div>
+        <div style="font-size: 11px; color:#94a3b8;"><span style="cursor:pointer; color:#ef4444;" onclick="logOut()">Logga ut</span> | Creator</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="grid-layout">
+    <div class="card">
+      <h2>🌍 Välj Bana (Tee Time)</h2>
+      <div id="course-list">
+        <div class="course-item" onclick="playCourse('valderrama')">
+          <div class="course-info">
+            <h4>Valderrama (Original 18)</h4>
+            <p>Par 71 • Spanien • Official Data</p>
+          </div>
+          <button class="btn-play">Spela</button>
+        </div>
+        <div id="ugc-container"></div>
+      </div>
+    </div>
+    
+    <div>
+      <div class="card" style="padding: 20px;">
+        <h2 style="font-size: 16px; margin-bottom: 16px;">Världsbyggare</h2>
+        <a href="editor.html" class="action-btn creator">
+          <span class="icon-large">🏗️</span>
+          Course Creator Studio
+          <span style="font-weight: 400; font-size: 12px; color:#cbd5e1; margin-top: 4px;">Bygg egna banor på valfri plats</span>
+        </a>
+      </div>
+      
+      <div class="card" style="padding: 20px; margin-top: 20px;">
+         <h2 style="font-size: 16px; margin-bottom: 16px;">Barn & Lek</h2>
+         <a href="arcade.html" class="action-btn arcade">
+            <span class="icon-large">👾</span>
+            Smash Arcade Mode
+            <span style="font-weight: 400; font-size: 12px; color:#cbd5e1; margin-top: 4px;">Extreme Boost & Targets</span>
+         </a>
+      </div>
+
+      <div class="card" style="padding: 20px; margin-top: 20px; border-color: rgba(56,189,248,0.3);">
+         <h2 style="font-size: 16px; margin-bottom: 16px; color: #38bdf8;">Data & AI</h2>
+         <a href="#" onclick="openRangeModal(); return false;" class="action-btn optimizer">
+            <span class="icon-large">📈</span>
+            Bag Optimizer Studio
+            <span style="font-weight: 400; font-size: 12px; color:#cbd5e1; margin-top: 4px;">Club Fitting & Distance Gap Analysis</span>
+         </a>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="range-modal" style="display:none; position:fixed; top:0;left:0; width:100%;height:100%;background:rgba(0,0,0,0.8); z-index:999; justify-content:center; align-items:center;">
+    <div style="background:#0f172a; padding:30px; border-radius:12px; border:1px solid #38bdf8; width:400px; box-shadow:0 20px 50px rgba(0,0,0,0.5);">
+        <h2 style="color:#38bdf8; margin-top:0; margin-bottom: 20px;">🌍 Välj Range Plats</h2>
+        <div id="range-list" style="max-height: 300px; overflow-y:auto;">
+           <!-- populeras av JS -->
+        </div>
+        <button onclick="document.getElementById('range-modal').style.display='none'" style="margin-top:20px; width:100%; padding:12px; border:none; border-radius:4px; font-weight:bold; background:#475569; color:white; cursor:pointer;">Avbryt</button>
+    </div>
+</div>
+
+<script>
+function playCourse(courseId) {
+    window.location.href = `index.html?course=${courseId}`;
+}
+
+const DEFAULT_RANGE = { name: "St Andrews Links Academy", tee: {lat: 56.335967, lng: -2.821102}, heading: 358 };
+
+function openRangeModal() {
+    let html = `<div class="course-item" onclick='bootRange(${JSON.stringify(DEFAULT_RANGE)})'>
+        <div class="course-info">
+          <h4 style="margin:0; font-size:15px;">⛳ ${DEFAULT_RANGE.name}</h4>
+          <p style="margin:4px 0 0 0;font-size:12px;color:#cbd5e1;">Pro Range • Scotland City</p>
+        </div>
+    </div>`;
+    
+    let saved = localStorage.getItem('golf_os_saved_ranges');
+    if(saved) {
+        try {
+            let rList = JSON.parse(saved);
+            rList.forEach(r => {
+                 let safeR = encodeURIComponent(JSON.stringify(r));
+                 html += `<div class="course-item" onclick='bootRange(JSON.parse(decodeURIComponent("${safeR}")))' style="margin-top:10px; border-color:#ef4444;">
+                     <div class="course-info">
+                       <h4 style="margin:0; font-size:15px;">🌍 ${r.name}</h4>
+                       <p style="margin:4px 0 0 0;font-size:12px;color:#fca5a5;">Custom Byggd Range</p>
+                     </div>
+                 </div>`;
+            });
+        } catch(e) {}
+    }
+    
+    document.getElementById('range-list').innerHTML = html;
+    document.getElementById('range-modal').style.display = 'flex';
+}
+
+function bootRange(rObj) {
+    localStorage.setItem('golf_os_active_range', JSON.stringify(rObj));
+    window.location.href = 'range.html';
+}
+
+
+function loadUGC() {
+    var raw = localStorage.getItem('creator_courses');
+    if(raw) {
+        try {
+            var courses = JSON.parse(raw);
+            var html = '';
+            for(var key in courses) {
+                var c = courses[key];
+                html += `
+                <div class="course-item" onclick="playCourse('custom_${key}')">
+                  <div class="course-info">
+                    <h4>${c.name}</h4>
+                    <p>${Object.keys(c.holes).length} Hål • UGC Bana</p>
+                  </div>
+                  <button class="btn-play" style="background:#8b5cf6;">Spela (UGC)</button>
+                </div>
+                `;
+            }
+            document.getElementById('ugc-container').innerHTML = html;
+        } catch(e) { console.error("Error loading UGC:", e); }
+    }
+}
+
+// --- AUTHENTICATION & PAYMENT LOGIC ---
+function checkAuth() {
+    var hasSub = localStorage.getItem('golf_os_subscription') === 'active';
+    if(hasSub) {
+        document.getElementById('landing-view').style.display = 'none';
+        document.getElementById('dashboard-view').style.display = 'block';
+        loadUGC(); // Load courses only if logged in
+    } else {
+        document.getElementById('landing-view').style.display = 'flex';
+        document.getElementById('dashboard-view').style.display = 'none';
+    }
+}
+
+function openStripeModal() {
+    document.getElementById('checkout-modal').style.display = 'flex';
+}
+function closeStripeModal() {
+    document.getElementById('checkout-modal').style.display = 'none';
+}
+
+function processPayment() {
+    let btn = document.querySelector('.stripe-btn');
+    btn.textContent = "Processing secure payment...";
+    setTimeout(() => {
+        localStorage.setItem('golf_os_subscription', 'active');
+        closeStripeModal();
+        checkAuth(); // Boot dashboard
+        btn.textContent = "Start Trial";
+    }, 1200);
+}
+
+function logOut() {
+    localStorage.removeItem('golf_os_subscription');
+    checkAuth();
+}
+
+// Initial Boot
+checkAuth();
+
+</script>
+</body>
+</html>

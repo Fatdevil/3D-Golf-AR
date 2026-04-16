@@ -36,11 +36,36 @@
 <body>
 <div id="map"></div>
 <div id="sidebar">
-  <h2>🛠️ Course Mod Editor</h2>
+  <h2>🛠️ The Creator Studio</h2>
+  <a href="hub.html" style="color:#aaa; font-size:12px; display:block; margin-bottom:15px; text-decoration:none;">⬅ Tillbaka till Golf OS Hub</a>
+  
+  <div style="display:flex; background:#111; margin-bottom:20px; border-radius:8px; overflow:hidden;">
+      <button id="tab-course" onclick="switchTab('COURSE')" style="flex:1; margin:0; padding:12px; border-radius:0; background:#4ade80; color:#000;">18-Hål Bana</button>
+      <button id="tab-range" onclick="switchTab('RANGE')" style="flex:1; margin:0; padding:12px; border-radius:0; background:#333; color:#fff;">Driving Range</button>
+  </div>
+  
+  <div id="course-builder-ui">
+    <div class="control-group">
+      <label>Banans Namn</label>
+      <input type="text" id="course-name" value="Custom Course">
+    </div>
   
   <div class="control-group">
-    <label>1. Välj Hål Att Redigera</label>
+    <label>1. Hantera Hål</label>
     <select id="hole-select"></select>
+    <div style="display:flex; gap:10px;">
+        <button onclick="addHole()" style="background:#3b82f6;color:white;">+ Nytt Hål</button>
+        <button onclick="removeHole()" style="background:#ef4444;color:white;">- Radera Hål</button>
+    </div>
+    <label style="margin-top:10px;">Par för detta hål</label>
+    <input type="number" id="hole-par" value="4" onchange="updatePar()">
+  </div>
+  
+  <div class="control-group">
+    <label>2. Banans Längd (Start & Mål)</label>
+    <button class="type-btn tee" id="btn-set-tee" onclick="activatePointMode('TEE')">📍 Sätt TEE Position</button>
+    <button class="type-btn green" id="btn-set-green" onclick="activatePointMode('GREEN')">⛳ Sätt GREEN Position</button>
+    <small style="color:#aaa;">Klicka på knappen, klicka sen på kartan för att flytta start/mål för detta hål.</small>
   </div>
   
   <div class="control-group">
@@ -56,22 +81,48 @@
     <button class="type-btn ob" onclick="setType('OB')">🔴 Out of Bounds (Förbjuden gräns!)</button>
     
     <div class="tree-options" id="tree-options">
-      <label>Ungefärlig Trädhöjd (meter):</label>
-      <input type="number" id="tree-height" value="15" min="2" max="50">
-      <small style="color:#aaa; font-size:11px;">Om bollen färdas under denna höjd när den är inne i zonen krockar den i grenarna.</small>
+      <label style="color:#a21caf;">🌳 Trädhöjd / Byggnadshöjd (meter)</label>
+      <input type="number" id="tree-height" value="25" min="2" max="150" style="margin-top:2px;">
+      <small style="color:#aaa; font-size:11px; display:block; margin-top:5px;">Rita med lassot ovanifrån här i 2D. Fysikmotorn drar sedan upp en osynlig, exakt vägg över denna yta till angiven höjd i The Simulator!</small>
     </div>
   </div>
   
   <div class="control-group">
-    <label>3. Ritverktyg</label>
+    <label>3. Ritverktyg (Rödplikt/Vatten/etc)</label>
     <small style="color:#aaa; display:block; margin-bottom:10px;">Välj vilken yta du vill rita ovan, och rita sedan ut polygonen på kartan.</small>
     <button onclick="clearCurrentHoleData()" style="background:#ef4444; color:white;">Rensa Alla Min Karta för detta Hål</button>
   </div>
   
-  <div class="control-group" style="background:#111; border: 1px solid #4ade80;">
-    <label style="color:#4ade80;">4. Exportera Data</label>
-    <button onclick="exportData()" style="background:#22c55e;">Generera Uppdaterad Ban-Fil</button>
-    <textarea id="json-output" readonly placeholder="Resultatet från editorn kommer hamna här när du klickar på Export."></textarea>
+    <div class="control-group" style="background:#111; border: 1px solid #4ade80;">
+      <label style="color:#4ade80;">4. Exportera Data</label>
+      <button onclick="exportData()" style="background:#22c55e;">Generera Uppdaterad Ban-Fil</button>
+      <textarea id="json-output" readonly placeholder="Resultatet från editorn kommer hamna här när du klickar på Export."></textarea>
+    </div>
+  </div>
+  
+  <div id="range-builder-ui" style="display:none;">
+    <p style="font-size:12px; color:#aaa; margin-bottom:15px;">Bygg en Range från vilken plats som helst på jorden genom att söka i 2D, för att sedan slå på den i The Golf OS 3D-Simulator.</p>
+    
+    <div class="control-group">
+        <label>1. Flyg till Plats (Sökord)</label>
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="range-search-box" placeholder="T.ex Ullna Golf Club..." style="margin-bottom:0;">
+            <button onclick="searchFreeMap()" style="width:auto; padding:8px 12px; margin-bottom:0;"><span class="icon-large">🔍</span></button>
+        </div>
+    </div>
+    
+    <div class="control-group">
+        <label>2. Kalibrera Rangen</label>
+        <button class="type-btn tee" id="btn-set-range-tee" onclick="activateRangePoint('TEE')">📍 1. Sätt TEE Position</button>
+        <button class="type-btn ob" id="btn-set-range-target" onclick="activateRangePoint('TARGET')">🎯 2. Dra Target Riktning</button>
+        <small style="color:#aaa;">Klicka på knappen och sedan ut på kartan.</small>
+    </div>
+    
+    <div class="control-group" style="background:#111; border: 1px solid #38bdf8;">
+        <label style="color:#38bdf8;">3. Exportera Range till Hub</label>
+        <input type="text" id="range-name" value="Min Driving Range" style="margin-bottom:10px;">
+        <button onclick="saveRangeToHub()" style="background:#38bdf8;">Spara & Exportera</button>
+    </div>
   </div>
 </div>
 
@@ -81,25 +132,165 @@
 <script>
 const API_KEY = "AIzaSyAX0hFTbQ5utdLQIM4gyXnqZElEMJTM3DU";
 let map;
+
+// Course Builder State
 let drawingManager;
 let currentHoleIndex = 0;
 let currentType = 'FAIRWAY';
+let pointMode = null; // 'TEE' eller 'GREEN'
+let teeMarker = null;
+let greenMarker = null;
 
-// Vi skapar en customMod variabel inuti HOLES!
-// Vårt data-träd: HOLES[i].hazards = [ { type: 'SAND', path: [{lat,lng}, {lat,lng}...], height: null }, ... ]
+// Range Builder State
+let appMode = 'COURSE';
+let rangeTeePos = null;
+let rangeTargetHeading = 0;
+let rangePointMode = null;
+let searchBox = null;
+let rangeLineOverlay = null;
 
-// Fyll i Hål-rullgardinen
+function switchTab(t) {
+    appMode = t;
+    document.getElementById('tab-course').style.background = (t==='COURSE') ? '#4ade80' : '#333';
+    document.getElementById('tab-course').style.color = (t==='COURSE') ? '#000' : 'white';
+    document.getElementById('tab-range').style.background = (t==='RANGE') ? '#38bdf8' : '#333';
+    document.getElementById('tab-range').style.color = (t==='RANGE') ? '#000' : 'white';
+    
+    document.getElementById('course-builder-ui').style.display = (t==='COURSE') ? 'block' : 'none';
+    document.getElementById('range-builder-ui').style.display = (t==='RANGE') ? 'block' : 'none';
+    
+    if (drawingManager) drawingManager.setDrawingMode(null);
+    pointMode = null; rangePointMode = null;
+}
+
+async function searchFreeMap() {
+    let q = document.getElementById('range-search-box').value;
+    if(!q) return;
+    
+    document.getElementById('range-search-box').value = "Söker...";
+    try {
+        let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`);
+        let data = await res.json();
+        if(data && data.length > 0) {
+            let lat = parseFloat(data[0].lat);
+            let lon = parseFloat(data[0].lon);
+            map.setCenter({lat: lat, lng: lon});
+            map.setZoom(18); // Zooma in the fairway 
+            document.getElementById('range-search-box').value = data[0].display_name.split(',')[0] + " (Hittad!)";
+        } else {
+            document.getElementById('range-search-box').value = q;
+            alert("Kunde tyvärr inte hitta platsen. Försök med ort (t.ex. 'Augusta National, Georgia').");
+        }
+    } catch(e) {
+        document.getElementById('range-search-box').value = q;
+        alert("Sökfelet: " + e.message);
+    }
+}
+
+function activateRangePoint(type) {
+    rangePointMode = type;
+    if (drawingManager) drawingManager.setDrawingMode(null);
+    document.getElementById('btn-set-range-tee').classList.remove('active');
+    document.getElementById('btn-set-range-target').classList.remove('active');
+    if(type === 'TEE') document.getElementById('btn-set-range-tee').classList.add('active');
+    if(type === 'TARGET') document.getElementById('btn-set-range-target').classList.add('active');
+}
+
+function saveRangeToHub() {
+    if(!rangeTeePos) return alert("Sätt TEE först!");
+    if(rangeTargetHeading === 0) return alert("Sätt Target-vinkeln först!");
+    let rName = document.getElementById('range-name').value || "Custom Driving Range";
+    let dbRaw = localStorage.getItem('golf_os_saved_ranges') || '[]';
+    let db = JSON.parse(dbRaw);
+    let newRange = {
+        name: rName,
+        tee: rangeTeePos,
+        heading: rangeTargetHeading
+    };
+    db.push(newRange);
+    localStorage.setItem('golf_os_saved_ranges', JSON.stringify(db));
+    alert('Range Sparad! Du kan nu starta den inifrån Hubben.');
+    window.location.href = 'hub.html';
+}
+
+function computeBearing(p1, p2) {
+    let lat1 = p1.lat * Math.PI / 180;
+    let lon1 = p1.lng * Math.PI / 180;
+    let lat2 = p2.lat * Math.PI / 180;
+    let lon2 = p2.lng * Math.PI / 180;
+    let y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+    let x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+    let brng = Math.atan2(y, x) * 180 / Math.PI;
+    return (brng + 360) % 360;
+}
+
+
+// Initialisera namn om det finns
+if(typeof COURSE_NAME !== 'undefined') {
+    document.getElementById('course-name').value = COURSE_NAME;
+}
+
 const select = document.getElementById('hole-select');
-HOLES.forEach((h, i) => {
-    let opt = document.createElement('option');
-    opt.value = i;
-    opt.innerText = `Hål ${i+1} (Par ${h.par})`;
-    select.appendChild(opt);
-});
+
+function updateHoleSelect() {
+    select.innerHTML = '';
+    HOLES.forEach((h, i) => {
+        let opt = document.createElement('option');
+        opt.value = i;
+        opt.innerText = `Hål ${i+1} (Par ${h.par})`;
+        select.appendChild(opt);
+    });
+    select.value = currentHoleIndex;
+    
+    if(HOLES[currentHoleIndex]) {
+        document.getElementById('hole-par').value = HOLES[currentHoleIndex].par;
+    }
+}
+updateHoleSelect();
+
 select.addEventListener('change', (e) => {
     currentHoleIndex = parseInt(e.target.value);
+    document.getElementById('hole-par').value = HOLES[currentHoleIndex].par;
     loadHole(currentHoleIndex);
 });
+
+function addHole() {
+    HOLES.push({
+        hole: HOLES.length + 1,
+        par: 4,
+        tee: {lat: map.getCenter().lat(), lng: map.getCenter().lng() },
+        green: {lat: map.getCenter().lat() + 0.001, lng: map.getCenter().lng() },
+        hazards: []
+    });
+    currentHoleIndex = HOLES.length - 1;
+    updateHoleSelect();
+    loadHole(currentHoleIndex);
+}
+
+function removeHole() {
+    if(HOLES.length <= 1) return alert("Banan måste ha minst ett hål!");
+    if(confirm("Är du säker på att du vill ta bort detta hål helt?")) {
+        HOLES.splice(currentHoleIndex, 1);
+        currentHoleIndex = Math.max(0, currentHoleIndex - 1);
+        // Uppdatera hole numbers
+        HOLES.forEach((h, i) => h.hole = i+1);
+        updateHoleSelect();
+        loadHole(currentHoleIndex);
+    }
+}
+
+function updatePar() {
+    HOLES[currentHoleIndex].par = parseInt(document.getElementById('hole-par').value) || 4;
+    updateHoleSelect();
+}
+
+function activatePointMode(type) {
+    pointMode = type;
+    drawingManager.setDrawingMode(null);
+    document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('btn-set-' + type.toLowerCase()).classList.add('active');
+    alert(`Klicka på kartan för att sätta ny ${type === 'TEE' ? 'Start (Tee)' : 'Mål (Green)'} position för Hål ${currentHoleIndex+1}!`);
+}
 
 let drawnOverlays = []; // Tillfälliga google.maps.Polygon objekt för nuvarande hål
 
@@ -149,7 +340,7 @@ function initMap() {
     });
 
     drawingManager = new google.maps.drawing.DrawingManager({
-        drawingMode: google.maps.drawing.OverlayType.POLYGON,
+        drawingMode: null,
         drawingControl: true,
         drawingControlOptions: {
             position: google.maps.ControlPosition.TOP_CENTER,
@@ -158,6 +349,49 @@ function initMap() {
         polygonOptions: getPolygonOptsForType(currentType)
     });
     drawingManager.setMap(map);
+    
+    // Hantera musklick på kartan
+    map.addListener("click", (e) => {
+        if(appMode === 'RANGE') {
+            if (rangePointMode === 'TEE') {
+                rangeTeePos = {lat: e.latLng.lat(), lng: e.latLng.lng()};
+                if(teeMarker) teeMarker.setMap(null);
+                teeMarker = new google.maps.Marker({
+                    position: rangeTeePos, map: map,
+                    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#60a5fa', fillOpacity: 1, strokeWeight: 2, strokeColor: 'white' },
+                });
+                rangePointMode = 'TARGET';
+                document.getElementById('btn-set-range-tee').classList.remove('active');
+                document.getElementById('btn-set-range-target').classList.add('active');
+            } else if (rangePointMode === 'TARGET') {
+                let tPos = {lat: e.latLng.lat(), lng: e.latLng.lng()};
+                rangeTargetHeading = computeBearing(rangeTeePos, tPos);
+                
+                if (rangeLineOverlay) rangeLineOverlay.setMap(null);
+                rangeLineOverlay = new google.maps.Polyline({
+                    path: [rangeTeePos, tPos],
+                    geodesic: true,
+                    strokeColor: '#ef4444', strokeOpacity: 1.0, strokeWeight: 4,
+                    map: map
+                });
+                rangePointMode = null;
+                document.getElementById('btn-set-range-target').classList.remove('active');
+            }
+            return;
+        }
+        
+        if(pointMode === 'TEE') {
+            HOLES[currentHoleIndex].tee = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+            pointMode = null;
+            document.getElementById('btn-set-tee').classList.remove('active');
+            loadHole(currentHoleIndex);
+        } else if (pointMode === 'GREEN') {
+            HOLES[currentHoleIndex].green = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+            pointMode = null;
+            document.getElementById('btn-set-green').classList.remove('active');
+            loadHole(currentHoleIndex);
+        }
+    });
 
     // När användaren ritat klart en polygon
     google.maps.event.addListener(drawingManager, 'polygoncomplete', function (polygon) {
@@ -228,6 +462,23 @@ function loadHole(idx) {
             drawnOverlays.push(p);
         })
     }
+    
+    // Rita ut Tee och Green markörer visuellt!
+    if(teeMarker) teeMarker.setMap(null);
+    if(greenMarker) greenMarker.setMap(null);
+    
+    teeMarker = new google.maps.Marker({
+        position: hole.tee,
+        map: map,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#60a5fa', fillOpacity: 1, strokeWeight: 2, strokeColor: 'white' },
+        title: "Tee"
+    });
+    greenMarker = new google.maps.Marker({
+        position: hole.green,
+        map: map,
+        icon: { path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW, scale: 6, fillColor: '#ef4444', fillOpacity: 1, strokeWeight: 2, strokeColor: 'white' },
+        title: "Green / Hål"
+    });
 }
 
 function clearCurrentHoleData() {
@@ -238,9 +489,26 @@ function clearCurrentHoleData() {
 }
 
 function exportData() {
-    // Vi skapar en kopia av datan så vi inte pajar originalet just nu!
-    document.getElementById('json-output').value = "const HOLES = " + JSON.stringify(HOLES, null, 2) + ";";
-    alert('Kopiera datan från rutan och skriv över i data/valderrama.js!');
+    let cName = document.getElementById('course-name').value || "Custom Course";
+    let exportString = `const COURSE_NAME = "${cName}";\n`;
+    exportString += "const HOLES = " + JSON.stringify(HOLES, null, 2) + ";";
+    document.getElementById('json-output').value = exportString;
+    
+    // NYTT: Spara ner till Hubbens moln-databas lokalt!
+    try {
+        let dbRaw = localStorage.getItem('creator_courses') || '{}';
+        let db = JSON.parse(dbRaw);
+        let safeId = cName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString().slice(-4);
+        db[safeId] = {
+            name: cName,
+            holes: HOLES
+        };
+        localStorage.setItem('creator_courses', JSON.stringify(db));
+        alert('Banan sparad! Gå tillbaka till The Golf OS Hub för att spela den.');
+        window.location.href = 'hub.html';
+    } catch(e) {
+        alert('Något gick fel vid sparande...');
+    }
 }
 
 function initScript() {

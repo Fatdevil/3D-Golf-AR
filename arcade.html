@@ -97,6 +97,7 @@
         <input type="number" id="in-speed" value="130" title="Ball Speed (mph)">
         <input type="number" id="in-la" value="18" title="Launch Angle (deg)">
         <input type="number" id="in-hla" value="0" title="Horizontal Angle (deg)">
+        <input type="number" id="in-boost" value="1.0" step="0.1" title="Boost Multiplier (x)" style="background:#eab308; color:#000; border:none;">
         <button onclick="fireShot()">🔥 SHOOT</button>
     </div>
 </div>
@@ -192,6 +193,9 @@
         var vSpeed = parseFloat(document.getElementById('in-speed').value) || 120;
         var vLa = parseFloat(document.getElementById('in-la').value) || 15;
         var vHla = parseFloat(document.getElementById('in-hla').value) || 0;
+        var vBoost = parseFloat(document.getElementById('in-boost').value) || 1.0;
+        
+        vSpeed = vSpeed * vBoost;
         
         var launchConfig = {
             ballSpeedObj: { value: vSpeed, unit: "MPH" },
