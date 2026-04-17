@@ -166,7 +166,11 @@ window.GolfPhysics = (function() {
         const sampleRate = 0.1; // Output sparar var 100ms
         
         let path = [];
-        path.push({ x: 0, y: 0, z: 0, time: 0 });
+        path.push({ 
+            x: 0, y: 0, z: 0, 
+            vx: vel[0], vy: vel[1], vz: vel[2],
+            time: 0 
+        });
         
         let metrics = {
             carryMeters: 0,
@@ -344,7 +348,11 @@ window.GolfPhysics = (function() {
             }
 
             if ((t - lastSampleTime >= sampleRate) || state.phase === "stopped") {
-                path.push({ x: state.pos[0], y: state.pos[1], z: state.pos[2], time: t });
+                path.push({ 
+                    x: state.pos[0], y: state.pos[1], z: state.pos[2], 
+                    vx: state.vel[0], vy: state.vel[1], vz: state.vel[2],
+                    time: t 
+                });
                 lastSampleTime = t;
             }
         }

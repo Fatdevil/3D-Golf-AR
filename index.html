@@ -59,6 +59,15 @@
   .hole-title { font-size: 24px; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.8); display: flex; align-items: baseline; gap: 8px; }
   .par-text { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.6); }
   
+  .btn-home { 
+    background: rgba(15,23,42,0.8); color: #fff; 
+    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; text-decoration: none; font-size: 20px;
+    border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(8px); 
+    transition: all 0.2s; cursor: pointer; pointer-events: auto;
+  }
+  .btn-home:hover { background: rgba(15,23,42,0.95); border-color: #4ade80; transform: scale(1.05); }
+  
   #error-msg {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 200;
     background: rgba(0,0,0,0.9); border: 1px solid #ef4444; border-radius: 12px;
@@ -197,7 +206,10 @@
 
 <div id="mobile-top-bar">
   <div class="top-left">
-    <div class="logo">⛳ GreenRead <span class="badgetag" id="btn-unit-toggle" style="margin-left:4px;">METRIC</span></div>
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+        <a href="hub.html" class="btn-home" title="GOLF OS HUB">🏠</a>
+        <div class="logo">GOLF OS. <span class="badgetag" id="btn-unit-toggle" style="margin-left:4px;">METRIC</span></div>
+    </div>
     <div class="hole-picker">
        <button id="prev-hole">‹</button>
        <div class="hole-title"><span id="hud-hole-compact">Hål 1</span> <span class="par-text" id="hud-par-compact">Par 4 | Slag 1</span></div>
@@ -1208,7 +1220,7 @@ function animatePhysicsShot(launchData) {
         seg.setAttribute('stroke-color', userLaserColor);
         seg.setAttribute('stroke-width', '4');
         seg.setAttribute('altitude-mode', 'relative-to-ground');
-        seg.coordinates = [globalPath[i], globalPath[i+1]];
+        seg.path = [globalPath[i], globalPath[i+1]];
         window.tracerSegments.push(seg);
     }
     
@@ -1263,7 +1275,7 @@ function animatePhysicsShot(launchData) {
             lastDrawnSegment = currentIndex;
         }
 
-        shotMarker.coordinates = [
+        shotMarker.path = [
             currentPoint,
             { lat: currentPoint.lat + 0.000001, lng: currentPoint.lng, altitude: currentPoint.altitude } 
         ];
@@ -1505,11 +1517,15 @@ function animateShot() {
         var ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t; // ease-in-out curve
         var progress = t; // Linjär hastighet framåt
         
-        // Rolling Numbers Effect for Telemetry
-        document.getElementById('tm-club').innerHTML   = (tMetrics.clubSpeed * t).toFixed(1) + '<span class="tm-unit">mph</span>';
-        document.getElementById('tm-ball').innerHTML   = (tMetrics.ballSpeed * t).toFixed(1) + '<span class="tm-unit">mph</span>';
-        document.getElementById('tm-launch').innerHTML = (tMetrics.launch * t).toFixed(1) + '<span class="tm-unit">deg</span>';
-        document.getElementById('tm-spin').innerHTML   = Math.round(tMetrics.spin * t) + '<span class="tm-unit">rpm</span>';
+        // Fast Roll-up for Launch Data (Speed, Angle, Spin) - Reaches 100% in ~0.5s
+        let lp = Math.min(1, t * 8); 
+
+        document.getElementById('tm-club').innerHTML   = (tMetrics.clubSpeed * lp).toFixed(1) + '<span class="tm-unit">mph</span>';
+        document.getElementById('tm-ball').innerHTML   = (tMetrics.ballSpeed * lp).toFixed(1) + '<span class="tm-unit">mph</span>';
+        document.getElementById('tm-launch').innerHTML = (tMetrics.launch * lp).toFixed(1) + '<span class="tm-unit">deg</span>';
+        document.getElementById('tm-spin').innerHTML   = Math.round(tMetrics.spin * lp) + '<span class="tm-unit">rpm</span>';
+        
+        // Carry and Total can be slightly faster but still follow the flight
         document.getElementById('tm-carry').innerHTML  = Math.round(tMetrics.carry * Math.min(1, t*1.2)) + '<span class="tm-unit" id="tm-unit-carry">'+(currentUnit==='metric'?'m':'y')+'</span>';
         document.getElementById('tm-total').innerHTML  = Math.round(tMetrics.total * t) + '<span class="tm-unit" id="tm-unit-total">'+(currentUnit==='metric'?'m':'y')+'</span>';
         
@@ -1531,7 +1547,7 @@ function animateShot() {
 
         // Uppdatera polyline-bollen: Ett extremt kort streck ser ut som en lysande orb/boll i 3D
         // OBS: shotMarker har altitude-mode 'relative-to-ground', lägg inte till groundElev!
-        shotMarker.coordinates = [
+        shotMarker.path = [
             { lat: lat, lng: lng, altitude: altFromGround },
             { lat: lat + 0.000001, lng: lng, altitude: altFromGround } // Obetydlig sträcka framåt
         ];

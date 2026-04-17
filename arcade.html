@@ -81,15 +81,28 @@
       transition: transform 0.1s;
   }
   .controls button:active { transform: scale(0.95); }
+  .btn-home {
+      position: absolute; top: 20px; left: 20px;
+      background: rgba(15, 23, 42, 0.8); color: #fff;
+      width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
+      border-radius: 15px; text-decoration: none; font-size: 24px;
+      border: 2px solid #eab308;
+      pointer-events: auto; transition: all 0.2s;
+  }
+  .btn-home:hover { background: #eab308; color: #000; transform: scale(1.1); }
   
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="physics.js"></script>
 </head>
-<body>
-
 <div id="ui-layer">
+    <a href="hub.html" class="btn-home" title="GOLF OS HUB">🏠</a>
+    <div id="lm-status" style="position:absolute; top: 80px; left: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; pointer-events:auto; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
+       <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+       <span id="lm-status-text" style="text-transform: uppercase;">LM Frånkopplad</span>
+    </div>
+
     <div class="score-hud">SCORE: <span id="score-val">0</span></div>
     <div id="score-popup">+500 POP!</div>
     
@@ -187,22 +200,41 @@
     function fireShot() {
         if(isFlying) return; // Låt bollen landa
         
-        // Återställ bollen
-        ball.position.set(0, 0.3, 0);
-        
         var vSpeed = parseFloat(document.getElementById('in-speed').value) || 120;
         var vLa = parseFloat(document.getElementById('in-la').value) || 15;
         var vHla = parseFloat(document.getElementById('in-hla').value) || 0;
+        
+        var launchData = {
+            ballSpeedMph: vSpeed,
+            launchAngleDeg: vLa,
+            azimDeg: vHla,
+            totalSpinRpm: 2500, // Standardspin
+            spinAxisDeg: 0
+        };
+        
+        executeArcadeShot(launchData);
+    }
+    
+    function triggerRealShot(data) {
+        if(isFlying) return;
+        executeArcadeShot(data);
+    }
+
+    function executeArcadeShot(data) {
+        // Återställ bollen
+        ball.position.set(0, 0.3, 0);
+        
         var vBoost = parseFloat(document.getElementById('in-boost').value) || 1.0;
         
-        vSpeed = vSpeed * vBoost;
+        // Applicera Arcade Boost!
+        var finalSpeed = data.ballSpeedMph * vBoost;
         
         var launchConfig = {
-            ballSpeedObj: { value: vSpeed, unit: "MPH" },
-            launchAngle: vLa,
-            horizontalAngle: vHla,
-            totalSpin: 2500, // Standardspin
-            spinAxis: 0
+            ballSpeedMph: finalSpeed,
+            launchAngleDeg: data.launchAngleDeg,
+            totalSpinRpm: data.totalSpinRpm || 2500,
+            spinAxisDeg: data.spinAxisDeg || 0,
+            azimDeg: data.azimDeg || 0 // Horizontal Angle
         };
         
         // Enkel environment context (inget dör, FAIRWAY som mark)
@@ -211,9 +243,11 @@
             hasTreeCollision: function(x, y, z) { return false; }
         };
         
-        // Simulera The Matrix med vår super-algoritm!
-        flightData = simulateFlight(launchConfig, {speedAmp:0, heading:0}, envCtx);
+        // Simulera The Matrix med nya Fysikmotorn
+        let result = window.GolfPhysics.simulateFlight(launchConfig, envCtx);
+        if (!result) return;
         
+        flightData = result; // Path är result.path
         flightTick = 0;
         isFlying = true;
     }
@@ -222,19 +256,19 @@
         requestAnimationFrame(animate);
 
         // Om bollen flyger, hämta nästa punkt i trajectory
-        if (isFlying && flightData && flightTick < flightData.trajectory.length) {
+        if (isFlying && flightData && flightData.path && flightTick < flightData.path.length) {
             
             // Vi spelar p fram 3 ticks per frame för att det ska gå snabbt nog visuellt!
             var step = 3; 
-            var newTick = Math.min(flightTick + step, flightData.trajectory.length - 1);
+            var newTick = Math.min(flightTick + step, flightData.path.length - 1);
             
-            var point = flightData.trajectory[newTick];
+            var point = flightData.path[newTick];
             
-            // Konvertera Fysik (localX: Framåt, localY: Sida, currentZ: Höjd) till ThreeJS
-            // X = Sida (localY)
-            // Y = Höjd (currentZ)
-            // Z = Framåt (Negativ localX)
-            ball.position.set(point.localY, point.currentZ + 0.3, -point.localX);
+            // Konvertera Fysik (x: Sida, y: Framåt, z: Höjd) till ThreeJS
+            // X = Sida (x)
+            // Y = Höjd (z)
+            // Z = Framåt (Negativ y)
+            ball.position.set(point.x, point.z + 0.3, -point.y);
             
             // Följ bollen med kameran!
             camera.position.x = ball.position.x;
@@ -265,7 +299,7 @@
             
             flightTick = newTick;
             
-            if (flightTick === flightData.trajectory.length - 1) {
+            if (flightTick === flightData.path.length - 1) {
                 isFlying = false; // Bollen har stannat
                 setTimeout(() => {
                     // Återställ kameran
@@ -277,6 +311,41 @@
 
         renderer.render(scene, camera);
     }
+    
+    // --- LM BRIDGE STATUS ---
+    function initLaunchMonitorBridge() {
+        var ws = new WebSocket('ws://localhost:8081');
+        var dot = document.getElementById('lm-status-dot');
+        var txt = document.getElementById('lm-status-text');
+
+        ws.onopen = function() {
+            if(txt) txt.textContent = "LM Brygga Redo";
+            if(dot) dot.style.background = "#eab308";
+        };
+        ws.onmessage = function(event) {
+            try {
+                var msg = JSON.parse(event.data);
+                if (msg.type === 'status') {
+                    if(txt) txt.textContent = msg.data.message;
+                    if(dot) dot.style.background = msg.data.color;
+                } else if (msg.type === 'shot') {
+                    if(dot) {
+                        dot.style.background = "#38bdf8";
+                        setTimeout(() => dot.style.background = "#4ade80", 500);
+                    }
+                    triggerRealShot(msg.data);
+                }
+            } catch(e) {}
+        };
+        ws.onclose = function() {
+            if(txt) txt.textContent = "LM Brygga Nere";
+            if(dot) dot.style.background = "#ef4444";
+            setTimeout(initLaunchMonitorBridge, 5000);
+        };
+    }
+    
+    initLaunchMonitorBridge();
+    
     
     // Resize resulterar..
     window.addEventListener('resize', () => {

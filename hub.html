@@ -158,6 +158,11 @@ body {
         <button onclick="document.getElementById('range-modal').style.display='none'" style="margin-top:20px; width:100%; padding:12px; border:none; border-radius:4px; font-weight:bold; background:#475569; color:white; cursor:pointer;">Avbryt</button>
     </div>
 </div>
+<!-- GLOBAL LM STATUS -->
+<div id="lm-status" style="position:fixed; bottom: 20px; right: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; z-index: 1000; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
+   <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+   <span id="lm-status-text" style="text-transform: uppercase;">LM Frånkopplad</span>
+</div>
 
 <script>
 function playCourse(courseId) {
@@ -258,6 +263,39 @@ function logOut() {
     localStorage.removeItem('golf_os_subscription');
     checkAuth();
 }
+
+// --- LM BRIDGE STATUS ---
+function initLaunchMonitorBridge() {
+    var ws = new WebSocket('ws://localhost:8081');
+    var dot = document.getElementById('lm-status-dot');
+    var txt = document.getElementById('lm-status-text');
+
+    ws.onopen = function() {
+        if(txt) txt.textContent = "LM Brygga Redo";
+        if(dot) dot.style.background = "#eab308";
+    };
+    ws.onmessage = function(event) {
+        try {
+            var msg = JSON.parse(event.data);
+            if (msg.type === 'status') {
+                if(txt) txt.textContent = msg.data.message;
+                if(dot) dot.style.background = msg.data.color;
+            } else if (msg.type === 'shot') {
+                // Blink green on shot in hub
+                if(dot) {
+                    dot.style.background = "#4ade80";
+                    setTimeout(() => dot.style.background = "#eab308", 500);
+                }
+            }
+        } catch(e) {}
+    };
+    ws.onclose = function() {
+        if(txt) txt.textContent = "LM Brygga Nere";
+        if(dot) dot.style.background = "#ef4444";
+        setTimeout(initLaunchMonitorBridge, 5000);
+    };
+}
+initLaunchMonitorBridge();
 
 // Initial Boot
 checkAuth();

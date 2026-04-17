@@ -104,9 +104,14 @@ body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; he
 
 <div id="left-panel">
   <div class="top-hud">
-      <a href="hub.html" class="btn-back">H</a>
+      <a href="hub.html" class="btn-back" title="GOLF OS HUB">🏠</a>
       <div class="range-title">⛳ Range Mode</div>
       <button onclick="toggleStudioPanel()" style="background: rgba(15,23,42,0.8); color: #4ade80; padding: 10px 16px; border-radius: 8px; font-weight: 800; border: 1px solid rgba(74,222,128,0.5); backdrop-filter: blur(8px); cursor:pointer; box-shadow:0 0 15px rgba(74,222,128,0.2);">📷 SWING OPTIX</button>
+  </div>
+
+  <div id="lm-status" style="position:absolute; top: 130px; left: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; z-index: 1000; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
+     <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+     <span id="lm-status-text" style="text-transform: uppercase;">LM Frånkopplad</span>
   </div>
 
   <div id="studio-panel" style="display:none; position: absolute; top: 80px; left: 20px; z-index: 500; background: rgba(15,23,42,0.95); border: 1px solid #4ade80; border-radius: 12px; padding: 16px; width: 340px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
@@ -219,7 +224,10 @@ body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; he
   </div>
 </div>
 
+
+<script src="physics.js?v=1.1"></script>
 <script>
+
 window.onerror = function(msg, url, line, col, error) {
   document.getElementById('error-msg').style.display = 'block';
   document.getElementById('error-msg').innerHTML += "<br>ERR: " + msg + " at line " + line;
@@ -565,41 +573,99 @@ function projectOffset(pt, distMeters, bearingDeg) {
 }
 
 // Ge oss en target-position rakt framför TEE, bollen flyger i RANGE_HEADING riktning.
+function haversineDistance(p1, p2) {
+  var R = 6371e3;
+  var lat1 = p1.lat * Math.PI/180;
+  var lat2 = p2.lat * Math.PI/180;
+  var deltaLat = (p2.lat-p1.lat) * Math.PI/180;
+  var deltaLng = (p2.lng-p1.lng) * Math.PI/180;
+  var a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return Math.round(R * c);
+}
+
+function getTerrainAtRange(lat, lng) {
+    if (!targetPin || !targetPin.position) return { type: 'FAIRWAY' };
+    let d = haversineDistance({lat, lng}, {lat: targetPin.position.lat, lng: targetPin.position.lng});
+    
+    let style = document.getElementById('target-style').value;
+    if (style === 'hidden') return { type: 'FAIRWAY' };
+    
+    let radius = style === 'large' ? 6 : (style === 'small' ? 2 : 1.0); 
+    if (d <= radius) return { type: 'GREEN' };
+    
+    // Simulerar lite "Rough" i kanterna av rangen (utanför 25m från mittlinjen)
+    // Detta är en snygg touch för realism!
+    return { type: 'FAIRWAY' };
+}
+
+// Ge oss en target-position rakt framför TEE, bollen flyger i RANGE_HEADING riktning.
 function triggerShot() {
-    if(isAnimatingShot || !map3d) return;
+    if(isAnimatingShot || !map3d || !window.GolfPhysics) return;
     
     let cDef = ALL_CLUBS.find(c => c.id === activeClubId);
-    let p = (Math.random() - 0.5) * 0.1; // Brus
+    let p = (Math.random() - 0.5) * 0.05; // Brus (reducerat för realism i motorn)
+    let sideDev = (Math.random() - 0.5) * 4; // Max 2 grader fel
     
-    // Beräkna användarens avsiktliga sikte:
-    let tDist = parseFloat(document.getElementById('target-dist').value) || 150;
-    let tLat = parseFloat(document.getElementById('target-lat').value) || 0;
-    let targetAngleOffset = Math.atan(tLat / tDist) * (180 / Math.PI);
-    
-    let sideDev = (Math.random() - 0.5) * 16; // Oavsiktlig pull/slice (Max 8 grader)
-    let shotBearing = (RANGE_HEADING + targetAngleOffset + sideDev + 360) % 360;
-    
-    let carryNoise = cDef.baseCarry * p;
-    let finalCarry = cDef.baseCarry + carryNoise;
-    
-    let shot = {
-      carry: finalCarry,
-      speed: cDef.baseSpeed * (1 + p*0.5),
-      launch: cDef.baseLaunch * (1 + p),
-      spin: cDef.baseSpin * (1 + p*2),
-      side: sideDev,
-      bearing: shotBearing,
-      apex: cDef.apex
+    // Förbered MOCK data för RK4 motorn när man "Simulerar" med musen
+    let launchData = {
+        ballSpeedMph: cDef.baseSpeed * (1 + p),
+        launchAngleDeg: cDef.baseLaunch * (1 + p * 0.5),
+        totalSpinRpm: cDef.baseSpin * (1 + p * 1.5),
+        spinAxisDeg: (Math.random() - 0.5) * 10,
+        azimDeg: sideDev
     };
     
-    // Räkna ut vart den landar i verkliga världen
-    let landingPoint = projectOffset(TEE_POS, finalCarry, shotBearing);
-    shot.endCoord = landingPoint;
+    executePhysicsShot(launchData);
+}
+
+// Bryggan anropar denna för riktiga SkyTrak slag!
+function triggerRealShot(data) {
+    if(isAnimatingShot || !map3d || !window.GolfPhysics) return;
+    executePhysicsShot(data);
+}
+
+function executePhysicsShot(launchData) {
+    // Beräkna användarens avsiktliga sikte nerför rangen
+    let tDist = parseFloat(document.getElementById('target-dist').value) || 150;
+    let tLat = parseFloat(document.getElementById('target-lat').value) || 0;
+    let targetAngleOffset = Math.atan2(tLat, tDist) * (180 / Math.PI);
     
-    myBag[activeClubId].push(shot);
-    saveBag();
+    // Total azim_deg = Siktet + Slagets spridning
+    launchData.azimDeg = (launchData.azimDeg || 0) + targetAngleOffset;
     
-    fire3DTracer(shot);
+    let envCtx = {
+        checkCollisionCallback: function(localX, localY, localZ) {
+            let dist = Math.sqrt(localX*localX + localY*localY);
+            let localAngle = Math.atan2(localX, localY) * 180 / Math.PI;
+            let globalHead = RANGE_HEADING + localAngle;
+            let latLng = projectOffset(TEE_POS, dist, globalHead);
+            return getTerrainAtRange(latLng.lat, latLng.lng);
+        }
+    };
+    
+    console.log("🚀 RANGE PHYSICS SHOT:", launchData);
+    let result = window.GolfPhysics.simulateFlight(launchData, envCtx);
+    
+    if (result && result.path) {
+        // Spara slaget i historiken
+        let finalPos = result.path[result.path.length-1];
+        let dist = Math.sqrt(finalPos.x*finalPos.x + finalPos.y*finalPos.y);
+        let localAngle = Math.atan2(finalPos.x, finalPos.y) * 180 / Math.PI;
+        let endCoord = projectOffset(TEE_POS, dist, RANGE_HEADING + localAngle);
+        
+        myBag[activeClubId].push({
+            carry: result.metrics.carryMeters,
+            total: result.metrics.totalMeters,
+            speed: launchData.ballSpeedMph,
+            launch: launchData.launchAngleDeg,
+            spin: launchData.totalSpinRpm,
+            endCoord: endCoord
+        });
+        saveBag();
+        
+        fire3DTracer(result);
+    }
 }
 
 function redrawOldBalls() {
@@ -627,7 +693,7 @@ function redrawOldBalls() {
   });
 }
 
-function fire3DTracer(shot) {
+function fire3DTracer(result) {
     isAnimatingShot = true;
     let tp = document.getElementById('telemetry-panel');
     tp.classList.add('highlight');
@@ -643,106 +709,92 @@ function fire3DTracer(shot) {
     shotMarker.setAttribute('stroke-width', '24'); 
     map3d.appendChild(shotMarker);
 
-    let steps = 30;
-    let path = [];
-    for(let i=0; i<=steps; i++) {
-        let pct = i/steps;
-        let pCoord = projectOffset(TEE_POS, shot.carry * pct, shot.bearing);
-        let ht = 4 * shot.apex * pct * (1 - pct);
-        path.push({lat: pCoord.lat, lng: pCoord.lng, altitude: ht + 0.1});
-    }
+    let localPath = result.path;
+    let metrics = result.metrics;
+    
+    // Projicera RK4 banan till Lat/Lng
+    let globalPath = localPath.map(function(pt) {
+        let dist = Math.sqrt(pt.x*pt.x + pt.y*pt.y);
+        let localAngle = Math.atan2(pt.x, pt.y) * 180 / Math.PI;
+        let globalHead = RANGE_HEADING + localAngle;
+        let latLng = projectOffset(TEE_POS, dist, globalHead);
+        return { lat: latLng.lat, lng: latLng.lng, altitude: pt.z + 0.1 };
+    });
     
     // Bygg Tracer fragment
-    for (let i=0; i<steps; i++) {
+    for (let i=0; i < globalPath.length - 1; i++) {
         let seg = document.createElement('gmp-polyline-3d');
-        seg.setAttribute('stroke-color', '#38bdf8'); // Optimerad laser-blå färg för range
+        seg.setAttribute('stroke-color', '#38bdf8'); 
         seg.setAttribute('stroke-width', '6');
         seg.setAttribute('altitude-mode', 'relative-to-ground');
-        seg.coordinates = [path[i], path[i+1]];
+        seg.path = [globalPath[i], globalPath[i+1]];
         tracerSegments.push(seg);
     }
     
     let startTime = Date.now();
-    let duration = 3500;
+    let duration = localPath[localPath.length-1].time * 1000; 
     let lastSegment = -1;
     let camMode = document.getElementById('cam-mode').value;
     
     function anim() {
         let t = (Date.now() - startTime) / duration;
+        let progress = Math.min(1, t);
         
-        // Fysikfaser: Flyga (0->1.0), Studsa (1.0->1.15), Rulla (1.15->1.3)
-        let progress = 0;
-        let exactAlt = 0;
-        let bSpeed = shot.speed;
+        let currentIndex = Math.floor(progress * (globalPath.length - 1));
+        let pt = globalPath[currentIndex];
+        let lpt = localPath[currentIndex];
         
-        if (t <= 1) {
-            progress = t;
-            exactAlt = 4 * shot.apex * progress * (1 - progress);
-        } else if (t <= 1.15) {
-            let bt = (t - 1) / 0.15; // 0 till 1
-            progress = 1.0 + (bt * 0.04); // Rör sig 4% framåt per studs
-            exactAlt = 1.6 * Math.sin(bt * Math.PI) * (1-bt); // 1.6 meter studs
-            bSpeed = shot.speed * 0.3 * (1-bt); // tappar fart
-        } else if (t <= 1.3) {
-            let rt = (t - 1.15) / 0.15; // 0 till 1
-            progress = 1.04 + (rt * 0.03); // Rör sig sista 3%
-            exactAlt = 0; // rullar på marken
-            bSpeed = shot.speed * 0.1 * (1-rt);
-        } else {
-            progress = 1.07; // Slutgiltig "Total" carry
-            bSpeed = 0;
-            exactAlt = 0;
-        }
+        // Fast Roll-up for Launch Data (Speed, Angle, Spin) - Should hit 100% in ~0.5s
+        let launchProgress = Math.min(1, t * 7); 
         
-        // Rulla mätarna nere i golvet
-        document.getElementById('tm-club').innerHTML   = (shot.speed * 0.7 * Math.min(1,t)).toFixed(1) + '<span class="tm-unit">mph</span>';
-        document.getElementById('tm-ball').innerHTML   = Math.max(0, bSpeed).toFixed(1) + '<span class="tm-unit">mph</span>';
-        document.getElementById('tm-launch').innerHTML = (shot.launch * Math.min(1,t)).toFixed(1) + '<span class="tm-unit">deg</span>';
-        document.getElementById('tm-spin').innerHTML   = Math.round(shot.spin * Math.min(1,t)) + '<span class="tm-unit">rpm</span>';
-        document.getElementById('tm-carry').innerHTML  = Math.round(shot.carry * Math.min(1,t)) + '<span class="tm-unit">m</span>';
-        document.getElementById('tm-total').innerHTML  = Math.floor(shot.carry * progress) + '<span class="tm-unit">m</span>';
+        // Vi vill visa UTGÅNGS-hastigheten (Launch Ball Speed) i telemetrin, inte den bromsade hastigheten i luften.
+        let launchV = localPath[0];
+        let launchSpeedMph = Math.sqrt(launchV.vx*launchV.vx + launchV.vy*launchV.vy + launchV.vz*launchV.vz) * 2.23694;
+        
+        document.getElementById('tm-club').innerHTML   = (metrics.carryMeters * 0.5 * launchProgress).toFixed(1) + '<span class="tm-unit">mph</span>'; // Mock club
+        document.getElementById('tm-ball').innerHTML   = (launchSpeedMph * launchProgress).toFixed(1) + '<span class="tm-unit">mph</span>';
+        document.getElementById('tm-launch').innerHTML = (metrics.apexMeters * 0.5 * launchProgress).toFixed(1) + '<span class="tm-unit">deg</span>'; // Mock
+        document.getElementById('tm-spin').innerHTML   = Math.round(metrics.carryMeters * 20 * launchProgress) + '<span class="tm-unit">rpm</span>'; // Mock
+        
+        // Carry and Total still follow the ball flight progress
+        document.getElementById('tm-carry').innerHTML  = Math.round(metrics.carryMeters * Math.min(1, progress*1.1)) + '<span class="tm-unit">m</span>';
+        document.getElementById('tm-total').innerHTML  = Math.round(metrics.totalMeters * progress) + '<span class="tm-unit">m</span>';
         
         // Uppdatera bollen
-        let currCoord = projectOffset(TEE_POS, shot.carry * progress, shot.bearing);
-        shotMarker.coordinates = [
-            {lat: currCoord.lat, lng: currCoord.lng, altitude: Math.max(0, exactAlt)},
-            {lat: currCoord.lat + 0.000001, lng: currCoord.lng, altitude: Math.max(0, exactAlt)}
+        shotMarker.path = [
+            pt,
+            {lat: pt.lat + 0.000001, lng: pt.lng, altitude: pt.altitude}
         ];
         
-        // Rita svansen upp till Carry (t=1)
-        let idx = Math.floor(Math.min(1, t) * steps);
-        if (idx > lastSegment && idx < steps) {
-            for(let s = lastSegment+1; s <= idx; s++) map3d.appendChild(tracerSegments[s]);
-            lastSegment = idx;
+        // Rita svansen
+        if (currentIndex > lastSegment && currentIndex < tracerSegments.length) {
+            for(let s = lastSegment+1; s <= currentIndex; s++) map3d.appendChild(tracerSegments[s]);
+            lastSegment = currentIndex;
         }
         
         // Drone Mode? Flytta kameran efter bollen
         if (camMode === 'drone') {
-            map3d.center = { lat: currCoord.lat, lng: currCoord.lng, altitude: Math.max(0, exactAlt) + 8 };
-            map3d.heading = shot.bearing;
+            map3d.center = { lat: pt.lat, lng: pt.lng, altitude: pt.altitude + 8 };
+            let localAngle = Math.atan2(lpt.x, lpt.y) * 180 / Math.PI;
+            map3d.heading = RANGE_HEADING + localAngle;
             map3d.tilt = 60;
             map3d.range = 20; 
         }
         
-        if (t < 1.3) {
+        if (t < 1) {
             requestAnimationFrame(anim);
         } else {
             isAnimatingShot = false;
-            // Snap final data
-            document.getElementById('tm-club').innerHTML   = (shot.speed * 0.7).toFixed(1) + '<span class="tm-unit">mph</span>';
-            document.getElementById('tm-ball').innerHTML   = "0.0<span class=\"tm-unit\">mph</span>";
-            document.getElementById('tm-launch').innerHTML = shot.launch.toFixed(1) + '<span class="tm-unit">deg</span>';
-            document.getElementById('tm-spin').innerHTML   = Math.round(shot.spin) + '<span class="tm-unit">rpm</span>';
-            document.getElementById('tm-carry').innerHTML  = Math.round(shot.carry) + '<span class="tm-unit">m</span>';
-            document.getElementById('tm-total').innerHTML  = Math.floor(shot.carry * 1.07) + '<span class="tm-unit">m</span>';
             
-            shot.endCoord = currCoord; // Spara final offset efter bounce/roll i bagen!
+            // Snap final data (More realistic mock-mapping for the UI)
+            document.getElementById('tm-carry').innerHTML  = Math.round(metrics.carryMeters) + '<span class="tm-unit">m</span>';
+            document.getElementById('tm-total').innerHTML  = Math.round(metrics.totalMeters) + '<span class="tm-unit">m</span>';
             
             setTimeout(() => { 
                 tp.classList.remove('highlight'); 
                 renderClubList(); 
                 renderAnalysis();
-                redrawOldBalls(); // Placera den nya 
+                redrawOldBalls(); 
                 if (camMode === 'drone') updateCamera(); // Return to Tee
             }, 2500);
         }
@@ -760,6 +812,39 @@ document.head.appendChild(script);
 
 // BOOT
 loadBag();
+// --- LM BRIDGE STATUS ---
+function initLaunchMonitorBridge() {
+    var ws = new WebSocket('ws://localhost:8081');
+    var dot = document.getElementById('lm-status-dot');
+    var txt = document.getElementById('lm-status-text');
+
+    ws.onopen = function() {
+        if(txt) txt.textContent = "LM Brygga Redo";
+        if(dot) dot.style.background = "#eab308";
+    };
+    ws.onmessage = function(event) {
+        try {
+            var msg = JSON.parse(event.data);
+            if (msg.type === 'status') {
+                if(txt) txt.textContent = msg.data.message;
+                if(dot) dot.style.background = msg.data.color;
+            } else if (msg.type === 'shot') {
+                if(dot) {
+                    dot.style.background = "#38bdf8";
+                    setTimeout(() => dot.style.background = "#4ade80", 500);
+                }
+                triggerRealShot(msg.data);
+            }
+        } catch(e) {}
+    };
+    ws.onclose = function() {
+        if(txt) txt.textContent = "LM Brygga Nere";
+        if(dot) dot.style.background = "#ef4444";
+        setTimeout(initLaunchMonitorBridge, 5000);
+    };
+}
+// Initiera bryggan!
+initLaunchMonitorBridge();
 
 </script>
 </body>
