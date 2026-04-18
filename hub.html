@@ -166,7 +166,11 @@ body {
 
 <script>
 function playCourse(courseId) {
-    window.location.href = `arcade.html?course=${courseId}`;
+    if (courseId === 'valderrama') {
+        window.location.href = `index.html?course=${courseId}`;
+    } else {
+        window.location.href = `arcade.html?course=${courseId}`;
+    }
 }
 
 const DEFAULT_RANGE = { name: "St Andrews Links Academy", tee: {lat: 56.335967, lng: -2.821102}, heading: 358 };
