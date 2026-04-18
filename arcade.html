@@ -1195,11 +1195,16 @@
                 else if (minD === dWater) biomeType = 'WATER';
                 else if (minD === dFairway) biomeType = 'FAIRWAY';
                 else biomeType = 'ROUGH';
-                
-                if (height < -29.9) {
-                    biomeType = 'WATER';
+                let waterHeight = -99;
+                if (typeof waterGeo !== 'undefined' && waterGeo) {
+                    waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
                 }
                 
+                // Då kan du ha snustorra bunkrar på -40m, vattnet triggar bara där du faktiskt grävt vatten!
+                if (waterHeight > -90 && height < waterHeight + 0.1) {
+                    biomeType = 'WATER';
+                    height = waterHeight; // Möt ytan exakt
+                }
                 return {
                     z: height,
                     normal: normal, 
