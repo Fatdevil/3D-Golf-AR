@@ -1914,7 +1914,8 @@
         previousFrameHitPoint = lastHitPoint.clone();
         
         // Omdirigera ritandet direkt till Canvas för skarp grafik
-        if (currentTool === 'PAINT' || currentTool === 'WATER') {
+        // Omdirigera ritandet direkt till Canvas för skarp grafik (TILLÄGG: Water ritar inte längre på pCtx)
+        if (currentTool === 'PAINT') {
             let pCtx1X = ((p1.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pCtx1Z = ((p1.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pCtx2X = ((p2.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
@@ -1922,7 +1923,7 @@
             let cRad = (radius / TERRAIN_SIZE) * 4096;
             
             pCtx.globalCompositeOperation = 'source-over'; 
-            let brushColor = currentTool === 'WATER' ? '#38bdf8' : '#' + targetPaintColor.getHexString(); // Physics expects #38bdf8 for water
+            let brushColor = '#' + targetPaintColor.getHexString();
             pCtx.strokeStyle = brushColor;
             pCtx.fillStyle = brushColor;
             pCtx.lineWidth = cRad * 2;
@@ -1939,28 +1940,34 @@
                 pCtx.stroke();
             }
             if(mapTex) mapTex.needsUpdate = true;
-            
-            // ALPHA MASK FOR WATER 
-            if (currentTool === 'WATER') {
-                wCtx.globalCompositeOperation = 'source-over';
-                wCtx.strokeStyle = '#ffffff';
-                wCtx.fillStyle = '#ffffff';
-                wCtx.lineWidth = cRad * 2;
-                wCtx.lineCap = 'round';
-                wCtx.lineJoin = 'round';
-                wCtx.beginPath();
-                if (p1.distanceTo(p2) < 0.1) {
-                    wCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
-                    wCtx.fill();
-                } else {
-                    wCtx.moveTo(pCtx1X, pCtx1Z);
-                    wCtx.lineTo(pCtx2X, pCtx2Z);
-                    wCtx.stroke();
-                }
-                if(waterTex) waterTex.needsUpdate = true;
+        }
+        // ALPHA MASK FOR WATER 
+        if (currentTool === 'WATER') {
+            let pCtx1X = ((p1.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pCtx1Z = ((p1.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pCtx2X = ((p2.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pCtx2Z = ((p2.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let cRad = (radius / TERRAIN_SIZE) * 4096;
+
+            wCtx.globalCompositeOperation = 'source-over';
+            wCtx.strokeStyle = '#ffffff';
+            wCtx.fillStyle = '#ffffff';
+            wCtx.lineWidth = cRad * 2;
+            wCtx.lineCap = 'round';
+            wCtx.lineJoin = 'round';
+            wCtx.beginPath();
+            if (p1.distanceTo(p2) < 0.1) {
+                wCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
+                wCtx.fill();
+            } else {
+                wCtx.moveTo(pCtx1X, pCtx1Z);
+                wCtx.lineTo(pCtx2X, pCtx2Z);
+                wCtx.stroke();
             }
-            
-            if (currentTool === 'PAINT') return; // Vi skulpterar inga höjder vid ren målning!
+            if(waterTex) waterTex.needsUpdate = true;
+        }
+        
+        if (currentTool === 'PAINT') return; // Vi skulpterar inga höjder vid ren målning!
         }
         
         let l2 = (p1.x - p2.x)*(p1.x - p2.x) + (p1.z - p2.z)*(p1.z - p2.z);
