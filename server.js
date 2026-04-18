@@ -35,6 +35,9 @@ async function initDB() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+        try {
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS likes INT DEFAULT 0;`);
+        } catch(e) {}
         console.log("✅ Database schema ready");
     } catch(err) {
         console.error("❌ Database schema error:", err);
@@ -50,6 +53,37 @@ if(process.env.DATABASE_URL) {
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', db_connected: !!process.env.DATABASE_URL });
+});
+
+app.get('/api/courses', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT share_code, name, author, likes, created_at 
+            FROM courses 
+            ORDER BY created_at DESC 
+            LIMIT 50
+        `);
+        res.json(result.rows);
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+app.post('/api/courses/:share_code/like', async (req, res) => {
+    try {
+        const code = req.params.share_code.toUpperCase();
+        const result = await pool.query(`
+            UPDATE courses 
+            SET likes = COALESCE(likes, 0) + 1 
+            WHERE share_code = $1 
+            RETURNING likes
+        `, [code]);
+        res.json({ success: true, likes: result.rows[0] ? result.rows[0].likes : 0 });
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 // Generera en slumpmässig share_code

@@ -166,7 +166,7 @@ body {
 
 <script>
 function playCourse(courseId) {
-    window.location.href = `index.html?course=${courseId}`;
+    window.location.href = `arcade.html?course=${courseId}`;
 }
 
 const DEFAULT_RANGE = { name: "St Andrews Links Academy", tee: {lat: 56.335967, lng: -2.821102}, heading: 358 };
@@ -205,27 +205,58 @@ function bootRange(rObj) {
 }
 
 
-function loadUGC() {
-    var raw = localStorage.getItem('creator_courses');
-    if(raw) {
-        try {
-            var courses = JSON.parse(raw);
-            var html = '';
-            for(var key in courses) {
-                var c = courses[key];
-                html += `
-                <div class="course-item" onclick="playCourse('custom_${key}')">
-                  <div class="course-info">
-                    <h4>${c.name}</h4>
-                    <p>${Object.keys(c.holes).length} Hål • UGC Bana</p>
+async function loadUGC() {
+    try {
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses');
+        let courses = await res.json();
+        
+        let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
+        
+        let html = '';
+        courses.forEach(c => {
+            let isLiked = likedLocal.includes(c.share_code);
+            let heartColor = isLiked ? '#ef4444' : '#94a3b8';
+            let formattedDate = new Date(c.created_at).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+            
+            html += `
+            <div class="course-item" style="border:1px solid rgba(56,189,248,0.3); align-items:center;">
+              <div class="course-info" style="flex:1;">
+                <h4 style="font-size:18px; color:#38bdf8;">${c.name}</h4>
+                <p>by <span style="color:#e2e8f0;">${c.author}</span> • Code: <strong>${c.share_code}</strong> • ${formattedDate}</p>
+              </div>
+              <div style="display:flex; gap:15px; align-items:center;">
+                  <div style="text-align:center; cursor:pointer; min-width:40px; transition: transform 0.2s;" onclick="${isLiked ? '' : `likeCourse(event, '${c.share_code}')`}" class="like-btn" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                      <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:20px;">❤️</div>
+                      <div id="likes-${c.share_code}" style="font-size:12px; color:#cbd5e1; font-weight:bold;">${c.likes || 0}</div>
                   </div>
-                  <button class="btn-play" style="background:#8b5cf6;">Spela (UGC)</button>
-                </div>
-                `;
-            }
-            document.getElementById('ugc-container').innerHTML = html;
-        } catch(e) { console.error("Error loading UGC:", e); }
+                  <button class="btn-play" style="background:#38bdf8; color:#0f172a; padding:12px 24px; font-size:14px;" onclick="playCourse('${c.share_code}')">Spela Bana</button>
+              </div>
+            </div>
+            `;
+        });
+        document.getElementById('ugc-container').innerHTML = html;
+    } catch(e) {
+        console.error("Error loading Cloud Courses:", e);
+        document.getElementById('ugc-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">Kunde inte ladda banor från nätverket.</div>`;
     }
+}
+
+async function likeCourse(event, code) {
+    if(event) event.stopPropagation(); // Avoid triggering playCourse if they sit inside the same box (though buttons don't anyway)
+    let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
+    if(likedLocal.includes(code)) return;
+    
+    likedLocal.push(code);
+    localStorage.setItem('golf_os_likes', JSON.stringify(likedLocal));
+    
+    let heart = document.getElementById('heart-'+code);
+    let likesDiv = document.getElementById('likes-'+code);
+    if(heart) heart.style.color = '#ef4444';
+    if(likesDiv) likesDiv.innerText = parseInt(likesDiv.innerText) + 1;
+    
+    try {
+        await fetch('https://3d-golf-ar-production.up.railway.app/api/courses/'+code+'/like', {method: 'POST'});
+    } catch(e) { console.error("Like failed", e); }
 }
 
 // --- AUTHENTICATION & PAYMENT LOGIC ---
