@@ -234,6 +234,7 @@
         </div>
 
         <div style="width:1px; height:30px; background:#475569; margin: 0 10px;"></div>
+        <button onclick="document.getElementById('publish-modal').style.display='flex'" style="background:#a855f7; color:#fff; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s;">☁️ PUBLISH</button>
         <button onclick="clearMyBlocks()" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.5); padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s;">🗑️ CLEAR ALL</button>
         <div id="tool-hints" style="color:#94a3b8; font-size:11px; margin-left:15px; line-height:1.4;">
             Hold Left: <b>Raise Ground</b><br>Hold Right: <b>Lower Ground</b>
@@ -263,6 +264,20 @@
         </div>
     </div>
     
+    <!-- PUBLISH MODAL -->
+    <div id="publish-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto;">
+        <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #a855f7; width:400px; text-align:center; box-shadow: 0 10px 40px rgba(168,85,247,0.3);">
+            <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:24px;">☁️ PUBLISH COURSE</h2>
+            <input type="text" id="pub-name" placeholder="Course Name..." style="width:90%; padding:10px; margin-bottom:10px; border-radius:6px; border:none; background:#0f172a; color:#fff; font-size:16px;">
+            <input type="text" id="pub-author" placeholder="Author Name..." style="width:90%; padding:10px; margin-bottom:20px; border-radius:6px; border:none; background:#0f172a; color:#fff; font-size:16px;">
+            <div style="display:flex; gap:15px; justify-content:center;">
+                <button id="pub-btn" onclick="publishCourse()" style="background:#a855f7; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">Publish!</button>
+                <button onclick="document.getElementById('publish-modal').style.display='none'" style="background:#475569; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">Cancel</button>
+            </div>
+            <p id="pub-status" style="color:#4ade80; display:none; margin-top:20px; font-weight:bold;"></p>
+        </div>
+    </div>
+
     <!-- SCORECARD MODAL -->
     <div id="scorecard-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.9); z-index:9999; align-items:center; justify-content:center; pointer-events:auto; backdrop-filter:blur(10px);">
         <div style="background:#0f172a; border:2px solid #38bdf8; padding:30px; border-radius:20px; width:700px; box-shadow:0 20px 60px rgba(56,189,248,0.15);">
@@ -713,13 +728,89 @@
         localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
     }
     
-    function loadLevel() {
-        let saved = localStorage.getItem('arcade_custom_level');
-        if(saved) {
+    window.publishCourse = async function() {
+        let name = document.getElementById('pub-name').value;
+        let author = document.getElementById('pub-author').value;
+        if(!name) { alert("Please enter a course name!"); return; }
+        
+        let btn = document.getElementById('pub-btn');
+        btn.innerText = "Uploading...";
+        btn.disabled = true;
+
+        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
+        let dumpHoles = courseHoles.map(h => ({
+            par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
+        }));
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.treeType, x: t.x, z: t.z, s: t.s, r: t.rot})) : [];
+        
+        let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 1); 
+        let biome = pCtx.canvas.toDataURL('image/jpeg', 0.8);
+
+        try {
+            let res = await fetch('/api/courses', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name: name,
+                    author: author,
+                    holes: dumpHoles,
+                    targets: dumpTargets,
+                    trees: dumpTrees,
+                    terrain_heightmap: JSON.stringify(hm),
+                    terrain_biomemap: biome
+                })
+            });
+            let data = await res.json();
+            if(data.success) {
+                let stat = document.getElementById('pub-status');
+                let href = window.location.origin + window.location.pathname + "?course=" + data.share_code;
+                stat.innerHTML = "Success! Share Link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
+                stat.style.display = 'block';
+                btn.innerText = "Published!";
+            } else {
+                alert("Failed: " + data.error);
+                btn.innerText = "Publish!";
+                btn.disabled = false;
+            }
+        } catch(e) {
+            alert("Error connecting to server.");
+            btn.innerText = "Publish!";
+            btn.disabled = false;
+        }
+    };
+
+    async function loadLevel() {
+        let params = new URLSearchParams(window.location.search);
+        let courseCode = params.get('course');
+        
+        let savedStr = null;
+        let isCloud = false;
+
+        if (courseCode) {
+            try {
+                let res = await fetch('/api/courses/' + courseCode);
+                let data = await res.json();
+                if(data.share_code) {
+                    savedStr = data;
+                    isCloud = true;
+                    if(typeof savedStr.holes === 'string') savedStr.holes = JSON.parse(savedStr.holes);
+                    if(typeof savedStr.targets === 'string') savedStr.targets = JSON.parse(savedStr.targets);
+                    if(typeof savedStr.trees === 'string') savedStr.trees = JSON.parse(savedStr.trees);
+                } else {
+                    console.error("Course not found!");
+                }
+            } catch(e) { console.error("Cloud fetch fail:", e); }
+        }
+        
+        if (!isCloud) {
+            let ls = localStorage.getItem('arcade_custom_level');
+            if(ls) savedStr = JSON.parse(ls);
+        }
+
+        if(savedStr) {
             targets.forEach(t => scene.remove(t.mesh));
             targets.length = 0;
             
-            // Rensa eventuella nyladdade hål före
             for(let i=0; i<18; i++) {
                 let h = courseHoles[i];
                 for(let key in h.tees) {
@@ -728,42 +819,70 @@
                 if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
                 h.tees={red:null,yellow:null,white:null,black:null}; h.flag=null;
             }
+            
             try {
-            var arr = JSON.parse(saved);
-            if (arr && arr.targets && Array.isArray(arr.targets)) {
-                arr.targets.forEach(function(a) {
-                    if(Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z)) {
-                        createTargetAbsolute(a.x, a.y, a.z, a.c);
-                    }
-                });
-            }
-            if (arr && arr.holes && Array.isArray(arr.holes)) {
-                for(let i=0; i<18 && i<arr.holes.length; i++) {
-                    let hSync = arr.holes[i];
-                    let h = courseHoles[i];
-                    h.par = hSync.par || 4;
-                    // Format Migration
-                    if(hSync.tee) { h.tees.yellow = {x: hSync.tee.x, y: hSync.tee.y, z: hSync.tee.z}; }
-                    if(hSync.tees) {
-                        for(let tType in hSync.tees) {
-                            if(hSync.tees[tType]) h.tees[tType] = hSync.tees[tType];
+                var arr = savedStr;
+
+                if (arr.targets && Array.isArray(arr.targets)) {
+                    arr.targets.forEach(function(a) {
+                        if(Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z)) {
+                            createTargetAbsolute(a.x, a.y, a.z, a.c);
+                        }
+                    });
+                }
+                
+                if (arr.holes && Array.isArray(arr.holes)) {
+                    for(let i=0; i<18 && i<arr.holes.length; i++) {
+                        let hSync = arr.holes[i];
+                        let h = courseHoles[i];
+                        h.par = hSync.par || 4;
+                        if(hSync.tee) { h.tees.yellow = {x: hSync.tee.x, y: hSync.tee.y, z: hSync.tee.z}; }
+                        if(hSync.tees) {
+                            for(let tType in hSync.tees) {
+                                if(hSync.tees[tType]) h.tees[tType] = hSync.tees[tType];
+                            }
+                        }
+                        if(h.tees.red) { h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444); if(h.tees.red.rot) h.teeMeshes.red.rotation.y = h.tees.red.rot; }
+                        if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
+                        if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
+                        if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
+                        
+                        if(hSync.flag) {
+                            h.flag = hSync.flag;
+                            h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
                         }
                     }
-                    // Re-instantiate
-                    if(h.tees.red) { h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444); if(h.tees.red.rot) h.teeMeshes.red.rotation.y = h.tees.red.rot; }
-                    if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
-                    if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
-                    if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
-                    
-                    if(hSync.flag) {
-                        h.flag = hSync.flag;
-                        h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
-                    }
+                    if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
                 }
-                document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par;
-            }
-        } catch(e) {
-                console.error("Kunde ladda bana från LS", e);
+
+                if (isCloud && arr.terrain_heightmap) {
+                    let mapData = JSON.parse(arr.terrain_heightmap);
+                    let pos = planeGeo.attributes.position;
+                    // Mappa Y värden
+                    for(let i=0; i<mapData.length; i++) {
+                        pos.setY(i, mapData[i]);
+                    }
+                    pos.needsUpdate = true;
+                    planeGeo.computeVertexNormals();
+
+                    if(arr.terrain_biomemap) {
+                        let img = new Image();
+                        img.onload = () => {
+                            pCtx.drawImage(img, 0, 0);
+                            mapTex.needsUpdate = true;
+                        };
+                        img.src = arr.terrain_biomemap;
+                    }
+
+                    if(arr.trees && Array.isArray(arr.trees)) {
+                        arr.trees.forEach(t => createTree(t.type, t.x, t.z, t.s, t.r));
+                    }
+                    
+                    setTimeout(() => setMode('PLAY'), 500);
+                }
+
+            } catch(e) {
+                console.error("Fel vid parse av sparad bana", e);
             }
         }
     }

@@ -52,8 +52,52 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', db_connected: !!process.env.DATABASE_URL });
 });
 
-// TODO: Endpoint för att Spara en bana (POST /api/courses)
-// TODO: Endpoint för att Ladda en bana (GET /api/courses/:share_code)
+// Generera en slumpmässig share_code
+function generateShareCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+app.post('/api/courses', async (req, res) => {
+    try {
+        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap } = req.body;
+        
+        // Validering
+        if (!holes) return res.status(400).json({ error: 'Missing holes data' });
+
+        const share_code = generateShareCode();
+        const c_name = name || 'My Golf Course';
+        const c_author = author || 'Anonymous';
+
+        const result = await pool.query(
+            `INSERT INTO courses 
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING share_code`,
+            [
+                share_code, c_name, c_author, 
+                JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
+                terrain_heightmap, terrain_biomemap
+            ]
+        );
+
+        res.json({ success: true, share_code: result.rows[0].share_code });
+    } catch(err) {
+        console.error("Error saving course:", err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/courses/:share_code', async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM courses WHERE share_code = $1", [req.params.share_code.toUpperCase()]);
+        if(result.rows.length === 0) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+        res.json(result.rows[0]);
+    } catch(err) {
+        console.error("Error fetching course:", err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
 // --- SERVING STATIC FILES (För Railway Deploy) ---
 // Gör så att hela public/ eller roten serveras som en hemsida
