@@ -753,19 +753,28 @@
     window.publishCourse = async function() {
         let name = document.getElementById('pub-name').value;
         let author = document.getElementById('pub-author').value;
-        if(!name) { alert("Please enter a course name!"); return; }
+        let stat = document.getElementById('pub-status');
+        stat.style.display = 'none';
+
+        function showError(msg) {
+            stat.style.display = 'block';
+            stat.style.color = '#ef4444';
+            stat.innerHTML = "❌ " + msg;
+        }
+
+        if(!name) { showError("Please enter a course name!"); return; }
         
         // VALIDERINGSCHECK (Steg 3)
         let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
         if(!h1HasTee || !courseHoles[0].flag) {
-            alert("Validation Error: You must build at least Hole 1 with a Tee and a Flag before publishing.");
+            showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag before publishing.");
             return;
         }
         for (let i=0; i<18; i++) {
             let h = courseHoles[i];
             let hasTee = h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black);
-            if(hasTee && !h.flag) { alert(`Validation Error: Hole ${i+1} has a tee but no flag! Please fix before publishing.`); return; }
-            if(h.flag && !hasTee) { alert(`Validation Error: Hole ${i+1} has a flag but no tee! Please fix before publishing.`); return; }
+            if(hasTee && !h.flag) { showError(`Validation Error: Hole ${i+1} has a tee but no flag! Please fix before publishing.`); return; }
+            if(h.flag && !hasTee) { showError(`Validation Error: Hole ${i+1} has a flag but no tee! Please fix before publishing.`); return; }
         }
         
         let btn = document.getElementById('pub-btn');
@@ -798,18 +807,18 @@
             });
             let data = await res.json();
             if(data.success) {
-                let stat = document.getElementById('pub-status');
                 let href = window.location.origin + window.location.pathname + "?course=" + data.share_code;
+                stat.style.color = '#4ade80';
                 stat.innerHTML = "Success! Share Link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
                 stat.style.display = 'block';
                 btn.innerText = "Published!";
             } else {
-                alert("Failed: " + data.error);
+                showError("Failed: " + data.error);
                 btn.innerText = "Publish!";
                 btn.disabled = false;
             }
         } catch(e) {
-            alert("Error connecting to server.");
+            showError("Error connecting to server. Is the database active?");
             btn.innerText = "Publish!";
             btn.disabled = false;
         }
