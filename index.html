@@ -866,7 +866,7 @@ function refreshDynamicDistances() {
         l1.setAttribute('stroke-color', userLaserColor); 
         l1.setAttribute('stroke-width', '3');
         l1.setAttribute('altitude-mode', 'relative-to-ground');
-        l1.coordinates = [
+        l1.path = [
             {lat: originPos.lat, lng: originPos.lng, altitude: 4},
             {lat: activeLayupPt.lat, lng: activeLayupPt.lng, altitude: 4}
         ];
@@ -875,7 +875,7 @@ function refreshDynamicDistances() {
         l2.setAttribute('stroke-color', userLaserColor); 
         l2.setAttribute('stroke-width', '3');
         l2.setAttribute('altitude-mode', 'relative-to-ground');
-        l2.coordinates = [
+        l2.path = [
             {lat: activeLayupPt.lat, lng: activeLayupPt.lng, altitude: 4},
             {lat: hole.green.lat, lng: hole.green.lng, altitude: 4}
         ];
@@ -892,7 +892,7 @@ function refreshDynamicDistances() {
         lGreen.setAttribute('stroke-color', userLaserColor); 
         lGreen.setAttribute('stroke-width', '3');
         lGreen.setAttribute('altitude-mode', 'relative-to-ground');
-        lGreen.coordinates = [
+        lGreen.path = [
             {lat: originPos.lat, lng: originPos.lng, altitude: 4},
             {lat: hole.green.lat, lng: hole.green.lng, altitude: 4}
         ];
@@ -1501,7 +1501,7 @@ function animateShot() {
         seg.setAttribute('stroke-color', userLaserColor);
         seg.setAttribute('stroke-width', '4');
         seg.setAttribute('altitude-mode', 'relative-to-ground');
-        seg.coordinates = [fullPath[i], fullPath[i+1]];
+        seg.path = [fullPath[i], fullPath[i+1]];
         window.tracerSegments.push(seg);
     }
     var lastDrawnSegment = -1;
@@ -2030,7 +2030,7 @@ async function bootGoogleMaps() {
             laserLine.setAttribute('stroke-color', rangefinderColor);
             laserLine.setAttribute('stroke-width', '2');
             laserLine.setAttribute('altitude-mode', 'relative-to-ground');
-            laserLine.coordinates = [
+            laserLine.path = [
                 {lat: originPos.lat, lng: originPos.lng, altitude: 3},
                 {lat: clickPos.lat, lng: clickPos.lng, altitude: 3}
             ];
