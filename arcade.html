@@ -553,13 +553,20 @@
     }
 
     // 3. SKAPA BOLLEN
-    const ballGeo = new THREE.SphereGeometry(0.3, 16, 16); // Bollen känns marginellt större i arkad
+    const ballGeo = new THREE.SphereGeometry(0.0427, 16, 16); // Riktigt Golfboll! (~4.2cm diameter. Visuell proxy för att synas vid puttning)
     const ballMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
     const ball = new THREE.Mesh(ballGeo, ballMat);
     ball.castShadow = true;
-    ball.position.set(0, 0.3, 0);
+    ball.position.set(0, 0.0213, 0);
     ball.visible = false;
     scene.add(ball);
+
+    // TRACER LINE FÖR FANTSTISK 3D FYSIK
+    const tracerGeo = new THREE.BufferGeometry();
+    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3 });
+    const flightTracer = new THREE.Line(tracerGeo, tracerMat);
+    scene.add(flightTracer);
+    let tracerPoints = [];
 
     // 4. SKAPA MÅLTAVLOR (Targets)
     const targets = [];
@@ -1098,21 +1105,28 @@
                 
                 for(let i=0; i<window.placedTrees.length; i++) {
                     let tree = window.placedTrees[i];
-                    if (tree.type === 'BUSH') continue; // Ignorera buskar i luften
+                    if (tree.type === 'BUSH') continue; 
                     
                     let dx = tree.x - threeX;
                     let dz = tree.z - threeZ;
-                    let radius = 2.5 * tree.scale; // Grov Kronstorlek
+                    let distSq = dx*dx + dz*dz;
                     
-                    if (dx*dx + dz*dz < radius*radius) {
-                        return { type: 'TREE', height: 12.0 * tree.scale };
+                    let trunkRadius = 0.5 * tree.scale;
+                    let treeHeight = 15.0 * tree.scale;
+                    let canopyRadius = 3.0 * tree.scale;
+                    
+                    if (distSq < canopyRadius*canopyRadius) {
+                        if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
+                            return { type: 'TREE', height: treeHeight, part: 'TRUNK' };
+                        } else if (z > treeHeight*0.3 && z < treeHeight) {
+                            return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
+                        }
                     }
                 }
                 return null; 
             },
             hasTreeCollision: function(x, y, z) { return false; },
             getTerrainAt: function(px, py) {
-                // Physics coords to Three coords
                 let threeX = px;
                 let threeZ = -py;
                 
@@ -1124,16 +1138,26 @@
                 
                 let idx = gz * (TERRAIN_SEGS+1) + gx;
                 let positions = planeGeo.attributes.position.array;
-                let height = positions[idx * 3 + 2]; // Z is Local Y axis in Three before rotation
+                let height = positions[idx * 3 + 2]; 
                 
-                // Mappa Färg till Fysik från Canvas! (Betydligt mer exakt än vertexArray)
+                let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
+                let gzDown = Math.max(0, gz - 1); // gz minskar -> Z ökar -> Y(phys) ökar
+
+                let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
+                let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+                
+                let step = TERRAIN_SIZE/TERRAIN_SEGS;
+                let dx_phys = (hR - height) / step;
+                let dy_phys = (hD - height) / step; 
+                
+                let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
+                let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
+                
                 let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
                 let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
-                if (cX < 0) cX = 0; if (cX > 2047) cX = 2047;
-                if (cZ < 0) cZ = 0; if (cZ > 2047) cZ = 2047;
+                if (cX < 0) cX = 0; if (cX >= 4096) cX = 4095;
+                if (cZ < 0) cZ = 0; if (cZ >= 4096) cZ = 4095;
                 
-                // Cacha imagedata globalt varje shot istället för att dra ur canvasen (som är extremt slött i loop)
-                // Eftersom getTerrainAt anropas ~500 gånger per sekund, vi läser snabbt:
                 let r, g, b;
                 if (window.terrainBiomeData) {
                     let pIdx = (cZ * 4096 + cX) * 4;
@@ -1145,9 +1169,6 @@
                 }
                 
                 let biomeType = 'ROUGH'; // Default
-                let bounce = 0.5; let friction = 0.95;
-
-                // Färg-koordinat-räkning (Närmaste RGB-matchning för färgrymds-tolerans)
                 function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
                 
                 let dOB = cDist(r,g,b, 239,68,68);
@@ -1167,12 +1188,12 @@
                 else biomeType = 'ROUGH';
                 
                 if (height < -29.9) {
-                    biomeType = 'WATER'; // Globalt djuphav
+                    biomeType = 'WATER';
                 }
                 
                 return {
                     z: height,
-                    normal: [0, 0, 1], 
+                    normal: normal, 
                     type: biomeType
                 };
             }
@@ -1187,6 +1208,10 @@
         
         flightData = result; // Path är result.path
         flightTick = 0;
+        isFlying = true;
+        
+        tracerPoints = [];
+        flightTracer.geometry.setFromPoints(tracerPoints);
         isFlying = true;
     }
 
@@ -2024,7 +2049,13 @@
             // X = Sida (x)
             // Y = Höjd (z)
             // Z = Framåt (Negativ y)
-            ball.position.set(point.x, point.z + 0.3, -point.y);
+            ball.position.set(point.x, point.z + 0.0213, -point.y);
+            
+            for (let k = flightTick; k <= newTick; k++) {
+                let p = flightData.path[k];
+                tracerPoints.push(new THREE.Vector3(p.x, p.z + 0.0213, -p.y));
+            }
+            flightTracer.geometry.setFromPoints(tracerPoints);
             
             // TV BROADCAST CAMERA LOGIC
             if (playState === 'ROUND_FLYING') {
