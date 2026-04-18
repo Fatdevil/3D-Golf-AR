@@ -59,7 +59,8 @@ app.get('/api/health', (req, res) => {
 // Gör så att hela public/ eller roten serveras som en hemsida
 app.use(express.static(__dirname));
 
-app.get('*', (req, res) => {
+// Fallback för allt annat (Catch-all)
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'hub.html'));
 });
 
