@@ -769,9 +769,10 @@
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
         }));
-        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.treeType, x: t.x, z: t.z, s: t.s, r: t.rot})) : [];
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot})) : [];
         
-        let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 1); 
+        let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
+        let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
         let biome = pCtx.canvas.toDataURL('image/jpeg', 0.8);
 
         try {
@@ -784,7 +785,7 @@
                     holes: dumpHoles,
                     targets: dumpTargets,
                     trees: dumpTrees,
-                    terrain_heightmap: JSON.stringify(hm),
+                    terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
                     terrain_biomemap: biome
                 })
             });
@@ -886,18 +887,28 @@
                 if (isCloud && arr.terrain_heightmap) {
                     let mapData = JSON.parse(arr.terrain_heightmap);
                     let pos = planeGeo.attributes.position;
-                    // Mappa Y värden
-                    for(let i=0; i<mapData.length; i++) {
-                        pos.setY(i, mapData[i]);
+                    let wPos = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position : null;
+                    
+                    let groundArr = Array.isArray(mapData) ? mapData : mapData.ground;
+                    let waterArr = Array.isArray(mapData) ? null : mapData.water;
+
+                    if(groundArr) {
+                        for(let i=0; i<groundArr.length; i++) pos.setZ(i, groundArr[i]);
                     }
+                    if(waterArr && wPos) {
+                        for(let i=0; i<waterArr.length; i++) wPos.setZ(i, waterArr[i]);
+                    }
+
                     pos.needsUpdate = true;
+                    if(wPos) wPos.needsUpdate = true;
                     planeGeo.computeVertexNormals();
 
                     if(arr.terrain_biomemap) {
                         let img = new Image();
                         img.onload = () => {
                             pCtx.drawImage(img, 0, 0);
-                            mapTex.needsUpdate = true;
+                            if(typeof mapTex !== 'undefined') mapTex.needsUpdate = true;
+                            if(typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
                         };
                         img.src = arr.terrain_biomemap;
                     }
