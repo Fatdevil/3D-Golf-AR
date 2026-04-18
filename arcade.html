@@ -548,7 +548,7 @@
     let currentHoleIndex = 0;
     let currentHoleAction = 'TEE_YELLOW';
     
-    const teeGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+    const teeGeo = new THREE.SphereGeometry(0.35, 16, 16); // Teekulor istället för block
     const teeMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8 });
     const flagPoleGeo = new THREE.CylinderGeometry(0.05, 0.05, 6, 8);
     const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -556,12 +556,25 @@
     const flagClothMat = new THREE.MeshLambertMaterial({ color: 0xef4444, side: THREE.DoubleSide });
 
     function createTeeObject(x, y, z, colorHex=0xfacc15) {
+        let group = new THREE.Group();
         let tMat = new THREE.MeshLambertMaterial({ color: colorHex });
-        let mesh = new THREE.Mesh(teeGeo, tMat);
-        mesh.position.set(x, y + 0.2, z);
-        mesh.castShadow = true;
-        scene.add(mesh);
-        return mesh;
+        
+        // Vänstra Tee-kulan
+        let meshLeft = new THREE.Mesh(teeGeo, tMat);
+        meshLeft.position.set(-1.8, 0.35, 0);
+        meshLeft.castShadow = true;
+        
+        // Högra Tee-kulan
+        let meshRight = new THREE.Mesh(teeGeo, tMat);
+        meshRight.position.set(1.8, 0.35, 0);
+        meshRight.castShadow = true;
+        
+        group.add(meshLeft);
+        group.add(meshRight);
+        
+        group.position.set(x, y, z);
+        scene.add(group);
+        return group;
     }
 
     function createFlagObject(x, y, z) {
@@ -1257,9 +1270,11 @@
             for(let t of window.placedTrees) t.mesh.position.y = getH(t.mesh.position.x, t.mesh.position.z);
         }
         for(let h of courseHoles) {
-            if(h.teeMesh && h.tee) {
-                h.tee.y = getH(h.tee.x, h.tee.z);
-                h.teeMesh.position.y = h.tee.y + 0.2;
+            for(let key in h.tees) {
+                if(h.teeMeshes[key] && h.tees[key]) {
+                    h.tees[key].y = getH(h.tees[key].x, h.tees[key].z);
+                    h.teeMeshes[key].position.y = h.tees[key].y; 
+                }
             }
             if(h.flagMesh && h.flag) {
                 h.flag.y = getH(h.flag.x, h.flag.z);
