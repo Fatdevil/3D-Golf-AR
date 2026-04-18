@@ -221,9 +221,13 @@
                 <button onclick="changeHolePar(1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">+</button>
             </div>
             <!-- Item toggle -->
-            <div style="display:flex; gap:5px;">
-                <button id="btn-set-tee" onclick="setHoleItem('TEE')" class="hole-item-btn active" style="background:#38bdf8; color:#0f172a; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">Place Tee</button>
-                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">Place Flag</button>
+            <div style="display:flex; gap:3px;">
+                <button id="btn-set-tee-red" onclick="setHoleItem('TEE_RED')" class="hole-item-btn" style="background:#1e293b; color:#ef4444; border:1px solid #ef4444; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Red Tee / Junior">T</button>
+                <button id="btn-set-tee-yellow" onclick="setHoleItem('TEE_YELLOW')" class="hole-item-btn active" style="background:#facc15; color:#0f172a; border:1px solid #facc15; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Yellow Tee / Mens">T</button>
+                <button id="btn-set-tee-white" onclick="setHoleItem('TEE_WHITE')" class="hole-item-btn" style="background:#1e293b; color:#fff; border:1px solid #fff; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="White Tee / Club">T</button>
+                <button id="btn-set-tee-black" onclick="setHoleItem('TEE_BLACK')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #000; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Black Tee / Pro">T</button>
+                <div style="width:1px; height:20px; background:#475569; margin: 0 2px;"></div>
+                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;">⛳ Flag</button>
             </div>
             <div style="width:1px; height:30px; background:#475569; margin:0 5px;"></div>
             <button onclick="showScorecard()" style="background:#4ade80; color:#0f172a; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">📝 Scorecard</button>
@@ -533,10 +537,16 @@
     // --- BANSYSTEM & SCOREKORT (Holes, Tees, Flags) ---
     let courseHoles = [];
     for(let i=0; i<18; i++) {
-        courseHoles.push({ par: 4, tee: null, flag: null, teeMesh: null, flagMesh: null });
+        courseHoles.push({ 
+            par: 4, 
+            tees: { red: null, yellow: null, white: null, black: null },
+            teeMeshes: { red: null, yellow: null, white: null, black: null },
+            flag: null, 
+            flagMesh: null 
+        });
     }
     let currentHoleIndex = 0;
-    let currentHoleAction = 'TEE';
+    let currentHoleAction = 'TEE_YELLOW';
     
     const teeGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
     const teeMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8 });
@@ -545,8 +555,9 @@
     const flagClothGeo = new THREE.PlaneGeometry(1.5, 1.0);
     const flagClothMat = new THREE.MeshLambertMaterial({ color: 0xef4444, side: THREE.DoubleSide });
 
-    function createTeeObject(x, y, z) {
-        let mesh = new THREE.Mesh(teeGeo, teeMat);
+    function createTeeObject(x, y, z, colorHex=0xfacc15) {
+        let tMat = new THREE.MeshLambertMaterial({ color: colorHex });
+        let mesh = new THREE.Mesh(teeGeo, tMat);
         mesh.position.set(x, y + 0.2, z);
         mesh.castShadow = true;
         scene.add(mesh);
@@ -594,11 +605,24 @@
     window.setHoleItem = function(action) {
         currentHoleAction = action;
         var btns = document.getElementsByClassName('hole-item-btn');
-        for(let b of btns) { b.style.background = '#1e293b'; b.style.color = '#94a3b8'; }
+        for(let b of btns) { 
+            b.style.background = '#1e293b'; 
+            b.classList.remove('active');
+            if(b.id === 'btn-set-tee-red') b.style.color = '#ef4444';
+            else if(b.id === 'btn-set-tee-yellow') b.style.color = '#facc15';
+            else if(b.id === 'btn-set-tee-white') b.style.color = '#fff';
+            else if(b.id === 'btn-set-tee-black') b.style.color = '#94a3b8';
+            else b.style.color = '#94a3b8'; 
+        }
         
-        let activeBtn = action === 'TEE' ? document.getElementById('btn-set-tee') : document.getElementById('btn-set-flag');
-        activeBtn.style.background = '#38bdf8';
-        activeBtn.style.color = '#0f172a';
+        let activeBtn;
+        if(action === 'TEE_RED') { activeBtn = document.getElementById('btn-set-tee-red'); activeBtn.style.background = '#ef4444'; activeBtn.style.color = '#000'; }
+        else if(action === 'TEE_YELLOW') { activeBtn = document.getElementById('btn-set-tee-yellow'); activeBtn.style.background = '#facc15'; activeBtn.style.color = '#000'; }
+        else if(action === 'TEE_WHITE') { activeBtn = document.getElementById('btn-set-tee-white'); activeBtn.style.background = '#fff'; activeBtn.style.color = '#000'; }
+        else if(action === 'TEE_BLACK') { activeBtn = document.getElementById('btn-set-tee-black'); activeBtn.style.background = '#000'; activeBtn.style.color = '#fff'; }
+        else { activeBtn = document.getElementById('btn-set-flag'); activeBtn.style.background = '#38bdf8'; activeBtn.style.color = '#0f172a'; }
+        
+        if(activeBtn) activeBtn.classList.add('active');
     };
     
     window.showScorecard = function() {
@@ -610,25 +634,40 @@
         let inPar = 0;
         let inLen = 0;
         
-        let c1Html = "<tr style='border-bottom:1px solid #334155;'><td style='color:#94a3b8; font-weight:normal; padding:10px;'>PAR</td>";
-        let c2Html = "<tr style='border-bottom:1px solid #334155;'><td style='color:#38bdf8; font-weight:normal; padding:10px;'>DIST</td>";
+        let cHtml = "<tr style='border-bottom:1px solid #334155;'><td style='color:#94a3b8; font-weight:normal; padding:10px;'>PAR</td>";
+        let cBlack = "<tr><td style='color:#fff; background:#111; padding:5px; border-right:1px solid #334155;'>BLACK</td>";
+        let cWhite = "<tr><td style='color:#0f172a; background:#e2e8f0; padding:5px; border-right:1px solid #334155;'>WHITE</td>";
+        let cYellow = "<tr><td style='color:#0f172a; background:#facc15; padding:5px; border-right:1px solid #334155;'>YELLOW</td>";
+        let cRed = "<tr><td style='color:#fff; background:#ef4444; padding:5px; border-right:1px solid #334155;'>RED</td>";
+        
+        // outTotals
+        let sumBlack=0, sumWhite=0, sumYellow=0, sumRed=0;
         
         for(let i=0; i<9; i++) {
             let h = courseHoles[i];
             outPar += h.par;
-            let dist = 0;
-            if(h.tee && h.flag) {
-                dist = Math.round(Math.hypot(h.flag.x - h.tee.x, h.flag.z - h.tee.z));
+            cHtml += "<td style='padding:10px; color:#fff; border-right:1px solid #334155;'>" + h.par + "</td>";
+            
+            let blk='-', wht='-', yel='-', red='-';
+            if(h.flag) {
+                if(h.tees.black) { blk = Math.round(Math.hypot(h.flag.x-h.tees.black.x, h.flag.z-h.tees.black.z)); sumBlack+=blk; }
+                if(h.tees.white) { wht = Math.round(Math.hypot(h.flag.x-h.tees.white.x, h.flag.z-h.tees.white.z)); sumWhite+=wht; }
+                if(h.tees.yellow) { yel = Math.round(Math.hypot(h.flag.x-h.tees.yellow.x, h.flag.z-h.tees.yellow.z)); sumYellow+=yel; }
+                if(h.tees.red) { red = Math.round(Math.hypot(h.flag.x-h.tees.red.x, h.flag.z-h.tees.red.z)); sumRed+=red; }
             }
-            outLen += dist;
-            c1Html += "<td style='padding:10px; color:#fff;'>" + h.par + "</td>";
-            c2Html += "<td style='padding:10px; color:#fff;'>" + (dist > 0 ? dist : '-') + "</td>";
+            cBlack += "<td style='border-right:1px solid #334155;'>"+blk+"</td>"; 
+            cWhite += "<td style='border-right:1px solid #334155;'>"+wht+"</td>"; 
+            cYellow += "<td style='border-right:1px solid #334155;'>"+yel+"</td>"; 
+            cRed += "<td style='border-right:1px solid #334155;'>"+red+"</td>";
         }
         
-        c1Html += "<td style='padding:10px; color:#fbbf24;'>" + outPar + "</td></tr>";
-        c2Html += "<td style='padding:10px; color:#fbbf24;'>" + outLen + "m</td></tr>";
+        cHtml += "<td style='padding:10px; color:#fbbf24;'>" + outPar + "</td></tr>";
+        cBlack += "<td style='color:#fbbf24;'>"+sumBlack+"</td></tr>";
+        cWhite += "<td style='color:#fbbf24;'>"+sumWhite+"</td></tr>";
+        cYellow += "<td style='color:#fbbf24;'>"+sumYellow+"</td></tr>";
+        cRed += "<td style='color:#fbbf24;'>"+sumRed+"</td></tr>";
         
-        tbody.innerHTML += c1Html + c2Html;
+        tbody.innerHTML += cHtml + cBlack + cWhite + cYellow + cRed;
         document.getElementById('scorecard-modal').style.display = 'flex';
     };
     
@@ -654,7 +693,7 @@
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, 
-            tee: h.tee ? {x: h.tee.x, y: h.tee.y, z: h.tee.z} : null,
+            tees: h.tees,
             flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
         }));
         
@@ -669,9 +708,12 @@
             
             // Rensa eventuella nyladdade hål före
             for(let i=0; i<18; i++) {
-                if(courseHoles[i].teeMesh) { scene.remove(courseHoles[i].teeMesh); courseHoles[i].teeMesh=null; }
-                if(courseHoles[i].flagMesh) { scene.remove(courseHoles[i].flagMesh); courseHoles[i].flagMesh=null; }
-                courseHoles[i].tee=null; courseHoles[i].flag=null;
+                let h = courseHoles[i];
+                for(let key in h.tees) {
+                    if(h.teeMeshes[key]) { scene.remove(h.teeMeshes[key]); h.teeMeshes[key]=null; }
+                }
+                if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
+                h.tees={red:null,yellow:null,white:null,black:null}; h.flag=null;
             }
             try {
             var arr = JSON.parse(saved);
@@ -685,14 +727,24 @@
             if (arr && arr.holes && Array.isArray(arr.holes)) {
                 for(let i=0; i<18 && i<arr.holes.length; i++) {
                     let hSync = arr.holes[i];
-                    courseHoles[i].par = hSync.par || 4;
-                    if(hSync.tee) {
-                        courseHoles[i].tee = hSync.tee;
-                        courseHoles[i].teeMesh = createTeeObject(hSync.tee.x, hSync.tee.y, hSync.tee.z);
+                    let h = courseHoles[i];
+                    h.par = hSync.par || 4;
+                    // Format Migration
+                    if(hSync.tee) { h.tees.yellow = {x: hSync.tee.x, y: hSync.tee.y, z: hSync.tee.z}; }
+                    if(hSync.tees) {
+                        for(let tType in hSync.tees) {
+                            if(hSync.tees[tType]) h.tees[tType] = hSync.tees[tType];
+                        }
                     }
+                    // Re-instantiate
+                    if(h.tees.red) h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444);
+                    if(h.tees.yellow) h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15);
+                    if(h.tees.white) h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff);
+                    if(h.tees.black) h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111);
+                    
                     if(hSync.flag) {
-                        courseHoles[i].flag = hSync.flag;
-                        courseHoles[i].flagMesh = createFlagObject(hSync.flag.x, hSync.flag.y, hSync.flag.z);
+                        h.flag = hSync.flag;
+                        h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
                     }
                 }
                 document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par;
@@ -738,7 +790,8 @@
     
     function nextHole() {
         playingHoleIndex++;
-        if(playingHoleIndex > 17 || !courseHoles[playingHoleIndex].tee) {
+        let activeT = courseHoles[playingHoleIndex] ? (courseHoles[playingHoleIndex].tees.yellow || courseHoles[playingHoleIndex].tees.white || courseHoles[playingHoleIndex].tees.red || courseHoles[playingHoleIndex].tees.black) : null;
+        if(playingHoleIndex > 17 || !activeT) {
             let pop = document.getElementById('score-popup');
             pop.innerText = "ROUND COMPLETE!";
             pop.style.opacity = '1';
@@ -758,8 +811,9 @@
     
     function teleportToHole(index) {
         let hole = courseHoles[index];
-        if(!hole || !hole.tee || !hole.flag) {
-            alert("Hole " + (index+1) + " is not fully built! Needs both Tee and Flag.");
+        let activeT = hole ? (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) : null;
+        if(!hole || !activeT || !hole.flag) {
+            alert("Hole " + (index+1) + " is not fully built! Needs both a Tee and a Flag.");
             return;
         }
         
@@ -769,11 +823,11 @@
         
         // Reset Ball
         ball.visible = true;
-        ball.position.set(hole.tee.x, hole.tee.y + 0.3, hole.tee.z);
+        ball.position.set(activeT.x, activeT.y + 0.3, activeT.z);
         
         // Vänd kameran mot flaggan från Tee!
         controls.enabled = true;
-        let teeVec = new THREE.Vector3(hole.tee.x, hole.tee.y, hole.tee.z);
+        let teeVec = new THREE.Vector3(activeT.x, activeT.y, activeT.z);
         let flagVec = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         
         let dir = new THREE.Vector3().subVectors(flagVec, teeVec).normalize();
@@ -1459,10 +1513,17 @@
         
         if (currentTool === 'HOLE' && lastHitPoint) {
             let hole = courseHoles[currentHoleIndex];
-            if (currentHoleAction === 'TEE') {
-                if (hole.teeMesh) scene.remove(hole.teeMesh);
-                hole.tee = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
-                hole.teeMesh = createTeeObject(hole.tee.x, hole.tee.y, hole.tee.z);
+            if (currentHoleAction.startsWith('TEE_')) {
+                let teeType = currentHoleAction.replace('TEE_', '').toLowerCase();
+                if (hole.teeMeshes[teeType]) scene.remove(hole.teeMeshes[teeType]);
+                hole.tees[teeType] = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
+                
+                let col = 0xffffff;
+                if(teeType === 'red') col = 0xef4444;
+                if(teeType === 'yellow') col = 0xfacc15;
+                if(teeType === 'black') col = 0x111111;
+                
+                hole.teeMeshes[teeType] = createTeeObject(hole.tees[teeType].x, hole.tees[teeType].y, hole.tees[teeType].z, col);
             } else if (currentHoleAction === 'FLAG') {
                 if (hole.flagMesh) scene.remove(hole.flagMesh);
                 hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
