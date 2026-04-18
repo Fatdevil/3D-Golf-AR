@@ -37,6 +37,7 @@ async function initDB() {
         `);
         try {
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS likes INT DEFAULT 0;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT false;`);
         } catch(e) {}
         console.log("✅ Database schema ready");
     } catch(err) {
@@ -60,6 +61,7 @@ app.get('/api/courses', async (req, res) => {
         const result = await pool.query(`
             SELECT share_code, name, author, likes, created_at 
             FROM courses 
+            WHERE is_draft = false OR is_draft IS NULL
             ORDER BY created_at DESC 
             LIMIT 50
         `);
@@ -93,23 +95,46 @@ function generateShareCode() {
 
 app.post('/api/courses', async (req, res) => {
     try {
-        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap } = req.body;
+        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, edit_code } = req.body;
         
         // Validering
         if (!holes) return res.status(400).json({ error: 'Missing holes data' });
 
-        const share_code = generateShareCode();
+        const draftStatus = is_draft === true;
         const c_name = name || 'My Golf Course';
         const c_author = author || 'Anonymous';
 
+        if (edit_code) {
+            // Överskriv en existerande bana om koden matchar!
+            const updateResult = await pool.query(
+                `UPDATE courses 
+                 SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, is_draft=$8
+                 WHERE share_code=$9 
+                 RETURNING share_code`,
+                [
+                    c_name, c_author, 
+                    JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
+                    terrain_heightmap, terrain_biomemap, draftStatus, 
+                    edit_code.toUpperCase()
+                ]
+            );
+            
+            if (updateResult.rows.length > 0) {
+                return res.json({ success: true, share_code: updateResult.rows[0].share_code });
+            }
+            // Finns den inte? Fallback till INSERT!
+        }
+
+        const share_code = generateShareCode();
+
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
-                terrain_heightmap, terrain_biomemap
+                terrain_heightmap, terrain_biomemap, draftStatus
             ]
         );
 

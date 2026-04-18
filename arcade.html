@@ -281,14 +281,19 @@
     
     <!-- PUBLISH MODAL -->
     <div id="publish-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto;">
-        <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #a855f7; width:400px; text-align:center; box-shadow: 0 10px 40px rgba(168,85,247,0.3);">
-            <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:24px;">☁️ PUBLISH COURSE</h2>
+        <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #a855f7; width:450px; text-align:center; box-shadow: 0 10px 40px rgba(168,85,247,0.3);">
+            <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:24px;">☁️ SAVE / PUBLISH</h2>
             <input type="text" id="pub-name" placeholder="Course Name..." style="width:90%; padding:10px; margin-bottom:10px; border-radius:6px; border:none; background:#0f172a; color:#fff; font-size:16px;">
             <input type="text" id="pub-author" placeholder="Author Name..." style="width:90%; padding:10px; margin-bottom:20px; border-radius:6px; border:none; background:#0f172a; color:#fff; font-size:16px;">
-            <div style="display:flex; gap:15px; justify-content:center;">
-                <button id="pub-btn" onclick="publishCourse()" style="background:#a855f7; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">Publish!</button>
-                <button onclick="document.getElementById('publish-modal').style.display='none'" style="background:#475569; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">Cancel</button>
+            
+            <div style="display:flex; flex-direction:column; gap:10px; align-items:center; margin-bottom: 20px;">
+                <button id="btn-save-draft" onclick="publishCourse({ isDraft: true, overwrite: true })" style="width:90%; background:#38bdf8; color:#0f172a; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">💾 Spara Utkast (Skriv över)</button>
+                <button id="btn-save-copy" onclick="publishCourse({ isDraft: true, overwrite: false })" style="width:90%; background:#eab308; color:#0f172a; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🗂️ Spara Utkast (Ny Slot)</button>
+                <div style="width:90%; height:1px; background:#475569; margin: 10px 0;"></div>
+                <button id="btn-publish-hub" onclick="publishCourse({ isDraft: false })" style="width:90%; background:#a855f7; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🌎 Publicera till HUB</button>
             </div>
+            
+            <button onclick="document.getElementById('publish-modal').style.display='none'" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; font-size:14px; cursor:pointer; text-decoration:underline;">Avbryt / Fortsätt bygga</button>
             <p id="pub-status" style="color:#4ade80; display:none; margin-top:20px; font-weight:bold;"></p>
         </div>
     </div>
@@ -750,7 +755,7 @@
         localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
     }
     
-    window.publishCourse = async function() {
+    window.publishCourse = async function(options = { isDraft: false, overwrite: false }) {
         let name = document.getElementById('pub-name').value;
         let author = document.getElementById('pub-author').value;
         let stat = document.getElementById('pub-status');
@@ -762,25 +767,23 @@
             stat.innerHTML = "❌ " + msg;
         }
 
-        if(!name) { showError("Please enter a course name!"); return; }
+        if(!name && !options.isDraft) { showError("Please enter a course name!"); return; }
         
-        // VALIDERINGSCHECK (Steg 3)
-        let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
-        if(!h1HasTee || !courseHoles[0].flag) {
-            showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag before publishing.");
-            return;
-        }
-        for (let i=0; i<18; i++) {
-            let h = courseHoles[i];
-            let hasTee = h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black);
-            if(hasTee && !h.flag) { showError(`Validation Error: Hole ${i+1} has a tee but no flag! Please fix before publishing.`); return; }
-            if(h.flag && !hasTee) { showError(`Validation Error: Hole ${i+1} has a flag but no tee! Please fix before publishing.`); return; }
+        // VALIDERINGSCHECK (Steg 3) - Skip if drafting!
+        if (!options.isDraft) {
+            let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
+            if(!h1HasTee || !courseHoles[0].flag) {
+                showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag before publishing.");
+                return;
+            }
+            for (let i=0; i<18; i++) {
+                let h = courseHoles[i];
+                let hasTee = h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black);
+                if(hasTee && !h.flag) { showError(`Validation Error: Hole ${i+1} has a tee but no flag! Please fix before publishing.`); return; }
+                if(h.flag && !hasTee) { showError(`Validation Error: Hole ${i+1} has a flag but no tee! Please fix before publishing.`); return; }
+            }
         }
         
-        let btn = document.getElementById('pub-btn');
-        btn.innerText = "Uploading...";
-        btn.disabled = true;
-
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
@@ -792,52 +795,73 @@
         let biome = pCtx.canvas.toDataURL('image/jpeg', 0.8);
 
         try {
+            let payload = {
+                name: name || "Draft",
+                author: author || "Builder",
+                holes: dumpHoles,
+                targets: dumpTargets,
+                trees: dumpTrees,
+                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
+                terrain_biomemap: biome,
+                is_draft: options.isDraft
+            };
+            
+            if (options.overwrite && currentEditCode) {
+                payload.edit_code = currentEditCode;
+            }
+            
             let res = await fetch('/api/courses', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    name: name,
-                    author: author,
-                    holes: dumpHoles,
-                    targets: dumpTargets,
-                    trees: dumpTrees,
-                    terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
-                    terrain_biomemap: biome
-                })
+                body: JSON.stringify(payload)
             });
             let data = await res.json();
             if(data.success) {
-                let href = window.location.origin + window.location.pathname + "?course=" + data.share_code;
+                currentEditCode = data.share_code;
+                let href = window.location.origin + window.location.pathname + (options.isDraft ? "?edit=" : "?course=") + data.share_code;
+                
+                // Byt URL utan omladdning
+                window.history.pushState({}, '', href);
+                
                 stat.style.color = '#4ade80';
-                stat.innerHTML = "Success! Share Link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
+                stat.innerHTML = "Sparad! Din länk:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
                 stat.style.display = 'block';
-                btn.innerText = "Published!";
+                
+                if (options.isDraft && document.getElementById('btn-save-draft')) {
+                    document.getElementById('btn-save-draft').style.display = 'block'; // Visar "skriv över"-knappen nu när vi har en EditCode
+                }
             } else {
                 showError("Failed: " + data.error);
-                btn.innerText = "Publish!";
-                btn.disabled = false;
             }
         } catch(e) {
             showError("Error connecting to server. Is the database active?");
-            btn.innerText = "Publish!";
-            btn.disabled = false;
         }
     };
 
     async function loadLevel() {
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course');
+        let editCode = params.get('edit');
         
         let savedStr = null;
         let isCloud = false;
+        
+        let targetCode = courseCode || editCode;
 
-        if (courseCode) {
+        if (targetCode) {
             try {
-                let res = await fetch('/api/courses/' + courseCode);
+                let res = await fetch('/api/courses/' + targetCode);
                 let data = await res.json();
                 if(data.share_code) {
                     savedStr = data;
                     isCloud = true;
+                    if (editCode) {
+                        currentEditCode = data.share_code; // Vi LADDADE MÄS från draft url, vi är ägaren!
+                        if(document.getElementById('pub-name')) document.getElementById('pub-name').value = data.name;
+                        if(document.getElementById('pub-author')) document.getElementById('pub-author').value = data.author;
+                        // Synliggör Spara Utkast (Samma Slot) om vi laddade en edit URL
+                        if (document.getElementById('btn-save-draft')) document.getElementById('btn-save-draft').style.display = 'block';
+                    }
                     if(typeof savedStr.holes === 'string') savedStr.holes = JSON.parse(savedStr.holes);
                     if(typeof savedStr.targets === 'string') savedStr.targets = JSON.parse(savedStr.targets);
                     if(typeof savedStr.trees === 'string') savedStr.trees = JSON.parse(savedStr.trees);
@@ -933,7 +957,9 @@
                         arr.trees.forEach(t => createTree(t.type, t.x, t.z, t.s, t.r));
                     }
                     
-                    setTimeout(() => setMode('PLAY'), 500);
+                    if (courseCode) {
+                        setTimeout(() => setMode('PLAY'), 500); // Bara om vi laddade en färdig bana
+                    }
                 }
 
             } catch(e) {
