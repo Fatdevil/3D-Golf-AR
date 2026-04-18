@@ -1456,9 +1456,13 @@
                 raycaster.setFromCamera(mouse, camera);
                 let intersects = raycaster.intersectObject(plane);
                 if(intersects.length > 0) {
-                    lastHitPoint = intersects[0].point;
-                    teeGroup.lookAt(lastHitPoint.x, teeGroup.position.y, lastHitPoint.z);
-                    teeData.rot = teeGroup.rotation.y;
+                    let p = intersects[0].point;
+                    let dist = Math.hypot(p.x - teeData.x, p.z - teeData.z);
+                    if(dist > 0.1) {
+                        lastHitPoint = p;
+                        teeGroup.lookAt(p.x, teeGroup.position.y, p.z);
+                        teeData.rot = teeGroup.rotation.y;
+                    }
                 }
             }
             return;
