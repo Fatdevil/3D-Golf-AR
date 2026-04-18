@@ -1328,6 +1328,7 @@
     window.stopMove = function() { moveDir = null; };
     
     window.addEventListener('keydown', e => {
+        if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         let key = e.key.toUpperCase();
         if(['W','A','S','D'].includes(key)) {
             moveDir = key;
@@ -1981,7 +1982,7 @@
         requestAnimationFrame(animate);
         
         // Panning movement (WASD)
-        if(moveDir && appMode === 'BUILD') {
+        if(moveDir) {
             // Farten justeras magiskt efter höjden! (Mer höjd = Snabbare kamera)
             let altOffset = Math.max(0, camera.position.y - 10); // Ingen boost under 10m
             let speed = 0.4 + (altOffset * 0.03); // Max speed limit
