@@ -1414,7 +1414,19 @@
             sculptDirection = (e.button === 2 || e.shiftKey) ? -1 : 1; 
             
             if (currentTool === 'WATER' && lastHitPoint) {
-                waterLevelTarget = lastHitPoint.y - 0.5; // Gräv en platt botten 0.5m lägre än där vi klickade
+                let gx = Math.round((lastHitPoint.x + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+                let gz = Math.round((lastHitPoint.z + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+                if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
+                if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
+                let idx = gz * (TERRAIN_SEGS+1) + gx;
+                
+                let existingWater = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position.array[idx*3 + 2] : -99;
+                
+                if (existingWater > -90) {
+                    waterLevelTarget = existingWater; // Klick på sjö -> Lås ytan, djupdyk botten utan att ändra ytan!
+                } else {
+                    waterLevelTarget = lastHitPoint.y - 0.5; // Gräv en platt botten 0.5m lägre än där vi klickade
+                }
             }
         } else {
             if(e.button === 0) onMouseClick(e);
