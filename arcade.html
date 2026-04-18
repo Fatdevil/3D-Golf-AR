@@ -252,6 +252,21 @@
         </div>
     </div>
     
+    <!-- TEE SELECT MODAL (ROUND START) -->
+    <div id="tee-select-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto;">
+        <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #38bdf8; width:450px; text-align:center; box-shadow: 0 10px 40px rgba(56,189,248,0.3);">
+            <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:24px;">⛳ CHOOSE YOUR TEE</h2>
+            <p style="color:#94a3b8; font-size:16px; margin-bottom:25px;">Select which tee box you will play from today.</p>
+            <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+                <button id="ts-red" onclick="actuallyStartRound('red')" style="flex:1; background:#ef4444; color:#fff; border:2px solid #fff; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="Red Tee / Junior">Red</button>
+                <button id="ts-yellow" onclick="actuallyStartRound('yellow')" style="flex:1; background:#facc15; color:#0f172a; border:2px solid #0f172a; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="Yellow Tee / Mens">Yellow</button>
+                <button id="ts-white" onclick="actuallyStartRound('white')" style="flex:1; background:#fff; color:#0f172a; border:2px solid #1e293b; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="White Tee / Club">White</button>
+                <button id="ts-black" onclick="actuallyStartRound('black')" style="flex:1; background:#111; color:#fff; border:2px solid #fff; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="Black Tee / Pro">Black</button>
+            </div>
+            <button onclick="document.getElementById('tee-select-modal').style.display='none'" style="margin-top:25px; background:transparent; color:#94a3b8; border:none; padding:10px; font-weight:bold; cursor:pointer; text-decoration:underline;">Cancel</button>
+        </div>
+    </div>
+
     <!-- CONFIRM MODAL -->
     <div id="confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto;">
         <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #ef4444; width:400px; text-align:center; box-shadow: 0 10px 40px rgba(239,68,68,0.3);">
@@ -733,6 +748,19 @@
         let author = document.getElementById('pub-author').value;
         if(!name) { alert("Please enter a course name!"); return; }
         
+        // VALIDERINGSCHECK (Steg 3)
+        let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
+        if(!h1HasTee || !courseHoles[0].flag) {
+            alert("Validation Error: You must build at least Hole 1 with a Tee and a Flag before publishing.");
+            return;
+        }
+        for (let i=0; i<18; i++) {
+            let h = courseHoles[i];
+            let hasTee = h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black);
+            if(hasTee && !h.flag) { alert(`Validation Error: Hole ${i+1} has a tee but no flag! Please fix before publishing.`); return; }
+            if(h.flag && !hasTee) { alert(`Validation Error: Hole ${i+1} has a flag but no tee! Please fix before publishing.`); return; }
+        }
+        
         let btn = document.getElementById('pub-btn');
         btn.innerText = "Uploading...";
         btn.disabled = true;
@@ -909,6 +937,26 @@
 
     window.startRound = function() {
         if(appMode !== 'PLAY') return;
+
+        let hole1 = courseHoles[0];
+        let h1HasTee = hole1 && hole1.tees && (hole1.tees.yellow || hole1.tees.white || hole1.tees.red || hole1.tees.black);
+        if(!hole1 || !h1HasTee || !hole1.flag) {
+            alert("Hole 1 is missing a tee or a flag! You must build Hole 1 completely to play.");
+            return;
+        }
+
+        document.getElementById('ts-red').style.display = hole1.tees.red ? 'block' : 'none';
+        document.getElementById('ts-yellow').style.display = hole1.tees.yellow ? 'block' : 'none';
+        document.getElementById('ts-white').style.display = hole1.tees.white ? 'block' : 'none';
+        document.getElementById('ts-black').style.display = hole1.tees.black ? 'block' : 'none';
+        
+        document.getElementById('tee-select-modal').style.display = 'flex';
+    };
+
+    window.actuallyStartRound = function(teeColor) {
+        window.playingTeeColor = teeColor;
+        document.getElementById('tee-select-modal').style.display = 'none';
+
         playState = 'ROUND_IDLE';
         playingHoleIndex = 0;
         playingStrokes = 0;
@@ -943,11 +991,14 @@
     
     function teleportToHole(index) {
         let hole = courseHoles[index];
-        let activeT = hole ? (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) : null;
-        if(!hole || !activeT || !hole.flag) {
+        let anyTee = hole ? (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) : null;
+        if(!hole || !anyTee || !hole.flag) {
             alert("Hole " + (index+1) + " is not fully built! Needs both a Tee and a Flag.");
             return;
         }
+        
+        let targetColor = window.playingTeeColor || 'yellow';
+        let activeT = hole.tees[targetColor] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
         
         document.getElementById('hud-play-hole').innerText = (index + 1);
         document.getElementById('hud-play-par').innerText = hole.par;
@@ -964,7 +1015,10 @@
         
         let dir = new THREE.Vector3().subVectors(flagVec, teeVec).normalize();
         
-        camera.position.copy(teeVec).add(new THREE.Vector3(-dir.x * 5, 2, -dir.z * 5)); // Ställ kameran 5 meter snett bakom
+        let camDist = 5;
+        let camHeight = 3;
+        
+        camera.position.copy(teeVec).add(new THREE.Vector3(-dir.x * camDist, camHeight, -dir.z * camDist)); // Ställ kameran bakom och lite över
         controls.target.copy(teeVec).add(new THREE.Vector3(dir.x * 20, 0, dir.z * 20)); // Titta åt flaggan
         controls.update();
     }
