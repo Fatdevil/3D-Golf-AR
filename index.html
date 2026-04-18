@@ -212,7 +212,7 @@
     </div>
     <div class="hole-picker">
        <button id="prev-hole">‹</button>
-       <div class="hole-title"><span id="hud-hole-compact">Hål 1</span> <span class="par-text" id="hud-par-compact">Par 4 | Slag 1</span></div>
+       <div class="hole-title"><span id="hud-hole-compact">Hole 1</span> <span class="par-text" id="hud-par-compact">Par 4 | Shot 1</span></div>
        <button id="next-hole">›</button>
     </div>
   </div>
@@ -225,26 +225,26 @@
 
 <div id="gps-status">
    <div id="gps-status-dot" style="width:8px; height:8px; border-radius:50%; background:#eab308; animation: pulse 1s infinite;"></div>
-   <span id="gps-status-text">Söker...</span>
+   <span id="gps-status-text">Searching...</span>
 </div>
 
 <div id="lm-status" style="position:fixed; top: 120px; left: 16px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; z-index: 1000; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1);">
    <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
-   <span id="lm-status-text" style="text-transform: uppercase;">LM Frånkopplad</span>
+   <span id="lm-status-text" style="text-transform: uppercase;">LM Disconnected</span>
 </div>
 
 <div id="floating-actions">
-  <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.9); border-color:#8b5cf6;" title="Flytta Mig">🚶‍♂️</button>
+  <button id="btn-move-me" style="display:none; background:rgba(139,92,246,0.9); border-color:#8b5cf6;" title="Move Me">🚶‍♂️</button>
   <button id="btn-shot" title="AUTO SHOT" style="background:rgba(234,179,8,0.9); border-color:#eab308;">🏌️</button>
-  <button id="btn-sim" title="Fysik Simulator" style="background:rgba(15,23,42,0.9); border-color:#4ade80; color:#4ade80;" onclick="document.getElementById('simulator-panel').style.display = document.getElementById('simulator-panel').style.display === 'none' ? 'block' : 'none';">💻</button>
-  <button id="btn-cam-dash" title="Kamera Lab" style="background:rgba(15,23,42,0.9); border-color:#38bdf8; color:#38bdf8;" onclick="document.getElementById('camera-panel').style.display = document.getElementById('camera-panel').style.display === 'none' ? 'block' : 'none';">🎥</button>
-  <button id="btn-rangefinder" title="Rangefinder — mät avstånd">🎯</button>
-  <button id="btn-flyover" title="3D Drönare">🚁</button>
-  <button class="active" id="btn-2d" title="2D Vy">📍</button>
+  <button id="btn-sim" title="Physics Simulator" style="background:rgba(15,23,42,0.9); border-color:#4ade80; color:#4ade80;" onclick="document.getElementById('simulator-panel').style.display = document.getElementById('simulator-panel').style.display === 'none' ? 'block' : 'none';">💻</button>
+  <button id="btn-cam-dash" title="Camera Lab" style="background:rgba(15,23,42,0.9); border-color:#38bdf8; color:#38bdf8;" onclick="document.getElementById('camera-panel').style.display = document.getElementById('camera-panel').style.display === 'none' ? 'block' : 'none';">🎥</button>
+  <button id="btn-rangefinder" title="Rangefinder">🎯</button>
+  <button id="btn-flyover" title="3D Flyover">🚁</button>
+  <button class="active" id="btn-2d" title="2D View">📍</button>
   <button id="btn-score" title="Scorecard" style="background:rgba(15,23,42,0.9); border-color:#eab308; color:#eab308;" onclick="openScorecard()">📝</button>
-  <button id="btn-profil" title="Inställningar" style="background:rgba(15,23,42,0.9); border-color:#94a3b8; color:#94a3b8;" onclick="toggleSettings()">⚙️</button>
+  <button id="btn-profil" title="Settings" style="background:rgba(15,23,42,0.9); border-color:#94a3b8; color:#94a3b8;" onclick="toggleSettings()">⚙️</button>
 </div>
-<div id="rangefinder-badge">🎯 MÄTLÄGE — tryck 🎯 för att rensa</div>
+<div id="rangefinder-badge">🎯 MEASURE MODE — tap 🎯 to clear</div>
 
 <div id="telemetry-panel">
   <div class="tm-cell"><div class="tm-label">Club Speed</div><div class="tm-value" id="tm-club">--<span class="tm-unit">mph</span></div></div>
@@ -258,9 +258,9 @@
 
 
 <!-- Gimmie Button Overlay -->
-<button id="gimmie-btn" onclick="takeGimmie()">Hålat! (Gimmie)<span>Lägger till 1 putt</span></button>
+<button id="gimmie-btn" onclick="takeGimmie()">It's Good! (Gimmie)<span>Adds 1 putt</span></button>
 
-<button id="unplayable-btn" onclick="takeUnplayableLie()" style="display:none; position: fixed; top: 180px; left: 50%; transform: translateX(-50%); z-index: 10000; background: rgba(239, 68, 68, 0.9); color: white; border: 2px solid #f87171; padding: 12px 24px; border-radius: 12px; font-weight: 800; text-transform: uppercase;">Ospelbart (Ta Dropp)</button>
+<button id="unplayable-btn" onclick="takeUnplayableLie()" style="display:none; position: fixed; top: 180px; left: 50%; transform: translateX(-50%); z-index: 10000; background: rgba(239, 68, 68, 0.9); color: white; border: 2px solid #f87171; padding: 12px 24px; border-radius: 12px; font-weight: 800; text-transform: uppercase;">Unplayable (Take Drop)</button>
 
 <!-- Scorecard Modal -->
 <div id="scorecard-modal">
@@ -283,7 +283,7 @@
 </div>
 
 <div id="simulator-panel" style="display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:400; background:rgba(15,23,42,0.95); padding:16px; border-radius:12px; border:1px solid #4ade80; color:#fff; width:300px; backdrop-filter:blur(10px); pointer-events:auto;">
-  <h3 style="margin-bottom:12px; color:#4ade80; font-size:14px; text-transform:uppercase; text-align:center;">⚙️ Fysik Simulator (RK4)</h3>
+  <h3 style="margin-bottom:12px; color:#4ade80; font-size:14px; text-transform:uppercase; text-align:center;">⚙️ Physics Simulator (RK4)</h3>
   <div style="margin-bottom:10px;">
     <label style="font-size:12px; color:#aaa;">Speed (mph): <span id="sim-speed-val" style="color:white;float:right;font-weight:bold;">165</span></label>
     <input type="range" id="sim-speed" min="40" max="190" value="165" style="width:100%;" oninput="document.getElementById('sim-speed-val').innerText=this.value">

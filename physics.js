@@ -60,17 +60,33 @@ window.GolfPhysics = (function() {
     function evaluateState(state, dt, dv) {
         let currentV = vecAdd(state.vel, vecScale(dv, dt));
         
-        // Stäng av aerodynamik under rullfasen (drivs bara av markens rullmotstånd)
+        // Stäng av aerodynamik under rullfasen (drivs bara av markens rullmotstånd & lutning)
         if (state.phase === "roll") {
-            let vXY = [currentV[0], currentV[1], 0];
-            let speedXY = vecMag(vXY);
-            if (speedXY < 0.05) {
-                return { dp: currentV, dv: [0, 0, 0] };
-            }
-            let dirXY = [vXY[0]/speedXY, vXY[1]/speedXY, 0];
+            let N = state.terrainNormal || [0,0,1];
+            let G = [0, 0, GRAVITY];
+            let gDotN = G[0]*N[0] + G[1]*N[1] + G[2]*N[2];
+            // Acceleration down the slope due to gravity component
+            let gParallel = [
+                G[0] - gDotN * N[0],
+                G[1] - gDotN * N[1],
+                G[2] - gDotN * N[2]
+            ];
+            
+            let vSpeed = vecMag(currentV);
             let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
-            let accel = vecScale(dirXY, -currentDecel);
-            return { dp: currentV, dv: accel };
+            
+            // Friktion verkar mot rörelseriktningen
+            let dir = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,0,0];
+            let frictionAccel = vecScale(dir, -currentDecel);
+            
+            let totalAccel = vecAdd(gParallel, frictionAccel);
+            
+            if (vSpeed < 0.05 && vecMag(gParallel) < currentDecel) {
+                // Helt stilla på en svag lutning
+                return { dp: currentV, dv: vecScale(currentV, -1 / dt) }; // Tvingar hastighet till 0
+            }
+            
+            return { dp: currentV, dv: totalAccel };
         }
 
         let vRel = vecSub(currentV, state.wind); // Relativ hastighet mot luften
@@ -154,9 +170,10 @@ window.GolfPhysics = (function() {
         let sZ = -wRads * Math.sin(spinAxisRads);
         let spin = [sX, sY, sZ];
 
+        let startPosXZY = input.startPos || [0, 0, 0];
         let state = {
             phase: "flight",
-            pos: [0, 0, 0], // Start i origo (0,0,0)
+            pos: [startPosXZY[0], startPosXZY[1], startPosXZY[2]], // Start i definierad pos (X, Fysik-Y, Höjd)
             vel: vel,
             spin: spin,
             wind: [0, 0, 0] // Enkelt tills vidare (utan extern vind)
@@ -230,27 +247,46 @@ window.GolfPhysics = (function() {
                 }
             }
             
+            // Lägg in en hook för att hämta terränginformation varje tick!
+            let tInfo = { z: 0, normal: [0,0,1], type: 'FAIRWAY' };
+            if (envCtx && envCtx.getTerrainAt) {
+                tInfo = envCtx.getTerrainAt(state.pos[0], state.pos[1]);
+            }
+            state.terrainNormal = tInfo.normal;
+            
             let prevPos = [...state.pos];
             let prevVel = [...state.vel];
             
             stepRK4(state, dt);
+            
+            if (state.phase === "roll") {
+                // Tvinga bollen att "hug the ground" och uppdatera hastighetsvektor så den är parallell!
+                let freshT = envCtx && envCtx.getTerrainAt ? envCtx.getTerrainAt(state.pos[0], state.pos[1]) : tInfo;
+                state.pos[2] = freshT.z;
+                
+                let vDotN = state.vel[0]*freshT.normal[0] + state.vel[1]*freshT.normal[1] + state.vel[2]*freshT.normal[2];
+                state.vel[0] -= vDotN * freshT.normal[0];
+                state.vel[1] -= vDotN * freshT.normal[1];
+                state.vel[2] -= vDotN * freshT.normal[2];
+            }
+            
             t += dt;
             
             // Evaluera Apex
             if (state.pos[2] > metrics.apexMeters) metrics.apexMeters = state.pos[2];
 
-            // Markkontakt och Fysik-övergång
-            if (state.pos[2] <= 0 && state.phase !== "stopped") {
+            // Markkontakt och Fysik-övergång via 3D Slopes
+            if (state.pos[2] <= tInfo.z && state.phase !== "stopped") {
                 
-                // 1. Beräkna den exakta tidpunkten då bollen korsade Z=0 mellan förra och nya steget
+                // 1. Beräkna den exakta tidpunkten då bollen dök igenom z-kartan
                 let travelZ = prevPos[2] - state.pos[2];
-                let f = travelZ > 0.0001 ? prevPos[2] / travelZ : 0; // andel av steget tills Z=0
+                let f = travelZ > 0.0001 ? (prevPos[2] - tInfo.z) / travelZ : 0; 
                 
                 // 2. Interpolera en exakt nerslagspunkt
                 let impactPos = [
                     prevPos[0] + (state.pos[0] - prevPos[0]) * f,
                     prevPos[1] + (state.pos[1] - prevPos[1]) * f,
-                    0
+                    tInfo.z
                 ];
                 let impactVel = [
                     prevVel[0] + (state.vel[0] - prevVel[0]) * f,
@@ -258,7 +294,7 @@ window.GolfPhysics = (function() {
                     prevVel[2] + (state.vel[2] - prevVel[2]) * f
                 ];
                 
-                let rawUncorrectedZ = state.pos[2]; // Spara för loggen
+                let rawUncorrectedZ = state.pos[2];
 
                 state.pos = [...impactPos];
                 state.vel = [...impactVel];
@@ -307,40 +343,57 @@ window.GolfPhysics = (function() {
                         console.log("Spinn vid impact: " + ((vecMag(state.spin)*60)/(2*Math.PI)).toFixed(0) + " RPM");
                     }
                     
-                    if (Math.abs(state.vel[2]) > GROUND.minBounceVerticalSpeed && impactTerrainType !== 'SAND') {
+                    // 3D Vektor Reflektion mot lutningen (tInfo.normal)
+                    let N = tInfo.normal;
+                    let V = [...impactVel];
+                    let vDotN = V[0]*N[0] + V[1]*N[1] + V[2]*N[2];
+                    
+                    let vPerp = vecScale(N, vDotN);  // Vektor rakt in i marken
+                    let vTan = vecSub(V, vPerp);     // Hastighet längs ytan
+                    
+                    // Bounce Physics
+                    let bounceVel = vecAdd(
+                        vecScale(vPerp, -cRestitution),  // Normal forces push out
+                        vecScale(vTan, 1.0 - cFriction)  // Friction kills tangential speed
+                    );
+
+                    // Fysiskt korrekt spin-bite på lutningar
+                    const GRIP = 0.85; 
+                    let vContactY = V[1] + (state.spin[0] * RADIUS);
+                    let vContactX = V[0] - (state.spin[1] * RADIUS);
+                    
+                    let deltaVY = -(vContactY) / 3.5 * GRIP;
+                    let deltaVX = -(vContactX) / 3.5 * GRIP;
+
+                    bounceVel[1] += deltaVY;
+                    bounceVel[0] += deltaVX;
+
+                    state.spin[0] += (2.5 * deltaVY / RADIUS);
+                    state.spin[1] -= (2.5 * deltaVX / RADIUS); 
+
+                    state.vel = bounceVel;
+                    state.spin = vecScale(state.spin, GROUND.spinDampingPerBounce);
+                    
+                    // Är studsen för mjuk uppåt längs ytan? => Rullfas (kolla perpendicular fart)
+                    if (vecMag(vecScale(vPerp, -cRestitution)) < GROUND.minBounceVerticalSpeed || impactTerrainType === 'SAND') {
+                        state.phase = "roll";
+                        // Rull fas, vi tvingar hastigheten att vara helt parallell
+                        let newVDotN = state.vel[0]*N[0] + state.vel[1]*N[1] + state.vel[2]*N[2];
+                        state.vel = [
+                            state.vel[0] - newVDotN * N[0],
+                            state.vel[1] - newVDotN * N[1],
+                            state.vel[2] - newVDotN * N[2]
+                        ];
+                    } else {
                         state.phase = "bounce";
                         metrics.bounceCount++;
-                        
-                        state.vel[2] = Math.abs(state.vel[2]) * cRestitution;
-                        
-                        // Fysiskt korrekt spin-bite
-                        const GRIP = 0.85; 
-
-                        let vContactY = state.vel[1] + (state.spin[0] * RADIUS);
-                        let vContactX = state.vel[0] - (state.spin[1] * RADIUS);
-                        
-                        let deltaVY = -(vContactY) / 3.5 * GRIP;
-                        let deltaVX = -(vContactX) / 3.5 * GRIP;
-
-                        state.vel[1] += deltaVY;
-                        state.vel[0] += deltaVX;
-
-                        state.spin[0] += (2.5 * deltaVY / RADIUS);
-                        state.spin[1] -= (2.5 * deltaVX / RADIUS); 
-
-                        state.vel[0] *= (1 - cFriction);
-                        state.vel[1] *= (1 - cFriction);
-                        
-                        state.spin = vecScale(state.spin, GROUND.spinDampingPerBounce);
-                    } else {
-                        state.phase = "roll";
-                        state.vel[2] = 0; 
                     }
                 }
 
                 if (state.phase === "roll") {
                     let speedXY = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);
                     if (speedXY < GROUND.stopSpeed) {
+                        // Kontrollera om backen är så brant att den *drar iväg* bollen istället för att stanna (evalueras bäst i evaluateState)
                         state.phase = "stopped";
                         state.vel = [0, 0, 0];
                     }
