@@ -750,10 +750,10 @@
                         }
                     }
                     // Re-instantiate
-                    if(h.tees.red) h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444);
-                    if(h.tees.yellow) h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15);
-                    if(h.tees.white) h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff);
-                    if(h.tees.black) h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111);
+                    if(h.tees.red) { h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444); if(h.tees.red.rot) h.teeMeshes.red.rotation.y = h.tees.red.rot; }
+                    if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
+                    if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
+                    if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
                     
                     if(hSync.flag) {
                         h.flag = hSync.flag;
@@ -1207,6 +1207,12 @@
     let isMeasuring = false;
 
     renderer.domElement.addEventListener('pointerup', e => {
+        if(typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
+            activeRotatingTee = null;
+            controls.enabled = true;
+            saveLevel();
+            return;
+        }
         if(currentTool === 'SCULPT' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
             isSculpting = false;
             controls.enabled = true; // Släpp kameran
@@ -1435,11 +1441,28 @@
     }
     
     let lastHitPoint = null;
+    let activeRotatingTee = null;
     function onMouseMove(event) {
         if(appMode !== 'BUILD') return;
         event.preventDefault();
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        
+        if (activeRotatingTee && lastHitPoint) {
+            let hole = courseHoles[currentHoleIndex];
+            let teeGroup = hole.teeMeshes[activeRotatingTee];
+            let teeData = hole.tees[activeRotatingTee];
+            if(teeGroup && teeData) {
+                raycaster.setFromCamera(mouse, camera);
+                let intersects = raycaster.intersectObject(plane);
+                if(intersects.length > 0) {
+                    lastHitPoint = intersects[0].point;
+                    teeGroup.lookAt(lastHitPoint.x, teeGroup.position.y, lastHitPoint.z);
+                    teeData.rot = teeGroup.rotation.y;
+                }
+            }
+            return;
+        }
         
         if (currentTool === 'INSPECT') {
             ghostBlock.visible = false;
@@ -1531,7 +1554,7 @@
             if (currentHoleAction.startsWith('TEE_')) {
                 let teeType = currentHoleAction.replace('TEE_', '').toLowerCase();
                 if (hole.teeMeshes[teeType]) scene.remove(hole.teeMeshes[teeType]);
-                hole.tees[teeType] = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
+                hole.tees[teeType] = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z, rot: 0 };
                 
                 let col = 0xffffff;
                 if(teeType === 'red') col = 0xef4444;
@@ -1539,6 +1562,10 @@
                 if(teeType === 'black') col = 0x111111;
                 
                 hole.teeMeshes[teeType] = createTeeObject(hole.tees[teeType].x, hole.tees[teeType].y, hole.tees[teeType].z, col);
+                
+                activeRotatingTee = teeType;
+                controls.enabled = false;
+                return;
             } else if (currentHoleAction === 'FLAG') {
                 if (hole.flagMesh) scene.remove(hole.flagMesh);
                 hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
