@@ -1151,13 +1151,7 @@
     ghostTree.visible = false;
     scene.add(ghostTree);
     
-    // The grid
-    const gridHelper = new THREE.GridHelper(200, 50, 0xffffff, 0xffffff);
-    gridHelper.material.opacity = 0.2;
-    gridHelper.material.transparent = true;
-    gridHelper.visible = false;
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
+    // The static gridHelper was removed because it clipped through sculpted terrain and water.
 
     // Skulpterings-variabler
     let isSculpting = false;
@@ -1363,7 +1357,6 @@
         
         if (mode === 'BUILD') {
             controls.enabled = true;
-            gridHelper.visible = true;
             // Move camera up to look down a bit
             camera.position.set(0, 15, 10);
             controls.target.set(0, 0, -30);
@@ -1371,7 +1364,6 @@
         } else {
             // PLAY MODE
             controls.enabled = true; // Tillåt zoom och rotering!
-            gridHelper.visible = false;
             ghostBlock.visible = false;
             
             // Default vy från tee mot banan
