@@ -209,18 +209,6 @@
             <span id="minimap-updown">0.0° UP</span>
         </div>
     </div>
-            <div style="width:2px; height:30px; background:#475569;"></div>
-            <div style="display:flex; flex-direction:column; align-items:center;">
-                <span style="font-size:12px; color:#94a3b8; text-transform:uppercase;">Par</span>
-                <span id="hud-play-par" style="color:#fbbf24;">4</span>
-            </div>
-            <div style="width:2px; height:30px; background:#475569;"></div>
-            <div style="display:flex; flex-direction:column; align-items:center;">
-                <span style="font-size:12px; color:#94a3b8; text-transform:uppercase;">Strokes</span>
-                <span id="hud-play-strokes" style="color:#f87171;">0</span>
-            </div>
-        </div>
-    </div>
     
     <div id="measure-hud" style="display:none; font-family:'Inter', sans-serif; position:fixed; top:90px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.9); color:#fbbf24; border:2px solid #fbbf24; padding:12px 24px; border-radius:15px; font-weight:900; font-size:20px; pointer-events:none; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
         0.0m x 0.0m
@@ -1241,7 +1229,7 @@
         // Update Minimap Wind UI
         let wSpd = document.getElementById('minimap-wind-spd');
         let wArr = document.getElementById('minimap-wind-arr');
-        if(wSpd && wArr && window.aimTarget && ball.visible) {
+        if(wSpd && wArr && window.aimTarget && typeof ball !== 'undefined' && ball && ball.visible) {
             wSpd.innerText = Math.round(window.currentWindMph) + " MPH";
             
             // Konvertera Absolut Vind-direktion till Kamerans/Siktets referensram!
@@ -3134,6 +3122,7 @@
         } else {
             if (mapCont) mapCont.style.display = 'none';
         }
+    }
     
     // --- LM BRIDGE STATUS ---
     function initLaunchMonitorBridge() {
