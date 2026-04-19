@@ -438,18 +438,22 @@
                 </div>
             </div>
 
-            <!-- CHOOSE TEE -->
-            <div style="margin-top:25px; background:#1e293b; padding:20px; border-radius:15px; border:1px solid #334155; text-align:center;">
-                <h3 style="color:#fff; margin-top:0; font-size:16px;">SELECT TEE TO START</h3>
-                <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-                    <button id="ts-red" onclick="commitSettingsAndStart('red')" style="flex:1; background:#ef4444; color:#fff; border:2px solid #fff; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="Red Tee / Junior">Red</button>
-                    <button id="ts-yellow" onclick="commitSettingsAndStart('yellow')" style="flex:1; background:#facc15; color:#0f172a; border:2px solid #0f172a; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="Yellow Tee / Mens">Yellow</button>
-                    <button id="ts-white" onclick="commitSettingsAndStart('white')" style="flex:1; background:#fff; color:#0f172a; border:2px solid #1e293b; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="White Tee / Club">White</button>
-                    <button id="ts-black" onclick="commitSettingsAndStart('black')" style="flex:1; background:#111; color:#fff; border:2px solid #fff; padding:12px 15px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;" title="Black Tee / Pro">Black</button>
+            <!-- PLAYER ROSTER -->
+            <div style="margin-top:25px; background:#1e293b; padding:20px; border-radius:15px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="color:#fff; margin:0; font-size:16px;">👥 PLAYER ROSTER</h3>
+                    <button onclick="addPlayerToRoster()" style="background:#10b981; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px;">+ ADD PLAYER</button>
+                </div>
+                <div id="roster-list" style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+                    <!-- Rows generated here -->
+                </div>
+                
+                <div style="margin-top:20px; text-align:center;">
+                    <button onclick="commitSettingsAndStart()" style="background:#38bdf8; color:#0f172a; border:none; padding:15px 40px; border-radius:10px; font-weight:900; font-size:18px; cursor:pointer; width:100%; box-shadow:0 4px 15px rgba(56,189,248,0.4);">⛳ START MATCH</button>
                 </div>
             </div>
             
-            <div style="text-align:center; margin-top:20px;">
+            <div style="text-align:center; margin-top:15px;">
                 <button onclick="document.getElementById('settings-modal').style.display='none'" style="background:transparent; color:#94a3b8; border:none; padding:10px; font-weight:bold; cursor:pointer; text-decoration:underline;">Cancel</button>
             </div>
         </div>
@@ -1296,7 +1300,66 @@
         }
     };
 
-    window.commitSettingsAndStart = function(color) {
+// --- MULTIPLAYER ROSTER SETUP ---
+    window.setupPlayers = [{ name: 'Spelaren 1', tee: 'yellow' }];
+    
+    window.renderPlayerRoster = function() {
+        const list = document.getElementById('roster-list');
+        if (!list) return;
+        list.innerHTML = '';
+        
+        const hole1 = courseHoles[0] || {};
+        const tees = hole1.tees || {};
+        
+        const tOpts = [];
+        if(tees.red) tOpts.push('<option value="red">🔴 Red</option>');
+        if(tees.yellow) tOpts.push('<option value="yellow">🟡 Yellow</option>');
+        if(tees.white) tOpts.push('<option value="white">⚪ White</option>');
+        if(tees.black) tOpts.push('<option value="black">⚫ Black</option>');
+        if(tOpts.length === 0) tOpts.push('<option value="yellow">🟡 Yellow</option>');
+        
+        window.setupPlayers.forEach((p, idx) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; gap:10px; align-items:center; background:#0f172a; padding:10px; border-radius:8px; border:1px solid #475569;';
+            
+            row.innerHTML = `
+                <input type="text" value="${p.name}" onchange="window.setupPlayers[${idx}].name=this.value" placeholder="Player Name" style="flex:1; padding:8px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
+                <select onchange="window.setupPlayers[${idx}].tee=this.value" style="padding:8px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
+                    ${tOpts.join('')}
+                </select>
+                <button onclick="window.removePlayerFromRoster(${idx})" style="background:transparent; color:#ef4444; border:none; font-weight:bold; cursor:pointer; font-size:16px;" title="Remove Player">✖</button>
+            `;
+            const sel = row.querySelector('select');
+            if (sel) sel.value = p.tee;
+            list.appendChild(row);
+        });
+    };
+    
+    window.addPlayerToRoster = function() {
+        if(window.setupPlayers.length >= 4) {
+            alert("Maximum 4 players supported.");
+            return;
+        }
+        let tee = window.setupPlayers.length > 0 ? window.setupPlayers[0].tee : 'yellow';
+        window.setupPlayers.push({ name: `Spelaren ${window.setupPlayers.length + 1}`, tee: tee });
+        window.renderPlayerRoster();
+    };
+    
+    window.removePlayerFromRoster = function(idx) {
+        if(window.setupPlayers.length <= 1) return;
+        window.setupPlayers.splice(idx, 1);
+        window.renderPlayerRoster();
+    };
+
+    window.commitSettingsAndStart = function() {
+        if (window.setupPlayers.length === 0) return;
+        
+        // Ensure names are saved if users forgot to unfocus the input (onchange issue)
+        const inputs = document.getElementById('roster-list').querySelectorAll('input[type="text"]');
+        inputs.forEach((inp, idx) => {
+            if (window.setupPlayers[idx]) window.setupPlayers[idx].name = inp.value;
+        });
+
         window.matchSettings.gimmeDist = parseInt(document.getElementById('set-gimme-dist').value);
         window.matchSettings.autoPutt = document.getElementById('set-autoputt-mode').value;
         window.matchSettings.mulligans = document.getElementById('set-mulligans').checked;
@@ -1308,7 +1371,7 @@
         window.GREEN_STIMP = window.matchSettings.greenStimp; // Backwards compatible
         
         document.getElementById('settings-modal').style.display = 'none';
-        actuallyStartRound(color);
+        actuallyStartRound();
     };
 
     window.startRound = function() {
@@ -1320,48 +1383,241 @@
             alert("Hole 1 is missing a tee or a flag! You must build Hole 1 completely to play.");
             return;
         }
-
-        document.getElementById('ts-red').style.display = hole1.tees.red ? 'block' : 'none';
-        document.getElementById('ts-yellow').style.display = hole1.tees.yellow ? 'block' : 'none';
-        document.getElementById('ts-white').style.display = hole1.tees.white ? 'block' : 'none';
-        document.getElementById('ts-black').style.display = hole1.tees.black ? 'block' : 'none';
         
+        // Match player default tee to whatever tee actually exists on hole 1
+        let firstAvailableTee = hole1.tees.yellow ? 'yellow' : (hole1.tees.white ? 'white' : (hole1.tees.red ? 'red' : 'black'));
+        window.setupPlayers.forEach(p => {
+            if (!hole1.tees[p.tee]) p.tee = firstAvailableTee;
+        });
+        
+        window.renderPlayerRoster();
         document.getElementById('settings-modal').style.display = 'flex';
     };
 
-    window.actuallyStartRound = function(teeColor) {
-        window.playingTeeColor = teeColor;
-        document.getElementById('tee-select-modal').style.display = 'none';
+    
+    function getTeeOrder() {
+        let players = window.players;
+        let pIndices = players.map((p,i) => i);
+        if (playingHoleIndex === 0) {
+            // Hole 1: Distance based from hole for TEE ordering (or list order)
+            return pIndices; // List order for hole 1 as per user spec
+        }
+        
+        let prevHole = playingHoleIndex - 1;
+        
+        // Honours: Lowest scoreVsPar plays FIRST
+        pIndices.sort((a,b) => {
+            let aScore = players[a].scoreVsPar[prevHole] || 0;
+            let bScore = players[b].scoreVsPar[prevHole] || 0;
+            if (aScore !== bScore) return aScore - bScore; // Ascending (lägst först)
+            return a - b; 
+        });
+        return pIndices;
+    }
+    
+    function getNextPlayerIndex() {
+        let players = window.players;
+        let notHoledOut = players.map((p,i) => i).filter(i => !players[i].holedOut);
+        if (notHoledOut.length === 0) return -1; // Alla är klara
+        
+        // Är alla kvar på tee? (Ingen har slagit slag)
+        let allOnTee = notHoledOut.every(i => players[i].strokes === 0 && players[i].penaltyStrokes === 0);
+        if (allOnTee) {
+            let teeOrder = getTeeOrder();
+            // Nästa från tee-order som inte slagit!
+            let nextId = teeOrder.find(id => notHoledOut.includes(id) && players[id].strokes === 0);
+            if(nextId !== undefined) return nextId;
+        }
+        
+        // Ute på banan -> Furthest from hole goes first!
+        let hole = courseHoles[playingHoleIndex];
+        let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+        notHoledOut.sort((a,b) => {
+            let pA = players[a]; let pB = players[b];
+            let dA = new THREE.Vector3(pA.lie.x, pA.lie.y, pA.lie.z).distanceTo(fv);
+            let dB = new THREE.Vector3(pB.lie.x, pB.lie.y, pB.lie.z).distanceTo(fv);
+            return dB - dA; // Descending (längst slår först)
+        });
+        return notHoledOut[0];
+    }
+    
+    function teleportToHole(index) {
+        let hole = courseHoles[index];
+        let anyTee = hole ? (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) : null;
+        if(!hole || !anyTee || !hole.flag) {
+            alert("Hole " + (index+1) + " is not fully built! Needs both a Tee and a Flag.");
+            return;
+        }
+
+        // Sätt initiala LIES & TEES för alla players
+        window.players.forEach((p, idx) => {
+            p.holedOut = false;
+            p.strokes = 0;
+            p.penaltyStrokes = 0;
+            
+            // Hitta deras valda tee (eller fallback)
+            let activeT = hole.tees[p.tee] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
+            p.teePosition = { x: activeT.x, y: activeT.y, z: activeT.z };
+            p.lie = { x: activeT.x, y: activeT.y + 0.3, z: activeT.z }; // Startar på peggen!
+        });
+
+        let startPlayerIdx = getNextPlayerIndex();
+        switchTurnTo(startPlayerIdx);
+    }
+    
+    function switchTurnTo(idx) {
+        if(idx === -1) {
+            nextHole(); // Hela fältet är klara
+            return;
+        }
+        
+        window.activePlayerIndex = idx;
+        let p = window.players[idx];
+        
+        // Visa ställningen för den aktiva spelaren
+        updatePlayerBanner();
+        
+        // Återställ boll-statusen till idle för denna spelare
+        window.ballLocked = false;
+        if (playState !== 'ROUND_PUTTING') playState = 'ROUND_IDLE'; // eller behåll putting logik  
+        
+        // Ställ upp bollen på deras nuvarande lie
+        ball.visible = true;
+        ball.position.set(p.lie.x, p.lie.y, p.lie.z);
+        ball.velocity = new THREE.Vector3(0,0,0);
+        ball.angularVelocity = new THREE.Vector3(0,0,0);
+        
+        window.aimTarget = new THREE.Vector3();
+        
+        // Vänd kameran framåt
+        let hole = courseHoles[playingHoleIndex];
+        let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+        let dir = new THREE.Vector3().subVectors(fv, ball.position).normalize();
+        
+        let camDist = 5; let camHeight = 3;
+        camera.position.copy(ball.position).add(new THREE.Vector3(-dir.x * camDist, camHeight, -dir.z * camDist)); 
+        controls.target.copy(ball.position).add(new THREE.Vector3(dir.x * 20, 0, dir.z * 20)); 
+        controls.enabled = true;
+        controls.update();
+
+        // Uppdatera Trackers
+        let trck = document.getElementById('ball-tracker');
+        if (trck) trck.style.display = 'none';
+
+        // Flash turn message om vi har slagit slag och byter spelare
+        let pop = document.getElementById('score-popup');
+        pop.innerText = p.name.toUpperCase() + "'S TURN";
+        pop.style.color = "#38bdf8";
+        pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
+        pop.style.opacity = '1';
+        setTimeout(() => { pop.style.opacity = '0'; pop.style.color = "#fcd34d"; }, 2500);
+    }
+    
+    window.evaluateNextTurn = function() {
+        let p = window.players[window.activePlayerIndex];
+        let hole = courseHoles[playingHoleIndex];
+        let maxConcede = window.matchSettings ? window.matchSettings.autoConcede : 99;
+        let maxScore = hole ? (hole.par || 4) + maxConcede : 99;
+        
+        // Spara deras position eftersom dom precis slagit bollen (vi antar bollen stannat)
+        p.lie = {x: ball.position.x, y: ball.position.y, z: ball.position.z};
+
+        if (p.strokes + p.penaltyStrokes >= maxScore && maxConcede !== 99 && !p.holedOut) {
+            p.holedOut = true;
+            p.strokes = maxScore;
+            
+            // Pop-up för concede!
+            let pop = document.getElementById('score-popup');
+            pop.innerText = "AUTO CONCEDE (" + maxScore + ")";
+            pop.style.color = "#ef4444";
+            pop.style.opacity = '1';
+            setTimeout(() => { pop.style.opacity = '0'; pop.style.color = "#fcd34d"; }, 3000);
+        }
+        
+        if (p.holedOut) {
+            let total = p.strokes + p.penaltyStrokes;
+            p.scores[playingHoleIndex] = total;
+            p.scoreVsPar[playingHoleIndex] = total - (hole.par || 4);
+            
+            let flash = document.getElementById('pb-flash');
+            if(flash) {
+                let diff = total - (hole.par || 4);
+                flash.innerText = logHoleScoreText(total, hole.par || 4);
+                if(diff < 0) flash.style.color = '#4ade80';
+                else if(diff > 0) flash.style.color = '#f87171';
+                else flash.style.color = '#e2e8f0';
+                flash.style.opacity = '1';
+                setTimeout(() => { flash.style.opacity = '0'; }, 3000);
+            }
+        }
+        
+        // Hitta vem som ska slå näst
+        let nextPlayer = getNextPlayerIndex();
+        if(nextPlayer === -1) {
+            setTimeout(nextHole, 2500);
+        } else {
+            // Om nextPlayer är samma spelare (pga farthest, eller ensam), uppdatera inte kameran direkt för man ser landningen
+            // Om de hålade ut måste vi vänta så de ser bollen trilla i
+            setTimeout(() => {
+                switchTurnTo(nextPlayer);
+            }, p.holedOut ? 2500 : 1000);
+        }
+    }
+
+    window.actuallyStartRound = function() {
+        document.getElementById('settings-modal').style.display = 'none';
 
         playState = 'ROUND_IDLE';
         playingHoleIndex = 0;
-        playingStrokes = 0;
+        
+        window.players = window.setupPlayers.map(sp => ({
+            id: sp.name + "_" + Math.random().toString(36).substring(7),
+            name: sp.name,
+            tee: sp.tee,
+            strokes: 0,
+            penaltyStrokes: 0,
+            scores: Array(18).fill(null),
+            scoreVsPar: Array(18).fill(null),
+            lie: null,
+            teePosition: null,
+            holedOut: false,
+            honours: false
+        }));
+        
+        window.activePlayerIndex = 0;
         
         document.getElementById('play-tools').style.display = 'flex';
         document.getElementById('btn-start-round').style.display = 'none';
-        document.getElementById('playing-hud').style.display = 'none'; // Dölj The old HUD
-        document.getElementById('player-banner').style.display = 'block'; // Visa GSPro-style Banner
+        document.getElementById('playing-hud').style.display = 'none'; 
+        document.getElementById('player-banner').style.display = 'block'; 
+        document.getElementById('player-banner').querySelector('#pb-name').style.display = 'inline-block'; // Visa Namn!
         
         teleportToHole(playingHoleIndex);
     };
 
     window.updatePlayerBanner = function() {
         let hole = courseHoles[playingHoleIndex];
-        if(!hole) return;
-
-        // Beräkna Total Score text (E, +3, -2)
-        let totalDisplay = "E";
-        if (window.totalScore > 0) totalDisplay = "+" + window.totalScore;
-        else if (window.totalScore < 0) totalDisplay = window.totalScore.toString();
+        if(!hole || !window.players) return;
         
-        document.getElementById('pb-score').innerText = totalDisplay;
+        let p = window.players[window.activePlayerIndex];
+        if(!p) return;
+
+        let totalVsPar = p.scoreVsPar.reduce((sum, s) => s !== null ? sum + s : sum, 0);
+        
+        let totalDisplay = "E";
+        if (totalVsPar > 0) totalDisplay = "+" + totalVsPar;
+        else if (totalVsPar < 0) totalDisplay = totalVsPar.toString();
+        
+        // Uppdatera Namnet & Score
+        document.getElementById('pb-score').innerHTML = totalDisplay + " <span style='font-size:12px; color:#94a3b8;'>| " + p.name + "</span>";
         
         // Uppdatera Shot X
-        document.getElementById('pb-shot').innerText = "Shot " + (playingStrokes + 1);
+        let totalStrokes = p.strokes + p.penaltyStrokes;
+        document.getElementById('pb-shot').innerText = "Shot " + (totalStrokes + 1);
         
         // Uppdatera Distans om vi har the pin
-        if (hole.flag && ball.visible) {
-            let dist = ball.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z)) * 1.09361;
+        if (hole.flag && ball.visible && p.lie) {
+            let dist = new THREE.Vector3(p.lie.x, p.lie.y, p.lie.z).distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z)) * 1.09361;
             document.getElementById('pb-dist').innerText = dist.toFixed(1) + " YDS";
         }
     };
@@ -1379,31 +1635,7 @@
     }
     
     function nextHole() {
-        let hole = courseHoles[playingHoleIndex];
-        let par = hole ? hole.par : 4;
-        
-        // Spara poängen internt!
-        window.playerScores[playingHoleIndex] = playingStrokes;
-        
-        // Visa BOGEY/BIRDIE texten snabbt
-        let flash = document.getElementById('pb-flash');
-        if(flash) {
-            let diff = playingStrokes - par;
-            // Uppdatera window.totalScore
-            window.totalScore += diff;
-            
-            flash.innerText = logHoleScoreText(playingStrokes, par);
-            if(diff < 0) flash.style.color = '#4ade80'; // Grön för bra
-            else if(diff > 0) flash.style.color = '#f87171'; // Röd för dåligt
-            else flash.style.color = '#e2e8f0'; // Vit för par
-            
-            flash.style.opacity = '1';
-        }
-        
-        setTimeout(() => {
-            if(flash) flash.style.opacity = '0';
-            startNextHole();
-        }, 4000);
+        startNextHole();
     }
     
     function startNextHole() {
@@ -1421,15 +1653,13 @@
             document.getElementById('play-tools').style.display = 'none';
             document.getElementById('btn-start-round').style.display = 'block';
             
-            // Bygg och visa Scorekortet!
             renderScorecard();
             document.getElementById('scorecard-modal').style.display = 'flex';
             return;
         }
-        playingStrokes = 0;
+        
         teleportToHole(playingHoleIndex);
     }
-    
     function renderScorecard() {
         let tbody = document.getElementById('scorecard-tbody');
         if(!tbody) return;
@@ -1582,8 +1812,9 @@
         
         if (playState === 'ROUND_IDLE') {
             playState = 'ROUND_FLYING';
-            playingStrokes++;
-            document.getElementById('hud-play-strokes').innerText = playingStrokes;
+            let p = window.players[window.activePlayerIndex];
+            p.strokes++;
+            document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
             if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
             broadcastCamPhase = 'TEE';
             startPos = [ball.position.x, -ball.position.z, ball.position.y]; // Three X,Z,Y -> Phys X,Y,Z
@@ -2994,26 +3225,23 @@
                         let distFt = distToPin * 3.28084;
                         let gimmeMax = window.matchSettings ? window.matchSettings.gimmeDist : 10;
                         
+                        let p = window.players[window.activePlayerIndex];
                         // Kolla Auto Concede först
                         let maxConcede = window.matchSettings ? window.matchSettings.autoConcede : 99;
-                        let maxScore = hole ? hole.par + maxConcede : 99;
-                        if (playingStrokes >= maxScore && maxConcede !== 99) {
-                            playingStrokes = maxScore;
-                            pop.innerText = `AUTO CONCEDE (${maxScore})`;
-                            pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 3000);
-                            return;
-                        }
+                        let maxScore = hole ? (hole.par || 4) + maxConcede : 99;
+                        
+                        let shouldConcede = (p.strokes + p.penaltyStrokes) >= maxScore && maxConcede !== 99;
 
                         let mode = window.matchSettings ? window.matchSettings.autoPutt : 'TOUR_PRO';
                         
                         // Gimme check
-                        if (distFt <= gimmeMax) {
-                            playingStrokes += 1;
+                        if (!shouldConcede && distFt <= gimmeMax) {
+                            p.strokes += 1;
+                            p.holedOut = true;
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 4000);
-                        } else if ((isGreen || distToPin < 20.0) && mode !== 'OFF') {
+                            setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
+                        } else if (!shouldConcede && (isGreen || distToPin < 20.0) && mode !== 'OFF') {
                             // AUTO-PUTT LOGIC (On Green or very close Fringe)
                             let putts = 2;
                             if (mode === 'TOUR_PRO') {
@@ -3031,10 +3259,11 @@
                                 putts = distFt < 10 ? 1 : (distFt < 40 ? 2 : 3);
                             }
                             
-                            playingStrokes += putts;
+                            p.strokes += putts;
+                            p.holedOut = true;
                             pop.innerText = `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
                             pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 4000);
+                            setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
                         } else {
                             // Vi är inte klara. Nytt slag ELLER Manuell Putt!
                             if (isGreen && mode === 'OFF') {
@@ -3050,8 +3279,10 @@
                             
                             // Reset Aim mot nästa slag (Flaggan eller Fairway)
                             window.resetAimTarget();
+                            
+                            // Evaluate who plays next (this player is not done)
+                            evaluateNextTurn();
                         }
-                        document.getElementById('hud-play-strokes').innerText = playingStrokes;
                     }, 2000);
                 } else {
                     // ARCADE MODE: Klassisk reset efter 2 sekunder
