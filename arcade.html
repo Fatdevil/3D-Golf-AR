@@ -255,6 +255,7 @@
             <input type="number" id="in-hla" value="0" title="Horizontal Angle (deg)">
             <input type="number" id="in-stimp" value="10.0" step="0.5" title="Green Stimp (Speed)" style="background:#10b981; color:#fff; border:none; width:50px; font-weight:bold;">
             <input type="number" id="in-boost" value="1.0" step="0.1" title="Boost Multiplier (x)" style="background:#eab308; color:#000; border:none;">
+            <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Camera Mode">🎥 BROADCAST</button>
             <button onclick="fireShot()">🔥 SHOOT</button>
         </div>
     </div>
@@ -1083,6 +1084,24 @@
         controls.update();
     }
 
+    // --- CAMERA TOGGLE ---
+    window.camFollowMode = 'BROADCAST'; // 'BROADCAST', 'FOLLOW', 'FREE'
+    window.toggleCamMode = function() {
+        let btn = document.getElementById('btn-cam-mode');
+        if (window.camFollowMode === 'BROADCAST') {
+            window.camFollowMode = 'FOLLOW';
+            btn.innerText = '🎥 FOLLOW';
+            btn.style.background = '#64748b'; // slate-500
+        } else if (window.camFollowMode === 'FOLLOW') {
+            window.camFollowMode = 'FREE';
+            btn.innerText = '🎥 FREE CAM';
+            btn.style.background = '#ec4899'; // pink-500
+        } else {
+            window.camFollowMode = 'BROADCAST';
+            btn.innerText = '🎥 BROADCAST';
+            btn.style.background = '#4f46e5'; // indigo-600
+        }
+    };
 
     function fireShot() {
         if(isFlying) return; // Låt bollen landa
@@ -1108,8 +1127,12 @@
     }
 
     function executeArcadeShot(data) {
-        // Lås kamerakontroller så vi kan regissera kameran
-        controls.enabled = false; 
+        // Lås kamerakontroller så vi kan regissera kameran (OM VI INTE KÖR FREE-CAM)
+        if (window.camFollowMode !== 'FREE') {
+            controls.enabled = false; 
+        } else {
+            controls.enabled = true;
+        }
         
         let startPos = [0, 0.3, 0];
         
@@ -2232,34 +2255,57 @@
             }
             flightTracer.geometry.setFromPoints(tracerPoints);
             
-            // TV BROADCAST CAMERA LOGIC
-            if (playState === 'ROUND_FLYING') {
-                if (broadcastCamPhase === 'TEE') {
-                    // Stanna kvar på Tee och titta efter bollen!
-                    camera.lookAt(ball.position);
-                    
-                    // Klipp till Landing Camera om bollen är i luften längre än 1.5 sek!
-                    if (flightTick > 45 && flightData.path.length > 90) {
-                        broadcastCamPhase = 'LANDING';
-                        let finalPhys = flightData.path[flightData.path.length-1];
-                        // Kameran placeras 15 meter bakom landningsplatsen för att se den komma ner
-                        landingCamPos.set(finalPhys.x, finalPhys.z + 3, -finalPhys.y - 15);
-                        camera.position.copy(landingCamPos);
-                    }
-                } else if (broadcastCamPhase === 'LANDING') {
-                    // Ser bollen komma emot oss 
-                    camera.lookAt(ball.position);
-                }
-            } else {
-                // ARCADE MODE: Klassisk drönarkamera
+            // --- FLIGHT CAMERA SYSTEM ---
+            if (window.camFollowMode === 'FREE') {
+                // FREE CAM: Släpp kameran fri. Användaren styr med OrbitControls!
+                // Gör ingenting åt kamera-positionen.
+            } else if (window.camFollowMode === 'FOLLOW') {
+                // GSPRO REACTIVE FOLLOW (Classic Drone)
                 let targetCamX = ball.position.x;
                 let targetCamY = Math.max(3, ball.position.y + 3);
-                let targetCamZ = ball.position.z + 12;
+                let targetCamZ = ball.position.z + 12; // Konstant 12m offset bakom
                 
                 camera.position.x += (targetCamX - camera.position.x) * 0.1;
                 camera.position.y += (targetCamY - camera.position.y) * 0.1;
                 camera.position.z += (targetCamZ - camera.position.z) * 0.1;
                 camera.lookAt(ball.position);
+            } else {
+                // TV BROADCAST / PROACTIVE LOOK-AHEAD
+                if (playState === 'ROUND_FLYING') {
+                    // För ROUND mode använder vi The TV Broadcast Director (Multi-angle)
+                    if (broadcastCamPhase === 'TEE') {
+                        camera.lookAt(ball.position);
+                        if (flightTick > 45 && flightData.path.length > 90) {
+                            broadcastCamPhase = 'LANDING';
+                            let finalPhys = flightData.path[flightData.path.length-1];
+                            landingCamPos.set(finalPhys.x, finalPhys.z + 3, -finalPhys.y - 15);
+                            camera.position.copy(landingCamPos);
+                        }
+                    } else if (broadcastCamPhase === 'LANDING') {
+                        camera.lookAt(ball.position);
+                    }
+                } else {
+                    // TRACKMAN PROACTIVE LOOK-AHEAD
+                    // Leta upp framtiden (ca 0.5s fram = 100 ticks vid 5ms/tick)
+                    let aheadTick = Math.min(flightTick + 100, flightData.path.length - 1);
+                    let aheadP = flightData.path[aheadTick];
+                    let currP = flightData.path[flightTick];
+                    
+                    // Eftersom koden ej skickar vx just nu i metrics-pathen, kör vi en vMag approx:
+                    let bVel = currP.vMag || 30; // vMag läggs ofta in i simFlight för tracers
+                    
+                    let zScale = 1.0 + (bVel / 50.0) * 0.8; // Skalar Z-offset från fart
+                    
+                    let targetCamX = aheadP.x;
+                    let targetCamY = Math.max(3, (aheadP.z + 0.0213) + Math.abs(currP.vz || 0) * 0.05); // Y=Höjd i threeJS
+                    let targetCamZ = -aheadP.y + (10 * zScale); // Fartskalat bakom The Look-Ahead Point
+                    
+                    // Mjuk Interpolering mot framtiden
+                    camera.position.x += (targetCamX - camera.position.x) * 0.15;
+                    camera.position.y += (targetCamY - camera.position.y) * 0.15;
+                    camera.position.z += (targetCamZ - camera.position.z) * 0.15;
+                    camera.lookAt(ball.position); // Position at future, look at ball today!
+                }
             }
             
             // COLLISION DETECTION! Krockar bollen med ett block?
