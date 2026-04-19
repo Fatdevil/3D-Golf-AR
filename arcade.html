@@ -247,6 +247,7 @@
             <input type="number" id="in-speed" value="130" title="Ball Speed (mph)">
             <input type="number" id="in-la" value="18" title="Launch Angle (deg)">
             <input type="number" id="in-hla" value="0" title="Horizontal Angle (deg)">
+            <input type="number" id="in-stimp" value="10.0" step="0.5" title="Green Stimp (Speed)" style="background:#10b981; color:#fff; border:none; width:50px; font-weight:bold;">
             <input type="number" id="in-boost" value="1.0" step="0.1" title="Boost Multiplier (x)" style="background:#eab308; color:#000; border:none;">
             <button onclick="fireShot()">🔥 SHOOT</button>
         </div>
@@ -1118,6 +1119,8 @@
         }
         
         var vBoost = parseFloat(document.getElementById('in-boost').value) || 1.0;
+        var vStimpEl = document.getElementById('in-stimp');
+        window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
         
         // Applicera Arcade Boost!
         var finalSpeed = data.ballSpeedMph * vBoost;

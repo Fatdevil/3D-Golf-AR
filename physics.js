@@ -60,11 +60,12 @@ window.GolfPhysics = (function() {
     function evaluateState(state, dt, dv) {
         let currentV = vecAdd(state.vel, vecScale(dv, dt));
         
-        // Stäng av aerodynamik under rullfasen (drivs bara av markens rullmotstånd & lutning)
-        if (state.phase === "roll") {
+        // Stäng av aerodynamik under glid/rullfasen (drivs bara av markens rullmotstånd & lutning)
+        if (state.phase === "roll" || state.phase === "skid") {
             let N = state.terrainNormal || [0,0,1];
             let G = [0, 0, GRAVITY];
-            let gDotN = G[0]*N[0] + G[1]*N[1] + G[2]*N[2];
+            let gDotN = G[0]*N[0] + G[1]*N[1] + G[2]*N[2]; // Negativt värde typiskt (-9.81)
+            
             // Acceleration down the slope due to gravity component
             let gParallel = [
                 G[0] - gDotN * N[0],
@@ -73,17 +74,38 @@ window.GolfPhysics = (function() {
             ];
             
             let vSpeed = vecMag(currentV);
-            let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
+            let normalForceMag = Math.abs(gDotN); // m/s^2 trycket mot marken
             
-            // Friktion verkar mot rörelseriktningen
+            // Rullfriktion härleds antingen från statisk kod (Fairway/Rough) eller dynamisk Stimp (Green)
+            let mu = 0.5; // Standard/Fallback
+            if (state.terrainType === 'GREEN' && typeof window !== 'undefined' && window.GREEN_STIMP) {
+                // Formula: friktion mu är omvänt proportionell mot Stimp.
+                // Vid Stimp 10 är mu ~ 0.08.
+                let stimp = window.GREEN_STIMP;
+                if (stimp < 6) stimp = 6; if (stimp > 14) stimp = 14;
+                mu = 0.8 / stimp; // Stimp 10 -> 0.080, Stimp 13 -> 0.061
+            } else {
+                // Omvandla den inkodade rullbromsen (rollingDecel) tillbaka till ett mu-värde för kompatibilitet.
+                let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
+                mu = currentDecel / 9.81;
+            }
+
+            // Kinetisk glidfas ("Skid") har ungefär 50-80% högre friktion än rullfriktion
+            if (state.phase === "skid") {
+                mu *= 1.7; 
+            }
+            
+            let frictionAccelMag = mu * normalForceMag;
+            
+            // Friktion verkar rakt mot rörelseriktningen parallellt med marken
             let dir = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,0,0];
-            let frictionAccel = vecScale(dir, -currentDecel);
+            let frictionAccel = vecScale(dir, -frictionAccelMag);
             
             let totalAccel = vecAdd(gParallel, frictionAccel);
             
-            if (vSpeed < 0.05 && vecMag(gParallel) < currentDecel) {
-                // Helt stilla på en svag lutning
-                return { dp: currentV, dv: vecScale(currentV, -1 / dt) }; // Tvingar hastighet till 0
+            if (vSpeed < 0.05 && vecMag(gParallel) < frictionAccelMag) {
+                // Farten är nära noll och gravitationssluttningen är för svag för att övervinna friktionen => STILLA
+                return { dp: currentV, dv: vecScale(currentV, -1 / dt) }; // Tvingar hastighet till exakt 0
             }
             
             return { dp: currentV, dv: totalAccel };
@@ -330,7 +352,8 @@ window.GolfPhysics = (function() {
                 let cRollingDecel = GROUND.rollingDecel;
                 
                 if (impactTerrainType === 'GREEN') {
-                    cRestitution = 0.15; cFriction = 0.50; cRollingDecel = 0.5;
+                    // GSPro / Trackman Greens: e ~ 0.5 for realistic bounces, låg rullfriktion (via Stimp i evaluateState)
+                    cRestitution = 0.50; cFriction = 0.35; cRollingDecel = 0.5;
                 } else if (impactTerrainType === 'TEE') {
                     cRestitution = 0.30; cFriction = 0.40; cRollingDecel = 0.8;
                 } else if (impactTerrainType === 'ROUGH') {
@@ -351,6 +374,7 @@ window.GolfPhysics = (function() {
                 
                 state.rollingDecel = cRollingDecel;
                 metrics.finalTerrainType = impactTerrainType;
+                state.terrainType = impactTerrainType; // Spara ner det i staten
                 
                 if (state.phase === "flight" || state.phase === "bounce") {
                     if (state.phase === "flight") {
@@ -376,11 +400,12 @@ window.GolfPhysics = (function() {
                         vecScale(vTan, 1.0 - cFriction)  // Friction kills tangential speed
                     );
 
-                    // Fysiskt korrekt spin-bite på lutningar
-                    const GRIP = 0.85; 
+                    // Fysiskt korrekt spin-bite på lutningar inspirerat av Penner
+                    const GRIP = impactTerrainType === 'GREEN' ? 0.98 : 0.85; 
                     let vContactY = V[1] + (state.spin[0] * RADIUS);
                     let vContactX = V[0] - (state.spin[1] * RADIUS);
                     
+                    // Energi överförs mellan translation (spinoff) och rotation (bite)
                     let deltaVY = -(vContactY) / 3.5 * GRIP;
                     let deltaVX = -(vContactX) / 3.5 * GRIP;
 
@@ -393,10 +418,17 @@ window.GolfPhysics = (function() {
                     state.vel = bounceVel;
                     state.spin = vecScale(state.spin, GROUND.spinDampingPerBounce);
                     
-                    // Är studsen för mjuk uppåt längs ytan? => Rullfas (kolla perpendicular fart)
-                    if (vecMag(vecScale(vPerp, -cRestitution)) < GROUND.minBounceVerticalSpeed || impactTerrainType === 'SAND') {
-                        state.phase = "roll";
-                        // Rull fas, vi tvingar hastigheten att vara helt parallell
+                    // Är studsen för mjuk uppåt längs ytan? => Rullfas
+                    let bounceZMag = vecMag(vecScale(vPerp, -cRestitution));
+                    if (bounceZMag < GROUND.minBounceVerticalSpeed || impactTerrainType === 'SAND') {
+                        // Greener genererar mer skid eftersom kinetisk gräsfriktion måste överkommas först
+                        if (impactTerrainType === 'GREEN') {
+                            state.phase = "skid"; 
+                        } else {
+                            state.phase = "roll";
+                        }
+                        
+                        // Tvinga hastigheten att vara helt parallell med ytan (nolla vDotN lokalt)
                         let newVDotN = state.vel[0]*N[0] + state.vel[1]*N[1] + state.vel[2]*N[2];
                         state.vel = [
                             state.vel[0] - newVDotN * N[0],
@@ -409,10 +441,20 @@ window.GolfPhysics = (function() {
                     }
                 }
 
-                if (state.phase === "roll") {
-                    let speedXY = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);
+                if (state.phase === "skid" || state.phase === "roll") {
+                    let speedXY = vecMag(state.vel);
+                    
+                    // Övergång Skid -> Roll
+                    if (state.phase === "skid") {
+                        // Så länge forward speed skiljer sig drastiskt från spinn-speed, sladdar vi!
+                        let spinSpeed = Math.sqrt(state.spin[0]*state.spin[0] + state.spin[1]*state.spin[1]) * RADIUS;
+                        // Ren approximationsgräns. I snitt ca 10-20% av en putt.
+                        if (Math.abs(speedXY - spinSpeed) < 1.0 || speedXY < 2.0) {
+                            state.phase = "roll"; // Hjulet har fått fäste!
+                        }
+                    }
+
                     if (speedXY < GROUND.stopSpeed) {
-                        // Kontrollera om backen är så brant att den *drar iväg* bollen istället för att stanna (evalueras bäst i evaluateState)
                         state.phase = "stopped";
                         state.vel = [0, 0, 0];
                     }
