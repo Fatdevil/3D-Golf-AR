@@ -1012,6 +1012,7 @@
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
         let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
         let biome = pCtx.canvas.toDataURL('image/jpeg', 0.8);
+        let w_mask = (typeof wCtx !== 'undefined') ? wCtx.canvas.toDataURL('image/jpeg', 0.8) : null;
 
         try {
             let payload = {
@@ -1022,6 +1023,7 @@
                 trees: dumpTrees,
                 terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
                 terrain_biomemap: biome,
+                terrain_watermask: w_mask,
                 is_draft: options.isDraft
             };
             
@@ -1167,9 +1169,17 @@
                         img.onload = () => {
                             pCtx.drawImage(img, 0, 0);
                             if(typeof mapTex !== 'undefined') mapTex.needsUpdate = true;
-                            if(typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
                         };
                         img.src = arr.terrain_biomemap;
+                    }
+                    
+                    if(arr.terrain_watermask) {
+                        let wImg = new Image();
+                        wImg.onload = () => {
+                            if (typeof wCtx !== 'undefined') wCtx.drawImage(wImg, 0, 0);
+                            if (typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
+                        };
+                        wImg.src = arr.terrain_watermask;
                     }
 
                     if(arr.trees && Array.isArray(arr.trees)) {
