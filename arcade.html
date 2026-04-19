@@ -1139,22 +1139,39 @@
                 let threeZ = -y;
                 
                 for(let i=0; i<window.placedTrees.length; i++) {
-                    let tree = window.placedTrees[i];
-                    if (tree.type === 'BUSH') continue; 
+                    let obj = window.placedTrees[i];
                     
-                    let dx = tree.x - threeX;
-                    let dz = tree.z - threeZ;
+                    let dx = obj.x - threeX;
+                    let dz = obj.z - threeZ;
                     let distSq = dx*dx + dz*dz;
                     
-                    let trunkRadius = 0.5 * tree.scale;
-                    let treeHeight = 15.0 * tree.scale;
-                    let canopyRadius = 3.0 * tree.scale;
-                    
-                    if (distSq < canopyRadius*canopyRadius) {
-                        if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
-                            return { type: 'TREE', height: treeHeight, part: 'TRUNK' };
-                        } else if (z > treeHeight*0.3 && z < treeHeight) {
-                            return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
+                    if (obj.type === 'ROCK') {
+                        let rad = 2.0 * obj.scale;
+                        if (distSq < rad*rad && z < 1.8 * obj.scale) {
+                            return { type: 'ROCK', height: 1.8 * obj.scale };
+                        }
+                    } else if (obj.type === 'BUSH') {
+                        let rad = 2.5 * obj.scale;
+                        if (distSq < rad*rad && z < 2.5 * obj.scale) {
+                            return { type: 'BUSH', height: 2.5 * obj.scale };
+                        }
+                    } else if (obj.type === 'CACTUS') {
+                        let rad = 0.8 * obj.scale;
+                        if (distSq < rad*rad && z < 6.0 * obj.scale) {
+                            return { type: 'CACTUS', height: 6.0 * obj.scale };
+                        }
+                    } else {
+                        // TREE, PINE, PALM, OAK -> Samma träd-fysik med stam och krona
+                        let trunkRadius = 0.5 * obj.scale;
+                        let treeHeight = 15.0 * obj.scale;
+                        let canopyRadius = 3.0 * obj.scale;
+                        
+                        if (distSq < canopyRadius*canopyRadius) {
+                            if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
+                                return { type: 'TREE', height: treeHeight, part: 'TRUNK' };
+                            } else if (z > treeHeight*0.3 && z < treeHeight) {
+                                return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
+                            }
                         }
                     }
                 }

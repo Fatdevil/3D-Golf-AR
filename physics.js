@@ -208,40 +208,59 @@ window.GolfPhysics = (function() {
             // Kolla luft-kollisioner (Träd) innan vi flyttar oss
             if (envCtx && envCtx.checkCollisionCallback && state.phase === "flight") {
                 let terrain = envCtx.checkCollisionCallback(state.pos[0], state.pos[1], state.pos[2]);
-                if (terrain && terrain.type === 'TREE') {
-                    let treeHeight = terrain.height || 15.0;
-                    
-                    if (state.pos[2] < treeHeight && state.pos[2] > 0.1) {
-                        // Distans som bollen just färdats (grovt) under denna tick (dt)
-                        let speed = vecMag(state.vel);
-                        let distTraveled = speed * dt;
-                        
-                        // Vi skiljer på "stammar" och "Krona/Lövverk"
-                        const TRUNK_GAP_HEIGHT = 2.5;
-                        let hitProbabilityPerMeter = 0;
-                        
-                        if (state.pos[2] < TRUNK_GAP_HEIGHT) {
-                            // Punch-out läge! Bara 5% risk per meter att träffa en solid stam.
-                            hitProbabilityPerMeter = 0.05;
-                        } else {
-                            // Upp i lövverket! Mycket högre risk (t.ex. 40% risk att fastna per meter).
-                            hitProbabilityPerMeter = 0.40;
+                if (terrain) {
+                    if (terrain.type === 'ROCK' || terrain.type === 'CACTUS') {
+                        // Solid krock!
+                        console.log(`🏌️‍♂️🪨 KROCK! Bollen träffade ett solitt objekt (${terrain.type})`);
+                        // Minska framåtfart, studsa marginellt bakåt
+                        state.vel[0] *= -0.2; 
+                        state.vel[1] *= -0.2; 
+                        state.vel[2] = -2.0; // Fall ner till gräset
+                        state.spin = [0,0,0];
+                    } else if (terrain.type === 'BUSH') {
+                        // Segt buskage, käkar fart
+                        let speedXZ = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);
+                        if (speedXZ > 2.0 && Math.random() < 0.6) {
+                            console.log(`🏌️‍♂️🌿 Bollen rasslade rakt in i en tjock buske!`);
+                            state.vel[0] *= 0.4;
+                            state.vel[1] *= 0.4;
+                            state.vel[2] *= 0.5;
                         }
+                    } else if (terrain.type === 'TREE') {
+                        let treeHeight = terrain.height || 15.0;
                         
-                        let currentTickRisk = distTraveled * hitProbabilityPerMeter;
-                        
-                        if (Math.random() < currentTickRisk) {
-                            // KROCK I TRÄDEN!
-                            console.log(`🏌️‍♂️🌲 KROCK! Bollen fastnade i skogen på höjd: ${state.pos[2].toFixed(1)}m`);
-                            state.vel[0] *= 0.1; // Döda fart framåt x
-                            state.vel[1] *= 0.1; // Döda fart framåt y
-                            // Fall neråt genom lövverket
-                            if (state.pos[2] > TRUNK_GAP_HEIGHT) {
-                                state.vel[2] = -2.0; 
+                        if (state.pos[2] < treeHeight && state.pos[2] > 0.1) {
+                            // Distans som bollen just färdats (grovt) under denna tick (dt)
+                            let speed = vecMag(state.vel);
+                            let distTraveled = speed * dt;
+                            
+                            // Vi skiljer på "stammar" och "Krona/Lövverk"
+                            const TRUNK_GAP_HEIGHT = 2.5;
+                            let hitProbabilityPerMeter = 0;
+                            
+                            if (state.pos[2] < TRUNK_GAP_HEIGHT) {
+                                // Punch-out läge! Bara 5% risk per meter att träffa en solid stam.
+                                hitProbabilityPerMeter = 0.05;
                             } else {
-                                state.vel[2] = -1.0; // Mjukare bounce mot stam
+                                // Upp i lövverket! Mycket högre risk (t.ex. 40% risk att fastna per meter).
+                                hitProbabilityPerMeter = 0.40;
                             }
-                            state.spin = [0,0,0]; // Spin äts upp av träd/grenar
+                            
+                            let currentTickRisk = distTraveled * hitProbabilityPerMeter;
+                            
+                            if (Math.random() < currentTickRisk) {
+                                // KROCK I TRÄDEN!
+                                console.log(`🏌️‍♂️🌲 KROCK! Bollen fastnade i skogen på höjd: ${state.pos[2].toFixed(1)}m`);
+                                state.vel[0] *= 0.1; // Döda fart framåt x
+                                state.vel[1] *= 0.1; // Döda fart framåt y
+                                // Fall neråt genom lövverket
+                                if (state.pos[2] > TRUNK_GAP_HEIGHT) {
+                                    state.vel[2] = -2.0; 
+                                } else {
+                                    state.vel[2] = -1.0; // Mjukare bounce mot stam
+                                }
+                                state.spin = [0,0,0]; // Spin äts upp av träd/grenar
+                            }
                         }
                     }
                 }
