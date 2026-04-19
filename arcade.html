@@ -264,6 +264,7 @@
         <div style="display:flex; gap:5px; background:#0f172a; padding:5px; border-radius:10px;">
             <button id="tool-inspect" onclick="setTool('INSPECT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">👀 INSPECT</button>
             <button id="tool-sculpt" onclick="setTool('SCULPT')" style="background:#38bdf8; color:#0f172a; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">⛰️ SCULPT</button>
+            <button id="tool-smooth" onclick="setTool('SMOOTH')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧽 SMOOTH</button>
             <button id="tool-flatten" onclick="setTool('FLATTEN')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧽 FLATTEN</button>
             <button id="tool-water" onclick="setTool('WATER')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">💧 WATER</button>
             <button id="tool-paint" onclick="setTool('PAINT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🖌️ PAINT</button>
@@ -2321,7 +2322,7 @@
                 document.getElementById('measure-hud').style.display = 'none';
                 measureStartPoint = null;
             }
-        } else if(currentTool === 'SCULPT' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
+        } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
             isSculpting = true;
             controls.enabled = false; // Lås kameran när vi skulpterar
             // Vänsterklick = Upp. Högerklick ELLER Shift+Vänster = Ner.
@@ -2357,7 +2358,7 @@
             saveLevel();
             return;
         }
-        if(currentTool === 'SCULPT' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
+        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
             isSculpting = false;
             controls.enabled = true; // Släpp kameran
             if(currentTool !== 'PAINT') {
@@ -2448,6 +2449,9 @@
         document.getElementById('tool-sculpt').style.background = toolName === 'SCULPT' ? '#38bdf8' : 'transparent';
         document.getElementById('tool-sculpt').style.color = toolName === 'SCULPT' ? '#0f172a' : '#94a3b8';
         
+        document.getElementById('tool-smooth').style.background = toolName === 'SMOOTH' ? '#38bdf8' : 'transparent';
+        document.getElementById('tool-smooth').style.color = toolName === 'SMOOTH' ? '#0f172a' : '#94a3b8';
+
         document.getElementById('tool-flatten').style.background = toolName === 'FLATTEN' ? '#38bdf8' : 'transparent';
         document.getElementById('tool-flatten').style.color = toolName === 'FLATTEN' ? '#0f172a' : '#94a3b8';
 
@@ -2472,13 +2476,14 @@
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
         document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
         document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
-        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER') ? 'flex' : 'none';
+        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER') ? 'flex' : 'none';
         
         let hintHtml = "";
         if (toolName === 'INSPECT') hintHtml = "<b>Safe Mode</b>: Look around without modifying terrain";
         else if (toolName === 'BLOCK') hintHtml = "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
         else if (toolName === 'NATURE') hintHtml = "Left Click: <b>Plant Nature</b><br>Right Click: <b>Remove Tree</b>";
         else if (toolName === 'SCULPT') hintHtml = "Hold Left: <b>Raise Ground</b><br>Hold Right: <b>Lower Ground</b>";
+        else if (toolName === 'SMOOTH') hintHtml = "Hold Mouse: <b>Smooth Terrain</b>";
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
         else if (toolName === 'WATER') hintHtml = "Hold Mouse: <b>Dig Water</b>";
@@ -2495,7 +2500,9 @@
             if(typeof measureLines !== 'undefined') measureLines.visible = false;
         }
 
-        if(toolName === 'FLATTEN') {
+        if(toolName === 'SMOOTH') {
+            sculptBrushCursor.material.color.setHex(0xa855f7); // Lila
+        } else if(toolName === 'FLATTEN') {
             sculptBrushCursor.material.color.setHex(0xffffff); // Vit
         } else if(toolName === 'SCULPT') {
             sculptBrushCursor.material.color.setHex(0xffff00); // Gul
@@ -2659,14 +2666,14 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             raycaster.setFromCamera(mouse, camera);
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
-                if(currentTool === 'SCULPT' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
@@ -2872,7 +2879,7 @@
             previousFrameHitPoint = null;
             return;
         }
-        if (currentTool !== 'SCULPT' && currentTool !== 'FLATTEN' && currentTool !== 'PAINT' && currentTool !== 'WATER') return;
+        if (currentTool !== 'SCULPT' && currentTool !== 'SMOOTH' && currentTool !== 'FLATTEN' && currentTool !== 'PAINT' && currentTool !== 'WATER') return;
         
         let positions = planeGeo.attributes.position.array;
         let count = planeGeo.attributes.position.count;
@@ -2947,6 +2954,29 @@
         
         let wPosArray = waterGeo ? waterGeo.attributes.position.array : null;
 
+        let smoothAvg = 0;
+        let smoothCount = 0;
+        if (currentTool === 'SMOOTH') {
+            for(let i = 0; i < count; i++) {
+                let vx = positions[i*3];
+                let vz = -positions[i*3 + 1]; 
+                let d = 0;
+                if (l2 === 0) {
+                    d = Math.sqrt((vx - p1.x)*(vx - p1.x) + (vz - p1.z)*(vz - p1.z));
+                } else {
+                    let t = Math.max(0, Math.min(1, ((vx - p1.x) * (p2.x - p1.x) + (vz - p1.z) * (p2.z - p1.z)) / l2));
+                    let pX = p1.x + t * (p2.x - p1.x);
+                    let pZ = p1.z + t * (p2.z - p1.z);
+                    d = Math.sqrt((vx - pX)*(vx - pX) + (vz - pZ)*(vz - pZ));
+                }
+                if (d < radius) {
+                    smoothAvg += positions[i*3 + 2];
+                    smoothCount++;
+                }
+            }
+            if (smoothCount > 0) smoothAvg /= smoothCount;
+        }
+
         for(let i = 0; i < count; i++) {
             let vx = positions[i*3];
             let vz = -positions[i*3 + 1]; 
@@ -2966,6 +2996,9 @@
                 
                 if (currentTool === 'SCULPT') {
                     positions[i*3 + 2] += strength * falloff;
+                    updatePos = true;
+                } else if (currentTool === 'SMOOTH') {
+                    positions[i*3 + 2] += (smoothAvg - positions[i*3 + 2]) * 0.15 * brushMultiplier * falloff;
                     updatePos = true;
                 } else if (currentTool === 'FLATTEN') {
                     // Mjukutjämning mot just den höjden man klickade på! Perfekt för platåer och upphöjda greener.
