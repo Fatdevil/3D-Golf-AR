@@ -2165,6 +2165,20 @@
 
     // Pensel multiplikator logik
     let brushMultiplier = 1;
+    window.ipadSculptDir = 1;
+    window.toggleIpadSculpt = function() {
+        window.ipadSculptDir = window.ipadSculptDir === 1 ? -1 : 1;
+        let btn = document.getElementById('ipad-sculpt-btn');
+        if (window.ipadSculptDir === 1) {
+            btn.innerText = "⬆️ RAISE";
+            btn.style.background = "#4ade80"; // green
+            btn.style.color = "#0f172a";
+        } else {
+            btn.innerText = "⬇️ LOWER";
+            btn.style.background = "#ef4444"; // red
+            btn.style.color = "#fff";
+        }
+    };
     window.setBrushMultiplier = function(mult, btn) {
         brushMultiplier = mult;
         document.querySelectorAll('.brush-mult-btn').forEach(b => {
