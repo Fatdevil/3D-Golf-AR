@@ -39,22 +39,53 @@ window.GolfPhysics = (function() {
         return m === 0 ? [0,0,0] : [v[0]/m, v[1]/m, v[2]/m];
     }
 
-    // Aerodynamiska koefficient-kurvor
-    function getDragCoefficient(vMag, spinParam) {
-        // En solid grund-approach
-        const baseCd = 0.22; 
-        const spinEffect = spinParam * 0.4;
-        let cd = baseCd + spinEffect;
-        if (vMag < 20) {
-            // Ökat motstånd vid låga hastigheter innan turbulent lager byggs upp helt
-            cd += 0.1 * ((20 - vMag) / 20); 
-        }
-        return cd;
+    // Helper för linjär interpolering
+    function lerp(a, b, t) {
+        return a + (b - a) * Math.max(0, Math.min(1, t));
     }
 
-    function getLiftCoefficient(vMag, spinParam) {
-        // Lift drivs primärt av spin parameter (Dimensionless)
-        return 0.15 + (spinParam * 0.8);
+    // Aerodynamiska koefficient-kurvor (Trackman Data)
+    function getDragCoefficient(vMag, spinRateRpm) {
+        let vMph = vMag * 2.23694;
+        let cd = 0.22;
+        
+        // Drag Crisis Re-kurva (Värden från referenstabell)
+        if (vMph <= 45) {
+            cd = lerp(0.50, 0.45, vMph / 45.0); // Laminärt, högt motstånd
+        } else if (vMph <= 78) {
+            cd = lerp(0.45, 0.25, (vMph - 45.0) / 33.0); // Drag Crisis! Massivt drop
+        } else if (vMph <= 112) {
+            cd = lerp(0.25, 0.22, (vMph - 78.0) / 34.0); // Går in i turbulent
+        } else if (vMph <= 145) {
+            cd = lerp(0.22, 0.215, (vMph - 112.0) / 33.0); // Optimalt slip
+        } else {
+            cd = lerp(0.215, 0.23, (vMph - 145.0) / 55.0); // Ökar svagt vid extrema farter
+        }
+        
+        // Spin straff (Trackman: +0.03 vid ~3000 RPM)
+        let spinPenalty = (spinRateRpm / 3000.0) * 0.035;
+        
+        return cd + spinPenalty;
+    }
+
+    function getLiftCoefficient(vMag, spinParam, spinRateRpm) {
+        // Världsnyhet: Reverse Magnus Effect
+        // Inträffar vid v < 20 m/s och backspin < 2250 rpm
+        if (vMag < 20.0 && spinRateRpm > 0 && spinRateRpm <= 2250) {
+            // Skapar upp till -0.10 negativt lyft
+            let intensity = lerp(1.0, 0.0, spinRateRpm / 2250.0);
+            return -0.10 * intensity;
+        }
+        
+        // Trackmans Spin Factor kurva (S = r*w/v)
+        if (spinParam <= 0.08) return lerp(0.00, 0.10, spinParam / 0.08);
+        if (spinParam <= 0.13) return lerp(0.10, 0.14, (spinParam - 0.08) / 0.05);
+        if (spinParam <= 0.20) return lerp(0.14, 0.20, (spinParam - 0.13) / 0.07);
+        if (spinParam <= 0.32) return lerp(0.20, 0.23, (spinParam - 0.20) / 0.12);
+        if (spinParam <= 0.45) return lerp(0.23, 0.25, (spinParam - 0.32) / 0.13);
+        
+        // Maxar ut runt 0.26 vid extremt spin (Full Wedge)
+        return 0.26;
     }
 
     function evaluateState(state, dt, dv) {
@@ -121,8 +152,10 @@ window.GolfPhysics = (function() {
 
         let spinRate = vecMag(state.spin);
         let spinParam = (RADIUS * spinRate) / Math.max(vRelMag, 1.0); // Förhindra Magnus-singularitet vid låg fart under studsar
-        let Cd = getDragCoefficient(vRelMag, spinParam);
-        let Cl = getLiftCoefficient(vRelMag, spinParam);
+        let spinRateRpm = (spinRate * 60) / (2 * Math.PI); // rad/s till rpm
+
+        let Cd = getDragCoefficient(vRelMag, spinRateRpm);
+        let Cl = getLiftCoefficient(vRelMag, spinParam, spinRateRpm);
 
         // Drag Force (F_D)
         let fDragMag = 0.5 * RHO * AREA * Cd * vRelMag * vRelMag;
@@ -159,8 +192,9 @@ window.GolfPhysics = (function() {
         state.pos = vecAdd(state.pos, vecScale(dp, dt));
         state.vel = vecAdd(state.vel, vecScale(dv, dt));
         
-        // Luften dämpar spinnen över tid
-        state.spin = vecScale(state.spin, 0.999); 
+        // Luften dämpar spinnen över tid i exponentiell kurva 
+        // Trackman-fakta: k ≈ 0.04 s^-1
+        state.spin = vecScale(state.spin, Math.exp(-0.04 * dt)); 
     }
 
     /**
