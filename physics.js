@@ -356,8 +356,12 @@ window.GolfPhysics = (function() {
                     cRestitution = 0.50; cFriction = 0.35; cRollingDecel = 0.5;
                 } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
                     cRestitution = 0.55; cFriction = 0.55; cRollingDecel = 0.78; // roll_mu 0.08
+                } else if (impactTerrainType === 'SEMI-ROUGH') {
+                    cRestitution = 0.50; cFriction = 0.60; cRollingDecel = 0.98; // roll_mu 0.10
                 } else if (impactTerrainType === 'ROUGH') {
                     cRestitution = 0.45; cFriction = 0.70; cRollingDecel = 1.47; // roll_mu 0.15
+                } else if (impactTerrainType === 'DEEP ROUGH') {
+                    cRestitution = 0.40; cFriction = 0.80; cRollingDecel = 2.45; // roll_mu 0.25
                 } else if (impactTerrainType === 'SAND') {
                     cRestitution = 0.45; cFriction = 0.75; cRollingDecel = 3.92; // roll_mu 0.40
                 } else if (impactTerrainType === 'WASTE') {
