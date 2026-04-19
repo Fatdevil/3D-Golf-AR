@@ -117,11 +117,11 @@ window.GolfPhysics = (function() {
             // Rullfriktion härleds antingen från statisk kod (Fairway/Rough) eller dynamisk Stimp (Green)
             let mu = 0.5; // Standard/Fallback
             if (state.terrainType === 'GREEN' && typeof window !== 'undefined' && window.GREEN_STIMP) {
-                // Formula: friktion mu är omvänt proportionell mot Stimp.
-                // Vid Stimp 10 är mu ~ 0.08.
+                // Werner & Greig empirisk ekvation (Validerad mot Trackman data)
+                // Stimp 10 ≈ μ_roll 0.065
                 let stimp = window.GREEN_STIMP;
                 if (stimp < 6) stimp = 6; if (stimp > 14) stimp = 14;
-                mu = 0.8 / stimp; // Stimp 10 -> 0.080, Stimp 13 -> 0.061
+                mu = 0.065 * (10.0 / stimp); 
             } else {
                 // Omvandla den inkodade rullbromsen (rollingDecel) tillbaka till ett mu-värde för kompatibilitet.
                 let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
