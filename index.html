@@ -1067,6 +1067,13 @@ function getTerrainAt(lat, lng) {
         }
     }
     
+    // Check if on the Green (Approx 15m radius from the pin)
+    if (hole.green) {
+        if (haversineDistance(pt, hole.green) <= 15) {
+            return { type: 'GREEN', height: hole.greenElev || null };
+        }
+    }
+    
     return { type: 'FAIRWAY', height: null }; // Default back-stop
 }
 
