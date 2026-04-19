@@ -7,7 +7,6 @@
 window.GolfPhysics = (function() {
     
     // Konstanter (SI Enheter: kg, m, s, rad)
-    const RHO = 1.225; // Luftdensitet (Sea level, 15°C) kg/m^3
     const GRAVITY = -9.81; // m/s^2
     const MASS = 0.04593; // 45.93 gram (Golfboll standard)
     const RADIUS = 0.021335; // 42.67mm diameter
@@ -22,7 +21,15 @@ window.GolfPhysics = (function() {
         stopSpeed: 0.1
     };
 
-    // Hjälpfunktioner för Vektorer
+    // Hjälpfunktioner för miljö och vektorer
+    function calculateAirDensity(altFeet, tempC) {
+        // Trackman gillar Referens: 0 fot, 25°C -> RHO ≈ 1.184
+        let hMeters = altFeet * 0.3048;
+        let tempK = tempC + 273.15;
+        let p = 101325 * Math.pow(1 - 2.25577e-5 * hMeters, 5.25588);
+        return p / (287.05 * tempK);
+    }
+    
     function vecAdd(a, b) { return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
     function vecSub(a, b) { return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
     function vecScale(a, s) { return [a[0]*s, a[1]*s, a[2]*s]; }
@@ -157,14 +164,16 @@ window.GolfPhysics = (function() {
         let Cd = getDragCoefficient(vRelMag, spinRateRpm);
         let Cl = getLiftCoefficient(vRelMag, spinParam, spinRateRpm);
 
+        let activeRho = state.rho || 1.184;
+
         // Drag Force (F_D)
-        let fDragMag = 0.5 * RHO * AREA * Cd * vRelMag * vRelMag;
+        let fDragMag = 0.5 * activeRho * AREA * Cd * vRelMag * vRelMag;
         let vRelNorm = vecNorm(vRel);
         let fDrag = vecScale(vRelNorm, -fDragMag);
 
         // Magnus Force (Lift) (F_L)
         let magnusDir = vecNorm(vecCross(state.spin, vRel));
-        let fLiftMag = 0.5 * RHO * AREA * Cl * vRelMag * vRelMag;
+        let fLiftMag = 0.5 * activeRho * AREA * Cl * vRelMag * vRelMag;
         let fLift = vecScale(magnusDir, fLiftMag);
 
         // Totalkraft
@@ -273,12 +282,19 @@ window.GolfPhysics = (function() {
         let spin = [sX, sY, sZ];
 
 
+        let startPosXZY = input.startPos || [0, 0, 0];
+        
+        let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;
+        let tCelsius = (envCtx && envCtx.temperatureC !== undefined) ? envCtx.temperatureC : 25;
+        let windVec = (envCtx && envCtx.wind) ? envCtx.wind : [0, 0, 0];
+        
         let state = {
             phase: "flight",
-            pos: [startPosXZY[0], startPosXZY[1], startPosXZY[2]], // Start i definierad pos (X, Fysik-Y, Höjd)
+            pos: [startPosXZY[0], startPosXZY[1], startPosXZY[2]], 
             vel: vel,
             spin: spin,
-            wind: [0, 0, 0] // Enkelt tills vidare (utan extern vind)
+            wind: windVec,
+            rho: calculateAirDensity(altFt, tCelsius)
         };
 
         const dt = 0.005; // Intern tick-rate 5ms
@@ -447,9 +463,26 @@ window.GolfPhysics = (function() {
                 } else if (impactTerrainType === 'WASTE') {
                     cRestitution = 0.65; cFriction = 0.50; cRollingDecel = 0.49; // roll_mu 0.05 (Hård yta)
                 } else if (impactTerrainType === 'WATER') {
-                    state.phase = "stopped";
-                    metrics.finalTerrainType = 'WATER';
-                    continue; // Plask!
+                    // WATER SKIMMING TRACKMAN MACKA!
+                    let vZ = state.vel[2];
+                    let vXY = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);
+                    // Bollen måste sjunka för att landAngle ska räknas
+                    let landAngleRad = vZ < 0 ? Math.atan2(Math.abs(vZ), vXY) : 1.0; 
+                    let landAngleDeg = landAngleRad * 180 / Math.PI;
+                    let vMagImpact = Math.sqrt(vXY*vXY + vZ*vZ);
+                    
+                    // Om inkommande vinkel är extremt låg (<15°) och farten är hög (>18 m/s), skimmar vi på vattnet
+                    if (landAngleDeg < 15.0 && vMagImpact > 18.0 && state.phase === "flight") {
+                        console.log(`💦 VATTENSKIMMING! Vinkel in: ${landAngleDeg.toFixed(1)}°. Fart: ${vMagImpact.toFixed(1)} m/s`);
+                        // Deflektera hårt (massive energiförlust)
+                        cRestitution = 0.15; 
+                        cFriction = 0.90; // Vattnet greppar bollen och dödar all spinn omedelbart
+                        cRollingDecel = 30.0;
+                    } else {
+                        state.phase = "stopped";
+                        metrics.finalTerrainType = 'WATER';
+                        continue; // Plask!
+                    }
                 } else if (impactTerrainType === 'OB') {
                     state.phase = "stopped";
                     metrics.finalTerrainType = 'OB';
