@@ -635,6 +635,7 @@ function executePhysicsShot(launchData) {
     launchData.azimDeg = (launchData.azimDeg || 0) + targetAngleOffset;
     
     let envCtx = {
+        cupPositionLocal: [tLat, tDist, 0],
         checkCollisionCallback: function(localX, localY, localZ) {
             let dist = Math.sqrt(localX*localX + localY*localY);
             let localAngle = Math.atan2(localX, localY) * 180 / Math.PI;

@@ -1174,7 +1174,20 @@ function animatePhysicsShot(launchData) {
     
     console.log("SIMULATING PHYSICS... ⛳ SPEED: " + launchData.ballSpeedMph + " MPH");
     
+    var cupPosLocal = null;
+    if (hole.green) {
+        var distToPin = haversineDistance(originPos, hole.green);
+        var dirToPin = getHeading(originPos, hole.green);
+        var diffRad = (dirToPin - baseHeading) * Math.PI / 180;
+        cupPosLocal = [
+            distToPin * Math.sin(diffRad),
+            distToPin * Math.cos(diffRad),
+            0 // Höjd beräknas dynamiskt vid bouncen ändå
+        ];
+    }
+
     var envCtx = {
+        cupPositionLocal: cupPosLocal,
         originPos: originPos,
         baseHeading: baseHeading,
         checkCollisionCallback: function(localX, localY, currentZ) {

@@ -1217,8 +1217,15 @@
             spinAxisDeg: data.spinAxisDeg || 0,
             azimDeg: data.azimDeg || 0 // Horizontal Angle
         };
-        
+        var cupPosLocal = null;
+        if (window.pinMesh) {
+            // ThreeJS: Y is Up, -Z is forward -> Physics: Z is up, Y is forward
+            // pinMesh.position.y is usually the terrain height
+            cupPosLocal = [window.pinMesh.position.x, -window.pinMesh.position.z, window.pinMesh.position.y];
+        }
+
         var envCtx = {
+            cupPositionLocal: cupPosLocal,
             checkCollisionCallback: function(x, y, z) { 
                 if (!window.placedTrees) return null;
                 // Fysik(X,Y,Z) -> ThreeJS(X,-Z,Y)

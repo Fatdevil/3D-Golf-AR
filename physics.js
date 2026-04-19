@@ -238,7 +238,7 @@ window.GolfPhysics = (function() {
         let sZ = -wRads * Math.sin(spinAxisRads);
         let spin = [sX, sY, sZ];
 
-        let startPosXZY = input.startPos || [0, 0, 0];
+
         let state = {
             phase: "flight",
             pos: [startPosXZY[0], startPosXZY[1], startPosXZY[2]], // Start i definierad pos (X, Fysik-Y, Höjd)
@@ -511,7 +511,52 @@ window.GolfPhysics = (function() {
                 }
             }
 
-            if ((t - lastSampleTime >= sampleRate) || state.phase === "stopped") {
+                }
+            }
+
+            // --- KOLLA HÅLET (CUP INTERACTION) ---
+            if (envCtx && envCtx.cupPositionLocal && (state.phase === 'roll' || state.phase === 'skid' || state.phase === 'flight')) {
+                // Endast om bollen är på marken, eller hoppar lågt över hålet
+                if (state.pos[2] <= (currentTerrainZ + 0.08)) {
+                    let dX = state.pos[0] - envCtx.cupPositionLocal[0];
+                    let dY = state.pos[1] - envCtx.cupPositionLocal[1];
+                    let distToCenter = Math.sqrt(dX*dX + dY*dY);
+                    
+                    if (distToCenter < 0.055) { // 108mm diameter hål (≈ 54mm radie). 55mm ink marginal.
+                        let speedXY = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);
+                        let offsetFactor = distToCenter / 0.054; // 0.0 = exakt mitt, 1.0 = bollen precis på läppen
+                        
+                        // Fysikalisk Capture-Threshold (Trackman / Pelz)
+                        // Om bollen går under 1.0 m/s ramlar den i även på kanten!
+                        // Om bollen går upp mot 1.63 m/s ramlar den bara i om den ligger dead-center.
+                        let captureThreshold = 1.63 - (offsetFactor * 0.7); 
+                        
+                        if (speedXY <= captureThreshold) {
+                            state.phase = "holed";
+                            state.vel = [0, 0, -2.0]; // Dra ner bollen
+                            state.pos[0] = envCtx.cupPositionLocal[0];
+                            state.pos[1] = envCtx.cupPositionLocal[1];
+                            metrics.holed = true;
+                            console.log("⛳ HÅLAD! Fart: " + speedXY.toFixed(2) + " m/s");
+                        } else if (speedXY > captureThreshold && speedXY <= 2.2 && offsetFactor > 0.3) {
+                            // LIP OUT! Bollen slår i bortre kanten men har för mycket fart/fel vinkel för att droppa. 
+                            console.log("😥 LIP OUT! Fart: " + speedXY.toFixed(2) + " m/s, Offset: " + offsetFactor.toFixed(2));
+                            // Deflektera 
+                            state.vel[0] = state.vel[0] * 0.4 + (dX * 18.0); 
+                            state.vel[1] = state.vel[1] * 0.4 + (dY * 18.0);
+                            state.vel[2] = 0.5; // Litet hopp
+                            // Flytta ut från radien så den inte lips out 100 ggr per sekund
+                            state.pos[0] += (dX / distToCenter) * 0.02;
+                            state.pos[1] += (dY / distToCenter) * 0.02;
+                            state.phase = "bounce"; // Return to air temporarily to escape hole radius
+                        } else if (speedXY > 2.2) {
+                            // Går extremt fort, skippar hålet obemärkt
+                        }
+                    }
+                }
+            }
+
+            if ((t - lastSampleTime >= sampleRate) || state.phase === "stopped" || state.phase === "holed") {
                 path.push({ 
                     x: state.pos[0], y: state.pos[1], z: state.pos[2], 
                     vx: state.vel[0], vy: state.vel[1], vz: state.vel[2],
