@@ -92,12 +92,19 @@ function handleIncomingData(data, socket) {
         
         // 4. Normalisera till Frontendens "Big 5"-format
         const ball = data.BallData;
+        const club = data.ClubData || {};
+        
         const normalizedShot = {
             ballSpeedMph: typeof ball.Speed === 'number' ? ball.Speed : 0,
             launchAngleDeg: typeof ball.VLA === 'number' ? ball.VLA : 0,
             totalSpinRpm: typeof ball.TotalSpin === 'number' ? ball.TotalSpin : (typeof ball.Spin === 'number' ? ball.Spin : 0),
             spinAxisDeg: typeof ball.SpinAxis === 'number' ? ball.SpinAxis : 0,
-            azimDeg: typeof ball.HLA === 'number' ? ball.HLA : 0
+            azimDeg: typeof ball.HLA === 'number' ? ball.HLA : 0,
+            // Club data
+            clubSpeedMph: typeof club.Speed === 'number' ? club.Speed : 0,
+            clubPathDeg: typeof club.Path === 'number' ? club.Path : 0,
+            faceToPathDeg: typeof club.FaceToTarget === 'number' ? (club.FaceToTarget - (club.Path || 0)) : (typeof club.FaceToPath === 'number' ? club.FaceToPath : 0),
+            clubAoADeg: typeof club.AngleOfAttack === 'number' ? club.AngleOfAttack : 0
         };
 
         console.log(`📡 Skickar normalized shot till webbläsaren:`, normalizedShot);

@@ -436,6 +436,10 @@ window.GolfPhysics = (function() {
                 state.pos = [...impactPos];
                 state.vel = [...impactVel];
                 
+                if (metrics.bounceCount === 0 && state.phase === 'flight') {
+                    metrics.carryMeters = Math.sqrt(state.pos[0]*state.pos[0] + state.pos[1]*state.pos[1]);
+                }
+                
                 // Bestäm markens fysikegenskaper
                 let impactTerrainType = 'FAIRWAY';
                 if (envCtx && envCtx.checkCollisionCallback) {
