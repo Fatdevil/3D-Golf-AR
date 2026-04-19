@@ -1118,18 +1118,121 @@
             ball.position.set(0, 0.3, 0);
         }
         
+        let localGetTerrainAt = function(px, py) {
+            let threeX = px;
+            let threeZ = -py;
+            
+            let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+            let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+            
+            if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
+            if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
+            
+            let idx = gz * (TERRAIN_SEGS+1) + gx;
+            let positions = planeGeo.attributes.position.array;
+            let height = positions[idx * 3 + 2]; 
+            
+            let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
+            let gzDown = Math.max(0, gz - 1); 
+
+            let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
+            let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+            
+            let step = TERRAIN_SIZE/TERRAIN_SEGS;
+            let dx_phys = (hR - height) / step;
+            let dy_phys = (hD - height) / step; 
+            
+            let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
+            let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
+            
+            let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+            let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+            if (cX < 0) cX = 0; if (cX >= 4096) cX = 4095;
+            if (cZ < 0) cZ = 0; if (cZ >= 4096) cZ = 4095;
+            
+            let r, g, b;
+            if (window.terrainBiomeData) {
+                let pIdx = (cZ * 4096 + cX) * 4;
+                r = window.terrainBiomeData[pIdx];
+                g = window.terrainBiomeData[pIdx+1];
+                b = window.terrainBiomeData[pIdx+2];
+            } else {
+                r = 74; g = 222; b = 128; // Fairway fallback
+            }
+            
+            let biomeType = 'ROUGH'; // Default
+            function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
+            
+            let dOB = cDist(r,g,b, 239,68,68);
+            let dSand = cDist(r,g,b, 224,216,164);
+            let dFairway = cDist(r,g,b, 125,185,82);
+            let dRough = cDist(r,g,b, 74,120,43);
+            let dGreen = cDist(r,g,b, 152,206,104);
+            let dWater = cDist(r,g,b, 56,189,248);
+            
+            let minD = Math.min(dOB, dSand, dFairway, dRough, dGreen, dWater);
+            
+            if (minD === dSand) biomeType = 'SAND';
+            else if (minD === dGreen) biomeType = 'GREEN';
+            else if (minD === dOB) biomeType = 'OB';
+            else if (minD === dWater) biomeType = 'WATER';
+            else if (minD === dFairway) biomeType = 'FAIRWAY';
+            else biomeType = 'ROUGH';
+            
+            let waterHeight = -99;
+            if (typeof waterGeo !== 'undefined' && waterGeo) {
+                waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
+            }
+            if (waterHeight > -90 && height < waterHeight + 0.1) {
+                biomeType = 'WATER';
+                height = waterHeight; 
+            }
+            return { z: height, normal: normal, type: biomeType };
+        };
+        
         var vBoost = parseFloat(document.getElementById('in-boost').value) || 1.0;
         var vStimpEl = document.getElementById('in-stimp');
         window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
         
-        // Applicera Arcade Boost!
-        var finalSpeed = data.ballSpeedMph * vBoost;
+        let baseSpeed = data.ballSpeedMph * vBoost;
+        let baseSpin = data.totalSpinRpm || 2500;
+        
+        // --- GSPro & Trackman Pre-Flight Lie Adjustments ---
+        let lieInfo = localGetTerrainAt(startPos[0], startPos[1]);
+        let lieType = lieInfo.type;
+        let vla = data.launchAngleDeg;
+        
+        let speedMult = 1.0;
+        let spinMult = 1.0;
+        
+        if (lieType === 'ROUGH') {
+            // VLA min=10, max=45
+            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
+            if (Math.random() < 0.15 && vla > 15) {
+                // TRACKMAN FLYER!
+                speedMult = 1.05; 
+                spinMult = 0.35;
+                console.log("💥 TRACKMAN FLYER-LIE DETECTED! Zero spin, hot velocity.");
+                // alert could be annoying, just log it.
+            } else {
+                // GSPro Dynamic Penalty (Low VLA = Heavy Penalty)
+                speedMult = 1.0 - (0.50 - (0.45 * vlaFactor)); // 10 deg -> 0.50x, 45 deg -> 0.95x
+                spinMult = 1.0 - (0.65 - (0.50 * vlaFactor)); // 10 deg -> 0.35x, 45 deg -> 0.85x
+            }
+        } else if (lieType === 'SAND') {
+            let vlaFactor = Math.max(0, Math.min(1, (vla - 20) / 30)); 
+            speedMult = 1.0 - (0.40 - (0.25 * vlaFactor));
+            spinMult = 1.0 - (0.45 - (0.25 * vlaFactor));
+        }
+
+        var finalSpeed = baseSpeed * speedMult;
+        var finalSpin = baseSpin * spinMult;
         
         var launchConfig = {
             startPos: startPos,
             ballSpeedMph: finalSpeed,
             launchAngleDeg: data.launchAngleDeg,
-            totalSpinRpm: data.totalSpinRpm || 2500,
+            totalSpinRpm: finalSpin,
             spinAxisDeg: data.spinAxisDeg || 0,
             azimDeg: data.azimDeg || 0 // Horizontal Angle
         };

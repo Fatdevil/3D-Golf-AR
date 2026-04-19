@@ -354,14 +354,14 @@ window.GolfPhysics = (function() {
                 if (impactTerrainType === 'GREEN') {
                     // GSPro / Trackman Greens: e ~ 0.5 for realistic bounces, låg rullfriktion (via Stimp i evaluateState)
                     cRestitution = 0.50; cFriction = 0.35; cRollingDecel = 0.5;
-                } else if (impactTerrainType === 'TEE') {
-                    cRestitution = 0.30; cFriction = 0.40; cRollingDecel = 0.8;
+                } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
+                    cRestitution = 0.55; cFriction = 0.55; cRollingDecel = 0.78; // roll_mu 0.08
                 } else if (impactTerrainType === 'ROUGH') {
-                    cRestitution = 0.10; cFriction = 0.70; cRollingDecel = 1.8;
+                    cRestitution = 0.45; cFriction = 0.70; cRollingDecel = 1.47; // roll_mu 0.15
                 } else if (impactTerrainType === 'SAND') {
-                    cRestitution = 0.05; cFriction = 0.90; cRollingDecel = 3.0; // Splatt
+                    cRestitution = 0.45; cFriction = 0.75; cRollingDecel = 3.92; // roll_mu 0.40
                 } else if (impactTerrainType === 'WASTE') {
-                    cRestitution = 0.12; cFriction = 0.75; cRollingDecel = 2.5; // Hård grussand
+                    cRestitution = 0.65; cFriction = 0.50; cRollingDecel = 0.49; // roll_mu 0.05 (Hård yta)
                 } else if (impactTerrainType === 'WATER') {
                     state.phase = "stopped";
                     metrics.finalTerrainType = 'WATER';
