@@ -169,8 +169,54 @@ window.GolfPhysics = (function() {
      * @param {Object} envCtx - { checkCollisionCallback }
      */
     function simulateFlight(input, envCtx) {
-        // Initiera state variabler
-        let speedMS = input.ballSpeedMph * 0.44704; // mph -> m/s
+        let startPosXZY = input.startPos || [0, 0, 0];
+        let baseSpeedMph = input.ballSpeedMph;
+        let baseSpinRpm = input.totalSpinRpm || 2500;
+        let vla = input.launchAngleDeg;
+        
+        let lieType = 'FAIRWAY';
+        if (envCtx) {
+            if (envCtx.getTerrainAt) {
+                let li = envCtx.getTerrainAt(startPosXZY[0], startPosXZY[1]);
+                if (li && li.type) lieType = li.type;
+            } else if (envCtx.checkCollisionCallback) {
+                let li = envCtx.checkCollisionCallback(0, 0, 0); // Check precisely at origin
+                if (li && li.type) lieType = li.type;
+            }
+        }
+        
+        let speedMult = 1.0;
+        let spinMult = 1.0;
+        
+        if (lieType === 'ROUGH') {
+            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
+            if (Math.random() < 0.15 && vla > 15) {
+                speedMult = 1.05; spinMult = 0.35;
+                console.log("💥 TRACKMAN FLYER-LIE DETECTED! Zero spin, hot velocity.");
+            } else {
+                speedMult = 1.0 - (0.50 - (0.45 * vlaFactor)); 
+                spinMult = 1.0 - (0.65 - (0.50 * vlaFactor));
+            }
+        } else if (lieType === 'SEMI-ROUGH') {
+            speedMult = 0.95; spinMult = 0.93; 
+        } else if (lieType === 'DEEP ROUGH') {
+            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
+            if (Math.random() < 0.25 && vla > 20) {
+                speedMult = 1.05; spinMult = 0.20;
+                console.log("💥 TRACKMAN FLYER-LIE DETECTED (DEEP ROUGH)! Zero spin, hot velocity.");
+            } else {
+                speedMult = 1.0 - (0.80 - (0.45 * vlaFactor));
+                spinMult = 1.0 - (0.85 - (0.50 * vlaFactor));
+            }
+        } else if (lieType === 'SAND') {
+            let vlaFactor = Math.max(0, Math.min(1, (vla - 20) / 30)); 
+            speedMult = 1.0 - (0.40 - (0.25 * vlaFactor));
+            spinMult = 1.0 - (0.45 - (0.25 * vlaFactor));
+        }
+        
+        let speedMS = (baseSpeedMph * speedMult) * 0.44704; // mph -> m/s
+        let spinFinal = baseSpinRpm * spinMult;
+        
         let launchRads = input.launchAngleDeg * Math.PI / 180;
         let azimRads = (input.azimDeg || 0) * Math.PI / 180;
         
@@ -182,7 +228,7 @@ window.GolfPhysics = (function() {
         let vel = [vX, vY, vZ];
 
         // Start spinnvektor
-        let wRads = input.totalSpinRpm * 2 * Math.PI / 60; // rpm -> rad/s
+        let wRads = spinFinal * 2 * Math.PI / 60; // rpm -> rad/s
         let spinAxisRads = input.spinAxisDeg * Math.PI / 180;
         
         // Om spinAxis = 0 -> rent backspin -> snurrar kring X-axeln.
