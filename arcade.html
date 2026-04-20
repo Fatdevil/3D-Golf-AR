@@ -3091,11 +3091,11 @@
         let rctx = rc.getContext('2d');
         rctx.fillStyle = '#4a782b'; // Mörk olivgrön bas
         rctx.fillRect(0,0,128,128);
-        for(let i=0; i<800; i++) {
+        for(let i=0; i<3000; i++) {
             rctx.fillStyle = Math.random() > 0.5 ? '#3a6120' : '#5b8a38';
             let x = Math.random() * 128;
             let y = Math.random() * 128;
-            rctx.fillRect(x, y, 2, 6 + Math.random()*6); // Vertikala strån
+            rctx.fillRect(x, y, 1, 1 + Math.random()*2); // Minimalistiskt grus/strå
         }
         // Skapa ett brush-mönster som Canvas 2D kan använda likt en färg
         roughPattern = pCtx.createPattern(rc, 'repeat');
