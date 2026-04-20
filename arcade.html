@@ -246,11 +246,7 @@
     </div>
     
     <!-- MODE TOGGLE UI -->
-    <div id="mode-toggle" style="position:absolute; top:20px; right:20px; display:flex; gap:10px; pointer-events:auto; align-items:center;">
-        <label style="color:#fff; font-size:12px; font-weight:bold; display:flex; align-items:center; gap:5px; background:rgba(15,23,42,0.8); padding:10px 15px; border-radius:8px; cursor:pointer; border:1px solid #475569;" title="Växla till Photorealism">
-            <input type="checkbox" id="hd-graphics-toggle" onchange="toggleHDGraphics(this.checked)" style="width:16px; height:16px; cursor:pointer;" checked>
-            HD GRÄS
-        </label>
+    <div id="mode-toggle" style="position:absolute; top:20px; right:20px; display:flex; gap:10px; pointer-events:auto;">
         <a href="hub.html" style="padding:10px 15px; border-radius:8px; background:#1e293b; color:#fff; border:1px solid #475569; text-decoration:none; display:flex; align-items:center; font-size:18px;" title="Home">🏠</a>
         <button id="btn-toggle-data" onclick="document.getElementById('gspro-hud').classList.toggle('hidden')" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#38bdf8; border:1px solid #38bdf8; font-weight:800; cursor:pointer;" title="Shot Data">📊</button>
         <button id="btn-mode-build" onclick="setMode('BUILD')" style="padding:10px 20px; border-radius:8px; border:2px solid #38bdf8; background:#0f172a; color:#38bdf8; font-weight:800; cursor:pointer; text-transform:uppercase; transition:all 0.2s;">🔨 BUILD</button>
@@ -706,67 +702,6 @@
     planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
     
     const planeMat = new THREE.MeshLambertMaterial({ map: mapTex, vertexColors: false });
-    
-    // --- PHOTOREALISM: SPLAT SHADER INJECTION ---
-    window.USE_PHOTOREALISM = true;
-    planeMat.onBeforeCompile = function (shader) {
-        shader.uniforms.u_hdGraphics = { value: window.USE_PHOTOREALISM ? 1.0 : 0.0 };
-        planeMat.userData.shader = shader; // Save reference
-
-        shader.fragmentShader = shader.fragmentShader.replace(
-            '#include <common>',
-            `
-            #include <common>
-            uniform float u_hdGraphics;
-            `
-        );
-
-        // Inject Procedural Splat Mathematics
-        shader.fragmentShader = shader.fragmentShader.replace(
-            '#include <map_fragment>',
-            `
-            #include <map_fragment>
-            if (u_hdGraphics > 0.5) {
-                // Skapa en grynig högfrekvent Noise-karta baserad på marken
-                vec2 st = vUv * 1500.0; // Ultrahög täthet
-                
-                // Målfärgerna från Canvas (RGB 0 till 1)
-                vec3 cRough = vec3(0.29, 0.47, 0.17); // #4a782b
-                vec3 cSand = vec3(0.76, 0.69, 0.49);  // #c2af7c
-                vec3 cGreen = vec3(0.60, 0.81, 0.41); // #98ce68
-                
-                // Maska ut områden med mjuka kanter
-                float isRough = 1.0 - smoothstep(0.0, 0.15, length(diffuseColor.rgb - cRough));
-                float isSand = 1.0 - smoothstep(0.0, 0.15, length(diffuseColor.rgb - cSand));
-                float isGreen = 1.0 - smoothstep(0.0, 0.10, length(diffuseColor.rgb - cGreen));
-                
-                // Simpelt kaos/brus
-                float noise = fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
-                float noise2 = fract(sin(dot(st.xy * 0.5, vec2(12.9898,78.233))) * 43758.5453123);
-                
-                // Applicera specifika "Fotomaterial" baserat på masken
-                vec3 roughTex = mix(diffuseColor.rgb * 0.6, diffuseColor.rgb * 1.5, noise);
-                vec3 sandTex = mix(diffuseColor.rgb * 0.85, diffuseColor.rgb * 1.15, noise2);
-                vec3 greenTex = mix(diffuseColor.rgb * 0.93, diffuseColor.rgb * 1.07, noise);
-                
-                // Blanda ihop lagren
-                vec3 finalTex = mix(diffuseColor.rgb, roughTex, isRough);
-                finalTex = mix(finalTex, sandTex, isSand);
-                finalTex = mix(finalTex, greenTex, isGreen);
-                
-                diffuseColor.rgb = finalTex;
-            }
-            `
-        );
-    };
-
-    window.toggleHDGraphics = function(val) {
-        window.USE_PHOTOREALISM = val;
-        if (planeMat.userData.shader) {
-            planeMat.userData.shader.uniforms.u_hdGraphics.value = val ? 1.0 : 0.0;
-        }
-    };
-    // ----------------------------------------
     
     // THE STRIPED FAIRWAY SHADER INJECTION
     // (Mower stripes removed to fix visual artifacts)
