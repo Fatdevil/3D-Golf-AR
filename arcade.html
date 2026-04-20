@@ -2455,6 +2455,11 @@
             // Vänsterklick = Upp. Högerklick ELLER Shift+Vänster = Ner.
             sculptDirection = (e.button === 2 || e.shiftKey || window.ipadSculptDir === -1) ? -1 : 1; 
             
+            if ((currentTool === 'RAMP' || currentTool === 'SPLINE') && lastHitPoint) {
+                window.rampStartPt = lastHitPoint.clone();
+                window.rampSnapshotHeights = new Float32Array(planeGeo.attributes.position.array);
+            }
+            
             if (currentTool === 'WATER' && lastHitPoint) {
                 let gx = Math.round((lastHitPoint.x + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
                 let gz = Math.round((lastHitPoint.z + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
@@ -3088,17 +3093,10 @@
             previousFrameHitPoint = null;
             return;
         }
-        if (currentTool !== 'SCULPT' && currentTool !== 'SMOOTH' && currentTool !== 'FLATTEN' && currentTool !== 'PAINT' && currentTool !== 'WATER' && currentTool !== 'SMART_GREEN' && currentTool !== 'RIDGE' && currentTool !== 'NOISE' && currentTool !== 'FOREST') return;
+        if (currentTool !== 'SCULPT' && currentTool !== 'SMOOTH' && currentTool !== 'FLATTEN' && currentTool !== 'PAINT' && currentTool !== 'WATER' && currentTool !== 'SMART_GREEN' && currentTool !== 'RIDGE' && currentTool !== 'NOISE' && currentTool !== 'FOREST' && currentTool !== 'RAMP') return;
         
         let positions = planeGeo.attributes.position.array;
         let count = planeGeo.attributes.position.count;
-        let radius = currentTool === 'FLATTEN' ? currentBrushSize * 1.5 : currentBrushSize;
-        let strength = 0.02 * sculptDirection; 
-        
-        let updatePos = false;
-        
-        if (currentTool === 'PAINT') targetPaintColor.setHex(currentBuildColor);
-        
         let p1 = previousFrameHitPoint ? previousFrameHitPoint : lastHitPoint;
         let p2 = lastHitPoint;
         
@@ -3106,6 +3104,83 @@
             window.sculptAnchorY = p2.y;
         }
         previousFrameHitPoint = lastHitPoint.clone();
+
+        // -------------------------------------------------------------
+        // RAMP-VERKTYGET (Spikrak sluttning mellan Start och Target)
+        // -------------------------------------------------------------
+        if (currentTool === 'RAMP') {
+            if (!window.rampStartPt || !window.rampSnapshotHeights) return;
+            let A = window.rampStartPt;
+            let B = p2;
+            let R = currentBrushSize;
+            
+            // Beräkna en rimlig Bounding Box för att spara FPS
+            let minX = Math.min(A.x, B.x) - R;
+            let maxX = Math.max(A.x, B.x) + R;
+            let minZ = Math.min(A.z, B.z) - R;
+            let maxZ = Math.max(A.z, B.z) + R;
+            
+            let gxMin = Math.max(0, Math.floor((minX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+            let gxMax = Math.min(TERRAIN_SEGS, Math.ceil((maxX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+            let gzMin = Math.max(0, Math.floor((minZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+            let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((maxZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+            
+            let updatePos = false;
+            let l2 = (A.x - B.x)*(A.x - B.x) + (A.z - B.z)*(A.z - B.z);
+            
+            for (let z = gzMin; z <= gzMax; z++) {
+                for (let x = gxMin; x <= gxMax; x++) {
+                    let idx = z * (TERRAIN_SEGS+1) + x;
+                    
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+2]; // VIKTIGT: Z är negativ i position array jämfört med world.
+                    // Wait, in previous code: vz = -positions[i*3 + 1] ? NO.
+                    // Let's look at smooth tool: let vz = -positions[i*3 + 1]; BUT IT IS A ROTATED PLANE.
+                    // Actually, let's use the local plane coordinates.
+                    // Local plane X maps to world X. Local plane Y maps to world Z (because it's rotated -90 on X).
+                    let lx = positions[idx*3];
+                    let ly = positions[idx*3+1]; // Local Y is World Z length-wise. But it's negative? 
+                    // Let's use the standard distance calculation matched by other tools
+                    let wX = lx;
+                    let wZ = -ly; // Because rotation.x = -PI/2
+                    
+                    let t = 0;
+                    if (l2 !== 0) {
+                        t = ((wX - A.x) * (B.x - A.x) + (wZ - A.z) * (B.z - A.z)) / l2;
+                        t = Math.max(0, Math.min(1, t));
+                    }
+                    
+                    let projX = A.x + t * (B.x - A.x);
+                    let projZ = A.z + t * (B.z - A.z);
+                    
+                    let dist = Math.sqrt((wX - projX)*(wX - projX) + (wZ - projZ)*(wZ - projZ));
+                    
+                    if (dist < R) {
+                        let targetY = A.y + t * (B.y - A.y);
+                        
+                        // Smoothstep falloff för runda kanter mot originalterrängen
+                        let norm = dist / R;
+                        let falloff = 1.0 - norm;
+                        falloff = Math.max(0, falloff * falloff * (3 - 2 * falloff)); // Smoothstep
+                        
+                        let origY = window.rampSnapshotHeights[idx*3+2]; // Original World Y is in local Z position (idx*3+2)
+                        
+                        positions[idx*3+2] = origY + (targetY - origY) * falloff;
+                        updatePos = true;
+                    }
+                }
+            }
+            if (updatePos) planeGeo.attributes.position.needsUpdate = true;
+            return; // RAMP gör allt den behöver här, skippa vanliga borr-loopen.
+        }
+        // -------------------------------------------------------------
+
+        let radius = currentTool === 'FLATTEN' ? currentBrushSize * 1.5 : currentBrushSize;
+        let strength = 0.02 * sculptDirection; 
+        
+        let updatePos = false;
+        
+        if (currentTool === 'PAINT') targetPaintColor.setHex(currentBuildColor);
         
         // Omdirigera ritandet direkt till Canvas för skarp grafik
         // Omdirigera ritandet direkt till Canvas för skarp grafik (TILLÄGG: Water ritar inte längre på pCtx)
