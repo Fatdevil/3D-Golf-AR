@@ -274,6 +274,8 @@
             <button id="tool-flatten" onclick="setTool('FLATTEN')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧽 FLATTEN</button>
             <button id="tool-water" onclick="setTool('WATER')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">💧 WATER</button>
             <button id="tool-paint" onclick="setTool('PAINT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🖌️ PAINT</button>
+            <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')" style="background:transparent; color:#98ce68; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">⛳ GREEN</button>
+            <button id="tool-ridge" onclick="setTool('RIDGE')" style="background:transparent; color:#fbbf24; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🍔 RIDGE</button>
             <button id="tool-nature" onclick="setTool('NATURE')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🌴 NATURE</button>
             <button id="tool-block" onclick="setTool('BLOCK')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧱 BLOCKS</button>
             <button id="tool-hole" onclick="setTool('HOLE')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">⛳ HOLE</button>
@@ -314,8 +316,6 @@
             <div class="palette-btn" style="background:#4a782b;" onclick="setBlockColor(0x4a782b, this)" title="Rough"></div>
             <!-- Deep Rough -->
             <div class="palette-btn" style="background:#2d4c1a;" onclick="setBlockColor(0x2d4c1a, this)" title="Deep Rough / Fescue"></div>
-            <!-- Mörkgrön / GREEN -->
-            <div class="palette-btn" style="background:#98ce68;" onclick="setBlockColor(0x98ce68, this)" title="Putting Green"></div>
         </div>
 
         <!-- Naturväljare -->
@@ -2604,6 +2604,12 @@
         document.getElementById('tool-paint').style.background = toolName === 'PAINT' ? '#38bdf8' : 'transparent';
         document.getElementById('tool-paint').style.color = toolName === 'PAINT' ? '#0f172a' : '#94a3b8';
 
+        document.getElementById('tool-smartgreen').style.background = toolName === 'SMART_GREEN' ? '#98ce68' : 'transparent';
+        document.getElementById('tool-smartgreen').style.color = toolName === 'SMART_GREEN' ? '#0f172a' : '#98ce68';
+
+        document.getElementById('tool-ridge').style.background = toolName === 'RIDGE' ? '#fbbf24' : 'transparent';
+        document.getElementById('tool-ridge').style.color = toolName === 'RIDGE' ? '#0f172a' : '#fbbf24';
+
         document.getElementById('tool-nature').style.background = toolName === 'NATURE' ? '#4ade80' : 'transparent';
         document.getElementById('tool-nature').style.color = toolName === 'NATURE' ? '#0f172a' : '#94a3b8';
 
@@ -2619,7 +2625,7 @@
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
         document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
         document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
-        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER') ? 'flex' : 'none';
+        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'SMART_GREEN' || toolName === 'RIDGE') ? 'flex' : 'none';
         
         let hintHtml = "";
         if (toolName === 'INSPECT') hintHtml = "<b>Safe Mode</b>: Look around without modifying terrain";
@@ -2630,6 +2636,8 @@
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
         else if (toolName === 'WATER') hintHtml = "Hold Mouse: <b>Dig Water</b>";
+        else if (toolName === 'SMART_GREEN') hintHtml = "Hold Mouse: <b>Paint Green & Flatten to safe plateau</b>";
+        else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
         else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Measure Box</b><br>Right Click: <b>Clear Box</b>";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
         
@@ -3022,7 +3030,7 @@
             previousFrameHitPoint = null;
             return;
         }
-        if (currentTool !== 'SCULPT' && currentTool !== 'SMOOTH' && currentTool !== 'FLATTEN' && currentTool !== 'PAINT' && currentTool !== 'WATER') return;
+        if (currentTool !== 'SCULPT' && currentTool !== 'SMOOTH' && currentTool !== 'FLATTEN' && currentTool !== 'PAINT' && currentTool !== 'WATER' && currentTool !== 'SMART_GREEN' && currentTool !== 'RIDGE') return;
         
         let positions = planeGeo.attributes.position.array;
         let count = planeGeo.attributes.position.count;
@@ -3039,7 +3047,7 @@
         
         // Omdirigera ritandet direkt till Canvas för skarp grafik
         // Omdirigera ritandet direkt till Canvas för skarp grafik (TILLÄGG: Water ritar inte längre på pCtx)
-        if (currentTool === 'PAINT') {
+        if (currentTool === 'PAINT' || currentTool === 'SMART_GREEN') {
             let pCtx1X = ((p1.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pCtx1Z = ((p1.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pCtx2X = ((p2.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
@@ -3047,21 +3055,54 @@
             let cRad = (radius / TERRAIN_SIZE) * 4096;
             
             pCtx.globalCompositeOperation = 'source-over'; 
-            let brushColor = '#' + targetPaintColor.getHexString();
-            pCtx.strokeStyle = brushColor;
-            pCtx.fillStyle = brushColor;
-            pCtx.lineWidth = cRad * 2;
             pCtx.lineCap = 'round';
             pCtx.lineJoin = 'round';
             
-            pCtx.beginPath();
-            if (p1.distanceTo(p2) < 0.1) {
-                pCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
-                pCtx.fill();
+            if (currentTool === 'SMART_GREEN') {
+                // Steg 1: Foregreen (Mörkare Fairway-krans)
+                // Utrullningsyta som är 1.8 meter bredare (1.8m skalat till 4k pixlar)
+                let fRad = cRad + (1.8 / TERRAIN_SIZE) * 4096;
+                pCtx.strokeStyle = '#7db952';
+                pCtx.fillStyle = '#7db952';
+                pCtx.lineWidth = fRad * 2;
+                pCtx.beginPath();
+                if (p1.distanceTo(p2) < 0.1) {
+                    pCtx.arc(pCtx2X, pCtx2Z, fRad, 0, Math.PI*2);
+                    pCtx.fill();
+                } else {
+                    pCtx.moveTo(pCtx1X, pCtx1Z);
+                    pCtx.lineTo(pCtx2X, pCtx2Z);
+                    pCtx.stroke();
+                }
+                
+                // Steg 2: Putting Green Yta i mitten
+                pCtx.strokeStyle = '#98ce68';
+                pCtx.fillStyle = '#98ce68';
+                pCtx.lineWidth = cRad * 2;
+                pCtx.beginPath();
+                if (p1.distanceTo(p2) < 0.1) {
+                    pCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
+                    pCtx.fill();
+                } else {
+                    pCtx.moveTo(pCtx1X, pCtx1Z);
+                    pCtx.lineTo(pCtx2X, pCtx2Z);
+                    pCtx.stroke();
+                }
             } else {
-                pCtx.moveTo(pCtx1X, pCtx1Z);
-                pCtx.lineTo(pCtx2X, pCtx2Z);
-                pCtx.stroke();
+                let brushColor = '#' + targetPaintColor.getHexString();
+                pCtx.strokeStyle = brushColor;
+                pCtx.fillStyle = brushColor;
+                pCtx.lineWidth = cRad * 2;
+                
+                pCtx.beginPath();
+                if (p1.distanceTo(p2) < 0.1) {
+                    pCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
+                    pCtx.fill();
+                } else {
+                    pCtx.moveTo(pCtx1X, pCtx1Z);
+                    pCtx.lineTo(pCtx2X, pCtx2Z);
+                    pCtx.stroke();
+                }
             }
             if(mapTex) mapTex.needsUpdate = true;
         }
@@ -3147,6 +3188,36 @@
                     // Mjukutjämning mot just den höjden man klickade på! Perfekt för platåer och upphöjda greener.
                     positions[i*3 + 2] += (p1.y - positions[i*3 + 2]) * 0.2 * falloff;
                     updatePos = true;
+                } else if (currentTool === 'SMART_GREEN') {
+                    let hDiff = positions[i*3 + 2] - p1.y; 
+                    let maxSlope = dist * 0.03; // ~3% slope gräns
+                    let clampedHeight = p1.y + Math.sign(hDiff) * Math.min(Math.abs(hDiff), maxSlope);
+                    
+                    // Applicera en blending under brushen mot den säkra platån
+                    positions[i*3 + 2] += (clampedHeight - positions[i*3 + 2]) * 0.3 * falloff;
+                    updatePos = true;
+                } else if (currentTool === 'RIDGE') {
+                    // Vektor-kalkyl tvärs över mus-dragriktningen p1 -> p2
+                    let dX = p2.x - p1.x;
+                    let dZ = p2.z - p1.z;
+                    let len = Math.sqrt(dX*dX + dZ*dZ + 1e-6);
+                    if (len > 0.001) {
+                        let nX = -dZ / len;
+                        let nZ = dX / len;
+                        
+                        // Dot Product för avstånd till centrumlinje med tecken (+/-) avgör vilken sida
+                        let dotDiff = (vx - p2.x)*nX + (vz - p2.z)*nZ;
+                        let side = Math.sign(dotDiff);
+                        let distToLine = Math.abs(dotDiff);
+                        
+                        // Bygg en skarp spine/ridge
+                        // Maximal höjdeffekt en bit bort från centrum (distToLine / 1.5)
+                        let ridgeProfile = Math.min(distToLine / 1.5, 1.0);
+                        
+                        // Pusha upp ena sidan, ner andra + sculptDirection ger möjlighet att byta håll
+                        positions[i*3 + 2] += side * (0.05 * sculptDirection) * ridgeProfile * falloff;
+                        updatePos = true;
+                    }
                 } else if (currentTool === 'WATER') {
                     // Botten faller successivt men vattnet står spikrakt!
                     let bottomTarget = waterLevelTarget - 0.7; // Gräv en grop 0.7 under vattenytan
