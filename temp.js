@@ -1,4 +1,7 @@
 
+
+
+
     // 1. THREE.JS INITIALIZATION
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Himmel
@@ -11,7 +14,24 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.autoClear = false; // Krävs för Picture-in-Picture (Minimap)
     document.body.appendChild(renderer.domElement);
+    
+    // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
+    window.aimTarget = new THREE.Vector3(0, 0, -20);
+    window.aimTracerGeo = new THREE.BufferGeometry();
+    window.aimTracerGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    window.aimTracerLine = new THREE.LineDashedMaterial({ color: 0xffff00, dashSize: 1, gapSize: 1, transparent: true, opacity: 0.6 });
+    const aimLineMesh = new THREE.Line(window.aimTracerGeo, window.aimTracerLine);
+    aimLineMesh.computeLineDistances();
+    scene.add(aimLineMesh);
+    
+    // Orthographic Camera för Minimappen
+    const mapSize = 150; // Hur stor markyta minikartan visar by default (radie)
+    const minimapCamera = new THREE.OrthographicCamera(-mapSize, mapSize, mapSize, -mapSize, 0.1, 1000);
+    minimapCamera.position.set(0, 300, 0); // Högt över banan
+    minimapCamera.lookAt(0, 0, 0);
+    minimapCamera.up.set(0, 0, -1); // För orienteringens skull
 
     // Ljus
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
@@ -114,6 +134,16 @@
     const gridPlane = new THREE.Mesh(planeGeo, gridMat);
     gridPlane.rotation.x = -Math.PI / 2;
     scene.add(gridPlane);
+
+    // GSPRO PUTTING VISUALIZATION (Beads & Break Line)
+    const greenBeadsGroup = new THREE.Group();
+    scene.add(greenBeadsGroup);
+    window.greenBeads = [];
+    const beadGeo = new THREE.SphereGeometry(0.04, 8, 8);
+    const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+    
+    window.breakLineMesh = null;
+
     
     // SKULPTER-PENSEL (Visuell cirkel)
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
@@ -229,13 +259,20 @@
     }
 
     // 3. SKAPA BOLLEN
-    const ballGeo = new THREE.SphereGeometry(0.3, 16, 16); // Bollen känns marginellt större i arkad
+    const ballGeo = new THREE.SphereGeometry(0.0427, 16, 16); // Riktigt Golfboll! (~4.2cm diameter. Visuell proxy för att synas vid puttning)
     const ballMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
     const ball = new THREE.Mesh(ballGeo, ballMat);
     ball.castShadow = true;
-    ball.position.set(0, 0.3, 0);
+    ball.position.set(0, 0.0213, 0);
     ball.visible = false;
     scene.add(ball);
+
+    // TRACER LINE FÖR FANTSTISK 3D FYSIK
+    const tracerGeo = new THREE.BufferGeometry();
+    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3 });
+    const flightTracer = new THREE.Line(tracerGeo, tracerMat);
+    scene.add(flightTracer);
+    let tracerPoints = [];
 
     // 4. SKAPA MÅLTAVLOR (Targets)
     const targets = [];
@@ -243,24 +280,44 @@
     // --- BANSYSTEM & SCOREKORT (Holes, Tees, Flags) ---
     let courseHoles = [];
     for(let i=0; i<18; i++) {
-        courseHoles.push({ par: 4, tee: null, flag: null, teeMesh: null, flagMesh: null });
+        courseHoles.push({ 
+            par: 4, 
+            tees: { red: null, yellow: null, white: null, black: null },
+            teeMeshes: { red: null, yellow: null, white: null, black: null },
+            flag: null, 
+            flagMesh: null 
+        });
     }
     let currentHoleIndex = 0;
-    let currentHoleAction = 'TEE';
+    let currentHoleAction = 'TEE_YELLOW';
     
-    const teeGeo = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+    const teeGeo = new THREE.SphereGeometry(0.35, 16, 16); // Teekulor istället för block
     const teeMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8 });
     const flagPoleGeo = new THREE.CylinderGeometry(0.05, 0.05, 6, 8);
     const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const flagClothGeo = new THREE.PlaneGeometry(1.5, 1.0);
     const flagClothMat = new THREE.MeshLambertMaterial({ color: 0xef4444, side: THREE.DoubleSide });
 
-    function createTeeObject(x, y, z) {
-        let mesh = new THREE.Mesh(teeGeo, teeMat);
-        mesh.position.set(x, y + 0.2, z);
-        mesh.castShadow = true;
-        scene.add(mesh);
-        return mesh;
+    function createTeeObject(x, y, z, colorHex=0xfacc15) {
+        let group = new THREE.Group();
+        let tMat = new THREE.MeshLambertMaterial({ color: colorHex });
+        
+        // Vänstra Tee-kulan
+        let meshLeft = new THREE.Mesh(teeGeo, tMat);
+        meshLeft.position.set(-1.8, 0.35, 0);
+        meshLeft.castShadow = true;
+        
+        // Högra Tee-kulan
+        let meshRight = new THREE.Mesh(teeGeo, tMat);
+        meshRight.position.set(1.8, 0.35, 0);
+        meshRight.castShadow = true;
+        
+        group.add(meshLeft);
+        group.add(meshRight);
+        
+        group.position.set(x, y, z);
+        scene.add(group);
+        return group;
     }
 
     function createFlagObject(x, y, z) {
@@ -304,11 +361,24 @@
     window.setHoleItem = function(action) {
         currentHoleAction = action;
         var btns = document.getElementsByClassName('hole-item-btn');
-        for(let b of btns) { b.style.background = '#1e293b'; b.style.color = '#94a3b8'; }
+        for(let b of btns) { 
+            b.style.background = '#1e293b'; 
+            b.classList.remove('active');
+            if(b.id === 'btn-set-tee-red') b.style.color = '#ef4444';
+            else if(b.id === 'btn-set-tee-yellow') b.style.color = '#facc15';
+            else if(b.id === 'btn-set-tee-white') b.style.color = '#fff';
+            else if(b.id === 'btn-set-tee-black') b.style.color = '#94a3b8';
+            else b.style.color = '#94a3b8'; 
+        }
         
-        let activeBtn = action === 'TEE' ? document.getElementById('btn-set-tee') : document.getElementById('btn-set-flag');
-        activeBtn.style.background = '#38bdf8';
-        activeBtn.style.color = '#0f172a';
+        let activeBtn;
+        if(action === 'TEE_RED') { activeBtn = document.getElementById('btn-set-tee-red'); activeBtn.style.background = '#ef4444'; activeBtn.style.color = '#000'; }
+        else if(action === 'TEE_YELLOW') { activeBtn = document.getElementById('btn-set-tee-yellow'); activeBtn.style.background = '#facc15'; activeBtn.style.color = '#000'; }
+        else if(action === 'TEE_WHITE') { activeBtn = document.getElementById('btn-set-tee-white'); activeBtn.style.background = '#fff'; activeBtn.style.color = '#000'; }
+        else if(action === 'TEE_BLACK') { activeBtn = document.getElementById('btn-set-tee-black'); activeBtn.style.background = '#000'; activeBtn.style.color = '#fff'; }
+        else { activeBtn = document.getElementById('btn-set-flag'); activeBtn.style.background = '#38bdf8'; activeBtn.style.color = '#0f172a'; }
+        
+        if(activeBtn) activeBtn.classList.add('active');
     };
     
     window.showScorecard = function() {
@@ -320,25 +390,40 @@
         let inPar = 0;
         let inLen = 0;
         
-        let c1Html = "<tr style='border-bottom:1px solid #334155;'><td style='color:#94a3b8; font-weight:normal; padding:10px;'>PAR</td>";
-        let c2Html = "<tr style='border-bottom:1px solid #334155;'><td style='color:#38bdf8; font-weight:normal; padding:10px;'>DIST</td>";
+        let cHtml = "<tr style='border-bottom:1px solid #334155;'><td style='color:#94a3b8; font-weight:normal; padding:10px;'>PAR</td>";
+        let cBlack = "<tr><td style='color:#fff; background:#111; padding:5px; border-right:1px solid #334155;'>BLACK</td>";
+        let cWhite = "<tr><td style='color:#0f172a; background:#e2e8f0; padding:5px; border-right:1px solid #334155;'>WHITE</td>";
+        let cYellow = "<tr><td style='color:#0f172a; background:#facc15; padding:5px; border-right:1px solid #334155;'>YELLOW</td>";
+        let cRed = "<tr><td style='color:#fff; background:#ef4444; padding:5px; border-right:1px solid #334155;'>RED</td>";
+        
+        // outTotals
+        let sumBlack=0, sumWhite=0, sumYellow=0, sumRed=0;
         
         for(let i=0; i<9; i++) {
             let h = courseHoles[i];
             outPar += h.par;
-            let dist = 0;
-            if(h.tee && h.flag) {
-                dist = Math.round(Math.hypot(h.flag.x - h.tee.x, h.flag.z - h.tee.z));
+            cHtml += "<td style='padding:10px; color:#fff; border-right:1px solid #334155;'>" + h.par + "</td>";
+            
+            let blk='-', wht='-', yel='-', red='-';
+            if(h.flag) {
+                if(h.tees.black) { blk = Math.round(Math.hypot(h.flag.x-h.tees.black.x, h.flag.z-h.tees.black.z)); sumBlack+=blk; }
+                if(h.tees.white) { wht = Math.round(Math.hypot(h.flag.x-h.tees.white.x, h.flag.z-h.tees.white.z)); sumWhite+=wht; }
+                if(h.tees.yellow) { yel = Math.round(Math.hypot(h.flag.x-h.tees.yellow.x, h.flag.z-h.tees.yellow.z)); sumYellow+=yel; }
+                if(h.tees.red) { red = Math.round(Math.hypot(h.flag.x-h.tees.red.x, h.flag.z-h.tees.red.z)); sumRed+=red; }
             }
-            outLen += dist;
-            c1Html += "<td style='padding:10px; color:#fff;'>" + h.par + "</td>";
-            c2Html += "<td style='padding:10px; color:#fff;'>" + (dist > 0 ? dist : '-') + "</td>";
+            cBlack += "<td style='border-right:1px solid #334155;'>"+blk+"</td>"; 
+            cWhite += "<td style='border-right:1px solid #334155;'>"+wht+"</td>"; 
+            cYellow += "<td style='border-right:1px solid #334155;'>"+yel+"</td>"; 
+            cRed += "<td style='border-right:1px solid #334155;'>"+red+"</td>";
         }
         
-        c1Html += "<td style='padding:10px; color:#fbbf24;'>" + outPar + "</td></tr>";
-        c2Html += "<td style='padding:10px; color:#fbbf24;'>" + outLen + "m</td></tr>";
+        cHtml += "<td style='padding:10px; color:#fbbf24;'>" + outPar + "</td></tr>";
+        cBlack += "<td style='color:#fbbf24;'>"+sumBlack+"</td></tr>";
+        cWhite += "<td style='color:#fbbf24;'>"+sumWhite+"</td></tr>";
+        cYellow += "<td style='color:#fbbf24;'>"+sumYellow+"</td></tr>";
+        cRed += "<td style='color:#fbbf24;'>"+sumRed+"</td></tr>";
         
-        tbody.innerHTML += c1Html + c2Html;
+        tbody.innerHTML += cHtml + cBlack + cWhite + cYellow + cRed;
         document.getElementById('scorecard-modal').style.display = 'flex';
     };
     
@@ -364,51 +449,222 @@
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, 
-            tee: h.tee ? {x: h.tee.x, y: h.tee.y, z: h.tee.z} : null,
+            tees: h.tees,
             flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
         }));
         
         localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
     }
     
-    function loadLevel() {
-        let saved = localStorage.getItem('arcade_custom_level');
-        if(saved) {
+    window.publishCourse = async function(options = { isDraft: false, overwrite: false }) {
+        let name = document.getElementById('pub-name').value;
+        let author = document.getElementById('pub-author').value;
+        let stat = document.getElementById('pub-status');
+        stat.style.display = 'none';
+
+        function showError(msg) {
+            stat.style.display = 'block';
+            stat.style.color = '#ef4444';
+            stat.innerHTML = "❌ " + msg;
+        }
+
+        if(!name && !options.isDraft) { showError("Please enter a course name!"); return; }
+        
+        // VALIDERINGSCHECK (Steg 3) - Skip if drafting!
+        if (!options.isDraft) {
+            let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
+            if(!h1HasTee || !courseHoles[0].flag) {
+                showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag before publishing.");
+                return;
+            }
+            for (let i=0; i<18; i++) {
+                let h = courseHoles[i];
+                let hasTee = h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black);
+                if(hasTee && !h.flag) { showError(`Validation Error: Hole ${i+1} has a tee but no flag! Please fix before publishing.`); return; }
+                if(h.flag && !hasTee) { showError(`Validation Error: Hole ${i+1} has a flag but no tee! Please fix before publishing.`); return; }
+            }
+        }
+        
+        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
+        let dumpHoles = courseHoles.map(h => ({
+            par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
+        }));
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot})) : [];
+        
+        let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
+        let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
+        let biome = pCtx.canvas.toDataURL('image/jpeg', 0.8);
+
+        try {
+            let payload = {
+                name: name || "Draft",
+                author: author || "Builder",
+                holes: dumpHoles,
+                targets: dumpTargets,
+                trees: dumpTrees,
+                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
+                terrain_biomemap: biome,
+                is_draft: options.isDraft
+            };
+            
+            if (options.overwrite && currentEditCode) {
+                payload.edit_code = currentEditCode;
+            }
+            
+            let res = await fetch('/api/courses', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            let data = await res.json();
+            if(data.success) {
+                currentEditCode = data.share_code;
+                let href = window.location.origin + window.location.pathname + (options.isDraft ? "?edit=" : "?course=") + data.share_code;
+                
+                // Byt URL utan omladdning
+                window.history.pushState({}, '', href);
+                
+                stat.style.color = '#4ade80';
+                stat.innerHTML = "Sparad! Din länk:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
+                stat.style.display = 'block';
+                
+                if (options.isDraft && document.getElementById('btn-save-draft')) {
+                    document.getElementById('btn-save-draft').style.display = 'block'; // Visar "skriv över"-knappen nu när vi har en EditCode
+                }
+            } else {
+                showError("Failed: " + data.error);
+            }
+        } catch(e) {
+            showError("Error connecting to server. Is the database active?");
+        }
+    };
+
+    async function loadLevel() {
+        let params = new URLSearchParams(window.location.search);
+        let courseCode = params.get('course');
+        let editCode = params.get('edit');
+        
+        let savedStr = null;
+        let isCloud = false;
+        
+        let targetCode = courseCode || editCode;
+
+        if (targetCode) {
+            try {
+                let res = await fetch('/api/courses/' + targetCode);
+                let data = await res.json();
+                if(data.share_code) {
+                    savedStr = data;
+                    isCloud = true;
+                    if (editCode) {
+                        currentEditCode = data.share_code; // Vi LADDADE MÄS från draft url, vi är ägaren!
+                        if(document.getElementById('pub-name')) document.getElementById('pub-name').value = data.name;
+                        if(document.getElementById('pub-author')) document.getElementById('pub-author').value = data.author;
+                        // Synliggör Spara Utkast (Samma Slot) om vi laddade en edit URL
+                        if (document.getElementById('btn-save-draft')) document.getElementById('btn-save-draft').style.display = 'block';
+                    }
+                    if(typeof savedStr.holes === 'string') savedStr.holes = JSON.parse(savedStr.holes);
+                    if(typeof savedStr.targets === 'string') savedStr.targets = JSON.parse(savedStr.targets);
+                    if(typeof savedStr.trees === 'string') savedStr.trees = JSON.parse(savedStr.trees);
+                } else {
+                    console.error("Course not found!");
+                }
+            } catch(e) { console.error("Cloud fetch fail:", e); }
+        }
+        
+        if (!isCloud) {
+            let ls = localStorage.getItem('arcade_custom_level');
+            if(ls) savedStr = JSON.parse(ls);
+        }
+
+        if(savedStr) {
             targets.forEach(t => scene.remove(t.mesh));
             targets.length = 0;
             
-            // Rensa eventuella nyladdade hål före
             for(let i=0; i<18; i++) {
-                if(courseHoles[i].teeMesh) { scene.remove(courseHoles[i].teeMesh); courseHoles[i].teeMesh=null; }
-                if(courseHoles[i].flagMesh) { scene.remove(courseHoles[i].flagMesh); courseHoles[i].flagMesh=null; }
-                courseHoles[i].tee=null; courseHoles[i].flag=null;
+                let h = courseHoles[i];
+                for(let key in h.tees) {
+                    if(h.teeMeshes[key]) { scene.remove(h.teeMeshes[key]); h.teeMeshes[key]=null; }
+                }
+                if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
+                h.tees={red:null,yellow:null,white:null,black:null}; h.flag=null;
             }
+            
             try {
-            var arr = JSON.parse(saved);
-            if (arr && arr.targets && Array.isArray(arr.targets)) {
-                arr.targets.forEach(function(a) {
-                    if(Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z)) {
-                        createTargetAbsolute(a.x, a.y, a.z, a.c);
+                var arr = savedStr;
+
+                if (arr.targets && Array.isArray(arr.targets)) {
+                    arr.targets.forEach(function(a) {
+                        if(Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z)) {
+                            createTargetAbsolute(a.x, a.y, a.z, a.c);
+                        }
+                    });
+                }
+                
+                if (arr.holes && Array.isArray(arr.holes)) {
+                    for(let i=0; i<18 && i<arr.holes.length; i++) {
+                        let hSync = arr.holes[i];
+                        let h = courseHoles[i];
+                        h.par = hSync.par || 4;
+                        if(hSync.tee) { h.tees.yellow = {x: hSync.tee.x, y: hSync.tee.y, z: hSync.tee.z}; }
+                        if(hSync.tees) {
+                            for(let tType in hSync.tees) {
+                                if(hSync.tees[tType]) h.tees[tType] = hSync.tees[tType];
+                            }
+                        }
+                        if(h.tees.red) { h.teeMeshes.red = createTeeObject(h.tees.red.x, h.tees.red.y, h.tees.red.z, 0xef4444); if(h.tees.red.rot) h.teeMeshes.red.rotation.y = h.tees.red.rot; }
+                        if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
+                        if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
+                        if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
+                        
+                        if(hSync.flag) {
+                            h.flag = hSync.flag;
+                            h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                        }
                     }
-                });
-            }
-            if (arr && arr.holes && Array.isArray(arr.holes)) {
-                for(let i=0; i<18 && i<arr.holes.length; i++) {
-                    let hSync = arr.holes[i];
-                    courseHoles[i].par = hSync.par || 4;
-                    if(hSync.tee) {
-                        courseHoles[i].tee = hSync.tee;
-                        courseHoles[i].teeMesh = createTeeObject(hSync.tee.x, hSync.tee.y, hSync.tee.z);
+                    if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
+                }
+
+                if (isCloud && arr.terrain_heightmap) {
+                    let mapData = JSON.parse(arr.terrain_heightmap);
+                    let pos = planeGeo.attributes.position;
+                    let wPos = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position : null;
+                    
+                    let groundArr = Array.isArray(mapData) ? mapData : mapData.ground;
+                    let waterArr = Array.isArray(mapData) ? null : mapData.water;
+
+                    if(groundArr) {
+                        for(let i=0; i<groundArr.length; i++) pos.setZ(i, groundArr[i]);
                     }
-                    if(hSync.flag) {
-                        courseHoles[i].flag = hSync.flag;
-                        courseHoles[i].flagMesh = createFlagObject(hSync.flag.x, hSync.flag.y, hSync.flag.z);
+                    if(waterArr && wPos) {
+                        for(let i=0; i<waterArr.length; i++) wPos.setZ(i, waterArr[i]);
+                    }
+
+                    pos.needsUpdate = true;
+                    if(wPos) wPos.needsUpdate = true;
+                    planeGeo.computeVertexNormals();
+
+                    if(arr.terrain_biomemap) {
+                        let img = new Image();
+                        img.onload = () => {
+                            pCtx.drawImage(img, 0, 0);
+                            if(typeof mapTex !== 'undefined') mapTex.needsUpdate = true;
+                            if(typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
+                        };
+                        img.src = arr.terrain_biomemap;
+                    }
+
+                    if(arr.trees && Array.isArray(arr.trees)) {
+                        arr.trees.forEach(t => createTree(t.type, t.x, t.z, t.s, t.r));
+                    }
+                    
+                    if (courseCode) {
+                        setTimeout(() => setMode('PLAY'), 500); // Bara om vi laddade en färdig bana
                     }
                 }
-                document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par;
-            }
-        } catch(e) {
-                console.error("Kunde ladda bana från LS", e);
+
+            } catch(e) {
+                console.error("Fel vid parse av sparad bana", e);
             }
         }
     }
@@ -432,23 +688,214 @@
     let playingStrokes = 0;
     let broadcastCamPhase = 'TEE'; // 'TEE', 'LANDING'
     let landingCamPos = new THREE.Vector3();
+    
+    // THE GSPRO PLAYER STATE
+    window.playerScores = Array(18).fill(null);
+    window.totalScore = 0;
+    
+    // THE WIND ENGINE STATE
+    window.currentWindMph = 0;
+    window.currentWindDir = 0;
+    window.currentWindVec = [0,0,0];
+
+    window.matchSettings = {
+        tournamentMode: false,
+        gimmeDist: 10,
+        autoPutt: 'TOUR_PRO',
+        mulligans: true,
+        autoConcede: 99,
+        windStrength: 0,
+        greenStimp: 10,
+        altitude: 0
+    };
+
+    // --- THE GLOBAL WIND ENGINE ---
+    function updateWindEngine() {
+        if (playState !== 'ROUND_IDLE' && playState !== 'ROUND_FLYING') return;
+        
+        let matchWindLevel = window.matchSettings ? window.matchSettings.windStrength : 0;
+        let windMph = 0;
+        if (matchWindLevel === 1) windMph = 5 + Math.random() * 5; // 5-10
+        else if (matchWindLevel === 2) windMph = 10 + Math.random() * 8; // 10-18
+        else if (matchWindLevel === 3) windMph = 18 + Math.random() * 7; // 18-25
+        else if (matchWindLevel === 4) windMph = 25 + Math.random() * 10; // 25-35
+        else if (matchWindLevel === 0) windMph = Math.random() * 2; // 0-2 (Calm)
+        
+        // Mjuka kastvindar: Rör sig långsamt mot en target
+        window.currentWindMph += (windMph - window.currentWindMph) * 0.1;
+        
+        let windMs = window.currentWindMph * 0.44704;
+        
+        // Pseudo-random bas-vindriktning per hål, The Course Wind!
+        let holeWindDir = (playingHoleIndex * 137.5) % 360; 
+        
+        // Gusts offset
+        if (!window._targetGust) window._targetGust = 0;
+        if (Math.random() < 0.2) window._targetGust = (Math.random() - 0.5) * 30; // +/- 15 graders kastvind
+        window.currentWindDir += (window._targetGust - (window.currentWindDir - holeWindDir)) * 0.05;
+        
+        let finalDirRad = window.currentWindDir * Math.PI / 180;
+        
+        // Sätt in i Physics (X = Sida, Y = Framåt/Bakåt i Course Space)
+        window.currentWindVec = [Math.sin(finalDirRad) * windMs, -Math.cos(finalDirRad) * windMs, 0];
+        
+        // Update Minimap Wind UI
+        let wSpd = document.getElementById('minimap-wind-spd');
+        let wArr = document.getElementById('minimap-wind-arr');
+        if(wSpd && wArr && window.aimTarget && typeof ball !== 'undefined' && ball && ball.visible) {
+            wSpd.innerText = Math.round(window.currentWindMph) + " MPH";
+            
+            // Konvertera Absolut Vind-direktion till Kamerans/Siktets referensram!
+            let dX = window.aimTarget.x - ball.position.x;
+            let dZ = window.aimTarget.z - ball.position.z;
+            let aimAngleRad = Math.atan2(dX, -dZ); // Standard 3D Y är Upp, Z är inåt
+            
+            // finalDirRad är absolut. aimAngleRad är vart vi tittar.
+            let relWindRad = aimAngleRad - finalDirRad;
+            let relWindDeg = relWindRad * 180 / Math.PI;
+            
+            // Rotera UPP-pilen baserat på denna vinkel
+            wArr.style.transform = `rotate(${relWindDeg}deg)`;
+        }
+    }
+    setInterval(updateWindEngine, 500);
+
+    window.toggleTournamentMode = function(isActive) {
+        window.matchSettings.tournamentMode = isActive;
+        let gimmeInp = document.getElementById('set-gimme-dist');
+        let mulliganInp = document.getElementById('set-mulligans');
+        if(isActive) {
+            gimmeInp.max = 12;
+            if(parseInt(gimmeInp.value) > 12) {
+                gimmeInp.value = 12;
+                document.getElementById('gimme-val').innerText = '12 ft (Max)';
+            }
+            mulliganInp.checked = false;
+            mulliganInp.disabled = true;
+            document.getElementById('set-tournament-mode').parentElement.style.background = '#ef4444';
+            document.getElementById('set-tournament-mode').parentElement.style.color = '#fff';
+        } else {
+            gimmeInp.max = 20;
+            mulliganInp.disabled = false;
+            document.getElementById('set-tournament-mode').parentElement.style.background = 'transparent';
+            document.getElementById('set-tournament-mode').parentElement.style.color = '#ef4444';
+        }
+    };
+
+    window.commitSettingsAndStart = function(color) {
+        window.matchSettings.gimmeDist = parseInt(document.getElementById('set-gimme-dist').value);
+        window.matchSettings.autoPutt = document.getElementById('set-autoputt-mode').value;
+        window.matchSettings.mulligans = document.getElementById('set-mulligans').checked;
+        window.matchSettings.autoConcede = parseInt(document.getElementById('set-concede').value);
+        window.matchSettings.windStrength = parseInt(document.getElementById('set-wind').value);
+        window.matchSettings.greenStimp = parseFloat(document.getElementById('set-green-stimp').value);
+        window.matchSettings.altitude = parseInt(document.getElementById('set-altitude').value);
+        
+        window.GREEN_STIMP = window.matchSettings.greenStimp; // Backwards compatible
+        
+        document.getElementById('settings-modal').style.display = 'none';
+        actuallyStartRound(color);
+    };
 
     window.startRound = function() {
         if(appMode !== 'PLAY') return;
+
+        let hole1 = courseHoles[0];
+        let h1HasTee = hole1 && hole1.tees && (hole1.tees.yellow || hole1.tees.white || hole1.tees.red || hole1.tees.black);
+        if(!hole1 || !h1HasTee || !hole1.flag) {
+            alert("Hole 1 is missing a tee or a flag! You must build Hole 1 completely to play.");
+            return;
+        }
+
+        document.getElementById('ts-red').style.display = hole1.tees.red ? 'block' : 'none';
+        document.getElementById('ts-yellow').style.display = hole1.tees.yellow ? 'block' : 'none';
+        document.getElementById('ts-white').style.display = hole1.tees.white ? 'block' : 'none';
+        document.getElementById('ts-black').style.display = hole1.tees.black ? 'block' : 'none';
+        
+        document.getElementById('settings-modal').style.display = 'flex';
+    };
+
+    window.actuallyStartRound = function(teeColor) {
+        window.playingTeeColor = teeColor;
+        document.getElementById('tee-select-modal').style.display = 'none';
+
         playState = 'ROUND_IDLE';
         playingHoleIndex = 0;
         playingStrokes = 0;
         
         document.getElementById('play-tools').style.display = 'flex';
         document.getElementById('btn-start-round').style.display = 'none';
-        document.getElementById('playing-hud').style.display = 'block';
+        document.getElementById('playing-hud').style.display = 'none'; // Dölj The old HUD
+        document.getElementById('player-banner').style.display = 'block'; // Visa GSPro-style Banner
         
         teleportToHole(playingHoleIndex);
     };
+
+    window.updatePlayerBanner = function() {
+        let hole = courseHoles[playingHoleIndex];
+        if(!hole) return;
+
+        // Beräkna Total Score text (E, +3, -2)
+        let totalDisplay = "E";
+        if (window.totalScore > 0) totalDisplay = "+" + window.totalScore;
+        else if (window.totalScore < 0) totalDisplay = window.totalScore.toString();
+        
+        document.getElementById('pb-score').innerText = totalDisplay;
+        
+        // Uppdatera Shot X
+        document.getElementById('pb-shot').innerText = "Shot " + (playingStrokes + 1);
+        
+        // Uppdatera Distans om vi har the pin
+        if (hole.flag && ball.visible) {
+            let dist = ball.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z)) * 1.09361;
+            document.getElementById('pb-dist').innerText = dist.toFixed(1) + " YDS";
+        }
+    };
+    
+    function logHoleScoreText(strokes, par) {
+        let diff = strokes - par;
+        if(strokes === 1) return "HOLE IN ONE!";
+        if(diff <= -3) return "ALBATROSS";
+        if(diff === -2) return "EAGLE";
+        if(diff === -1) return "BIRDIE";
+        if(diff === 0) return "PAR";
+        if(diff === 1) return "BOGEY";
+        if(diff === 2) return "DOUBLE BOGEY";
+        return diff >= 3 ? "+" + diff : "";
+    }
     
     function nextHole() {
+        let hole = courseHoles[playingHoleIndex];
+        let par = hole ? hole.par : 4;
+        
+        // Spara poängen internt!
+        window.playerScores[playingHoleIndex] = playingStrokes;
+        
+        // Visa BOGEY/BIRDIE texten snabbt
+        let flash = document.getElementById('pb-flash');
+        if(flash) {
+            let diff = playingStrokes - par;
+            // Uppdatera window.totalScore
+            window.totalScore += diff;
+            
+            flash.innerText = logHoleScoreText(playingStrokes, par);
+            if(diff < 0) flash.style.color = '#4ade80'; // Grön för bra
+            else if(diff > 0) flash.style.color = '#f87171'; // Röd för dåligt
+            else flash.style.color = '#e2e8f0'; // Vit för par
+            
+            flash.style.opacity = '1';
+        }
+        
+        setTimeout(() => {
+            if(flash) flash.style.opacity = '0';
+            startNextHole();
+        }, 4000);
+    }
+    
+    function startNextHole() {
         playingHoleIndex++;
-        if(playingHoleIndex > 17 || !courseHoles[playingHoleIndex].tee) {
+        let activeT = courseHoles[playingHoleIndex] ? (courseHoles[playingHoleIndex].tees.yellow || courseHoles[playingHoleIndex].tees.white || courseHoles[playingHoleIndex].tees.red || courseHoles[playingHoleIndex].tees.black) : null;
+        if(playingHoleIndex > 17 || !activeT) {
             let pop = document.getElementById('score-popup');
             pop.innerText = "ROUND COMPLETE!";
             pop.style.opacity = '1';
@@ -456,43 +903,103 @@
             setTimeout(() => { pop.style.opacity = '0'; }, 3000);
             
             playState = 'IDLE';
-            document.getElementById('playing-hud').style.display = 'none';
+            document.getElementById('player-banner').style.display = 'none';
             document.getElementById('play-tools').style.display = 'none';
             document.getElementById('btn-start-round').style.display = 'block';
-            showScorecard();
+            
+            // Bygg och visa Scorekortet!
+            renderScorecard();
+            document.getElementById('scorecard-modal').style.display = 'flex';
             return;
         }
         playingStrokes = 0;
         teleportToHole(playingHoleIndex);
     }
     
+    function renderScorecard() {
+        let tbody = document.getElementById('scorecard-tbody');
+        if(!tbody) return;
+        
+        let htmlMode = '';
+        // Vi måste kunna hantera både 9 hål och 18 hål
+        let maxHoles = 18; 
+        if (!courseHoles[9] || !courseHoles[9].flag) maxHoles = 9; // Kolla om hål 10 finns
+        
+        let parOut = 0; let parIn = 0;
+        let scoreOut = 0; let scoreIn = 0;
+        
+        let trPar = `<tr style="color:#fbbf24; border-bottom:1px solid #334155;"><td>PAR</td>`;
+        let trScore = `<tr style="color:#fff;"><td>SCORE</td>`;
+        
+        for(let i=0; i<9; i++) {
+            let hole = courseHoles[i];
+            let p = hole ? hole.par : '-';
+            let s = window.playerScores[i] !== null ? window.playerScores[i] : '-';
+            
+            if(p !== '-') parOut += p;
+            if(s !== '-') scoreOut += s;
+            
+            trPar += `<td>${p}</td>`;
+            trScore += `<td>${s}</td>`;
+        }
+        trPar += `<td style="color:#fbbf24">${parOut > 0 ? parOut : '-'}</td>`;
+        trScore += `<td style="color:#fbbf24">${scoreOut > 0 ? scoreOut : '-'}</td></tr>`;
+        
+        htmlMode += trPar + trScore;
+        tbody.innerHTML = htmlMode;
+    }
+    
     function teleportToHole(index) {
         let hole = courseHoles[index];
-        if(!hole || !hole.tee || !hole.flag) {
-            alert("Hole " + (index+1) + " is not fully built! Needs both Tee and Flag.");
+        let anyTee = hole ? (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) : null;
+        if(!hole || !anyTee || !hole.flag) {
+            alert("Hole " + (index+1) + " is not fully built! Needs both a Tee and a Flag.");
             return;
         }
         
-        document.getElementById('hud-play-hole').innerText = (index + 1);
-        document.getElementById('hud-play-par').innerText = hole.par;
-        document.getElementById('hud-play-strokes').innerText = playingStrokes;
+        let targetColor = window.playingTeeColor || 'yellow';
+        let activeT = hole.tees[targetColor] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
+        
+        // Uppdatera banners för första gången på hålet
+        window.updatePlayerBanner();
         
         // Reset Ball
         ball.visible = true;
-        ball.position.set(hole.tee.x, hole.tee.y + 0.3, hole.tee.z);
+        ball.position.set(activeT.x, activeT.y + 0.3, activeT.z);
         
         // Vänd kameran mot flaggan från Tee!
         controls.enabled = true;
-        let teeVec = new THREE.Vector3(hole.tee.x, hole.tee.y, hole.tee.z);
+        let teeVec = new THREE.Vector3(activeT.x, activeT.y, activeT.z);
         let flagVec = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         
         let dir = new THREE.Vector3().subVectors(flagVec, teeVec).normalize();
         
-        camera.position.copy(teeVec).add(new THREE.Vector3(-dir.x * 5, 2, -dir.z * 5)); // Ställ kameran 5 meter snett bakom
+        let camDist = 5;
+        let camHeight = 3;
+        
+        camera.position.copy(teeVec).add(new THREE.Vector3(-dir.x * camDist, camHeight, -dir.z * camDist)); // Ställ kameran bakom och lite över
         controls.target.copy(teeVec).add(new THREE.Vector3(dir.x * 20, 0, dir.z * 20)); // Titta åt flaggan
         controls.update();
     }
 
+    // --- CAMERA TOGGLE ---
+    window.camFollowMode = 'BROADCAST'; // 'BROADCAST', 'FOLLOW', 'FREE'
+    window.toggleCamMode = function() {
+        let btn = document.getElementById('btn-cam-mode');
+        if (window.camFollowMode === 'BROADCAST') {
+            window.camFollowMode = 'FOLLOW';
+            btn.innerText = '🎥 FOLLOW';
+            btn.style.background = '#64748b'; // slate-500
+        } else if (window.camFollowMode === 'FOLLOW') {
+            window.camFollowMode = 'FREE';
+            btn.innerText = '🎥 FREE CAM';
+            btn.style.background = '#ec4899'; // pink-500
+        } else {
+            window.camFollowMode = 'BROADCAST';
+            btn.innerText = '🎥 BROADCAST';
+            btn.style.background = '#4f46e5'; // indigo-600
+        }
+    };
 
     function fireShot() {
         if(isFlying) return; // Låt bollen landa
@@ -506,20 +1013,56 @@
             launchAngleDeg: vLa,
             azimDeg: vHla,
             totalSpinRpm: 2500, // Standardspin
-            spinAxisDeg: 0
+            spinAxisDeg: 0,
+            clubSpeedMph: 0,
+            clubPathDeg: 0,
+            faceToPathDeg: 0,
+            clubAoADeg: 0
         };
         
-        executeArcadeShot(launchData);
+        triggerRealShot(launchData);
     }
     
     function triggerRealShot(data) {
         if(isFlying) return;
+        
+        // --- UPPDATERA GSPro DATA HUD ---
+        if(document.getElementById('hud-cp')) document.getElementById('hud-cp').innerText = typeof data.clubPathDeg === 'number' ? data.clubPathDeg.toFixed(1) + '°' : '---';
+        if(document.getElementById('hud-ftp')) document.getElementById('hud-ftp').innerText = typeof data.faceToPathDeg === 'number' ? data.faceToPathDeg.toFixed(1) + '°' : '---';
+        if(document.getElementById('hud-aoa')) document.getElementById('hud-aoa').innerText = typeof data.clubAoADeg === 'number' ? data.clubAoADeg.toFixed(1) + '°' : '---';
+        if(document.getElementById('hud-cs')) document.getElementById('hud-cs').innerText = typeof data.clubSpeedMph === 'number' ? data.clubSpeedMph.toFixed(1) + ' mph' : '---';
+        if(document.getElementById('hud-hla')) document.getElementById('hud-hla').innerText = typeof data.azimDeg === 'number' ? data.azimDeg.toFixed(1) + '°' : '---';
+        if(document.getElementById('hud-bs')) document.getElementById('hud-bs').innerText = typeof data.ballSpeedMph === 'number' ? data.ballSpeedMph.toFixed(1) + ' mph' : '---';
+        if(document.getElementById('hud-vla')) document.getElementById('hud-vla').innerText = typeof data.launchAngleDeg === 'number' ? data.launchAngleDeg.toFixed(1) + '°' : '---';
+        
+        // Side spin approximation från SpinAxis (Om axis är 10 grader, ca 10% av spinnen blir side spin)
+        let sSpin = (data.totalSpinRpm * Math.sin((data.spinAxisDeg||0) * Math.PI/180)) || 0;
+        let bSpin = (data.totalSpinRpm * Math.cos((data.spinAxisDeg||0) * Math.PI/180)) || data.totalSpinRpm;
+        if(document.getElementById('hud-ss')) document.getElementById('hud-ss').innerText = sSpin.toFixed(0);
+        if(document.getElementById('hud-backspin')) document.getElementById('hud-backspin').innerText = bSpin.toFixed(0);
+        if(document.getElementById('hud-sa')) document.getElementById('hud-sa').innerText = typeof data.spinAxisDeg === 'number' ? data.spinAxisDeg.toFixed(1) + '°' : '---';
+        // Reset carry
+        if(document.getElementById('hud-carry')) document.getElementById('hud-carry').innerText = '0 yds';
+        if(document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = '0 yds';
+        if(document.getElementById('hud-total')) document.getElementById('hud-total').innerText = '0 yds';
+        
+        // Updatera inmatningsfält visuellt 
+        if(document.getElementById('in-speed')) document.getElementById('in-speed').value = (data.ballSpeedMph || 0).toFixed(1);
+        if(document.getElementById('in-la')) document.getElementById('in-la').value = (data.launchAngleDeg || 0).toFixed(1);
+        if(document.getElementById('in-hla')) document.getElementById('in-hla').value = (data.azimDeg || 0).toFixed(1);
+
         executeArcadeShot(data);
     }
 
+    window.shotStartPos = null;
+
     function executeArcadeShot(data) {
-        // Lås kamerakontroller så vi kan regissera kameran
-        controls.enabled = false; 
+        // Lås kamerakontroller så vi kan regissera kameran (OM VI INTE KÖR FREE-CAM)
+        if (window.camFollowMode !== 'FREE') {
+            controls.enabled = false; 
+        } else {
+            controls.enabled = true;
+        }
         
         let startPos = [0, 0.3, 0];
         
@@ -527,6 +1070,7 @@
             playState = 'ROUND_FLYING';
             playingStrokes++;
             document.getElementById('hud-play-strokes').innerText = playingStrokes;
+            if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
             broadcastCamPhase = 'TEE';
             startPos = [ball.position.x, -ball.position.z, ball.position.y]; // Three X,Z,Y -> Phys X,Y,Z
         } else {
@@ -534,21 +1078,153 @@
             ball.position.set(0, 0.3, 0);
         }
         
-        var vBoost = parseFloat(document.getElementById('in-boost').value) || 1.0;
+        window.shotStartPos = { x: ball.position.x, y: ball.position.y, z: ball.position.z };
+
         
-        // Applicera Arcade Boost!
-        var finalSpeed = data.ballSpeedMph * vBoost;
+        let localGetTerrainAt = function(px, py) {
+            let threeX = px;
+            let threeZ = -py;
+            
+            let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+            let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+            
+            if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
+            if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
+            
+            let idx = gz * (TERRAIN_SEGS+1) + gx;
+            let positions = planeGeo.attributes.position.array;
+            let height = positions[idx * 3 + 2]; 
+            
+            let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
+            let gzDown = Math.max(0, gz - 1); 
+
+            let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
+            let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+            
+            let step = TERRAIN_SIZE/TERRAIN_SEGS;
+            let dx_phys = (hR - height) / step;
+            let dy_phys = (hD - height) / step; 
+            
+            let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
+            let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
+            
+            let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+            let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+            if (cX < 0) cX = 0; if (cX >= 4096) cX = 4095;
+            if (cZ < 0) cZ = 0; if (cZ >= 4096) cZ = 4095;
+            
+            let r, g, b;
+            if (window.terrainBiomeData) {
+                let pIdx = (cZ * 4096 + cX) * 4;
+                r = window.terrainBiomeData[pIdx];
+                g = window.terrainBiomeData[pIdx+1];
+                b = window.terrainBiomeData[pIdx+2];
+            } else {
+                r = 74; g = 222; b = 128; // Fairway fallback
+            }
+            
+            let biomeType = 'ROUGH'; // Default
+            function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
+            
+            let dOB = cDist(r,g,b, 239,68,68);
+            let dSand = cDist(r,g,b, 224,216,164);
+            let dWaste = cDist(r,g,b, 194,175,124);
+            let dFairway = cDist(r,g,b, 125,185,82);
+            let dSemiRough = cDist(r,g,b, 107,158,61);
+            let dRough = cDist(r,g,b, 74,120,43);
+            let dDeepRough = cDist(r,g,b, 45,76,26);
+            let dGreen = cDist(r,g,b, 152,206,104);
+            let dWater = cDist(r,g,b, 56,189,248);
+            
+            let minD = Math.min(dOB, dSand, dWaste, dFairway, dSemiRough, dRough, dDeepRough, dGreen, dWater);
+            
+            if (minD === dSand) biomeType = 'SAND';
+            else if (minD === dWaste) biomeType = 'WASTE';
+            else if (minD === dGreen) biomeType = 'GREEN';
+            else if (minD === dOB) biomeType = 'OB';
+            else if (minD === dWater) biomeType = 'WATER';
+            else if (minD === dFairway) biomeType = 'FAIRWAY';
+            else if (minD === dSemiRough) biomeType = 'SEMI-ROUGH';
+            else if (minD === dDeepRough) biomeType = 'DEEP ROUGH';
+            else biomeType = 'ROUGH';
+            
+            let waterHeight = -99;
+            if (typeof waterGeo !== 'undefined' && waterGeo) {
+                waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
+            }
+            if (waterHeight > -90 && height < waterHeight + 0.1) {
+                biomeType = 'WATER';
+                height = waterHeight; 
+            }
+            return { z: height, normal: normal, type: biomeType };
+        };
+        
+        var vBoost = parseFloat(document.getElementById('in-boost').value) || 1.0;
+        var vStimpEl = document.getElementById('in-stimp');
+        window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
+        
+        let baseSpeed = data.ballSpeedMph * vBoost;
+        let baseSpin = data.totalSpinRpm || 2500;
+        
+        // STOCHASTIC LIE PENALTY (TRACKMAN PHYSICS)
+        let lieSurface = localGetTerrainAt(startPos[0], startPos[1]);
+        if (playState !== 'IDLE' && lieSurface && lieSurface.type) {
+            let sType = lieSurface.type;
+            let spdPen = 1.0;
+            let spnPen = 1.0;
+            
+            // Random Range
+            let rand = () => Math.random();
+            if (sType === 'SEMI-ROUGH') {
+                spdPen = 1.0 - (0.02 + rand() * 0.06); // 2-8% straff
+                spnPen = 1.0 - (0.10 + rand() * 0.10); // 10-20% spinnbortfall
+            } else if (sType === 'ROUGH') {
+                spdPen = 1.0 - (0.10 + rand() * 0.15); // 10-25%
+                spnPen = 1.0 - (0.30 + rand() * 0.30); // 30-60%
+            } else if (sType === 'DEEP ROUGH') {
+                spdPen = 1.0 - (0.20 + rand() * 0.20); // 20-40% 
+                spnPen = 1.0 - (0.50 + rand() * 0.30); // 50-80%
+            } else if (sType === 'SAND' || sType === 'BUNKER') {
+                spdPen = 1.0 - (0.15 + rand() * 0.15); // 15-30%
+                spnPen = 1.0 - (0.40 + rand() * 0.30); // 40-70%
+            }
+            
+            // Om turnering, skriv ut straffet!
+            if (spdPen < 1.0) {
+                console.log(`LIE PENALTY (${sType}): Speed modifier ${(spdPen*100).toFixed(1)}%, Spin modifier ${(spnPen*100).toFixed(1)}%`);
+                // Vi kan flasha informationen på skärmen via ett simpelt UI senare
+            }
+            
+            baseSpeed *= spdPen;
+            baseSpin *= spnPen;
+        }
         
         var launchConfig = {
             startPos: startPos,
-            ballSpeedMph: finalSpeed,
+            ballSpeedMph: baseSpeed,
             launchAngleDeg: data.launchAngleDeg,
-            totalSpinRpm: data.totalSpinRpm || 2500,
+            totalSpinRpm: baseSpin,
             spinAxisDeg: data.spinAxisDeg || 0,
             azimDeg: data.azimDeg || 0 // Horizontal Angle
         };
+        var cupPosLocal = null;
+        if (window.pinMesh) {
+            // ThreeJS: Y is Up, -Z is forward -> Physics: Z is up, Y is forward
+            // pinMesh.position.y is usually the terrain height
+            cupPosLocal = [window.pinMesh.position.x, -window.pinMesh.position.z, window.pinMesh.position.y];
+        }
         
+        // --- ENVIRONMENTAL INJECTION (Wind & Altitude) ---
+        let envAlt = window.matchSettings ? window.matchSettings.altitude : 0;
+        
+        let windVecStr = JSON.stringify(window.currentWindVec);
+        console.log("WIND INJECTED TO PHYSICS:", windVecStr, "SPEED:", window.currentWindMph, "DIR:", window.currentWindDir);
+
         var envCtx = {
+            wind: window.currentWindVec,
+            altitudeFeet: envAlt,
+            temperatureC: 25,
+            cupPositionLocal: cupPosLocal,
             checkCollisionCallback: function(x, y, z) { 
                 if (!window.placedTrees) return null;
                 // Fysik(X,Y,Z) -> ThreeJS(X,-Z,Y)
@@ -556,22 +1232,46 @@
                 let threeZ = -y;
                 
                 for(let i=0; i<window.placedTrees.length; i++) {
-                    let tree = window.placedTrees[i];
-                    if (tree.type === 'BUSH') continue; // Ignorera buskar i luften
+                    let obj = window.placedTrees[i];
                     
-                    let dx = tree.x - threeX;
-                    let dz = tree.z - threeZ;
-                    let radius = 2.5 * tree.scale; // Grov Kronstorlek
+                    let dx = obj.x - threeX;
+                    let dz = obj.z - threeZ;
+                    let distSq = dx*dx + dz*dz;
                     
-                    if (dx*dx + dz*dz < radius*radius) {
-                        return { type: 'TREE', height: 12.0 * tree.scale };
+                    if (obj.type === 'ROCK') {
+                        let rad = 2.0 * obj.scale;
+                        if (distSq < rad*rad && z < 1.8 * obj.scale) {
+                            return { type: 'ROCK', height: 1.8 * obj.scale };
+                        }
+                    } else if (obj.type === 'BUSH') {
+                        let rad = 2.5 * obj.scale;
+                        if (distSq < rad*rad && z < 2.5 * obj.scale) {
+                            return { type: 'BUSH', height: 2.5 * obj.scale };
+                        }
+                    } else if (obj.type === 'CACTUS') {
+                        let rad = 0.8 * obj.scale;
+                        if (distSq < rad*rad && z < 6.0 * obj.scale) {
+                            return { type: 'CACTUS', height: 6.0 * obj.scale };
+                        }
+                    } else {
+                        // TREE, PINE, PALM, OAK -> Samma träd-fysik med stam och krona
+                        let trunkRadius = 0.5 * obj.scale;
+                        let treeHeight = 15.0 * obj.scale;
+                        let canopyRadius = 3.0 * obj.scale;
+                        
+                        if (distSq < canopyRadius*canopyRadius) {
+                            if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
+                                return { type: 'TREE', height: treeHeight, part: 'TRUNK' };
+                            } else if (z > treeHeight*0.3 && z < treeHeight) {
+                                return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
+                            }
+                        }
                     }
                 }
                 return null; 
             },
             hasTreeCollision: function(x, y, z) { return false; },
             getTerrainAt: function(px, py) {
-                // Physics coords to Three coords
                 let threeX = px;
                 let threeZ = -py;
                 
@@ -583,16 +1283,26 @@
                 
                 let idx = gz * (TERRAIN_SEGS+1) + gx;
                 let positions = planeGeo.attributes.position.array;
-                let height = positions[idx * 3 + 2]; // Z is Local Y axis in Three before rotation
+                let height = positions[idx * 3 + 2]; 
                 
-                // Mappa Färg till Fysik från Canvas! (Betydligt mer exakt än vertexArray)
+                let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
+                let gzDown = Math.max(0, gz - 1); // gz minskar -> Z ökar -> Y(phys) ökar
+
+                let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
+                let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+                
+                let step = TERRAIN_SIZE/TERRAIN_SEGS;
+                let dx_phys = (hR - height) / step;
+                let dy_phys = (hD - height) / step; 
+                
+                let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
+                let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
+                
                 let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
                 let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
-                if (cX < 0) cX = 0; if (cX > 2047) cX = 2047;
-                if (cZ < 0) cZ = 0; if (cZ > 2047) cZ = 2047;
+                if (cX < 0) cX = 0; if (cX >= 4096) cX = 4095;
+                if (cZ < 0) cZ = 0; if (cZ >= 4096) cZ = 4095;
                 
-                // Cacha imagedata globalt varje shot istället för att dra ur canvasen (som är extremt slött i loop)
-                // Eftersom getTerrainAt anropas ~500 gånger per sekund, vi läser snabbt:
                 let r, g, b;
                 if (window.terrainBiomeData) {
                     let pIdx = (cZ * 4096 + cX) * 4;
@@ -604,34 +1314,42 @@
                 }
                 
                 let biomeType = 'ROUGH'; // Default
-                let bounce = 0.5; let friction = 0.95;
-
-                // Färg-koordinat-räkning (Närmaste RGB-matchning för färgrymds-tolerans)
                 function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
                 
                 let dOB = cDist(r,g,b, 239,68,68);
                 let dSand = cDist(r,g,b, 224,216,164);
+                let dWaste = cDist(r,g,b, 194,175,124);
                 let dFairway = cDist(r,g,b, 125,185,82);
+                let dSemiRough = cDist(r,g,b, 107,158,61);
                 let dRough = cDist(r,g,b, 74,120,43);
+                let dDeepRough = cDist(r,g,b, 45,76,26);
                 let dGreen = cDist(r,g,b, 152,206,104);
                 let dWater = cDist(r,g,b, 56,189,248);
                 
-                let minD = Math.min(dOB, dSand, dFairway, dRough, dGreen, dWater);
+                let minD = Math.min(dOB, dSand, dWaste, dFairway, dSemiRough, dRough, dDeepRough, dGreen, dWater);
                 
                 if (minD === dSand) biomeType = 'SAND';
+                else if (minD === dWaste) biomeType = 'WASTE';
                 else if (minD === dGreen) biomeType = 'GREEN';
                 else if (minD === dOB) biomeType = 'OB';
                 else if (minD === dWater) biomeType = 'WATER';
                 else if (minD === dFairway) biomeType = 'FAIRWAY';
+                else if (minD === dSemiRough) biomeType = 'SEMI-ROUGH';
+                else if (minD === dDeepRough) biomeType = 'DEEP ROUGH';
                 else biomeType = 'ROUGH';
-                
-                if (height < -29.9) {
-                    biomeType = 'WATER'; // Globalt djuphav
+                let waterHeight = -99;
+                if (typeof waterGeo !== 'undefined' && waterGeo) {
+                    waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
                 }
                 
+                // Då kan du ha snustorra bunkrar på -40m, vattnet triggar bara där du faktiskt grävt vatten!
+                if (waterHeight > -90 && height < waterHeight + 0.1) {
+                    biomeType = 'WATER';
+                    height = waterHeight; // Möt ytan exakt
+                }
                 return {
                     z: height,
-                    normal: [0, 0, 1], 
+                    normal: normal, 
                     type: biomeType
                 };
             }
@@ -646,6 +1364,10 @@
         
         flightData = result; // Path är result.path
         flightTick = 0;
+        isFlying = true;
+        
+        tracerPoints = [];
+        flightTracer.geometry.setFromPoints(tracerPoints);
         isFlying = true;
     }
 
@@ -675,13 +1397,7 @@
     ghostTree.visible = false;
     scene.add(ghostTree);
     
-    // The grid
-    const gridHelper = new THREE.GridHelper(200, 50, 0xffffff, 0xffffff);
-    gridHelper.material.opacity = 0.2;
-    gridHelper.material.transparent = true;
-    gridHelper.visible = false;
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
+    // The static gridHelper was removed because it clipped through sculpted terrain and water.
 
     // Skulpterings-variabler
     let isSculpting = false;
@@ -793,6 +1509,7 @@
     window.stopMove = function() { moveDir = null; };
     
     window.addEventListener('keydown', e => {
+        if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         let key = e.key.toUpperCase();
         if(['W','A','S','D'].includes(key)) {
             moveDir = key;
@@ -839,7 +1556,19 @@
             sculptDirection = (e.button === 2 || e.shiftKey) ? -1 : 1; 
             
             if (currentTool === 'WATER' && lastHitPoint) {
-                waterLevelTarget = lastHitPoint.y - 0.5; // Gräv en platt botten 0.5m lägre än där vi klickade
+                let gx = Math.round((lastHitPoint.x + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+                let gz = Math.round((lastHitPoint.z + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+                if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
+                if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
+                let idx = gz * (TERRAIN_SEGS+1) + gx;
+                
+                let existingWater = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position.array[idx*3 + 2] : -99;
+                
+                if (existingWater > -90) {
+                    waterLevelTarget = existingWater; // Klick på sjö -> Lås ytan, djupdyk botten utan att ändra ytan!
+                } else {
+                    waterLevelTarget = lastHitPoint.y - 0.5; // Gräv en platt botten 0.5m lägre än där vi klickade
+                }
             }
         } else {
             if(e.button === 0) onMouseClick(e);
@@ -850,6 +1579,12 @@
     let isMeasuring = false;
 
     renderer.domElement.addEventListener('pointerup', e => {
+        if(typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
+            activeRotatingTee = null;
+            controls.enabled = true;
+            saveLevel();
+            return;
+        }
         if(currentTool === 'SCULPT' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
             isSculpting = false;
             controls.enabled = true; // Släpp kameran
@@ -881,7 +1616,6 @@
         
         if (mode === 'BUILD') {
             controls.enabled = true;
-            gridHelper.visible = true;
             // Move camera up to look down a bit
             camera.position.set(0, 15, 10);
             controls.target.set(0, 0, -30);
@@ -889,7 +1623,6 @@
         } else {
             // PLAY MODE
             controls.enabled = true; // Tillåt zoom och rotering!
-            gridHelper.visible = false;
             ghostBlock.visible = false;
             
             // Default vy från tee mot banan
@@ -913,9 +1646,11 @@
             for(let t of window.placedTrees) t.mesh.position.y = getH(t.mesh.position.x, t.mesh.position.z);
         }
         for(let h of courseHoles) {
-            if(h.teeMesh && h.tee) {
-                h.tee.y = getH(h.tee.x, h.tee.z);
-                h.teeMesh.position.y = h.tee.y + 0.2;
+            for(let key in h.tees) {
+                if(h.teeMeshes[key] && h.tees[key]) {
+                    h.tees[key].y = getH(h.tees[key].x, h.tees[key].z);
+                    h.teeMeshes[key].position.y = h.tees[key].y; 
+                }
             }
             if(h.flagMesh && h.flag) {
                 h.flag.y = getH(h.flag.x, h.flag.z);
@@ -1045,13 +1780,12 @@
         for(let i=0; i<wPos.count; i++) { wPos.setZ(i, -2); }
         wPos.needsUpdate = true;
         
-        const ctx = texCanvas.getContext('2d');
-        ctx.fillStyle = '#548c2f';
-        ctx.fillRect(0,0,4096,4096);
+        pCtx.fillStyle = '#4a782b';
+        pCtx.fillRect(0,0,4096,4096);
         mapTex.needsUpdate = true;
         
-        const wCtx = waterTexCanvas.getContext('2d');
-        wCtx.clearRect(0,0,1024,1024);
+        wCtx.fillStyle = '#000000';
+        wCtx.fillRect(0,0,4096,4096);
         waterTex.needsUpdate = true;
         
         saveLevel();
@@ -1077,11 +1811,32 @@
     }
     
     let lastHitPoint = null;
+    let activeRotatingTee = null;
     function onMouseMove(event) {
         if(appMode !== 'BUILD') return;
         event.preventDefault();
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        
+        if (activeRotatingTee && lastHitPoint) {
+            let hole = courseHoles[currentHoleIndex];
+            let teeGroup = hole.teeMeshes[activeRotatingTee];
+            let teeData = hole.tees[activeRotatingTee];
+            if(teeGroup && teeData) {
+                raycaster.setFromCamera(mouse, camera);
+                let intersects = raycaster.intersectObject(plane);
+                if(intersects.length > 0) {
+                    let p = intersects[0].point;
+                    let dist = Math.hypot(p.x - teeData.x, p.z - teeData.z);
+                    if(dist > 0.1) {
+                        lastHitPoint = p;
+                        teeGroup.lookAt(p.x, teeGroup.position.y, p.z);
+                        teeData.rot = teeGroup.rotation.y;
+                    }
+                }
+            }
+            return;
+        }
         
         if (currentTool === 'INSPECT') {
             ghostBlock.visible = false;
@@ -1170,10 +1925,21 @@
         
         if (currentTool === 'HOLE' && lastHitPoint) {
             let hole = courseHoles[currentHoleIndex];
-            if (currentHoleAction === 'TEE') {
-                if (hole.teeMesh) scene.remove(hole.teeMesh);
-                hole.tee = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
-                hole.teeMesh = createTeeObject(hole.tee.x, hole.tee.y, hole.tee.z);
+            if (currentHoleAction.startsWith('TEE_')) {
+                let teeType = currentHoleAction.replace('TEE_', '').toLowerCase();
+                if (hole.teeMeshes[teeType]) scene.remove(hole.teeMeshes[teeType]);
+                hole.tees[teeType] = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z, rot: 0 };
+                
+                let col = 0xffffff;
+                if(teeType === 'red') col = 0xef4444;
+                if(teeType === 'yellow') col = 0xfacc15;
+                if(teeType === 'black') col = 0x111111;
+                
+                hole.teeMeshes[teeType] = createTeeObject(hole.tees[teeType].x, hole.tees[teeType].y, hole.tees[teeType].z, col);
+                
+                activeRotatingTee = teeType;
+                controls.enabled = false;
+                return;
             } else if (currentHoleAction === 'FLAG') {
                 if (hole.flagMesh) scene.remove(hole.flagMesh);
                 hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
@@ -1282,6 +2048,40 @@
         
         controls.update();
     });
+    
+    // --- MINIMAP CLICK TO AIM ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const mmc = document.getElementById('minimap-container');
+        if(mmc) {
+            mmc.addEventListener('mousedown', (e) => {
+                if (appMode !== 'PLAY' || playState !== 'ROUND_IDLE') return;
+                
+                let rect = mmc.getBoundingClientRect();
+                let x = e.clientX - rect.left;
+                let y = e.clientY - rect.top;
+                
+                let nx = (x / rect.width) * 2 - 1;
+                let ny = -(y / rect.height) * 2 + 1;
+                
+                let raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(new THREE.Vector2(nx, ny), minimapCamera);
+                let hits = raycaster.intersectObject(plane);
+                
+                if (hits.length > 0) {
+                    window.aimTarget.copy(hits[0].point);
+                    // Rota kameran mot nya siktet
+                    let aimDir = new THREE.Vector3().subVectors(window.aimTarget, ball.position).normalize();
+                    if (window.isPuttingMode) {
+                        camera.position.copy(ball.position).add(new THREE.Vector3(-aimDir.x * 2.5, 0.4, -aimDir.z * 2.5));
+                    } else {
+                        camera.position.copy(ball.position).add(new THREE.Vector3(-aimDir.x * 5, 2, -aimDir.z * 5));
+                    }
+                    controls.target.copy(window.aimTarget);
+                    controls.update();
+                }
+            });
+        }
+    });
 
     const targetPaintColor = new THREE.Color();
     let previousFrameHitPoint = null;
@@ -1307,7 +2107,8 @@
         previousFrameHitPoint = lastHitPoint.clone();
         
         // Omdirigera ritandet direkt till Canvas för skarp grafik
-        if (currentTool === 'PAINT' || currentTool === 'WATER') {
+        // Omdirigera ritandet direkt till Canvas för skarp grafik (TILLÄGG: Water ritar inte längre på pCtx)
+        if (currentTool === 'PAINT') {
             let pCtx1X = ((p1.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pCtx1Z = ((p1.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pCtx2X = ((p2.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
@@ -1315,7 +2116,7 @@
             let cRad = (radius / TERRAIN_SIZE) * 4096;
             
             pCtx.globalCompositeOperation = 'source-over'; 
-            let brushColor = currentTool === 'WATER' ? '#38bdf8' : '#' + targetPaintColor.getHexString(); // Physics expects #38bdf8 for water
+            let brushColor = '#' + targetPaintColor.getHexString();
             pCtx.strokeStyle = brushColor;
             pCtx.fillStyle = brushColor;
             pCtx.lineWidth = cRad * 2;
@@ -1332,29 +2133,34 @@
                 pCtx.stroke();
             }
             if(mapTex) mapTex.needsUpdate = true;
-            
-            // ALPHA MASK FOR WATER 
-            if (currentTool === 'WATER') {
-                wCtx.globalCompositeOperation = 'source-over';
-                wCtx.strokeStyle = '#ffffff';
-                wCtx.fillStyle = '#ffffff';
-                wCtx.lineWidth = cRad * 2;
-                wCtx.lineCap = 'round';
-                wCtx.lineJoin = 'round';
-                wCtx.beginPath();
-                if (p1.distanceTo(p2) < 0.1) {
-                    wCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
-                    wCtx.fill();
-                } else {
-                    wCtx.moveTo(pCtx1X, pCtx1Z);
-                    wCtx.lineTo(pCtx2X, pCtx2Z);
-                    wCtx.stroke();
-                }
-                if(waterTex) waterTex.needsUpdate = true;
-            }
-            
-            if (currentTool === 'PAINT') return; // Vi skulpterar inga höjder vid ren målning!
         }
+        // ALPHA MASK FOR WATER 
+        if (currentTool === 'WATER') {
+            let pCtx1X = ((p1.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pCtx1Z = ((p1.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pCtx2X = ((p2.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pCtx2Z = ((p2.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let cRad = (radius / TERRAIN_SIZE) * 4096;
+
+            wCtx.globalCompositeOperation = 'source-over';
+            wCtx.strokeStyle = '#ffffff';
+            wCtx.fillStyle = '#ffffff';
+            wCtx.lineWidth = cRad * 2;
+            wCtx.lineCap = 'round';
+            wCtx.lineJoin = 'round';
+            wCtx.beginPath();
+            if (p1.distanceTo(p2) < 0.1) {
+                wCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
+                wCtx.fill();
+            } else {
+                wCtx.moveTo(pCtx1X, pCtx1Z);
+                wCtx.lineTo(pCtx2X, pCtx2Z);
+                wCtx.stroke();
+            }
+            if(waterTex) waterTex.needsUpdate = true;
+        }
+        
+        if (currentTool === 'PAINT') return; // Vi skulpterar inga höjder vid ren målning!
         
         let l2 = (p1.x - p2.x)*(p1.x - p2.x) + (p1.z - p2.z)*(p1.z - p2.z);
         
@@ -1409,7 +2215,7 @@
         requestAnimationFrame(animate);
         
         // Panning movement (WASD)
-        if(moveDir && appMode === 'BUILD') {
+        if(moveDir) {
             // Farten justeras magiskt efter höjden! (Mer höjd = Snabbare kamera)
             let altOffset = Math.max(0, camera.position.y - 10); // Ingen boost under 10m
             let speed = 0.4 + (altOffset * 0.03); // Max speed limit
@@ -1436,6 +2242,101 @@
         
         controls.update();
 
+        // --- GSPRO GREEN BEADS VISUALIZATION ---
+        if (window.isPuttingMode && playState === 'ROUND_IDLE') {
+            let hole = courseHoles[playingHoleIndex];
+            if (hole && hole.flag) {
+                if (window.greenBeads.length === 0) {
+                    // Generera ett stort grid runt flaggan/bollen
+                    for(let x=-8; x<=8; x+=0.6) {
+                        for(let z=-8; z<=8; z+=0.6) {
+                            let bead = new THREE.Mesh(beadGeo, beadMat);
+                            bead.startX = hole.flag.x + x;
+                            bead.startZ = hole.flag.z + z;
+                            bead.position.set(bead.startX, 0, bead.startZ);
+                            // Sprid start-tiden lite så de inte alla "poppar" samtidigt
+                            bead.distOffset = Math.random(); 
+                            greenBeadsGroup.add(bead);
+                            window.greenBeads.push(bead);
+                        }
+                    }
+                }
+                
+                let stimp = window.GREEN_STIMP || 10.0;
+                let dt = 0.016; 
+                
+                for(let i=0; i<window.greenBeads.length; i++) {
+                    let bead = window.greenBeads[i];
+                    let surf = localGetTerrainAt(bead.position.x, bead.position.z);
+                    
+                    if (surf && surf.type === 'GREEN') {
+                        bead.visible = true;
+                        bead.position.y = surf.z + 0.05; 
+                        
+                        let fallX = -surf.normal.x;
+                        let fallZ = -surf.normal.z;
+                        let slopeMag = Math.sqrt(fallX*fallX + fallZ*fallZ);
+                        
+                        if (slopeMag > 0.001) {
+                            let dirX = fallX / slopeMag;
+                            let dirZ = fallZ / slopeMag;
+                            // Exponentiell känsla för slope. Mycket slope = jättesnabbt
+                            let speed = slopeMag * stimp * 2.0; 
+                            
+                            bead.position.x += dirX * speed * dt;
+                            bead.position.z += dirZ * speed * dt;
+                        }
+                    } else {
+                        bead.visible = false;
+                    }
+                    
+                    let dX = bead.position.x - bead.startX;
+                    let dZ = bead.position.z - bead.startZ;
+                    let traveled = Math.sqrt(dX*dX + dZ*dZ);
+                    if (traveled > (0.8 + bead.distOffset * 0.4)) {
+                        bead.position.x = bead.startX;
+                        bead.position.z = bead.startZ;
+                    }
+                }
+
+                // --- GSPro Break Line Indicator ---
+                if (window.breakLineMesh) {
+                    scene.remove(window.breakLineMesh);
+                    window.breakLineMesh = null;
+                }
+                let aimDir = new THREE.Vector3().subVectors(controls.target, camera.position);
+                aimDir.y = 0; aimDir.normalize();
+                
+                let bPoints = [new THREE.Vector3(ball.position.x, ball.position.y, ball.position.z)];
+                let bCur = { x: ball.position.x, z: ball.position.z };
+                let bDir = aimDir.clone();
+                // Förutspå rull 15 meter framåt
+                for(let i=0; i<150; i++) {
+                    let surf = localGetTerrainAt(bCur.x, bCur.z);
+                    if (!surf || surf.type !== 'GREEN') break;
+                    let slopeForce = new THREE.Vector3(-surf.normal.x, 0, -surf.normal.z);
+                    // slope påverkar rullriktningen
+                    bDir.add(slopeForce.multiplyScalar(0.15)).normalize();
+                    
+                    bCur.x += bDir.x * 0.1;
+                    bCur.z += bDir.z * 0.1;
+                    bPoints.push(new THREE.Vector3(bCur.x, surf.z + 0.02, bCur.z));
+                }
+                let lineGeo = new THREE.BufferGeometry().setFromPoints(bPoints);
+                let lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+                window.breakLineMesh = new THREE.Line(lineGeo, lineMat);
+                scene.add(window.breakLineMesh);
+
+            }
+        } else if (window.greenBeads && window.greenBeads.length > 0) {
+            window.greenBeads.forEach(b => greenBeadsGroup.remove(b));
+            window.greenBeads = [];
+            if (window.breakLineMesh) {
+                scene.remove(window.breakLineMesh);
+                window.breakLineMesh = null;
+            }
+        }
+
         applySculpting();
 
         // Om bollen flyger, hämta nästa punkt i trajectory
@@ -1451,36 +2352,65 @@
             // X = Sida (x)
             // Y = Höjd (z)
             // Z = Framåt (Negativ y)
-            ball.position.set(point.x, point.z + 0.3, -point.y);
+            ball.position.set(point.x, point.z + 0.0213, -point.y);
             
-            // TV BROADCAST CAMERA LOGIC
-            if (playState === 'ROUND_FLYING') {
-                if (broadcastCamPhase === 'TEE') {
-                    // Stanna kvar på Tee och titta efter bollen!
-                    camera.lookAt(ball.position);
-                    
-                    // Klipp till Landing Camera om bollen är i luften längre än 1.5 sek!
-                    if (flightTick > 45 && flightData.path.length > 90) {
-                        broadcastCamPhase = 'LANDING';
-                        let finalPhys = flightData.path[flightData.path.length-1];
-                        // Kameran placeras 15 meter bakom landningsplatsen för att se den komma ner
-                        landingCamPos.set(finalPhys.x, finalPhys.z + 3, -finalPhys.y - 15);
-                        camera.position.copy(landingCamPos);
-                    }
-                } else if (broadcastCamPhase === 'LANDING') {
-                    // Ser bollen komma emot oss 
-                    camera.lookAt(ball.position);
-                }
-            } else {
-                // ARCADE MODE: Klassisk drönarkamera
+            for (let k = flightTick; k <= newTick; k++) {
+                let p = flightData.path[k];
+                tracerPoints.push(new THREE.Vector3(p.x, p.z + 0.0213, -p.y));
+            }
+            flightTracer.geometry.setFromPoints(tracerPoints);
+            
+            // --- FLIGHT CAMERA SYSTEM ---
+            if (window.camFollowMode === 'FREE') {
+                // FREE CAM: Släpp kameran fri. Användaren styr med OrbitControls!
+                // Gör ingenting åt kamera-positionen.
+            } else if (window.camFollowMode === 'FOLLOW') {
+                // GSPRO REACTIVE FOLLOW (Classic Drone)
                 let targetCamX = ball.position.x;
                 let targetCamY = Math.max(3, ball.position.y + 3);
-                let targetCamZ = ball.position.z + 12;
+                let targetCamZ = ball.position.z + 12; // Konstant 12m offset bakom
                 
                 camera.position.x += (targetCamX - camera.position.x) * 0.1;
                 camera.position.y += (targetCamY - camera.position.y) * 0.1;
                 camera.position.z += (targetCamZ - camera.position.z) * 0.1;
                 camera.lookAt(ball.position);
+            } else {
+                // TV BROADCAST / PROACTIVE LOOK-AHEAD
+                if (playState === 'ROUND_FLYING') {
+                    // För ROUND mode använder vi The TV Broadcast Director (Multi-angle)
+                    if (broadcastCamPhase === 'TEE') {
+                        camera.lookAt(ball.position);
+                        if (flightTick > 45 && flightData.path.length > 90) {
+                            broadcastCamPhase = 'LANDING';
+                            let finalPhys = flightData.path[flightData.path.length-1];
+                            landingCamPos.set(finalPhys.x, finalPhys.z + 3, -finalPhys.y - 15);
+                            camera.position.copy(landingCamPos);
+                        }
+                    } else if (broadcastCamPhase === 'LANDING') {
+                        camera.lookAt(ball.position);
+                    }
+                } else {
+                    // TRACKMAN PROACTIVE LOOK-AHEAD
+                    // Leta upp framtiden (ca 0.5s fram = 100 ticks vid 5ms/tick)
+                    let aheadTick = Math.min(flightTick + 100, flightData.path.length - 1);
+                    let aheadP = flightData.path[aheadTick];
+                    let currP = flightData.path[flightTick];
+                    
+                    // Eftersom koden ej skickar vx just nu i metrics-pathen, kör vi en vMag approx:
+                    let bVel = currP.vMag || 30; // vMag läggs ofta in i simFlight för tracers
+                    
+                    let zScale = 1.0 + (bVel / 50.0) * 0.8; // Skalar Z-offset från fart
+                    
+                    let targetCamX = aheadP.x;
+                    let targetCamY = Math.max(3, (aheadP.z + 0.0213) + Math.abs(currP.vz || 0) * 0.05); // Y=Höjd i threeJS
+                    let targetCamZ = -aheadP.y + (10 * zScale); // Fartskalat bakom The Look-Ahead Point
+                    
+                    // Mjuk Interpolering mot framtiden
+                    camera.position.x += (targetCamX - camera.position.x) * 0.15;
+                    camera.position.y += (targetCamY - camera.position.y) * 0.15;
+                    camera.position.z += (targetCamZ - camera.position.z) * 0.15;
+                    camera.lookAt(ball.position); // Position at future, look at ball today!
+                }
             }
             
             // COLLISION DETECTION! Krockar bollen med ett block?
@@ -1509,6 +2439,21 @@
             if (flightTick === flightData.path.length - 1) {
                 isFlying = false; // Bollen har stannat
                 
+                // --- UPPDATERA CARRY/TOTAL I HUD ---
+                if (window.shotStartPos) {
+                    let dX = ball.position.x - window.shotStartPos.x;
+                    let dZ = ball.position.z - window.shotStartPos.z;
+                    let totalYds = Math.sqrt(dX*dX + dZ*dZ) * 1.09361;
+                    let carryGameYds = (flightData.metrics.carryMeters || 0) * 1.09361;
+                    if (carryGameYds < 0.1) carryGameYds = totalYds; // Fallback
+                    
+                    if(document.getElementById('hud-carry')) {
+                        document.getElementById('hud-carry').innerText = carryGameYds.toFixed(1) + ' yds';
+                        document.getElementById('hud-carryraw').innerText = carryGameYds.toFixed(1) + ' yds';
+                        document.getElementById('hud-total').innerText = totalYds.toFixed(1) + ' yds'; 
+                    }
+                }
+                
                 if (playState === 'ROUND_FLYING') {
                     playState = 'ROUND_IDLE';
                     let hole = courseHoles[playingHoleIndex];
@@ -1521,31 +2466,67 @@
                         let pop = document.getElementById('score-popup');
                         pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
                         
-                        if (distToPin < 3.0) {
+                        let lieSurface = localGetTerrainAt(ball.position.x, ball.position.z);
+                        let isGreen = lieSurface && lieSurface.type === 'GREEN';
+                        let distFt = distToPin * 3.28084;
+                        let gimmeMax = window.matchSettings ? window.matchSettings.gimmeDist : 10;
+                        
+                        // Kolla Auto Concede först
+                        let maxConcede = window.matchSettings ? window.matchSettings.autoConcede : 99;
+                        let maxScore = hole ? hole.par + maxConcede : 99;
+                        if (playingStrokes >= maxScore && maxConcede !== 99) {
+                            playingStrokes = maxScore;
+                            pop.innerText = `AUTO CONCEDE (${maxScore})`;
+                            pop.style.opacity = '1';
+                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 3000);
+                            return;
+                        }
+
+                        let mode = window.matchSettings ? window.matchSettings.autoPutt : 'TOUR_PRO';
+                        
+                        // Gimme check
+                        if (distFt <= gimmeMax) {
                             playingStrokes += 1;
-                            pop.innerText = "HOLED OUT! (1 Putt)";
+                            pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 3000);
-                        } else if (distToPin < 10.0) {
-                            playingStrokes += 2;
-                            pop.innerText = "HOLED OUT! (2 Putts)";
-                            pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 3000);
-                        } else if (distToPin < 25.0) { // On Green 
-                            playingStrokes += 3;
-                            pop.innerText = "HOLED OUT! (3 Putts)";
-                            pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 3000);
-                        } else {
-                            // Vi är inte klara. Nytt slag!
-                            controls.enabled = true;
-                            let flagVec = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
-                            let dir = new THREE.Vector3().subVectors(flagVec, ball.position).normalize();
+                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 4000);
+                        } else if ((isGreen || distToPin < 20.0) && mode !== 'OFF') {
+                            // AUTO-PUTT LOGIC (On Green or very close Fringe)
+                            let putts = 2;
+                            if (mode === 'TOUR_PRO') {
+                                // Tour Pro Probability Math
+                                let p1 = Math.max(0, 100 - (distFt * 6.2)); // 10ft = ~38% chance
+                                let p3 = distFt > 20 ? (distFt - 20) * 0.8 : 0; // Starts from 20ft, e.g. 40ft = 16% risk
+                                let rand = Math.random() * 100;
+                                if (rand < p1) putts = 1;
+                                else if (rand > (100 - p3)) putts = 3;
+                                else putts = 2;
+                                
+                                console.log(`TOUR PRO AUTO-PUTT: Dist ${distFt.toFixed(1)} ft. Probs: 1P(${p1.toFixed(1)}%) 3P(${p3.toFixed(1)}%). Rolled: ${rand.toFixed(1)} -> ${putts} Putts`);
+                            } else {
+                                // GSPro FIXED Interval
+                                putts = distFt < 10 ? 1 : (distFt < 40 ? 2 : 3);
+                            }
                             
-                            // Placera kameran noga bakom bollen för nästa slag!
-                            camera.position.copy(ball.position).add(new THREE.Vector3(-dir.x * 5, 2, -dir.z * 5)); 
-                            controls.target.copy(ball.position).add(new THREE.Vector3(dir.x * 20, 0, dir.z * 20)); 
-                            controls.update();
+                            playingStrokes += putts;
+                            pop.innerText = `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
+                            pop.style.opacity = '1';
+                            setTimeout(() => { pop.style.opacity = '0'; nextHole(); }, 4000);
+                        } else {
+                            // Vi är inte klara. Nytt slag ELLER Manuell Putt!
+                            if (isGreen && mode === 'OFF') {
+                                window.isPuttingMode = true;
+                                console.log("MANUAL PUTTING ACTIVATED!");
+                            } else {
+                                window.isPuttingMode = false;
+                            }
+                            
+                            if (window.camFollowMode !== 'FREE' && appMode === 'PLAY') {
+                                controls.enabled = true;
+                            }
+                            
+                            // Reset Aim mot nästa slag (Flaggan eller Fairway)
+                            window.resetAimTarget();
                         }
                         document.getElementById('hud-play-strokes').innerText = playingStrokes;
                     }, 2000);
@@ -1561,7 +2542,99 @@
             }
         }
 
+        renderer.clear();
+        renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+        renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
+        renderer.setScissorTest(true);
         renderer.render(scene, camera);
+        
+        // --- GSPRO AIM BILLBOARD PROJECTION ---
+        let bb = document.getElementById('aim-billboard');
+        if (playState === 'ROUND_IDLE' && window.aimTarget) {
+            bb.style.display = 'block';
+            let pos = window.aimTarget.clone();
+            pos.project(camera);
+            
+            // Endast om framför kameran
+            if (pos.z < 1) {
+                let x = (pos.x * .5 + .5) * window.innerWidth;
+                let y = (pos.y * -.5 + .5) * window.innerHeight;
+                bb.style.left = x + 'px';
+                bb.style.top = (y - 30) + 'px'; // Sväva strax ovanför
+                
+                // Uppdatera info
+                let dist = ball.position.distanceTo(window.aimTarget);
+                let elevDiff = window.aimTarget.y - ball.position.y;
+                document.getElementById('aim-bb-dist').innerText = (dist * 1.09361).toFixed(0); 
+                document.getElementById('aim-bb-elev').innerText = Math.abs(elevDiff * 1.09361).toFixed(1) + 'y';
+                document.getElementById('aim-bb-arrow').innerText = elevDiff > 0 ? '▲' : '▼';
+                document.getElementById('aim-bb-arrow').style.color = elevDiff > 0 ? '#4ade80' : '#f87171'; // Grön upp, Röd ner
+            } else {
+                bb.style.display = 'none';
+            }
+        } else {
+            if(bb) bb.style.display = 'none';
+        }
+        
+        // --- THE GSPRO MINIMAP PASS ---
+        let mapCont = document.getElementById('minimap-container');
+        if (appMode === 'PLAY' && (playState === 'ROUND_IDLE' || playState === 'ROUND_FLYING')) {
+            if (mapCont) mapCont.style.display = 'block';
+            let mapW = 220; let mapH = 340;
+            // GSPro karta i nedre högra hörnet = window.innerWidth - mapW - 20
+            let mX = window.innerWidth - mapW - 20; 
+            let mY = 20; 
+            
+            renderer.setViewport(mX, mY, mapW, mapH);
+            renderer.setScissor(mX, mY, mapW, mapH);
+            
+            let hole = courseHoles[playingHoleIndex];
+            if (hole && hole.flag) {
+                let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+                
+                // Gör kameran responsiv mot layouten (Ball till Flagga)
+                minimapCamera.position.set((ball.position.x + fv.x)/2, 300, (ball.position.z + fv.z)/2);
+                
+                let dist = ball.position.distanceTo(fv);
+                // Dynamisk Scale beroende på hålets längd
+                minimapCamera.left = -(dist/2 + 20); 
+                minimapCamera.right = (dist/2 + 20);
+                // Behåll aspect ratio 220x340 = 0.64
+                minimapCamera.top = (dist/2 + 20) / 0.64;
+                minimapCamera.bottom = -(dist/2 + 20) / 0.64;
+                minimapCamera.updateProjectionMatrix();
+
+                // Låt "Uppåt" i kartan peka mot flaggan!
+                let dir = new THREE.Vector3().subVectors(fv, ball.position);
+                dir.y = 0; dir.normalize();
+                
+                minimapCamera.up.set(dir.x, 0, dir.z);
+                minimapCamera.lookAt(minimapCamera.position.x, 0, minimapCamera.position.z);
+                
+                // --- KARTA UI (Yards & Grader) ---
+                if (window.aimTarget) {
+                    let dX = window.aimTarget.x - ball.position.x;
+                    let dZ = window.aimTarget.z - ball.position.z;
+                    let flatD = Math.sqrt(dX*dX + dZ*dZ);
+                    let dY = window.aimTarget.y - ball.position.y;
+                    
+                    let degUp = (Math.atan2(dY, flatD) * 180 / Math.PI).toFixed(1);
+                    document.getElementById('minimap-updown').innerText = Math.abs(degUp) + (degUp >= 0 ? "° UP" : "° DN");
+                    
+                    // Left/Right? Eftersom kameran följer Siktet är vi alltid 0.0°!
+                    document.getElementById('minimap-leftright').innerText = "0.0° RIGHT";
+                    
+                    if (typeof localGetTerrainAt === 'function') {
+                        let surf = localGetTerrainAt(window.aimTarget.x, window.aimTarget.z);
+                        if (surf) document.getElementById('minimap-lie-text').innerText = surf.type || 'Fairway';
+                    }
+                }
+            }
+            
+            renderer.render(scene, minimapCamera);
+        } else {
+            if (mapCont) mapCont.style.display = 'none';
+        }
     }
     
     // --- LM BRIDGE STATUS ---
