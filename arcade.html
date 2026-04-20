@@ -2649,6 +2649,28 @@
         document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'SMART_GREEN' || toolName === 'RIDGE') ? 'flex' : 'none';
         document.getElementById('green-diff-group').style.display = (toolName === 'SMART_GREEN') ? 'flex' : 'none';
         
+        let ipadBtn = document.getElementById('ipad-sculpt-btn');
+        if (ipadBtn) {
+            ipadBtn.style.display = (toolName === 'SCULPT' || toolName === 'RIDGE') ? 'block' : 'none';
+        }
+        
+        // Uppdatera markörens färg beroende på verktyg bygger på samma basfärger
+        if(toolName === 'SMOOTH') {
+            sculptBrushCursor.material.color.setHex(0xa855f7); // Lila
+        } else if(toolName === 'FLATTEN') {
+            sculptBrushCursor.material.color.setHex(0xffffff); // Vit
+        } else if(toolName === 'SCULPT') {
+            sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
+        } else if(toolName === 'SMART_GREEN') {
+            sculptBrushCursor.material.color.setHex(0xffffff); // Stark Vit för max kontrast på grönt gräs
+        } else if(toolName === 'RIDGE') {
+            sculptBrushCursor.material.color.setHex(0xfbbf24); // Guld
+        } else if(toolName === 'PAINT') {
+            sculptBrushCursor.material.color.setHex(currentBuildColor);
+        } else if(toolName === 'WATER') {
+            sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
+        }
+        
         let hintHtml = "";
         if (toolName === 'INSPECT') hintHtml = "<b>Safe Mode</b>: Look around without modifying terrain";
         else if (toolName === 'BLOCK') hintHtml = "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
@@ -2671,18 +2693,6 @@
         if(toolName !== 'MEASURE') {
             document.getElementById('measure-hud').style.display = 'none';
             if(typeof measureLines !== 'undefined') measureLines.visible = false;
-        }
-
-        if(toolName === 'SMOOTH') {
-            sculptBrushCursor.material.color.setHex(0xa855f7); // Lila
-        } else if(toolName === 'FLATTEN') {
-            sculptBrushCursor.material.color.setHex(0xffffff); // Vit
-        } else if(toolName === 'SCULPT') {
-            sculptBrushCursor.material.color.setHex(0xffff00); // Gul
-        } else if(toolName === 'WATER') {
-            sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
-        } else if(toolName === 'PAINT') {
-            sculptBrushCursor.material.color.setHex(currentBuildColor);
         }
     }
 
@@ -2839,14 +2849,14 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             raycaster.setFromCamera(mouse, camera);
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
-                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
