@@ -2506,6 +2506,9 @@
         if(gsProHud && mode === 'BUILD') gsProHud.classList.add('hidden');
         
         if (mode === 'BUILD') {
+            playState = 'BUILDING'; // Nollställ playState från tidigare test-rundor
+            window.aimTarget = null; // Rensa eventuella gamla sikten
+            
             controls.enabled = true;
             // Move camera up to look down a bit
             camera.position.set(0, 15, 10);
@@ -3489,7 +3492,7 @@
         
         // --- GSPRO AIM BILLBOARD PROJECTION ---
         let bb = document.getElementById('aim-billboard');
-        if (playState === 'ROUND_IDLE' && window.aimTarget) {
+        if ((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget) {
             bb.style.display = 'block';
             let pos = window.aimTarget.clone();
             pos.project(camera);
@@ -3517,7 +3520,7 @@
         
         // --- THE GSPRO MINIMAP PASS ---
         let mapCont = document.getElementById('minimap-container');
-        if (appMode === 'PLAY' && (playState === 'ROUND_IDLE' || playState === 'ROUND_FLYING')) {
+        if ((appMode === 'PLAY' || appMode === 'TEST') && (playState === 'ROUND_IDLE' || playState === 'ROUND_FLYING')) {
             if (mapCont) mapCont.style.display = 'block';
             let mapW = 220; let mapH = 340;
             // GSPro karta i nedre högra hörnet = window.innerWidth - mapW - 20
