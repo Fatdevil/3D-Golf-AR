@@ -1291,11 +1291,6 @@
         }
     }
     
-    // Load custom world on boot!
-    loadLevel();
-
-
-
     // SPEL LOGIK
     let isFlying = false;
     let flightData = null;
@@ -3614,8 +3609,10 @@
     }
     
     // Boot:
-    // setMode is handled strictly inside loadLevel() now
     initLaunchMonitorBridge();
+    
+    // Load custom world on boot!
+    loadLevel();
     
     
     // Resize resulterar..
