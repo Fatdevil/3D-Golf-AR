@@ -442,6 +442,14 @@
                         <input type="range" id="set-green-stimp" min="6" max="14" step="0.5" value="10" oninput="document.getElementById('stimp-val').innerText = this.value; document.getElementById('in-stimp').value = this.value;" style="width:100%; accent-color:#4ade80;">
                     </div>
                     <div style="margin-bottom:15px;">
+                        <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">GREEN FIRMNESS</label>
+                        <select id="set-green-firmness" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
+                            <option value="SOFT">Soft (Less Bounce)</option>
+                            <option value="NORMAL" selected>Normal</option>
+                            <option value="FIRM">Firm (More Bounce)</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:15px;">
                         <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">ELEVATION (FT)</label>
                         <input type="number" id="set-altitude" value="0" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
                     </div>
@@ -1328,6 +1336,7 @@
         autoConcede: 99,
         windStrength: 0,
         greenStimp: 10,
+        greenFirmness: 'NORMAL',
         altitude: 0
     };
 
@@ -1470,6 +1479,7 @@
         window.matchSettings.autoConcede = parseInt(document.getElementById('set-concede').value);
         window.matchSettings.windStrength = parseInt(document.getElementById('set-wind').value);
         window.matchSettings.greenStimp = parseFloat(document.getElementById('set-green-stimp').value);
+        window.matchSettings.greenFirmness = document.getElementById('set-green-firmness').value;
         window.matchSettings.altitude = parseInt(document.getElementById('set-altitude').value);
         
         window.GREEN_STIMP = window.matchSettings.greenStimp; // Backwards compatible
@@ -3230,8 +3240,28 @@
                             // Exponentiell känsla för slope. Mycket slope = jättesnabbt
                             let speed = slopeMag * stimp * 2.0; 
                             
-                            bead.position.x += dirX * speed * dt;
-                            bead.position.z += dirZ * speed * dt;
+                            // GRAIN-INFUSION
+                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2);
+                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2); 
+                            let currentStimp = window.GREEN_STIMP || 10.0;
+                            let grainScale = 0.03 * (10.0 / currentStimp);
+                            
+                            let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
+                            let grainDirX = (sx / gl);
+                            let grainDirZ = (sz / gl);
+                            
+                            // Grain force (x25 artificiell multiplikator för att det ska synas på pärlorna relativt till speed)
+                            bead.position.x += (dirX * speed + grainDirX * grainScale * 25.0) * dt;
+                            bead.position.z += (dirZ * speed + grainDirZ * grainScale * 25.0) * dt;
+                        } else {
+                            // Även en perfekt platt yta drar beads iväg pga grain (om än sakta)
+                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2);
+                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2); 
+                            let currentStimp = window.GREEN_STIMP || 10.0;
+                            let grainScale = 0.03 * (10.0 / currentStimp);
+                            let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
+                            bead.position.x += (sx / gl) * grainScale * 15.0 * dt;
+                            bead.position.z += (sz / gl) * grainScale * 15.0 * dt;
                         }
                     } else {
                         bead.visible = false;
@@ -3263,7 +3293,17 @@
                     if (!surf || surf.type !== 'GREEN') break;
                     let slopeForce = new THREE.Vector3(-surf.normal.x, 0, -surf.normal.z);
                     // slope påverkar rullriktningen
-                    bDir.add(slopeForce.multiplyScalar(0.15)).normalize();
+                    bDir.add(slopeForce.multiplyScalar(0.15));
+                    
+                    // Grain påverkar rullriktningen
+                    let sx = Math.sin(bCur.x * 0.3 + bCur.z * 0.2);
+                    let sz = Math.cos(bCur.z * 0.3 - bCur.x * 0.2);
+                    let currentStimp = window.GREEN_STIMP || 10.0;
+                    let grainScale = 0.03 * (10.0 / currentStimp);
+                    let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
+                    bDir.add(new THREE.Vector3(sx/gl, 0, sz/gl).multiplyScalar(grainScale * 0.8));
+                    
+                    bDir.normalize();
                     
                     bCur.x += bDir.x * 0.1;
                     bCur.z += bDir.z * 0.1;

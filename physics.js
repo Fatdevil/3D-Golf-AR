@@ -138,6 +138,20 @@ window.GolfPhysics = (function() {
             // Friktion verkar rakt mot rörelseriktningen parallellt med marken
             let dir = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,0,0];
             let frictionAccel = vecScale(dir, -frictionAccelMag);
+
+            // GRASS GRAIN (Pseudorandom vector based on X/Y position)
+            if (state.terrainType === 'GREEN') {
+                // Skapa en svag ström baserat på position
+                let sx = Math.sin(state.pos[0] * 0.3 + state.pos[1] * 0.2);
+                let sy = Math.cos(state.pos[1] * 0.3 - state.pos[0] * 0.2);
+                let currentStimp = (typeof window !== 'undefined' && window.GREEN_STIMP) ? window.GREEN_STIMP : 10.0;
+                let grainAccelScale = 0.03 * (10.0 / currentStimp); // Grain påverkar mer på tröga greener
+                
+                // Endast tillämpa grain horisontellt (x/y)
+                let gl = Math.sqrt(sx*sx + sy*sy + 1e-6);
+                frictionAccel[0] += (sx / gl) * grainAccelScale;
+                frictionAccel[1] += (sy / gl) * grainAccelScale;
+            }
             
             let totalAccel = vecAdd(gParallel, frictionAccel);
             
@@ -394,14 +408,24 @@ window.GolfPhysics = (function() {
             stepRK4(state, dt);
             
             if (state.phase === "roll") {
-                // Tvinga bollen att "hug the ground" och uppdatera hastighetsvektor så den är parallell!
-                let freshT = envCtx && envCtx.getTerrainAt ? envCtx.getTerrainAt(state.pos[0], state.pos[1]) : tInfo;
-                state.pos[2] = freshT.z;
-                
-                let vDotN = state.vel[0]*freshT.normal[0] + state.vel[1]*freshT.normal[1] + state.vel[2]*freshT.normal[2];
-                state.vel[0] -= vDotN * freshT.normal[0];
-                state.vel[1] -= vDotN * freshT.normal[1];
-                state.vel[2] -= vDotN * freshT.normal[2];
+                // BYPASS KOPPEN FÖR ATT INTE TVINGAS TILL GRÄS-YTAN I HÅLET
+                let insideCup = false;
+                if (envCtx && envCtx.cupPositionLocal) {
+                    let dX = state.pos[0] - envCtx.cupPositionLocal[0];
+                    let dY = state.pos[1] - envCtx.cupPositionLocal[1];
+                    if (dX*dX + dY*dY < 0.054*0.054) insideCup = true;
+                }
+
+                if (!insideCup) {
+                    // Tvinga bollen att "hug the ground" och uppdatera hastighetsvektor så den är parallell!
+                    let freshT = envCtx && envCtx.getTerrainAt ? envCtx.getTerrainAt(state.pos[0], state.pos[1]) : tInfo;
+                    state.pos[2] = freshT.z;
+                    
+                    let vDotN = state.vel[0]*freshT.normal[0] + state.vel[1]*freshT.normal[1] + state.vel[2]*freshT.normal[2];
+                    state.vel[0] -= vDotN * freshT.normal[0];
+                    state.vel[1] -= vDotN * freshT.normal[1];
+                    state.vel[2] -= vDotN * freshT.normal[2];
+                }
             }
             
             t += dt;
@@ -409,8 +433,16 @@ window.GolfPhysics = (function() {
             // Evaluera Apex
             if (state.pos[2] > metrics.apexMeters) metrics.apexMeters = state.pos[2];
 
-            // Markkontakt och Fysik-övergång via 3D Slopes
-            if (state.pos[2] <= tInfo.z && state.phase !== "stopped") {
+            // Identifiera om vi svävar över koppen
+            let overCup = false;
+            if (envCtx && envCtx.cupPositionLocal) {
+                let dX = state.pos[0] - envCtx.cupPositionLocal[0];
+                let dY = state.pos[1] - envCtx.cupPositionLocal[1];
+                if (dX*dX + dY*dY < 0.054*0.054) overCup = true;
+            }
+
+            // Markkontakt och Fysik-övergång via 3D Slopes (Bypass om vi är över koppen!)
+            if (state.pos[2] <= tInfo.z && state.phase !== "stopped" && !overCup) {
                 
                 // 1. Beräkna den exakta tidpunkten då bollen dök igenom z-kartan
                 let travelZ = prevPos[2] - state.pos[2];
@@ -449,8 +481,16 @@ window.GolfPhysics = (function() {
                 let cRollingDecel = GROUND.rollingDecel;
                 
                 if (impactTerrainType === 'GREEN') {
-                    // GSPro / Trackman Greens: e ~ 0.5 for realistic bounces, låg rullfriktion (via Stimp i evaluateState)
-                    cRestitution = 0.50; cFriction = 0.35; cRollingDecel = 0.5;
+                    // Mjukhet baserad på inställningar
+                    let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
+                    if (firmness === 'SOFT') {
+                        cRestitution = 0.40; cFriction = 0.45; cRollingDecel = 0.5;
+                    } else if (firmness === 'FIRM') {
+                        cRestitution = 0.60; cFriction = 0.25; cRollingDecel = 0.5;
+                    } else {
+                        // NORMAL fallback (GSPro / Trackman standard)
+                        cRestitution = 0.50; cFriction = 0.35; cRollingDecel = 0.5;
+                    }
                 } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
                     cRestitution = 0.55; cFriction = 0.55; cRollingDecel = 0.78; // roll_mu 0.08
                 } else if (impactTerrainType === 'SEMI-ROUGH') {
@@ -579,44 +619,77 @@ window.GolfPhysics = (function() {
                 }
             }
 
-            // --- KOLLA HÅLET (CUP INTERACTION) ---
+            // --- KOLLA HÅLET (CUP INTERACTION - 3D RATTLE) ---
             if (envCtx && envCtx.cupPositionLocal && (state.phase === 'roll' || state.phase === 'skid' || state.phase === 'flight')) {
-                // Endast om bollen är på marken, eller hoppar lågt över hålet
-                if (state.pos[2] <= (tInfo.z + 0.08)) {
+                // Hålets golv ligger vanligtvis ca 10.8 cm (0.108m) under ytan
+                let cupBottomZ = tInfo.z - 0.108;
+                let isBelowGround = state.pos[2] < tInfo.z;
+                let isInsideCupVolume = state.pos[2] >= cupBottomZ;
+
+                // Är vi i närheten av koppen ovanifrån (margin of error för hopp)
+                if (state.pos[2] <= (tInfo.z + 0.08) && !isBelowGround) {
                     let dX = state.pos[0] - envCtx.cupPositionLocal[0];
                     let dY = state.pos[1] - envCtx.cupPositionLocal[1];
                     let distToCenter = Math.sqrt(dX*dX + dY*dY);
                     
-                    if (distToCenter < 0.055) { // 108mm diameter hål (≈ 54mm radie). 55mm ink marginal.
-                        let speedXY = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);
-                        let offsetFactor = distToCenter / 0.054; // 0.0 = exakt mitt, 1.0 = bollen precis på läppen
+                    if (distToCenter < 0.054) { // Över hålet (inom 54mm)
+                        let speedXY = vecMag([state.vel[0], state.vel[1], 0]);
+                        let offsetFactor = distToCenter / 0.054; 
                         
-                        // Fysikalisk Capture-Threshold (Trackman / Pelz)
-                        // Om bollen går under 1.0 m/s ramlar den i även på kanten!
-                        // Om bollen går upp mot 1.63 m/s ramlar den bara i om den ligger dead-center.
                         let captureThreshold = 1.63 - (offsetFactor * 0.7); 
                         
-                        if (speedXY <= captureThreshold) {
-                            state.phase = "holed";
-                            state.vel = [0, 0, -2.0]; // Dra ner bollen
-                            state.pos[0] = envCtx.cupPositionLocal[0];
-                            state.pos[1] = envCtx.cupPositionLocal[1];
-                            metrics.holed = true;
-                            console.log("⛳ HÅLAD! Fart: " + speedXY.toFixed(2) + " m/s");
+                        if (speedXY <= captureThreshold || (state.phase !== 'roll' && state.phase !== 'skid' && state.vel[2] < 0)) {
+                            // Vi ramlar i hålet! Tillåt gravitation att verka
+                            state.phase = "flight"; 
+                            // Tryck bollen nedåt direkt för att undvika konstig lip-hanging
+                            if (state.vel[2] >= 0) state.vel[2] = -0.5;
                         } else if (speedXY > captureThreshold && speedXY <= 2.2 && offsetFactor > 0.3) {
-                            // LIP OUT! Bollen slår i bortre kanten men har för mycket fart/fel vinkel för att droppa. 
+                            // LIP OUT!
                             console.log("😥 LIP OUT! Fart: " + speedXY.toFixed(2) + " m/s, Offset: " + offsetFactor.toFixed(2));
-                            // Deflektera 
                             state.vel[0] = state.vel[0] * 0.4 + (dX * 18.0); 
                             state.vel[1] = state.vel[1] * 0.4 + (dY * 18.0);
-                            state.vel[2] = 0.5; // Litet hopp
-                            // Flytta ut från radien så den inte lips out 100 ggr per sekund
+                            state.vel[2] = 0.5; 
                             state.pos[0] += (dX / distToCenter) * 0.02;
                             state.pos[1] += (dY / distToCenter) * 0.02;
-                            state.phase = "bounce"; // Return to air temporarily to escape hole radius
-                        } else if (speedXY > 2.2) {
-                            // Går extremt fort, skippar hålet obemärkt
+                            state.phase = "bounce"; 
                         }
+                    }
+                } 
+                // Om vi redan ÄR nere i hålet (under markytan Z)
+                else if (isBelowGround && isInsideCupVolume) {
+                    let dX = state.pos[0] - envCtx.cupPositionLocal[0];
+                    let dY = state.pos[1] - envCtx.cupPositionLocal[1];
+                    let distToCenter = Math.sqrt(dX*dX + dY*dY);
+
+                    // Studs mot hålets plastiga innervägg (radie 54mm = 0.054)
+                    if (distToCenter > 0.032) { // Bollen (radie 21mm) träffar väggen när centrum är ca 32mm från center
+                        // Rebound mot väggen (elastisk collision)
+                        let nX = dX / distToCenter;
+                        let nY = dY / distToCenter;
+                        
+                        let vDotN = state.vel[0]*nX + state.vel[1]*nY;
+                        if (vDotN > 0) {
+                            state.vel[0] -= 1.6 * vDotN * nX; // Studs (restitution 0.6)
+                            state.vel[1] -= 1.6 * vDotN * nY;
+                            // Sänk fart och drag in den lätt mot mitten
+                            state.vel[0] *= 0.8;
+                            state.vel[1] *= 0.8;
+                        }
+                        // Dra tillbaka innanför väggen
+                        state.pos[0] = envCtx.cupPositionLocal[0] + nX * 0.031;
+                        state.pos[1] = envCtx.cupPositionLocal[1] + nY * 0.031;
+                    }
+                    
+                    // Slutligen, om bollen ligger på botten
+                    if (state.pos[2] <= cupBottomZ + 0.021) { // 21mm bollradie
+                        state.pos[2] = cupBottomZ + 0.021;
+                        metrics.holed = true;
+                        state.phase = "holed";
+                        state.vel = [0,0,0];
+                        state.spin = [0,0,0];
+                        console.log("⛳ HÅLAD (Till botten)!");
+                    } else {
+                        state.phase = "flight"; // Fortsätt falla fritt mellan väggarna
                     }
                 }
             }
