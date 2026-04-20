@@ -1149,7 +1149,7 @@
         if (autoRun === 'new_build') {
             if (typeof executeClear === 'function') executeClear();
             else localStorage.removeItem('arcade_custom_level');
-            setTimeout(() => setMode('BUILD'), 100);
+            setMode('BUILD');
             return;
         }
 
@@ -1272,24 +1272,22 @@
                         arr.trees.forEach(t => createTree(t.type, t.x, t.z, t.s, t.r));
                     }
                 }
-
             } catch(e) {
                 console.error("Fel vid parse av sparad bana", e);
             }
         }
         
         if (autoRun === 'setup') {
-            setTimeout(() => {
-                setMode('PLAY');
-                if (typeof startRound === 'function') startRound();
-            }, 500);
+            setMode('PLAY');
+            if (typeof startRound === 'function') setTimeout(startRound, 500);
         } else if (autoRun === 'edit_build' || autoRun === 'build') {
-            setTimeout(() => setMode('BUILD'), 500);
+            setMode('BUILD');
         } else if (courseCode) {
-            setTimeout(() => {
-                setMode('PLAY');
-                if (typeof startRound === 'function') startRound();
-            }, 500);
+            setMode('PLAY');
+            if (typeof startRound === 'function') setTimeout(startRound, 500);
+        } else if (!autoRun && !courseCode && !editCode) {
+            // Default fallback
+            setMode('TEST');
         }
     }
     
@@ -2496,10 +2494,12 @@
         }
         
         document.getElementById('build-palette').style.display = mode === 'BUILD' ? 'flex' : 'none';
-        document.getElementById('play-controls').style.display = (mode === 'PLAY' || mode === 'TEST') ? 'flex' : 'none'; // The shoot UI
+        
+        let playControls = document.getElementById('play-controls');
+        if (playControls) playControls.style.display = (mode === 'PLAY' || mode === 'TEST') ? 'flex' : 'none';
         
         let startBtn = document.getElementById('btn-start-round');
-        if (startBtn) startBtn.style.display = mode === 'TEST' ? 'none' : 'block';
+        if (startBtn) startBtn.style.display = mode === 'PLAY' ? 'block' : 'none';
 
         let scoreHud = document.querySelector('.score-hud');
         if(scoreHud) scoreHud.style.display = (mode === 'BUILD' || mode === 'TEST') ? 'none' : 'block';
@@ -3613,8 +3613,8 @@
         };
     }
     
-    // Boot: 
-    setMode('PLAY'); // Initialize correct UI visibility
+    // Boot:
+    // setMode is handled strictly inside loadLevel() now
     initLaunchMonitorBridge();
     
     
