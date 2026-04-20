@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Golf OS - Arcade Hub</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+
+body {
+  margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc;
+  min-height: 100vh;
+  background-image: radial-gradient(circle at 50% 0%, rgba(234, 179, 8, 0.15), transparent 40%),
+                    radial-gradient(circle at 100% 100%, rgba(239, 68, 68, 0.1), transparent 30%);
+  overflow-x: hidden;
+}
+.max-w { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+.header .logo { font-size: 32px; font-weight: 900; letter-spacing: -1px; background: linear-gradient(135deg, #facc15, #ef4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display:flex; align-items:center; gap:10px;}
+.profile-chip { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+.profile-avatar { width: 36px; height: 36px; border-radius: 50%; background: #eab308; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #0f172a; }
+.grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+@media(max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
+.card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; padding: 30px; backdrop-filter: blur(20px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; overflow: hidden; }
+.card h2 { margin: 0 0 20px 0; font-weight: 800; font-size: 24px; color: #e2e8f0; }
+
+.course-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 16px; margin-bottom: 12px; transition: all 0.2s; cursor: pointer; border: 1px solid transparent; }
+.course-item:hover { background: rgba(234,179,8,0.1); border-color: rgba(234,179,8,0.3); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(234,179,8,0.15);}
+.course-info h4 { margin: 0 0 4px 0; font-size: 16px; color: #fff; }
+.course-info p { margin: 0; font-size: 12px; color: #94a3b8; }
+.btn-play { background: #eab308; color: #0f172a; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; transition: transform 0.1s; }
+.btn-play:active { transform: scale(0.95); }
+
+.action-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-radius: 20px; text-decoration: none; color: #fff; font-weight: 900; font-size: 18px; text-align: center; gap: 10px; transition: all 0.2s; border: 2px solid transparent; }
+.action-btn.creator { background: linear-gradient(135deg, rgba(56,189,248,0.1), rgba(59,130,246,0.2)); border-color: rgba(56,189,248,0.4); }
+.action-btn.creator:hover { background: rgba(56,189,248,0.3); transform: translateY(-3px); box-shadow: 0 10px 30px rgba(56,189,248,0.3); }
+
+.icon-large { font-size: 32px; }
+
+/* LM Status globalt */
+#lm-status { position:fixed; bottom: 20px; right: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; z-index: 1000; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+.back-btn { display: flex; align-items: center; gap: 8px; color: #94a3b8; text-decoration: none; font-weight: 700; transition: color 0.2s; }
+.back-btn:hover { color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="max-w">
+  <header class="header">
+    <div style="display:flex; flex-direction:column; gap:8px;">
+        <a href="hub.html" class="back-btn">← Tillbaka till GOLF OS</a>
+        <div class="logo">👾 GOLF OS ARCADE</div>
+    </div>
+    <div class="profile-chip">
+      <div class="profile-avatar">ST</div>
+      <div>
+        <div style="font-weight: 800; font-size: 14px;">Stellan</div>
+        <div style="font-size: 11px; color:#94a3b8;">Arcade Player</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="grid-layout">
+    <!-- Vänster kolumn: Intro & Bygga -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="card" style="padding: 30px;">
+          <h1 style="font-size:32px; margin:0 0 10px 0; color:#fff;">Welcome to the Madness.</h1>
+          <p style="color:#cbd5e1; font-size:16px; line-height:1.5; margin:0;">
+            Arcade-läget bjuder på galen fysik, extrema boosts och vansinniga bandesign. Bygg från grunden eller spela communityns banor!
+          </p>
+        </div>
+        
+        <div class="card" style="padding: 40px 30px;">
+           <a href="arcade.html?autorun=build" class="action-btn creator" style="padding: 40px; font-size:24px;">
+             <span class="icon-large" style="font-size: 48px;">🏗️</span>
+             LADDA BYGGLÄGET
+             <span style="font-weight: 600; font-size: 14px; color:#93c5fd; margin-top: 10px;">Skapa din egna extrema arkad-bana</span>
+           </a>
+        </div>
+    </div>
+
+    <!-- Höger kolumn: Spela Banor -->
+    <div class="card" id="play-section" style="border-top: 4px solid #ef4444;">
+        <h2 style="font-size:24px; color:#f8fafc; display:flex; align-items:center; gap:10px;">🏌️ Spela Banor</h2>
+        <p style="color:#94a3b8; font-size:14px; margin-bottom: 25px;">Välj en bana nedan. Därefter slussas du direkt till match-lobbyn!</p>
+        
+        <div id="course-list">
+          <!-- Vår egen Local Draft option -->
+          <div class="course-item" onclick="playCourse('')" style="border-color:#eab308; background:rgba(234,179,8,0.1);">
+            <div class="course-info">
+              <h4 style="color:#fde047; font-size: 18px;">🛠️ Mitt Lokala Utkast</h4>
+              <p>Din senast sparade arbetskopia från Byggläget</p>
+            </div>
+            <button class="btn-play">Möte i Lobbyn</button>
+          </div>
+          
+          <div style="margin: 25px 0; height:1px; background:rgba(255,255,255,0.1);"></div>
+          <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase;">Moln-Banor (Community)</h3>
+          
+          <div id="ugc-container">
+             <!-- Fetched from API -->
+             <div style="color:#94a3b8; text-align:center; padding:20px;">Laddar moln-banor...</div>
+          </div>
+        </div>
+    </div>
+  </div>
+</div>
+
+<div id="lm-status">
+   <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+   <span id="lm-status-text">LM Frånkopplad</span>
+</div>
+
+<script>
+function playCourse(courseCode) {
+    let url = "arcade.html?autorun=setup";
+    if(courseCode) {
+        url += "&course=" + courseCode;
+    }
+    window.location.href = url;
+}
+
+async function loadUGC() {
+    try {
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses');
+        let courses = await res.json();
+        
+        let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
+        
+        let html = '';
+        courses.forEach(c => {
+            let isLiked = likedLocal.includes(c.share_code);
+            let heartColor = isLiked ? '#ef4444' : '#64748b';
+            let formattedDate = new Date(c.created_at).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+            
+            html += `
+            <div class="course-item" style="border:1px solid rgba(239, 68, 68, 0.3); align-items:center;">
+              <div class="course-info" style="flex:1;">
+                <h4 style="font-size:18px; color:#f8fafc;">${c.name}</h4>
+                <p>by <span style="color:#e2e8f0;">${c.author}</span> • Code: <strong>${c.share_code}</strong> • ${formattedDate}</p>
+              </div>
+              <div style="display:flex; gap:15px; align-items:center;">
+                  <div style="text-align:center; cursor:pointer; min-width:40px; transition: transform 0.2s;" onclick="${isLiked ? '' : `likeCourse(event, '${c.share_code}')`}" class="like-btn" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                      <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:20px;">❤️</div>
+                      <div id="likes-${c.share_code}" style="font-size:12px; color:#cbd5e1; font-weight:bold;">${c.likes || 0}</div>
+                  </div>
+                  <button class="btn-play" style="background:#ef4444; color:#fff;" onclick="playCourse('${c.share_code}')">Spela</button>
+              </div>
+            </div>
+            `;
+        });
+        
+        if (courses.length === 0) {
+           html = "<div style='color:#94a3b8; padding:20px; text-align:center;'>Inga publicerade banor hittades.</div>";
+        }
+        
+        document.getElementById('ugc-container').innerHTML = html;
+    } catch(e) {
+        console.error("Error loading Cloud Courses:", e);
+        document.getElementById('ugc-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">Kunde inte ladda banor från nätverket. Servern kan vara nere.</div>`;
+    }
+}
+
+async function likeCourse(event, code) {
+    if(event) event.stopPropagation();
+    let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
+    if(likedLocal.includes(code)) return;
+    
+    likedLocal.push(code);
+    localStorage.setItem('golf_os_likes', JSON.stringify(likedLocal));
+    
+    let heart = document.getElementById('heart-'+code);
+    let likesDiv = document.getElementById('likes-'+code);
+    if(heart) heart.style.color = '#ef4444';
+    if(likesDiv) likesDiv.innerText = parseInt(likesDiv.innerText) + 1;
+    
+    try {
+        await fetch('https://3d-golf-ar-production.up.railway.app/api/courses/'+code+'/like', {method: 'POST'});
+    } catch(e) { console.error("Like failed", e); }
+}
+
+// LM BRYGGE STATUS KOD
+function initLaunchMonitorBridge() {
+    var ws = new WebSocket('ws://localhost:8081');
+    var dot = document.getElementById('lm-status-dot');
+    var txt = document.getElementById('lm-status-text');
+
+    ws.onopen = function() {
+        if(txt) txt.textContent = "LM Brygga Redo";
+        if(dot) dot.style.background = "#eab308";
+    };
+    ws.onmessage = function(event) {
+        try {
+            var msg = JSON.parse(event.data);
+            if (msg.type === 'status') {
+                if(txt) txt.textContent = msg.data.message;
+                if(dot) dot.style.background = msg.data.color;
+            } else if (msg.type === 'shot') {
+                if(dot) {
+                    dot.style.background = "#4ade80";
+                    setTimeout(() => dot.style.background = "#eab308", 500);
+                }
+            }
+        } catch(e) {}
+    };
+    ws.onclose = function() {
+        if(txt) txt.textContent = "LM Brygga Nere";
+        if(dot) dot.style.background = "#ef4444";
+        setTimeout(initLaunchMonitorBridge, 5000);
+    };
+}
+
+// Boot
+loadUGC();
+initLaunchMonitorBridge();
+
+</script>
+</body>
+</html>

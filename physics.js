@@ -280,9 +280,6 @@ window.GolfPhysics = (function() {
         let sY = 0;
         let sZ = -wRads * Math.sin(spinAxisRads);
         let spin = [sX, sY, sZ];
-
-
-        let startPosXZY = input.startPos || [0, 0, 0];
         
         let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;
         let tCelsius = (envCtx && envCtx.temperatureC !== undefined) ? envCtx.temperatureC : 25;
@@ -582,13 +579,10 @@ window.GolfPhysics = (function() {
                 }
             }
 
-                }
-            }
-
             // --- KOLLA HÅLET (CUP INTERACTION) ---
             if (envCtx && envCtx.cupPositionLocal && (state.phase === 'roll' || state.phase === 'skid' || state.phase === 'flight')) {
                 // Endast om bollen är på marken, eller hoppar lågt över hålet
-                if (state.pos[2] <= (currentTerrainZ + 0.08)) {
+                if (state.pos[2] <= (tInfo.z + 0.08)) {
                     let dX = state.pos[0] - envCtx.cupPositionLocal[0];
                     let dY = state.pos[1] - envCtx.cupPositionLocal[1];
                     let distToCenter = Math.sqrt(dX*dX + dY*dY);

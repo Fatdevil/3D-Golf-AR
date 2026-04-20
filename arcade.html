@@ -198,6 +198,7 @@
                 <span style="color:#fff;"><span id="hud-play-dist">385</span><span style="font-size:14px; color:#94a3b8;"> yds</span></span>
             </div>
             <div style="width:2px; height:30px; background:#475569;"></div>
+            <button id="btn-mulligan" onclick="takeMulligan()" style="background:#ef4444; color:#fff; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer; display:none; margin: 0 5px;" title="TAKE MULLIGAN">MULLIGAN ↺</button>
             <div style="display:flex; flex-direction:column; align-items:center;">
                 <span style="font-size:12px; color:#94a3b8; text-transform:uppercase;">Strokes</span>
                 <span id="hud-play-strokes" style="color:#f87171;">0</span>
@@ -525,6 +526,56 @@
 
 <script>
     // 1. THREE.JS INITIALIZATION
+    let currentEditCode = null;
+    
+    window.takeMulligan = function() {
+        if (typeof appMode === 'undefined' || appMode !== 'PLAY' || !window.matchSettings || !window.matchSettings.mulligans) return;
+        if (playState !== 'ROUND_IDLE') return;
+
+        let p = window.players[window.activePlayerIndex];
+        if (p && p.prevPos) {
+            ball.position.set(p.prevPos.x, p.prevPos.y, p.prevPos.z);
+            p.strokes = (p.prevStrokes !== undefined) ? p.prevStrokes : p.strokes;
+            p.penaltyStrokes = (p.prevPenalty !== undefined) ? p.prevPenalty : p.penaltyStrokes;
+            
+            p.prevPos = null;
+
+            document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
+            if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+            
+            camera.position.set(ball.position.x, ball.position.y + 4, ball.position.z + 10);
+            controls.target.copy(ball.position);
+            controls.update();
+
+            let pop = document.getElementById('score-popup');
+            if(pop) {
+                pop.innerText = "MULLIGAN!";
+                pop.style.color = "#ef4444";
+                pop.style.opacity = '1';
+                setTimeout(() => { pop.style.opacity = '0'; pop.style.color = "#fcd34d"; }, 2000);
+            }
+
+            let mBtn = document.getElementById('btn-mulligan');
+            if (mBtn) mBtn.style.display = 'none';
+            
+            if (window.resetAimTarget) window.resetAimTarget();
+        }
+    };
+    
+    setInterval(() => {
+        let mBtn = document.getElementById('btn-mulligan');
+        if (mBtn) {
+            if (typeof appMode !== 'undefined' && appMode === 'PLAY' && typeof playState !== 'undefined' && playState === 'ROUND_IDLE' && window.matchSettings && window.matchSettings.mulligans) {
+                let p = window.players ? window.players[window.activePlayerIndex] : null;
+                if (p && p.prevPos) {
+                    mBtn.style.display = 'block';
+                    return;
+                }
+            }
+            mBtn.style.display = 'none';
+        }
+    }, 500);
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Himmel
     scene.fog = new THREE.Fog(0x87CEEB, 300, 2500); // Kraftigt ökat synavstånd
@@ -1067,6 +1118,7 @@
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course');
         let editCode = params.get('edit');
+        let autoRun = params.get('autorun');
         
         let savedStr = null;
         let isCloud = false;
@@ -1190,7 +1242,14 @@
                         arr.trees.forEach(t => createTree(t.type, t.x, t.z, t.s, t.r));
                     }
                     
-                    if (courseCode) {
+                    if (autoRun === 'setup') {
+                        setTimeout(() => {
+                            setMode('PLAY');
+                            startRound();
+                        }, 500);
+                    } else if (autoRun === 'build') {
+                        setTimeout(() => setMode('BUILD'), 500);
+                    } else if (courseCode) {
                         setTimeout(() => setMode('PLAY'), 500); // Bara om vi laddade en färdig bana
                     }
                 }
@@ -1827,6 +1886,11 @@
         if (playState === 'ROUND_IDLE') {
             playState = 'ROUND_FLYING';
             let p = window.players[window.activePlayerIndex];
+            
+            p.prevPos = { x: ball.position.x, y: ball.position.y, z: ball.position.z };
+            p.prevStrokes = p.strokes;
+            p.prevPenalty = p.penaltyStrokes;
+            
             p.strokes++;
             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
             if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
