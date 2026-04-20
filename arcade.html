@@ -316,6 +316,8 @@
             <div class="palette-btn" style="background:#e0d8a4;" onclick="setBlockColor(0xe0d8a4, this)" title="Sand / Bunker"></div>
             <!-- Waste -->
             <div class="palette-btn" style="background:#c2af7c;" onclick="setBlockColor(0xc2af7c, this)" title="Waste Area"></div>
+            <!-- Putting Green -->
+            <div class="palette-btn" style="background:#98ce68;" onclick="setBlockColor(0x98ce68, this)" title="Putting Green"></div>
             <!-- Ljusgrön / FAIRWAY -->
             <div class="palette-btn" style="background:#7db952;" onclick="setBlockColor(0x7db952, this)" title="Fairway"></div>
             <!-- Semi-Rough -->
@@ -2471,7 +2473,7 @@
             saveLevel();
             return;
         }
-        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER') {
+        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE') {
             isSculpting = false;
             controls.enabled = true; // Släpp kameran
             if(currentTool !== 'PAINT') {
@@ -3095,21 +3097,8 @@
             pCtx.lineJoin = 'round';
             
             if (currentTool === 'SMART_GREEN') {
-                // Steg 1: Foregreen (Mörkare Fairway-krans)
-                // Utrullningsyta som är 1.8 meter bredare (1.8m skalat till 4k pixlar)
-                let fRad = cRad + (1.8 / TERRAIN_SIZE) * 4096;
-                pCtx.strokeStyle = '#7db952';
-                pCtx.fillStyle = '#7db952';
-                pCtx.lineWidth = fRad * 2;
-                pCtx.beginPath();
-                if (p1.distanceTo(p2) < 0.1) {
-                    pCtx.arc(pCtx2X, pCtx2Z, fRad, 0, Math.PI*2);
-                    pCtx.fill();
-                } else {
-                    pCtx.moveTo(pCtx1X, pCtx1Z);
-                    pCtx.lineTo(pCtx2X, pCtx2Z);
-                    pCtx.stroke();
-                }
+                // Steg 1: Skippar automatiskt Foregreen (användare kan måla det manuellt med Paint -> Fairway färg)
+                
                 
                 // Steg 2: Putting Green Yta i mitten
                 pCtx.strokeStyle = '#98ce68';
