@@ -71,28 +71,21 @@ body {
         </div>
         
         <div class="card" style="padding: 40px 30px;">
-           <a href="arcade.html?autorun=build" class="action-btn creator" style="padding: 40px; font-size:24px;">
+           <a href="#" onclick="if(confirm('Detta kastar din eventuella osparade arbetskopia. Är du redo för ett blankt papper?')) window.location.href='arcade.html?autorun=new_build'" class="action-btn creator" style="padding: 40px; font-size:24px;">
              <span class="icon-large" style="font-size: 48px;">🏗️</span>
-             LADDA BYGGLÄGET
-             <span style="font-weight: 600; font-size: 14px; color:#93c5fd; margin-top: 10px;">Skapa din egna extrema arkad-bana</span>
+             SKAPA NY BANA
+             <span style="font-weight: 600; font-size: 14px; color:#93c5fd; margin-top: 10px;">Börja på ett helt tomt grönt papper</span>
            </a>
         </div>
     </div>
 
     <!-- Höger kolumn: Spela Banor -->
     <div class="card" id="play-section" style="border-top: 4px solid #ef4444;">
-        <h2 style="font-size:24px; color:#f8fafc; display:flex; align-items:center; gap:10px;">🏌️ Spela Banor</h2>
-        <p style="color:#94a3b8; font-size:14px; margin-bottom: 25px;">Välj en bana nedan. Därefter slussas du direkt till match-lobbyn!</p>
+        <h2 style="font-size:24px; color:#f8fafc; display:flex; align-items:center; gap:10px;">🏌️ Spela Banor & Utkast</h2>
+        <p style="color:#94a3b8; font-size:14px; margin-bottom: 25px;">Fortsätt på dina utkast eller spela andras banor!</p>
         
         <div id="course-list">
-          <!-- Vår egen Local Draft option -->
-          <div class="course-item" onclick="playCourse('')" style="border-color:#eab308; background:rgba(234,179,8,0.1);">
-            <div class="course-info">
-              <h4 style="color:#fde047; font-size: 18px;">🛠️ Mitt Lokala Utkast</h4>
-              <p>Din senast sparade arbetskopia från Byggläget</p>
-            </div>
-            <button class="btn-play">Möte i Lobbyn</button>
-          </div>
+          <div id="drafts-container"></div>
           
           <div style="margin: 25px 0; height:1px; background:rgba(255,255,255,0.1);"></div>
           <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase;">Moln-Banor (Community)</h3>
@@ -118,6 +111,52 @@ function playCourse(courseCode) {
         url += "&course=" + courseCode;
     }
     window.location.href = url;
+}
+
+function loadDrafts() {
+    let drafts = JSON.parse(localStorage.getItem('golf_os_my_drafts') || "[]");
+    let hasLocalCopy = localStorage.getItem('arcade_custom_level') !== null;
+    
+    let html = '';
+    
+    if (hasLocalCopy) {
+        html += `
+        <div class="course-item" style="border-color:#eab308; background:rgba(234,179,8,0.1);">
+            <div class="course-info">
+              <h4 style="color:#fde047; font-size: 18px;">⚠️ Snabbutkast (WIP)</h4>
+              <p>Din absolut senaste session i editor</p>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?autorun=edit_build'">Bygg</button>
+                <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('')">Spela</button>
+            </div>
+        </div>`;
+    }
+    
+    if (drafts.length > 0) {
+        html += `<h3 style="color:#94a3b8; font-size:14px; margin-top:20px; margin-bottom:10px; text-transform:uppercase;">Dina Sparade Utkast (Moln)</h3>`;
+        drafts.reverse().forEach(d => {
+             let dDate = new Date(d.date).toLocaleDateString();
+             html += `
+             <div class="course-item" style="border-color:#38bdf8; background:rgba(56,189,248,0.1);">
+                <div class="course-info">
+                  <h4 style="color:#93c5fd; font-size: 16px;">${d.name}</h4>
+                  <p>Sparat: ${dDate}</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?autorun=edit_build&edit=${d.code}'">Bygg</button>
+                    <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('${d.code}')">Spela</button>
+                </div>
+             </div>`;
+        });
+    }
+
+    if (!hasLocalCopy && drafts.length === 0) {
+        html = "<p style='color:#94a3b8; font-size:14px;'>Du har inga pågående utkast. Klicka på Skapa Ny Bana för att börja!</p>";
+    }
+    
+    let container = document.getElementById('drafts-container');
+    if (container) container.innerHTML = html;
 }
 
 async function loadUGC() {
@@ -211,6 +250,7 @@ function initLaunchMonitorBridge() {
 }
 
 // Boot
+loadDrafts();
 loadUGC();
 initLaunchMonitorBridge();
 

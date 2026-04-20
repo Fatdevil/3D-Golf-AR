@@ -1018,6 +1018,14 @@
         createTargetAbsolute(x, 2, z, new THREE.Color().setHSL(Math.random(), 1.0, 0.5).getHex());
     }
 
+    window.hasUnsavedChanges = false;
+    window.addEventListener('beforeunload', function (e) {
+        if (appMode === 'BUILD' && window.hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
     function saveLevel() {
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
@@ -1027,6 +1035,7 @@
         }));
         
         localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
+        if (appMode === 'BUILD') window.hasUnsavedChanges = true;
     }
     
     window.publishCourse = async function(options = { isDraft: false, overwrite: false }) {
@@ -1094,6 +1103,20 @@
             let data = await res.json();
             if(data.success) {
                 currentEditCode = data.share_code;
+                window.hasUnsavedChanges = false;
+                
+                if (options.isDraft) {
+                    let drafts = JSON.parse(localStorage.getItem('golf_os_my_drafts') || "[]");
+                    let draftObj = drafts.find(d => d.code === data.share_code);
+                    if (!draftObj) {
+                        drafts.push({ code: data.share_code, name: payload.name, date: new Date().toISOString() });
+                    } else {
+                        draftObj.name = payload.name;
+                        draftObj.date = new Date().toISOString();
+                    }
+                    localStorage.setItem('golf_os_my_drafts', JSON.stringify(drafts));
+                }
+                
                 let href = window.location.origin + window.location.pathname + (options.isDraft ? "?edit=" : "?course=") + data.share_code;
                 
                 // Byt URL utan omladdning
@@ -1123,6 +1146,13 @@
         let savedStr = null;
         let isCloud = false;
         
+        if (autoRun === 'new_build') {
+            if (typeof executeClear === 'function') executeClear();
+            else localStorage.removeItem('arcade_custom_level');
+            setTimeout(() => setMode('BUILD'), 100);
+            return;
+        }
+
         let targetCode = courseCode || editCode;
 
         if (targetCode) {
@@ -1241,22 +1271,25 @@
                     if(arr.trees && Array.isArray(arr.trees)) {
                         arr.trees.forEach(t => createTree(t.type, t.x, t.z, t.s, t.r));
                     }
-                    
-                    if (autoRun === 'setup') {
-                        setTimeout(() => {
-                            setMode('PLAY');
-                            startRound();
-                        }, 500);
-                    } else if (autoRun === 'build') {
-                        setTimeout(() => setMode('BUILD'), 500);
-                    } else if (courseCode) {
-                        setTimeout(() => setMode('PLAY'), 500); // Bara om vi laddade en färdig bana
-                    }
                 }
 
             } catch(e) {
                 console.error("Fel vid parse av sparad bana", e);
             }
+        }
+        
+        if (autoRun === 'setup') {
+            setTimeout(() => {
+                setMode('PLAY');
+                if (typeof startRound === 'function') startRound();
+            }, 500);
+        } else if (autoRun === 'edit_build' || autoRun === 'build') {
+            setTimeout(() => setMode('BUILD'), 500);
+        } else if (courseCode) {
+            setTimeout(() => {
+                setMode('PLAY');
+                if (typeof startRound === 'function') startRound();
+            }, 500);
         }
     }
     
@@ -2442,17 +2475,34 @@
     
     function setMode(mode) {
         appMode = mode;
-        document.getElementById('btn-mode-build').style.background = mode === 'BUILD' ? '#38bdf8' : '#0f172a';
-        document.getElementById('btn-mode-build').style.color = mode === 'BUILD' ? '#0f172a' : '#38bdf8';
+        let btnBuild = document.getElementById('btn-mode-build');
+        let btnPlay = document.getElementById('btn-mode-play');
+
+        if(btnBuild) {
+            btnBuild.style.display = mode === 'PLAY' ? 'none' : 'block';
+            btnBuild.style.background = mode === 'BUILD' ? '#38bdf8' : '#0f172a';
+            btnBuild.style.color = mode === 'BUILD' ? '#0f172a' : '#38bdf8';
+        }
         
-        document.getElementById('btn-mode-play').style.background = mode === 'PLAY' ? '#4ade80' : '#0f172a';
-        document.getElementById('btn-mode-play').style.color = mode === 'PLAY' ? '#0f172a' : '#4ade80';
+        if (btnPlay) {
+            btnPlay.style.display = mode === 'PLAY' ? 'none' : 'block';
+            if (mode === 'BUILD' || mode === 'TEST') {
+                btnPlay.innerHTML = mode === 'TEST' ? '🏌️ TESTA' : '🔥 TESTA BANAN';
+                btnPlay.onclick = () => setMode('TEST');
+                btnPlay.style.background = mode === 'TEST' ? '#ef4444' : '#0f172a';
+                btnPlay.style.color = mode === 'TEST' ? '#fff' : '#ef4444';
+                btnPlay.style.borderColor = '#ef4444';
+            }
+        }
         
         document.getElementById('build-palette').style.display = mode === 'BUILD' ? 'flex' : 'none';
-        document.getElementById('play-controls').style.display = mode === 'PLAY' ? 'flex' : 'none'; // The shoot UI
+        document.getElementById('play-controls').style.display = (mode === 'PLAY' || mode === 'TEST') ? 'flex' : 'none'; // The shoot UI
         
+        let startBtn = document.getElementById('btn-start-round');
+        if (startBtn) startBtn.style.display = mode === 'TEST' ? 'none' : 'block';
+
         let scoreHud = document.querySelector('.score-hud');
-        if(scoreHud) scoreHud.style.display = mode === 'BUILD' ? 'none' : 'block';
+        if(scoreHud) scoreHud.style.display = (mode === 'BUILD' || mode === 'TEST') ? 'none' : 'block';
         
         let dataBtn = document.getElementById('btn-toggle-data');
         if(dataBtn) dataBtn.style.display = mode === 'BUILD' ? 'none' : 'block';
@@ -2466,6 +2516,22 @@
             camera.position.set(0, 15, 10);
             controls.target.set(0, 0, -30);
             controls.update();
+        } else if (mode === 'TEST') {
+            controls.enabled = true;
+            ghostBlock.visible = false;
+            playState = 'ROUND_IDLE';
+            window.activePlayerId = 'tester';
+            window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true } ];
+            let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red) : null;
+            if(tee) {
+                if(typeof ballPos !== 'undefined') {
+                    ballPos.x = tee.x; ballPos.y = tee.y + 0.2; ballPos.z = tee.z;
+                    if(typeof ballMesh !== 'undefined') ballMesh.position.set(ballPos.x, ballPos.y, ballPos.z);
+                    camera.position.set(ballPos.x, ballPos.y + 2, ballPos.z + 10);
+                    controls.target.set(ballPos.x, ballPos.y, ballPos.z - 20);
+                    controls.update();
+                }
+            }
         } else {
             // PLAY MODE
             controls.enabled = true; // Tillåt zoom och rotering!
