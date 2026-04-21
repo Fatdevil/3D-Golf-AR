@@ -335,8 +335,7 @@ window.GolfPhysics = (function() {
         };
 
         let t = 0;
-        let lastSampleTime = 0;
-
+        // lastSampleTime utfasas till förmån för direkta dt-ticks i path.
         // Simulator-loop
         while (state.phase !== "stopped" && t < 25.0) { // Safety break efter max 25 sek in-miljö
             
@@ -716,15 +715,13 @@ window.GolfPhysics = (function() {
                 }
             }
 
-            if ((t - lastSampleTime >= sampleRate) || state.phase === "stopped" || state.phase === "holed") {
-                path.push({ 
-                    x: state.pos[0], y: state.pos[1], z: state.pos[2], 
-                    vx: state.vel[0], vy: state.vel[1], vz: state.vel[2],
-                    time: t 
-                });
-                lastSampleTime = t;
-            }
+            path.push({ 
+                x: state.pos[0], y: state.pos[1], z: state.pos[2], 
+                vx: state.vel[0], vy: state.vel[1], vz: state.vel[2],
+                time: t 
+            });
         }
+
         
         metrics.totalMeters = Math.sqrt(state.pos[0]*state.pos[0] + state.pos[1]*state.pos[1]);
         metrics.totalTime = t;
