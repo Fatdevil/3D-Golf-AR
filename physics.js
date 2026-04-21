@@ -57,19 +57,13 @@ window.GolfPhysics = (function() {
         let cd = 0.22;
         
         // Drag Crisis Re-kurva (Värden från referenstabell)
-        if (vMph <= 45) {
-            cd = lerp(0.50, 0.45, vMph / 45.0); // Laminärt, högt motstånd
-        } else if (vMph <= 78) {
-            cd = lerp(0.45, 0.25, (vMph - 45.0) / 33.0); // Drag Crisis! Massivt drop
-        } else if (vMph <= 112) {
-            cd = lerp(0.25, 0.22, (vMph - 78.0) / 34.0); // Går in i turbulent
-        } else if (vMph <= 145) {
-            cd = lerp(0.22, 0.215, (vMph - 112.0) / 33.0); // Optimalt slip
-        } else {
-            cd = lerp(0.215, 0.23, (vMph - 145.0) / 55.0); // Ökar svagt vid extrema farter
-        }
+        // Högre fart => mer turbolens => minskat drag. 
+        if (vMag > 65) cd = 0.19;
+        else if (vMag > 50) cd = lerp(0.22, 0.19, (vMag - 50) / 15);
+        else if (vMag > 20) cd = lerp(0.26, 0.22, (vMag - 20) / 30);
+        else cd = 0.26;
         
-        // Spin straff (Justerad från 0.035 till 0.020 för Trackman realism - wedgar maxar typiskt Cd~0.30)
+        // Ökad fart ger snabbare spinn, mer drag (upp till +4%)
         let spinPenalty = (spinRateRpm / 3000.0) * 0.020;
         
         return cd + spinPenalty;
@@ -84,15 +78,15 @@ window.GolfPhysics = (function() {
             return -0.10 * intensity;
         }
         
-        // Trackmans Spin Factor kurva (S = r*w/v) - Exaktkalibrerad, drivers låg tidigare för lågt.
-        if (spinParam <= 0.08) return lerp(0.00, 0.13, spinParam / 0.08); // Driver lyft (Trackman ref ~0.14-0.16 för uppvinklad Driver)
-        if (spinParam <= 0.13) return lerp(0.13, 0.17, (spinParam - 0.08) / 0.05); // Långa/Mellanjärn
-        if (spinParam <= 0.20) return lerp(0.17, 0.21, (spinParam - 0.13) / 0.07); // Korta järn
-        if (spinParam <= 0.32) return lerp(0.21, 0.24, (spinParam - 0.20) / 0.12); // Pitch
-        if (spinParam <= 0.45) return lerp(0.24, 0.27, (spinParam - 0.32) / 0.13); // Wedgar
+        // Trackmans Spin Factor kurva för lift kalibrering (130 mph, 14 deg = 215 yds carry)
+        if (spinParam <= 0.08) return lerp(0.00, 0.20, spinParam / 0.08); // Driver lyft
+        if (spinParam <= 0.13) return lerp(0.20, 0.28, (spinParam - 0.08) / 0.05); // Långa/Mellanjärn
+        if (spinParam <= 0.20) return lerp(0.28, 0.33, (spinParam - 0.13) / 0.07); // Korta järn
+        if (spinParam <= 0.32) return lerp(0.29, 0.32, (spinParam - 0.20) / 0.12); // Pitch
+        if (spinParam <= 0.45) return lerp(0.32, 0.35, (spinParam - 0.32) / 0.13); // Wedgar
         
-        // Maxar ut runt 0.28 vid extremt spin (GSPro Wedge spin zone)
-        return 0.28;
+        // Maxar ut runt 0.32 vid extremt spin (GSPro Wedge spin zone)
+        return 0.32;
     }
 
     function evaluateState(state, dt, dv) {
@@ -297,10 +291,11 @@ window.GolfPhysics = (function() {
         let spinAxisRads = spinAxisIn * Math.PI / 180;
         
         // Om spinAxis = 0 -> rent backspin -> snurrar kring X-axeln.
-        // Positiv spinAxis -> tiltar åt höger -> Z-komponent blir negativ -> resulterar i Fade/Slice.
+        // Trackman-konvention (positiv SpinAxis = Slice = Bollen böjer höger)
+        // För att det ska böja höger i vår fysik (positiv x-kraft), måste sZ vara negativt.
         let sX = wRads * Math.cos(spinAxisRads);
         let sY = 0;
-        let sZ = -wRads * Math.sin(spinAxisRads);
+        let sZ = wRads * Math.sin(spinAxisRads);
         let spin = [sX, sY, sZ];
         
         let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;

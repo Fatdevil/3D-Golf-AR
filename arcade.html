@@ -390,11 +390,12 @@
     <div class="controls" id="play-controls">
         <button id="btn-start-round" onclick="startRound()" style="background:#38bdf8; color:#0f172a; padding:12px 30px; font-size:18px; border-radius:8px; font-weight:900; border:none; cursor:pointer;">⛳ START ROUND</button>
         <div id="play-tools" style="display:none; align-items:center; gap:10px;">
-            <input type="number" id="in-speed" value="130" title="Ball Speed (mph)">
-            <input type="number" id="in-la" value="18" title="Launch Angle (deg)">
-            <input type="number" id="in-hla" value="0" title="Horizontal Angle (deg)">
-            <input type="number" id="in-stimp" value="10.0" step="0.5" title="Green Stimp (Speed)" style="background:#10b981; color:#fff; border:none; width:50px; font-weight:bold;">
-            <input type="number" id="in-boost" value="1.0" step="0.1" title="Boost Multiplier (x)" style="background:#eab308; color:#000; border:none;">
+            <input type="number" id="in-speed" value="130" title="Ball Speed (mph)" style="width:65px;">
+            <input type="number" id="in-la" value="14" title="Launch Angle (deg)" style="width:60px;">
+            <input type="number" id="in-hla" value="0" title="Azimuth / HLA (deg)" style="width:60px;">
+            <input type="number" id="in-backspin" value="2500" title="Backspin (rpm)" style="width:70px;">
+            <input type="number" id="in-sidespin" value="0" title="Sidespin (rpm)" style="width:70px;">
+            <input type="hidden" id="in-stimp" value="10.0">
             <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Camera Mode">🎥 BROADCAST</button>
             <button onclick="fireShot()">🔥 SHOOT</button>
         </div>
@@ -1951,16 +1952,25 @@
     function fireShot() {
         if(isFlying) return; // Låt bollen landa
         
-        var vSpeed = parseFloat(document.getElementById('in-speed').value) || 120;
-        var vLa = parseFloat(document.getElementById('in-la').value) || 15;
+        var vSpeed = parseFloat(document.getElementById('in-speed').value) || 130;
+        var vLa = parseFloat(document.getElementById('in-la').value) || 14;
         var vHla = parseFloat(document.getElementById('in-hla').value) || 0;
+        
+        let bs = parseFloat(document.getElementById('in-backspin').value) || 2500;
+        let ss = parseFloat(document.getElementById('in-sidespin').value) || 0;
+        
+        let totalSpin = Math.sqrt(bs*bs + ss*ss);
+        let spinAxis = Math.atan2(-ss, bs) * (180 / Math.PI);
         
         var launchData = {
             ballSpeedMph: vSpeed,
             launchAngleDeg: vLa,
             azimDeg: vHla,
-            totalSpinRpm: 2500, // Standardspin
-            spinAxisDeg: 0,
+            totalSpinRpm: totalSpin,
+            spinAxisDeg: spinAxis,
+            isLiveData: false,
+            
+            // Obligatoriska defaults för HUD
             clubSpeedMph: 0,
             clubPathDeg: 0,
             faceToPathDeg: 0,
@@ -2112,12 +2122,11 @@
             return { z: height, normal: normal, type: biomeType };
         };
         
-        var vBoost = parseFloat(document.getElementById('in-boost').value) || 1.0;
         var vStimpEl = document.getElementById('in-stimp');
         window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
         
-        let baseSpeed = data.ballSpeedMph * vBoost;
-        let baseSpin = data.totalSpinRpm || 2500;
+        let baseSpeed = data.ballSpeedMph;
+        let baseSpin = data.totalSpinRpm;
         
         // STOCHASTIC LIE PENALTY (TRACKMAN PHYSICS)
         let lieSurface = localGetTerrainAt(startPos[0], startPos[1]);
