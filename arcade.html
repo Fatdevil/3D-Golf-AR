@@ -1479,6 +1479,11 @@
             // Default fallback
             setMode('TEST');
         }
+        
+        // Initialisera biome-cache the lazy way (for empty manual load triggers mostly)
+        setTimeout(() => {
+            if (typeof pCtx !== 'undefined') window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        }, 800);
     }
     
     // SPEL LOGIK
@@ -2129,6 +2134,7 @@
             altitudeFeet: envAlt,
             temperatureC: 25,
             cupPositionLocal: cupPosLocal,
+            greenFirmness: window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL',
             checkCollisionCallback: function(x, y, z) { 
                 if (!window.placedTrees) return null;
                 // Fysik(X,Y,Z) -> ThreeJS(X,-Z,Y)
