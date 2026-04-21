@@ -2147,11 +2147,20 @@
                     let dx = obj.x - threeX;
                     let dz = obj.z - threeZ;
                     let distSq = dx*dx + dz*dz;
+                    let dist = Math.sqrt(distSq) || 0.001;
+
+                    // Normal som pekar ut från objektet mot bollen
+                    let nxThree = -dx / dist; 
+                    let nzThree = -dz / dist;
+                    let nxPhys = nxThree;
+                    let nyPhys = -nzThree;
                     
                     if (obj.type === 'ROCK') {
                         let rad = 2.0 * obj.scale;
                         if (distSq < rad*rad && z < 1.8 * obj.scale) {
-                            return { type: 'ROCK', height: 1.8 * obj.scale };
+                            let sX = obj.x + nxThree * (rad + 0.05);
+                            let sZ = obj.z + nzThree * (rad + 0.05);
+                            return { type: 'ROCK', height: 1.8 * obj.scale, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
                         }
                     } else if (obj.type === 'BUSH') {
                         let rad = 2.5 * obj.scale;
@@ -2161,7 +2170,9 @@
                     } else if (obj.type === 'CACTUS') {
                         let rad = 0.8 * obj.scale;
                         if (distSq < rad*rad && z < 6.0 * obj.scale) {
-                            return { type: 'CACTUS', height: 6.0 * obj.scale };
+                            let sX = obj.x + nxThree * (rad + 0.05);
+                            let sZ = obj.z + nzThree * (rad + 0.05);
+                            return { type: 'CACTUS', height: 6.0 * obj.scale, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
                         }
                     } else {
                         // TREE, PINE, PALM, OAK -> Samma träd-fysik med stam och krona
@@ -2171,7 +2182,9 @@
                         
                         if (distSq < canopyRadius*canopyRadius) {
                             if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
-                                return { type: 'TREE', height: treeHeight, part: 'TRUNK' };
+                                let sX = obj.x + nxThree * (trunkRadius + 0.05);
+                                let sZ = obj.z + nzThree * (trunkRadius + 0.05);
+                                return { type: 'TREE', height: treeHeight, part: 'TRUNK', n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
                             } else if (z > treeHeight*0.3 && z < treeHeight) {
                                 return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
                             }

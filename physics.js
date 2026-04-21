@@ -341,16 +341,43 @@ window.GolfPhysics = (function() {
             if (t > 0.20 && envCtx && envCtx.checkCollisionCallback && state.phase === "flight") {
                 let terrain = envCtx.checkCollisionCallback(state.pos[0], state.pos[1], state.pos[2]);
                 if (terrain) {
-                    if (terrain.type === 'ROCK' || terrain.type === 'CACTUS') {
+                    if (terrain.type === 'ROCK' || terrain.type === 'CACTUS' || terrain.part === 'TRUNK') {
                         // Solid krock!
-                        console.log(`🏌️‍♂️🪨 KROCK! Bollen träffade ett solitt objekt (${terrain.type})`);
-                        // Minska framåtfart, studsa marginellt bakåt
-                        state.vel[0] *= -0.2; 
-                        state.vel[1] *= -0.2; 
-                        state.vel[2] = -2.0; // Fall ner till gräset
+                        console.log(`🏌️‍♂️🪨 SOLID KROCK! Bollen träffade ett hårt objekt (${terrain.type} ${terrain.part || ''})`);
+                        
+                        // Anti-clipping: Tvinga ut bollen från kollisionshöljet
+                        if (terrain.safePos) {
+                            state.pos[0] = terrain.safePos[0];
+                            state.pos[1] = terrain.safePos[1];
+                        }
+
+                        // Trigonometrisk Reflektion (Studs) mot fallets normal
+                        if (terrain.n) {
+                            let n = terrain.n; // [nx, ny, nz]
+                            let vDotN = state.vel[0]*n[0] + state.vel[1]*n[1] + state.vel[2]*n[2];
+                            
+                            // Studsa enbart om vi fysiskt rör oss in i hindret (dot-product < 0)
+                            if (vDotN < 0) {
+                                let cor = 0.4; // 40% Bevarad rörelseenergi efter studs
+                                state.vel[0] -= (1 + cor) * vDotN * n[0];
+                                state.vel[1] -= (1 + cor) * vDotN * n[1];
+                                state.vel[2] -= (1 + cor) * vDotN * n[2];
+                                
+                                // Drag-absorbering från ojämna ytor
+                                state.vel[0] *= 0.8;
+                                state.vel[1] *= 0.8;
+                                state.vel[2] *= 0.8;
+                            }
+                        } else {
+                            // Fallback för ofullständig objekt-data
+                            state.vel[0] *= -0.2; 
+                            state.vel[1] *= -0.2; 
+                        }
+                        
+                        // Spinn dör tvärt mot solida ytor
                         state.spin = [0,0,0];
                     } else if (terrain.type === 'BUSH') {
-                        // Segt buskage, käkar fart
+                        // Segt buskage drar ner farten sekventiellt (Ej solid)
                         let speedXZ = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);
                         if (speedXZ > 2.0 && Math.random() < 0.6) {
                             console.log(`🏌️‍♂️🌿 Bollen rasslade rakt in i en tjock buske!`);
@@ -358,40 +385,22 @@ window.GolfPhysics = (function() {
                             state.vel[1] *= 0.4;
                             state.vel[2] *= 0.5;
                         }
-                    } else if (terrain.type === 'TREE') {
+                    } else if (terrain.type === 'TREE' && terrain.part === 'CANOPY') {
                         let treeHeight = terrain.height || 15.0;
-                        
                         if (state.pos[2] < treeHeight && state.pos[2] > 0.1) {
-                            // Distans som bollen just färdats (grovt) under denna tick (dt)
                             let speed = vecMag(state.vel);
                             let distTraveled = speed * dt;
                             
-                            // Vi skiljer på "stammar" och "Krona/Lövverk"
-                            const TRUNK_GAP_HEIGHT = 2.5;
-                            let hitProbabilityPerMeter = 0;
-                            
-                            if (state.pos[2] < TRUNK_GAP_HEIGHT) {
-                                // Punch-out läge! Bara 5% risk per meter att träffa en solid stam.
-                                hitProbabilityPerMeter = 0.05;
-                            } else {
-                                // Upp i lövverket! Mycket högre risk (t.ex. 40% risk att fastna per meter).
-                                hitProbabilityPerMeter = 0.40;
-                            }
-                            
+                            // Lövverk: ren volymetrisk sannolikhet
+                            let hitProbabilityPerMeter = 0.40; 
                             let currentTickRisk = distTraveled * hitProbabilityPerMeter;
                             
                             if (Math.random() < currentTickRisk) {
-                                // KROCK I TRÄDEN!
-                                console.log(`🏌️‍♂️🌲 KROCK! Bollen fastnade i skogen på höjd: ${state.pos[2].toFixed(1)}m`);
-                                state.vel[0] *= 0.1; // Döda fart framåt x
-                                state.vel[1] *= 0.1; // Döda fart framåt y
-                                // Fall neråt genom lövverket
-                                if (state.pos[2] > TRUNK_GAP_HEIGHT) {
-                                    state.vel[2] = -2.0; 
-                                } else {
-                                    state.vel[2] = -1.0; // Mjukare bounce mot stam
-                                }
-                                state.spin = [0,0,0]; // Spin äts upp av träd/grenar
+                                console.log(`🏌️‍♂️🌲 KROCK! Bollen fastnade i lövverket på höjd: ${state.pos[2].toFixed(1)}m`);
+                                state.vel[0] *= 0.1;
+                                state.vel[1] *= 0.1;
+                                state.vel[2] = -2.0; // Bollen dröser neråt ruffen
+                                state.spin = [0,0,0]; 
                             }
                         }
                     }
