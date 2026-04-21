@@ -335,7 +335,8 @@ window.GolfPhysics = (function() {
         while (state.phase !== "stopped" && t < 25.0) { // Safety break efter max 25 sek in-miljö
             
             // Kolla luft-kollisioner (Träd) innan vi flyttar oss
-            if (envCtx && envCtx.checkCollisionCallback && state.phase === "flight") {
+            // SPAWN IMMUNITY: Give the ball 0.2s to escape a bad lie or tree trunk
+            if (t > 0.20 && envCtx && envCtx.checkCollisionCallback && state.phase === "flight") {
                 let terrain = envCtx.checkCollisionCallback(state.pos[0], state.pos[1], state.pos[2]);
                 if (terrain) {
                     if (terrain.type === 'ROCK' || terrain.type === 'CACTUS') {

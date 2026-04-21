@@ -711,6 +711,69 @@
     plane.receiveShadow = true;
     scene.add(plane);
     
+    // THE TOPOGRAPHY HEATMAP SHADER (For Minimap)
+    const heatmapVertexShader = `
+        varying vec2 vUv;
+        varying float vWorldY;
+        void main() {
+            vUv = uv;
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldY = worldPosition.y;
+            gl_Position = projectionMatrix * viewMatrix * worldPosition;
+        }
+    `;
+
+    const heatmapFragmentShader = `
+        varying vec2 vUv;
+        varying float vWorldY;
+        uniform float uFlagHeight;
+        
+        void main() {
+            // GSPro-inspirerad Heatmap (Relativ Höjd till Flaggan)
+            float diff = vWorldY - uFlagHeight;
+            
+            // Contour lines varje 0.25 meter (25 cm) djupt
+            float contourInterval = 0.25;
+            float band = fract(abs(vWorldY) / contourInterval);
+            
+            vec3 finalColor = vec3(0.0);
+            
+            // Färgskala (Blått nere, Grönt mitten, Rött uppe)
+            if (diff >= 1.0) {
+                finalColor = vec3(0.8, 0.0, 0.0); // Röd
+            } else if (diff > 0.3) {
+                // Mix Grön till Röd
+                float f = (diff - 0.3) / 0.7;
+                finalColor = mix(vec3(0.5, 0.8, 0.0), vec3(0.8, 0.0, 0.0), f);
+            } else if (diff > -0.3) {
+                // Mix Ljusgrön till Grön
+                float f = (diff + 0.3) / 0.6;
+                finalColor = mix(vec3(0.2, 0.7, 0.2), vec3(0.5, 0.8, 0.0), f);
+            } else if (diff > -1.0) {
+                // Mix Ljusblå till Ljusgrön
+                float f = (diff + 1.0) / 0.7;
+                finalColor = mix(vec3(0.0, 0.5, 0.8), vec3(0.2, 0.7, 0.2), f);
+            } else {
+                finalColor = vec3(0.0, 0.0, 0.6); // Mörkblå
+            }
+            
+            // Rita Contour Lines
+            if (band < 0.05 || band > 0.95) {
+                finalColor = vec3(0.05); // Nästan svart
+            }
+            
+            gl_FragColor = vec4(finalColor, 1.0);
+        }
+    `;
+    
+    window.heatmapMaterial = new THREE.ShaderMaterial({
+        vertexShader: heatmapVertexShader,
+        fragmentShader: heatmapFragmentShader,
+        uniforms: {
+            uFlagHeight: { value: 0.0 }
+        }
+    });
+    
     // THE PHYSICAL WATER LAYER
     const waterGeo = planeGeo.clone(); // Exakt samma nät!
     waterGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
@@ -3861,8 +3924,16 @@
                     }
                 }
             }
+            let oldMat = plane.material;
+            if (window.heatmapMaterial) {
+                let hole = courseHoles[playingHoleIndex];
+                window.heatmapMaterial.uniforms.uFlagHeight.value = (hole && hole.flag) ? hole.flag.y : 0.0;
+                plane.material = window.heatmapMaterial;
+            }
             
             renderer.render(scene, minimapCamera);
+            
+            plane.material = oldMat; // Återställ till den originella fairways-texturen
         } else {
             if (mapCont) mapCont.style.display = 'none';
         }
