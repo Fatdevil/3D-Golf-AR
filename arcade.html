@@ -237,7 +237,10 @@
                 <span id="minimap-wind-spd">0 MPH</span>
                 <span id="minimap-wind-arr" style="display:inline-block; transition:transform 0.5s;">▲</span>
             </span>
-            <span id="minimap-updown">0.0° UP</span>
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <span id="minimap-updown">0.0° UP</span>
+                <span id="minimap-leftright" style="color:#94a3b8; font-size:10px;">0.0° RIGHT</span>
+            </div>
         </div>
     </div>
     
@@ -806,6 +809,90 @@
     const gridPlane = new THREE.Mesh(planeGeo, gridMat);
     gridPlane.rotation.x = -Math.PI / 2;
     scene.add(gridPlane);
+
+    window.resetAimTarget = function() {
+        let hole = courseHoles[playingHoleIndex];
+        if (hole && hole.flag) {
+            window.aimTarget = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+        }
+    };
+
+    window.localGetTerrainAt = function(px, py) {
+        if (!window.terrainBiomeData) {
+            return { z: 0, normal: [0, 0, 1], type: 'FAIRWAY' };
+        }
+        
+        let threeX = px;
+        let threeZ = -py;
+        
+        let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+        let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+        
+        if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
+        if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
+        
+        let idx = gz * (TERRAIN_SEGS+1) + gx;
+        let positions = planeGeo.attributes.position.array;
+        let height = positions[idx * 3 + 2]; 
+        
+        let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
+        let gzDown = Math.max(0, gz - 1); 
+
+        let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
+        let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+        
+        let step = TERRAIN_SIZE/TERRAIN_SEGS;
+        let dx_phys = (hR - height) / step;
+        let dy_phys = (hD - height) / step; 
+        
+        let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
+        let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
+        
+        let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+        let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+        if (cX < 0) cX = 0; if (cX >= 4096) cX = 4095;
+        if (cZ < 0) cZ = 0; if (cZ >= 4096) cZ = 4095;
+        
+        let pIdx = (cZ * 4096 + cX) * 4;
+        let r = window.terrainBiomeData[pIdx];
+        let g = window.terrainBiomeData[pIdx+1];
+        let b = window.terrainBiomeData[pIdx+2];
+        
+        let biomeType = 'ROUGH'; // Default
+        function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
+        
+        let dOB = cDist(r,g,b, 239,68,68);
+        let dSand = cDist(r,g,b, 224,216,164);
+        let dWaste = cDist(r,g,b, 194,175,124);
+        let dFairway = cDist(r,g,b, 125,185,82);
+        let dSemiRough = cDist(r,g,b, 107,158,61);
+        let dRough = cDist(r,g,b, 74,120,43);
+        let dDeepRough = cDist(r,g,b, 45,76,26);
+        let dGreen = cDist(r,g,b, 152,206,104);
+        let dWater = cDist(r,g,b, 56,189,248);
+        
+        let minD = Math.min(dOB, dSand, dWaste, dFairway, dSemiRough, dRough, dDeepRough, dGreen, dWater);
+        
+        if (minD === dSand) biomeType = 'SAND';
+        else if (minD === dWaste) biomeType = 'WASTE';
+        else if (minD === dGreen) biomeType = 'GREEN';
+        else if (minD === dOB) biomeType = 'OB';
+        else if (minD === dWater) biomeType = 'WATER';
+        else if (minD === dFairway) biomeType = 'FAIRWAY';
+        else if (minD === dSemiRough) biomeType = 'SEMI-ROUGH';
+        else if (minD === dDeepRough) biomeType = 'DEEP ROUGH';
+        else biomeType = 'ROUGH';
+        
+        let waterHeight = -99;
+        if (typeof waterGeo !== 'undefined' && waterGeo) {
+            waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
+        }
+        if (waterHeight > -90 && height < waterHeight + 0.1) {
+            biomeType = 'WATER';
+            height = waterHeight; 
+        }
+        return { z: height, normal: normal, type: biomeType };
+    };
 
     // GSPRO PUTTING VISUALIZATION (Beads & Break Line)
     const greenBeadsGroup = new THREE.Group();
@@ -1897,38 +1984,7 @@
         tbody.innerHTML = htmlMode;
     }
     
-    function teleportToHole(index) {
-        let hole = courseHoles[index];
-        let anyTee = hole ? (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) : null;
-        if(!hole || !anyTee || !hole.flag) {
-            alert("Hole " + (index+1) + " is not fully built! Needs both a Tee and a Flag.");
-            return;
-        }
-        
-        let targetColor = window.playingTeeColor || 'yellow';
-        let activeT = hole.tees[targetColor] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
-        
-        // Uppdatera banners för första gången på hålet
-        window.updatePlayerBanner();
-        
-        // Reset Ball
-        ball.visible = true;
-        ball.position.set(activeT.x, activeT.y + 0.3, activeT.z);
-        
-        // Vänd kameran mot flaggan från Tee!
-        controls.enabled = true;
-        let teeVec = new THREE.Vector3(activeT.x, activeT.y, activeT.z);
-        let flagVec = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
-        
-        let dir = new THREE.Vector3().subVectors(flagVec, teeVec).normalize();
-        
-        let camDist = 5;
-        let camHeight = 3;
-        
-        camera.position.copy(teeVec).add(new THREE.Vector3(-dir.x * camDist, camHeight, -dir.z * camDist)); // Ställ kameran bakom och lite över
-        controls.target.copy(teeVec).add(new THREE.Vector3(dir.x * 20, 0, dir.z * 20)); // Titta åt flaggan
-        controls.update();
-    }
+    // Teleport single-player override removed for multiplayer stability.
 
     // --- CAMERA TOGGLE ---
     window.camFollowMode = 'BROADCAST'; // 'BROADCAST', 'FOLLOW', 'FREE'
@@ -2043,131 +2099,17 @@
         
         window.shotStartPos = { x: ball.position.x, y: ball.position.y, z: ball.position.z };
 
-        
-        let localGetTerrainAt = function(px, py) {
-            let threeX = px;
-            let threeZ = -py;
-            
-            let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
-            let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
-            
-            if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
-            if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
-            
-            let idx = gz * (TERRAIN_SEGS+1) + gx;
-            let positions = planeGeo.attributes.position.array;
-            let height = positions[idx * 3 + 2]; 
-            
-            let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
-            let gzDown = Math.max(0, gz - 1); 
-
-            let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
-            let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
-            
-            let step = TERRAIN_SIZE/TERRAIN_SEGS;
-            let dx_phys = (hR - height) / step;
-            let dy_phys = (hD - height) / step; 
-            
-            let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
-            let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
-            
-            let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
-            let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
-            if (cX < 0) cX = 0; if (cX >= 4096) cX = 4095;
-            if (cZ < 0) cZ = 0; if (cZ >= 4096) cZ = 4095;
-            
-            let r, g, b;
-            if (window.terrainBiomeData) {
-                let pIdx = (cZ * 4096 + cX) * 4;
-                r = window.terrainBiomeData[pIdx];
-                g = window.terrainBiomeData[pIdx+1];
-                b = window.terrainBiomeData[pIdx+2];
-            } else {
-                r = 74; g = 222; b = 128; // Fairway fallback
-            }
-            
-            let biomeType = 'ROUGH'; // Default
-            function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
-            
-            let dOB = cDist(r,g,b, 239,68,68);
-            let dSand = cDist(r,g,b, 224,216,164);
-            let dWaste = cDist(r,g,b, 194,175,124);
-            let dFairway = cDist(r,g,b, 125,185,82);
-            let dSemiRough = cDist(r,g,b, 107,158,61);
-            let dRough = cDist(r,g,b, 74,120,43);
-            let dDeepRough = cDist(r,g,b, 45,76,26);
-            let dGreen = cDist(r,g,b, 152,206,104);
-            let dWater = cDist(r,g,b, 56,189,248);
-            
-            let minD = Math.min(dOB, dSand, dWaste, dFairway, dSemiRough, dRough, dDeepRough, dGreen, dWater);
-            
-            if (minD === dSand) biomeType = 'SAND';
-            else if (minD === dWaste) biomeType = 'WASTE';
-            else if (minD === dGreen) biomeType = 'GREEN';
-            else if (minD === dOB) biomeType = 'OB';
-            else if (minD === dWater) biomeType = 'WATER';
-            else if (minD === dFairway) biomeType = 'FAIRWAY';
-            else if (minD === dSemiRough) biomeType = 'SEMI-ROUGH';
-            else if (minD === dDeepRough) biomeType = 'DEEP ROUGH';
-            else biomeType = 'ROUGH';
-            
-            let waterHeight = -99;
-            if (typeof waterGeo !== 'undefined' && waterGeo) {
-                waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
-            }
-            if (waterHeight > -90 && height < waterHeight + 0.1) {
-                biomeType = 'WATER';
-                height = waterHeight; 
-            }
-            return { z: height, normal: normal, type: biomeType };
-        };
-        
         var vStimpEl = document.getElementById('in-stimp');
         window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
         
-        let baseSpeed = data.ballSpeedMph;
-        let baseSpin = data.totalSpinRpm;
-        
-        // STOCHASTIC LIE PENALTY (TRACKMAN PHYSICS)
-        let lieSurface = localGetTerrainAt(startPos[0], startPos[1]);
-        if (playState !== 'IDLE' && lieSurface && lieSurface.type) {
-            let sType = lieSurface.type;
-            let spdPen = 1.0;
-            let spnPen = 1.0;
-            
-            // Random Range
-            let rand = () => Math.random();
-            if (sType === 'SEMI-ROUGH') {
-                spdPen = 1.0 - (0.02 + rand() * 0.06); // 2-8% straff
-                spnPen = 1.0 - (0.10 + rand() * 0.10); // 10-20% spinnbortfall
-            } else if (sType === 'ROUGH') {
-                spdPen = 1.0 - (0.10 + rand() * 0.15); // 10-25%
-                spnPen = 1.0 - (0.30 + rand() * 0.30); // 30-60%
-            } else if (sType === 'DEEP ROUGH') {
-                spdPen = 1.0 - (0.20 + rand() * 0.20); // 20-40% 
-                spnPen = 1.0 - (0.50 + rand() * 0.30); // 50-80%
-            } else if (sType === 'SAND' || sType === 'BUNKER') {
-                spdPen = 1.0 - (0.15 + rand() * 0.15); // 15-30%
-                spnPen = 1.0 - (0.40 + rand() * 0.30); // 40-70%
-            }
-            
-            // Om turnering, skriv ut straffet!
-            if (spdPen < 1.0) {
-                console.log(`LIE PENALTY (${sType}): Speed modifier ${(spdPen*100).toFixed(1)}%, Spin modifier ${(spnPen*100).toFixed(1)}%`);
-                // Vi kan flasha informationen på skärmen via ett simpelt UI senare
-            }
-            
-            baseSpeed *= spdPen;
-            baseSpin *= spnPen;
-        }
-        
         var launchConfig = {
             startPos: startPos,
-            ballSpeedMph: baseSpeed,
+            ballSpeedMph: data.ballSpeedMph,
             launchAngleDeg: data.launchAngleDeg,
-            totalSpinRpm: baseSpin,
+            totalSpinRpm: data.totalSpinRpm,
             spinAxisDeg: data.spinAxisDeg || 0,
-            azimDeg: data.azimDeg || 0 // Horizontal Angle
+            azimDeg: data.azimDeg || 0, // Horizontal Angle
+            isLiveData: data.isLiveData || false
         };
         var cupPosLocal = null;
         if (window.pinMesh) {
@@ -3544,7 +3486,7 @@
                 
                 for(let i=0; i<window.greenBeads.length; i++) {
                     let bead = window.greenBeads[i];
-                    let surf = localGetTerrainAt(bead.position.x, bead.position.z);
+                    let surf = localGetTerrainAt(bead.position.x, -bead.position.z);
                     
                     if (surf && surf.type === 'GREEN') {
                         bead.visible = true;
@@ -3609,7 +3551,7 @@
                 let bDir = aimDir.clone();
                 // Förutspå rull 15 meter framåt
                 for(let i=0; i<150; i++) {
-                    let surf = localGetTerrainAt(bCur.x, bCur.z);
+                    let surf = localGetTerrainAt(bCur.x, -bCur.z);
                     if (!surf || surf.type !== 'GREEN') break;
                     let slopeForce = new THREE.Vector3(-surf.normal.x, 0, -surf.normal.z);
                     // slope påverkar rullriktningen
@@ -3942,7 +3884,7 @@
                     document.getElementById('minimap-leftright').innerText = "0.0° RIGHT";
                     
                     if (typeof localGetTerrainAt === 'function') {
-                        let surf = localGetTerrainAt(window.aimTarget.x, window.aimTarget.z);
+                        let surf = localGetTerrainAt(window.aimTarget.x, -window.aimTarget.z);
                         if (surf) document.getElementById('minimap-lie-text').innerText = surf.type || 'Fairway';
                     }
                 }
