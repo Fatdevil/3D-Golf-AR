@@ -16,7 +16,7 @@ window.GolfPhysics = (function() {
         restitution: 0.20,
         bounceFriction: 0.30,
         rollingDecel: 0.8,
-        spinDampingPerBounce: 0.75,
+        spinDampingPerBounce: 0.85, // Ändrad från 0.75. Mindre direkt spin-död, gör att wedgar spinner mer på greenen (GSPro-stil)
         minBounceVerticalSpeed: 1.0,
         stopSpeed: 0.1
     };
@@ -69,8 +69,8 @@ window.GolfPhysics = (function() {
             cd = lerp(0.215, 0.23, (vMph - 145.0) / 55.0); // Ökar svagt vid extrema farter
         }
         
-        // Spin straff (Trackman: +0.03 vid ~3000 RPM)
-        let spinPenalty = (spinRateRpm / 3000.0) * 0.035;
+        // Spin straff (Justerad från 0.035 till 0.020 för Trackman realism - wedgar maxar typiskt Cd~0.30)
+        let spinPenalty = (spinRateRpm / 3000.0) * 0.020;
         
         return cd + spinPenalty;
     }
@@ -84,15 +84,15 @@ window.GolfPhysics = (function() {
             return -0.10 * intensity;
         }
         
-        // Trackmans Spin Factor kurva (S = r*w/v)
-        if (spinParam <= 0.08) return lerp(0.00, 0.10, spinParam / 0.08);
-        if (spinParam <= 0.13) return lerp(0.10, 0.14, (spinParam - 0.08) / 0.05);
-        if (spinParam <= 0.20) return lerp(0.14, 0.20, (spinParam - 0.13) / 0.07);
-        if (spinParam <= 0.32) return lerp(0.20, 0.23, (spinParam - 0.20) / 0.12);
-        if (spinParam <= 0.45) return lerp(0.23, 0.25, (spinParam - 0.32) / 0.13);
+        // Trackmans Spin Factor kurva (S = r*w/v) - Exaktkalibrerad, drivers låg tidigare för lågt.
+        if (spinParam <= 0.08) return lerp(0.00, 0.13, spinParam / 0.08); // Driver lyft (Trackman ref ~0.14-0.16 för uppvinklad Driver)
+        if (spinParam <= 0.13) return lerp(0.13, 0.17, (spinParam - 0.08) / 0.05); // Långa/Mellanjärn
+        if (spinParam <= 0.20) return lerp(0.17, 0.21, (spinParam - 0.13) / 0.07); // Korta järn
+        if (spinParam <= 0.32) return lerp(0.21, 0.24, (spinParam - 0.20) / 0.12); // Pitch
+        if (spinParam <= 0.45) return lerp(0.24, 0.27, (spinParam - 0.32) / 0.13); // Wedgar
         
-        // Maxar ut runt 0.26 vid extremt spin (Full Wedge)
-        return 0.26;
+        // Maxar ut runt 0.28 vid extremt spin (GSPro Wedge spin zone)
+        return 0.28;
     }
 
     function evaluateState(state, dt, dv) {
@@ -117,11 +117,11 @@ window.GolfPhysics = (function() {
             // Rullfriktion härleds antingen från statisk kod (Fairway/Rough) eller dynamisk Stimp (Green)
             let mu = 0.5; // Standard/Fallback
             if (state.terrainType === 'GREEN' && typeof window !== 'undefined' && window.GREEN_STIMP) {
-                // Werner & Greig empirisk ekvation (Validerad mot Trackman data)
-                // Stimp 10 ≈ μ_roll 0.065
+                // Werner & Greig empirisk ekvation + USGA Fysik korrektion (a = mu * g)
+                // Stimp 10 (feet) kräver acceleration på ~0.55m/s^2, vilket ger mu = 0.056
                 let stimp = window.GREEN_STIMP;
                 if (stimp < 6) stimp = 6; if (stimp > 14) stimp = 14;
-                mu = 0.065 * (10.0 / stimp); 
+                mu = 0.056 * (10.0 / stimp); // Spot-on Trackman/USGA matematik
             } else {
                 // Omvandla den inkodade rullbromsen (rollingDecel) tillbaka till ett mu-värde för kompatibilitet.
                 let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
@@ -215,9 +215,13 @@ window.GolfPhysics = (function() {
         state.pos = vecAdd(state.pos, vecScale(dp, dt));
         state.vel = vecAdd(state.vel, vecScale(dv, dt));
         
-        // Luften dämpar spinnen över tid i exponentiell kurva 
-        // Trackman-fakta: k ≈ 0.04 s^-1
-        state.spin = vecScale(state.spin, Math.exp(-0.04 * dt)); 
+        // Dynamisk spin decay: baserad på hastighet (Claude/Trackman spec)
+        // ~7%/s vid 67m/s (150mph), ~2.8%/s vid 13.4m/s (30mph)
+        let speedMs = vecMag(state.vel);
+        let t_speed = Math.max(0, Math.min(1, (speedMs - 13.4) / (67.0 - 13.4)));
+        let decayRate = 0.028 + t_speed * (0.070 - 0.028);
+        
+        state.spin = vecScale(state.spin, Math.exp(-decayRate * dt)); 
     }
 
     /**
@@ -245,30 +249,32 @@ window.GolfPhysics = (function() {
         let speedMult = 1.0;
         let spinMult = 1.0;
         
-        if (lieType === 'ROUGH') {
-            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
-            if (Math.random() < 0.15 && vla > 15) {
-                speedMult = 1.05; spinMult = 0.35;
-                console.log("💥 TRACKMAN FLYER-LIE DETECTED! Zero spin, hot velocity.");
-            } else {
-                speedMult = 1.0 - (0.50 - (0.45 * vlaFactor)); 
-                spinMult = 1.0 - (0.65 - (0.50 * vlaFactor));
+        if (!input.isLiveData) {
+            if (lieType === 'ROUGH') {
+                let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
+                if (Math.random() < 0.15 && vla > 15) {
+                    speedMult = 1.05; spinMult = 0.35;
+                    console.log("💥 TRACKMAN FLYER-LIE DETECTED! Zero spin, hot velocity.");
+                } else {
+                    speedMult = 1.0 - (0.50 - (0.45 * vlaFactor)); 
+                    spinMult = 1.0 - (0.65 - (0.50 * vlaFactor));
+                }
+            } else if (lieType === 'SEMI-ROUGH') {
+                speedMult = 0.95; spinMult = 0.93; 
+            } else if (lieType === 'DEEP ROUGH') {
+                let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
+                if (Math.random() < 0.25 && vla > 20) {
+                    speedMult = 1.05; spinMult = 0.20;
+                    console.log("💥 TRACKMAN FLYER-LIE DETECTED (DEEP ROUGH)! Zero spin, hot velocity.");
+                } else {
+                    speedMult = 1.0 - (0.80 - (0.45 * vlaFactor));
+                    spinMult = 1.0 - (0.85 - (0.50 * vlaFactor));
+                }
+            } else if (lieType === 'SAND') {
+                let vlaFactor = Math.max(0, Math.min(1, (vla - 20) / 30)); 
+                speedMult = 1.0 - (0.40 - (0.25 * vlaFactor));
+                spinMult = 1.0 - (0.45 - (0.25 * vlaFactor));
             }
-        } else if (lieType === 'SEMI-ROUGH') {
-            speedMult = 0.95; spinMult = 0.93; 
-        } else if (lieType === 'DEEP ROUGH') {
-            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
-            if (Math.random() < 0.25 && vla > 20) {
-                speedMult = 1.05; spinMult = 0.20;
-                console.log("💥 TRACKMAN FLYER-LIE DETECTED (DEEP ROUGH)! Zero spin, hot velocity.");
-            } else {
-                speedMult = 1.0 - (0.80 - (0.45 * vlaFactor));
-                spinMult = 1.0 - (0.85 - (0.50 * vlaFactor));
-            }
-        } else if (lieType === 'SAND') {
-            let vlaFactor = Math.max(0, Math.min(1, (vla - 20) / 30)); 
-            speedMult = 1.0 - (0.40 - (0.25 * vlaFactor));
-            spinMult = 1.0 - (0.45 - (0.25 * vlaFactor));
         }
         
         let speedMS = (baseSpeedMph * speedMult) * 0.44704; // mph -> m/s
@@ -477,7 +483,16 @@ window.GolfPhysics = (function() {
                     if (impactRes && impactRes.type) impactTerrainType = impactRes.type;
                 }
                 
-                let cRestitution = GROUND.restitution;
+                // Beräkna infallsvinkel (0° = lodrätt, 90° = horisontell längs marken)
+                let N = tInfo.normal;
+                let vMagImpact = vecMag(impactVel);
+                let vDotN_impact = impactVel[0]*N[0] + impactVel[1]*N[1] + impactVel[2]*N[2];
+                let incidenceAngleDeg = 90.0;
+                if (vMagImpact > 0.001) {
+                    incidenceAngleDeg = 90.0 - Math.acos(Math.abs(vDotN_impact) / vMagImpact) * (180.0/Math.PI);
+                }
+                
+                let baseCor = GROUND.restitution;
                 let cFriction = GROUND.bounceFriction;
                 let cRollingDecel = GROUND.rollingDecel;
                 
@@ -485,26 +500,32 @@ window.GolfPhysics = (function() {
                     // Mjukhet baserad på inställningar
                     let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
                     if (firmness === 'SOFT') {
-                        cRestitution = 0.40; cFriction = 0.45; cRollingDecel = 0.5;
+                        baseCor = 0.52; cFriction = 0.45; cRollingDecel = 0.5;
                     } else if (firmness === 'FIRM') {
-                        cRestitution = 0.60; cFriction = 0.25; cRollingDecel = 0.5;
+                        baseCor = 0.72; cFriction = 0.25; cRollingDecel = 0.5;
                     } else {
-                        // NORMAL fallback (GSPro / Trackman standard)
-                        cRestitution = 0.50; cFriction = 0.35; cRollingDecel = 0.5;
+                        // NORMAL fallback
+                        baseCor = 0.62; cFriction = 0.35; cRollingDecel = 0.5;
                     }
                 } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
-                    cRestitution = 0.55; cFriction = 0.55; cRollingDecel = 0.78; // roll_mu 0.08
+                    baseCor = 0.58; cFriction = 0.55; cRollingDecel = 0.78; // roll_mu 0.08
                 } else if (impactTerrainType === 'SEMI-ROUGH') {
-                    cRestitution = 0.50; cFriction = 0.60; cRollingDecel = 0.98; // roll_mu 0.10
+                    baseCor = 0.50; cFriction = 0.60; cRollingDecel = 0.98; // roll_mu 0.10
                 } else if (impactTerrainType === 'ROUGH') {
-                    cRestitution = 0.45; cFriction = 0.70; cRollingDecel = 1.47; // roll_mu 0.15
+                    baseCor = 0.43; cFriction = 0.70; cRollingDecel = 1.47; // roll_mu 0.15
                 } else if (impactTerrainType === 'DEEP ROUGH') {
-                    cRestitution = 0.40; cFriction = 0.80; cRollingDecel = 2.45; // roll_mu 0.25
+                    baseCor = 0.35; cFriction = 0.80; cRollingDecel = 2.45; // roll_mu 0.25
                 } else if (impactTerrainType === 'SAND') {
-                    cRestitution = 0.45; cFriction = 0.75; cRollingDecel = 3.92; // roll_mu 0.40
+                    baseCor = 0.30; cFriction = 0.75; cRollingDecel = 3.92; // roll_mu 0.40
                 } else if (impactTerrainType === 'WASTE') {
-                    cRestitution = 0.65; cFriction = 0.50; cRollingDecel = 0.49; // roll_mu 0.05 (Hård yta)
-                } else if (impactTerrainType === 'WATER') {
+                    baseCor = 0.32; cFriction = 0.50; cRollingDecel = 0.49; // roll_mu 0.05
+                }
+                
+                // Variabel COR-ekvation (Sports Engineering 2023)
+                // En brant infallsvinkel (0-20°) droppar COR. Flack vinkel (60-90°) behåller hastigheten.
+                let cRestitution = Math.max(0.05, baseCor - 0.004 * incidenceAngleDeg);
+                
+                if (impactTerrainType === 'WATER') {
                     // WATER SKIMMING TRACKMAN MACKA!
                     let vZ = state.vel[2];
                     let vXY = Math.sqrt(state.vel[0]*state.vel[0] + state.vel[1]*state.vel[1]);

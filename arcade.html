@@ -3967,6 +3967,7 @@
                         dot.style.background = "#38bdf8";
                         setTimeout(() => dot.style.background = "#4ade80", 500);
                     }
+                    msg.data.isLiveData = true; // Markera som LM-data så physics.js skippar virtuella lie-straff!
                     triggerRealShot(msg.data);
                 }
             } catch(e) {}
