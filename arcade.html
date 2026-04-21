@@ -3968,7 +3968,6 @@
             let oldMat = plane.material;
             
             if (window.minimapMat && window.heatmapShaderRef) {
-                let hole = courseHoles[playingHoleIndex];
                 window.heatmapShaderRef.uniforms.uFlagHeight.value = (hole && hole.flag) ? hole.flag.y : 0.0;
                 
                 // Måste se till att maskreferensen lever
@@ -3980,7 +3979,6 @@
             }
             
             // Ritning av Line Overlay (Ball -> Target -> Flag)
-            let hole = courseHoles[playingHoleIndex];
             if (window.aimTarget && hole && hole.flag && document.getElementById('mm-line-1')) {
                 let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
                 let pB = ball.position.clone().project(minimapCamera);
