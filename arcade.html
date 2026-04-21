@@ -690,6 +690,33 @@
     const mapTex = new THREE.CanvasTexture(paintCanvas);
     mapTex.magFilter = THREE.LinearFilter; // Mjuka suddiga Golf Clash kanter!
     
+    // EXPLICIT GREEN MASK (För Minimap Topography)
+    window.greenMaskCanvas = document.createElement('canvas');
+    window.greenMaskCanvas.width = 4096; window.greenMaskCanvas.height = 4096;
+    window.greenCtx = window.greenMaskCanvas.getContext('2d', { willReadFrequently: true });
+    window.greenCtx.fillStyle = '#000000'; // Svart = Inte Green
+    window.greenCtx.fillRect(0, 0, 4096, 4096);
+    window.greenMaskTex = new THREE.CanvasTexture(window.greenMaskCanvas);
+    window.greenMaskTex.magFilter = THREE.LinearFilter;
+    
+    window.rebuildGreenMask = function() {
+        if (!window.terrainBiomeData) return;
+        let gData = window.greenCtx.createImageData(4096, 4096);
+        let tData = window.terrainBiomeData;
+        for(let i=0; i < tData.length; i+=4) {
+            let r = tData[i], g = tData[i+1], b = tData[i+2];
+            // Enkel C-dist check mot Green: rgb(152, 206, 104) som körs asynkront PÅ CPU:n. Håller shadern 100% ren!
+            let dGreen = (r-152)*(r-152) + (g-206)*(g-206) + (b-104)*(b-104);
+            if (dGreen < 2000) {
+                gData.data[i] = 255; gData.data[i+1] = 255; gData.data[i+2] = 255; gData.data[i+3] = 255;
+            } else {
+                gData.data[i] = 0; gData.data[i+1] = 0; gData.data[i+2] = 0; gData.data[i+3] = 255;
+            }
+        }
+        window.greenCtx.putImageData(gData, 0, 0);
+        window.greenMaskTex.needsUpdate = true;
+    };
+
     // SKAPA VATTEN-ALPHAMASK (Styr osynlighet för vatten-lagret)
     const waterCanvas = document.createElement('canvas');
     waterCanvas.width = 4096; waterCanvas.height = 4096;
@@ -731,8 +758,13 @@
         varying vec2 vUv;
         varying float vWorldY;
         uniform float uFlagHeight;
+        uniform sampler2D tDiffuse;
+        uniform sampler2D tGreenMask;
         
         void main() {
+            vec4 texColor = texture2D(tDiffuse, vUv);
+            vec4 greenMask = texture2D(tGreenMask, vUv);
+            
             // GSPro-inspirerad Heatmap (Relativ Höjd till Flaggan)
             float diff = vWorldY - uFlagHeight;
             
@@ -740,28 +772,32 @@
             float contourInterval = 0.25;
             float band = fract(abs(vWorldY) / contourInterval);
             
-            vec3 finalColor = vec3(0.0);
+            vec3 hmColor = vec3(0.0);
             
             // Färgskala (Blått nere, Grönt mitten, Rött uppe)
             if (diff >= 1.0) {
-                finalColor = vec3(0.8, 0.0, 0.0); // Röd
+                hmColor = vec3(0.8, 0.0, 0.0); // Röd
             } else if (diff > 0.3) {
-                // Mix Grön till Röd
                 float f = (diff - 0.3) / 0.7;
-                finalColor = mix(vec3(0.5, 0.8, 0.0), vec3(0.8, 0.0, 0.0), f);
+                hmColor = mix(vec3(0.5, 0.8, 0.0), vec3(0.8, 0.0, 0.0), f);
             } else if (diff > -0.3) {
-                // Mix Ljusgrön till Grön
                 float f = (diff + 0.3) / 0.6;
-                finalColor = mix(vec3(0.2, 0.7, 0.2), vec3(0.5, 0.8, 0.0), f);
+                hmColor = mix(vec3(0.2, 0.7, 0.2), vec3(0.5, 0.8, 0.0), f);
             } else if (diff > -1.0) {
-                // Mix Ljusblå till Ljusgrön
                 float f = (diff + 1.0) / 0.7;
-                finalColor = mix(vec3(0.0, 0.5, 0.8), vec3(0.2, 0.7, 0.2), f);
+                hmColor = mix(vec3(0.0, 0.5, 0.8), vec3(0.2, 0.7, 0.2), f);
             } else {
-                finalColor = vec3(0.0, 0.0, 0.6); // Mörkblå
+                hmColor = vec3(0.0, 0.0, 0.6); // Mörkblå
             }
             
-            // Rita Contour Lines
+            // Exakt GSPro/TrackMan beteende!
+            // Om masken säger att detta är Green (1.0), blanda 85% heatmap över texturfärgen.
+            // Annars ritas terrängen upp helt orörd.
+            float heatAlpha = greenMask.r * 0.85; 
+            
+            vec3 finalColor = mix(texColor.rgb, hmColor, heatAlpha);
+            
+            // Rita Contour Lines starkt överallt fastän heatmapen utelämnar zonen!
             if (band < 0.05 || band > 0.95) {
                 finalColor = vec3(0.05); // Nästan svart
             }
@@ -774,7 +810,9 @@
         vertexShader: heatmapVertexShader,
         fragmentShader: heatmapFragmentShader,
         uniforms: {
-            uFlagHeight: { value: 0.0 }
+            uFlagHeight: { value: 0.0 },
+            tDiffuse: { value: mapTex },
+            tGreenMask: { value: window.greenMaskTex }
         }
     });
     
@@ -1861,6 +1899,8 @@
     }
 
     window.actuallyStartRound = function() {
+        if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+        
         document.getElementById('settings-modal').style.display = 'none';
 
         playState = 'ROUND_IDLE';
@@ -2546,6 +2586,10 @@
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault(), false);
     
     function setMode(mode) {
+        if ((appMode === 'BUILD' || appMode === 'ARCHITECT') && (mode === 'PLAY' || mode === 'TEST')) {
+            // Skapa Green Mask inför minikartan
+            if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+        }
         appMode = mode;
         let btnBuild = document.getElementById('btn-mode-build');
         let btnPlay = document.getElementById('btn-mode-play');
@@ -3913,13 +3957,13 @@
             if (window.heatmapMaterial) {
                 let hole = courseHoles[playingHoleIndex];
                 window.heatmapMaterial.uniforms.uFlagHeight.value = (hole && hole.flag) ? hole.flag.y : 0.0;
-                scene.overrideMaterial = window.heatmapMaterial;
+                plane.material = window.heatmapMaterial; // Selektiv assignment på enbart marken! Inget mer globalt scene.overrideMaterial
             }
             
             // depth är redan rensat via clear() ovan
             renderer.render(scene, minimapCamera);
             
-            scene.overrideMaterial = null;
+            plane.material = oldMat; // Återställ markens material
             renderer.setClearColor(oldClearColor, 1.0); // Återställ clear color ifall den används på andra ställen
         } else {
             if (mapCont) mapCont.style.display = 'none';
