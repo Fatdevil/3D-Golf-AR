@@ -743,78 +743,62 @@
     scene.add(plane);
     
     // THE TOPOGRAPHY HEATMAP SHADER (For Minimap)
-    const heatmapVertexShader = `
-        varying vec2 vUv;
-        varying float vWorldY;
-        void main() {
-            vUv = uv;
-            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-            vWorldY = worldPosition.y;
-            gl_Position = projectionMatrix * viewMatrix * worldPosition;
-        }
-    `;
-
-    const heatmapFragmentShader = `
-        varying vec2 vUv;
-        varying float vWorldY;
-        uniform float uFlagHeight;
-        uniform sampler2D tDiffuse;
-        uniform sampler2D tGreenMask;
+    window.minimapMat = planeMat.clone();
+    window.minimapMat.extensions = { derivatives: true };
+    window.heatmapShaderRef = null;
+    
+    window.minimapMat.onBeforeCompile = function(shader) {
+        shader.uniforms.uFlagHeight = { value: 0.0 };
+        shader.uniforms.tGreenMask = { value: window.greenMaskTex };
+        window.heatmapShaderRef = shader;
         
-        void main() {
-            vec4 texColor = texture2D(tDiffuse, vUv);
-            vec4 greenMask = texture2D(tGreenMask, vUv);
+        shader.vertexShader = shader.vertexShader.replace(
+            'void main() {',
+            'varying float vWorldY;\n varying vec2 vCustomUv;\n void main() {\n vCustomUv = uv;\n'
+        );
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\n vWorldY = (modelMatrix * vec4(position, 1.0)).y;\n'
+        );
+        
+        shader.fragmentShader = shader.fragmentShader.replace(
+            'void main() {',
+            'varying float vWorldY;\n varying vec2 vCustomUv;\n uniform float uFlagHeight;\n uniform sampler2D tGreenMask;\n void main() {\n'
+        );
+        
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
             
-            // GSPro-inspirerad Heatmap (Relativ Höjd till Flaggan)
+            vec4 greenMask = texture2D(tGreenMask, vCustomUv);
             float diff = vWorldY - uFlagHeight;
-            
-            // Contour lines varje 0.25 meter (25 cm) djupt
             float contourInterval = 0.25;
-            float band = fract(abs(vWorldY) / contourInterval);
+            
+            // Beräkna lutning via skärmderivator för att anpassa linjetjocklek matematiskt
+            float slope = length(vec2(dFdx(vWorldY), dFdy(vWorldY)));
+            float distToContour = abs(fract(vWorldY / contourInterval + 0.5) - 0.5) * contourInterval;
+            float lineThicknessWorld = slope * 1.5; // Linjen blir 1.5 pixlar bred oavsett geometri
+            
+            // Rita bara linjer där det lutar (slope > 0.002). Annars blir platta fairways dolda av tjock svart contour.
+            bool isLine = (slope > 0.002) && (distToContour < lineThicknessWorld);
             
             vec3 hmColor = vec3(0.0);
+            if (diff >= 1.0) hmColor = vec3(0.8, 0.0, 0.0);
+            else if (diff > 0.3) hmColor = mix(vec3(0.5, 0.8, 0.0), vec3(0.8, 0.0, 0.0), (diff - 0.3)/0.7);
+            else if (diff > -0.3) hmColor = mix(vec3(0.2, 0.7, 0.2), vec3(0.5, 0.8, 0.0), (diff + 0.3)/0.6);
+            else if (diff > -1.0) hmColor = mix(vec3(0.0, 0.5, 0.8), vec3(0.2, 0.7, 0.2), (diff + 1.0)/0.7);
+            else hmColor = vec3(0.0, 0.0, 0.6);
             
-            // Färgskala (Blått nere, Grönt mitten, Rött uppe)
-            if (diff >= 1.0) {
-                hmColor = vec3(0.8, 0.0, 0.0); // Röd
-            } else if (diff > 0.3) {
-                float f = (diff - 0.3) / 0.7;
-                hmColor = mix(vec3(0.5, 0.8, 0.0), vec3(0.8, 0.0, 0.0), f);
-            } else if (diff > -0.3) {
-                float f = (diff + 0.3) / 0.6;
-                hmColor = mix(vec3(0.2, 0.7, 0.2), vec3(0.5, 0.8, 0.0), f);
-            } else if (diff > -1.0) {
-                float f = (diff + 1.0) / 0.7;
-                hmColor = mix(vec3(0.0, 0.5, 0.8), vec3(0.2, 0.7, 0.2), f);
-            } else {
-                hmColor = vec3(0.0, 0.0, 0.6); // Mörkblå
-            }
-            
-            // Exakt GSPro/TrackMan beteende!
-            // Om masken säger att detta är Green (1.0), blanda 85% heatmap över texturfärgen.
-            // Annars ritas terrängen upp helt orörd.
             float heatAlpha = greenMask.r * 0.85; 
             
-            vec3 finalColor = mix(texColor.rgb, hmColor, heatAlpha);
+            // Mixa Heatmap på det belysta (Lambert) materialet så sand och fairway ser ut exakt som i spelet!
+            vec3 mapColor = mix(gl_FragColor.rgb, hmColor, heatAlpha);
+            if (isLine) mapColor = vec3(0.05); // Svart Contour line
             
-            // Rita Contour Lines starkt överallt fastän heatmapen utelämnar zonen!
-            if (band < 0.05 || band > 0.95) {
-                finalColor = vec3(0.05); // Nästan svart
-            }
-            
-            gl_FragColor = vec4(finalColor, 1.0);
-        }
-    `;
-    
-    window.heatmapMaterial = new THREE.ShaderMaterial({
-        vertexShader: heatmapVertexShader,
-        fragmentShader: heatmapFragmentShader,
-        uniforms: {
-            uFlagHeight: { value: 0.0 },
-            tDiffuse: { value: mapTex },
-            tGreenMask: { value: window.greenMaskTex }
-        }
-    });
+            gl_FragColor = vec4(mapColor, gl_FragColor.a);
+            `
+        );
+    };
     
     // THE PHYSICAL WATER LAYER
     const waterGeo = planeGeo.clone(); // Exakt samma nät!
@@ -3954,10 +3938,16 @@
             }
             let oldMat = plane.material;
             
-            if (window.heatmapMaterial) {
+            if (window.minimapMat && window.heatmapShaderRef) {
                 let hole = courseHoles[playingHoleIndex];
-                window.heatmapMaterial.uniforms.uFlagHeight.value = (hole && hole.flag) ? hole.flag.y : 0.0;
-                plane.material = window.heatmapMaterial; // Selektiv assignment på enbart marken! Inget mer globalt scene.overrideMaterial
+                window.heatmapShaderRef.uniforms.uFlagHeight.value = (hole && hole.flag) ? hole.flag.y : 0.0;
+                
+                // Måste se till att maskreferensen lever
+                if (window.heatmapShaderRef.uniforms.tGreenMask.value !== window.greenMaskTex) {
+                    window.heatmapShaderRef.uniforms.tGreenMask.value = window.greenMaskTex;
+                }
+                
+                plane.material = window.minimapMat;
             }
             
             // depth är redan rensat via clear() ovan
