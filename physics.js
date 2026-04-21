@@ -122,16 +122,30 @@ window.GolfPhysics = (function() {
                 mu = currentDecel / 9.81;
             }
 
+            let spinTractionMag = 0;
+
             // Kinetisk glidfas ("Skid") har ungefär 50-80% högre friktion än rullfriktion
             if (state.phase === "skid") {
                 mu *= 1.7; 
+                
+                // SPINN-ÖVERFÖRING (Energi från rotation -> translation)
+                let spinVel = vecCross(state.spin, N); 
+                let dirFallback = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,1,0];
+                let dirDotSpin = spinVel[0]*dirFallback[0] + spinVel[1]*dirFallback[1] + spinVel[2]*dirFallback[2];
+                
+                // dirDotSpin < 0 (Backspin) ökar friktionen (biter). 
+                // dirDotSpin > 0 (Topspin) minskar friktionen (rullar vidare).
+                spinTractionMag = dirDotSpin * 0.15; // Tuning coefficient
             }
             
             let frictionAccelMag = mu * normalForceMag;
             
+            // Skydda mot okontrollerad Topspin-boost - friktionen får aldrig bli negativ
+            let effectiveFriction = Math.max(0, frictionAccelMag - spinTractionMag);
+            
             // Friktion verkar rakt mot rörelseriktningen parallellt med marken
             let dir = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,0,0];
-            let frictionAccel = vecScale(dir, -frictionAccelMag);
+            let frictionAccel = vecScale(dir, -effectiveFriction);
 
             // GRASS GRAIN (Pseudorandom vector based on X/Y position)
             if (state.terrainType === 'GREEN') {
@@ -419,6 +433,15 @@ window.GolfPhysics = (function() {
             
             stepRK4(state, dt);
             
+            // Mark-spinn decay (spin dör snabbt ut under Skid/Roll fas tills den matchar rörelsen)
+            if (state.phase === "skid" || state.phase === "roll") {
+                 let spinDecay = 1.0 - (dt * 2.5); // Dödar spinn successivt
+                 if (spinDecay < 0) spinDecay = 0;
+                 state.spin[0] *= spinDecay;
+                 state.spin[1] *= spinDecay;
+                 state.spin[2] *= spinDecay;
+            }
+            
             if (state.phase === "roll") {
                 // BYPASS KOPPEN FÖR ATT INTE TVINGAS TILL GRÄS-YTAN I HÅLET
                 let insideCup = false;
@@ -505,25 +528,25 @@ window.GolfPhysics = (function() {
                     // Mjukhet baserad på inställningar
                     let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
                     if (firmness === 'SOFT') {
-                        baseCor = 0.52; cFriction = 0.45; cRollingDecel = 0.5;
+                        baseCor = 0.52; cFriction = 0.20; cRollingDecel = 0.5;
                     } else if (firmness === 'FIRM') {
-                        baseCor = 0.72; cFriction = 0.25; cRollingDecel = 0.5;
+                        baseCor = 0.72; cFriction = 0.10; cRollingDecel = 0.5;
                     } else {
                         // NORMAL fallback
-                        baseCor = 0.62; cFriction = 0.35; cRollingDecel = 0.5;
+                        baseCor = 0.62; cFriction = 0.15; cRollingDecel = 0.5;
                     }
                 } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
-                    baseCor = 0.58; cFriction = 0.55; cRollingDecel = 0.78; // roll_mu 0.08
+                    baseCor = 0.58; cFriction = 0.15; cRollingDecel = 0.78; // roll_mu 0.08
                 } else if (impactTerrainType === 'SEMI-ROUGH') {
-                    baseCor = 0.50; cFriction = 0.60; cRollingDecel = 0.98; // roll_mu 0.10
+                    baseCor = 0.50; cFriction = 0.20; cRollingDecel = 0.98; // roll_mu 0.10
                 } else if (impactTerrainType === 'ROUGH') {
-                    baseCor = 0.43; cFriction = 0.70; cRollingDecel = 1.47; // roll_mu 0.15
+                    baseCor = 0.43; cFriction = 0.25; cRollingDecel = 1.47; // roll_mu 0.15
                 } else if (impactTerrainType === 'DEEP ROUGH') {
-                    baseCor = 0.35; cFriction = 0.80; cRollingDecel = 2.45; // roll_mu 0.25
+                    baseCor = 0.35; cFriction = 0.35; cRollingDecel = 2.45; // roll_mu 0.25
                 } else if (impactTerrainType === 'SAND') {
-                    baseCor = 0.30; cFriction = 0.75; cRollingDecel = 3.92; // roll_mu 0.40
+                    baseCor = 0.30; cFriction = 0.50; cRollingDecel = 3.92; // roll_mu 0.40
                 } else if (impactTerrainType === 'WASTE') {
-                    baseCor = 0.32; cFriction = 0.50; cRollingDecel = 0.49; // roll_mu 0.05
+                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 0.49; // roll_mu 0.05
                 }
                 
                 // Variabel COR-ekvation (Sports Engineering 2023)
