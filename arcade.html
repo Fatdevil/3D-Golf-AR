@@ -1858,6 +1858,9 @@
         // Spara deras position eftersom dom precis slagit bollen (vi antar bollen stannat)
         p.lie = {x: ball.position.x, y: ball.position.y, z: ball.position.z};
 
+        // Uppdatera HUD Banner till att visa korrekt avstånd för nästa slag!
+        if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+
         if (p.strokes + p.penaltyStrokes >= maxScore && maxConcede !== 99 && !p.holedOut) {
             p.holedOut = true;
             p.strokes = maxScore;
@@ -1954,9 +1957,10 @@
         document.getElementById('pb-shot').innerText = "Shot " + (totalStrokes + 1);
         
         // Uppdatera Distans om vi har the pin
-        if (hole.flag && ball.visible && p.lie) {
-            let dist = new THREE.Vector3(p.lie.x, p.lie.y, p.lie.z).distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z)) * 1.09361;
-            document.getElementById('pb-dist').innerText = dist.toFixed(1) + " YDS";
+        if (hole.flag && ball && ball.visible) {
+            // Använd faktiska bollpositionen för live-kalkyl
+            let dist = ball.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
+            document.getElementById('pb-dist').innerText = window.formatDistStr(dist, 1);
         }
     };
     
