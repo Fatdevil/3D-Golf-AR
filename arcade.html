@@ -3881,6 +3881,10 @@
             
             renderer.setViewport(mX, mY, mapW, mapH);
             renderer.setScissor(mX, mY, mapW, mapH);
+            // Eftersom vi satt scissorTest = true förut, rensar detta bart minikartan!
+            let oldClearColor = renderer.getClearColor(new THREE.Color());
+            renderer.setClearColor(0x0f172a, 1.0); // Mörkblå bakgrund
+            renderer.clear(true, true, false);
             
             let hole = courseHoles[playingHoleIndex];
             if (hole && hole.flag) {
@@ -3925,15 +3929,18 @@
                 }
             }
             let oldMat = plane.material;
+            
             if (window.heatmapMaterial) {
                 let hole = courseHoles[playingHoleIndex];
                 window.heatmapMaterial.uniforms.uFlagHeight.value = (hole && hole.flag) ? hole.flag.y : 0.0;
-                plane.material = window.heatmapMaterial;
+                scene.overrideMaterial = window.heatmapMaterial;
             }
             
+            // depth är redan rensat via clear() ovan
             renderer.render(scene, minimapCamera);
             
-            plane.material = oldMat; // Återställ till den originella fairways-texturen
+            scene.overrideMaterial = null;
+            renderer.setClearColor(oldClearColor, 1.0); // Återställ clear color ifall den används på andra ställen
         } else {
             if (mapCont) mapCont.style.display = 'none';
         }
