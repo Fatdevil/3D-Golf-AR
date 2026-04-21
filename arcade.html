@@ -231,11 +231,23 @@
             <span style="color:#fff; font-weight:bold; font-size:13px;" id="minimap-lie-text">Fairway</span>
             <span style="color:#38bdf8; font-size:12px; cursor:pointer;" id="minimap-expand">⤢</span>
         </div>
+        <!-- DRAWING OVERLAY FOR LINES -->
+        <svg id="minimap-svg" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:1; overflow:hidden;">
+            <!-- Ball to Target -->
+            <line id="mm-line-1" x1="-10" y1="-10" x2="-10" y2="-10" stroke="#facc15" stroke-width="2" stroke-dasharray="4" stroke-opacity="0.8" />
+            <!-- Target to Flag -->
+            <line id="mm-line-2" x1="-10" y1="-10" x2="-10" y2="-10" stroke="#ffffff" stroke-width="2" stroke-opacity="0.8" />
+            <!-- Dots -->
+            <circle id="mm-dot-target" cx="-10" cy="-10" r="4" fill="#facc15" stroke="#000" stroke-width="1" />
+        </svg>
+        <div id="mm-dist-target" style="position:absolute; font-size:11px; font-weight:bold; color:#facc15; text-shadow:0 1px 3px rgba(0,0,0,0.8); z-index:2; transform:translate(-50%, -50%); display:none;">---</div>
+        <div id="mm-dist-flag" style="position:absolute; font-size:11px; font-weight:bold; color:#ffffff; text-shadow:0 1px 3px rgba(0,0,0,0.8); z-index:2; transform:translate(-50%, -50%); display:none;">---</div>
+
         <!-- FOOTER -->
-        <div style="position:absolute; bottom:0; left:0; width:100%; height:25px; background:rgba(15,23,42,0.85); display:flex; justify-content:space-around; align-items:center; color:#fff; font-size:11px; font-weight:bold; pointer-events:none;">
+        <div style="position:absolute; bottom:0; left:0; width:100%; height:25px; background:rgba(15,23,42,0.85); display:flex; justify-content:space-around; align-items:center; color:#fff; font-size:11px; font-weight:bold; pointer-events:none; z-index:3;">
             <span id="minimap-wind" style="color:#38bdf8; display:flex; align-items:center; gap:4px;">
                 <span id="minimap-wind-spd">0 MPH</span>
-                <span id="minimap-wind-arr" style="display:inline-block; transition:transform 0.5s;">▲</span>
+                <span id="minimap-wind-arr" style="display:inline-block; transition:transform 0.5s;">⬆</span>
             </span>
             <div style="display:flex; flex-direction:column; align-items:center;">
                 <span id="minimap-updown">0.0° UP</span>
@@ -250,7 +262,13 @@
     
     <!-- MODE TOGGLE UI -->
     <div id="mode-toggle" style="position:absolute; top:20px; right:20px; display:flex; gap:10px; pointer-events:auto;">
+        <script>
+            window.useMeters = false;
+            window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
+            window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
+        </script>
         <a href="hub.html" style="padding:10px 15px; border-radius:8px; background:#1e293b; color:#fff; border:1px solid #475569; text-decoration:none; display:flex; align-items:center; font-size:18px;" title="Home">🏠</a>
+        <button id="btn-toggle-unit" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 M' : '📏 YD';" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#facc15; border:1px solid #facc15; font-weight:800; cursor:pointer;" title="Toggle Unit">📏 YD</button>
         <button id="btn-toggle-data" onclick="document.getElementById('gspro-hud').classList.toggle('hidden')" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#38bdf8; border:1px solid #38bdf8; font-weight:800; cursor:pointer;" title="Shot Data">📊</button>
         <button id="btn-mode-build" onclick="setMode('BUILD')" style="padding:10px 20px; border-radius:8px; border:2px solid #38bdf8; background:#0f172a; color:#38bdf8; font-weight:800; cursor:pointer; text-transform:uppercase; transition:all 0.2s;">🔨 BUILD</button>
         <button id="btn-mode-play" onclick="setMode('PLAY')" style="padding:10px 20px; border-radius:8px; border:2px solid #4ade80; background:#4ade80; color:#0f172a; font-weight:800; cursor:pointer; text-transform:uppercase; transition:all 0.2s;">🏌️ PLAY</button>
@@ -3730,8 +3748,7 @@
                         // Popp-effekt
                         let pop = document.getElementById('score-popup');
                         pop.style.opacity = '1';
-                        pop.style.transform = 'translate(-50%, -60%) scale(1.2)';
-                        setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -50%) scale(1)'; }, 500);
+                        pop.style.transform = 'translate(-50%, -50%) scale(1)';
                     }
                 }
             }
@@ -3743,16 +3760,20 @@
                 
                 // --- UPPDATERA CARRY/TOTAL I HUD ---
                 if (window.shotStartPos) {
-                    let dX = ball.position.x - window.shotStartPos.x;
-                    let dZ = ball.position.z - window.shotStartPos.z;
-                    let totalYds = Math.sqrt(dX*dX + dZ*dZ) * 1.09361;
-                    let carryGameYds = (flightData.metrics.carryMeters || 0) * 1.09361;
-                    if (carryGameYds < 0.1) carryGameYds = totalYds; // Fallback
+                    let finalPhys = flightData.path[flightData.path.length-1];
+                    let dX = finalPhys.x - window.shotStartPos.x;
+                    let dZ = finalPhys.z - window.shotStartPos.z;
                     
-                    if(document.getElementById('hud-carry')) {
-                        document.getElementById('hud-carry').innerText = carryGameYds.toFixed(1) + ' yds';
-                        document.getElementById('hud-carryraw').innerText = carryGameYds.toFixed(1) + ' yds';
-                        document.getElementById('hud-total').innerText = totalYds.toFixed(1) + ' yds'; 
+                    let totalM = Math.sqrt(dX*dX + dZ*dZ);
+                    let carryM = (flightData.metrics.carryMeters || 0);
+                    
+                    if (document.getElementById('hud-carry')) {
+                        document.getElementById('hud-carry').innerText = window.formatDistStr(carryM);
+                        document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
+                        document.getElementById('hud-total').innerText = window.formatDistStr(totalM); 
+                        
+                        let offPath = Math.abs(finalPhys.x);
+                        document.getElementById('hud-offline').innerText = window.formatDistStr(offPath);
                     }
                 }
                 
@@ -3865,6 +3886,7 @@
                 bb.style.top = (y - 30) + 'px'; // Sväva strax ovanför
                 
                 // Uppdatera info
+                let hole = courseHoles[playingHoleIndex];
                 let dist = ball.position.distanceTo(window.aimTarget);
                 let elevDiff = window.aimTarget.y - ball.position.y;
                 document.getElementById('aim-bb-dist').innerText = (dist * 1.09361).toFixed(0); 
@@ -3902,18 +3924,25 @@
                 minimapCamera.position.set((ball.position.x + fv.x)/2, 300, (ball.position.z + fv.z)/2);
                 
                 let dist = ball.position.distanceTo(fv);
-                // Dynamisk Scale beroende på hålets längd
-                minimapCamera.left = -(dist/2 + 20); 
-                minimapCamera.right = (dist/2 + 20);
-                // Behåll aspect ratio 220x340 = 0.64
-                minimapCamera.top = (dist/2 + 20) / 0.64;
-                minimapCamera.bottom = -(dist/2 + 20) / 0.64;
-                minimapCamera.updateProjectionMatrix();
-
-                // Låt "Uppåt" i kartan peka mot flaggan!
+                
+                // Låt "Uppåt" i kartan peka mot flaggan! (Vi räknar ut detta först för offset)
                 let dir = new THREE.Vector3().subVectors(fv, ball.position);
                 dir.y = 0; dir.normalize();
                 
+                // SKIFTA MINIMAP-KAMERANS CENTRUM
+                // Genom att backa kameran minskar vi problemet att UI täcker bollen
+                let offsetDist = dist * 0.15 + 15; // Backa ~15% plus 15 meter
+                minimapCamera.position.sub(dir.clone().multiplyScalar(offsetDist));
+                
+                // Dynamisk Scale beroende på hålets längd
+                let pad = 20 + offsetDist; // Öka padding proportionerligt
+                minimapCamera.left = -(dist/2 + pad); 
+                minimapCamera.right = (dist/2 + pad);
+                // Behåll aspect ratio 220x340 = 0.64
+                minimapCamera.top = (dist/2 + pad) / 0.64;
+                minimapCamera.bottom = -(dist/2 + pad) / 0.64;
+                minimapCamera.updateProjectionMatrix();
+
                 minimapCamera.up.set(dir.x, 0, dir.z);
                 minimapCamera.lookAt(minimapCamera.position.x, 0, minimapCamera.position.z);
                 
@@ -3948,6 +3977,47 @@
                 }
                 
                 plane.material = window.minimapMat;
+            }
+            
+            // Ritning av Line Overlay (Ball -> Target -> Flag)
+            let hole = courseHoles[playingHoleIndex];
+            if (window.aimTarget && hole && hole.flag && document.getElementById('mm-line-1')) {
+                let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+                let pB = ball.position.clone().project(minimapCamera);
+                let pA = window.aimTarget.clone().project(minimapCamera);
+                let pF = fv.clone().project(minimapCamera);
+                
+                // Transformera från NDS [-1, 1] till Pixel Coordinates [0, 220] & [0, 340]
+                let toX = (v) => (v.x * 0.5 + 0.5) * 220;
+                let toY = (v) => (-v.y * 0.5 + 0.5) * 340;
+                
+                let bx = toX(pB), by = toY(pB);
+                let ax = toX(pA), ay = toY(pA);
+                let fx = toX(pF), fy = toY(pF);
+                
+                document.getElementById('mm-line-1').setAttribute('x1', bx);
+                document.getElementById('mm-line-1').setAttribute('y1', by);
+                document.getElementById('mm-line-1').setAttribute('x2', ax);
+                document.getElementById('mm-line-1').setAttribute('y2', ay);
+                document.getElementById('mm-line-2').setAttribute('x1', ax);
+                document.getElementById('mm-line-2').setAttribute('y1', ay);
+                document.getElementById('mm-line-2').setAttribute('x2', fx);
+                document.getElementById('mm-line-2').setAttribute('y2', fy);
+                document.getElementById('mm-dot-target').setAttribute('cx', ax);
+                document.getElementById('mm-dot-target').setAttribute('cy', ay);
+                
+                let dT = document.getElementById('mm-dist-target');
+                let dF = document.getElementById('mm-dist-flag');
+                dT.style.display = 'block';
+                dF.style.display = 'block';
+                
+                dT.innerText = window.formatDistStr(ball.position.distanceTo(window.aimTarget), 0);
+                dF.innerText = window.formatDistStr(window.aimTarget.distanceTo(fv), 0);
+                
+                dT.style.left = ((bx+ax)/2 + 20) + 'px';
+                dT.style.top = ((by+ay)/2) + 'px';
+                dF.style.left = ((ax+fx)/2 + 20) + 'px';
+                dF.style.top = ((ay+fy)/2) + 'px';
             }
             
             // depth är redan rensat via clear() ovan
