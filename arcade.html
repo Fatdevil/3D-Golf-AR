@@ -2700,6 +2700,8 @@
             sculptBrushCursor.material.color.setHex(currentBuildColor);
         } else if(toolName === 'WATER') {
             sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
+        } else if(toolName === 'RAMP') {
+            sculptBrushCursor.material.color.setHex(0x38bdf8); // Light Blue for Ramp
         }
         
         let hintHtml = "";
@@ -2887,7 +2889,7 @@
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
-                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST') {
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
