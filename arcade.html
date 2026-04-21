@@ -2149,13 +2149,22 @@
         var vStimpEl = document.getElementById('in-stimp');
         window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
         
+        // --- 1. SIKTE- OCH OFFSET-LOGIK ---
+        // Användarens grafiska sikte projiceras på fysikens azimut för att flyga dit du siktar.
+        let aimOffsetDeg = 0;
+        if ((appMode === 'PLAY' || appMode === 'TEST') && window.aimTarget) {
+            let dX = window.aimTarget.x - ball.position.x;
+            let dZ = window.aimTarget.z - ball.position.z;
+            aimOffsetDeg = Math.atan2(dX, -dZ) * 180 / Math.PI;
+        }
+
         var launchConfig = {
             startPos: startPos,
             ballSpeedMph: data.ballSpeedMph,
             launchAngleDeg: data.launchAngleDeg,
             totalSpinRpm: data.totalSpinRpm,
             spinAxisDeg: data.spinAxisDeg || 0,
-            azimDeg: data.azimDeg || 0, // Horizontal Angle
+            azimDeg: (data.azimDeg || 0) + aimOffsetDeg, // Lägg till sikt-vinkeln!
             isLiveData: data.isLiveData || false
         };
         var cupPosLocal = null;
@@ -3783,6 +3792,16 @@
                     let distToPin = 999;
                     if(hole && hole.flag) {
                         distToPin = ball.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
+                        
+                        // --- SMART AUTO-AIM EFTER SLAG ---
+                        // Standard default-beteende för nästa slag är mot target progression (pin/green center)
+                        if (window.aimTarget) {
+                            window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z);
+                            let aimDir = new THREE.Vector3().subVectors(window.aimTarget, ball.position).normalize();
+                            if(aimDir.lengthSq() < 0.01) aimDir.set(0, 0, -1);
+                            camera.position.copy(ball.position).add(new THREE.Vector3(-aimDir.x * 5, 2, -aimDir.z * 5));
+                            controls.target.copy(window.aimTarget);
+                        }
                     }
                     
                     setTimeout(() => {
