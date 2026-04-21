@@ -128,7 +128,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="physics.js?v=3"></script>
+<script src="physics.js?v=4"></script>
 </head>
 <div id="ui-layer">
 
@@ -939,11 +939,15 @@
     scene.add(ball);
 
     // TRACER LINE FÖR FANTSTISK 3D FYSIK
+    const MAX_TRACER_POINTS = 6000;
+    const tracerPositions = new Float32Array(MAX_TRACER_POINTS * 3);
     const tracerGeo = new THREE.BufferGeometry();
+    tracerGeo.setAttribute('position', new THREE.BufferAttribute(tracerPositions, 3));
+    tracerGeo.setDrawRange(0, 0);
     const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3 });
     const flightTracer = new THREE.Line(tracerGeo, tracerMat);
     scene.add(flightTracer);
-    let tracerPoints = [];
+    let tracerPointsCount = 0;
 
     // 4. SKAPA MÅLTAVLOR (Targets)
     const targets = [];
@@ -2315,8 +2319,8 @@
         flightTick = 0;
         isFlying = true;
         
-        tracerPoints = [];
-        flightTracer.geometry.setFromPoints(tracerPoints);
+        tracerPointsCount = 0;
+        flightTracer.geometry.setDrawRange(0, 0);
         isFlying = true;
     }
 
@@ -3649,10 +3653,16 @@
             ball.position.set(point.x, point.z + 0.0213, -point.y);
             
             for (let k = flightTick; k <= newTick; k++) {
-                let p = flightData.path[k];
-                tracerPoints.push(new THREE.Vector3(p.x, p.z + 0.0213, -p.y));
+                if (tracerPointsCount < MAX_TRACER_POINTS) {
+                    let p = flightData.path[k];
+                    tracerPositions[tracerPointsCount * 3] = p.x;
+                    tracerPositions[tracerPointsCount * 3 + 1] = p.z + 0.0213;
+                    tracerPositions[tracerPointsCount * 3 + 2] = -p.y;
+                    tracerPointsCount++;
+                }
             }
-            flightTracer.geometry.setFromPoints(tracerPoints);
+            flightTracer.geometry.attributes.position.needsUpdate = true;
+            flightTracer.geometry.setDrawRange(0, tracerPointsCount);
             
             // --- FLIGHT CAMERA SYSTEM ---
             if (window.camFollowMode === 'FREE') {

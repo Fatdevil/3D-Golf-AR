@@ -231,9 +231,11 @@ window.GolfPhysics = (function() {
      */
     function simulateFlight(input, envCtx) {
         let startPosXZY = input.startPos || [0, 0, 0];
-        let baseSpeedMph = input.ballSpeedMph;
-        let baseSpinRpm = input.totalSpinRpm || 2500;
-        let vla = input.launchAngleDeg;
+        let baseSpeedMph = input.ballSpeedMph !== undefined ? input.ballSpeedMph : (input.vMag || 0);
+        let baseSpinRpm = input.totalSpinRpm !== undefined ? input.totalSpinRpm : (input.spinTotal || 2500);
+        let vla = input.launchAngleDeg !== undefined ? input.launchAngleDeg : (input.vLa || 0);
+        let azimDegIn = input.azimDeg !== undefined ? input.azimDeg : (input.vHla || 0);
+        let spinAxisIn = input.spinAxisDeg !== undefined ? input.spinAxisDeg : (input.spinAxis || 0);
         
         let lieType = 'FAIRWAY';
         if (envCtx) {
@@ -280,8 +282,8 @@ window.GolfPhysics = (function() {
         let speedMS = (baseSpeedMph * speedMult) * 0.44704; // mph -> m/s
         let spinFinal = baseSpinRpm * spinMult;
         
-        let launchRads = input.launchAngleDeg * Math.PI / 180;
-        let azimRads = (input.azimDeg || 0) * Math.PI / 180;
+        let launchRads = vla * Math.PI / 180;
+        let azimRads = azimDegIn * Math.PI / 180;
         
         // Start hastighetsvektor
         // Y: framåt, X: höger, Z: upp
@@ -292,7 +294,7 @@ window.GolfPhysics = (function() {
 
         // Start spinnvektor
         let wRads = spinFinal * 2 * Math.PI / 60; // rpm -> rad/s
-        let spinAxisRads = input.spinAxisDeg * Math.PI / 180;
+        let spinAxisRads = spinAxisIn * Math.PI / 180;
         
         // Om spinAxis = 0 -> rent backspin -> snurrar kring X-axeln.
         // Positiv spinAxis -> tiltar åt höger -> Z-komponent blir negativ -> resulterar i Fade/Slice.
