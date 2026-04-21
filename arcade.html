@@ -2702,6 +2702,8 @@
             sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
         } else if(toolName === 'RAMP') {
             sculptBrushCursor.material.color.setHex(0x38bdf8); // Light Blue for Ramp
+        } else if(toolName === 'SPLINE') {
+            sculptBrushCursor.material.color.setHex(0xec4899); // Rosa för Spline
         }
         
         let hintHtml = "";
@@ -2889,7 +2891,7 @@
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
-                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
