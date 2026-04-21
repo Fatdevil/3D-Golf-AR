@@ -315,7 +315,7 @@ window.GolfPhysics = (function() {
         };
 
         const dt = 0.005; // Intern tick-rate 5ms
-        const sampleRate = 0.1; // Output sparar var 100ms
+        const sampleRate = 0.005; // MÅSTE vara 5ms för att matcha Animation Loops Time-step (100ms kraschade Trackman Look-ahead kameran)
         
         let path = [];
         path.push({ 
