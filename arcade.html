@@ -2383,6 +2383,12 @@
     let currentTool = 'SCULPT'; // 'BLOCK' eller 'SCULPT'
     let currentBrushSize = 6.0;
 
+    // Spline-variabler
+    let splinePoints = [];
+    let splineSpheres = [];
+    let splineLineMesh = null;
+    let splinePreviewMesh = null;
+
     // Pensel multiplikator logik
     let brushMultiplier = 1;
     window.ipadSculptDir = 1;
@@ -2524,7 +2530,7 @@
         // Spara Undo-State precis vid klick! (Bara om de ritar/modifierar något)
         let isModifyingClick = e.button === 0 || e.button === 2;
         if(currentTool !== 'PAINT' && currentTool !== 'MEASURE' || isModifyingClick) { 
-             if (currentTool !== 'MEASURE') saveUndoState(); 
+             if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE') saveUndoState(); 
         }
 
         if(currentTool === 'MEASURE') {
@@ -2541,13 +2547,22 @@
                 document.getElementById('measure-hud').style.display = 'none';
                 measureStartPoint = null;
             }
-        } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE') {
+        } else if(currentTool === 'SPLINE') {
+            if(e.button === 0 && lastHitPoint) {
+                splinePoints.push(lastHitPoint.clone());
+                updateSplinePreview();
+            } else if (e.button === 2 && splinePoints.length > 0) {
+                splinePoints.pop();
+                updateSplinePreview();
+            }
+            controls.enabled = false;
+        } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
             isSculpting = true;
             controls.enabled = false; // Lås kameran när vi skulpterar
             // Vänsterklick = Upp. Högerklick ELLER Shift+Vänster = Ner.
             sculptDirection = (e.button === 2 || e.shiftKey || window.ipadSculptDir === -1) ? -1 : 1; 
             
-            if ((currentTool === 'RAMP' || currentTool === 'SPLINE') && lastHitPoint) {
+            if (currentTool === 'RAMP' && lastHitPoint) {
                 window.rampStartPt = lastHitPoint.clone();
                 window.rampSnapshotHeights = new Float32Array(planeGeo.attributes.position.array);
             }
@@ -2980,14 +2995,14 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             raycaster.setFromCamera(mouse, camera);
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
-                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE') {
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
@@ -3188,6 +3203,159 @@
     const targetPaintColor = new THREE.Color();
     let previousFrameHitPoint = null;
     
+    function updateSplinePreview() {
+        // Rensa gamla sfärer och mesh
+        splineSpheres.forEach(s => scene.remove(s));
+        splineSpheres = [];
+        if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
+
+        let sMat = new THREE.MeshBasicMaterial({ color: 0xec4899 });
+        let sGeo = new THREE.SphereGeometry(1.0, 8, 8);
+        splinePoints.forEach(pt => {
+            let s = new THREE.Mesh(sGeo, sMat);
+            s.position.copy(pt);
+            s.position.y += 0.5;
+            scene.add(s);
+            splineSpheres.push(s);
+        });
+
+        if(splinePoints.length > 1) {
+            let pts = [...splinePoints];
+            if(splinePoints.length > 2) pts.push(splinePoints[0].clone()); // Stäng loopen grafiskt
+            
+            let curve = new THREE.CatmullRomCurve3(pts);
+            let curvePts = curve.getPoints(50 * pts.length);
+            let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+            let lineMat = new THREE.LineBasicMaterial({ color: 0xec4899, linewidth: 3 });
+            splineLineMesh = new THREE.Line(lineGeo, lineMat);
+            splineLineMesh.position.y += 0.5;
+            scene.add(splineLineMesh);
+        }
+
+        let pnl = document.getElementById('spline-action-panel');
+        if(pnl) pnl.style.display = splinePoints.length > 2 ? 'block' : 'none';
+        renderer.render(scene, camera); // Force draw
+    }
+
+    window.clearSpline = function() {
+        splinePoints = [];
+        updateSplinePreview();
+    };
+
+    window.executeSplineBoundary = function(layerType) {
+        if(splinePoints.length < 3) return;
+        saveUndoState();
+        
+        // Point in Polygon algorithm för 2D projicerad X/Z
+        function pointInPolygon(pt, vs) {
+            let inside = false;
+            for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+                let xi = vs[i].x, zi = vs[i].z;
+                let xj = vs[j].x, zj = vs[j].z;
+                let intersect = ((zi > pt.z) != (zj > pt.z))
+                    && (pt.x < (xj - xi) * (pt.z - zi) / (zj - zi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        let positions = planeGeo.attributes.position.array;
+        let count = planeGeo.attributes.position.count;
+        let boundsMinX = 9999, boundsMaxX = -9999;
+        let boundsMinZ = 9999, boundsMaxZ = -9999;
+        
+        splinePoints.forEach(p => {
+            if(p.x < boundsMinX) boundsMinX = p.x;
+            if(p.x > boundsMaxX) boundsMaxX = p.x;
+            if(p.z < boundsMinZ) boundsMinZ = p.z;
+            if(p.z > boundsMaxZ) boundsMaxZ = p.z;
+        });
+        
+        let pArray = splatCanvas.getContext('2d').getImageData(0, 0, 4096, 4096);
+        let d = pArray.data;
+        let didPaint = false;
+        
+        let curve = new THREE.CatmullRomCurve3([...splinePoints, splinePoints[0].clone()]);
+        let densePts = curve.getPoints(splinePoints.length * 10);
+        
+        for (let i = 0; i < count; i++) {
+            let vx = positions[i*3];
+            let vz = -positions[i*3+2];
+            
+            if(vx < boundsMinX || vx > boundsMaxX || vz < boundsMinZ || vz > boundsMaxZ) continue;
+            
+            if(pointInPolygon({x: vx, z: vz}, densePts)) {
+                // Map to 4096 splat map
+                let pxX = Math.round(((vx + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+                let pxY = Math.round(((vz + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+                
+                if (pxX>=0 && pxX<4096 && pxY>=0 && pxY<4096) {
+                    pCtx.save();
+                    pCtx.beginPath();
+                    pCtx.arc(pxX, pxY, 20, 0, Math.PI*2); // Paint brush size
+                    if(layerType === 'GREEN') pCtx.fillStyle = '#98ce68';
+                    else if(layerType === 'FAIRWAY') pCtx.fillStyle = '#659c35';
+                    else if(layerType === 'BUNKER') pCtx.fillStyle = '#dcb871';
+                    pCtx.fill();
+                    pCtx.restore();
+                    didPaint = true;
+                }
+            }
+        }
+        
+        if (didPaint) {
+            mapTex.needsUpdate = true;
+            clearSpline();
+        }
+    };
+
+    window.executeSplinePath = function(pathType) {
+        if(splinePoints.length < 2) return;
+        saveUndoState();
+        
+        let curve = new THREE.CatmullRomCurve3(splinePoints);
+        let objType = 'ROAD';
+        
+        // Väg-mesh
+        let tubeGeo = new THREE.TubeGeometry(curve, splinePoints.length * 10, 2, 8, false);
+        let colors = new Float32Array(tubeGeo.attributes.position.count * 3);
+        let col = new THREE.Color(0.5, 0.5, 0.5); // Grå asfalt
+        for(let j=0; j<colors.length; j+=3) {
+            colors[j]=col.r; colors[j+1]=col.g; colors[j+2]=col.b;
+        }
+        tubeGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        let pathMat = new THREE.MeshLambertMaterial({ vertexColors:true, side: THREE.DoubleSide });
+        let pMesh = new THREE.Mesh(tubeGeo, pathMat);
+        
+        // Flatten and snap to ground
+        pMesh.geometry.computeBoundingBox();
+        let pPos = pMesh.geometry.attributes.position.array;
+        for(let i=0; i<pPos.length; i+=3) {
+            let wx = pPos[i];
+            let wz = pPos[i+2];
+            let t = localGetTerrainAt(wx, wz);
+            if(t) {
+                pPos[i+1] = t.y + 0.1; // Snap + offset
+            }
+            // Sätt alla vertexfärger explicit baserat på typ (redan gjort i BufferAttribute)
+        }
+        pMesh.geometry.computeVertexNormals();
+        pMesh.castShadow = true;
+        pMesh.receiveShadow = true;
+        
+        let rObj = {
+            id: Math.random().toString(36).substr(2, 9),
+            type: objType,
+            mesh: pMesh,
+            splineData: splinePoints.map(p => ({x:p.x, y:p.y, z:p.z}))
+        };
+        scene.add(pMesh);
+        courseHoles[currentHoleIndex].envObjects.push(rObj);
+        
+        clearSpline();
+    };
+
     function applySculpting() {
         if (!isSculpting || !lastHitPoint) {
             previousFrameHitPoint = null;
@@ -4100,6 +4268,19 @@
 
     animate();
 </script>
+
+<div id="spline-action-panel" style="display:none; position:absolute; bottom:120px; left:50%; transform:translateX(-50%); background:#0f172a; border:2px solid #38bdf8; border-radius:12px; padding:15px; z-index:400; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center;">
+    <h3 style="margin:0 0 10px 0; color:#fff; font-size:14px; text-transform:uppercase; letter-spacing:1px;">Spline Ready</h3>
+    <div style="display:flex; gap:10px;">
+        <button onclick="executeSplineBoundary('GREEN')" style="background:#4ade80; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">⛳ Fill Green</button>
+        <button onclick="executeSplineBoundary('FAIRWAY')" style="background:#22c55e; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🌿 Fill Fairway</button>
+        <button onclick="executeSplineBoundary('BUNKER')" style="background:#fbbf24; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🏖️ Fill Bunker</button>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:10px;">
+        <button onclick="executeSplinePath('ROAD')" style="background:#64748b; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🛣️ Extrude Path</button>
+        <button onclick="clearSpline()" style="background:#ef4444; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">❌ Clear All</button>
+    </div>
+</div>
 
 </body>
 </html>
