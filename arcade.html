@@ -3203,6 +3203,17 @@
     const targetPaintColor = new THREE.Color();
     let previousFrameHitPoint = null;
     
+    window.localGetTerrainAt = function(threeX, threeZ) {
+        let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+        let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+        if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
+        if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
+        let idx = gz * (TERRAIN_SEGS+1) + gx;
+        let positions = planeGeo.attributes.position.array;
+        let height = positions[idx * 3 + 2];
+        return { z: height };
+    };
+
     function updateSplinePreview() {
         // Rensa gamla sfärer och mesh
         splineSpheres.forEach(s => scene.remove(s));
@@ -3221,7 +3232,7 @@
 
         if(splinePoints.length > 1) {
             let pts = [...splinePoints];
-            if(splinePoints.length > 2) pts.push(splinePoints[0].clone()); // Stäng loopen grafiskt
+            // Stänger INTE loopen grafiskt längre, så att öppna vägar ser korrekta ut i previewn!
             
             let curve = new THREE.CatmullRomCurve3(pts);
             let curvePts = curve.getPoints(50 * pts.length);
@@ -3277,35 +3288,48 @@
         saveUndoState();
         
         let curve = new THREE.CatmullRomCurve3(splinePoints);
-        let objType = 'ROAD';
+        let objType = pathType === 'TUBE' ? 'TUBE' : 'ROAD'; // ROAD = Flat
+        let pMesh;
         
-        // Väg-mesh
-        let tubeGeo = new THREE.TubeGeometry(curve, splinePoints.length * 10, 2, 8, false);
-        let colors = new Float32Array(tubeGeo.attributes.position.count * 3);
-        let col = new THREE.Color(0.5, 0.5, 0.5); // Grå asfalt
-        for(let j=0; j<colors.length; j+=3) {
-            colors[j]=col.r; colors[j+1]=col.g; colors[j+2]=col.b;
-        }
-        tubeGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        
-        let pathMat = new THREE.MeshLambertMaterial({ vertexColors:true, side: THREE.DoubleSide });
-        let pMesh = new THREE.Mesh(tubeGeo, pathMat);
-        
-        // Flatten and snap to ground
-        pMesh.geometry.computeBoundingBox();
-        let pPos = pMesh.geometry.attributes.position.array;
-        for(let i=0; i<pPos.length; i+=3) {
-            let wx = pPos[i];
-            let wz = pPos[i+2];
-            let t = localGetTerrainAt(wx, -wz);
-            if(t) {
-                pPos[i+1] = t.z + 0.1; // Snap + offset
+        if (pathType === 'TUBE') {
+            // Skapa 3D Tube längs kurvan
+            let densePts = curve.getPoints(splinePoints.length * 10);
+            for(let pt of densePts) {
+                let t = localGetTerrainAt(pt.x, -pt.z);
+                if(t) pt.y = t.z + 1.0; // Lyft upp centrum något över marken
             }
-            // Sätt alla vertexfärger explicit baserat på typ (redan gjort i BufferAttribute)
+            let groundCurve = new THREE.CatmullRomCurve3(densePts);
+            let tubeGeo = new THREE.TubeGeometry(groundCurve, densePts.length, 1.5, 8, false);
+            
+            let color = new THREE.Color(0.2, 0.6, 0.8); // By default nice blue pipeline
+            let tubeMat = new THREE.MeshLambertMaterial({ color: color });
+            pMesh = new THREE.Mesh(tubeGeo, tubeMat);
+            pMesh.castShadow = true;
+            pMesh.receiveShadow = true;
+            
+        } else {
+            // PLAT VÄG
+            let densePts = curve.getPoints(splinePoints.length * 10);
+            for(let pt of densePts) {
+                let t = localGetTerrainAt(pt.x, -pt.z);
+                if(t) pt.y = t.z + 0.15; // Snappa kurvan mot marken med offset
+            }
+            let groundCurve = new THREE.CatmullRomCurve3(densePts);
+            
+            let tubeGeo = new THREE.TubeGeometry(groundCurve, densePts.length, 2.5, 8, false);
+            let roadMat = new THREE.MeshLambertMaterial({ color: 0x475569, side: THREE.DoubleSide });
+            pMesh = new THREE.Mesh(tubeGeo, roadMat);
+            
+            // Platta till Mesh Y-skalan (skapar plat asfältsform istället för tub)
+            pMesh.scale.y = 0.05; 
+            pMesh.updateMatrix();
+            pMesh.geometry.applyMatrix4(pMesh.matrix);
+            pMesh.scale.set(1,1,1);
+            pMesh.updateMatrix();
+            pMesh.geometry.computeBoundingBox();
+            pMesh.geometry.computeVertexNormals();
+            pMesh.receiveShadow = true;
         }
-        pMesh.geometry.computeVertexNormals();
-        pMesh.castShadow = true;
-        pMesh.receiveShadow = true;
         
         let rObj = {
             id: Math.random().toString(36).substr(2, 9),
@@ -4240,7 +4264,8 @@
         <button onclick="executeSplineBoundary('BUNKER')" style="background:#fbbf24; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🏖️ Fill Bunker</button>
     </div>
     <div style="display:flex; gap:10px; margin-top:10px;">
-        <button onclick="executeSplinePath('ROAD')" style="background:#64748b; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🛣️ Extrude Path</button>
+        <button onclick="executeSplinePath('FLAT_ROAD')" style="background:#475569; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🛣️ Extrude Flat Road</button>
+        <button onclick="executeSplinePath('TUBE')" style="background:#3b82f6; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🚰 Extrude 3D Tube</button>
         <button onclick="clearSpline()" style="background:#ef4444; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">❌ Clear All</button>
     </div>
 </div>
