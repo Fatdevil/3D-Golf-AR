@@ -3246,67 +3246,30 @@
         if(splinePoints.length < 3) return;
         saveUndoState();
         
-        // Point in Polygon algorithm för 2D projicerad X/Z
-        function pointInPolygon(pt, vs) {
-            let inside = false;
-            for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-                let xi = vs[i].x, zi = vs[i].z;
-                let xj = vs[j].x, zj = vs[j].z;
-                let intersect = ((zi > pt.z) != (zj > pt.z))
-                    && (pt.x < (xj - xi) * (pt.z - zi) / (zj - zi) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
-        }
-
-        let positions = planeGeo.attributes.position.array;
-        let count = planeGeo.attributes.position.count;
-        let boundsMinX = 9999, boundsMaxX = -9999;
-        let boundsMinZ = 9999, boundsMaxZ = -9999;
-        
-        splinePoints.forEach(p => {
-            if(p.x < boundsMinX) boundsMinX = p.x;
-            if(p.x > boundsMaxX) boundsMaxX = p.x;
-            if(p.z < boundsMinZ) boundsMinZ = p.z;
-            if(p.z > boundsMaxZ) boundsMaxZ = p.z;
-        });
-        
-        let pArray = splatCanvas.getContext('2d').getImageData(0, 0, 4096, 4096);
-        let d = pArray.data;
-        let didPaint = false;
+        pCtx.save();
+        pCtx.beginPath();
         
         let curve = new THREE.CatmullRomCurve3([...splinePoints, splinePoints[0].clone()]);
         let densePts = curve.getPoints(splinePoints.length * 10);
         
-        for (let i = 0; i < count; i++) {
-            let vx = positions[i*3];
-            let vz = -positions[i*3+2];
-            
-            if(vx < boundsMinX || vx > boundsMaxX || vz < boundsMinZ || vz > boundsMaxZ) continue;
-            
-            if(pointInPolygon({x: vx, z: vz}, densePts)) {
-                // Map to 4096 splat map
-                let pxX = Math.round(((vx + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
-                let pxY = Math.round(((vz + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
-                
-                if (pxX>=0 && pxX<4096 && pxY>=0 && pxY<4096) {
-                    pCtx.save();
-                    pCtx.beginPath();
-                    pCtx.arc(pxX, pxY, 20, 0, Math.PI*2); // Paint brush size
-                    if(layerType === 'GREEN') pCtx.fillStyle = '#98ce68';
-                    else if(layerType === 'FAIRWAY') pCtx.fillStyle = '#659c35';
-                    else if(layerType === 'BUNKER') pCtx.fillStyle = '#dcb871';
-                    pCtx.fill();
-                    pCtx.restore();
-                    didPaint = true;
-                }
-            }
-        }
+        densePts.forEach((pt, i) => {
+            let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pxY = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            if (i === 0) pCtx.moveTo(pxX, pxY);
+            else pCtx.lineTo(pxX, pxY);
+        });
         
-        if (didPaint) {
-            mapTex.needsUpdate = true;
-            clearSpline();
-        }
+        pCtx.closePath();
+        
+        if(layerType === 'GREEN') pCtx.fillStyle = '#98ce68';
+        else if(layerType === 'FAIRWAY') pCtx.fillStyle = '#659c35';
+        else if(layerType === 'BUNKER') pCtx.fillStyle = '#dcb871';
+        
+        pCtx.fill();
+        pCtx.restore();
+        
+        mapTex.needsUpdate = true;
+        clearSpline();
     };
 
     window.executeSplinePath = function(pathType) {
@@ -3334,9 +3297,9 @@
         for(let i=0; i<pPos.length; i+=3) {
             let wx = pPos[i];
             let wz = pPos[i+2];
-            let t = localGetTerrainAt(wx, wz);
+            let t = localGetTerrainAt(wx, -wz);
             if(t) {
-                pPos[i+1] = t.y + 0.1; // Snap + offset
+                pPos[i+1] = t.z + 0.1; // Snap + offset
             }
             // Sätt alla vertexfärger explicit baserat på typ (redan gjort i BufferAttribute)
         }
