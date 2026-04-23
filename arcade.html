@@ -654,46 +654,48 @@
     
     // Nya extremt nerskalade palmen (250 KB)
     gltfLoader.load('palm3.glb', function(gltf) {
-        let model = gltf.scene;
-        let box = new THREE.Box3().setFromObject(model);
-        let center = box.getCenter(new THREE.Vector3());
-        let size = box.getSize(new THREE.Vector3());
-        
-        let targetHeight = 12.0; 
-        let scaleFixed = (size.y > 0.001) ? (targetHeight / size.y) : 1.0;
-        if (!isFinite(scaleFixed)) scaleFixed = 1.0;
-        
-        // Prevent NaN matrix corruption
-        let cx = isFinite(center.x) ? center.x : 0;
-        let cymin = isFinite(box.min.y) ? box.min.y : 0;
-        let cz = isFinite(center.z) ? center.z : 0;
-        
-        model.scale.set(scaleFixed, scaleFixed, scaleFixed);
-        model.position.set(-cx * scaleFixed, -cymin * scaleFixed, -cz * scaleFixed);
-        
-        let container = new THREE.Group();
-        container.add(model);
-        
-        container.traverse(function(node) {
-            if (node.isMesh) {
-                node.castShadow = true;
-                node.receiveShadow = true;
-            }
-        });
-        window.customModels['PALM'] = container;
-        console.log("Palm 3 (250kb) Laddad!", container);
-        
-        // --- RETROFIT EXISTING PALMS ---
-        // Eftersom träden ofta skapas (via createTree) innan denna tunga .glb filen
-        // har hunnit asynkront laddas klart, råkade de istället ritas upp med den gamla 
-        // temporära, fula primitiven som fallback. Vi byter härmed ut dem direkt!
-        if (window.placedTrees) {
-            window.placedTrees.forEach(t => {
-                if (t.type === 'PALM') {
-                    while(t.mesh.children.length > 0) { t.mesh.remove(t.mesh.children[0]); }
-                    t.mesh.add(window.customModels['PALM'].clone());
+        try {
+            let model = gltf.scene;
+            let box = new THREE.Box3().setFromObject(model);
+            let center = box.getCenter(new THREE.Vector3());
+            let size = box.getSize(new THREE.Vector3());
+            
+            let targetHeight = 12.0; 
+            let scaleFixed = (size.y > 0.001) ? (targetHeight / size.y) : 1.0;
+            if (!isFinite(scaleFixed)) scaleFixed = 1.0;
+            
+            // Prevent NaN matrix corruption
+            let cx = isFinite(center.x) ? center.x : 0;
+            let cymin = isFinite(box.min.y) ? box.min.y : 0;
+            let cz = isFinite(center.z) ? center.z : 0;
+            
+            model.scale.set(scaleFixed, scaleFixed, scaleFixed);
+            model.position.set(-cx * scaleFixed, -cymin * scaleFixed, -cz * scaleFixed);
+            
+            let container = new THREE.Group();
+            container.add(model);
+            
+            container.traverse(function(node) {
+                if (node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
                 }
             });
+            window.customModels['PALM'] = container;
+            console.log("Palm 3 (250kb) Laddad!", container);
+            
+            // --- RETROFIT EXISTING PALMS ---
+            if (window.placedTrees) {
+                window.placedTrees.forEach(t => {
+                    if (t.type === 'PALM') {
+                        while(t.mesh.children.length > 0) { t.mesh.remove(t.mesh.children[0]); }
+                        t.mesh.add(window.customModels['PALM'].clone());
+                    }
+                });
+            }
+        } catch(err) {
+            console.error("PALM3 TRY-CATCH ERROR:", err);
+            alert("JS ERROR IN GLTFLOADER: " + err.message);
         }
     }, undefined, function(error) {
         console.error("PALM3 GLB ERROR:", error);
