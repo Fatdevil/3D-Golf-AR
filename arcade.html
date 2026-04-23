@@ -8,6 +8,12 @@
   body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Inter', sans-serif; }
   canvas { display: block; }
   
+  /* Sleek Scrollbar for ribbons */
+  ::-webkit-scrollbar { height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  
   #ui-layer {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -285,11 +291,79 @@
         </div>
     </div>
     
-    <!-- BUILD PALETTE -->
-    <div id="build-palette" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.9); padding:15px; border-radius:15px; pointer-events:auto; display:none; gap:10px; border:1px solid #475569; align-items:center;">
+    <!-- FLOATING SUB-PALETTES -->
+    <div id="sub-palette-container" style="position:absolute; bottom:140px; left:50%; transform:translateX(-50%); pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:10px; z-index:100; width:100%;">
+        
+        <!-- Inställningar för skulptering -->
+        <div id="sculpt-settings-group" style="display:none; flex-direction:row; align-items:center; gap:15px; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569;">
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Brush Size</label>
+                <input type="range" id="brush-slider" min="2" max="25" value="6" oninput="updateBrushSize()" style="width:100px; accent-color:#38bdf8; cursor:pointer;" title="Change size">
+            </div>
+            <div style="display:flex; gap:5px;">
+                <button onclick="setBrushMultiplier(1, this)" class="brush-mult-btn active" style="background:#38bdf8; color:#0f172a; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">1x</button>
+                <button onclick="setBrushMultiplier(4, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">4x</button>
+                <button onclick="setBrushMultiplier(10, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">10x</button>
+            </div>
+            <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="background:#4ade80; color:#0f172a; border:none; padding:6px 12px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.5);" title="Ändra riktning på penseln">⬆️ RAISE</button>
+            
+            <div id="green-diff-group" style="display:none; flex-direction:row; align-items:center; gap:5px; margin-left:10px; border-left:1px solid #475569; padding-left:15px;">
+                <label style="color:#fbbf24; font-size:10px; font-weight:bold; text-transform:uppercase;">Green Diff:</label>
+                <button id="green-btn-flat" onclick="setGreenDiff('FLAT')" style="background:#fbbf24; color:#0f172a; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">FLAT</button>
+                <button id="green-btn-easy" onclick="setGreenDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">EASY</button>
+                <button id="green-btn-med" onclick="setGreenDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">MED</button>
+                <button id="green-btn-hard" onclick="setGreenDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">HARD</button>
+            </div>
+        </div>
+
+        <!-- Färg för block / Målning -->
+        <div id="color-picker-group" style="display:none; gap:10px; align-items:center; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569; overflow-x:auto; flex-wrap:nowrap; max-width:80vw;">
+            <div class="palette-btn active" style="background:#ef4444; flex-shrink:0;" onclick="setBlockColor(0xef4444, this)" title="Red Block / Lava (OB)"></div>
+            <div class="palette-btn" style="background:#e0d8a4; flex-shrink:0;" onclick="setBlockColor(0xe0d8a4, this)" title="Sand / Bunker"></div>
+            <div class="palette-btn" style="background:#c2af7c; flex-shrink:0;" onclick="setBlockColor(0xc2af7c, this)" title="Waste Area"></div>
+            <div class="palette-btn" style="background:#98ce68; flex-shrink:0;" onclick="setBlockColor(0x98ce68, this)" title="Putting Green"></div>
+            <div class="palette-btn" style="background:#8bc45d; flex-shrink:0;" onclick="setBlockColor(0x8bc45d, this)" title="Foregreen"></div>
+            <div class="palette-btn" style="background:#7db952; flex-shrink:0;" onclick="setBlockColor(0x7db952, this)" title="Fairway"></div>
+            <div class="palette-btn" style="background:#6b9e3d; flex-shrink:0;" onclick="setBlockColor(0x6b9e3d, this)" title="Semi-Rough"></div>
+            <div class="palette-btn" style="background:#4a782b; flex-shrink:0;" onclick="setBlockColor(0x4a782b, this)" title="Rough"></div>
+            <div class="palette-btn" style="background:#2d4c1a; flex-shrink:0;" onclick="setBlockColor(0x2d4c1a, this)" title="Deep Rough / Fescue"></div>
+        </div>
+
+        <!-- Naturväljare (Scrollable Ribbon) -->
+        <div id="nature-picker-group" style="display:none; gap:10px; align-items:center; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569; overflow-x:auto; flex-wrap:nowrap; max-width:80vw;">
+            <!-- Populated dynamically via ASSET_REGISTRY -->
+        </div>
+
+        <!-- Hål-väljare (Course Builder) -->
+        <div id="hole-picker-group" style="display:none; gap:15px; align-items:center; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569;">
+            <div style="display:flex; align-items:center; background:#1e293b; border-radius:8px; padding:2px;">
+                <button onclick="changeHole(-1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&lt;</button>
+                <div id="hole-ui-num" style="color:#fff; font-weight:900; width:60px; text-align:center;">Hole 1</div>
+                <button onclick="changeHole(1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&gt;</button>
+            </div>
+            <div style="display:flex; align-items:center; background:#1e293b; border-radius:8px; padding:2px;">
+                <button onclick="changeHolePar(-1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">-</button>
+                <div id="hole-ui-par" style="color:#fbbf24; font-weight:900; width:50px; text-align:center;">Par 4</div>
+                <button onclick="changeHolePar(1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">+</button>
+            </div>
+            <div style="display:flex; gap:3px;">
+                <button id="btn-set-tee-red" onclick="setHoleItem('TEE_RED')" class="hole-item-btn" style="background:#1e293b; color:#ef4444; border:1px solid #ef4444; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Red Tee">T</button>
+                <button id="btn-set-tee-yellow" onclick="setHoleItem('TEE_YELLOW')" class="hole-item-btn active" style="background:#facc15; color:#0f172a; border:1px solid #facc15; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Yellow Tee">T</button>
+                <button id="btn-set-tee-white" onclick="setHoleItem('TEE_WHITE')" class="hole-item-btn" style="background:#1e293b; color:#fff; border:1px solid #fff; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="White Tee">T</button>
+                <button id="btn-set-tee-black" onclick="setHoleItem('TEE_BLACK')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #000; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Black Tee">T</button>
+                <div style="width:1px; height:20px; background:#475569; margin: 0 5px;"></div>
+                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;">⛳ Flag</button>
+            </div>
+            <div style="width:1px; height:30px; background:#475569; margin:0 5px;"></div>
+            <button onclick="showScorecard()" style="background:#4ade80; color:#0f172a; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">📝 Score</button>
+        </div>
+    </div>
+
+    <!-- MAIN BUILD PALETTE -->
+    <div id="build-palette" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.9); padding:10px 15px; border-radius:15px; pointer-events:auto; display:none; gap:10px; border:1px solid #475569; align-items:center; box-shadow:0 10px 40px rgba(0,0,0,0.7);">
         
         <!-- Verktygsväljare -->
-        <div style="display:flex; flex-direction:column; gap:5px; background:#0f172a; padding:5px; border-radius:10px;">
+        <div style="display:flex; flex-direction:column; gap:5px;">
             <!-- Rad 1: Terräng & Penslar -->
             <div style="display:flex; gap:5px; justify-content:center;">
                 <button id="tool-inspect" onclick="setTool('INSPECT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">👀 INSPECT</button>
@@ -314,91 +388,6 @@
                 <div style="width:1px; height:30px; background:#475569; margin: 0 5px;"></div>
                 <button onclick="performUndo()" title="Undo (Ctrl+Z)" style="background:transparent; color:#f87171; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">↩️ UNDO</button>
             </div>
-        </div>
-        
-        <div style="width:1px; height:30px; background:#475569; margin: 0 10px;"></div>
-        
-        <!-- Inställningar för skulptering -->
-        <div id="sculpt-settings-group" style="display:none; flex-direction:column; gap:2px; margin:0 5px;">
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Brush</label>
-            <input type="range" id="brush-slider" min="2" max="25" value="6" oninput="updateBrushSize()" style="width:80px; accent-color:#38bdf8; cursor:pointer;" title="Change size">
-            <div style="display:flex; justify-content:space-between; width:80px;">
-                <button onclick="setBrushMultiplier(1, this)" class="brush-mult-btn active" style="background:#38bdf8; color:#0f172a; border:none; padding:2px; font-size:9px; border-radius:3px; font-weight:bold; cursor:pointer; width:30%;">1x</button>
-                <button onclick="setBrushMultiplier(4, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:2px; font-size:9px; border-radius:3px; font-weight:bold; cursor:pointer; width:30%;">4x</button>
-                <button onclick="setBrushMultiplier(10, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:2px; font-size:9px; border-radius:3px; font-weight:bold; cursor:pointer; width:30%;">10x</button>
-            </div>
-            
-            <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="width:80px; margin-top:4px; background:#4ade80; color:#0f172a; border:none; padding:4px 0; font-size:10px; border-radius:3px; font-weight:bold; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.5);" title="Ändra riktning på penseln (för iPads utan högerklick)">⬆️ RAISE</button>
-            <div id="green-diff-group" style="display:none; flex-direction:column; gap:2px;">
-                <label style="color:#fbbf24; font-size:10px; font-weight:bold; margin-top:5px; text-transform:uppercase;">Green Diff</label>
-                <div style="display:flex; justify-content:space-between; width:80px; gap:2px;">
-                    <button id="green-btn-flat" onclick="setGreenDiff('FLAT')" style="background:#fbbf24; color:#0f172a; border:none; padding:2px; font-size:9px; border-radius:3px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
-                    <button id="green-btn-easy" onclick="setGreenDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:2px; font-size:9px; border-radius:3px; font-weight:bold; cursor:pointer; flex:1;">EASY</button>
-                    <button id="green-btn-med" onclick="setGreenDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:2px; font-size:9px; border-radius:3px; font-weight:bold; cursor:pointer; flex:1;">MED</button>
-                    <button id="green-btn-hard" onclick="setGreenDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:2px; font-size:9px; border-radius:3px; font-weight:bold; cursor:pointer; flex:1;">HARD</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Färg för block / Målning (PREMIUM GOLF CLASH COLORS) -->
-        <div id="color-picker-group" style="display:none; gap:10px; align-items:center;">
-            <!-- Röd / OB -->
-            <div class="palette-btn active" style="background:#ef4444;" onclick="setBlockColor(0xef4444, this)" title="Red Block / Lava (OB)"></div>
-            <!-- Sand -->
-            <div class="palette-btn" style="background:#e0d8a4;" onclick="setBlockColor(0xe0d8a4, this)" title="Sand / Bunker"></div>
-            <!-- Waste -->
-            <div class="palette-btn" style="background:#c2af7c;" onclick="setBlockColor(0xc2af7c, this)" title="Waste Area"></div>
-            <!-- Putting Green -->
-            <div class="palette-btn" style="background:#98ce68;" onclick="setBlockColor(0x98ce68, this)" title="Putting Green"></div>
-            <!-- Foregreen -->
-            <div class="palette-btn" style="background:#8bc45d;" onclick="setBlockColor(0x8bc45d, this)" title="Foregreen"></div>
-            <!-- Ljusgrön / FAIRWAY -->
-            <div class="palette-btn" style="background:#7db952;" onclick="setBlockColor(0x7db952, this)" title="Fairway"></div>
-            <!-- Semi-Rough -->
-            <div class="palette-btn" style="background:#6b9e3d;" onclick="setBlockColor(0x6b9e3d, this)" title="Semi-Rough"></div>
-            <!-- Olivgrön / ROUGH -->
-            <div class="palette-btn" style="background:#4a782b;" onclick="setBlockColor(0x4a782b, this)" title="Rough"></div>
-            <!-- Deep Rough -->
-            <div class="palette-btn" style="background:#2d4c1a;" onclick="setBlockColor(0x2d4c1a, this)" title="Deep Rough / Fescue"></div>
-        </div>
-
-        <!-- Naturväljare -->
-        <div id="nature-picker-group" style="display:none; gap:10px; align-items:center;">
-            <div class="palette-btn active" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('RANDOM', this)" title="Random Mix">🎲</div>
-            <div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('TREE', this)" title="Tree">🌳</div>
-            <div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('OAK', this)" title="Giant Oak Tree">🪹</div>
-            <div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('PALM', this)" title="Palm Tree">🌴</div>
-            <div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('PINE', this)" title="Pine Tree">🎄</div>
-            <div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('BUSH', this)" title="Bush">🪴</div>
-            <div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('ROCK', this)" title="Rock/Stone">🪨</div>
-            <div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('CACTUS', this)" title="Cactus">🌵</div>
-        </div>
-
-        <!-- Hål-väljare (Course Builder) -->
-        <div id="hole-picker-group" style="display:none; gap:10px; align-items:center;">
-            <!-- Hole Navigator -->
-            <div style="display:flex; align-items:center; background:#1e293b; border-radius:8px; padding:2px;">
-                <button onclick="changeHole(-1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&lt;</button>
-                <div id="hole-ui-num" style="color:#fff; font-weight:900; width:60px; text-align:center;">Hole 1</div>
-                <button onclick="changeHole(1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&gt;</button>
-            </div>
-            <!-- Par Selection -->
-            <div style="display:flex; align-items:center; background:#1e293b; border-radius:8px; padding:2px;">
-                <button onclick="changeHolePar(-1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">-</button>
-                <div id="hole-ui-par" style="color:#fbbf24; font-weight:900; width:50px; text-align:center;">Par 4</div>
-                <button onclick="changeHolePar(1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">+</button>
-            </div>
-            <!-- Item toggle -->
-            <div style="display:flex; gap:3px;">
-                <button id="btn-set-tee-red" onclick="setHoleItem('TEE_RED')" class="hole-item-btn" style="background:#1e293b; color:#ef4444; border:1px solid #ef4444; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Red Tee / Junior">T</button>
-                <button id="btn-set-tee-yellow" onclick="setHoleItem('TEE_YELLOW')" class="hole-item-btn active" style="background:#facc15; color:#0f172a; border:1px solid #facc15; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Yellow Tee / Mens">T</button>
-                <button id="btn-set-tee-white" onclick="setHoleItem('TEE_WHITE')" class="hole-item-btn" style="background:#1e293b; color:#fff; border:1px solid #fff; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="White Tee / Club">T</button>
-                <button id="btn-set-tee-black" onclick="setHoleItem('TEE_BLACK')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #000; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Black Tee / Pro">T</button>
-                <div style="width:1px; height:20px; background:#475569; margin: 0 2px;"></div>
-                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;">⛳ Flag</button>
-            </div>
-            <div style="width:1px; height:30px; background:#475569; margin:0 5px;"></div>
-            <button onclick="showScorecard()" style="background:#4ade80; color:#0f172a; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">📝 Scorecard</button>
         </div>
 
         <div style="width:1px; height:30px; background:#475569; margin: 0 10px;"></div>
@@ -648,59 +637,114 @@
     renderer.autoClear = false; // Krävs för Picture-in-Picture (Minimap)
     document.body.appendChild(renderer.domElement);
     
-    // -- CUSTOM 3D MODELS INJECTION --
+    // -- CUSTOM 3D MODELS INJECTION & ASSET REGISTRY --
     window.customModels = {};
+    window.ASSET_REGISTRY = {
+        'TREE':   { icon: '🌳', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.5 } },
+        'OAK':    { icon: '🌳', cat: 'nature', physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
+        'PALM':   { icon: '🌴', cat: 'nature', file: 'Palm3.glb?v=2', targetHeight: 12.0, brightness: 0.15, physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.0 } },
+        'PINE':   { icon: '🌲', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 18.0, canopyRadius: 2.5 } },
+        'BUSH':   { icon: '🪴', cat: 'nature', physics: { type: 'sphere', radius: 2.0 } },
+        'ROCK':   { icon: '🪨', cat: 'nature', physics: { type: 'sphere', radius: 1.5 } },
+        'CACTUS': { icon: '🌵', cat: 'nature', file: 'cactus_1.glb?v=1', targetHeight: 5.0, brightness: 0.15, physics: { type: 'cylinder', radius: 0.6, height: 6.0 } }
+    };
+    
+    // -- DYNAMIC UI GENERATION --
+    const natureGroup = document.getElementById('nature-picker-group');
+    if (natureGroup) {
+        natureGroup.innerHTML = '<div class="palette-btn active" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType(\'RANDOM\', this)" title="Random Mix">❓</div>';
+        for (let key in window.ASSET_REGISTRY) {
+            let asset = window.ASSET_REGISTRY[key];
+            if (asset.cat === 'nature') {
+                natureGroup.innerHTML += `<div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('${key}', this)" title="${key}">${asset.icon}</div>`;
+            }
+        }
+    }
+    
     const gltfLoader = new THREE.GLTFLoader();
     
     // Nya extremt nerskalade palmen (250 KB)
-    gltfLoader.load('palm3.glb', function(gltf) {
-        try {
-            let model = gltf.scene;
-            let box = new THREE.Box3().setFromObject(model);
-            let center = box.getCenter(new THREE.Vector3());
-            let size = box.getSize(new THREE.Vector3());
-            
-            let targetHeight = 12.0; 
-            let scaleFixed = (size.y > 0.001) ? (targetHeight / size.y) : 1.0;
-            if (!isFinite(scaleFixed)) scaleFixed = 1.0;
-            
-            // Prevent NaN matrix corruption
-            let cx = isFinite(center.x) ? center.x : 0;
-            let cymin = isFinite(box.min.y) ? box.min.y : 0;
-            let cz = isFinite(center.z) ? center.z : 0;
-            
-            model.scale.set(scaleFixed, scaleFixed, scaleFixed);
-            model.position.set(-cx * scaleFixed, -cymin * scaleFixed, -cz * scaleFixed);
-            
-            let container = new THREE.Group();
-            container.add(model);
-            
-            container.traverse(function(node) {
-                if (node.isMesh) {
-                    node.castShadow = true;
-                    node.receiveShadow = true;
-                }
-            });
-            window.customModels['PALM'] = container;
-            console.log("Palm 3 (250kb) Laddad!", container);
-            
-            // --- RETROFIT EXISTING PALMS ---
-            if (window.placedTrees) {
-                window.placedTrees.forEach(t => {
-                    if (t.type === 'PALM') {
-                        while(t.mesh.children.length > 0) { t.mesh.remove(t.mesh.children[0]); }
-                        t.mesh.add(window.customModels['PALM'].clone());
+    window.loadAsset = function(type, callback) {
+        if (!window.ASSET_REGISTRY[type] || !window.ASSET_REGISTRY[type].file) {
+            if(callback) callback(false);
+            return;
+        }
+        if (window.customModels[type] && window.customModels[type] !== 'LOADING') {
+            if(callback) callback(true);
+            return;
+        }
+        if (window.customModels[type] === 'LOADING') return;
+        
+        window.customModels[type] = 'LOADING';
+        gltfLoader.load(window.ASSET_REGISTRY[type].file, function(gltf) {
+            try {
+                let model = gltf.scene;
+                let box = new THREE.Box3().setFromObject(model);
+                let center = box.getCenter(new THREE.Vector3());
+                let size = box.getSize(new THREE.Vector3());
+                
+                let targetHeight = window.ASSET_REGISTRY[type].targetHeight || 12.0; 
+                let scaleFixed = (size.y > 0.001) ? (targetHeight / size.y) : 1.0;
+                if (!isFinite(scaleFixed)) scaleFixed = 1.0;
+                
+                let cx = isFinite(center.x) ? center.x : 0;
+                let cymin = isFinite(box.min.y) ? box.min.y : 0;
+                let cz = isFinite(center.z) ? center.z : 0;
+                
+                model.scale.set(scaleFixed, scaleFixed, scaleFixed);
+                model.position.set(-cx * scaleFixed, -cymin * scaleFixed, -cz * scaleFixed);
+                
+                let container = new THREE.Group();
+                container.add(model);
+                
+                container.traverse(function(node) {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                        if (node.material) {
+                            // Åtgärda "mörka GLTF-modeller" (pga avsaknad av envMap / sRGBEncoding)
+                            if (node.material.isMeshStandardMaterial || node.material.isMeshPhysicalMaterial) {
+                                node.material.metalness = 0.0; // Metaller utan reflektion blir svarta
+                                node.material.roughness = 0.9; // Matt yta för arkadkänsla
+                                
+                                // Läs av ljusstyrka från registret (default 0.15)
+                                let boost = window.ASSET_REGISTRY[type].brightness !== undefined ? window.ASSET_REGISTRY[type].brightness : 0.15;
+                                
+                                // Simulera ambient-ljus genom att addera lite emissive (självbelysning) baserat på ytans egen färg
+                                if (node.material.color && boost > 0) {
+                                    node.material.emissive = node.material.color.clone().multiplyScalar(boost);
+                                }
+                                node.material.needsUpdate = true;
+                            }
+                        }
                     }
                 });
+                window.customModels[type] = container;
+                console.log(type + " loaded successfully!");
+                
+                if (window.placedTrees) {
+                    window.placedTrees.forEach(t => {
+                        if (t.type === type) {
+                            while(t.mesh.children.length > 0) { t.mesh.remove(t.mesh.children[0]); }
+                            t.mesh.add(window.customModels[type].clone());
+                        }
+                    });
+                }
+                if(callback) callback(true);
+            } catch(err) {
+                console.error(type + " processing error:", err);
+                window.customModels[type] = null;
+                if(callback) callback(false);
             }
-        } catch(err) {
-            console.error("PALM3 TRY-CATCH ERROR:", err);
-            alert("JS ERROR IN GLTFLOADER: " + err.message);
-        }
-    }, undefined, function(error) {
-        console.error("PALM3 GLB ERROR:", error);
-        alert("ERROR: Could not load palm3.glb! Check console for details. " + (error.message || error));
-    });
+        }, undefined, function(error) {
+            console.error(type + " load error:", error);
+            window.customModels[type] = null;
+            if(callback) callback(false);
+        });
+    };
+    
+    // Förladda modeller som ska vara aktiva direkt
+    window.loadAsset('PALM');
     
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
     window.aimTarget = new THREE.Vector3(0, 0, -20);
@@ -1025,7 +1069,7 @@
     const palmTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
     const palmLeavesMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
-    const cactusMat = new THREE.MeshLambertMaterial({ color: 0x65a30d });
+
     const oakLeavesMat = new THREE.MeshLambertMaterial({ color: 0x3f6b2b }); // Mörk oliv/ek
 
     const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 4, 6); 
@@ -1036,8 +1080,7 @@
     const pineGeo = new THREE.ConeGeometry(2.5, 8, 6); // Tall
     const spineGeo = new THREE.CylinderGeometry(0.3, 0.6, 8, 6); 
     const rockGeo = new THREE.DodecahedronGeometry(1.5, 0); // Klippa
-    const cactusBaseGeo = new THREE.CylinderGeometry(0.6, 0.6, 5, 6); // Kaktus
-    const cactusArmGeo = new THREE.CylinderGeometry(0.4, 0.4, 3, 6); // Kaktusarm
+
     const palmFrondGeo = new THREE.ConeGeometry(0.5, 5, 4); 
     palmFrondGeo.translate(0, 2.5, 0);
 
@@ -1055,22 +1098,23 @@
         if(hits.length > 0) groundY = hits[0].point.y;
         group.position.y = groundY;
 
-        if (type === 'BUSH') {
-            let bMesh = new THREE.Mesh(bushGeo, bushLeavesMat);
-            bMesh.position.y = 0.5; bMesh.castShadow = true; bMesh.receiveShadow = true;
-            group.add(bMesh);
-        } else if (type === 'TREE') {
-            let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
-            tMesh.position.y = 2.0; tMesh.castShadow = true;
-            let lMesh = new THREE.Mesh(leafGeo, treeLeavesMat);
-            lMesh.position.y = 5.0; lMesh.scale.set(1, 0.8, 1);
-            lMesh.castShadow = true; lMesh.receiveShadow = true;
-            group.add(tMesh); group.add(lMesh);
-        } else if (type === 'PALM') {
-            if (window.customModels && window.customModels['PALM']) {
-                let clone = window.customModels['PALM'].clone();
-                group.add(clone);
-            } else {
+        if (window.customModels[type] && window.customModels[type] !== 'LOADING') {
+            let clone = window.customModels[type].clone();
+            group.add(clone);
+        } else {
+            // Procedural Fallbacks for legacy nature, or generic block for new assets
+            if (type === 'BUSH') {
+                let bMesh = new THREE.Mesh(bushGeo, bushLeavesMat);
+                bMesh.position.y = 0.5; bMesh.castShadow = true; bMesh.receiveShadow = true;
+                group.add(bMesh);
+            } else if (type === 'TREE') {
+                let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
+                tMesh.position.y = 2.0; tMesh.castShadow = true;
+                let lMesh = new THREE.Mesh(leafGeo, treeLeavesMat);
+                lMesh.position.y = 5.0; lMesh.scale.set(1, 0.8, 1);
+                lMesh.castShadow = true; lMesh.receiveShadow = true;
+                group.add(tMesh); group.add(lMesh);
+            } else if (type === 'PALM') {
                 let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
                 pMesh.position.y = 4.0; pMesh.rotation.z = Math.PI/32; pMesh.castShadow = true;
                 group.add(pMesh);
@@ -1081,42 +1125,42 @@
                     frond.castShadow = true; frond.receiveShadow = true;
                     pMesh.add(frond);
                 }
-            }
-        } else if (type === 'ROCK') {
-            let rMesh = new THREE.Mesh(rockGeo, rockMat);
-            rMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-            rMesh.scale.set(1 + Math.random(), 0.5 + Math.random(), 1 + Math.random());
-            rMesh.position.y = 0.5; rMesh.castShadow = true; rMesh.receiveShadow = true;
-            group.add(rMesh);
-        } else if (type === 'CACTUS') {
-            if (window.customModels && window.customModels['CACTUS']) {
-                let clone = window.customModels['CACTUS'].clone();
-                group.add(clone);
+            } else if (type === 'ROCK') {
+                let rMesh = new THREE.Mesh(rockGeo, rockMat);
+                rMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+                rMesh.scale.set(1 + Math.random(), 0.5 + Math.random(), 1 + Math.random());
+                rMesh.position.y = 0.5; rMesh.castShadow = true; rMesh.receiveShadow = true;
+                group.add(rMesh);
+
+            } else if (type === 'OAK') {
+                let tMesh = new THREE.Mesh(oakTrunkGeo, treeTrunkMat);
+                tMesh.position.y = 3.0; tMesh.castShadow = true;
+                let lMesh = new THREE.Mesh(oakLeafGeo, oakLeavesMat);
+                lMesh.position.y = 7.0; lMesh.scale.set(1, 0.8, 1);
+                lMesh.castShadow = true; lMesh.receiveShadow = true;
+                group.add(tMesh); group.add(lMesh);
+            } else if (type === 'PINE') {
+                let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
+                tMesh.position.y = 2.0; tMesh.castShadow = true;
+                let lMesh = new THREE.Mesh(pineGeo, treeLeavesMat);
+                lMesh.position.y = 6.0; 
+                lMesh.castShadow = true; lMesh.receiveShadow = true;
+                group.add(tMesh); group.add(lMesh);
             } else {
-                let cMesh = new THREE.Mesh(cactusBaseGeo, cactusMat);
-                cMesh.position.y = 2.5; cMesh.castShadow = true;
-                let arm1 = new THREE.Mesh(cactusArmGeo, cactusMat);
-                arm1.position.set(0.8, 1.0, 0); arm1.rotation.z = Math.PI/4; arm1.castShadow = true;
-                let arm2 = new THREE.Mesh(cactusArmGeo, cactusMat);
-                arm2.position.set(-0.8, 2.0, 0); arm2.rotation.z = -Math.PI/4; arm2.castShadow = true;
-                cMesh.add(arm1); cMesh.add(arm2);
-                group.add(cMesh);
+                // Generic Fallback Container for any new asset while loading
+                let tempGeo = new THREE.BoxGeometry(2, 5, 2);
+                let tempMat = new THREE.MeshLambertMaterial({ color: 0x64748b, wireframe: true });
+                let tMesh = new THREE.Mesh(tempGeo, tempMat);
+                tMesh.position.y = 2.5;
+                group.add(tMesh);
+                
+                // Trigger lazy load if not already loading
+                if (window.ASSET_REGISTRY[type] && !window.customModels[type]) {
+                    window.loadAsset(type);
+                }
             }
-        } else if (type === 'OAK') {
-            let tMesh = new THREE.Mesh(oakTrunkGeo, treeTrunkMat);
-            tMesh.position.y = 3.0; tMesh.castShadow = true;
-            let lMesh = new THREE.Mesh(oakLeafGeo, oakLeavesMat);
-            lMesh.position.y = 7.0; lMesh.scale.set(1, 0.8, 1);
-            lMesh.castShadow = true; lMesh.receiveShadow = true;
-            group.add(tMesh); group.add(lMesh);
-        } else if (type === 'PINE') {
-            let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
-            tMesh.position.y = 2.0; tMesh.castShadow = true;
-            let lMesh = new THREE.Mesh(pineGeo, treeLeavesMat);
-            lMesh.position.y = 6.0; 
-            lMesh.castShadow = true; lMesh.receiveShadow = true;
-            group.add(tMesh); group.add(lMesh);
         }
+        
         group.scale.set(scale, scale, scale); group.rotation.y = rot;
         treesGroup.add(group);
         window.placedTrees.push({ type: type, x: x, z: z, scale: scale, rot: rot, mesh: group });
@@ -2275,38 +2319,38 @@
                     let nxPhys = nxThree;
                     let nyPhys = -nzThree;
                     
-                    if (obj.type === 'ROCK') {
-                        let rad = 2.0 * obj.scale;
-                        if (distSq < rad*rad && z < 1.8 * obj.scale) {
-                            let sX = obj.x + nxThree * (rad + 0.05);
-                            let sZ = obj.z + nzThree * (rad + 0.05);
-                            return { type: 'ROCK', height: 1.8 * obj.scale, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                        }
-                    } else if (obj.type === 'BUSH') {
-                        let rad = 2.5 * obj.scale;
-                        if (distSq < rad*rad && z < 2.5 * obj.scale) {
-                            return { type: 'BUSH', height: 2.5 * obj.scale };
-                        }
-                    } else if (obj.type === 'CACTUS') {
-                        let rad = 0.8 * obj.scale;
-                        if (distSq < rad*rad && z < 6.0 * obj.scale) {
-                            let sX = obj.x + nxThree * (rad + 0.05);
-                            let sZ = obj.z + nzThree * (rad + 0.05);
-                            return { type: 'CACTUS', height: 6.0 * obj.scale, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                        }
-                    } else {
-                        // TREE, PINE, PALM, OAK -> Samma träd-fysik med stam och krona
-                        let trunkRadius = 0.5 * obj.scale;
-                        let treeHeight = 15.0 * obj.scale;
-                        let canopyRadius = 3.0 * obj.scale;
+                    let assetDef = window.ASSET_REGISTRY && window.ASSET_REGISTRY[obj.type] ? window.ASSET_REGISTRY[obj.type] : null;
+                    if (assetDef && assetDef.physics) {
+                        let phys = assetDef.physics;
                         
-                        if (distSq < canopyRadius*canopyRadius) {
-                            if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
-                                let sX = obj.x + nxThree * (trunkRadius + 0.05);
-                                let sZ = obj.z + nzThree * (trunkRadius + 0.05);
-                                return { type: 'TREE', height: treeHeight, part: 'TRUNK', n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                            } else if (z > treeHeight*0.3 && z < treeHeight) {
-                                return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
+                        if (phys.type === 'sphere') {
+                            let rad = phys.radius * obj.scale;
+                            if (distSq < rad*rad && z < rad) {
+                                let sX = obj.x + nxThree * (rad + 0.05);
+                                let sZ = obj.z + nzThree * (rad + 0.05);
+                                return { type: obj.type, height: rad, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                            }
+                        } else if (phys.type === 'cylinder') {
+                            let rad = phys.radius * obj.scale;
+                            let h = phys.height * obj.scale;
+                            if (distSq < rad*rad && z < h) {
+                                let sX = obj.x + nxThree * (rad + 0.05);
+                                let sZ = obj.z + nzThree * (rad + 0.05);
+                                return { type: obj.type, height: h, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                            }
+                        } else if (phys.type === 'tree') {
+                            let trunkRadius = phys.trunkRadius * obj.scale;
+                            let treeHeight = phys.height * obj.scale;
+                            let canopyRadius = phys.canopyRadius * obj.scale;
+                            
+                            if (distSq < canopyRadius*canopyRadius) {
+                                if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
+                                    let sX = obj.x + nxThree * (trunkRadius + 0.05);
+                                    let sZ = obj.z + nzThree * (trunkRadius + 0.05);
+                                    return { type: obj.type, height: treeHeight, part: 'TRUNK', n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                                } else if (z > treeHeight*0.3 && z < treeHeight) {
+                                    return { type: obj.type, height: treeHeight, part: 'CANOPY' };
+                                }
                             }
                         }
                     }

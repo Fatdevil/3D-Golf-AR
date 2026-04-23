@@ -94,6 +94,19 @@
             if (node.isMesh) {
                 node.castShadow = true;
                 node.receiveShadow = true;
+                if (node.material) {
+                    if (node.material.isMeshStandardMaterial || node.material.isMeshPhysicalMaterial) {
+                        node.material.metalness = 0.0;
+                        node.material.roughness = 0.9;
+                        
+                        let boost = window.ASSET_REGISTRY['PALM'].brightness !== undefined ? window.ASSET_REGISTRY['PALM'].brightness : 0.15;
+                        
+                        if (node.material.color && boost > 0) {
+                            node.material.emissive = node.material.color.clone().multiplyScalar(boost);
+                        }
+                        node.material.needsUpdate = true;
+                    }
+                }
             }
         });
         window.customModels['PALM'] = container;
@@ -435,7 +448,7 @@
     const palmTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
     const palmLeavesMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
-    const cactusMat = new THREE.MeshLambertMaterial({ color: 0x65a30d });
+
     const oakLeavesMat = new THREE.MeshLambertMaterial({ color: 0x3f6b2b }); // Mörk oliv/ek
 
     const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 4, 6); 
@@ -446,8 +459,7 @@
     const pineGeo = new THREE.ConeGeometry(2.5, 8, 6); // Tall
     const spineGeo = new THREE.CylinderGeometry(0.3, 0.6, 8, 6); 
     const rockGeo = new THREE.DodecahedronGeometry(1.5, 0); // Klippa
-    const cactusBaseGeo = new THREE.CylinderGeometry(0.6, 0.6, 5, 6); // Kaktus
-    const cactusArmGeo = new THREE.CylinderGeometry(0.4, 0.4, 3, 6); // Kaktusarm
+
     const palmFrondGeo = new THREE.ConeGeometry(0.5, 5, 4); 
     palmFrondGeo.translate(0, 2.5, 0);
 
@@ -465,22 +477,23 @@
         if(hits.length > 0) groundY = hits[0].point.y;
         group.position.y = groundY;
 
-        if (type === 'BUSH') {
-            let bMesh = new THREE.Mesh(bushGeo, bushLeavesMat);
-            bMesh.position.y = 0.5; bMesh.castShadow = true; bMesh.receiveShadow = true;
-            group.add(bMesh);
-        } else if (type === 'TREE') {
-            let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
-            tMesh.position.y = 2.0; tMesh.castShadow = true;
-            let lMesh = new THREE.Mesh(leafGeo, treeLeavesMat);
-            lMesh.position.y = 5.0; lMesh.scale.set(1, 0.8, 1);
-            lMesh.castShadow = true; lMesh.receiveShadow = true;
-            group.add(tMesh); group.add(lMesh);
-        } else if (type === 'PALM') {
-            if (window.customModels && window.customModels['PALM']) {
-                let clone = window.customModels['PALM'].clone();
-                group.add(clone);
-            } else {
+        if (window.customModels && window.customModels[type] && window.customModels[type] !== 'LOADING') {
+            let clone = window.customModels[type].clone();
+            group.add(clone);
+        } else {
+            // Procedural Fallbacks for legacy nature, or generic block for new assets
+            if (type === 'BUSH') {
+                let bMesh = new THREE.Mesh(bushGeo, bushLeavesMat);
+                bMesh.position.y = 0.5; bMesh.castShadow = true; bMesh.receiveShadow = true;
+                group.add(bMesh);
+            } else if (type === 'TREE') {
+                let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
+                tMesh.position.y = 2.0; tMesh.castShadow = true;
+                let lMesh = new THREE.Mesh(leafGeo, treeLeavesMat);
+                lMesh.position.y = 5.0; lMesh.scale.set(1, 0.8, 1);
+                lMesh.castShadow = true; lMesh.receiveShadow = true;
+                group.add(tMesh); group.add(lMesh);
+            } else if (type === 'PALM') {
                 let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
                 pMesh.position.y = 4.0; pMesh.rotation.z = Math.PI/32; pMesh.castShadow = true;
                 group.add(pMesh);
@@ -491,42 +504,42 @@
                     frond.castShadow = true; frond.receiveShadow = true;
                     pMesh.add(frond);
                 }
-            }
-        } else if (type === 'ROCK') {
-            let rMesh = new THREE.Mesh(rockGeo, rockMat);
-            rMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-            rMesh.scale.set(1 + Math.random(), 0.5 + Math.random(), 1 + Math.random());
-            rMesh.position.y = 0.5; rMesh.castShadow = true; rMesh.receiveShadow = true;
-            group.add(rMesh);
-        } else if (type === 'CACTUS') {
-            if (window.customModels && window.customModels['CACTUS']) {
-                let clone = window.customModels['CACTUS'].clone();
-                group.add(clone);
+            } else if (type === 'ROCK') {
+                let rMesh = new THREE.Mesh(rockGeo, rockMat);
+                rMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+                rMesh.scale.set(1 + Math.random(), 0.5 + Math.random(), 1 + Math.random());
+                rMesh.position.y = 0.5; rMesh.castShadow = true; rMesh.receiveShadow = true;
+                group.add(rMesh);
+
+            } else if (type === 'OAK') {
+                let tMesh = new THREE.Mesh(oakTrunkGeo, treeTrunkMat);
+                tMesh.position.y = 3.0; tMesh.castShadow = true;
+                let lMesh = new THREE.Mesh(oakLeafGeo, oakLeavesMat);
+                lMesh.position.y = 7.0; lMesh.scale.set(1, 0.8, 1);
+                lMesh.castShadow = true; lMesh.receiveShadow = true;
+                group.add(tMesh); group.add(lMesh);
+            } else if (type === 'PINE') {
+                let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
+                tMesh.position.y = 2.0; tMesh.castShadow = true;
+                let lMesh = new THREE.Mesh(pineGeo, treeLeavesMat);
+                lMesh.position.y = 6.0; 
+                lMesh.castShadow = true; lMesh.receiveShadow = true;
+                group.add(tMesh); group.add(lMesh);
             } else {
-                let cMesh = new THREE.Mesh(cactusBaseGeo, cactusMat);
-                cMesh.position.y = 2.5; cMesh.castShadow = true;
-                let arm1 = new THREE.Mesh(cactusArmGeo, cactusMat);
-                arm1.position.set(0.8, 1.0, 0); arm1.rotation.z = Math.PI/4; arm1.castShadow = true;
-                let arm2 = new THREE.Mesh(cactusArmGeo, cactusMat);
-                arm2.position.set(-0.8, 2.0, 0); arm2.rotation.z = -Math.PI/4; arm2.castShadow = true;
-                cMesh.add(arm1); cMesh.add(arm2);
-                group.add(cMesh);
+                // Generic Fallback Container for any new asset while loading
+                let tempGeo = new THREE.BoxGeometry(2, 5, 2);
+                let tempMat = new THREE.MeshLambertMaterial({ color: 0x64748b, wireframe: true });
+                let tMesh = new THREE.Mesh(tempGeo, tempMat);
+                tMesh.position.y = 2.5;
+                group.add(tMesh);
+                
+                // Trigger lazy load if not already loading
+                if (window.ASSET_REGISTRY && window.ASSET_REGISTRY[type] && (!window.customModels || !window.customModels[type])) {
+                    if (typeof window.loadAsset === 'function') window.loadAsset(type);
+                }
             }
-        } else if (type === 'OAK') {
-            let tMesh = new THREE.Mesh(oakTrunkGeo, treeTrunkMat);
-            tMesh.position.y = 3.0; tMesh.castShadow = true;
-            let lMesh = new THREE.Mesh(oakLeafGeo, oakLeavesMat);
-            lMesh.position.y = 7.0; lMesh.scale.set(1, 0.8, 1);
-            lMesh.castShadow = true; lMesh.receiveShadow = true;
-            group.add(tMesh); group.add(lMesh);
-        } else if (type === 'PINE') {
-            let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
-            tMesh.position.y = 2.0; tMesh.castShadow = true;
-            let lMesh = new THREE.Mesh(pineGeo, treeLeavesMat);
-            lMesh.position.y = 6.0; 
-            lMesh.castShadow = true; lMesh.receiveShadow = true;
-            group.add(tMesh); group.add(lMesh);
         }
+        
         group.scale.set(scale, scale, scale); group.rotation.y = rot;
         treesGroup.add(group);
         window.placedTrees.push({ type: type, x: x, z: z, scale: scale, rot: rot, mesh: group });
@@ -1685,38 +1698,38 @@
                     let nxPhys = nxThree;
                     let nyPhys = -nzThree;
                     
-                    if (obj.type === 'ROCK') {
-                        let rad = 2.0 * obj.scale;
-                        if (distSq < rad*rad && z < 1.8 * obj.scale) {
-                            let sX = obj.x + nxThree * (rad + 0.05);
-                            let sZ = obj.z + nzThree * (rad + 0.05);
-                            return { type: 'ROCK', height: 1.8 * obj.scale, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                        }
-                    } else if (obj.type === 'BUSH') {
-                        let rad = 2.5 * obj.scale;
-                        if (distSq < rad*rad && z < 2.5 * obj.scale) {
-                            return { type: 'BUSH', height: 2.5 * obj.scale };
-                        }
-                    } else if (obj.type === 'CACTUS') {
-                        let rad = 0.8 * obj.scale;
-                        if (distSq < rad*rad && z < 6.0 * obj.scale) {
-                            let sX = obj.x + nxThree * (rad + 0.05);
-                            let sZ = obj.z + nzThree * (rad + 0.05);
-                            return { type: 'CACTUS', height: 6.0 * obj.scale, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                        }
-                    } else {
-                        // TREE, PINE, PALM, OAK -> Samma träd-fysik med stam och krona
-                        let trunkRadius = 0.5 * obj.scale;
-                        let treeHeight = 15.0 * obj.scale;
-                        let canopyRadius = 3.0 * obj.scale;
+                    let assetDef = window.ASSET_REGISTRY && window.ASSET_REGISTRY[obj.type] ? window.ASSET_REGISTRY[obj.type] : null;
+                    if (assetDef && assetDef.physics) {
+                        let phys = assetDef.physics;
                         
-                        if (distSq < canopyRadius*canopyRadius) {
-                            if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
-                                let sX = obj.x + nxThree * (trunkRadius + 0.05);
-                                let sZ = obj.z + nzThree * (trunkRadius + 0.05);
-                                return { type: 'TREE', height: treeHeight, part: 'TRUNK', n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                            } else if (z > treeHeight*0.3 && z < treeHeight) {
-                                return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
+                        if (phys.type === 'sphere') {
+                            let rad = phys.radius * obj.scale;
+                            if (distSq < rad*rad && z < rad) {
+                                let sX = obj.x + nxThree * (rad + 0.05);
+                                let sZ = obj.z + nzThree * (rad + 0.05);
+                                return { type: obj.type, height: rad, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                            }
+                        } else if (phys.type === 'cylinder') {
+                            let rad = phys.radius * obj.scale;
+                            let h = phys.height * obj.scale;
+                            if (distSq < rad*rad && z < h) {
+                                let sX = obj.x + nxThree * (rad + 0.05);
+                                let sZ = obj.z + nzThree * (rad + 0.05);
+                                return { type: obj.type, height: h, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                            }
+                        } else if (phys.type === 'tree') {
+                            let trunkRadius = phys.trunkRadius * obj.scale;
+                            let treeHeight = phys.height * obj.scale;
+                            let canopyRadius = phys.canopyRadius * obj.scale;
+                            
+                            if (distSq < canopyRadius*canopyRadius) {
+                                if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
+                                    let sX = obj.x + nxThree * (trunkRadius + 0.05);
+                                    let sZ = obj.z + nzThree * (trunkRadius + 0.05);
+                                    return { type: obj.type, height: treeHeight, part: 'TRUNK', n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                                } else if (z > treeHeight*0.3 && z < treeHeight) {
+                                    return { type: obj.type, height: treeHeight, part: 'CANOPY' };
+                                }
                             }
                         }
                     }
