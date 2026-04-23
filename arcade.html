@@ -690,15 +690,14 @@
         if (window.placedTrees) {
             window.placedTrees.forEach(t => {
                 if (t.type === 'PALM') {
-                    // Rensa den fula primitiv-fallbacken:
-                    while(t.mesh.children.length > 0) { 
-                        t.mesh.remove(t.mesh.children[0]); 
-                    }
-                    // Lägg in exklusiva GLB-palmen:
+                    while(t.mesh.children.length > 0) { t.mesh.remove(t.mesh.children[0]); }
                     t.mesh.add(window.customModels['PALM'].clone());
                 }
             });
         }
+    }, undefined, function(error) {
+        console.error("PALM3 GLB ERROR:", error);
+        alert("ERROR: Could not load palm3.glb! Check console for details. " + (error.message || error));
     });
     
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
