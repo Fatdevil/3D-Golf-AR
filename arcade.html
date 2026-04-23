@@ -652,14 +652,14 @@
     window.customModels = {};
     const gltfLoader = new THREE.GLTFLoader();
     
-    /* TEMPORARILY DISABLED: MEMORY LEAK. The raw AI GLB files are 62 MB combined and immediately crash Chromium instances due to VRAM overflow. Needs Decimation first.
-    gltfLoader.load('kaktus.glb', function(gltf) {
+    // Nya nerskalade palmer (drygt 1 MB st) - säkra!
+    gltfLoader.load('Palm  1.glb', function(gltf) {
         let model = gltf.scene;
         let box = new THREE.Box3().setFromObject(model);
         let center = box.getCenter(new THREE.Vector3());
         let size = box.getSize(new THREE.Vector3());
-        // Minska kaktusens storlek från 8.0 till 4.0 så att de inte ser ut som Godzilla bredvid palmerna
-        let targetHeight = 4.0;
+        
+        let targetHeight = 12.0; 
         let scaleFixed = targetHeight / size.y;
         
         model.scale.set(scaleFixed, scaleFixed, scaleFixed);
@@ -674,17 +674,17 @@
                 node.receiveShadow = true;
             }
         });
-        window.customModels['CACTUS'] = container;
-        console.log("Kaktus Laddad!", container);
+        window.customModels['PALM1'] = container;
+        console.log("Palm 1 Laddad!", container);
     });
     
-    gltfLoader.load('Palmtree3D.glb', function(gltf) {
+    gltfLoader.load('Palm 2.glb', function(gltf) {
         let model = gltf.scene;
         let box = new THREE.Box3().setFromObject(model);
         let center = box.getCenter(new THREE.Vector3());
         let size = box.getSize(new THREE.Vector3());
         
-        let targetHeight = 14.0; 
+        let targetHeight = 11.0; 
         let scaleFixed = targetHeight / size.y;
         
         model.scale.set(scaleFixed, scaleFixed, scaleFixed);
@@ -699,10 +699,9 @@
                 node.receiveShadow = true;
             }
         });
-        window.customModels['PALM'] = container;
-        console.log("Palmträd Laddat!", container);
+        window.customModels['PALM2'] = container;
+        console.log("Palm 2 Laddad!", container);
     });
-    */
     
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
     window.aimTarget = new THREE.Vector3(0, 0, -20);
@@ -1069,8 +1068,13 @@
             lMesh.castShadow = true; lMesh.receiveShadow = true;
             group.add(tMesh); group.add(lMesh);
         } else if (type === 'PALM') {
-            if (window.customModels && window.customModels['PALM']) {
-                let clone = window.customModels['PALM'].clone();
+            // Slumpa 50/50 mellan Palm 1 och Palm 2 om de finns laddade
+            let usePalm2 = Math.random() > 0.5;
+            if (usePalm2 && window.customModels && window.customModels['PALM2']) {
+                let clone = window.customModels['PALM2'].clone();
+                group.add(clone);
+            } else if (!usePalm2 && window.customModels && window.customModels['PALM1']) {
+                let clone = window.customModels['PALM1'].clone();
                 group.add(clone);
             } else {
                 let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
