@@ -1243,32 +1243,43 @@
                     let dz = obj.z - threeZ;
                     let distSq = dx*dx + dz*dz;
                     
-                    if (obj.type === 'ROCK') {
-                        let rad = 2.0 * obj.scale;
-                        if (distSq < rad*rad && z < 1.8 * obj.scale) {
-                            return { type: 'ROCK', height: 1.8 * obj.scale };
-                        }
-                    } else if (obj.type === 'BUSH') {
-                        let rad = 2.5 * obj.scale;
-                        if (distSq < rad*rad && z < 2.5 * obj.scale) {
-                            return { type: 'BUSH', height: 2.5 * obj.scale };
-                        }
-                    } else if (obj.type === 'CACTUS') {
-                        let rad = 0.8 * obj.scale;
-                        if (distSq < rad*rad && z < 6.0 * obj.scale) {
-                            return { type: 'CACTUS', height: 6.0 * obj.scale };
-                        }
-                    } else {
-                        // TREE, PINE, PALM, OAK -> Samma träd-fysik med stam och krona
-                        let trunkRadius = 0.5 * obj.scale;
-                        let treeHeight = 15.0 * obj.scale;
-                        let canopyRadius = 3.0 * obj.scale;
+                    let nxThree = distSq > 0 ? (-dx / Math.sqrt(distSq)) : 0;
+                    let nzThree = distSq > 0 ? (-dz / Math.sqrt(distSq)) : 0;
+                    let nxPhys = nxThree;
+                    let nyPhys = -nzThree;
+                    
+                    let assetDef = window.ASSET_REGISTRY && window.ASSET_REGISTRY[obj.type] ? window.ASSET_REGISTRY[obj.type] : null;
+                    if (assetDef && assetDef.physics) {
+                        let phys = assetDef.physics;
                         
-                        if (distSq < canopyRadius*canopyRadius) {
-                            if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
-                                return { type: 'TREE', height: treeHeight, part: 'TRUNK' };
-                            } else if (z > treeHeight*0.3 && z < treeHeight) {
-                                return { type: 'TREE', height: treeHeight, part: 'CANOPY' };
+                        if (phys.type === 'sphere') {
+                            let rad = phys.radius * obj.scale;
+                            if (distSq < rad*rad && z < rad) {
+                                let sX = obj.x + nxThree * (rad + 0.05);
+                                let sZ = obj.z + nzThree * (rad + 0.05);
+                                return { type: obj.type, height: rad, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                            }
+                        } else if (phys.type === 'cylinder') {
+                            let rad = phys.radius * obj.scale;
+                            let h = phys.height * obj.scale;
+                            if (distSq < rad*rad && z < h) {
+                                let sX = obj.x + nxThree * (rad + 0.05);
+                                let sZ = obj.z + nzThree * (rad + 0.05);
+                                return { type: obj.type, height: h, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                            }
+                        } else if (phys.type === 'tree') {
+                            let trunkRadius = phys.trunkRadius * obj.scale;
+                            let treeHeight = phys.height * obj.scale;
+                            let canopyRadius = phys.canopyRadius * obj.scale;
+                            
+                            if (distSq < canopyRadius*canopyRadius) {
+                                if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
+                                    let sX = obj.x + nxThree * (trunkRadius + 0.05);
+                                    let sZ = obj.z + nzThree * (trunkRadius + 0.05);
+                                    return { type: obj.type, height: treeHeight, part: 'TRUNK', n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
+                                } else if (z > treeHeight*0.3 && z < treeHeight) {
+                                    return { type: obj.type, height: treeHeight, part: 'CANOPY' };
+                                }
                             }
                         }
                     }

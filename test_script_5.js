@@ -445,8 +445,7 @@
     const treeTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
     const treeLeavesMat = new THREE.MeshLambertMaterial({ color: 0x2d5a27 }); 
     const bushLeavesMat = new THREE.MeshLambertMaterial({ color: 0x4d7c0f }); 
-    const palmTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
-    const palmLeavesMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
 
     const oakLeavesMat = new THREE.MeshLambertMaterial({ color: 0x3f6b2b }); // Mörk oliv/ek
@@ -460,8 +459,7 @@
     const spineGeo = new THREE.CylinderGeometry(0.3, 0.6, 8, 6); 
     const rockGeo = new THREE.DodecahedronGeometry(1.5, 0); // Klippa
 
-    const palmFrondGeo = new THREE.ConeGeometry(0.5, 5, 4); 
-    palmFrondGeo.translate(0, 2.5, 0);
+
 
     window.placedTrees = [];
     const treesGroup = new THREE.Group();
@@ -493,17 +491,7 @@
                 lMesh.position.y = 5.0; lMesh.scale.set(1, 0.8, 1);
                 lMesh.castShadow = true; lMesh.receiveShadow = true;
                 group.add(tMesh); group.add(lMesh);
-            } else if (type === 'PALM') {
-                let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
-                pMesh.position.y = 4.0; pMesh.rotation.z = Math.PI/32; pMesh.castShadow = true;
-                group.add(pMesh);
-                for(let i=0; i<6; i++) {
-                    let frond = new THREE.Mesh(palmFrondGeo, palmLeavesMat);
-                    frond.position.y = 4.0; 
-                    frond.rotation.z = Math.PI/2 - 0.5; frond.rotation.y = (Math.PI*2/6) * i;
-                    frond.castShadow = true; frond.receiveShadow = true;
-                    pMesh.add(frond);
-                }
+
             } else if (type === 'ROCK') {
                 let rMesh = new THREE.Mesh(rockGeo, rockMat);
                 rMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
