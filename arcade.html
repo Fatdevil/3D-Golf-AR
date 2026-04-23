@@ -676,6 +676,31 @@
         console.log("Kaktus Laddad!", container);
     });
     
+    gltfLoader.load('Palmtree3D.glb', function(gltf) {
+        let model = gltf.scene;
+        let box = new THREE.Box3().setFromObject(model);
+        let center = box.getCenter(new THREE.Vector3());
+        let size = box.getSize(new THREE.Vector3());
+        
+        let targetHeight = 14.0; 
+        let scaleFixed = targetHeight / size.y;
+        
+        model.scale.set(scaleFixed, scaleFixed, scaleFixed);
+        model.position.set(-center.x * scaleFixed, -box.min.y * scaleFixed, -center.z * scaleFixed);
+        
+        let container = new THREE.Group();
+        container.add(model);
+        
+        container.traverse(function(node) {
+            if (node.isMesh) {
+                node.castShadow = true;
+                node.receiveShadow = true;
+            }
+        });
+        window.customModels['PALM'] = container;
+        console.log("Palmträd Laddat!", container);
+    });
+    
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
     window.aimTarget = new THREE.Vector3(0, 0, -20);
     window.aimTracerGeo = new THREE.BufferGeometry();
@@ -1041,15 +1066,20 @@
             lMesh.castShadow = true; lMesh.receiveShadow = true;
             group.add(tMesh); group.add(lMesh);
         } else if (type === 'PALM') {
-            let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
-            pMesh.position.y = 4.0; pMesh.rotation.z = Math.PI/32; pMesh.castShadow = true;
-            group.add(pMesh);
-            for(let i=0; i<6; i++) {
-                let frond = new THREE.Mesh(palmFrondGeo, palmLeavesMat);
-                frond.position.y = 4.0; 
-                frond.rotation.z = Math.PI/2 - 0.5; frond.rotation.y = (Math.PI*2/6) * i;
-                frond.castShadow = true; frond.receiveShadow = true;
-                pMesh.add(frond);
+            if (window.customModels && window.customModels['PALM']) {
+                let clone = window.customModels['PALM'].clone();
+                group.add(clone);
+            } else {
+                let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
+                pMesh.position.y = 4.0; pMesh.rotation.z = Math.PI/32; pMesh.castShadow = true;
+                group.add(pMesh);
+                for(let i=0; i<6; i++) {
+                    let frond = new THREE.Mesh(palmFrondGeo, palmLeavesMat);
+                    frond.position.y = 4.0; 
+                    frond.rotation.z = Math.PI/2 - 0.5; frond.rotation.y = (Math.PI*2/6) * i;
+                    frond.castShadow = true; frond.receiveShadow = true;
+                    pMesh.add(frond);
+                }
             }
         } else if (type === 'ROCK') {
             let rMesh = new THREE.Mesh(rockGeo, rockMat);
