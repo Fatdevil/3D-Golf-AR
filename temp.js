@@ -213,15 +213,20 @@
             lMesh.castShadow = true; lMesh.receiveShadow = true;
             group.add(tMesh); group.add(lMesh);
         } else if (type === 'PALM') {
-            let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
-            pMesh.position.y = 4.0; pMesh.rotation.z = Math.PI/32; pMesh.castShadow = true;
-            group.add(pMesh);
-            for(let i=0; i<6; i++) {
-                let frond = new THREE.Mesh(palmFrondGeo, palmLeavesMat);
-                frond.position.y = 4.0; 
-                frond.rotation.z = Math.PI/2 - 0.5; frond.rotation.y = (Math.PI*2/6) * i;
-                frond.castShadow = true; frond.receiveShadow = true;
-                pMesh.add(frond);
+            if (window.customModels && window.customModels['PALM']) {
+                let clone = window.customModels['PALM'].clone();
+                group.add(clone);
+            } else {
+                let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);
+                pMesh.position.y = 4.0; pMesh.rotation.z = Math.PI/32; pMesh.castShadow = true;
+                group.add(pMesh);
+                for(let i=0; i<6; i++) {
+                    let frond = new THREE.Mesh(palmFrondGeo, palmLeavesMat);
+                    frond.position.y = 4.0; 
+                    frond.rotation.z = Math.PI/2 - 0.5; frond.rotation.y = (Math.PI*2/6) * i;
+                    frond.castShadow = true; frond.receiveShadow = true;
+                    pMesh.add(frond);
+                }
             }
         } else if (type === 'ROCK') {
             let rMesh = new THREE.Mesh(rockGeo, rockMat);

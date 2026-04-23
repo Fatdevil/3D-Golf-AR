@@ -68,18 +68,24 @@
     window.customModels = {};
     const gltfLoader = new THREE.GLTFLoader();
     
-    // Nya nerskalade palmer (drygt 1 MB st) - säkra!
-    gltfLoader.load('Palm  1.glb', function(gltf) {
+    // Nya extremt nerskalade palmen (250 KB)
+    gltfLoader.load('palm3.glb', function(gltf) {
         let model = gltf.scene;
         let box = new THREE.Box3().setFromObject(model);
         let center = box.getCenter(new THREE.Vector3());
         let size = box.getSize(new THREE.Vector3());
         
         let targetHeight = 12.0; 
-        let scaleFixed = targetHeight / size.y;
+        let scaleFixed = (size.y > 0.001) ? (targetHeight / size.y) : 1.0;
+        if (!isFinite(scaleFixed)) scaleFixed = 1.0;
+        
+        // Prevent NaN matrix corruption
+        let cx = isFinite(center.x) ? center.x : 0;
+        let cymin = isFinite(box.min.y) ? box.min.y : 0;
+        let cz = isFinite(center.z) ? center.z : 0;
         
         model.scale.set(scaleFixed, scaleFixed, scaleFixed);
-        model.position.set(-center.x * scaleFixed, -box.min.y * scaleFixed, -center.z * scaleFixed);
+        model.position.set(-cx * scaleFixed, -cymin * scaleFixed, -cz * scaleFixed);
         
         let container = new THREE.Group();
         container.add(model);
@@ -90,33 +96,20 @@
                 node.receiveShadow = true;
             }
         });
-        window.customModels['PALM1'] = container;
-        console.log("Palm 1 Laddad!", container);
-    });
-    
-    gltfLoader.load('Palm 2.glb', function(gltf) {
-        let model = gltf.scene;
-        let box = new THREE.Box3().setFromObject(model);
-        let center = box.getCenter(new THREE.Vector3());
-        let size = box.getSize(new THREE.Vector3());
+        window.customModels['PALM'] = container;
+        console.log("Palm 3 (250kb) Laddad!", container);
         
-        let targetHeight = 11.0; 
-        let scaleFixed = targetHeight / size.y;
-        
-        model.scale.set(scaleFixed, scaleFixed, scaleFixed);
-        model.position.set(-center.x * scaleFixed, -box.min.y * scaleFixed, -center.z * scaleFixed);
-        
-        let container = new THREE.Group();
-        container.add(model);
-        
-        container.traverse(function(node) {
-            if (node.isMesh) {
-                node.castShadow = true;
-                node.receiveShadow = true;
-            }
-        });
-        window.customModels['PALM2'] = container;
-        console.log("Palm 2 Laddad!", container);
+        // --- RETROFIT EXISTING PALMS ---
+        if (window.placedTrees) {
+            window.placedTrees.forEach(t => {
+                if (t.type === 'PALM') {
+                    while(t.mesh.children.length > 0) { 
+                        t.mesh.remove(t.mesh.children[0]); 
+                    }
+                    t.mesh.add(window.customModels['PALM'].clone());
+                }
+            });
+        }
     });
     
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
@@ -484,13 +477,8 @@
             lMesh.castShadow = true; lMesh.receiveShadow = true;
             group.add(tMesh); group.add(lMesh);
         } else if (type === 'PALM') {
-            // Slumpa 50/50 mellan Palm 1 och Palm 2 om de finns laddade
-            let usePalm2 = Math.random() > 0.5;
-            if (usePalm2 && window.customModels && window.customModels['PALM2']) {
-                let clone = window.customModels['PALM2'].clone();
-                group.add(clone);
-            } else if (!usePalm2 && window.customModels && window.customModels['PALM1']) {
-                let clone = window.customModels['PALM1'].clone();
+            if (window.customModels && window.customModels['PALM']) {
+                let clone = window.customModels['PALM'].clone();
                 group.add(clone);
             } else {
                 let pMesh = new THREE.Mesh(spineGeo, palmTrunkMat);

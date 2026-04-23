@@ -682,6 +682,23 @@
         });
         window.customModels['PALM'] = container;
         console.log("Palm 3 (250kb) Laddad!", container);
+        
+        // --- RETROFIT EXISTING PALMS ---
+        // Eftersom träden ofta skapas (via createTree) innan denna tunga .glb filen
+        // har hunnit asynkront laddas klart, råkade de istället ritas upp med den gamla 
+        // temporära, fula primitiven som fallback. Vi byter härmed ut dem direkt!
+        if (window.placedTrees) {
+            window.placedTrees.forEach(t => {
+                if (t.type === 'PALM') {
+                    // Rensa den fula primitiv-fallbacken:
+                    while(t.mesh.children.length > 0) { 
+                        t.mesh.remove(t.mesh.children[0]); 
+                    }
+                    // Lägg in exklusiva GLB-palmen:
+                    t.mesh.add(window.customModels['PALM'].clone());
+                }
+            });
+        }
     });
     
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
