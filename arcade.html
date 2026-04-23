@@ -127,6 +127,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="physics.js?v=4"></script>
 </head>
@@ -647,6 +648,34 @@
     renderer.autoClear = false; // Krävs för Picture-in-Picture (Minimap)
     document.body.appendChild(renderer.domElement);
     
+    // -- CUSTOM 3D MODELS INJECTION --
+    window.customModels = {};
+    const gltfLoader = new THREE.GLTFLoader();
+    gltfLoader.load('kaktus.glb', function(gltf) {
+        let model = gltf.scene;
+        let box = new THREE.Box3().setFromObject(model);
+        let center = box.getCenter(new THREE.Vector3());
+        let size = box.getSize(new THREE.Vector3());
+        
+        let targetHeight = 8.0;
+        let scaleFixed = targetHeight / size.y;
+        
+        model.scale.set(scaleFixed, scaleFixed, scaleFixed);
+        model.position.set(-center.x * scaleFixed, -box.min.y * scaleFixed, -center.z * scaleFixed);
+        
+        let container = new THREE.Group();
+        container.add(model);
+        
+        container.traverse(function(node) {
+            if (node.isMesh) {
+                node.castShadow = true;
+                node.receiveShadow = true;
+            }
+        });
+        window.customModels['CACTUS'] = container;
+        console.log("Kaktus Laddad!", container);
+    });
+    
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
     window.aimTarget = new THREE.Vector3(0, 0, -20);
     window.aimTracerGeo = new THREE.BufferGeometry();
@@ -1029,14 +1058,19 @@
             rMesh.position.y = 0.5; rMesh.castShadow = true; rMesh.receiveShadow = true;
             group.add(rMesh);
         } else if (type === 'CACTUS') {
-            let cMesh = new THREE.Mesh(cactusBaseGeo, cactusMat);
-            cMesh.position.y = 2.5; cMesh.castShadow = true;
-            let arm1 = new THREE.Mesh(cactusArmGeo, cactusMat);
-            arm1.position.set(0.8, 1.0, 0); arm1.rotation.z = Math.PI/4; arm1.castShadow = true;
-            let arm2 = new THREE.Mesh(cactusArmGeo, cactusMat);
-            arm2.position.set(-0.8, 2.0, 0); arm2.rotation.z = -Math.PI/4; arm2.castShadow = true;
-            cMesh.add(arm1); cMesh.add(arm2);
-            group.add(cMesh);
+            if (window.customModels && window.customModels['CACTUS']) {
+                let clone = window.customModels['CACTUS'].clone();
+                group.add(clone);
+            } else {
+                let cMesh = new THREE.Mesh(cactusBaseGeo, cactusMat);
+                cMesh.position.y = 2.5; cMesh.castShadow = true;
+                let arm1 = new THREE.Mesh(cactusArmGeo, cactusMat);
+                arm1.position.set(0.8, 1.0, 0); arm1.rotation.z = Math.PI/4; arm1.castShadow = true;
+                let arm2 = new THREE.Mesh(cactusArmGeo, cactusMat);
+                arm2.position.set(-0.8, 2.0, 0); arm2.rotation.z = -Math.PI/4; arm2.castShadow = true;
+                cMesh.add(arm1); cMesh.add(arm2);
+                group.add(cMesh);
+            }
         } else if (type === 'OAK') {
             let tMesh = new THREE.Mesh(oakTrunkGeo, treeTrunkMat);
             tMesh.position.y = 3.0; tMesh.castShadow = true;
