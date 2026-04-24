@@ -721,8 +721,16 @@
                                 let boost = window.ASSET_REGISTRY[type].brightness !== undefined ? window.ASSET_REGISTRY[type].brightness : 0.15;
                                 
                                 // Simulera ambient-ljus genom att addera lite emissive (självbelysning) baserat på ytans egen färg
-                                if (node.material.color && boost > 0) {
-                                    node.material.emissive = node.material.color.clone().multiplyScalar(boost);
+                                if (node.material.color) {
+                                    if (type.startsWith('R_')) {
+                                        let hsl = {};
+                                        node.material.color.getHSL(hsl);
+                                        // Boost saturation for a more cartoony/vibrant look
+                                        node.material.color.setHSL(hsl.h, Math.min(1.0, hsl.s * 1.6), Math.min(1.0, hsl.l * 1.2));
+                                    }
+                                    if (boost > 0) {
+                                        node.material.emissive = node.material.color.clone().multiplyScalar(boost);
+                                    }
                                 }
                                 node.material.needsUpdate = true;
                             }
