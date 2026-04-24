@@ -641,7 +641,7 @@
     window.customModels = {};
     window.ASSET_REGISTRY = {
         'TREE':   { icon: '🌳', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.5 } },
-        'OAK':    { icon: '🌳', cat: 'nature', physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
+        'OAK':    { icon: '🌳', cat: 'nature', file: 'Oaktree.glb?v=1', targetHeight: 18.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
         'PALM':   { icon: '🌴', cat: 'nature', file: 'palm3.glb?v=2', targetHeight: 12.0, brightness: 0.20, physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.0 } },
         'PINE':   { icon: '🌲', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 18.0, canopyRadius: 2.5 } },
         'BUSH':   { icon: '🪴', cat: 'nature', physics: { type: 'sphere', radius: 2.0 } },
@@ -1120,13 +1120,6 @@
                 rMesh.position.y = 0.5; rMesh.castShadow = true; rMesh.receiveShadow = true;
                 group.add(rMesh);
 
-            } else if (type === 'OAK') {
-                let tMesh = new THREE.Mesh(oakTrunkGeo, treeTrunkMat);
-                tMesh.position.y = 3.0; tMesh.castShadow = true;
-                let lMesh = new THREE.Mesh(oakLeafGeo, oakLeavesMat);
-                lMesh.position.y = 7.0; lMesh.scale.set(1, 0.8, 1);
-                lMesh.castShadow = true; lMesh.receiveShadow = true;
-                group.add(tMesh); group.add(lMesh);
             } else if (type === 'PINE') {
                 let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
                 tMesh.position.y = 2.0; tMesh.castShadow = true;
