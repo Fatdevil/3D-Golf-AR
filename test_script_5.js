@@ -1863,7 +1863,6 @@
     let splinePoints = [];
     let splineSpheres = [];
     let splineLineMesh = null;
-    let splinePreviewMesh = null;
 
     // Pensel multiplikator logik
     let brushMultiplier = 1;
@@ -2692,9 +2691,18 @@
 
     function updateSplinePreview() {
         // Rensa gamla sfärer och mesh
-        splineSpheres.forEach(s => scene.remove(s));
+        splineSpheres.forEach(s => {
+            scene.remove(s);
+            if (s.geometry) s.geometry.dispose();
+            if (s.material) s.material.dispose();
+        });
         splineSpheres = [];
-        if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
+        if(splineLineMesh) { 
+            scene.remove(splineLineMesh); 
+            if (splineLineMesh.geometry) splineLineMesh.geometry.dispose();
+            if (splineLineMesh.material) splineLineMesh.material.dispose();
+            splineLineMesh = null; 
+        }
 
         let sMat = new THREE.MeshBasicMaterial({ color: 0xec4899 });
         let sGeo = new THREE.SphereGeometry(1.0, 8, 8);
@@ -3040,10 +3048,21 @@
                     positions[i*3 + 2] += (smoothAvg - positions[i*3 + 2]) * 0.15 * brushMultiplier * falloff;
                     updatePos = true;
                 } else if (currentTool === 'NOISE') {
-                    // Genererar en organisk procedur-baserad vågform som agerar links/dune-bumpy terrain
-                    let noise = Math.sin(vx * 1.5) * Math.cos(vz * 1.5) * 0.5 + Math.sin(vx * 0.4 + vz * 0.8) * 0.8;
-                    // Kombinera en grundlyft/sänkning med starkt noise
-                    let targetH = positions[i*3 + 2] + (strength * 0.8) + (noise * 0.3 * Math.sign(strength));
+                    // Genererar organisk procedur-baserad vågform (Multi-Octave) för links/dune-bumpy terrain
+                    // Skalan på bruset anpassas dynamiskt efter penselns storlek
+                    let noiseScale = 5.0 / Math.max(1.0, radius);
+                    let nx = vx * 0.15 * noiseScale;
+                    let nz = vz * 0.15 * noiseScale;
+
+                    // Octave 1: Macro Dunes (Stora rullningar)
+                    let noise = Math.sin(nx + Math.cos(nz * 1.3)) * 1.2;
+                    // Octave 2: Mounds (Ojämnheter)
+                    noise += Math.sin(nx * 2.3 + Math.sin(nz * 2.1)) * 0.5;
+                    // Octave 3: Micro Bumps (Hummocks)
+                    noise += Math.sin(nx * 4.7 + Math.cos(nz * 4.4)) * 0.25;
+
+                    // Kombinera grundlyft/sänkning med det nya bruset (skalat ner marginellt för att undvika spikar)
+                    let targetH = positions[i*3 + 2] + (strength * 0.6) + (noise * 0.25 * Math.sign(strength));
                     positions[i*3 + 2] += (targetH - positions[i*3 + 2]) * 0.1 * falloff;
                     updatePos = true;
                 } else if (currentTool === 'FOREST') {
