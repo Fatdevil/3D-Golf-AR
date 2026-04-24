@@ -725,7 +725,9 @@
                                 // Åtgärda "mörka GLTF-modeller" och matta ner glans
                                 if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                                     mat.metalness = 0.0; 
-                                    mat.roughness = 1.0; // 1.0 = Helt matt yta (tar bort plastig glans)
+                                    mat.roughness = 1.0; // 1.0 = Helt matt yta
+                                    mat.roughnessMap = null; // Ta bort inbakade glans-texturer från modellen
+                                    mat.metalnessMap = null;
                                     
                                     // Läs av ljusstyrka från registret (default 0.15)
                                     let boost = window.ASSET_REGISTRY[type].brightness !== undefined ? window.ASSET_REGISTRY[type].brightness : 0.15;
