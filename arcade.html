@@ -720,28 +720,30 @@
                         node.castShadow = true;
                         node.receiveShadow = true;
                         if (node.material) {
-                            // Åtgärda "mörka GLTF-modeller" (pga avsaknad av envMap / sRGBEncoding)
-                            if (node.material.isMeshStandardMaterial || node.material.isMeshPhysicalMaterial) {
-                                node.material.metalness = 0.0; // Metaller utan reflektion blir svarta
-                                node.material.roughness = 0.9; // Matt yta för arkadkänsla
-                                
-                                // Läs av ljusstyrka från registret (default 0.15)
-                                let boost = window.ASSET_REGISTRY[type].brightness !== undefined ? window.ASSET_REGISTRY[type].brightness : 0.15;
-                                
-                                // Simulera ambient-ljus genom att addera lite emissive (självbelysning) baserat på ytans egen färg
-                                if (node.material.color) {
-                                    if (type.startsWith('R_')) {
-                                        let hsl = {};
-                                        node.material.color.getHSL(hsl);
-                                        // Boost saturation for a more cartoony/vibrant look
-                                        node.material.color.setHSL(hsl.h, Math.min(1.0, hsl.s * 1.6), Math.min(1.0, hsl.l * 1.2));
+                            let mats = Array.isArray(node.material) ? node.material : [node.material];
+                            mats.forEach(mat => {
+                                // Åtgärda "mörka GLTF-modeller" och matta ner glans
+                                if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                                    mat.metalness = 0.0; 
+                                    mat.roughness = 1.0; // 1.0 = Helt matt yta (tar bort plastig glans)
+                                    
+                                    // Läs av ljusstyrka från registret (default 0.15)
+                                    let boost = window.ASSET_REGISTRY[type].brightness !== undefined ? window.ASSET_REGISTRY[type].brightness : 0.15;
+                                    
+                                    // Simulera ambient-ljus
+                                    if (mat.color) {
+                                        if (type.startsWith('R_')) {
+                                            let hsl = {};
+                                            mat.color.getHSL(hsl);
+                                            mat.color.setHSL(hsl.h, Math.min(1.0, hsl.s * 1.6), Math.min(1.0, hsl.l * 1.2));
+                                        }
+                                        if (boost > 0) {
+                                            mat.emissive = mat.color.clone().multiplyScalar(boost);
+                                        }
                                     }
-                                    if (boost > 0) {
-                                        node.material.emissive = node.material.color.clone().multiplyScalar(boost);
-                                    }
+                                    mat.needsUpdate = true;
                                 }
-                                node.material.needsUpdate = true;
-                            }
+                            });
                         }
                     }
                 });
