@@ -642,6 +642,7 @@
     window.ASSET_REGISTRY = {
         'TREE':   { icon: '🌳', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.5 } },
         'OAK':    { icon: '🌳', cat: 'nature', file: 'Oaktree.glb?v=1', targetHeight: 18.0, brightness: 0.10, yOffset: -0.5, physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
+        'OAK2':   { icon: '🍂', cat: 'nature', file: 'Oaktree_1.glb?v=1', targetHeight: 18.0, brightness: 0.10, yOffset: -0.5, physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
         'PALM':   { icon: '🌴', cat: 'nature', file: 'palm3.glb?v=2', targetHeight: 12.0, brightness: 0.20, physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.0 } },
         'PINE':   { icon: '🌲', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 18.0, canopyRadius: 2.5 } },
         'BUSH':   { icon: '🪴', cat: 'nature', physics: { type: 'sphere', radius: 2.0 } },
@@ -748,6 +749,7 @@
     // Förladda modeller som ska vara aktiva direkt
     window.loadAsset('PALM');
     window.loadAsset('OAK');
+    window.loadAsset('OAK2');
     
     // --- GSPRO AIM SYSTEM & MINIMAP CAMERA ---
     window.aimTarget = new THREE.Vector3(0, 0, -20);
@@ -3162,13 +3164,13 @@
         if (currentTool === 'NATURE' && lastHitPoint) {
             let selectedType = currentNatureType;
             if (currentNatureType === 'RANDOM') {
-                let types = ['TREE', 'BUSH', 'PALM', 'OAK', 'PINE', 'ROCK', 'CACTUS'];
+                let types = ['TREE', 'BUSH', 'PALM', 'OAK', 'OAK2', 'PINE', 'ROCK', 'CACTUS'];
                 selectedType = types[Math.floor(Math.random() * types.length)];
             }
             let s = 1.0 + (Math.random() * 0.4 - 0.2); // 0.8 till 1.2 x storlek
             
             // Extrema storleksvariationer baserat på typ!
-            if (selectedType === 'OAK') s *= 1.8; // Ek-träd blir jättelika
+            if (selectedType === 'OAK' || selectedType === 'OAK2') s *= 1.8; // Ek-träd blir jättelika
             else if (selectedType === 'ROCK') s *= (0.3 + Math.random() * 1.5); // Små stenar till stora flyttblock
             else if (selectedType === 'BUSH') s *= (0.4 + Math.random() * 1.5); // Småbuskar och enorma buskar
             else if (selectedType === 'CACTUS') s *= (0.6 + Math.random() * 0.8);
@@ -3675,7 +3677,7 @@
                         let randX = p2.x + Math.cos(angle) * rad;
                         let randZ = p2.z + Math.sin(angle) * rad;
                         
-                        let types = ['TREE', 'PINE', 'OAK', 'BUSH', 'ROCK'];
+                        let types = ['TREE', 'PINE', 'OAK', 'OAK2', 'BUSH', 'ROCK'];
                         let type = types[Math.floor(Math.random() * types.length)];
                         
                         let s = 1.0 + (Math.random() * 0.4 - 0.2); 
