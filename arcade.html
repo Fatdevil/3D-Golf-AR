@@ -386,6 +386,7 @@
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
         <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')"><span style="font-size:16px;">⛳</span> GREEN</button>
+        <button id="tool-testputt" onclick="setTool('TEST_PUTT')"><span style="font-size:16px;">🏌️</span> PUTT</button>
         <button id="tool-ridge" onclick="setTool('RIDGE')"><span style="font-size:16px;">🍔</span> RIDGE</button>
         <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
         <button id="tool-forest" onclick="setTool('FOREST')"><span style="font-size:16px;">🌲</span> FOREST</button>
@@ -2758,6 +2759,22 @@
                 updateSplinePreview();
             }
             controls.enabled = false;
+        } else if(currentTool === 'TEST_PUTT') {
+            if(e.button === 0 && lastHitPoint) {
+                // Droppa bollen och gå in i TEST läge!
+                setMode('TEST');
+                let pos = lastHitPoint.clone();
+                if(typeof ballPos !== 'undefined') {
+                    ballPos.x = pos.x; ballPos.y = pos.y + 0.1; ballPos.z = pos.z;
+                    if(typeof ballMesh !== 'undefined') {
+                        ballMesh.position.copy(ballPos);
+                        ballMesh.visible = true;
+                    }
+                    camera.position.set(ballPos.x, ballPos.y + 2, ballPos.z + 5);
+                    controls.target.set(ballPos.x, ballPos.y, ballPos.z - 10);
+                    controls.update();
+                }
+            }
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
             isSculpting = true;
             controls.enabled = false; // Lås kameran när vi skulpterar
@@ -2941,7 +2958,7 @@
     function setTool(toolName) {
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -2997,6 +3014,7 @@
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
         else if (toolName === 'WATER') hintHtml = "Hold Mouse: <b>Dig Water</b>";
         else if (toolName === 'SMART_GREEN') hintHtml = "Hold Mouse: <b>Paint Green & Flatten to safe plateau</b>";
+        else if (toolName === 'TEST_PUTT') hintHtml = "Left Click: <b>Drop Ball & Test Putt</b>";
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
         else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Measure Box</b><br>Right Click: <b>Clear Box</b>";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
