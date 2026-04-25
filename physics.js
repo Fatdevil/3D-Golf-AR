@@ -248,7 +248,7 @@ window.GolfPhysics = (function() {
         let lieType = 'FAIRWAY';
         if (envCtx) {
             if (envCtx.getTerrainAt) {
-                let li = envCtx.getTerrainAt(startPosXZY[0], startPosXZY[1]);
+                let li = envCtx.getTerrainAt(startPosXZY[0], startPosXZY[1], startPosXZY[2]);
                 if (li && li.type) lieType = li.type;
             } else if (envCtx.checkCollisionCallback) {
                 let li = envCtx.checkCollisionCallback(0, 0, 0); // Check precisely at origin
@@ -424,7 +424,7 @@ window.GolfPhysics = (function() {
             // Lägg in en hook för att hämta terränginformation varje tick!
             let tInfo = { z: 0, normal: [0,0,1], type: 'FAIRWAY' };
             if (envCtx && envCtx.getTerrainAt) {
-                tInfo = envCtx.getTerrainAt(state.pos[0], state.pos[1]);
+                tInfo = envCtx.getTerrainAt(state.pos[0], state.pos[1], state.pos[2]);
             }
             state.terrainNormal = tInfo.normal;
             
@@ -432,6 +432,17 @@ window.GolfPhysics = (function() {
             let prevVel = [...state.vel];
             
             stepRK4(state, dt);
+            
+            // NYTT: Kolla väggkollision (Sargar)
+            if (envCtx && envCtx.checkWallCollision) {
+                let wallRes = envCtx.checkWallCollision(prevPos, state.pos, state.vel, dt);
+                if (wallRes) {
+                    state.pos = wallRes.pos;
+                    state.vel = wallRes.vel;
+                    if (wallRes.spin) state.spin = wallRes.spin;
+                    // Låt phase vara kvar (roll/skid/flight)
+                }
+            }
             
             // Mark-spinn decay (spin dör snabbt ut under Skid/Roll fas tills den matchar rörelsen)
             if (state.phase === "skid" || state.phase === "roll") {
@@ -453,7 +464,7 @@ window.GolfPhysics = (function() {
 
                 if (!insideCup) {
                     // Tvinga bollen att "hug the ground" och uppdatera hastighetsvektor så den är parallell!
-                    let freshT = envCtx && envCtx.getTerrainAt ? envCtx.getTerrainAt(state.pos[0], state.pos[1]) : tInfo;
+                    let freshT = envCtx && envCtx.getTerrainAt ? envCtx.getTerrainAt(state.pos[0], state.pos[1], state.pos[2]) : tInfo;
                     state.pos[2] = freshT.z;
                     
                     let vDotN = state.vel[0]*freshT.normal[0] + state.vel[1]*freshT.normal[1] + state.vel[2]*freshT.normal[2];

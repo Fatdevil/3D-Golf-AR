@@ -2310,11 +2310,94 @@
                 }
                 return null; 
             },
+            checkWallCollision: function(prevPos, nextPos, vel, dt) {
+                let tracks = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) 
+                             ? window.courseHoles[window.currentHoleIndex].envObjects.filter(o => o.type === 'MINIGOLF_TRACK').map(o => o.mesh) 
+                             : [];
+                if (tracks.length === 0) return null;
+                
+                let dir = [nextPos[0] - prevPos[0], nextPos[1] - prevPos[1], nextPos[2] - prevPos[2]];
+                let dist = Math.sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+                if (dist < 0.0001) return null; // Bollen ligger helt stilla
+                
+                if (!window.physWallRay) window.physWallRay = new THREE.Raycaster();
+                
+                let origin = new THREE.Vector3(prevPos[0], prevPos[2], -prevPos[1]);
+                let direction = new THREE.Vector3(dir[0]/dist, dir[2]/dist, -dir[1]/dist);
+                
+                window.physWallRay.set(origin, direction);
+                // Kolla bara så långt bollen kommer röra sig under denna tick + radie
+                window.physWallRay.far = dist + 0.0215; 
+                
+                let intersects = window.physWallRay.intersectObjects(tracks, false);
+                if (intersects.length > 0) {
+                    let hit = intersects[0];
+                    // Kontrollera att det vi träffat faktiskt är en "vägg" (brant normal) och inte ett platt golv.
+                    // Om normal.y är nära noll är det en vertikal vägg i 3D.
+                    if (Math.abs(hit.face.normal.y) < 0.5) { 
+                        let nX = hit.face.normal.x;
+                        let nY = -hit.face.normal.z;
+                        let nZ = hit.face.normal.y;
+                        
+                        let vDotN = vel[0]*nX + vel[1]*nY + vel[2]*nZ;
+                        if (vDotN < 0) { // Rör sig *in* i väggen
+                            // Sarg-studs (hög restitution)
+                            let restitution = 0.85; // Gummibands-effekt
+                            let newVel = [
+                                vel[0] - (1 + restitution) * vDotN * nX,
+                                vel[1] - (1 + restitution) * vDotN * nY,
+                                vel[2] - (1 + restitution) * vDotN * nZ
+                            ];
+                            
+                            // Stoppa bollen preciiis utanför väggen så den inte fastnar (Clipping protection)
+                            let safeDist = Math.max(0, hit.distance - 0.022); 
+                            let safePos = [
+                                prevPos[0] + (dir[0]/dist) * safeDist,
+                                prevPos[1] + (dir[1]/dist) * safeDist,
+                                prevPos[2] + (dir[2]/dist) * safeDist
+                            ];
+                            
+                            // Returnera ny position, hastighet och döda allt skruv-spinn!
+                            return { pos: safePos, vel: newVel, spin: [0,0,0] };
+                        }
+                    }
+                }
+                return null;
+            },
             hasTreeCollision: function(x, y, z) { return false; },
-            getTerrainAt: function(px, py) {
+            getTerrainAt: function(px, py, pz) {
                 let threeX = px;
                 let threeZ = -py;
                 
+                // --- NYTT: Kolla mot minigolf-banor (3D-Meshes) först ---
+                let tracks = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) 
+                             ? window.courseHoles[window.currentHoleIndex].envObjects.filter(o => o.type === 'MINIGOLF_TRACK').map(o => o.mesh) 
+                             : [];
+                             
+                if (tracks.length > 0) {
+                    if (!window.physRay) window.physRay = new THREE.Raycaster();
+                    // Skjut neråt från strax ovanför bollen (t.ex. pz + 0.1) för att undvika broar långt ovanför bollen!
+                    // Om pz saknas skjuter vi från skyhögt upp (100).
+                    let rayOriginY = pz !== undefined ? pz + 0.1 : 100;
+                    window.physRay.set(new THREE.Vector3(threeX, rayOriginY, threeZ), new THREE.Vector3(0, -1, 0));
+                    
+                    let intersects = window.physRay.intersectObjects(tracks, false);
+                    if (intersects.length > 0) {
+                        let hit = intersects[0];
+                        // Returnera banans data.
+                        let physZ = hit.point.y;
+                        let nX = hit.face.normal.x;
+                        let nY = -hit.face.normal.z;
+                        let nZ = hit.face.normal.y;
+                        return {
+                            z: physZ,
+                            normal: [nX, nY, nZ],
+                            type: 'GREEN' // Minigolfbana spelas som snabb Green
+                        };
+                    }
+                }
+                
+                // --- Fallback till den gamla organiska höjdkartan (Marken) ---
                 let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
                 let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
                 
