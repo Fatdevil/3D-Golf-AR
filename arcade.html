@@ -438,6 +438,12 @@
 
         <!-- Naturväljare -->
         <div id="nature-picker-group" class="prop-panel">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Category</label>
+            <div style="display:flex; gap:5px; margin-bottom:10px;">
+                <button id="cat-btn-TREES" class="sys-btn active" onclick="setNatureCategory('TREES')" style="flex:1; padding:6px 0; font-size:12px;">🌲 Trees</button>
+                <button id="cat-btn-ROCKS" class="sys-btn" onclick="setNatureCategory('ROCKS')" style="flex:1; padding:6px 0; font-size:12px;">🪨 Rocks</button>
+                <button id="cat-btn-PLANTS" class="sys-btn" onclick="setNatureCategory('PLANTS')" style="flex:1; padding:6px 0; font-size:12px;">🪴 Plants</button>
+            </div>
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Assets</label>
             <div id="nature-assets-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
                 <!-- Populated dynamically -->
@@ -732,37 +738,51 @@
     // -- CUSTOM 3D MODELS INJECTION & ASSET REGISTRY --
     window.customModels = {};
     window.ASSET_REGISTRY = {
-        'TREE':   { icon: '🌳', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.5 } },
-        'OAK':    { icon: '🌳', cat: 'nature', file: 'Oaktree.glb?v=1', targetHeight: 18.0, brightness: 0.10, yOffset: -0.5, physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
-        'OAK2':   { icon: '🍂', cat: 'nature', file: 'Oaktree_1.glb?v=1', targetHeight: 18.0, brightness: 0.10, yOffset: -0.5, physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
-        'PALM':   { icon: '🌴', cat: 'nature', file: 'palm3.glb?v=2', targetHeight: 12.0, brightness: 0.20, physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.0 } },
-        'PINE':   { icon: '🌲', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 18.0, canopyRadius: 2.5 } },
-        'BUSH':   { icon: '🪴', cat: 'nature', physics: { type: 'sphere', radius: 2.0 } },
-        'ROCK':   { icon: '🪨', cat: 'nature', physics: { type: 'sphere', radius: 1.5 } },
-        'CACTUS': { icon: '🌵', cat: 'nature', file: 'cactus_1.glb?v=1', targetHeight: 5.0, brightness: 0.20, physics: { type: 'cylinder', radius: 0.6, height: 6.0 } },
-        'R_BUSH': { icon: '🟩', cat: 'nature', file: 'robloxstyle/bush_1.glb', targetHeight: 3.0, brightness: 0.10, physics: { type: 'sphere', radius: 2.0 } },
-        'R_CACTUS': { icon: '🟩', cat: 'nature', file: 'robloxstyle/cactus_1.glb', targetHeight: 5.0, brightness: 0.10, physics: { type: 'cylinder', radius: 0.6, height: 6.0 } },
-        'R_PALM1': { icon: '🟩', cat: 'nature', file: 'robloxstyle/Palm_1.glb', targetHeight: 12.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.0 } },
-        'R_TREE1': { icon: '🟩', cat: 'nature', file: 'robloxstyle/Tree_1.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
-        'R_TREE2': { icon: '🟩', cat: 'nature', file: 'robloxstyle/Tree_2.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
-        'R_SANDST': { icon: '🟩', cat: 'nature', file: 'robloxstyle/sandstone_1.glb', targetHeight: 4.0, brightness: 0.10, physics: { type: 'sphere', radius: 2.0 } },
-        'R_STONE': { icon: '🟩', cat: 'nature', file: 'robloxstyle/ston_1.glb', targetHeight: 3.0, brightness: 0.10, physics: { type: 'sphere', radius: 1.5 } },
-        'R_GLOW': { icon: '✨', cat: 'nature', file: 'robloxstyle/tree_glow.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
-        'R_3DAI': { icon: '🤖', cat: 'nature', file: 'robloxstyle/tree_3dai.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
-        'R_PALM3D': { icon: '🌴', cat: 'nature', file: 'robloxstyle/palm_3dai.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 0.8, height: 15.0, canopyRadius: 4.0 } }
+        'TREE':   { subcat: 'TREES', icon: '🌳', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.5 } },
+        'OAK':    { subcat: 'TREES', icon: '🌳', cat: 'nature', file: 'Oaktree.glb?v=1', targetHeight: 18.0, brightness: 0.10, yOffset: -0.5, physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
+        'OAK2':   { subcat: 'TREES', icon: '🍂', cat: 'nature', file: 'Oaktree_1.glb?v=1', targetHeight: 18.0, brightness: 0.10, yOffset: -0.5, physics: { type: 'tree', trunkRadius: 1.5, height: 18.0, canopyRadius: 6.0 } },
+        'PALM':   { subcat: 'TREES', icon: '🌴', cat: 'nature', file: 'palm3.glb?v=2', targetHeight: 12.0, brightness: 0.20, physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.0 } },
+        'PINE':   { subcat: 'TREES', icon: '🌲', cat: 'nature', physics: { type: 'tree', trunkRadius: 0.5, height: 18.0, canopyRadius: 2.5 } },
+        'BUSH':   { subcat: 'PLANTS', icon: '🪴', cat: 'nature', physics: { type: 'sphere', radius: 2.0 } },
+        'ROCK':   { subcat: 'ROCKS', icon: '🪨', cat: 'nature', physics: { type: 'sphere', radius: 1.5 } },
+        'CACTUS': { subcat: 'PLANTS', icon: '🌵', cat: 'nature', file: 'cactus_1.glb?v=1', targetHeight: 5.0, brightness: 0.20, physics: { type: 'cylinder', radius: 0.6, height: 6.0 } },
+        'R_BUSH': { subcat: 'PLANTS', icon: '🟩', cat: 'nature', file: 'robloxstyle/bush_1.glb', targetHeight: 3.0, brightness: 0.10, physics: { type: 'sphere', radius: 2.0 } },
+        'R_CACTUS': { subcat: 'PLANTS', icon: '🟩', cat: 'nature', file: 'robloxstyle/cactus_1.glb', targetHeight: 5.0, brightness: 0.10, physics: { type: 'cylinder', radius: 0.6, height: 6.0 } },
+        'R_PALM1': { subcat: 'TREES', icon: '🟩', cat: 'nature', file: 'robloxstyle/Palm_1.glb', targetHeight: 12.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 0.5, height: 15.0, canopyRadius: 3.0 } },
+        'R_TREE1': { subcat: 'TREES', icon: '🟩', cat: 'nature', file: 'robloxstyle/Tree_1.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
+        'R_TREE2': { subcat: 'TREES', icon: '🟩', cat: 'nature', file: 'robloxstyle/Tree_2.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
+        'R_SANDST': { subcat: 'ROCKS', icon: '🟩', cat: 'nature', file: 'robloxstyle/sandstone_1.glb', targetHeight: 4.0, brightness: 0.10, physics: { type: 'sphere', radius: 2.0 } },
+        'R_STONE': { subcat: 'ROCKS', icon: '🟩', cat: 'nature', file: 'robloxstyle/ston_1.glb', targetHeight: 3.0, brightness: 0.10, physics: { type: 'sphere', radius: 1.5 } },
+        'R_GLOW': { subcat: 'TREES', icon: '✨', cat: 'nature', file: 'robloxstyle/tree_glow.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
+        'R_3DAI': { subcat: 'TREES', icon: '🤖', cat: 'nature', file: 'robloxstyle/tree_3dai.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 1.0, height: 15.0, canopyRadius: 5.0 } },
+        'R_PALM3D': { subcat: 'TREES', icon: '🌴', cat: 'nature', file: 'robloxstyle/palm_3dai.glb', targetHeight: 15.0, brightness: 0.10, physics: { type: 'tree', trunkRadius: 0.8, height: 15.0, canopyRadius: 4.0 } }
     };
     
     // -- DYNAMIC UI GENERATION --
-    const natureGroup = document.getElementById('nature-assets-grid');
-    if (natureGroup) {
+    window.currentNatureCategory = 'TREES';
+    window.setNatureCategory = function(cat) {
+        window.currentNatureCategory = cat;
+        document.getElementById('cat-btn-TREES').className = cat === 'TREES' ? 'sys-btn active' : 'sys-btn';
+        document.getElementById('cat-btn-ROCKS').className = cat === 'ROCKS' ? 'sys-btn active' : 'sys-btn';
+        document.getElementById('cat-btn-PLANTS').className = cat === 'PLANTS' ? 'sys-btn active' : 'sys-btn';
+        window.buildNatureUI();
+    };
+
+    window.buildNatureUI = function() {
+        const natureGroup = document.getElementById('nature-assets-grid');
+        if (!natureGroup) return;
         natureGroup.innerHTML = '<div class="palette-btn active" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType(\'RANDOM\', this)" title="Random Mix">❓</div>';
         for (let key in window.ASSET_REGISTRY) {
             let asset = window.ASSET_REGISTRY[key];
-            if (asset.cat === 'nature') {
+            if (asset.cat === 'nature' && asset.subcat === window.currentNatureCategory) {
                 natureGroup.innerHTML += `<div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('${key}', this)" title="${key}">${asset.icon}</div>`;
             }
         }
-    }
+        
+        // Auto-select "Random Mix" whenever category changes to prevent placing wrong category items
+        window.currentNatureType = 'RANDOM';
+    };
+    window.buildNatureUI();
     
     const dracoLoader = new THREE.DRACOLoader();
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
