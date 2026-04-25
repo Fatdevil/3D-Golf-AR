@@ -2772,6 +2772,8 @@
         } else if(currentTool === 'MEASURE' && isMeasuring) {
             isMeasuring = false;
             controls.enabled = true; 
+        } else if(currentTool === 'TRACK') {
+            controls.enabled = true;
         }
     }, false);
     
@@ -2945,6 +2947,9 @@
         
         let ipadBtn = document.getElementById('ipad-sculpt-btn');
         if (ipadBtn) ipadBtn.style.display = (toolName === 'SCULPT') ? 'block' : 'none';
+        
+        // Säkerhetsåtgärd: Lås alltid upp kameran när man byter verktyg så man inte fastnar
+        if (typeof controls !== 'undefined' && controls) controls.enabled = true;
         
         // Uppdatera markörens färg beroende på verktyg bygger på samma basfärger
         if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor && sculptBrushCursor.material) {
