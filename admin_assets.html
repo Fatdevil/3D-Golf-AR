@@ -277,14 +277,17 @@
                 const box = new THREE.Box3().setFromObject(currentModel);
                 const size = box.getSize(new THREE.Vector3());
                 const normalizeScale = 1.0 / size.y;
-                currentModel.scale.setScalar(normalizeScale);
                 
-                // Centrera
+                // Centrera och lägg botten på marken
                 const center = box.getCenter(new THREE.Vector3());
+                const cymin = isFinite(box.min.y) ? box.min.y : 0;
+                
+                currentModel.scale.setScalar(normalizeScale);
                 currentModel.position.x = -center.x * normalizeScale;
+                currentModel.position.y = -cymin * normalizeScale;
                 currentModel.position.z = -center.z * normalizeScale;
 
-                // Lägg i en container för att hålla 1m referensen
+                // Lägg i en container för att hålla 1m referensen i botten
                 const containerMesh = new THREE.Group();
                 containerMesh.add(currentModel);
                 currentModel = containerMesh;
