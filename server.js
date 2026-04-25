@@ -35,6 +35,21 @@ async function initDB() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+        
+        // Tabell för anpassade 3D-modeller (Assets)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS custom_assets (
+                id VARCHAR(50) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                subcategory VARCHAR(50) NOT NULL,
+                icon VARCHAR(10),
+                file_data TEXT NOT NULL,
+                config JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         try {
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS likes INT DEFAULT 0;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT false;`);
@@ -154,6 +169,72 @@ app.get('/api/courses/:share_code', async (req, res) => {
         res.json(result.rows[0]);
     } catch(err) {
         console.error("Error fetching course:", err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// --- ASSET MANAGER API ---
+
+// Hämta alla custom assets (Mindre payload, exkluderar den tunga file_data vid lista)
+app.get('/api/assets', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, name, category, subcategory, icon, config, created_at 
+            FROM custom_assets 
+            ORDER BY created_at DESC
+        `);
+        res.json(result.rows);
+    } catch(err) {
+        console.error("Error fetching assets:", err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// Hämta en specifik custom asset INKLUSIVE base64-filen
+app.get('/api/assets/:id/download', async (req, res) => {
+    try {
+        const result = await pool.query("SELECT file_data FROM custom_assets WHERE id = $1", [req.params.id]);
+        if(result.rows.length === 0) {
+            return res.status(404).json({ error: 'Asset not found' });
+        }
+        res.json({ file_data: result.rows[0].file_data });
+    } catch(err) {
+        console.error("Error downloading asset:", err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Spara/Uppdatera en custom asset
+app.post('/api/assets', async (req, res) => {
+    try {
+        const { id, name, category, subcategory, icon, file_data, config, password } = req.body;
+        
+        // Enkelt lösenordsskydd för admin-verktyget
+        if (password !== 'golfadmin123') {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        if (!id || !file_data) {
+            return res.status(400).json({ error: 'Missing id or file_data' });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO custom_assets (id, name, category, subcategory, icon, file_data, config) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id) DO UPDATE SET 
+                name = EXCLUDED.name,
+                category = EXCLUDED.category,
+                subcategory = EXCLUDED.subcategory,
+                icon = EXCLUDED.icon,
+                file_data = EXCLUDED.file_data,
+                config = EXCLUDED.config
+             RETURNING id`,
+            [id, name, category, subcategory, icon, file_data, config]
+        );
+
+        res.json({ success: true, id: result.rows[0].id });
+    } catch(err) {
+        console.error("Error saving asset:", err);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
