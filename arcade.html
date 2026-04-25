@@ -892,6 +892,9 @@
         // 6b. Tracer glow sync with time
         updateTracerForTimeOfDay(hour);
 
+        // 6c. Stars fade in/out with time
+        updateStarsForTimeOfDay(hour);
+
         // 7. Update UI label
         let lbl = document.getElementById('time-label');
         if (lbl) {
@@ -903,6 +906,68 @@
         let slider = document.getElementById('set-time');
         if (slider && parseFloat(slider.value) !== hour) slider.value = hour;
     };
+
+    // ============================================================
+    // STAR FIELD — Night Sky
+    // ============================================================
+    const STAR_COUNT = 600;
+    const starPositions = new Float32Array(STAR_COUNT * 3);
+    const starSizes = new Float32Array(STAR_COUNT);
+    const starPhases = new Float32Array(STAR_COUNT); // Random phase for twinkle
+    const starBaseSizes = new Float32Array(STAR_COUNT);
+
+    for (let i = 0; i < STAR_COUNT; i++) {
+        // Distribute on upper hemisphere (y > 0)
+        let theta = Math.random() * Math.PI * 2;
+        let phi = Math.acos(Math.random() * 0.85 + 0.15); // 0.15-1.0 = above horizon
+        let r = 800;
+        starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        starPositions[i * 3 + 1] = r * Math.cos(phi); // Always positive (upper hemisphere)
+        starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+        starBaseSizes[i] = 1.0 + Math.random() * 2.5; // 1.0 - 3.5
+        starSizes[i] = starBaseSizes[i];
+        starPhases[i] = Math.random() * Math.PI * 2;
+    }
+
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+    const starMat = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 2.5,
+        sizeAttenuation: false,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+    const starField = new THREE.Points(starGeo, starMat);
+    scene.add(starField);
+
+    window._starOpacity = 0;
+
+    function updateStarsForTimeOfDay(hour) {
+        let opacity = 0;
+        if (hour < 5 || hour > 21) { opacity = 1.0; }
+        else if (hour >= 5 && hour < 7) { opacity = 1.0 - (hour - 5) / 2; } // Dawn fade
+        else if (hour >= 18 && hour <= 21) { opacity = (hour - 18) / 3; }  // Dusk emerge
+        else { opacity = 0; }
+        window._starOpacity = opacity;
+        starMat.opacity = opacity;
+        starField.visible = opacity > 0.01;
+    }
+
+    // Twinkle animation (called from render loop)
+    function animateStars() {
+        if (window._starOpacity < 0.01) return;
+        let t = performance.now() * 0.001;
+        for (let i = 0; i < STAR_COUNT; i++) {
+            let twinkle = 0.7 + 0.3 * Math.sin(t * (1.5 + (starPhases[i] % 1.0) * 2.0) + starPhases[i]);
+            starSizes[i] = starBaseSizes[i] * twinkle;
+        }
+        starGeo.attributes.size.needsUpdate = true;
+    }
 
     // FAS 2: Glow-tree night mode
     const MAX_GLOW_LIGHTS = 20;
@@ -4588,6 +4653,7 @@
     // --- ANIMATION LOOP ---
     function animate() {
         requestAnimationFrame(animate);
+        animateStars(); // Star twinkle
         
         // Panning movement (WASD)
         if(moveDir) {
