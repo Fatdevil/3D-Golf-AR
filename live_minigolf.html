@@ -293,8 +293,8 @@
             <!-- Rad 1: Minigolf Block & Byggande -->
             <div style="display:flex; gap:5px; justify-content:center;">
                 <button id="tool-inspect" onclick="setTool('INSPECT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">👀 INSPECT</button>
-                <button id="tool-block" onclick="setTool('BLOCK')" style="background:#38bdf8; color:#0f172a; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧱 BYGG BLOCK</button>
-                <button id="tool-ramp" onclick="setTool('RAMP')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">📐 RAMP / TRAPPA</button>
+                <button id="tool-track" onclick="setTool('TRACK')" style="background:#38bdf8; color:#0f172a; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🎢 RITA BANA</button>
+                <button id="tool-sculpt" onclick="setTool('SCULPT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">⛰️ TERRÄNG</button>
                 <button id="tool-border" onclick="setTool('BORDER')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">〰️ SARG</button>
                 <button id="tool-obstacle" onclick="setTool('OBSTACLE')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🎡 3D-HINDER</button>
             </div>
@@ -309,6 +309,13 @@
         </div>
         
         <div style="width:1px; height:30px; background:#475569; margin: 0 10px;"></div>
+        
+        <!-- Track Settings -->
+        <div id="track-settings-group" style="display:none; flex-direction:column; gap:2px; margin:0 5px;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Höjd-Offset (Y)</label>
+            <input type="number" id="track-y-offset" value="0" step="0.5" style="width:70px; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px;">
+            <button onclick="createMinigolfTrack(splinePoints)" style="background:#4ade80; color:#0f172a; border:none; padding:4px; font-size:10px; border-radius:3px; font-weight:bold; cursor:pointer; margin-top:5px; transition:transform 0.1s;">✔ BYGG BANA</button>
+        </div>
         
         <!-- Inställningar för skulptering -->
         <div id="sculpt-settings-group" style="display:none; flex-direction:column; gap:2px; margin:0 5px;">
@@ -2612,19 +2619,21 @@
                 document.getElementById('measure-hud').style.display = 'none';
                 measureStartPoint = null;
             }
-        } else if(currentTool === 'SPLINE') {
+        } else if(currentTool === 'TRACK') {
             if(e.button === 0 && lastHitPoint) {
-                splinePoints.push(lastHitPoint.clone());
-                updateSplinePreview();
+                let pt = lastHitPoint.clone();
+                let yOffset = parseFloat(document.getElementById('track-y-offset')?.value || 0);
+                pt.y += yOffset;
+                splinePoints.push(pt);
+                if (typeof updateSplinePreview === 'function') updateSplinePreview();
             } else if (e.button === 2 && splinePoints.length > 0) {
                 splinePoints.pop();
-                updateSplinePreview();
+                if (typeof updateSplinePreview === 'function') updateSplinePreview();
             }
             controls.enabled = false;
-        } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
+        } else if(currentTool === 'SCULPT' || currentTool === 'WATER') {
             isSculpting = true;
-            controls.enabled = false; // Lås kameran när vi skulpterar
-            // Vänsterklick = Upp. Högerklick ELLER Shift+Vänster = Ner.
+            controls.enabled = false;
             sculptDirection = (e.button === 2 || e.shiftKey || window.ipadSculptDir === -1) ? -1 : 1; 
             
             if (currentTool === 'RAMP' && lastHitPoint) {
@@ -2805,64 +2814,45 @@
 
     function setTool(toolName) {
         currentTool = toolName;
-        document.getElementById('tool-inspect').style.background = toolName === 'INSPECT' ? '#a855f7' : 'transparent';
-        document.getElementById('tool-inspect').style.color = toolName === 'INSPECT' ? '#0f172a' : '#94a3b8';
         
-        document.getElementById('tool-sculpt').style.background = toolName === 'SCULPT' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-sculpt').style.color = toolName === 'SCULPT' ? '#0f172a' : '#94a3b8';
+        let tools = ['inspect', 'track', 'sculpt', 'ramp', 'border', 'obstacle', 'tee', 'hole', 'measure'];
+        tools.forEach(t => {
+            let el = document.getElementById('tool-' + t);
+            if(el) {
+                if (toolName === t.toUpperCase()) {
+                    el.style.background = '#38bdf8';
+                    el.style.color = '#0f172a';
+                } else {
+                    el.style.background = 'transparent';
+                    el.style.color = '#94a3b8';
+                }
+            }
+        });
         
-        document.getElementById('tool-smooth').style.background = toolName === 'SMOOTH' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-smooth').style.color = toolName === 'SMOOTH' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-flatten').style.background = toolName === 'FLATTEN' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-flatten').style.color = toolName === 'FLATTEN' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-ramp').style.background = toolName === 'RAMP' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-ramp').style.color = toolName === 'RAMP' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-noise').style.background = toolName === 'NOISE' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-noise').style.color = toolName === 'NOISE' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-spline').style.background = toolName === 'SPLINE' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-spline').style.color = toolName === 'SPLINE' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-water').style.background = toolName === 'WATER' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-water').style.color = toolName === 'WATER' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-paint').style.background = toolName === 'PAINT' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-paint').style.color = toolName === 'PAINT' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-smartgreen').style.background = toolName === 'SMART_GREEN' ? '#98ce68' : 'transparent';
-        document.getElementById('tool-smartgreen').style.color = toolName === 'SMART_GREEN' ? '#0f172a' : '#98ce68';
-
-        document.getElementById('tool-ridge').style.background = toolName === 'RIDGE' ? '#fbbf24' : 'transparent';
-        document.getElementById('tool-ridge').style.color = toolName === 'RIDGE' ? '#0f172a' : '#fbbf24';
-
-        document.getElementById('tool-nature').style.background = toolName === 'NATURE' ? '#4ade80' : 'transparent';
-        document.getElementById('tool-nature').style.color = toolName === 'NATURE' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-forest').style.background = toolName === 'FOREST' ? '#4ade80' : 'transparent';
-        document.getElementById('tool-forest').style.color = toolName === 'FOREST' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-block').style.background = toolName === 'BLOCK' ? '#4ade80' : 'transparent';
-        document.getElementById('tool-block').style.color = toolName === 'BLOCK' ? '#0f172a' : '#94a3b8';
+        // Special colors for start/hole
+        let teeBtn = document.getElementById('tool-tee');
+        if(teeBtn && toolName === 'TEE') { teeBtn.style.background = '#98ce68'; teeBtn.style.color = '#0f172a'; }
+        else if (teeBtn) { teeBtn.style.color = '#98ce68'; teeBtn.style.background = 'transparent'; }
         
-        document.getElementById('tool-hole').style.background = toolName === 'HOLE' ? '#ef4444' : 'transparent';
-        document.getElementById('tool-hole').style.color = toolName === 'HOLE' ? '#0f172a' : '#94a3b8';
+        let holeBtn = document.getElementById('tool-hole');
+        if(holeBtn && toolName === 'HOLE') { holeBtn.style.background = '#ef4444'; holeBtn.style.color = '#0f172a'; }
+        else if (holeBtn) { holeBtn.style.color = '#ef4444'; holeBtn.style.background = 'transparent'; }
         
-        document.getElementById('tool-measure').style.background = toolName === 'MEASURE' ? '#fbbf24' : 'transparent';
-        document.getElementById('tool-measure').style.color = toolName === 'MEASURE' ? '#0f172a' : '#fbbf24';
+        // UI Groups
+        let trackSettings = document.getElementById('track-settings-group');
+        if (trackSettings) trackSettings.style.display = (toolName === 'TRACK') ? 'flex' : 'none';
         
-        document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
-        document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
-        document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
-        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'SMART_GREEN' || toolName === 'RIDGE') ? 'flex' : 'none';
-        document.getElementById('green-diff-group').style.display = (toolName === 'SMART_GREEN') ? 'flex' : 'none';
+        let sculptSettings = document.getElementById('sculpt-settings-group');
+        if (sculptSettings) sculptSettings.style.display = (toolName === 'SCULPT' || toolName === 'WATER') ? 'flex' : 'none';
+        
+        let colorPicker = document.getElementById('color-picker-group');
+        if (colorPicker) colorPicker.style.display = 'none'; // Re-implement material picker later
+        
+        let holePicker = document.getElementById('hole-picker-group');
+        if (holePicker) holePicker.style.display = (toolName === 'HOLE') ? 'flex' : 'none';
         
         let ipadBtn = document.getElementById('ipad-sculpt-btn');
-        if (ipadBtn) {
-            ipadBtn.style.display = (toolName === 'SCULPT' || toolName === 'RIDGE') ? 'block' : 'none';
-        }
+        if (ipadBtn) ipadBtn.style.display = (toolName === 'SCULPT') ? 'block' : 'none';
         
         // Uppdatera markörens färg beroende på verktyg bygger på samma basfärger
         if(toolName === 'SMOOTH') {
@@ -3426,64 +3416,60 @@
         clearSpline();
     };
 
-    window.executeSplinePath = function(pathType) {
-        if(splinePoints.length < 2) return;
-        saveUndoState();
+    window.createMinigolfTrack = function(pts) {
+        if(pts.length < 2) return;
+        if(typeof saveUndoState === 'function') saveUndoState();
         
-        let curve = new THREE.CatmullRomCurve3(splinePoints);
-        let objType = pathType === 'TUBE' ? 'TUBE' : 'ROAD'; // ROAD = Flat
-        let pMesh;
+        let curve = new THREE.CatmullRomCurve3(pts);
         
-        if (pathType === 'TUBE') {
-            // Skapa 3D Tube längs kurvan
-            let densePts = curve.getPoints(splinePoints.length * 10);
-            for(let pt of densePts) {
-                let t = localGetTerrainAt(pt.x, -pt.z);
-                if(t) pt.y = t.z + 1.0; // Lyft upp centrum något över marken
-            }
-            let groundCurve = new THREE.CatmullRomCurve3(densePts);
-            let tubeGeo = new THREE.TubeGeometry(groundCurve, densePts.length, 1.5, 8, false);
-            
-            let color = new THREE.Color(0.2, 0.6, 0.8); // By default nice blue pipeline
-            let tubeMat = new THREE.MeshLambertMaterial({ color: color });
-            pMesh = new THREE.Mesh(tubeGeo, tubeMat);
-            pMesh.castShadow = true;
-            pMesh.receiveShadow = true;
-            
-        } else {
-            // PLAT VÄG
-            let densePts = curve.getPoints(splinePoints.length * 10);
-            for(let pt of densePts) {
-                let t = localGetTerrainAt(pt.x, -pt.z);
-                if(t) pt.y = t.z + 0.15; // Snappa kurvan mot marken med offset
-            }
-            let groundCurve = new THREE.CatmullRomCurve3(densePts);
-            
-            let tubeGeo = new THREE.TubeGeometry(groundCurve, densePts.length, 2.5, 8, false);
-            let roadMat = new THREE.MeshLambertMaterial({ color: 0x475569, side: THREE.DoubleSide });
-            pMesh = new THREE.Mesh(tubeGeo, roadMat);
-            
-            // Platta till Mesh Y-skalan (skapar plat asfältsform istället för tub)
-            pMesh.scale.y = 0.05; 
-            pMesh.updateMatrix();
-            pMesh.geometry.applyMatrix4(pMesh.matrix);
-            pMesh.scale.set(1,1,1);
-            pMesh.updateMatrix();
-            pMesh.geometry.computeBoundingBox();
-            pMesh.geometry.computeVertexNormals();
-            pMesh.receiveShadow = true;
-        }
+        // Define the "U" shape profile for the minigolf track
+        let trackWidth = 2.0; // Total width is 4 meters (-2 to +2)
+        let borderHeight = 0.4;
+        let borderThickness = 0.2;
+        let floorHeight = 0.1;
+        
+        let shape = new THREE.Shape();
+        shape.moveTo(-trackWidth, 0); // Bottom left outer
+        shape.lineTo(trackWidth, 0); // Bottom right outer
+        
+        shape.lineTo(trackWidth, borderHeight); // Right outer wall up
+        shape.lineTo(trackWidth - borderThickness, borderHeight); // Right top wall
+        shape.lineTo(trackWidth - borderThickness, floorHeight); // Right inner wall down
+        
+        shape.lineTo(-trackWidth + borderThickness, floorHeight); // Floor across to left
+        
+        shape.lineTo(-trackWidth + borderThickness, borderHeight); // Left inner wall up
+        shape.lineTo(-trackWidth, borderHeight); // Left top wall
+        shape.lineTo(-trackWidth, 0); // Left outer wall down (close shape)
+        
+        let extrudeSettings = {
+            steps: pts.length * 15, // Smoothness along the curve
+            bevelEnabled: false,
+            extrudePath: curve
+        };
+        
+        let geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        
+        // Temporärt gräsmaterial
+        let mat = new THREE.MeshLambertMaterial({ color: 0x4ade80, side: THREE.DoubleSide });
+        
+        let pMesh = new THREE.Mesh(geo, mat);
+        pMesh.castShadow = true;
+        pMesh.receiveShadow = true;
         
         let rObj = {
             id: Math.random().toString(36).substr(2, 9),
-            type: objType,
+            type: 'MINIGOLF_TRACK',
             mesh: pMesh,
-            splineData: splinePoints.map(p => ({x:p.x, y:p.y, z:p.z}))
+            splineData: pts.map(p => ({x:p.x, y:p.y, z:p.z}))
         };
-        scene.add(pMesh);
-        courseHoles[currentHoleIndex].envObjects.push(rObj);
         
-        clearSpline();
+        scene.add(pMesh);
+        if (window.courseHoles && window.courseHoles[window.currentHoleIndex]) {
+            window.courseHoles[window.currentHoleIndex].envObjects.push(rObj);
+        }
+        
+        if(typeof clearSpline === 'function') clearSpline();
     };
 
     function applySculpting() {
