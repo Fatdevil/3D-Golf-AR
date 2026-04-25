@@ -1400,13 +1400,6 @@
         window.placedTrees.push({ type: type, x: x, z: z, scale: scale, rot: rot, mesh: group });
     }
 
-    const ballGeo = new THREE.SphereGeometry(0.0427, 16, 16); 
-    const ballMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
-    const ball = new THREE.Mesh(ballGeo, ballMat);
-    ball.castShadow = true;
-    ball.position.set(0, 0.0213, 0);
-    ball.visible = false;
-    scene.add(ball);
 
     const MAX_TRACER_POINTS = 6000;
     const tracerPositions = new Float32Array(MAX_TRACER_POINTS * 3);
