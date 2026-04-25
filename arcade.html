@@ -213,6 +213,29 @@
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="physics.js?v=4"></script>
 </head>
+<body>
+<a href="hub.html" class="btn-home" style="z-index: 1000;">🏠</a>
+
+<div id="memory-budget-container" style="position:absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 8px 20px; border-radius: 20px; border: 1px solid #eab308; display: flex; align-items: center; gap: 15px; pointer-events: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
+    <span style="color: #eab308; font-size: 11px; font-weight:900; letter-spacing:1px;">ASSET BUDGET</span>
+    <div style="width: 150px; height: 10px; background: #334155; border-radius: 5px; overflow: hidden; position: relative;">
+        <div id="memory-budget-bar" style="width: 0%; height: 100%; background: #4ade80; transition: width 0.3s, background 0.3s;"></div>
+    </div>
+    <span id="memory-budget-text" style="color: #fff; font-size: 14px; font-weight: 900;">0 / 20</span>
+</div>
+
+<div id="biome-selector-container" style="position:absolute; top: 20px; right: 20px; z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 5px 15px; border-radius: 20px; border: 1px solid #38bdf8; display: flex; align-items: center; gap: 10px; pointer-events: auto;">
+    <span style="color: #94a3b8; font-size: 12px; font-weight:bold;">ENVIRONMENT</span>
+    <select id="biome-select" onchange="changeBiome(this.value)" style="background: transparent; color: #38bdf8; border: none; font-weight: bold; outline: none; cursor: pointer; text-transform:uppercase;">
+        <option value="ALL">Show All Assets</option>
+        <option value="GLOBAL">Generic (Global)</option>
+        <option value="DESERT">Desert</option>
+        <option value="SNOW">Snow</option>
+        <option value="MOON">Moon</option>
+        <option value="AUTUMN">Autumn</option>
+    </select>
+</div>
+
 <div id="ui-layer">
 
     <!-- THE GSPRO HUD (Always present but slidable) -->
@@ -768,6 +791,12 @@
         window.buildNatureUI();
     };
 
+    window.ACTIVE_BIOME = 'ALL';
+    window.changeBiome = function(val) {
+        window.ACTIVE_BIOME = val;
+        window.buildNatureUI();
+    };
+
     window.buildNatureUI = function() {
         const natureGroup = document.getElementById('nature-assets-grid');
         if (!natureGroup) return;
@@ -775,7 +804,10 @@
         for (let key in window.ASSET_REGISTRY) {
             let asset = window.ASSET_REGISTRY[key];
             if (asset.cat === 'nature' && asset.subcat === window.currentNatureCategory) {
-                natureGroup.innerHTML += `<div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('${key}', this)" title="${key}">${asset.icon}</div>`;
+                let biomes = asset.biomes || ['GLOBAL'];
+                if (window.ACTIVE_BIOME === 'ALL' || biomes.includes('GLOBAL') || biomes.includes(window.ACTIVE_BIOME)) {
+                    natureGroup.innerHTML += `<div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType('${key}', this)" title="${key}">${asset.icon}</div>`;
+                }
             }
         }
         
@@ -799,7 +831,8 @@
                     targetHeight: conf.targetHeight || 10.0,
                     yOffset: conf.yOffset || 0.0,
                     brightness: conf.brightness !== undefined ? conf.brightness : 0.0,
-                    physics: conf.physics || { type: 'sphere', radius: 1.0 }
+                    physics: conf.physics || { type: 'sphere', radius: 1.0 },
+                    biomes: conf.biomes || ['GLOBAL']
                 };
             });
             window.buildNatureUI(); // Rebuild UI with cloud assets
@@ -893,6 +926,8 @@
                 window.customModels[type] = container;
                 console.log(type + " loaded successfully!");
                 
+                window.updateMemoryBudget(); // Uppdatera mätaren!
+                
                 if (window.placedTrees) {
                     window.placedTrees.forEach(t => {
                         if (t.type === type) {
@@ -932,6 +967,31 @@
             });
         } else {
             performGLTFLoad(window.ASSET_REGISTRY[type].file);
+        }
+    };
+    
+    // --- MEMORY BUDGET LOGIC ---
+    window.MAX_ASSET_BUDGET = 20;
+    window.updateMemoryBudget = function() {
+        let loadedCount = 0;
+        for(let k in window.customModels) {
+            // Count unique loaded assets (ignore 'LOADING' state or failures)
+            if(window.customModels[k] && window.customModels[k] !== 'LOADING') {
+                loadedCount++;
+            }
+        }
+        
+        let pct = (loadedCount / window.MAX_ASSET_BUDGET) * 100;
+        let bar = document.getElementById('memory-budget-bar');
+        let txt = document.getElementById('memory-budget-text');
+        
+        if(bar && txt) {
+            bar.style.width = Math.min(pct, 100) + '%';
+            txt.innerText = loadedCount + ' / ' + window.MAX_ASSET_BUDGET;
+            
+            if (pct < 50) bar.style.background = '#4ade80'; // Grönt
+            else if (pct < 85) bar.style.background = '#fbbf24'; // Gult (Varning)
+            else bar.style.background = '#ef4444'; // Rött (Kritisk)
         }
     };
     
