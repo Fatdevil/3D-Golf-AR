@@ -346,10 +346,10 @@
     <!-- MODE TOGGLE UI & TOP BAR -->
     <div id="top-bar">
         <div style="display:flex; gap:10px;">
-            <button class="sys-btn" onclick="toggleMenu()">☰ MENY</button>
+            <button class="sys-btn" onclick="toggleMenu()">☰ MENU</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
             <button id="tool-testputt" class="sys-btn" onclick="setMode('BUILD'); setTool('TEST_PUTT')" style="border-color:#10b981; color:#10b981;">🏌️ DROP PUTT</button>
-            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🔥 TEST TEE</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🔥 TEST HOLE</button>
         </div>
         <div style="display:flex; gap:10px;">
             <button class="sys-btn" id="tool-inspect" onclick="setTool('INSPECT')">👀 INSPECT</button>
@@ -360,10 +360,10 @@
     </div>
     
     <div id="dropdown-menu">
-        <button onclick="document.getElementById('publish-modal').style.display='flex'; toggleMenu();">☁️ Spara / Publicera</button>
-        <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Rensa Banan</button>
+        <button onclick="document.getElementById('publish-modal').style.display='flex'; toggleMenu();">☁️ Save / Publish</button>
+        <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Clear Course</button>
         <div style="height:1px; background:#475569; margin:5px 0;"></div>
-        <button onclick="document.getElementById('settings-modal').style.display='flex'; toggleMenu();">⚙️ Spelinställningar</button>
+        <button onclick="document.getElementById('settings-modal').style.display='flex'; toggleMenu();">⚙️ Game Settings</button>
     </div>
     
     <script>
@@ -610,21 +610,27 @@
     </div>
     
     <!-- PUBLISH MODAL -->
-    <div id="publish-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto;">
-        <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #a855f7; width:450px; text-align:center; box-shadow: 0 10px 40px rgba(168,85,247,0.3);">
-            <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:24px;">☁️ SAVE / PUBLISH</h2>
-            <input type="text" id="pub-name" placeholder="Course Name..." style="width:90%; padding:10px; margin-bottom:10px; border-radius:6px; border:none; background:#0f172a; color:#fff; font-size:16px;">
-            <input type="text" id="pub-author" placeholder="Author Name..." style="width:90%; padding:10px; margin-bottom:20px; border-radius:6px; border:none; background:#0f172a; color:#fff; font-size:16px;">
+    <div id="publish-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto;">        <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #38bdf8; width:500px; text-align:center; box-shadow: 0 10px 40px rgba(56,189,248,0.3);">
+            <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:24px;">☁️ SAVE & PUBLISH</h2>
+            <p style="color:#94a3b8; font-size:14px; margin-bottom:20px;">Save your course to the cloud to play it later or share it with others.</p>
             
-            <div style="display:flex; flex-direction:column; gap:10px; align-items:center; margin-bottom: 20px;">
-                <button id="btn-save-draft" onclick="publishCourse({ isDraft: true, overwrite: true })" style="width:90%; background:#38bdf8; color:#0f172a; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">💾 Spara Utkast (Skriv över)</button>
-                <button id="btn-save-copy" onclick="publishCourse({ isDraft: true, overwrite: false })" style="width:90%; background:#eab308; color:#0f172a; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🗂️ Spara Utkast (Ny Slot)</button>
-                <div style="width:90%; height:1px; background:#475569; margin: 10px 0;"></div>
-                <button id="btn-publish-hub" onclick="publishCourse({ isDraft: false })" style="width:90%; background:#a855f7; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🌎 Publicera till HUB</button>
+            <input type="text" id="course-name-input" placeholder="Course Name (e.g. My Custom Links)" style="width:90%; padding:12px; border-radius:8px; border:1px solid #475569; background:#0f172a; color:#fff; font-size:16px; margin-bottom:15px;" />
+            <input type="text" id="author-name-input" placeholder="Author Name" style="width:90%; padding:12px; border-radius:8px; border:1px solid #475569; background:#0f172a; color:#fff; font-size:16px; margin-bottom:25px;" />
+            
+            <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+                <!-- Save Draft Overwrite -->
+                <button id="btn-save-draft" onclick="publishCourse({ isDraft: true, overwrite: true })" style="width:90%; background:#38bdf8; color:#0f172a; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">💾 Save Draft (Overwrite)</button>
+                <!-- Save Draft New Slot -->
+                <button id="btn-save-copy" onclick="publishCourse({ isDraft: true, overwrite: false })" style="width:90%; background:#eab308; color:#0f172a; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🗂️ Save Draft (New Slot)</button>
+                <!-- Publish Version -->
+                <button onclick="publishCourse({ isDraft: false })" style="width:90%; background:#10b981; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🌍 Publish Final Version</button>
             </div>
             
-            <button onclick="document.getElementById('publish-modal').style.display='none'" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; font-size:14px; cursor:pointer; text-decoration:underline;">Avbryt / Fortsätt bygga</button>
-            <p id="pub-status" style="color:#4ade80; display:none; margin-top:20px; font-weight:bold;"></p>
+            <div id="publish-status" style="margin-top:20px; color:#fbbf24; font-size:14px; font-weight:bold; min-height:40px;"></div>
+            
+            <div style="margin-top:20px; display:flex; justify-content:center;">
+                <button onclick="document.getElementById('publish-modal').style.display='none'" style="background:transparent; color:#94a3b8; border:none; padding:10px; font-weight:bold; cursor:pointer; text-decoration:underline;">Close</button>
+            </div>
         </div>
     </div>
 
@@ -710,17 +716,17 @@
     }, 500);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Himmel
-    scene.fog = new THREE.Fog(0x87CEEB, 300, 2500); // Kraftigt ökat synavstånd
+    scene.background = new THREE.Color(0x87CEEB); // Sky
+    scene.fog = new THREE.Fog(0x87CEEB, 300, 2500); // Increased view distance
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000); // Rendering upp till 4000m
-    // Kamera strax bakom och över bollen
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000); // Rendering up to 4000m
+    // Camera just behind and above ball
     camera.position.set(0, 2, 5); 
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    renderer.autoClear = false; // Krävs för Picture-in-Picture (Minimap)
+    renderer.autoClear = false; // Required for Picture-in-Picture (Minimap)
     document.body.appendChild(renderer.domElement);
     
     // -- CUSTOM 3D MODELS INJECTION & ASSET REGISTRY --
@@ -806,17 +812,17 @@
                         if (node.material) {
                             let mats = Array.isArray(node.material) ? node.material : [node.material];
                             mats.forEach(mat => {
-                                // Åtgärda "mörka GLTF-modeller" och matta ner glans
+                                // Fix "dark GLTF models" and make matte
                                 if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                                     mat.metalness = 0.0; 
-                                    mat.roughness = 1.0; // 1.0 = Helt matt yta
-                                    mat.roughnessMap = null; // Ta bort inbakade glans-texturer från modellen
+                                    mat.roughness = 1.0; // 1.0 = Fully matte surface
+                                    mat.roughnessMap = null; // Remove baked gloss textures
                                     mat.metalnessMap = null;
                                     
-                                    // Läs av ljusstyrka från registret (default 0.15)
+                                    // Read brightness from registry (default 0.15)
                                     let boost = window.ASSET_REGISTRY[type].brightness !== undefined ? window.ASSET_REGISTRY[type].brightness : 0.15;
                                     
-                                    // Simulera ambient-ljus
+                                    // Simulate ambient light
                                     if (mat.color) {
                                         if (type.startsWith('R_')) {
                                             let hsl = {};
@@ -857,7 +863,7 @@
         });
     };
     
-    // Förladda modeller som ska vara aktiva direkt
+    // Preload models
     window.loadAsset('PALM');
     window.loadAsset('OAK');
     window.loadAsset('OAK2');
@@ -881,21 +887,21 @@
     aimLineMesh.computeLineDistances();
     scene.add(aimLineMesh);
     
-    // Orthographic Camera för Minimappen
-    const mapSize = 150; // Hur stor markyta minikartan visar by default (radie)
+    // Orthographic Camera for Minimap
+    const mapSize = 150; 
     const minimapCamera = new THREE.OrthographicCamera(-mapSize, mapSize, mapSize, -mapSize, 0.1, 1000);
-    minimapCamera.position.set(0, 300, 0); // Högt över banan
+    minimapCamera.position.set(0, 300, 0); 
     minimapCamera.lookAt(0, 0, 0);
-    minimapCamera.up.set(0, 0, -1); // För orienteringens skull
+    minimapCamera.up.set(0, 0, -1); 
 
-    // Ljus
+    // Light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
     
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight.position.set(50, 100, 50);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048; // Skarpare skuggor
+    dirLight.shadow.mapSize.width = 2048; 
     dirLight.shadow.mapSize.height = 2048;
     dirLight.shadow.camera.top = 100;
     dirLight.shadow.camera.bottom = -100;
@@ -903,41 +909,38 @@
     dirLight.shadow.camera.right = 100;
     scene.add(dirLight);
     
-    // SKAPA EN MINECRAFT-SOL (Blockig)
+    // Create Minecraft sun
     const sunGeo = new THREE.BoxGeometry(20, 20, 20);
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-    sunMesh.position.set(200, 150, -400); // Långt bort på himlen!
+    sunMesh.position.set(200, 150, -400); 
     scene.add(sunMesh);
 
-    // 2. SKAPA GOLV (Byter från Vertex Colors till en High-Res 2048px Målar-Duk!)
+    // 2. CREATE FLOOR
     const tCanvas = document.createElement('canvas');
     tCanvas.width = 16; tCanvas.height = 16; 
     const tCtx = tCanvas.getContext('2d');
-    tCtx.clearRect(0,0,16,16); // Genomskinlig bas!!
-    tCtx.fillStyle = 'rgba(0,0,0,0.1)'; // Svagt svart grid-mönster
+    tCtx.clearRect(0,0,16,16); 
+    tCtx.fillStyle = 'rgba(0,0,0,0.1)'; 
     tCtx.fillRect(0,0,8,8); tCtx.fillRect(8,8,8,8); 
     
     const gridTex = new THREE.CanvasTexture(tCanvas);
     gridTex.wrapS = THREE.RepeatWrapping;
     gridTex.wrapT = THREE.RepeatWrapping;
-    // Skapa Textur-canvasen (Visuella)
     const paintCanvas = document.createElement('canvas');
     paintCanvas.width = 4096; paintCanvas.height = 4096;
     const pCtx = paintCanvas.getContext('2d', { willReadFrequently: true });
     
-    // Fyll med grundfärg (Rough)
     pCtx.fillStyle = '#4a782b';
     pCtx.fillRect(0, 0, 4096, 4096);
     
     const mapTex = new THREE.CanvasTexture(paintCanvas);
-    mapTex.magFilter = THREE.LinearFilter; // Mjuka suddiga Golf Clash kanter!
+    mapTex.magFilter = THREE.LinearFilter;
     
-    // EXPLICIT GREEN MASK (För Minimap Topography)
     window.greenMaskCanvas = document.createElement('canvas');
     window.greenMaskCanvas.width = 4096; window.greenMaskCanvas.height = 4096;
     window.greenCtx = window.greenMaskCanvas.getContext('2d', { willReadFrequently: true });
-    window.greenCtx.fillStyle = '#000000'; // Svart = Inte Green
+    window.greenCtx.fillStyle = '#000000'; 
     window.greenCtx.fillRect(0, 0, 4096, 4096);
     window.greenMaskTex = new THREE.CanvasTexture(window.greenMaskCanvas);
     window.greenMaskTex.magFilter = THREE.LinearFilter;
@@ -948,7 +951,6 @@
         let tData = window.terrainBiomeData;
         for(let i=0; i < tData.length; i+=4) {
             let r = tData[i], g = tData[i+1], b = tData[i+2];
-            // Enkel C-dist check mot Green: rgb(152, 206, 104) som körs asynkront PÅ CPU:n. Håller shadern 100% ren!
             let dGreen = (r-152)*(r-152) + (g-206)*(g-206) + (b-104)*(b-104);
             if (dGreen < 2000) {
                 gData.data[i] = 255; gData.data[i+1] = 255; gData.data[i+2] = 255; gData.data[i+3] = 255;
@@ -960,32 +962,26 @@
         window.greenMaskTex.needsUpdate = true;
     };
 
-    // SKAPA VATTEN-ALPHAMASK (Styr osynlighet för vatten-lagret)
     const waterCanvas = document.createElement('canvas');
     waterCanvas.width = 4096; waterCanvas.height = 4096;
     const wCtx = waterCanvas.getContext('2d');
-    wCtx.fillStyle = '#000000'; // Allt svart = Osynligt!
+    wCtx.fillStyle = '#000000'; 
     wCtx.fillRect(0, 0, 4096, 4096);
     const waterTex = new THREE.CanvasTexture(waterCanvas);
     waterTex.magFilter = THREE.LinearFilter;
     
-    // UTÖKAD BANA TILL 1200 METER! (1.4 km2)
-    const TERRAIN_SIZE = 900; // Kompaktare 900m yta (nästan 1 kvadratkilometer)
-    const TERRAIN_SEGS = 600; // Galet hög detaljrikedom, 1.5m mellan varje vertex!
+    const TERRAIN_SIZE = 900; 
+    const TERRAIN_SEGS = 600; 
     const planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
     planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
     
     const planeMat = new THREE.MeshLambertMaterial({ map: mapTex, vertexColors: false });
     
-    // THE STRIPED FAIRWAY SHADER INJECTION
-    // (Mower stripes removed to fix visual artifacts)
-
     const plane = new THREE.Mesh(planeGeo, planeMat);
     plane.rotation.x = -Math.PI / 2;
     plane.receiveShadow = true;
     scene.add(plane);
     
-    // THE TOPOGRAPHY HEATMAP SHADER (For Minimap)
     window.minimapMat = planeMat.clone();
     window.minimapMat.extensions = { derivatives: true };
     window.heatmapShaderRef = null;
@@ -1017,12 +1013,10 @@
             float diff = vWorldY - uFlagHeight;
             float contourInterval = 0.25;
             
-            // Beräkna lutning via skärmderivator för att anpassa linjetjocklek matematiskt
             float slope = length(vec2(dFdx(vWorldY), dFdy(vWorldY)));
             float distToContour = abs(fract(vWorldY / contourInterval + 0.5) - 0.5) * contourInterval;
-            float lineThicknessWorld = slope * 1.5; // Linjen blir 1.5 pixlar bred oavsett geometri
+            float lineThicknessWorld = slope * 1.5; 
             
-            // Rita bara linjer där det lutar (slope > 0.002). Annars blir platta fairways dolda av tjock svart contour.
             bool isLine = (slope > 0.002) && (distToContour < lineThicknessWorld);
             
             vec3 hmColor = vec3(0.0);
@@ -1034,19 +1028,16 @@
             
             float heatAlpha = greenMask.r * 0.85; 
             
-            // Mixa Heatmap på det belysta (Lambert) materialet så sand och fairway ser ut exakt som i spelet!
             vec3 mapColor = mix(gl_FragColor.rgb, hmColor, heatAlpha);
-            if (isLine) mapColor = vec3(0.05); // Svart Contour line
+            if (isLine) mapColor = vec3(0.05); 
             
             gl_FragColor = vec4(mapColor, gl_FragColor.a);
             `
         );
     };
     
-    // THE PHYSICAL WATER LAYER
-    const waterGeo = planeGeo.clone(); // Exakt samma nät!
+    const waterGeo = planeGeo.clone(); 
     waterGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    // Skjut ner allt vatten djupt initialt så inget glappar
     let wPos = waterGeo.attributes.position.array;
     for(let i=0; i<waterGeo.attributes.position.count; i++) wPos[i*3 + 2] = -99.0;
     
@@ -1055,7 +1046,7 @@
         transparent: true, 
         opacity: 0.85, 
         alphaMap: waterTex, 
-        alphaTest: 0.5, // Klipper kanterna magiskt skarpt!
+        alphaTest: 0.5, 
         depthWrite: false 
     });
     const waterMesh = new THREE.Mesh(waterGeo, waterMat);
@@ -1063,7 +1054,6 @@
     waterMesh.receiveShadow = true;
     scene.add(waterMesh);
     
-    // Grid-nätet läggs som en transparent hinna över (då slipper vi baka in det i canvas och undviker överlappningar)
     const gridMat = new THREE.MeshBasicMaterial({ 
         map: gridTex, 
         transparent: true, 
@@ -1123,7 +1113,7 @@
         let g = window.terrainBiomeData[pIdx+1];
         let b = window.terrainBiomeData[pIdx+2];
         
-        let biomeType = 'ROUGH'; // Default
+        let biomeType = 'ROUGH'; 
         function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
         
         let dOB = cDist(r,g,b, 239,68,68);
@@ -1159,7 +1149,6 @@
         return { z: height, normal: normal, type: biomeType };
     };
 
-    // GSPRO PUTTING VISUALIZATION (Beads & Break Line)
     const greenBeadsGroup = new THREE.Group();
     scene.add(greenBeadsGroup);
     window.greenBeads = [];
@@ -1167,9 +1156,7 @@
     const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
     
     window.breakLineMesh = null;
-
     
-    // SKULPTER-PENSEL (Visuell cirkel)
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
     const brushMat = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
     const sculptBrushCursor = new THREE.Mesh(brushGeo, brushMat);
@@ -1177,36 +1164,32 @@
     sculptBrushCursor.visible = false;
     scene.add(sculptBrushCursor);
 
-    // MÄTVERKTYG (Gula linjer för drag-rektangel)
     const measureGeo = new THREE.BufferGeometry();
-    const measurePos = new Float32Array(5 * 3); // 4 linjer = 5 noder
+    const measurePos = new Float32Array(5 * 3); 
     measureGeo.setAttribute('position', new THREE.BufferAttribute(measurePos, 3));
     const measureMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, depthTest: false, linewidth: 3 });
     const measureLines = new THREE.Line(measureGeo, measureMat);
-    measureLines.renderOrder = 999; // Rita ovanpå terrängen
+    measureLines.renderOrder = 999; 
     measureLines.visible = false;
     scene.add(measureLines);
     let measureStartPoint = null;
 
-    // TRÄD & NATUR
     const treeTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
     const treeLeavesMat = new THREE.MeshLambertMaterial({ color: 0x2d5a27 }); 
     const bushLeavesMat = new THREE.MeshLambertMaterial({ color: 0x4d7c0f }); 
 
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
 
-    const oakLeavesMat = new THREE.MeshLambertMaterial({ color: 0x3f6b2b }); // Mörk oliv/ek
+    const oakLeavesMat = new THREE.MeshLambertMaterial({ color: 0x3f6b2b }); 
 
     const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 4, 6); 
     const oakTrunkGeo = new THREE.CylinderGeometry(1.2, 1.8, 6, 8); 
-    const leafGeo = new THREE.IcosahedronGeometry(3.5, 1); // Bulligt
-    const oakLeafGeo = new THREE.IcosahedronGeometry(6.0, 1); // Gigantiskt
+    const leafGeo = new THREE.IcosahedronGeometry(3.5, 1); 
+    const oakLeafGeo = new THREE.IcosahedronGeometry(6.0, 1); 
     const bushGeo = new THREE.IcosahedronGeometry(2.0, 1); 
-    const pineGeo = new THREE.ConeGeometry(2.5, 8, 6); // Tall
+    const pineGeo = new THREE.ConeGeometry(2.5, 8, 6); 
     const spineGeo = new THREE.CylinderGeometry(0.3, 0.6, 8, 6); 
-    const rockGeo = new THREE.DodecahedronGeometry(1.5, 0); // Klippa
-
-
+    const rockGeo = new THREE.DodecahedronGeometry(1.5, 0); 
 
     window.placedTrees = [];
     const treesGroup = new THREE.Group();
@@ -1226,7 +1209,6 @@
             let clone = window.customModels[type].clone();
             group.add(clone);
         } else {
-            // Procedural Fallbacks for legacy nature, or generic block for new assets
             if (type === 'BUSH') {
                 let bMesh = new THREE.Mesh(bushGeo, bushLeavesMat);
                 bMesh.position.y = 0.5; bMesh.castShadow = true; bMesh.receiveShadow = true;
@@ -1254,14 +1236,12 @@
                 lMesh.castShadow = true; lMesh.receiveShadow = true;
                 group.add(tMesh); group.add(lMesh);
             } else {
-                // Generic Fallback Container for any new asset while loading
                 let tempGeo = new THREE.BoxGeometry(2, 5, 2);
                 let tempMat = new THREE.MeshLambertMaterial({ color: 0x64748b, wireframe: true });
                 let tMesh = new THREE.Mesh(tempGeo, tempMat);
                 tMesh.position.y = 2.5;
                 group.add(tMesh);
                 
-                // Trigger lazy load if not already loading
                 if (window.ASSET_REGISTRY[type] && !window.customModels[type]) {
                     window.loadAsset(type);
                 }
@@ -1273,8 +1253,7 @@
         window.placedTrees.push({ type: type, x: x, z: z, scale: scale, rot: rot, mesh: group });
     }
 
-    // 3. SKAPA BOLLEN
-    const ballGeo = new THREE.SphereGeometry(0.0427, 16, 16); // Riktigt Golfboll! (~4.2cm diameter. Visuell proxy för att synas vid puttning)
+    const ballGeo = new THREE.SphereGeometry(0.0427, 16, 16); 
     const ballMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
     const ball = new THREE.Mesh(ballGeo, ballMat);
     ball.castShadow = true;
@@ -1282,7 +1261,6 @@
     ball.visible = false;
     scene.add(ball);
 
-    // TRACER LINE FÖR FANTSTISK 3D FYSIK
     const MAX_TRACER_POINTS = 6000;
     const tracerPositions = new Float32Array(MAX_TRACER_POINTS * 3);
     const tracerGeo = new THREE.BufferGeometry();
@@ -1293,10 +1271,8 @@
     scene.add(flightTracer);
     let tracerPointsCount = 0;
 
-    // 4. SKAPA MÅLTAVLOR (Targets)
     const targets = [];
     
-    // --- BANSYSTEM & SCOREKORT (Holes, Tees, Flags) ---
     let courseHoles = [];
     for(let i=0; i<18; i++) {
         courseHoles.push({ 
@@ -1310,7 +1286,7 @@
     let currentHoleIndex = 0;
     let currentHoleAction = 'TEE_YELLOW';
     
-    const teeGeo = new THREE.SphereGeometry(0.35, 16, 16); // Teekulor istället för block
+    const teeGeo = new THREE.SphereGeometry(0.35, 16, 16); 
     const teeMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8 });
     const flagPoleGeo = new THREE.CylinderGeometry(0.05, 0.05, 6, 8);
     const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -1321,12 +1297,10 @@
         let group = new THREE.Group();
         let tMat = new THREE.MeshLambertMaterial({ color: colorHex });
         
-        // Vänstra Tee-kulan
         let meshLeft = new THREE.Mesh(teeGeo, tMat);
         meshLeft.position.set(-1.8, 0.35, 0);
         meshLeft.castShadow = true;
         
-        // Högra Tee-kulan
         let meshRight = new THREE.Mesh(teeGeo, tMat);
         meshRight.position.set(1.8, 0.35, 0);
         meshRight.castShadow = true;
@@ -1345,14 +1319,14 @@
         let holeGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.05, 16);
         let holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
         let phole = new THREE.Mesh(holeGeo, holeMat);
-        phole.position.set(0, 0.03, 0); // Precis ovanför gräset
+        phole.position.set(0, 0.03, 0); 
         group.add(phole);
         
         let pole = new THREE.Mesh(flagPoleGeo, flagPoleMat);
         pole.position.set(0, 3.0, 0);
         pole.castShadow = true;
         let pflag = new THREE.Mesh(flagClothGeo, flagClothMat);
-        pflag.position.set(0.75, 5.5, 0); // Fäst vid flaggstången
+        pflag.position.set(0.75, 5.5, 0); 
         pflag.castShadow = true;
         group.add(pole);
         group.add(pflag);
@@ -1415,7 +1389,6 @@
         let cYellow = "<tr><td style='color:#0f172a; background:#facc15; padding:5px; border-right:1px solid #334155;'>YELLOW</td>";
         let cRed = "<tr><td style='color:#fff; background:#ef4444; padding:5px; border-right:1px solid #334155;'>RED</td>";
         
-        // outTotals
         let sumBlack=0, sumWhite=0, sumYellow=0, sumRed=0;
         
         for(let i=0; i<9; i++) {
@@ -1446,24 +1419,6 @@
         document.getElementById('scorecard-modal').style.display = 'flex';
     };
     
-    function createTargetAbsolute(x, y, z, colStr) {
-        let exists = targets.find(t => t.mesh && t.mesh.position.x === x && Math.abs(t.mesh.position.y - y) < 0.1 && t.mesh.position.z === z);
-        if(exists) return; // Prevent double placement
-        
-        const tGeo = new THREE.BoxGeometry(3, 4, 3);
-        const tMat = new THREE.MeshLambertMaterial({ color: colStr });
-        const target = new THREE.Mesh(tGeo, tMat);
-        target.position.set(x, y, z);
-        target.castShadow = true;
-        scene.add(target);
-        
-        targets.push({ mesh: target, active: true, radius: 2.5, defColor: colStr });
-    }
-
-    function createTarget(x, z) {
-        createTargetAbsolute(x, 2, z, new THREE.Color().setHSL(Math.random(), 1.0, 0.5).getHex());
-    }
-
     window.hasUnsavedChanges = false;
     window.addEventListener('beforeunload', function (e) {
         if (appMode === 'BUILD' && window.hasUnsavedChanges) {
@@ -1485,31 +1440,23 @@
     }
     
     window.publishCourse = async function(options = { isDraft: false, overwrite: false }) {
-        let name = document.getElementById('pub-name').value;
-        let author = document.getElementById('pub-author').value;
-        let stat = document.getElementById('pub-status');
-        stat.style.display = 'none';
+        let name = document.getElementById('course-name-input').value;
+        let author = document.getElementById('author-name-input').value;
+        let stat = document.getElementById('publish-status');
+        stat.innerText = "Processing...";
 
         function showError(msg) {
-            stat.style.display = 'block';
             stat.style.color = '#ef4444';
-            stat.innerHTML = "❌ " + msg;
+            stat.innerText = "❌ " + msg;
         }
 
         if(!name && !options.isDraft) { showError("Please enter a course name!"); return; }
         
-        // VALIDERINGSCHECK (Steg 3) - Skip if drafting!
         if (!options.isDraft) {
             let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
             if(!h1HasTee || !courseHoles[0].flag) {
-                showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag before publishing.");
+                showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag.");
                 return;
-            }
-            for (let i=0; i<18; i++) {
-                let h = courseHoles[i];
-                let hasTee = h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black);
-                if(hasTee && !h.flag) { showError(`Validation Error: Hole ${i+1} has a tee but no flag! Please fix before publishing.`); return; }
-                if(h.flag && !hasTee) { showError(`Validation Error: Hole ${i+1} has a flag but no tee! Please fix before publishing.`); return; }
             }
         }
         
@@ -1565,21 +1512,15 @@
                 
                 let href = window.location.origin + window.location.pathname + (options.isDraft ? "?edit=" : "?course=") + data.share_code;
                 
-                // Byt URL utan omladdning
                 window.history.pushState({}, '', href);
                 
                 stat.style.color = '#4ade80';
-                stat.innerHTML = "Sparad! Din länk:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
-                stat.style.display = 'block';
-                
-                if (options.isDraft && document.getElementById('btn-save-draft')) {
-                    document.getElementById('btn-save-draft').style.display = 'block'; // Visar "skriv över"-knappen nu när vi har en EditCode
-                }
+                stat.innerHTML = "Saved! Your link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
             } else {
                 showError("Failed: " + data.error);
             }
         } catch(e) {
-            showError("Error connecting to server. Is the database active?");
+            showError("Error connecting to server.");
         }
     };
 
@@ -1609,10 +1550,9 @@
                     savedStr = data;
                     isCloud = true;
                     if (editCode) {
-                        currentEditCode = data.share_code; // Vi LADDADE MÄS från draft url, vi är ägaren!
-                        if(document.getElementById('pub-name')) document.getElementById('pub-name').value = data.name;
-                        if(document.getElementById('pub-author')) document.getElementById('pub-author').value = data.author;
-                        // Synliggör Spara Utkast (Samma Slot) om vi laddade en edit URL
+                        currentEditCode = data.share_code; 
+                        if(document.getElementById('course-name-input')) document.getElementById('course-name-input').value = data.name;
+                        if(document.getElementById('author-name-input')) document.getElementById('author-name-input').value = data.author;
                         if (document.getElementById('btn-save-draft')) document.getElementById('btn-save-draft').style.display = 'block';
                     }
                     if(typeof savedStr.holes === 'string') savedStr.holes = JSON.parse(savedStr.holes);
@@ -1719,7 +1659,7 @@
                     }
                 }
             } catch(e) {
-                console.error("Fel vid parse av sparad bana", e);
+                console.error("Parse error", e);
             }
         }
         
@@ -1732,40 +1672,22 @@
             setMode('PLAY');
             if (typeof startRound === 'function') setTimeout(startRound, 500);
         } else if (!autoRun && !courseCode && !editCode) {
-            // Default fallback
             setMode('TEST');
         }
         
-        // Initialisera biome-cache the lazy way (for empty manual load triggers mostly)
         setTimeout(() => {
             if (typeof pCtx !== 'undefined') window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
         }, 800);
     }
     
-    // SPEL LOGIK
     let isFlying = false;
     let flightData = null;
     let flightTick = 0;
     
-    // ARCADE MODE VARS
-    let points = 0;
-
-    // PROJECT ASCENSION (ROUND MODE) VARS
-    let playState = 'IDLE'; // 'IDLE', 'ROUND_IDLE', 'ROUND_FLYING', 'ROUND_HOLED_OUT'
+    let playState = 'IDLE'; 
     let playingHoleIndex = 0;
-    let playingStrokes = 0;
-    let broadcastCamPhase = 'TEE'; // 'TEE', 'LANDING'
-    let landingCamPos = new THREE.Vector3();
     
-    // THE GSPRO PLAYER STATE
     window.playerScores = Array(18).fill(null);
-    window.totalScore = 0;
-    
-    // THE WIND ENGINE STATE
-    window.currentWindMph = 0;
-    window.currentWindDir = 0;
-    window.currentWindVec = [0,0,0];
-
     window.matchSettings = {
         tournamentMode: false,
         gimmeDist: 10,
@@ -1778,52 +1700,43 @@
         altitude: 0
     };
 
-    // --- THE GLOBAL WIND ENGINE ---
     function updateWindEngine() {
         if (playState !== 'ROUND_IDLE' && playState !== 'ROUND_FLYING') return;
         
         let matchWindLevel = window.matchSettings ? window.matchSettings.windStrength : 0;
         let windMph = 0;
-        if (matchWindLevel === 1) windMph = 5 + Math.random() * 5; // 5-10
-        else if (matchWindLevel === 2) windMph = 10 + Math.random() * 8; // 10-18
-        else if (matchWindLevel === 3) windMph = 18 + Math.random() * 7; // 18-25
-        else if (matchWindLevel === 4) windMph = 25 + Math.random() * 10; // 25-35
-        else if (matchWindLevel === 0) windMph = Math.random() * 2; // 0-2 (Calm)
+        if (matchWindLevel === 1) windMph = 5 + Math.random() * 5; 
+        else if (matchWindLevel === 2) windMph = 10 + Math.random() * 8; 
+        else if (matchWindLevel === 3) windMph = 18 + Math.random() * 7; 
+        else if (matchWindLevel === 4) windMph = 25 + Math.random() * 10; 
+        else if (matchWindLevel === 0) windMph = Math.random() * 2; 
         
-        // Mjuka kastvindar: Rör sig långsamt mot en target
         window.currentWindMph += (windMph - window.currentWindMph) * 0.1;
         
         let windMs = window.currentWindMph * 0.44704;
         
-        // Pseudo-random bas-vindriktning per hål, The Course Wind!
         let holeWindDir = (playingHoleIndex * 137.5) % 360; 
         
-        // Gusts offset
         if (!window._targetGust) window._targetGust = 0;
-        if (Math.random() < 0.2) window._targetGust = (Math.random() - 0.5) * 30; // +/- 15 graders kastvind
+        if (Math.random() < 0.2) window._targetGust = (Math.random() - 0.5) * 30; 
         window.currentWindDir += (window._targetGust - (window.currentWindDir - holeWindDir)) * 0.05;
         
         let finalDirRad = window.currentWindDir * Math.PI / 180;
         
-        // Sätt in i Physics (X = Sida, Y = Framåt/Bakåt i Course Space)
         window.currentWindVec = [Math.sin(finalDirRad) * windMs, -Math.cos(finalDirRad) * windMs, 0];
         
-        // Update Minimap Wind UI
         let wSpd = document.getElementById('minimap-wind-spd');
         let wArr = document.getElementById('minimap-wind-arr');
         if(wSpd && wArr && window.aimTarget && typeof ball !== 'undefined' && ball && ball.visible) {
             wSpd.innerText = Math.round(window.currentWindMph) + " MPH";
             
-            // Konvertera Absolut Vind-direktion till Kamerans/Siktets referensram!
             let dX = window.aimTarget.x - ball.position.x;
             let dZ = window.aimTarget.z - ball.position.z;
-            let aimAngleRad = Math.atan2(dX, -dZ); // Standard 3D Y är Upp, Z är inåt
+            let aimAngleRad = Math.atan2(dX, -dZ); 
             
-            // finalDirRad är absolut. aimAngleRad är vart vi tittar.
             let relWindRad = aimAngleRad - finalDirRad;
             let relWindDeg = relWindRad * 180 / Math.PI;
             
-            // Rotera UPP-pilen baserat på denna vinkel
             wArr.style.transform = `rotate(${relWindDeg}deg)`;
         }
     }
@@ -1851,8 +1764,7 @@
         }
     };
 
-// --- MULTIPLAYER ROSTER SETUP ---
-    window.setupPlayers = [{ name: 'Spelaren 1', tee: 'yellow' }];
+    window.setupPlayers = [{ name: 'Player 1', tee: 'yellow' }];
     
     window.renderPlayerRoster = function() {
         const list = document.getElementById('roster-list');
@@ -1892,7 +1804,7 @@
             return;
         }
         let tee = window.setupPlayers.length > 0 ? window.setupPlayers[0].tee : 'yellow';
-        window.setupPlayers.push({ name: `Spelaren ${window.setupPlayers.length + 1}`, tee: tee });
+        window.setupPlayers.push({ name: `Player ${window.setupPlayers.length + 1}`, tee: tee });
         window.renderPlayerRoster();
     };
     
@@ -1905,7 +1817,6 @@
     window.commitSettingsAndStart = function() {
         if (window.setupPlayers.length === 0) return;
         
-        // Ensure names are saved if users forgot to unfocus the input (onchange issue)
         const inputs = document.getElementById('roster-list').querySelectorAll('input[type="text"]');
         inputs.forEach((inp, idx) => {
             if (window.setupPlayers[idx]) window.setupPlayers[idx].name = inp.value;
@@ -1920,7 +1831,7 @@
         window.matchSettings.greenFirmness = document.getElementById('set-green-firmness').value;
         window.matchSettings.altitude = parseInt(document.getElementById('set-altitude').value);
         
-        window.GREEN_STIMP = window.matchSettings.greenStimp; // Backwards compatible
+        window.GREEN_STIMP = window.matchSettings.greenStimp; 
         
         document.getElementById('settings-modal').style.display = 'none';
         actuallyStartRound();
@@ -1932,11 +1843,10 @@
         let hole1 = courseHoles[0];
         let h1HasTee = hole1 && hole1.tees && (hole1.tees.yellow || hole1.tees.white || hole1.tees.red || hole1.tees.black);
         if(!hole1 || !h1HasTee || !hole1.flag) {
-            alert("Hole 1 is missing a tee or a flag! You must build Hole 1 completely to play.");
+            alert("Hole 1 is missing a tee or a flag!");
             return;
         }
         
-        // Match player default tee to whatever tee actually exists on hole 1
         let firstAvailableTee = hole1.tees.yellow ? 'yellow' : (hole1.tees.white ? 'white' : (hole1.tees.red ? 'red' : 'black'));
         window.setupPlayers.forEach(p => {
             if (!hole1.tees[p.tee]) p.tee = firstAvailableTee;
@@ -1946,22 +1856,19 @@
         document.getElementById('settings-modal').style.display = 'flex';
     };
 
-    
     function getTeeOrder() {
         let players = window.players;
         let pIndices = players.map((p,i) => i);
         if (playingHoleIndex === 0) {
-            // Hole 1: Distance based from hole for TEE ordering (or list order)
-            return pIndices; // List order for hole 1 as per user spec
+            return pIndices; 
         }
         
         let prevHole = playingHoleIndex - 1;
         
-        // Honours: Lowest scoreVsPar plays FIRST
         pIndices.sort((a,b) => {
             let aScore = players[a].scoreVsPar[prevHole] || 0;
             let bScore = players[b].scoreVsPar[prevHole] || 0;
-            if (aScore !== bScore) return aScore - bScore; // Ascending (lägst först)
+            if (aScore !== bScore) return aScore - bScore; 
             return a - b; 
         });
         return pIndices;
@@ -1970,25 +1877,22 @@
     function getNextPlayerIndex() {
         let players = window.players;
         let notHoledOut = players.map((p,i) => i).filter(i => !players[i].holedOut);
-        if (notHoledOut.length === 0) return -1; // Alla är klara
+        if (notHoledOut.length === 0) return -1; 
         
-        // Är alla kvar på tee? (Ingen har slagit slag)
         let allOnTee = notHoledOut.every(i => players[i].strokes === 0 && players[i].penaltyStrokes === 0);
         if (allOnTee) {
             let teeOrder = getTeeOrder();
-            // Nästa från tee-order som inte slagit!
             let nextId = teeOrder.find(id => notHoledOut.includes(id) && players[id].strokes === 0);
             if(nextId !== undefined) return nextId;
         }
         
-        // Ute på banan -> Furthest from hole goes first!
         let hole = courseHoles[playingHoleIndex];
         let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         notHoledOut.sort((a,b) => {
             let pA = players[a]; let pB = players[b];
             let dA = new THREE.Vector3(pA.lie.x, pA.lie.y, pA.lie.z).distanceTo(fv);
             let dB = new THREE.Vector3(pB.lie.x, pB.lie.y, pB.lie.z).distanceTo(fv);
-            return dB - dA; // Descending (längst slår först)
+            return dB - dA; 
         });
         return notHoledOut[0];
     }
@@ -1997,20 +1901,18 @@
         let hole = courseHoles[index];
         let anyTee = hole ? (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) : null;
         if(!hole || !anyTee || !hole.flag) {
-            alert("Hole " + (index+1) + " is not fully built! Needs both a Tee and a Flag.");
+            alert("Hole " + (index+1) + " is not fully built!");
             return;
         }
 
-        // Sätt initiala LIES & TEES för alla players
         window.players.forEach((p, idx) => {
             p.holedOut = false;
             p.strokes = 0;
             p.penaltyStrokes = 0;
             
-            // Hitta deras valda tee (eller fallback)
             let activeT = hole.tees[p.tee] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
             p.teePosition = { x: activeT.x, y: activeT.y, z: activeT.z };
-            p.lie = { x: activeT.x, y: activeT.y + 0.3, z: activeT.z }; // Startar på peggen!
+            p.lie = { x: activeT.x, y: activeT.y + 0.3, z: activeT.z }; 
         });
 
         let startPlayerIdx = getNextPlayerIndex();
@@ -2019,21 +1921,18 @@
     
     function switchTurnTo(idx) {
         if(idx === -1) {
-            nextHole(); // Hela fältet är klara
+            nextHole(); 
             return;
         }
         
         window.activePlayerIndex = idx;
         let p = window.players[idx];
         
-        // Visa ställningen för den aktiva spelaren
         updatePlayerBanner();
         
-        // Återställ boll-statusen till idle för denna spelare
         window.ballLocked = false;
-        if (playState !== 'ROUND_PUTTING') playState = 'ROUND_IDLE'; // eller behåll putting logik  
+        if (playState !== 'ROUND_PUTTING') playState = 'ROUND_IDLE'; 
         
-        // Ställ upp bollen på deras nuvarande lie
         ball.visible = true;
         ball.position.set(p.lie.x, p.lie.y, p.lie.z);
         ball.velocity = new THREE.Vector3(0,0,0);
@@ -2041,7 +1940,6 @@
         
         window.aimTarget = new THREE.Vector3();
         
-        // Vänd kameran framåt
         let hole = courseHoles[playingHoleIndex];
         let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         let dir = new THREE.Vector3().subVectors(fv, ball.position).normalize();
@@ -2052,11 +1950,9 @@
         controls.enabled = true;
         controls.update();
 
-        // Uppdatera Trackers
         let trck = document.getElementById('ball-tracker');
         if (trck) trck.style.display = 'none';
 
-        // Flash turn message om vi har slagit slag och byter spelare
         let pop = document.getElementById('score-popup');
         pop.innerText = p.name.toUpperCase() + "'S TURN";
         pop.style.color = "#38bdf8";
@@ -2071,17 +1967,14 @@
         let maxConcede = window.matchSettings ? window.matchSettings.autoConcede : 99;
         let maxScore = hole ? (hole.par || 4) + maxConcede : 99;
         
-        // Spara deras position eftersom dom precis slagit bollen (vi antar bollen stannat)
         p.lie = {x: ball.position.x, y: ball.position.y, z: ball.position.z};
 
-        // Uppdatera HUD Banner till att visa korrekt avstånd för nästa slag!
         if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
 
         if (p.strokes + p.penaltyStrokes >= maxScore && maxConcede !== 99 && !p.holedOut) {
             p.holedOut = true;
             p.strokes = maxScore;
             
-            // Pop-up för concede!
             let pop = document.getElementById('score-popup');
             pop.innerText = "AUTO CONCEDE (" + maxScore + ")";
             pop.style.color = "#ef4444";
@@ -2106,13 +1999,10 @@
             }
         }
         
-        // Hitta vem som ska slå näst
         let nextPlayer = getNextPlayerIndex();
         if(nextPlayer === -1) {
             setTimeout(nextHole, 2500);
         } else {
-            // Om nextPlayer är samma spelare (pga farthest, eller ensam), uppdatera inte kameran direkt för man ser landningen
-            // Om de hålade ut måste vi vänta så de ser bollen trilla i
             setTimeout(() => {
                 switchTurnTo(nextPlayer);
             }, p.holedOut ? 2500 : 1000);
@@ -2147,7 +2037,7 @@
         document.getElementById('btn-start-round').style.display = 'none';
         document.getElementById('playing-hud').style.display = 'none'; 
         document.getElementById('player-banner').style.display = 'block'; 
-        document.getElementById('player-banner').querySelector('#pb-name').style.display = 'inline-block'; // Visa Namn!
+        document.getElementById('player-banner').querySelector('#pb-name').style.display = 'inline-block'; 
         
         teleportToHole(playingHoleIndex);
     };
@@ -2165,16 +2055,12 @@
         if (totalVsPar > 0) totalDisplay = "+" + totalVsPar;
         else if (totalVsPar < 0) totalDisplay = totalVsPar.toString();
         
-        // Uppdatera Namnet & Score
         document.getElementById('pb-score').innerHTML = totalDisplay + " <span style='font-size:12px; color:#94a3b8;'>| " + p.name + "</span>";
         
-        // Uppdatera Shot X
         let totalStrokes = p.strokes + p.penaltyStrokes;
         document.getElementById('pb-shot').innerText = "Shot " + (totalStrokes + 1);
         
-        // Uppdatera Distans om vi har the pin
         if (hole.flag && ball && ball.visible) {
-            // Använd faktiska bollpositionen för live-kalkyl
             let dist = ball.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
             document.getElementById('pb-dist').innerText = window.formatDistStr(dist, 1);
         }
@@ -2223,9 +2109,8 @@
         if(!tbody) return;
         
         let htmlMode = '';
-        // Vi måste kunna hantera både 9 hål och 18 hål
         let maxHoles = 18; 
-        if (!courseHoles[9] || !courseHoles[9].flag) maxHoles = 9; // Kolla om hål 10 finns
+        if (!courseHoles[9] || !courseHoles[9].flag) maxHoles = 9; 
         
         let parOut = 0; let parIn = 0;
         let scoreOut = 0; let scoreIn = 0;
@@ -2251,29 +2136,26 @@
         tbody.innerHTML = htmlMode;
     }
     
-    // Teleport single-player override removed for multiplayer stability.
-
-    // --- CAMERA TOGGLE ---
-    window.camFollowMode = 'BROADCAST'; // 'BROADCAST', 'FOLLOW', 'FREE'
+    window.camFollowMode = 'BROADCAST'; 
     window.toggleCamMode = function() {
         let btn = document.getElementById('btn-cam-mode');
         if (window.camFollowMode === 'BROADCAST') {
             window.camFollowMode = 'FOLLOW';
             btn.innerText = '🎥 FOLLOW';
-            btn.style.background = '#64748b'; // slate-500
+            btn.style.background = '#64748b'; 
         } else if (window.camFollowMode === 'FOLLOW') {
             window.camFollowMode = 'FREE';
             btn.innerText = '🎥 FREE CAM';
-            btn.style.background = '#ec4899'; // pink-500
+            btn.style.background = '#ec4899'; 
         } else {
             window.camFollowMode = 'BROADCAST';
             btn.innerText = '🎥 BROADCAST';
-            btn.style.background = '#4f46e5'; // indigo-600
+            btn.style.background = '#4f46e5'; 
         }
     };
 
     function fireShot() {
-        if(isFlying) return; // Låt bollen landa
+        if(isFlying) return; 
         
         var vSpeed = parseFloat(document.getElementById('in-speed').value) || 130;
         var vLa = parseFloat(document.getElementById('in-la').value) || 14;
@@ -2293,7 +2175,6 @@
             spinAxisDeg: spinAxis,
             isLiveData: false,
             
-            // Obligatoriska defaults för HUD
             clubSpeedMph: 0,
             clubPathDeg: 0,
             faceToPathDeg: 0,
@@ -2306,7 +2187,6 @@
     function triggerRealShot(data) {
         if(isFlying) return;
         
-        // --- UPPDATERA GSPro DATA HUD ---
         if(document.getElementById('hud-cp')) document.getElementById('hud-cp').innerText = typeof data.clubPathDeg === 'number' ? data.clubPathDeg.toFixed(1) + '°' : '---';
         if(document.getElementById('hud-ftp')) document.getElementById('hud-ftp').innerText = typeof data.faceToPathDeg === 'number' ? data.faceToPathDeg.toFixed(1) + '°' : '---';
         if(document.getElementById('hud-aoa')) document.getElementById('hud-aoa').innerText = typeof data.clubAoADeg === 'number' ? data.clubAoADeg.toFixed(1) + '°' : '---';
@@ -2315,18 +2195,12 @@
         if(document.getElementById('hud-bs')) document.getElementById('hud-bs').innerText = typeof data.ballSpeedMph === 'number' ? data.ballSpeedMph.toFixed(1) + ' mph' : '---';
         if(document.getElementById('hud-vla')) document.getElementById('hud-vla').innerText = typeof data.launchAngleDeg === 'number' ? data.launchAngleDeg.toFixed(1) + '°' : '---';
         
-        // Side spin approximation från SpinAxis (Om axis är 10 grader, ca 10% av spinnen blir side spin)
         let sSpin = (data.totalSpinRpm * Math.sin((data.spinAxisDeg||0) * Math.PI/180)) || 0;
         let bSpin = (data.totalSpinRpm * Math.cos((data.spinAxisDeg||0) * Math.PI/180)) || data.totalSpinRpm;
         if(document.getElementById('hud-ss')) document.getElementById('hud-ss').innerText = sSpin.toFixed(0);
         if(document.getElementById('hud-backspin')) document.getElementById('hud-backspin').innerText = bSpin.toFixed(0);
         if(document.getElementById('hud-sa')) document.getElementById('hud-sa').innerText = typeof data.spinAxisDeg === 'number' ? data.spinAxisDeg.toFixed(1) + '°' : '---';
-        // Reset carry
-        if(document.getElementById('hud-carry')) document.getElementById('hud-carry').innerText = '0 yds';
-        if(document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = '0 yds';
-        if(document.getElementById('hud-total')) document.getElementById('hud-total').innerText = '0 yds';
         
-        // Updatera inmatningsfält visuellt 
         if(document.getElementById('in-speed')) document.getElementById('in-speed').value = (data.ballSpeedMph || 0).toFixed(1);
         if(document.getElementById('in-la')) document.getElementById('in-la').value = (data.launchAngleDeg || 0).toFixed(1);
         if(document.getElementById('in-hla')) document.getElementById('in-hla').value = (data.azimDeg || 0).toFixed(1);
@@ -2337,7 +2211,6 @@
     window.shotStartPos = null;
 
     function executeArcadeShot(data) {
-        // Lås kamerakontroller så vi kan regissera kameran (OM VI INTE KÖR FREE-CAM)
         if (window.camFollowMode !== 'FREE') {
             controls.enabled = false; 
         } else {
@@ -2358,9 +2231,8 @@
             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
             if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
             broadcastCamPhase = 'TEE';
-            startPos = [ball.position.x, -ball.position.z, ball.position.y]; // Three X,Z,Y -> Phys X,Y,Z
+            startPos = [ball.position.x, -ball.position.z, ball.position.y]; 
         } else {
-            // ARCADE MODE: Lås till (0, 0.3, 0)
             ball.position.set(0, 0.3, 0);
         }
         
@@ -2369,8 +2241,6 @@
         var vStimpEl = document.getElementById('in-stimp');
         window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
         
-        // --- 1. SIKTE- OCH OFFSET-LOGIK ---
-        // Användarens grafiska sikte projiceras på fysikens azimut för att flyga dit du siktar.
         let aimOffsetDeg = 0;
         if ((appMode === 'PLAY' || appMode === 'TEST') && window.aimTarget) {
             let dX = window.aimTarget.x - ball.position.x;
@@ -2384,17 +2254,14 @@
             launchAngleDeg: data.launchAngleDeg,
             totalSpinRpm: data.totalSpinRpm,
             spinAxisDeg: data.spinAxisDeg || 0,
-            azimDeg: (data.azimDeg || 0) + aimOffsetDeg, // Lägg till sikt-vinkeln!
+            azimDeg: (data.azimDeg || 0) + aimOffsetDeg, 
             isLiveData: data.isLiveData || false
         };
         var cupPosLocal = null;
         if (window.pinMesh) {
-            // ThreeJS: Y is Up, -Z is forward -> Physics: Z is up, Y is forward
-            // pinMesh.position.y is usually the terrain height
             cupPosLocal = [window.pinMesh.position.x, -window.pinMesh.position.z, window.pinMesh.position.y];
         }
         
-        // --- ENVIRONMENTAL INJECTION (Wind & Altitude) ---
         let envAlt = window.matchSettings ? window.matchSettings.altitude : 0;
         
         let windVecStr = JSON.stringify(window.currentWindVec);
@@ -2408,7 +2275,6 @@
             greenFirmness: window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL',
             checkCollisionCallback: function(x, y, z) { 
                 if (!window.placedTrees) return null;
-                // Fysik(X,Y,Z) -> ThreeJS(X,-Z,Y)
                 let threeX = x;
                 let threeZ = -y;
                 
@@ -2420,7 +2286,6 @@
                     let distSq = dx*dx + dz*dz;
                     let dist = Math.sqrt(distSq) || 0.001;
 
-                    // Normal som pekar ut från objektet mot bollen
                     let nxThree = -dx / dist; 
                     let nzThree = -dz / dist;
                     let nxPhys = nxThree;
@@ -2480,7 +2345,7 @@
                 let height = positions[idx * 3 + 2]; 
                 
                 let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
-                let gzDown = Math.max(0, gz - 1); // gz minskar -> Z ökar -> Y(phys) ökar
+                let gzDown = Math.max(0, gz - 1); 
 
                 let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
                 let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
@@ -2504,10 +2369,10 @@
                     g = window.terrainBiomeData[pIdx+1];
                     b = window.terrainBiomeData[pIdx+2];
                 } else {
-                    r = 74; g = 222; b = 128; // Fairway fallback
+                    r = 74; g = 222; b = 128; 
                 }
                 
-                let biomeType = 'ROUGH'; // Default
+                let biomeType = 'ROUGH'; 
                 function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
                 
                 let dOB = cDist(r,g,b, 239,68,68);
@@ -2536,10 +2401,9 @@
                     waterHeight = waterGeo.attributes.position.array[idx * 3 + 2];
                 }
                 
-                // Då kan du ha snustorra bunkrar på -40m, vattnet triggar bara där du faktiskt grävt vatten!
                 if (waterHeight > -90 && height < waterHeight + 0.1) {
                     biomeType = 'WATER';
-                    height = waterHeight; // Möt ytan exakt
+                    height = waterHeight; 
                 }
                 return {
                     z: height,
@@ -2549,14 +2413,12 @@
             }
         };
         
-        // --- CACHE PIXELDATA INFÖR SKOTT ---
         window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
         
-        // Simulera The Matrix med nya Fysikmotorn
         let result = window.GolfPhysics.simulateFlight(launchConfig, envCtx);
         if (!result) return;
         
-        flightData = result; // Path är result.path
+        flightData = result; 
         flightTick = 0;
         isFlying = true;
         
@@ -2565,7 +2427,6 @@
         isFlying = true;
     }
 
-    // 5. BUILD MODE & RAYCASTING
     let appMode = 'PLAY'; 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -2577,35 +2438,28 @@
     
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    let currentBuildColor = 0xef4444; // Default Red
+    let currentBuildColor = 0xef4444; 
     
-    // Ghost block (Blueprint)
     const ghostGeo = new THREE.BoxGeometry(3, 4, 3);
     const ghostMat = new THREE.MeshBasicMaterial({ color: currentBuildColor, opacity: 0.5, transparent: true, wireframe: false });
     const ghostBlock = new THREE.Mesh(ghostGeo, ghostMat);
     ghostBlock.visible = false;
     scene.add(ghostBlock);
 
-    // GHOST TREE / BUSH (Indikator när man har Nature verktyget)
     const ghostTree = new THREE.Mesh(bushGeo, new THREE.MeshBasicMaterial({ color: 0x4ade80, wireframe: true, transparent:true, opacity: 0.7 }));
     ghostTree.visible = false;
     scene.add(ghostTree);
     
-    // The static gridHelper was removed because it clipped through sculpted terrain and water.
-
-    // Skulpterings-variabler
     let isSculpting = false;
     let sculptDirection = 1;
-    let currentTool = 'SCULPT'; // 'BLOCK' eller 'SCULPT'
+    let currentTool = 'SCULPT'; 
     let currentBrushSize = 6.0;
 
-    // Spline-variabler
     let splinePoints = [];
     let splineSpheres = [];
     let splineLineMesh = null;
     let splinePreviewMesh = null;
 
-    // Pensel multiplikator logik
     let brushMultiplier = 1;
     window.ipadSculptDir = 1;
     window.toggleIpadSculpt = function() {
@@ -2613,11 +2467,11 @@
         let btn = document.getElementById('ipad-sculpt-btn');
         if (window.ipadSculptDir === 1) {
             btn.innerText = "⬆️ RAISE";
-            btn.style.background = "#4ade80"; // green
+            btn.style.background = "#4ade80"; 
             btn.style.color = "#0f172a";
         } else {
             btn.innerText = "⬇️ LOWER";
-            btn.style.background = "#ef4444"; // red
+            btn.style.background = "#ef4444"; 
             btn.style.color = "#fff";
         }
     };
@@ -2634,7 +2488,6 @@
         updateBrushSize();
     };
 
-    // Funktion för radiesnurran
     window.updateBrushSize = function() {
         let val = document.getElementById('brush-slider') ? document.getElementById('brush-slider').value : 6;
         currentBrushSize = parseFloat(val) * brushMultiplier;
@@ -2644,13 +2497,11 @@
         }
     };
 
-    // Global Undo-Stack
     const undoStack = [];
     window.performUndo = function() {
         if (undoStack.length === 0) return;
         let state = undoStack.pop();
         
-        // Återställ höjder
         let posArr = planeGeo.attributes.position.array;
         for(let i=0; i<posArr.length; i++) posArr[i] = state.heights[i];
         planeGeo.attributes.position.needsUpdate = true;
@@ -2662,46 +2513,39 @@
             waterGeo.attributes.position.needsUpdate = true;
         }
         
-        // Återställ färg
         pCtx.clearRect(0,0,4096,4096);
         pCtx.drawImage(state.colorCanvas, 0, 0);
         mapTex.needsUpdate = true;
         
-        // Återställ vatten alfa
         if (state.waterColorCanvas && typeof wCtx !== 'undefined') {
             wCtx.clearRect(0,0,4096,4096);
             wCtx.drawImage(state.waterColorCanvas, 0, 0);
             if (typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
         }
         
-        // Återställ block
         targets.forEach(t => scene.remove(t.mesh));
         targets.length = 0;
         if (state.blocks) {
             state.blocks.forEach(b => createTargetAbsolute(b.x, b.y, b.z, b.color));
         }
         
-        // Återställ natur
         treesGroup.clear();
         window.placedTrees.length = 0;
         if (state.trees) {
             state.trees.forEach(t => createTree(t.type, t.x, t.z, t.scale, t.rot));
         }
         
-        // Återställ Holes (Tees & Flagga)
         if(state.holes) {
             for(let i=0; i<courseHoles.length; i++) {
                 let hState = state.holes[i];
                 if(!hState) continue;
                 let h = courseHoles[i];
                 
-                // Rensa bort nuvarande 3D-objekt
                 for(let key in h.teeMeshes) {
                     if(h.teeMeshes[key]) scene.remove(h.teeMeshes[key]);
                 }
                 if(h.flagMesh) scene.remove(h.flagMesh);
                 
-                // Bygg upp från sparad state
                 h.tees = JSON.parse(JSON.stringify(hState.tees));
                 h.teeMeshes = {};
                 for(let key in h.tees) {
@@ -2757,7 +2601,6 @@
 
     window.addEventListener('pointermove', onMouseMove, false);
     
-    // WASD Movement state
     let moveDir = null;
     window.startMove = function(dir) { moveDir = dir; };
     window.stopMove = function() { moveDir = null; };
@@ -2778,12 +2621,10 @@
     
     let waterLevelTarget = 0;
 
-    // Använd pointerdown / pointerup för att hantera "drag" skulptering
     renderer.domElement.addEventListener('pointerdown', e => {
         if(appMode !== 'BUILD') return;
         if(currentTool === 'INSPECT') return;
         
-        // Spara Undo-State precis vid klick! (Bara om de ritar/modifierar något)
         let isModifyingClick = e.button === 0 || e.button === 2;
         if(currentTool !== 'PAINT' && currentTool !== 'MEASURE' || isModifyingClick) { 
              if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE') saveUndoState(); 
@@ -2791,14 +2632,12 @@
 
         if(currentTool === 'MEASURE') {
             if(e.button === 0 && lastHitPoint) {
-                // Börja mäta
                 measureStartPoint = lastHitPoint.clone();
-                measureLines.visible = false; // Dölj tills vi drar
+                measureLines.visible = false; 
                 document.getElementById('measure-hud').style.display = 'block';
                 controls.enabled = false;
                 isMeasuring = true;
             } else if (e.button === 2) {
-                // Rensa mätning med högerklick
                 measureLines.visible = false;
                 document.getElementById('measure-hud').style.display = 'none';
                 measureStartPoint = null;
@@ -2814,7 +2653,6 @@
             controls.enabled = false;
         } else if(currentTool === 'TEST_PUTT') {
             if(e.button === 0 && lastHitPoint) {
-                // Droppa bollen och gå in i TEST läge!
                 setMode('TEST');
                 let pos = lastHitPoint.clone();
                 if(typeof ballPos !== 'undefined') {
@@ -2825,7 +2663,7 @@
                     }
                     
                     let targetPos = new THREE.Vector3(ballPos.x, ballPos.y, ballPos.z - 10);
-                    let camOffset = new THREE.Vector3(0, 0.4, 2.5); // Låg vinkel för puttning
+                    let camOffset = new THREE.Vector3(0, 0.4, 2.5); 
                     
                     if (typeof currentHole !== 'undefined' && courseHoles[currentHole] && courseHoles[currentHole].flag) {
                         let fPos = courseHoles[currentHole].flag;
@@ -2842,7 +2680,6 @@
                     controls.target.copy(targetPos);
                     controls.update();
                     
-                    // Aktivera GSPro lutnings-animationer direkt!
                     window.isPuttingMode = true;
                     if(typeof window.greenBeads !== 'undefined') {
                         if(typeof greenBeadsGroup !== 'undefined') {
@@ -2854,8 +2691,7 @@
             }
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
             isSculpting = true;
-            controls.enabled = false; // Lås kameran när vi skulpterar
-            // Vänsterklick = Upp. Högerklick ELLER Shift+Vänster = Ner.
+            controls.enabled = false; 
             sculptDirection = (e.button === 2 || e.shiftKey || window.ipadSculptDir === -1) ? -1 : 1; 
             
             if (currentTool === 'RAMP' && lastHitPoint) {
@@ -2873,9 +2709,9 @@
                 let existingWater = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position.array[idx*3 + 2] : -99;
                 
                 if (existingWater > -90) {
-                    waterLevelTarget = existingWater; // Klick på sjö -> Lås ytan, djupdyk botten utan att ändra ytan!
+                    waterLevelTarget = existingWater; 
                 } else {
-                    waterLevelTarget = lastHitPoint.y - 0.5; // Gräv en platt botten 0.5m lägre än där vi klickade
+                    waterLevelTarget = lastHitPoint.y - 0.5; 
                 }
             }
         } else {
@@ -2895,12 +2731,12 @@
         }
         if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE') {
             isSculpting = false;
-            controls.enabled = true; // Släpp kameran
+            controls.enabled = true; 
             if(currentTool !== 'PAINT') {
                 planeGeo.computeVertexNormals(); 
                 planeGeo.computeBoundingBox();
                 planeGeo.computeBoundingSphere();
-                snapObjectsToGround(); // Auto-lyft objekt som begravts!
+                snapObjectsToGround(); 
             }
         } else if(currentTool === 'MEASURE' && isMeasuring) {
             isMeasuring = false;
@@ -2908,12 +2744,10 @@
         }
     }, false);
     
-    // Blockera webbläsarens högerklick helt i canvas
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault(), false);
     
     function setMode(mode) {
         if ((appMode === 'BUILD' || appMode === 'ARCHITECT') && (mode === 'PLAY' || mode === 'TEST')) {
-            // Skapa Green Mask inför minikartan
             if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
         }
         appMode = mode;
