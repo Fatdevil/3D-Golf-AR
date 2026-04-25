@@ -68,6 +68,15 @@
             </div>
         </div>
 
+        <h1 style="margin-top: 15px; font-size: 14px;">Biomes (Miljöer)</h1>
+        <div class="form-group" style="flex-direction:row; flex-wrap:wrap; gap:10px;">
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="GLOBAL" checked> Global</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="DESERT"> Desert</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="SNOW"> Snow</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="MOON"> Moon</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="AUTUMN"> Autumn</label>
+        </div>
+
         <div class="row">
             <div class="form-group">
                 <label>Target Height (m) <span id="val-height">15.0</span></label>
@@ -371,7 +380,8 @@
                 cat: 'nature',
                 subcat: subcat,
                 icon: icon,
-                physics: physicsConf
+                physics: physicsConf,
+                biomes: Array.from(document.querySelectorAll('.biome-cb:checked')).map(cb => cb.value)
             };
 
             document.getElementById('log').innerText = "Uploading to Cloud...";
