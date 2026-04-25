@@ -766,6 +766,7 @@
     window.ballMesh.castShadow = true;
     window.ballMesh.visible = false;
     scene.add(window.ballMesh);
+    window.ball = window.ballMesh; // Add this alias to fix legacy code expecting 'ball' object
     
     // -- CUSTOM 3D MODELS INJECTION & ASSET REGISTRY --
     window.customModels = {};
@@ -4166,7 +4167,7 @@
             for(let i=0; i<targets.length; i++) {
                 let t = targets[i];
                 if(t.active) {
-                    let d = ball.position.distanceTo(t.mesh.position);
+                    let d = window.ballMesh.position.distanceTo(t.mesh.position);
                     if(d < t.radius) {
                         t.active = false;
                         scene.remove(t.mesh); // PANG! Block försvinner.
@@ -4211,15 +4212,15 @@
                     let hole = courseHoles[playingHoleIndex];
                     let distToPin = 999;
                     if(hole && hole.flag) {
-                        distToPin = ball.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
+                        distToPin = window.ballMesh.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
                         
                         // --- SMART AUTO-AIM EFTER SLAG ---
                         // Standard default-beteende för nästa slag är mot target progression (pin/green center)
                         if (window.aimTarget) {
                             window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z);
-                            let aimDir = new THREE.Vector3().subVectors(window.aimTarget, ball.position).normalize();
+                            let aimDir = new THREE.Vector3().subVectors(window.aimTarget, window.ballMesh.position).normalize();
                             if(aimDir.lengthSq() < 0.01) aimDir.set(0, 0, -1);
-                            camera.position.copy(ball.position).add(new THREE.Vector3(-aimDir.x * 5, 2, -aimDir.z * 5));
+                            camera.position.copy(window.ballMesh.position).add(new THREE.Vector3(-aimDir.x * 5, 2, -aimDir.z * 5));
                             controls.target.copy(window.aimTarget);
                         }
                     }
@@ -4228,7 +4229,7 @@
                         let pop = document.getElementById('score-popup');
                         pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
                         
-                        let lieSurface = localGetTerrainAt(ball.position.x, ball.position.z);
+                        let lieSurface = localGetTerrainAt(window.ballMesh.position.x, window.ballMesh.position.z);
                         let isGreen = lieSurface && lieSurface.type === 'GREEN';
                         let distFt = distToPin * 3.28084;
                         let gimmeMax = window.matchSettings ? window.matchSettings.gimmeDist : 10;
@@ -4326,8 +4327,8 @@
                 
                 // Uppdatera info
                 let hole = courseHoles[playingHoleIndex];
-                let dist = ball.position.distanceTo(window.aimTarget);
-                let elevDiff = window.aimTarget.y - ball.position.y;
+                let dist = window.ballMesh.position.distanceTo(window.aimTarget);
+                let elevDiff = window.aimTarget.y - window.ballMesh.position.y;
                 document.getElementById('aim-bb-dist').innerText = (dist * 1.09361).toFixed(0); 
                 document.getElementById('aim-bb-elev').innerText = Math.abs(elevDiff * 1.09361).toFixed(1) + 'y';
                 document.getElementById('aim-bb-arrow').innerText = elevDiff > 0 ? '▲' : '▼';
@@ -4360,12 +4361,12 @@
                 let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
                 
                 // Gör kameran responsiv mot layouten (Ball till Flagga)
-                minimapCamera.position.set((ball.position.x + fv.x)/2, 300, (ball.position.z + fv.z)/2);
+                minimapCamera.position.set((window.ballMesh.position.x + fv.x)/2, 300, (window.ballMesh.position.z + fv.z)/2);
                 
-                let dist = ball.position.distanceTo(fv);
+                let dist = window.ballMesh.position.distanceTo(fv);
                 
                 // Låt "Uppåt" i kartan peka mot flaggan! (Vi räknar ut detta först för offset)
-                let dir = new THREE.Vector3().subVectors(fv, ball.position);
+                let dir = new THREE.Vector3().subVectors(fv, window.ballMesh.position);
                 dir.y = 0; dir.normalize();
                 
                 // SKIFTA MINIMAP-KAMERANS CENTRUM
@@ -4387,10 +4388,10 @@
                 
                 // --- KARTA UI (Yards & Grader) ---
                 if (window.aimTarget) {
-                    let dX = window.aimTarget.x - ball.position.x;
-                    let dZ = window.aimTarget.z - ball.position.z;
+                    let dX = window.aimTarget.x - window.ballMesh.position.x;
+                    let dZ = window.aimTarget.z - window.ballMesh.position.z;
                     let flatD = Math.sqrt(dX*dX + dZ*dZ);
-                    let dY = window.aimTarget.y - ball.position.y;
+                    let dY = window.aimTarget.y - window.ballMesh.position.y;
                     
                     let degUp = (Math.atan2(dY, flatD) * 180 / Math.PI).toFixed(1);
                     document.getElementById('minimap-updown').innerText = Math.abs(degUp) + (degUp >= 0 ? "° UP" : "° DN");
@@ -4420,7 +4421,7 @@
             // Ritning av Line Overlay (Ball -> Target -> Flag)
             if (window.aimTarget && hole && hole.flag && document.getElementById('mm-line-1')) {
                 let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
-                let pB = ball.position.clone().project(minimapCamera);
+                let pB = window.ballMesh.position.clone().project(minimapCamera);
                 let pA = window.aimTarget.clone().project(minimapCamera);
                 let pF = fv.clone().project(minimapCamera);
                 
@@ -4448,7 +4449,7 @@
                 dT.style.display = 'block';
                 dF.style.display = 'block';
                 
-                dT.innerText = window.formatDistStr(ball.position.distanceTo(window.aimTarget), 0);
+                dT.innerText = window.formatDistStr(window.ballMesh.position.distanceTo(window.aimTarget), 0);
                 dF.innerText = window.formatDistStr(window.aimTarget.distanceTo(fv), 0);
                 
                 dT.style.left = ((bx+ax)/2 + 20) + 'px';
