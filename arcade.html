@@ -784,6 +784,31 @@
     };
     window.buildNatureUI();
     
+    window.fetchCloudAssets = async function() {
+        try {
+            let res = await fetch('/api/assets');
+            let assets = await res.json();
+            assets.forEach(a => {
+                let conf = a.config || {};
+                window.ASSET_REGISTRY[a.id] = {
+                    icon: a.icon || '📦',
+                    cat: a.category || 'nature',
+                    subcat: a.subcategory || 'TREES',
+                    isCloud: true,
+                    cloudId: a.id,
+                    targetHeight: conf.targetHeight || 10.0,
+                    yOffset: conf.yOffset || 0.0,
+                    brightness: conf.brightness !== undefined ? conf.brightness : 0.0,
+                    physics: conf.physics || { type: 'sphere', radius: 1.0 }
+                };
+            });
+            window.buildNatureUI(); // Rebuild UI with cloud assets
+        } catch(e) {
+            console.error("Failed to load cloud assets", e);
+        }
+    };
+    window.fetchCloudAssets();
+    
     const dracoLoader = new THREE.DRACOLoader();
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
     const gltfLoader = new THREE.GLTFLoader();
@@ -791,7 +816,11 @@
     
     // Nya extremt nerskalade palmen (250 KB)
     window.loadAsset = function(type, callback) {
-        if (!window.ASSET_REGISTRY[type] || !window.ASSET_REGISTRY[type].file) {
+        if (!window.ASSET_REGISTRY[type]) {
+            if(callback) callback(false);
+            return;
+        }
+        if (!window.ASSET_REGISTRY[type].file && !window.ASSET_REGISTRY[type].isCloud) {
             if(callback) callback(false);
             return;
         }
@@ -802,7 +831,9 @@
         if (window.customModels[type] === 'LOADING') return;
         
         window.customModels[type] = 'LOADING';
-        gltfLoader.load(window.ASSET_REGISTRY[type].file, function(gltf) {
+
+        const performGLTFLoad = (url) => {
+            gltfLoader.load(url, function(gltf) {
             try {
                 let model = gltf.scene;
                 let box = new THREE.Box3().setFromObject(model);
@@ -881,6 +912,27 @@
             window.customModels[type] = null;
             if(callback) callback(false);
         });
+        };
+
+        if (window.ASSET_REGISTRY[type].isCloud) {
+            fetch('/api/assets/' + window.ASSET_REGISTRY[type].cloudId + '/download')
+            .then(res => res.json())
+            .then(data => {
+                if(data.file_data) {
+                    performGLTFLoad(data.file_data);
+                } else {
+                    window.customModels[type] = null;
+                    if(callback) callback(false);
+                }
+            })
+            .catch(e => {
+                console.error("Cloud Asset Download failed", e);
+                window.customModels[type] = null;
+                if(callback) callback(false);
+            });
+        } else {
+            performGLTFLoad(window.ASSET_REGISTRY[type].file);
+        }
     };
     
     // Preload models
