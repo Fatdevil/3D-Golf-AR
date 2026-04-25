@@ -314,7 +314,10 @@
         <div id="track-settings-group" style="display:none; flex-direction:column; gap:2px; margin:0 5px;">
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Höjd-Offset (Y)</label>
             <input type="number" id="track-y-offset" value="0" step="0.5" style="width:70px; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px;">
-            <button onclick="createMinigolfTrack(splinePoints)" style="background:#4ade80; color:#0f172a; border:none; padding:4px; font-size:10px; border-radius:3px; font-weight:bold; cursor:pointer; margin-top:5px; transition:transform 0.1s;">✔ BYGG BANA</button>
+            <div style="display:flex; gap:2px; margin-top:5px;">
+                <button onclick="createMinigolfTrack(splinePoints)" style="flex:1; background:#4ade80; color:#0f172a; border:none; padding:4px; font-size:10px; border-radius:3px; font-weight:bold; cursor:pointer; transition:transform 0.1s;" title="Bygg bana från noderna">✔ BYGG</button>
+                <button onclick="if(typeof clearSpline === 'function') clearSpline();" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; font-size:10px; border-radius:3px; font-weight:bold; cursor:pointer; transition:transform 0.1s;" title="Rensa noder">❌</button>
+            </div>
         </div>
         
         <!-- Inställningar för skulptering -->
@@ -3402,9 +3405,6 @@
             splineLineMesh.position.y += 0.5;
             scene.add(splineLineMesh);
         }
-
-        let pnl = document.getElementById('spline-action-panel');
-        if(pnl) pnl.style.display = splinePoints.length > 2 ? 'block' : 'none';
         renderer.render(scene, camera); // Force draw
     }
 
@@ -4508,19 +4508,6 @@
     animate();
 </script>
 
-<div id="spline-action-panel" style="display:none; position:absolute; bottom:120px; left:50%; transform:translateX(-50%); background:#0f172a; border:2px solid #38bdf8; border-radius:12px; padding:15px; z-index:400; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center;">
-    <h3 style="margin:0 0 10px 0; color:#fff; font-size:14px; text-transform:uppercase; letter-spacing:1px;">Spline Ready</h3>
-    <div style="display:flex; gap:10px;">
-        <button onclick="executeSplineBoundary('GREEN')" style="background:#4ade80; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">⛳ Fill Green</button>
-        <button onclick="executeSplineBoundary('FAIRWAY')" style="background:#22c55e; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🌿 Fill Fairway</button>
-        <button onclick="executeSplineBoundary('BUNKER')" style="background:#fbbf24; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🏖️ Fill Bunker</button>
-    </div>
-    <div style="display:flex; gap:10px; margin-top:10px;">
-        <button onclick="executeSplinePath('FLAT_ROAD')" style="background:#475569; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🛣️ Extrude Flat Road</button>
-        <button onclick="executeSplinePath('TUBE')" style="background:#3b82f6; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🚰 Extrude 3D Tube</button>
-        <button onclick="clearSpline()" style="background:#ef4444; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">❌ Clear All</button>
-    </div>
-</div>
 
 </body>
 </html>
