@@ -70,11 +70,16 @@ body {
           </p>
         </div>
         
-        <div class="card" style="padding: 40px 30px;">
-           <a href="#" onclick="if(confirm('Detta kastar din eventuella osparade arbetskopia. Är du redo för ett blankt papper?')) window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'" class="action-btn creator" style="padding: 40px; font-size:24px;">
-             <span class="icon-large" style="font-size: 48px;">🏗️</span>
-             SKAPA NY BANA
-             <span style="font-weight: 600; font-size: 14px; color:#93c5fd; margin-top: 10px;">Börja på ett helt tomt grönt papper</span>
+        <div class="card" style="padding: 30px; display:flex; flex-direction:column; gap:15px;">
+           <a href="#" onclick="if(confirm('Detta kastar din eventuella osparade arbetskopia. Är du redo för ett blankt papper?')) window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'" class="action-btn creator" style="padding: 20px; font-size:20px;">
+             <span class="icon-large" style="font-size: 32px;">🏗️</span>
+             SKAPA NY ARCADE-BANA
+             <span style="font-weight: 600; font-size: 12px; color:#93c5fd; margin-top: 5px;">Klassiskt fritt skulpterande</span>
+           </a>
+           <a href="#" onclick="if(confirm('Starta ny Minigolf-bana? (Osparad data kan försvinna)')) window.location.href='live_minigolf.html'" class="action-btn creator" style="padding: 20px; font-size:20px; background: linear-gradient(135deg, rgba(168,85,247,0.1), rgba(139,92,246,0.2)); border-color: rgba(168,85,247,0.4);">
+             <span class="icon-large" style="font-size: 32px;">⛳</span>
+             SKAPA MINIGOLF (NY)
+             <span style="font-weight: 600; font-size: 12px; color:#d8b4fe; margin-top: 5px;">Modulärt snap-byggande</span>
            </a>
         </div>
     </div>
