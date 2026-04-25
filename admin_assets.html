@@ -320,6 +320,16 @@
             updateHitbox();
         });
 
+        // Automatisk ifyllnad: Ändrar du kategori till Rock, så ställs fysiken om till Sphere
+        document.getElementById('asset-subcat').addEventListener('change', function(e) {
+            const val = e.target.value;
+            const physSelect = document.getElementById('physics-type');
+            if (val === 'TREES') physSelect.value = 'tree';
+            else if (val === 'ROCKS') physSelect.value = 'sphere';
+            else if (val === 'PLANTS') physSelect.value = 'sphere';
+            physSelect.dispatchEvent(new Event('change'));
+        });
+
         // --- SPARA TILL BACKEND ---
         document.getElementById('btn-save').addEventListener('click', async () => {
             if (!base64Data) return alert("Please load a .glb file first!");
