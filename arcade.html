@@ -386,7 +386,9 @@
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
         <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')"><span style="font-size:16px;">⛳</span> GREEN</button>
+        <button id="tool-ridge" onclick="setTool('RIDGE')"><span style="font-size:16px;">🍔</span> RIDGE</button>
         <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
+        <button id="tool-forest" onclick="setTool('FOREST')"><span style="font-size:16px;">🌲</span> FOREST</button>
         <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-hole" onclick="setTool('HOLE')"><span style="font-size:16px;">🕳️</span> HOLE</button>
@@ -2939,7 +2941,7 @@
     function setTool(toolName) {
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'nature', 'block', 'hole', 'measure'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
