@@ -130,7 +130,81 @@
   .palette-btn { width: 40px; height: 40px; border-radius: 8px; cursor: pointer; border: 3px solid transparent; transition: transform 0.1s;}
   .palette-btn.active { border-color: white; transform: scale(1.1); }
   
-</style>
+  /* NEW PRO UI LAYOUT */
+  #left-toolbar {
+      position: absolute;
+      top: 50%; left: 10px;
+      transform: translateY(-50%);
+      background: rgba(15,23,42,0.9);
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid #475569;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      z-index: 100;
+  }
+  
+  #left-toolbar button {
+      background: transparent; color: #94a3b8; border: none; padding: 10px;
+      border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 10px; min-width: 65px; height: 50px; gap: 4px;
+  }
+  #left-toolbar button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  #left-toolbar button.active { background: #38bdf8; color: #0f172a; }
+  #left-toolbar button.active-green { background: #4ade80; color: #0f172a; }
+  #left-toolbar button.active-yellow { background: #fbbf24; color: #0f172a; }
+  
+  #right-toolbar {
+      position: absolute;
+      top: 50%; right: 10px;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+      z-index: 100;
+  }
+  
+  .prop-panel {
+      background: rgba(15,23,42,0.9); padding: 15px; border-radius: 12px;
+      border: 1px solid #475569; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      pointer-events: auto; display: none; flex-direction: column; gap: 10px;
+  }
+  
+  #top-bar {
+      position: absolute; top: 15px; left: 15px; right: 15px;
+      display: flex; justify-content: space-between; pointer-events: none; z-index: 101;
+  }
+  
+  .sys-btn {
+      background: rgba(15,23,42,0.9); color: #fff; border: 1px solid #475569;
+      padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer;
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; font-size: 14px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: all 0.2s;
+  }
+  .sys-btn:hover { background: #334155; transform: scale(1.05); }
+  
+  #dropdown-menu {
+      position: absolute; top: 60px; left: 15px; background: rgba(15,23,42,0.95);
+      border: 1px solid #475569; border-radius: 12px; padding: 10px;
+      display: none; flex-direction: column; gap: 5px; pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 102; min-width: 180px;
+  }
+  #dropdown-menu button {
+      background: transparent; border: none; color: #e2e8f0; text-align: left;
+      padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer;
+  }
+  #dropdown-menu button:hover { background: rgba(255,255,255,0.1); }
+  
+  #tool-hints {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(15,23,42,0.8); padding: 8px 15px; border-radius: 8px;
+      color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
+  }</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -269,19 +343,37 @@
         0.0m x 0.0m
     </div>
     
-    <!-- MODE TOGGLE UI -->
-    <div id="mode-toggle" style="position:absolute; top:20px; right:20px; display:flex; gap:10px; pointer-events:auto;">
-        <script>
-            window.useMeters = false;
-            window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
-            window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
-        </script>
-        <a href="hub.html" style="padding:10px 15px; border-radius:8px; background:#1e293b; color:#fff; border:1px solid #475569; text-decoration:none; display:flex; align-items:center; font-size:18px;" title="Home">🏠</a>
-        <button id="btn-toggle-unit" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 M' : '📏 YD';" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#facc15; border:1px solid #facc15; font-weight:800; cursor:pointer;" title="Toggle Unit">📏 YD</button>
-        <button id="btn-toggle-data" onclick="document.getElementById('gspro-hud').classList.toggle('hidden')" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#38bdf8; border:1px solid #38bdf8; font-weight:800; cursor:pointer;" title="Shot Data">📊</button>
-        <button id="btn-mode-build" onclick="setMode('BUILD')" style="padding:10px 20px; border-radius:8px; border:2px solid #38bdf8; background:#0f172a; color:#38bdf8; font-weight:800; cursor:pointer; text-transform:uppercase; transition:all 0.2s;">🔨 BUILD</button>
-        <button id="btn-mode-play" onclick="setMode('PLAY')" style="padding:10px 20px; border-radius:8px; border:2px solid #4ade80; background:#4ade80; color:#0f172a; font-weight:800; cursor:pointer; text-transform:uppercase; transition:all 0.2s;">🏌️ PLAY</button>
+    <!-- MODE TOGGLE UI & TOP BAR -->
+    <div id="top-bar">
+        <div style="display:flex; gap:10px;">
+            <button class="sys-btn" onclick="toggleMenu()">☰ MENY</button>
+            <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🏌️ PLAY</button>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="sys-btn" id="tool-inspect" onclick="setTool('INSPECT')">👀 INSPECT</button>
+            <button class="sys-btn" onclick="performUndo()" style="color:#f87171;">↩️ UNDO</button>
+            <button id="btn-toggle-unit" class="sys-btn" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 M' : '📏 YD';">📏 YD</button>
+            <a href="hub.html" class="sys-btn" style="text-decoration:none;">🏠</a>
+        </div>
     </div>
+    
+    <div id="dropdown-menu">
+        <button onclick="document.getElementById('publish-modal').style.display='flex'; toggleMenu();">☁️ Spara / Publicera</button>
+        <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Rensa Banan</button>
+        <div style="height:1px; background:#475569; margin:5px 0;"></div>
+        <button onclick="document.getElementById('settings-modal').style.display='flex'; toggleMenu();">⚙️ Spelinställningar</button>
+    </div>
+    
+    <script>
+        function toggleMenu() {
+            let m = document.getElementById('dropdown-menu');
+            m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+        }
+        window.useMeters = false;
+        window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
+        window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
+    </script>
 
     <!-- D-PAD MOVEMENT -->
     <div id="dpad-container" style="position:absolute; top:80px; right:20px; display:flex; flex-direction:column; align-items:center; gap:5px; pointer-events:auto; background:rgba(15,23,42,0.8); padding:10px; border-radius:15px; border:1px solid #475569;">
@@ -293,111 +385,97 @@
         </div>
     </div>
     
-    <!-- FLOATING SUB-PALETTES -->
-    <div id="sub-palette-container" style="position:absolute; bottom:140px; left:50%; transform:translateX(-50%); pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:10px; z-index:100; width:100%;">
+    <!-- PRO UI: VÄNSTER VERKTYGSLISTA -->
+    <div id="left-toolbar">
+        <button id="tool-sculpt" onclick="setTool('SCULPT')" class="active"><span style="font-size:16px;">⛰️</span> SCULPT</button>
+        <button id="tool-smooth" onclick="setTool('SMOOTH')"><span style="font-size:16px;">🧽</span> SMOOTH</button>
+        <button id="tool-flatten" onclick="setTool('FLATTEN')"><span style="font-size:16px;">📐</span> FLATTEN</button>
+        <button id="tool-ramp" onclick="setTool('RAMP')"><span style="font-size:16px;">📉</span> RAMP</button>
+        <button id="tool-water" onclick="setTool('WATER')"><span style="font-size:16px;">💧</span> WATER</button>
+        <button id="tool-spline" onclick="setTool('SPLINE')"><span style="font-size:16px;">〰️</span> SPLINE</button>
+        <div style="height:1px; background:#475569; width:100%; margin:4px 0;"></div>
+        <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
+        <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')"><span style="font-size:16px;">⛳</span> GREEN</button>
+        <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
+        <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
+        <div style="height:1px; background:#475569; width:100%; margin:4px 0;"></div>
+        <button id="tool-hole" onclick="setTool('HOLE')"><span style="font-size:16px;">🕳️</span> HOLE</button>
+        <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
+    </div>
+
+    <!-- PRO UI: HÖGER EGENSKAPSPANEL -->
+    <div id="right-toolbar">
         
         <!-- Inställningar för skulptering -->
-        <div id="sculpt-settings-group" style="display:none; flex-direction:row; align-items:center; gap:15px; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569;">
-            <div style="display:flex; flex-direction:column; align-items:center;">
-                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Brush Size</label>
-                <input type="range" id="brush-slider" min="2" max="25" value="6" oninput="updateBrushSize()" style="width:100px; accent-color:#38bdf8; cursor:pointer;" title="Change size">
+        <div id="sculpt-settings-group" class="prop-panel" style="display:flex;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Brush Size</label>
+            <input type="range" id="brush-slider" min="2" max="25" value="6" oninput="updateBrushSize()" style="width:140px; accent-color:#38bdf8; cursor:pointer;" title="Change size">
+            <div style="display:flex; justify-content:space-between; width:100%; gap:4px;">
+                <button onclick="setBrushMultiplier(1, this)" class="brush-mult-btn active" style="background:#38bdf8; color:#0f172a; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">1x</button>
+                <button onclick="setBrushMultiplier(4, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">4x</button>
+                <button onclick="setBrushMultiplier(10, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">10x</button>
             </div>
-            <div style="display:flex; gap:5px;">
-                <button onclick="setBrushMultiplier(1, this)" class="brush-mult-btn active" style="background:#38bdf8; color:#0f172a; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">1x</button>
-                <button onclick="setBrushMultiplier(4, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">4x</button>
-                <button onclick="setBrushMultiplier(10, this)" class="brush-mult-btn" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">10x</button>
-            </div>
-            <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="background:#4ade80; color:#0f172a; border:none; padding:6px 12px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.5);" title="Ändra riktning på penseln">⬆️ RAISE</button>
+            <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="background:#4ade80; color:#0f172a; border:none; padding:8px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; width:100%;">⬆️ RAISE</button>
             
-            <div id="green-diff-group" style="display:none; flex-direction:row; align-items:center; gap:5px; margin-left:10px; border-left:1px solid #475569; padding-left:15px;">
-                <label style="color:#fbbf24; font-size:10px; font-weight:bold; text-transform:uppercase;">Green Diff:</label>
-                <button id="green-btn-flat" onclick="setGreenDiff('FLAT')" style="background:#fbbf24; color:#0f172a; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">FLAT</button>
-                <button id="green-btn-easy" onclick="setGreenDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">EASY</button>
-                <button id="green-btn-med" onclick="setGreenDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">MED</button>
-                <button id="green-btn-hard" onclick="setGreenDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer;">HARD</button>
+            <div id="green-diff-group" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #475569;">
+                <label style="color:#fbbf24; font-size:10px; font-weight:bold; text-transform:uppercase;">Green Diff</label>
+                <div style="display:flex; justify-content:space-between; width:100%; gap:4px;">
+                    <button id="green-btn-flat" onclick="setGreenDiff('FLAT')" style="background:#fbbf24; color:#0f172a; border:none; padding:6px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
+                    <button id="green-btn-easy" onclick="setGreenDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">EASY</button>
+                    <button id="green-btn-med" onclick="setGreenDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">MED</button>
+                </div>
             </div>
         </div>
 
         <!-- Färg för block / Målning -->
-        <div id="color-picker-group" style="display:none; gap:10px; align-items:center; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569; overflow-x:auto; flex-wrap:nowrap; max-width:80vw;">
-            <div class="palette-btn active" style="background:#ef4444; flex-shrink:0;" onclick="setBlockColor(0xef4444, this)" title="Red Block / Lava (OB)"></div>
-            <div class="palette-btn" style="background:#e0d8a4; flex-shrink:0;" onclick="setBlockColor(0xe0d8a4, this)" title="Sand / Bunker"></div>
-            <div class="palette-btn" style="background:#c2af7c; flex-shrink:0;" onclick="setBlockColor(0xc2af7c, this)" title="Waste Area"></div>
-            <div class="palette-btn" style="background:#98ce68; flex-shrink:0;" onclick="setBlockColor(0x98ce68, this)" title="Putting Green"></div>
-            <div class="palette-btn" style="background:#8bc45d; flex-shrink:0;" onclick="setBlockColor(0x8bc45d, this)" title="Foregreen"></div>
-            <div class="palette-btn" style="background:#7db952; flex-shrink:0;" onclick="setBlockColor(0x7db952, this)" title="Fairway"></div>
-            <div class="palette-btn" style="background:#6b9e3d; flex-shrink:0;" onclick="setBlockColor(0x6b9e3d, this)" title="Semi-Rough"></div>
-            <div class="palette-btn" style="background:#4a782b; flex-shrink:0;" onclick="setBlockColor(0x4a782b, this)" title="Rough"></div>
-            <div class="palette-btn" style="background:#2d4c1a; flex-shrink:0;" onclick="setBlockColor(0x2d4c1a, this)" title="Deep Rough / Fescue"></div>
+        <div id="color-picker-group" class="prop-panel">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Material Palette</label>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+                <div class="palette-btn active" style="background:#ef4444;" onclick="setBlockColor(0xef4444, this)" title="Red Block / Lava (OB)"></div>
+                <div class="palette-btn" style="background:#e0d8a4;" onclick="setBlockColor(0xe0d8a4, this)" title="Sand / Bunker"></div>
+                <div class="palette-btn" style="background:#c2af7c;" onclick="setBlockColor(0xc2af7c, this)" title="Waste Area"></div>
+                <div class="palette-btn" style="background:#98ce68;" onclick="setBlockColor(0x98ce68, this)" title="Putting Green"></div>
+                <div class="palette-btn" style="background:#8bc45d;" onclick="setBlockColor(0x8bc45d, this)" title="Foregreen"></div>
+                <div class="palette-btn" style="background:#7db952;" onclick="setBlockColor(0x7db952, this)" title="Fairway"></div>
+                <div class="palette-btn" style="background:#6b9e3d;" onclick="setBlockColor(0x6b9e3d, this)" title="Semi-Rough"></div>
+                <div class="palette-btn" style="background:#4a782b;" onclick="setBlockColor(0x4a782b, this)" title="Rough"></div>
+                <div class="palette-btn" style="background:#2d4c1a;" onclick="setBlockColor(0x2d4c1a, this)" title="Deep Rough / Fescue"></div>
+            </div>
         </div>
 
-        <!-- Naturväljare (Scrollable Ribbon) -->
-        <div id="nature-picker-group" style="display:none; gap:10px; align-items:center; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569; overflow-x:auto; flex-wrap:nowrap; max-width:80vw;">
-            <!-- Populated dynamically via ASSET_REGISTRY -->
+        <!-- Naturväljare -->
+        <div id="nature-picker-group" class="prop-panel">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Assets</label>
+            <div id="nature-assets-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+                <!-- Populated dynamically -->
+            </div>
         </div>
 
-        <!-- Hål-väljare (Course Builder) -->
-        <div id="hole-picker-group" style="display:none; gap:15px; align-items:center; background:rgba(15,23,42,0.9); padding:10px 20px; border-radius:12px; pointer-events:auto; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #475569;">
-            <div style="display:flex; align-items:center; background:#1e293b; border-radius:8px; padding:2px;">
+        <!-- Hål-väljare -->
+        <div id="hole-picker-group" class="prop-panel">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Hole Setup</label>
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px;">
                 <button onclick="changeHole(-1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&lt;</button>
-                <div id="hole-ui-num" style="color:#fff; font-weight:900; width:60px; text-align:center;">Hole 1</div>
+                <div id="hole-ui-num" style="color:#fff; font-weight:bold;">Hole 1</div>
                 <button onclick="changeHole(1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&gt;</button>
             </div>
-            <div style="display:flex; align-items:center; background:#1e293b; border-radius:8px; padding:2px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px;">
                 <button onclick="changeHolePar(-1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">-</button>
-                <div id="hole-ui-par" style="color:#fbbf24; font-weight:900; width:50px; text-align:center;">Par 4</div>
+                <div id="hole-ui-par" style="color:#fbbf24; font-weight:bold;">Par 4</div>
                 <button onclick="changeHolePar(1)" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">+</button>
             </div>
-            <div style="display:flex; gap:3px;">
-                <button id="btn-set-tee-red" onclick="setHoleItem('TEE_RED')" class="hole-item-btn" style="background:#1e293b; color:#ef4444; border:1px solid #ef4444; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Red Tee">T</button>
-                <button id="btn-set-tee-yellow" onclick="setHoleItem('TEE_YELLOW')" class="hole-item-btn active" style="background:#facc15; color:#0f172a; border:1px solid #facc15; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Yellow Tee">T</button>
-                <button id="btn-set-tee-white" onclick="setHoleItem('TEE_WHITE')" class="hole-item-btn" style="background:#1e293b; color:#fff; border:1px solid #fff; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="White Tee">T</button>
-                <button id="btn-set-tee-black" onclick="setHoleItem('TEE_BLACK')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #000; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;" title="Black Tee">T</button>
-                <div style="width:1px; height:20px; background:#475569; margin: 0 5px;"></div>
-                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;">⛳ Flag</button>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:5px;">
+                <button id="btn-set-tee-yellow" onclick="setHoleItem('TEE_YELLOW')" class="hole-item-btn active" style="background:#facc15; color:#0f172a; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">Yellow Tee</button>
+                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">⛳ Flag</button>
             </div>
-            <div style="width:1px; height:30px; background:#475569; margin:0 5px;"></div>
-            <button onclick="showScorecard()" style="background:#4ade80; color:#0f172a; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;">📝 Score</button>
         </div>
+
     </div>
 
-    <!-- MAIN BUILD PALETTE -->
-    <div id="build-palette" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.9); padding:10px 15px; border-radius:15px; pointer-events:auto; display:none; gap:10px; border:1px solid #475569; align-items:center; box-shadow:0 10px 40px rgba(0,0,0,0.7);">
-        
-        <!-- Verktygsväljare -->
-        <div style="display:flex; flex-direction:column; gap:5px;">
-            <!-- Rad 1: Terräng & Penslar -->
-            <div style="display:flex; gap:5px; justify-content:center;">
-                <button id="tool-inspect" onclick="setTool('INSPECT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">👀 INSPECT</button>
-                <button id="tool-sculpt" onclick="setTool('SCULPT')" style="background:#38bdf8; color:#0f172a; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">⛰️ SCULPT</button>
-                <button id="tool-smooth" onclick="setTool('SMOOTH')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧽 SMOOTH</button>
-                <button id="tool-flatten" onclick="setTool('FLATTEN')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧽 FLATTEN</button>
-                <button id="tool-ramp" onclick="setTool('RAMP')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">📐 RAMP</button>
-                <button id="tool-noise" onclick="setTool('NOISE')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🌪️ NOISE</button>
-                <button id="tool-water" onclick="setTool('WATER')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">💧 WATER</button>
-                <button id="tool-spline" onclick="setTool('SPLINE')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">〰️ SPLINE</button>
-            </div>
-            <!-- Rad 2: Golf & Tillbehör -->
-            <div style="display:flex; gap:5px; justify-content:center;">
-                <button id="tool-paint" onclick="setTool('PAINT')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🖌️ PAINT</button>
-                <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')" style="background:transparent; color:#98ce68; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">⛳ GREEN</button>
-                <button id="tool-ridge" onclick="setTool('RIDGE')" style="background:transparent; color:#fbbf24; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🍔 RIDGE</button>
-                <button id="tool-nature" onclick="setTool('NATURE')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🌴 NATURE</button>
-                <button id="tool-forest" onclick="setTool('FOREST')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🌲 FOREST</button>
-                <button id="tool-block" onclick="setTool('BLOCK')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🧱 BLOCKS</button>
-                <button id="tool-hole" onclick="setTool('HOLE')" style="background:transparent; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">⛳ HOLE</button>
-                <button id="tool-measure" onclick="setTool('MEASURE')" style="background:transparent; color:#fbbf24; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer; transition:all 0.2s;">📏 MEASURE</button>
-                <div style="width:1px; height:30px; background:#475569; margin: 0 5px;"></div>
-                <button onclick="performUndo()" title="Undo (Ctrl+Z)" style="background:transparent; color:#f87171; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">↩️ UNDO</button>
-            </div>
-        </div>
-
-        <div style="width:1px; height:30px; background:#475569; margin: 0 10px;"></div>
-        <button onclick="document.getElementById('publish-modal').style.display='flex'" style="background:#a855f7; color:#fff; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s;">☁️ PUBLISH</button>
-        <button onclick="clearMyBlocks()" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.5); padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold; transition:all 0.2s;">🗑️ CLEAR ALL</button>
-        <div id="tool-hints" style="color:#94a3b8; font-size:11px; margin-left:15px; line-height:1.4;">
-            Hold Left: <b>Raise Ground</b><br>Hold Right: <b>Lower Ground</b>
-        </div>
+    <!-- Tool hint i botten -->
+    <div id="tool-hints">
+        Hold Left: <b>Raise Ground</b> | Hold Right: <b>Lower Ground</b>
     </div>
     
     <div class="controls" id="play-controls">
@@ -663,7 +741,7 @@
     };
     
     // -- DYNAMIC UI GENERATION --
-    const natureGroup = document.getElementById('nature-picker-group');
+    const natureGroup = document.getElementById('nature-assets-grid');
     if (natureGroup) {
         natureGroup.innerHTML = '<div class="palette-btn active" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px;" onclick="setNatureType(\'RANDOM\', this)" title="Random Mix">❓</div>';
         for (let key in window.ASSET_REGISTRY) {
@@ -2773,7 +2851,8 @@
             }
         }
         
-        document.getElementById('build-palette').style.display = mode === 'BUILD' ? 'flex' : 'none';
+        let lt = document.getElementById('left-toolbar'); if(lt) lt.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        let rt = document.getElementById('right-toolbar'); if(rt) rt.style.display = mode === 'BUILD' ? 'flex' : 'none';
         
         let playControls = document.getElementById('play-controls');
         if (playControls) playControls.style.display = (mode === 'PLAY' || mode === 'TEST') ? 'flex' : 'none';
@@ -2869,53 +2948,20 @@
 
     function setTool(toolName) {
         currentTool = toolName;
-        document.getElementById('tool-inspect').style.background = toolName === 'INSPECT' ? '#a855f7' : 'transparent';
-        document.getElementById('tool-inspect').style.color = toolName === 'INSPECT' ? '#0f172a' : '#94a3b8';
         
-        document.getElementById('tool-sculpt').style.background = toolName === 'SCULPT' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-sculpt').style.color = toolName === 'SCULPT' ? '#0f172a' : '#94a3b8';
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'nature', 'block', 'hole', 'measure'];
         
-        document.getElementById('tool-smooth').style.background = toolName === 'SMOOTH' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-smooth').style.color = toolName === 'SMOOTH' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-flatten').style.background = toolName === 'FLATTEN' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-flatten').style.color = toolName === 'FLATTEN' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-ramp').style.background = toolName === 'RAMP' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-ramp').style.color = toolName === 'RAMP' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-noise').style.background = toolName === 'NOISE' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-noise').style.color = toolName === 'NOISE' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-spline').style.background = toolName === 'SPLINE' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-spline').style.color = toolName === 'SPLINE' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-water').style.background = toolName === 'WATER' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-water').style.color = toolName === 'WATER' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-paint').style.background = toolName === 'PAINT' ? '#38bdf8' : 'transparent';
-        document.getElementById('tool-paint').style.color = toolName === 'PAINT' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-smartgreen').style.background = toolName === 'SMART_GREEN' ? '#98ce68' : 'transparent';
-        document.getElementById('tool-smartgreen').style.color = toolName === 'SMART_GREEN' ? '#0f172a' : '#98ce68';
-
-        document.getElementById('tool-ridge').style.background = toolName === 'RIDGE' ? '#fbbf24' : 'transparent';
-        document.getElementById('tool-ridge').style.color = toolName === 'RIDGE' ? '#0f172a' : '#fbbf24';
-
-        document.getElementById('tool-nature').style.background = toolName === 'NATURE' ? '#4ade80' : 'transparent';
-        document.getElementById('tool-nature').style.color = toolName === 'NATURE' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-forest').style.background = toolName === 'FOREST' ? '#4ade80' : 'transparent';
-        document.getElementById('tool-forest').style.color = toolName === 'FOREST' ? '#0f172a' : '#94a3b8';
-
-        document.getElementById('tool-block').style.background = toolName === 'BLOCK' ? '#4ade80' : 'transparent';
-        document.getElementById('tool-block').style.color = toolName === 'BLOCK' ? '#0f172a' : '#94a3b8';
+        tools.forEach(t => {
+            let btn = document.getElementById('tool-' + t);
+            if(btn) btn.className = '';
+        });
         
-        document.getElementById('tool-hole').style.background = toolName === 'HOLE' ? '#ef4444' : 'transparent';
-        document.getElementById('tool-hole').style.color = toolName === 'HOLE' ? '#0f172a' : '#94a3b8';
-        
-        document.getElementById('tool-measure').style.background = toolName === 'MEASURE' ? '#fbbf24' : 'transparent';
-        document.getElementById('tool-measure').style.color = toolName === 'MEASURE' ? '#0f172a' : '#fbbf24';
+        let activeBtn = document.getElementById('tool-' + toolName.toLowerCase().replace('_',''));
+        if (activeBtn) {
+            if (toolName === 'SMART_GREEN') activeBtn.className = 'active-green';
+            else if (toolName === 'MEASURE') activeBtn.className = 'active-yellow';
+            else activeBtn.className = 'active';
+        }
         
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
         document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
