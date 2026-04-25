@@ -2687,6 +2687,40 @@
         if (state.trees) {
             state.trees.forEach(t => createTree(t.type, t.x, t.z, t.scale, t.rot));
         }
+        
+        // Återställ Holes (Tees & Flagga)
+        if(state.holes) {
+            for(let i=0; i<courseHoles.length; i++) {
+                let hState = state.holes[i];
+                if(!hState) continue;
+                let h = courseHoles[i];
+                
+                // Rensa bort nuvarande 3D-objekt
+                for(let key in h.teeMeshes) {
+                    if(h.teeMeshes[key]) scene.remove(h.teeMeshes[key]);
+                }
+                if(h.flagMesh) scene.remove(h.flagMesh);
+                
+                // Bygg upp från sparad state
+                h.tees = JSON.parse(JSON.stringify(hState.tees));
+                h.teeMeshes = {};
+                for(let key in h.tees) {
+                    let col = 0xffffff;
+                    if(key === 'red') col = 0xef4444;
+                    if(key === 'yellow') col = 0xfacc15;
+                    if(key === 'black') col = 0x111111;
+                    h.teeMeshes[key] = createTeeObject(h.tees[key].x, h.tees[key].y, h.tees[key].z, col);
+                    if(h.tees[key].rot) h.teeMeshes[key].rotation.y = h.tees[key].rot;
+                }
+                
+                h.flag = hState.flag ? JSON.parse(JSON.stringify(hState.flag)) : null;
+                if(h.flag) {
+                    h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                } else {
+                    h.flagMesh = null;
+                }
+            }
+        }
     };
     
     function saveUndoState() {
@@ -2705,13 +2739,19 @@
         let blocksCopy = targets.map(b => ({x: b.mesh.position.x, y: b.mesh.position.y, z: b.mesh.position.z, color: b.defColor || 0xffffff}));
         let treesCopy = window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, scale: t.scale, rot: t.rot}));
         
+        let holesCopy = courseHoles.map(h => ({
+            tees: JSON.parse(JSON.stringify(h.tees)),
+            flag: h.flag ? JSON.parse(JSON.stringify(h.flag)) : null
+        }));
+        
         undoStack.push({ 
             heights: posCopy, 
             wHeights: wPosCopy, 
             colorCanvas: cCopy, 
             waterColorCanvas: wCanvasCopy, 
             blocks: blocksCopy, 
-            trees: treesCopy 
+            trees: treesCopy,
+            holes: holesCopy
         });
     }
 
