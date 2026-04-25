@@ -2770,8 +2770,23 @@
                         ballMesh.position.copy(ballPos);
                         ballMesh.visible = true;
                     }
-                    camera.position.set(ballPos.x, ballPos.y + 2, ballPos.z + 5);
-                    controls.target.set(ballPos.x, ballPos.y, ballPos.z - 10);
+                    
+                    let targetPos = new THREE.Vector3(ballPos.x, ballPos.y, ballPos.z - 10);
+                    let camOffset = new THREE.Vector3(0, 2, 5);
+                    
+                    if (typeof currentHole !== 'undefined' && courseHoles[currentHole] && courseHoles[currentHole].flag) {
+                        let fPos = courseHoles[currentHole].flag;
+                        targetPos.set(fPos.x, fPos.y, fPos.z);
+                        let dir = new THREE.Vector3().subVectors(ballPos, fPos);
+                        dir.y = 0;
+                        if(dir.lengthSq() > 0) {
+                            dir.normalize();
+                            camOffset = dir.multiplyScalar(5).add(new THREE.Vector3(0, 2, 0));
+                        }
+                    }
+                    
+                    camera.position.copy(ballPos).add(camOffset);
+                    controls.target.copy(targetPos);
                     controls.update();
                 }
             }
