@@ -2772,7 +2772,7 @@
                     }
                     
                     let targetPos = new THREE.Vector3(ballPos.x, ballPos.y, ballPos.z - 10);
-                    let camOffset = new THREE.Vector3(0, 2, 5);
+                    let camOffset = new THREE.Vector3(0, 0.4, 2.5); // Låg vinkel för puttning
                     
                     if (typeof currentHole !== 'undefined' && courseHoles[currentHole] && courseHoles[currentHole].flag) {
                         let fPos = courseHoles[currentHole].flag;
@@ -2781,13 +2781,22 @@
                         dir.y = 0;
                         if(dir.lengthSq() > 0) {
                             dir.normalize();
-                            camOffset = dir.multiplyScalar(5).add(new THREE.Vector3(0, 2, 0));
+                            camOffset = dir.multiplyScalar(2.5).add(new THREE.Vector3(0, 0.4, 0));
                         }
                     }
                     
                     camera.position.copy(ballPos).add(camOffset);
                     controls.target.copy(targetPos);
                     controls.update();
+                    
+                    // Aktivera GSPro lutnings-animationer direkt!
+                    window.isPuttingMode = true;
+                    if(typeof window.greenBeads !== 'undefined') {
+                        if(typeof greenBeadsGroup !== 'undefined') {
+                            window.greenBeads.forEach(b => greenBeadsGroup.remove(b));
+                        }
+                        window.greenBeads = [];
+                    }
                 }
             }
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
