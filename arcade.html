@@ -208,6 +208,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="physics.js?v=4"></script>
@@ -688,6 +689,13 @@
                 <button onclick="publishCourse({ isDraft: false })" style="width:90%; background:#10b981; color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">🌍 Publish Final Version</button>
             </div>
             
+            <!-- OFFLINE SHARE VIA URL -->
+            <div style="margin-top:15px; border-top:1px solid #334155; padding-top:15px;">
+                <p style="color:#64748b; font-size:11px; margin:0 0 8px 0;">OR SHARE OFFLINE (no server needed)</p>
+                <button onclick="exportCourseURL()" style="width:90%; background:linear-gradient(135deg, #8b5cf6, #6366f1); color:#fff; border:none; padding:12px 25px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(139,92,246,0.4);">🔗 Copy Share Link</button>
+                <div id="share-link-status" style="margin-top:8px; color:#a78bfa; font-size:12px; min-height:20px;"></div>
+            </div>
+
             <div id="publish-status" style="margin-top:20px; color:#fbbf24; font-size:14px; font-weight:bold; min-height:40px;"></div>
             
             <div style="margin-top:20px; display:flex; justify-content:center;">
@@ -2097,6 +2105,118 @@
         }
     };
 
+    // ============================================================
+    // COURSE SHARING VIA URL (Offline — no server needed)
+    // ============================================================
+    window.exportCourseURL = function() {
+        let statusEl = document.getElementById('share-link-status');
+        try {
+            // Gather course data (same format as saveLevel)
+            let dumpTargets = targets.map(t => ({x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor}));
+            let dumpHoles = courseHoles.map(h => ({
+                par: h.par, tees: h.tees, flag: h.flag ? {x:h.flag.x, y:h.flag.y, z:h.flag.z} : null
+            }));
+            let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({t:t.type, x:Math.round(t.x*10)/10, z:Math.round(t.z*10)/10, s:Math.round(t.scale*100)/100, r:Math.round((t.rot||0)*100)/100})) : [];
+
+            // Compact terrain heightmap (only Y values, rounded to 2 decimals)
+            let heights = [];
+            let pos = planeGeo.attributes.position.array;
+            for (let i = 2; i < pos.length; i += 3) {
+                heights.push(Math.round(pos[i] * 100) / 100);
+            }
+
+            let payload = {
+                v: 1, // Version for future compat
+                h: dumpHoles,
+                t: dumpTargets,
+                r: dumpTrees,
+                m: heights
+            };
+
+            let json = JSON.stringify(payload);
+            
+            // Compress with pako
+            if (typeof pako === 'undefined') {
+                if (statusEl) { statusEl.style.color = '#ef4444'; statusEl.innerText = '❌ Compression library not loaded'; }
+                return;
+            }
+            let compressed = pako.deflate(json);
+            
+            // Convert to base64url
+            let binary = '';
+            for (let i = 0; i < compressed.length; i++) binary += String.fromCharCode(compressed[i]);
+            let base64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            
+            let url = window.location.origin + window.location.pathname + '#share=' + base64;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(url).then(() => {
+                if (statusEl) {
+                    statusEl.style.color = '#4ade80';
+                    statusEl.innerHTML = '✅ Link copied! (' + Math.round(base64.length/1024) + 'KB)<br><span style="color:#64748b;font-size:10px;word-break:break-all;">' + url.substring(0, 80) + '...</span>';
+                }
+            }).catch(() => {
+                // Fallback: show URL for manual copy
+                if (statusEl) {
+                    statusEl.style.color = '#fbbf24';
+                    statusEl.innerHTML = '📋 Copy this URL:<br><input type="text" value="' + url + '" style="width:100%;padding:4px;background:#0f172a;color:#fff;border:1px solid #475569;border-radius:4px;font-size:10px;" onclick="this.select();" readonly>';
+                }
+            });
+
+            console.log('Share URL generated: ' + Math.round(json.length/1024) + 'KB JSON → ' + Math.round(base64.length/1024) + 'KB compressed');
+            
+        } catch(e) {
+            console.error('Export error:', e);
+            if (statusEl) { statusEl.style.color = '#ef4444'; statusEl.innerText = '❌ Export failed: ' + e.message; }
+        }
+    };
+
+    function importCourseHash() {
+        try {
+            let hash = window.location.hash;
+            if (!hash || !hash.startsWith('#share=')) return null;
+            
+            let base64 = hash.substring(7); // Remove '#share='
+            // Restore base64 from base64url
+            base64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            
+            let binary = atob(base64);
+            let bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            
+            let json = pako.inflate(bytes, { to: 'string' });
+            let data = JSON.parse(json);
+            
+            if (data.v !== 1) { console.warn('Unknown share format version:', data.v); }
+            
+            // Convert compact format back to loadLevel format
+            let result = {
+                targets: data.t || [],
+                holes: data.h || [],
+                trees: (data.r || []).map(t => ({type: t.t, x: t.x, z: t.z, s: t.s, r: t.r}))
+            };
+            
+            // Restore terrain heightmap
+            if (data.m && data.m.length > 0) {
+                let pos = planeGeo.attributes.position.array;
+                let idx = 0;
+                for (let i = 2; i < pos.length && idx < data.m.length; i += 3) {
+                    pos[i] = data.m[idx++];
+                }
+                planeGeo.attributes.position.needsUpdate = true;
+                planeGeo.computeVertexNormals();
+            }
+            
+            console.log('Imported shared course: ' + (result.trees ? result.trees.length : 0) + ' trees, ' + (result.holes ? result.holes.length : 0) + ' holes');
+            return result;
+            
+        } catch(e) {
+            console.error('Import error:', e);
+            return null;
+        }
+    }
+
     async function loadLevel() {
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course');
@@ -2111,6 +2231,16 @@
             else localStorage.removeItem('arcade_custom_level');
             setMode('BUILD');
             return;
+        }
+
+        // Check for offline shared course in URL hash
+        if (window.location.hash && window.location.hash.startsWith('#share=')) {
+            let imported = importCourseHash();
+            if (imported) {
+                savedStr = imported;
+                isCloud = false;
+                console.log('Loaded shared course from URL hash!');
+            }
         }
 
         let targetCode = courseCode || editCode;
