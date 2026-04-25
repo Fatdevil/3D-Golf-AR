@@ -3582,14 +3582,19 @@
         rightWallShape.lineTo(trackWidth - borderThickness, borderHeight);
         rightWallShape.lineTo(trackWidth - borderThickness, 0);
         
-        let extrudeSettings = {
+        let extrudeSettingsFloor = {
+            steps: Math.max(10, Math.floor(trackLength * 2)), 
+            bevelEnabled: false,
+            extrudePath: curve
+        };
+        let extrudeSettingsWalls = {
             steps: Math.max(10, Math.floor(trackLength * 2)), 
             bevelEnabled: false,
             extrudePath: curve
         };
         
-        let floorGeo = new THREE.ExtrudeGeometry(floorShape, extrudeSettings);
-        let wallsGeo = new THREE.ExtrudeGeometry([leftWallShape, rightWallShape], extrudeSettings);
+        let floorGeo = new THREE.ExtrudeGeometry(floorShape, extrudeSettingsFloor);
+        let wallsGeo = new THREE.ExtrudeGeometry([leftWallShape, rightWallShape], extrudeSettingsWalls);
         
         let floorMat, wallMat;
         
@@ -3597,17 +3602,17 @@
         if (theme === 'MODERN') {
             let tileTex = createTileTexture('#cbd5e1', '#94a3b8');
             tileTex.repeat.set(2, trackLength / 2); // UV-skalning för att undvika utdragen textur
-            floorMat = new THREE.MeshStandardMaterial({ map: tileTex, roughness: 0.8, metalness: 0.1 });
-            wallMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.9 }); // Matt betong
+            floorMat = new THREE.MeshStandardMaterial({ map: tileTex, roughness: 0.8, metalness: 0.1, flatShading: true });
+            wallMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.9, flatShading: true }); // Matt betong
         } else if (theme === 'CARNIVAL') {
-            floorMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.6 }); // Plastig mjuk blå
+            floorMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.6, flatShading: true }); // Plastig mjuk blå
             let stripeTex = createStripeTexture('#ef4444', '#ffffff');
             stripeTex.repeat.set(1, trackLength);
-            wallMat = new THREE.MeshStandardMaterial({ map: stripeTex, roughness: 0.4 }); // Glansigare rör
+            wallMat = new THREE.MeshStandardMaterial({ map: stripeTex, roughness: 0.4, flatShading: true }); // Glansigare rör
         } else {
             // CLASSIC
-            floorMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 1.0 }); // Matt gräs
-            wallMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.9 }); // Matt trä
+            floorMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 1.0, flatShading: true }); // Matt gräs
+            wallMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.9, flatShading: true }); // Matt trä
         }
         
         let floorMesh = new THREE.Mesh(floorGeo, floorMat);
