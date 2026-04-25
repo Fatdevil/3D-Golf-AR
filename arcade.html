@@ -832,7 +832,8 @@
                     yOffset: conf.yOffset || 0.0,
                     brightness: conf.brightness !== undefined ? conf.brightness : 0.0,
                     physics: conf.physics || { type: 'sphere', radius: 1.0 },
-                    biomes: conf.biomes || ['GLOBAL']
+                    biomes: conf.biomes || ['GLOBAL'],
+                    fileSizeMB: conf.fileSizeMB || 0.5
                 };
             });
             window.buildNatureUI(); // Rebuild UI with cloud assets
@@ -971,23 +972,27 @@
     };
     
     // --- MEMORY BUDGET LOGIC ---
-    window.MAX_ASSET_BUDGET = 20;
+    window.MAX_ASSET_BUDGET_MB = 40.0;
     window.updateMemoryBudget = function() {
-        let loadedCount = 0;
+        let loadedMB = 0;
         for(let k in window.customModels) {
             // Count unique loaded assets (ignore 'LOADING' state or failures)
             if(window.customModels[k] && window.customModels[k] !== 'LOADING') {
-                loadedCount++;
+                if (window.ASSET_REGISTRY[k] && window.ASSET_REGISTRY[k].fileSizeMB) {
+                    loadedMB += window.ASSET_REGISTRY[k].fileSizeMB;
+                } else {
+                    loadedMB += 1.0; // fallback till 1.0 MB för okända/hårdkodade assets
+                }
             }
         }
         
-        let pct = (loadedCount / window.MAX_ASSET_BUDGET) * 100;
+        let pct = (loadedMB / window.MAX_ASSET_BUDGET_MB) * 100;
         let bar = document.getElementById('memory-budget-bar');
         let txt = document.getElementById('memory-budget-text');
         
         if(bar && txt) {
             bar.style.width = Math.min(pct, 100) + '%';
-            txt.innerText = loadedCount + ' / ' + window.MAX_ASSET_BUDGET;
+            txt.innerText = loadedMB.toFixed(1) + ' / ' + window.MAX_ASSET_BUDGET_MB.toFixed(1) + ' MB';
             
             if (pct < 50) bar.style.background = '#4ade80'; // Grönt
             else if (pct < 85) bar.style.background = '#fbbf24'; // Gult (Varning)

@@ -260,6 +260,8 @@
         }
 
         // --- EVENT LISTENERS ---
+        let fileSizeMB = 0;
+
         document.getElementById('file-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -268,6 +270,10 @@
             const baseName = file.name.split('.')[0];
             document.getElementById('asset-id').value = baseName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
             document.getElementById('asset-name').value = baseName;
+
+            // Spara MB storlek
+            fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            document.getElementById('log').innerText = `Vald fil: ${baseName} (${fileSizeMB} MB)`;
 
             const reader = new FileReader();
             reader.onload = function(event) {
@@ -381,7 +387,8 @@
                 subcat: subcat,
                 icon: icon,
                 physics: physicsConf,
-                biomes: Array.from(document.querySelectorAll('.biome-cb:checked')).map(cb => cb.value)
+                biomes: Array.from(document.querySelectorAll('.biome-cb:checked')).map(cb => cb.value),
+                fileSizeMB: parseFloat(fileSizeMB)
             };
 
             document.getElementById('log').innerText = "Uploading to Cloud...";
