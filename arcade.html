@@ -3000,7 +3000,7 @@
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
             if(btn) {
-                if(t === 'testputt') btn.className = 'sys-btn'; // Bevara top-bar styling
+                if(t === 'testputt' || t === 'inspect') btn.className = 'sys-btn'; // Bevara top-bar styling
                 else btn.className = '';
             }
         });
@@ -3009,7 +3009,7 @@
         if (activeBtn) {
             if (toolName === 'SMART_GREEN') activeBtn.className = 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = 'active-yellow';
-            else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active'; // Special styling
+            else if (toolName === 'TEST_PUTT' || toolName === 'INSPECT') activeBtn.className = 'sys-btn active'; // Special styling
             else activeBtn.className = 'active';
         }
         
