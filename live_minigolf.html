@@ -2923,7 +2923,13 @@
         
         // UI Groups
         let trackSettings = document.getElementById('track-settings-group');
-        if (trackSettings) trackSettings.style.display = (toolName === 'TRACK') ? 'flex' : 'none';
+        if (trackSettings) {
+            if (toolName === 'TRACK') {
+                trackSettings.style.setProperty('display', 'flex', 'important');
+            } else {
+                trackSettings.style.setProperty('display', 'none', 'important');
+            }
+        }
         
         let sculptSettings = document.getElementById('sculpt-settings-group');
         if (sculptSettings) sculptSettings.style.display = (toolName === 'SCULPT' || toolName === 'WATER') ? 'flex' : 'none';
@@ -2938,29 +2944,32 @@
         if (ipadBtn) ipadBtn.style.display = (toolName === 'SCULPT') ? 'block' : 'none';
         
         // Uppdatera markörens färg beroende på verktyg bygger på samma basfärger
-        if(toolName === 'SMOOTH') {
-            sculptBrushCursor.material.color.setHex(0xa855f7); // Lila
-        } else if(toolName === 'FLATTEN') {
-            sculptBrushCursor.material.color.setHex(0xffffff); // Vit
-        } else if(toolName === 'SCULPT') {
-            sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
-        } else if(toolName === 'SMART_GREEN') {
-            sculptBrushCursor.material.color.setHex(0xffffff); // Stark Vit för max kontrast på grönt gräs
-        } else if(toolName === 'RIDGE') {
-            sculptBrushCursor.material.color.setHex(0xfbbf24); // Guld
-        } else if(toolName === 'PAINT') {
-            sculptBrushCursor.material.color.setHex(currentBuildColor);
-        } else if(toolName === 'WATER') {
-            sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
-        } else if(toolName === 'RAMP') {
-            sculptBrushCursor.material.color.setHex(0x38bdf8); // Light Blue for Ramp
-        } else if(toolName === 'SPLINE') {
-            sculptBrushCursor.material.color.setHex(0xec4899); // Rosa för Spline
+        if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor && sculptBrushCursor.material) {
+            if(toolName === 'SMOOTH') {
+                sculptBrushCursor.material.color.setHex(0xa855f7); // Lila
+            } else if(toolName === 'FLATTEN') {
+                sculptBrushCursor.material.color.setHex(0xffffff); // Vit
+            } else if(toolName === 'SCULPT') {
+                sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
+            } else if(toolName === 'SMART_GREEN') {
+                sculptBrushCursor.material.color.setHex(0xffffff); // Stark Vit
+            } else if(toolName === 'RIDGE') {
+                sculptBrushCursor.material.color.setHex(0xfbbf24); // Guld
+            } else if(toolName === 'PAINT') {
+                sculptBrushCursor.material.color.setHex(typeof currentBuildColor !== 'undefined' ? currentBuildColor : 0x4ade80);
+            } else if(toolName === 'WATER') {
+                sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
+            } else if(toolName === 'RAMP') {
+                sculptBrushCursor.material.color.setHex(0x38bdf8); // Light Blue
+            } else if(toolName === 'SPLINE' || toolName === 'TRACK') {
+                sculptBrushCursor.material.color.setHex(0xec4899); // Rosa
+            }
         }
         
         let hintHtml = "";
         if (toolName === 'INSPECT') hintHtml = "<b>Safe Mode</b>: Look around without modifying terrain";
         else if (toolName === 'BLOCK') hintHtml = "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
+        else if (toolName === 'TRACK') hintHtml = "Left Click: <b>Placera Nod</b><br>Right Click: <b>Ångra Senaste</b>";
         else if (toolName === 'NATURE') hintHtml = "Left Click: <b>Plant Nature</b><br>Right Click: <b>Remove Tree</b>";
         else if (toolName === 'SCULPT') hintHtml = "Hold Left: <b>Raise Ground</b><br>Hold Right: <b>Lower Ground</b>";
         else if (toolName === 'SMOOTH') hintHtml = "Hold Mouse: <b>Smooth Terrain</b>";
@@ -2972,11 +2981,12 @@
         else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Measure Box</b><br>Right Click: <b>Clear Box</b>";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
         
-        document.getElementById('tool-hints').innerHTML = hintHtml;
+        let hintsEl = document.getElementById('tool-hints');
+        if (hintsEl) hintsEl.innerHTML = hintHtml;
         
-        ghostBlock.visible = false;
-        sculptBrushCursor.visible = false;
-        ghostTree.visible = false;
+        if (typeof ghostBlock !== 'undefined' && ghostBlock) ghostBlock.visible = false;
+        if (typeof sculptBrushCursor !== 'undefined' && sculptBrushCursor) sculptBrushCursor.visible = false;
+        if (typeof ghostTree !== 'undefined' && ghostTree) ghostTree.visible = false;
         if(toolName !== 'MEASURE') {
             document.getElementById('measure-hud').style.display = 'none';
             if(typeof measureLines !== 'undefined') measureLines.visible = false;
