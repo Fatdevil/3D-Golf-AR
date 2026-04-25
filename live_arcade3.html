@@ -2628,6 +2628,9 @@
                 window.rampStartPt = lastHitPoint.clone();
                 window.rampSnapshotHeights = new Float32Array(planeGeo.attributes.position.array);
             }
+            if (currentTool === 'NOISE' && lastHitPoint) {
+                window.noiseSnapshotHeights = new Float32Array(planeGeo.attributes.position.array);
+            }
             
             if (currentTool === 'WATER' && lastHitPoint) {
                 let gx = Math.round((lastHitPoint.x + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
@@ -3334,11 +3337,21 @@
         let curve = new THREE.CatmullRomCurve3([...splinePoints, splinePoints[0].clone()]);
         let densePts = curve.getPoints(splinePoints.length * 10);
         
+        let vs = [];
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        let avgHeight = 0;
+        
         densePts.forEach((pt, i) => {
             let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pxY = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             if (i === 0) pCtx.moveTo(pxX, pxY);
             else pCtx.lineTo(pxX, pxY);
+            
+            vs.push([pt.x, pt.z]);
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.z < minZ) minZ = pt.z;
+            if (pt.z > maxZ) maxZ = pt.z;
         });
         
         pCtx.closePath();
@@ -3350,6 +3363,62 @@
         pCtx.fill();
         pCtx.restore();
         
+        // --- FLATTEN 3D TERRAIN INSIDE BOUNDARY ---
+        splinePoints.forEach(p => avgHeight += p.y);
+        avgHeight /= splinePoints.length;
+        
+        let gxMin = Math.max(0, Math.floor((minX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+        let gxMax = Math.min(TERRAIN_SEGS, Math.ceil((maxX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+        let gzMin = Math.max(0, Math.floor((minZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+        let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((maxZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+        
+        let positions = planeGeo.attributes.position.array;
+        let updatePos = false;
+        
+        for (let z = gzMin; z <= gzMax; z++) {
+            for (let x = gxMin; x <= gxMax; x++) {
+                let idx = z * (TERRAIN_SEGS+1) + x;
+                let vx = positions[idx*3];
+                let vz = -positions[idx*3 + 1]; 
+                
+                let inside = false;
+                for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+                    let xi = vs[i][0], zi = vs[i][1];
+                    let xj = vs[j][0], zj = vs[j][1];
+                    let intersect = ((zi > vz) != (zj > vz))
+                        && (vx < (xj - xi) * (vz - zi) / (zj - zi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                
+                if (inside) {
+                    positions[idx*3 + 2] += (avgHeight - positions[idx*3 + 2]) * 0.8; // Mjukutjämning upp mot 80%
+                    updatePos = true;
+                }
+            }
+        }
+        
+        if (updatePos) {
+            planeGeo.attributes.position.needsUpdate = true;
+            planeGeo.computeVertexNormals();
+        }
+        
+        // UPDATE PHYSICS GREEN MASK IF GREEN
+        if (layerType === 'GREEN' && window.greenCtx) {
+            window.greenCtx.save();
+            window.greenCtx.beginPath();
+            densePts.forEach((pt, i) => {
+                let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+                let pxZ = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+                if (i === 0) window.greenCtx.moveTo(pxX, pxZ);
+                else window.greenCtx.lineTo(pxX, pxZ);
+            });
+            window.greenCtx.closePath();
+            window.greenCtx.fillStyle = '#ffffff';
+            window.greenCtx.fill();
+            window.greenCtx.restore();
+            if (window.greenMaskTex) window.greenMaskTex.needsUpdate = true;
+        }
+
         mapTex.needsUpdate = true;
         clearSpline();
     };
@@ -3538,6 +3607,26 @@
                     pCtx.lineTo(pCtx2X, pCtx2Z);
                     pCtx.stroke();
                 }
+
+                // TILLÄGG: Måla direkt på green mask canvas så fysikmotorn hänger med!
+                if (window.greenCtx) {
+                    window.greenCtx.globalCompositeOperation = 'source-over';
+                    window.greenCtx.strokeStyle = '#ffffff';
+                    window.greenCtx.fillStyle = '#ffffff';
+                    window.greenCtx.lineCap = 'round';
+                    window.greenCtx.lineJoin = 'round';
+                    window.greenCtx.lineWidth = cRad * 2;
+                    window.greenCtx.beginPath();
+                    if (p1.distanceTo(p2) < 0.1) {
+                        window.greenCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
+                        window.greenCtx.fill();
+                    } else {
+                        window.greenCtx.moveTo(pCtx1X, pCtx1Z);
+                        window.greenCtx.lineTo(pCtx2X, pCtx2Z);
+                        window.greenCtx.stroke();
+                    }
+                    if (window.greenMaskTex) window.greenMaskTex.needsUpdate = true;
+                }
             } else {
                 let brushColor = '#' + targetPaintColor.getHexString();
                 pCtx.strokeStyle = brushColor;
@@ -3588,156 +3677,155 @@
         
         let wPosArray = waterGeo ? waterGeo.attributes.position.array : null;
 
+        // Bounding Box Calculation to prevent O(N) looping over 361,201 vertices
+        let minX = Math.min(p1.x, p2.x) - radius;
+        let maxX = Math.max(p1.x, p2.x) + radius;
+        let minZ = Math.min(p1.z, p2.z) - radius;
+        let maxZ = Math.max(p1.z, p2.z) + radius;
+        
+        let gxMin = Math.max(0, Math.floor((minX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+        let gxMax = Math.min(TERRAIN_SEGS, Math.ceil((maxX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+        let gzMin = Math.max(0, Math.floor((minZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+        let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((maxZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS)));
+
         let smoothAvg = 0;
         let smoothCount = 0;
         if (currentTool === 'SMOOTH') {
-            for(let i = 0; i < count; i++) {
-                let vx = positions[i*3];
-                let vz = -positions[i*3 + 1]; 
-                let d = 0;
-                if (l2 === 0) {
-                    d = Math.sqrt((vx - p1.x)*(vx - p1.x) + (vz - p1.z)*(vz - p1.z));
-                } else {
-                    let t = Math.max(0, Math.min(1, ((vx - p1.x) * (p2.x - p1.x) + (vz - p1.z) * (p2.z - p1.z)) / l2));
-                    let pX = p1.x + t * (p2.x - p1.x);
-                    let pZ = p1.z + t * (p2.z - p1.z);
-                    d = Math.sqrt((vx - pX)*(vx - pX) + (vz - pZ)*(vz - pZ));
-                }
-                if (d < radius) {
-                    smoothAvg += positions[i*3 + 2];
-                    smoothCount++;
+            for (let z = gzMin; z <= gzMax; z++) {
+                for (let x = gxMin; x <= gxMax; x++) {
+                    let idx = z * (TERRAIN_SEGS+1) + x;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3 + 1]; 
+                    let d = 0;
+                    if (l2 === 0) {
+                        d = Math.sqrt((vx - p1.x)*(vx - p1.x) + (vz - p1.z)*(vz - p1.z));
+                    } else {
+                        let t = Math.max(0, Math.min(1, ((vx - p1.x) * (p2.x - p1.x) + (vz - p1.z) * (p2.z - p1.z)) / l2));
+                        let pX = p1.x + t * (p2.x - p1.x);
+                        let pZ = p1.z + t * (p2.z - p1.z);
+                        d = Math.sqrt((vx - pX)*(vx - pX) + (vz - pZ)*(vz - pZ));
+                    }
+                    if (d < radius) {
+                        smoothAvg += positions[idx*3 + 2];
+                        smoothCount++;
+                    }
                 }
             }
             if (smoothCount > 0) smoothAvg /= smoothCount;
         }
 
-        for(let i = 0; i < count; i++) {
-            let vx = positions[i*3];
-            let vz = -positions[i*3 + 1]; 
-            
-            let dist = 0;
-            if (l2 === 0) {
-                dist = Math.sqrt((vx - p1.x)*(vx - p1.x) + (vz - p1.z)*(vz - p1.z));
-            } else {
-                let t = Math.max(0, Math.min(1, ((vx - p1.x) * (p2.x - p1.x) + (vz - p1.z) * (p2.z - p1.z)) / l2));
-                let projX = p1.x + t * (p2.x - p1.x);
-                let projZ = p1.z + t * (p2.z - p1.z);
-                dist = Math.sqrt((vx - projX)*(vx - projX) + (vz - projZ)*(vz - projZ));
-            }
-            
-            if (dist < radius) {
-                let falloff = Math.cos((dist/radius) * (Math.PI/2));
+        for (let z = gzMin; z <= gzMax; z++) {
+            for (let x = gxMin; x <= gxMax; x++) {
+                let idx = z * (TERRAIN_SEGS+1) + x;
+                let vx = positions[idx*3];
+                let vz = -positions[idx*3 + 1]; 
                 
-                if (currentTool === 'SCULPT') {
-                    positions[i*3 + 2] += strength * falloff;
-                    updatePos = true;
-                } else if (currentTool === 'SMOOTH') {
-                    positions[i*3 + 2] += (smoothAvg - positions[i*3 + 2]) * 0.15 * brushMultiplier * falloff;
-                    updatePos = true;
-                } else if (currentTool === 'NOISE') {
-                    // Genererar organisk procedur-baserad vågform (Multi-Octave) för links/dune-bumpy terrain
-                    // Skalan på bruset anpassas dynamiskt efter penselns storlek
-                    let noiseScale = 5.0 / Math.max(1.0, radius);
-                    let nx = vx * 0.15 * noiseScale;
-                    let nz = vz * 0.15 * noiseScale;
-
-                    // Octave 1: Macro Dunes (Stora rullningar)
-                    let noise = Math.sin(nx + Math.cos(nz * 1.3)) * 1.2;
-                    // Octave 2: Mounds (Ojämnheter)
-                    noise += Math.sin(nx * 2.3 + Math.sin(nz * 2.1)) * 0.5;
-                    // Octave 3: Micro Bumps (Hummocks)
-                    noise += Math.sin(nx * 4.7 + Math.cos(nz * 4.4)) * 0.25;
-
-                    // Kombinera grundlyft/sänkning med det nya bruset (skalat ner marginellt för att undvika spikar)
-                    let targetH = positions[i*3 + 2] + (strength * 0.6) + (noise * 0.25 * Math.sign(strength));
-                    positions[i*3 + 2] += (targetH - positions[i*3 + 2]) * 0.1 * falloff;
-                    updatePos = true;
-                } else if (currentTool === 'FOREST') {
-                    if (!window.lastForestDropTime) window.lastForestDropTime = 0;
-                    let now = performance.now();
-                    // Släpp var X millisekund baserat på hur liten brushen är
-                    let dropRate = 80; 
-                    if (now - window.lastForestDropTime > dropRate) {
-                        window.lastForestDropTime = now;
-                        let angle = Math.random() * Math.PI * 2;
-                        let rad = Math.random() * radius * 0.8;
-                        let randX = p2.x + Math.cos(angle) * rad;
-                        let randZ = p2.z + Math.sin(angle) * rad;
-                        
-                        let types = ['TREE', 'PINE', 'OAK', 'BUSH', 'ROCK'];
-                        let type = types[Math.floor(Math.random() * types.length)];
-                        
-                        let s = 1.0 + (Math.random() * 0.4 - 0.2); 
-                        if (type === 'OAK') s *= 1.8;
-                        else if (type === 'ROCK') s *= (0.3 + Math.random() * 1.5);
-                        else if (type === 'BUSH') s *= (0.4 + Math.random() * 1.5);
-                        
-                        let rRot = Math.random() * Math.PI * 2;
-                        createTree(type, randX, randZ, s, rRot);
-                    }
-                } else if (currentTool === 'FLATTEN') {
-                    // Mjukutjämning mot just den höjden man klickade på! Perfekt för platåer och upphöjda greener.
-                    positions[i*3 + 2] += (p1.y - positions[i*3 + 2]) * 0.2 * falloff;
-                    updatePos = true;
-                } else if (currentTool === 'SMART_GREEN') {
-                    // Starta från absolut mark-ankare för kontinuerlig procedur-målning
-                    let baseH = (typeof window.sculptAnchorY !== 'undefined' && window.sculptAnchorY !== null) ? window.sculptAnchorY : p1.y;
-                    let targetHeight = baseH;
+                let dist = 0;
+                if (l2 === 0) {
+                    dist = Math.sqrt((vx - p1.x)*(vx - p1.x) + (vz - p1.z)*(vz - p1.z));
+                } else {
+                    let t = Math.max(0, Math.min(1, ((vx - p1.x) * (p2.x - p1.x) + (vz - p1.z) * (p2.z - p1.z)) / l2));
+                    let projX = p1.x + t * (p2.x - p1.x);
+                    let projZ = p1.z + t * (p2.z - p1.z);
+                    dist = Math.sqrt((vx - projX)*(vx - projX) + (vz - projZ)*(vz - projZ));
+                }
+                
+                if (dist < radius) {
+                    let falloff = Math.cos((dist/radius) * (Math.PI/2));
                     
-                    if (window.greenDifficulty === 'EASY') {
-                        targetHeight += Math.sin(vx * 0.1) * Math.cos(vz * 0.1) * 0.15;
-                    } else if (window.greenDifficulty === 'MED') {
-                        targetHeight += Math.sin(vx * 0.15) * Math.cos(vz * 0.15) * 0.3;
-                        targetHeight += (vx * 0.015); // Svagt makro-sluttning
-                    } else if (window.greenDifficulty === 'HARD') {
-                        targetHeight += Math.sin(vx * 0.2) * Math.cos(vz * 0.15) * 0.45 
-                                      + Math.sin(vz * 0.4) * 0.15;
-                    }
+                    if (currentTool === 'SCULPT') {
+                        positions[idx*3 + 2] += strength * falloff;
+                        updatePos = true;
+                    } else if (currentTool === 'SMOOTH') {
+                        positions[idx*3 + 2] += (smoothAvg - positions[idx*3 + 2]) * 0.15 * brushMultiplier * falloff;
+                        updatePos = true;
+                    } else if (currentTool === 'NOISE') {
+                        let origY = window.noiseSnapshotHeights ? window.noiseSnapshotHeights[idx*3+2] : positions[idx*3 + 2];
+                        let noiseScale = 5.0 / Math.max(1.0, radius);
+                        let nx = vx * 0.15 * noiseScale;
+                        let nz = vz * 0.15 * noiseScale;
 
-                    // Tvinga proceduren till säker maxlutning lokalt ifall terrängen var stökig
-                    let hDiff = positions[i*3 + 2] - targetHeight; 
-                    let maxSlope = dist * 0.04; // Något högre ~4% säkerhetsmarginal för contour Greens
-                    let clampedHeight = targetHeight + Math.sign(hDiff) * Math.min(Math.abs(hDiff), maxSlope);
-                    
-                    // Applicera en blending under brushen mot den processuella platån
-                    positions[i*3 + 2] += (clampedHeight - positions[i*3 + 2]) * 0.3 * falloff;
-                    updatePos = true;
-                } else if (currentTool === 'RIDGE') {
-                    // Vektor-kalkyl tvärs över mus-dragriktningen p1 -> p2
-                    let dX = p2.x - p1.x;
-                    let dZ = p2.z - p1.z;
-                    let len = Math.sqrt(dX*dX + dZ*dZ + 1e-6);
-                    if (len > 0.001) {
-                        let nX = -dZ / len;
-                        let nZ = dX / len;
+                        let noise = Math.sin(nx + Math.cos(nz * 1.3)) * 1.2;
+                        noise += Math.sin(nx * 2.3 + Math.sin(nz * 2.1)) * 0.5;
+                        noise += Math.sin(nx * 4.7 + Math.cos(nz * 4.4)) * 0.25;
+
+                        let targetH = origY + (strength * 0.6) + (noise * 0.25 * Math.sign(strength));
+                        positions[idx*3 + 2] += (targetH - positions[idx*3 + 2]) * 0.1 * falloff;
+                        updatePos = true;
+                    } else if (currentTool === 'FOREST') {
+                        if (!window.lastForestDropTime) window.lastForestDropTime = 0;
+                        let now = performance.now();
+                        let dropRate = 80; 
+                        if (now - window.lastForestDropTime > dropRate) {
+                            window.lastForestDropTime = now;
+                            let angle = Math.random() * Math.PI * 2;
+                            let rad = Math.random() * radius * 0.8;
+                            let randX = p2.x + Math.cos(angle) * rad;
+                            let randZ = p2.z + Math.sin(angle) * rad;
+                            
+                            let types = ['TREE', 'PINE', 'OAK', 'BUSH', 'ROCK'];
+                            let type = types[Math.floor(Math.random() * types.length)];
+                            
+                            let s = 1.0 + (Math.random() * 0.4 - 0.2); 
+                            if (type === 'OAK') s *= 1.8;
+                            else if (type === 'ROCK') s *= (0.3 + Math.random() * 1.5);
+                            else if (type === 'BUSH') s *= (0.4 + Math.random() * 1.5);
+                            
+                            let rRot = Math.random() * Math.PI * 2;
+                            createTree(type, randX, randZ, s, rRot);
+                        }
+                    } else if (currentTool === 'FLATTEN') {
+                        positions[idx*3 + 2] += (p1.y - positions[idx*3 + 2]) * 0.2 * falloff;
+                        updatePos = true;
+                    } else if (currentTool === 'SMART_GREEN') {
+                        let baseH = (typeof window.sculptAnchorY !== 'undefined' && window.sculptAnchorY !== null) ? window.sculptAnchorY : p1.y;
+                        let targetHeight = baseH;
                         
-                        // Dot Product för avstånd till centrumlinje med tecken (+/-) avgör vilken sida
-                        let dotDiff = (vx - p2.x)*nX + (vz - p2.z)*nZ;
-                        let side = Math.sign(dotDiff);
-                        let distToLine = Math.abs(dotDiff);
+                        if (window.greenDifficulty === 'EASY') {
+                            targetHeight += Math.sin(vx * 0.1) * Math.cos(vz * 0.1) * 0.15;
+                        } else if (window.greenDifficulty === 'MED') {
+                            targetHeight += Math.sin(vx * 0.15) * Math.cos(vz * 0.15) * 0.3;
+                            targetHeight += (vx * 0.015);
+                        } else if (window.greenDifficulty === 'HARD') {
+                            targetHeight += Math.sin(vx * 0.2) * Math.cos(vz * 0.15) * 0.45 
+                                          + Math.sin(vz * 0.4) * 0.15;
+                        }
+
+                        let hDiff = positions[idx*3 + 2] - targetHeight; 
+                        let maxSlope = dist * 0.04; 
+                        let clampedHeight = targetHeight + Math.sign(hDiff) * Math.min(Math.abs(hDiff), maxSlope);
                         
-                        // Bygg en skarp spine/ridge
-                        // Maximal höjdeffekt en bit bort från centrum (distToLine / 1.5)
-                        let ridgeProfile = Math.min(distToLine / 1.5, 1.0);
+                        positions[idx*3 + 2] += (clampedHeight - positions[idx*3 + 2]) * 0.3 * falloff;
+                        updatePos = true;
+                    } else if (currentTool === 'RIDGE') {
+                        let dX = p2.x - p1.x;
+                        let dZ = p2.z - p1.z;
+                        let len = Math.sqrt(dX*dX + dZ*dZ + 1e-6);
+                        if (len > 0.001) {
+                            let nX = -dZ / len;
+                            let nZ = dX / len;
+                            
+                            let dotDiff = (vx - p2.x)*nX + (vz - p2.z)*nZ;
+                            let side = Math.sign(dotDiff);
+                            let distToLine = Math.abs(dotDiff);
+                            
+                            let ridgeProfile = Math.min(distToLine / 1.5, 1.0);
+                            
+                            positions[idx*3 + 2] += side * (0.05 * sculptDirection) * ridgeProfile * falloff;
+                            updatePos = true;
+                        }
+                    } else if (currentTool === 'WATER') {
+                        let bottomTarget = waterLevelTarget - 0.7;
                         
-                        // Pusha upp ena sidan, ner andra + sculptDirection ger möjlighet att byta håll
-                        positions[i*3 + 2] += side * (0.05 * sculptDirection) * ridgeProfile * falloff;
+                        positions[idx*3 + 2] += (bottomTarget - positions[idx*3 + 2]) * 0.2 * falloff;
+                        
+                        if (wPosArray) {
+                            wPosArray[idx*3 + 2] = waterLevelTarget; 
+                            waterGeo.attributes.position.needsUpdate = true;
+                        }
+                        
                         updatePos = true;
                     }
-                } else if (currentTool === 'WATER') {
-                    // Botten faller successivt men vattnet står spikrakt!
-                    let bottomTarget = waterLevelTarget - 0.7; // Gräv en grop 0.7 under vattenytan
-                    
-                    // Skulptera terrängen (Mjuka slänter in i sjön)
-                    positions[i*3 + 2] += (bottomTarget - positions[i*3 + 2]) * 0.2 * falloff;
-                    
-                    // Skulptera WATER-MESHEN till EXAKT vattenLevelTarget
-                    if (wPosArray) {
-                        wPosArray[i*3 + 2] = waterLevelTarget; 
-                        waterGeo.attributes.position.needsUpdate = true;
-                    }
-                    
-                    updatePos = true;
                 }
             }
         }
