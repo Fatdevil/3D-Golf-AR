@@ -918,17 +918,16 @@
         activeGlowLights = [];
 
         glowTrees.forEach((obj, idx) => {
-            // Update emissive intensity on the mesh
-            if (obj.meshRef) {
-                obj.meshRef.traverse(child => {
-                    if (child.isMesh && child.material) {
-                        let baseBoost = 0.1;
-                        child.material.emissiveIntensity = baseBoost + glowBoost * 0.9;
+            // Update emissive via instance pool materials (shared = all glow trees update at once)
+            let pool = window.instancePools && window.instancePools['R_GLOW'];
+            if (pool && idx === 0) { // Only update materials once (shared across all instances)
+                pool.meshes.forEach(iMesh => {
+                    if (iMesh.material) {
+                        iMesh.material.emissiveIntensity = 0.1 + glowBoost * 0.9;
                         if (glowBoost > 0.5) {
-                            // Saturate emissive color for night glow
-                            child.material.emissive = new THREE.Color(0.2 * glowBoost, 0.8 * glowBoost, 0.3 * glowBoost);
+                            iMesh.material.emissive = new THREE.Color(0.2 * glowBoost, 0.8 * glowBoost, 0.3 * glowBoost);
                         }
-                        child.material.needsUpdate = true;
+                        iMesh.material.needsUpdate = true;
                     }
                 });
             }
@@ -1263,13 +1262,10 @@
                 
                 window.updateMemoryBudget(); // Uppdatera mätaren!
                 
-                if (window.placedTrees) {
-                    window.placedTrees.forEach(t => {
-                        if (t.type === type) {
-                            while(t.mesh.children.length > 0) { t.mesh.remove(t.mesh.children[0]); }
-                            t.mesh.add(window.customModels[type].clone());
-                        }
-                    });
+                // Rebuild instance pool now that GLTF is loaded
+                if (window.placedTrees && window.placedTrees.some(t => t.type === type)) {
+                    buildInstancePool(type);
+                    rebuildInstancePool(type);
                 }
                 if(callback) callback(true);
             } catch(err) {
@@ -1666,65 +1662,162 @@
     const rockGeo = new THREE.DodecahedronGeometry(1.5, 0); 
 
     window.placedTrees = [];
-    const treesGroup = new THREE.Group();
+    const treesGroup = new THREE.Group(); // Legacy fallback container
     scene.add(treesGroup);
 
+    // ============================================================
+    // INSTANCEDMESH POOL ENGINE
+    // ============================================================
+    const INSTANCE_MAX = 2000; // Max instances per type
+    window.instancePools = {};
+    const _iMatrix = new THREE.Matrix4();
+    const _iPos = new THREE.Vector3();
+    const _iQuat = new THREE.Quaternion();
+    const _iScale = new THREE.Vector3();
+    const _yAxis = new THREE.Vector3(0, 1, 0);
+
+    // Procedural asset sub-mesh definitions (for TREE/PINE/BUSH/ROCK)
+    const PROCEDURAL_SUBMESHES = {
+        'TREE': [
+            { geometry: trunkGeo, material: treeTrunkMat, offsetY: 2.0 },
+            { geometry: leafGeo, material: treeLeavesMat, offsetY: 5.0, scaleY: 0.8 }
+        ],
+        'PINE': [
+            { geometry: trunkGeo, material: treeTrunkMat, offsetY: 2.0 },
+            { geometry: pineGeo, material: treeLeavesMat, offsetY: 6.0 }
+        ],
+        'BUSH': [
+            { geometry: bushGeo, material: bushLeavesMat, offsetY: 0.5 }
+        ],
+        'ROCK': [
+            { geometry: rockGeo, material: rockMat, offsetY: 0.5 }
+        ]
+    };
+
+    function extractSubMeshes(type) {
+        // Procedural assets
+        if (PROCEDURAL_SUBMESHES[type]) {
+            return PROCEDURAL_SUBMESHES[type].map(def => ({
+                geometry: def.geometry,
+                material: def.material,
+                offsetY: def.offsetY || 0,
+                scaleY: def.scaleY || 1.0
+            }));
+        }
+        // GLTF models
+        let model = window.customModels[type];
+        if (!model || model === 'LOADING') return null;
+        let subs = [];
+        model.traverse(child => {
+            if (child.isMesh) {
+                subs.push({
+                    geometry: child.geometry,
+                    material: child.material,
+                    offsetY: child.position.y || 0,
+                    offsetX: child.position.x || 0,
+                    offsetZ: child.position.z || 0,
+                    childScale: child.scale.clone()
+                });
+            }
+        });
+        return subs.length > 0 ? subs : null;
+    }
+
+    function buildInstancePool(type) {
+        // Destroy existing pool first
+        destroyInstancePool(type);
+        let subs = extractSubMeshes(type);
+        if (!subs) return null;
+
+        let pool = { meshes: [], subOffsets: [], activeCount: 0 };
+        subs.forEach(sub => {
+            let iMesh = new THREE.InstancedMesh(sub.geometry, sub.material, INSTANCE_MAX);
+            iMesh.count = 0;
+            iMesh.castShadow = true;
+            iMesh.receiveShadow = true;
+            iMesh.frustumCulled = false;
+            scene.add(iMesh);
+            pool.meshes.push(iMesh);
+            pool.subOffsets.push({
+                x: sub.offsetX || 0,
+                y: sub.offsetY || 0,
+                z: sub.offsetZ || 0,
+                sy: sub.scaleY || 1.0,
+                cs: sub.childScale || null
+            });
+        });
+        window.instancePools[type] = pool;
+        return pool;
+    }
+
+    function rebuildInstancePool(type) {
+        let pool = window.instancePools[type];
+        if (!pool) pool = buildInstancePool(type);
+        if (!pool) return;
+
+        let trees = window.placedTrees.filter(t => t.type === type);
+        pool.activeCount = trees.length;
+
+        trees.forEach((t, i) => {
+            pool.meshes.forEach((iMesh, mi) => {
+                let off = pool.subOffsets[mi];
+                _iPos.set(t.x + (off.x * t.scale), (t.y || 0) + (off.y * t.scale), t.z + (off.z * t.scale));
+                _iQuat.setFromAxisAngle(_yAxis, t.rot || 0);
+                let sy = t.scale * (off.sy || 1.0);
+                if (off.cs) {
+                    _iScale.set(t.scale * off.cs.x, sy * off.cs.y, t.scale * off.cs.z);
+                } else {
+                    _iScale.set(t.scale, sy, t.scale);
+                }
+                _iMatrix.compose(_iPos, _iQuat, _iScale);
+                iMesh.setMatrixAt(i, _iMatrix);
+            });
+        });
+
+        pool.meshes.forEach(iMesh => {
+            iMesh.count = pool.activeCount;
+            iMesh.instanceMatrix.needsUpdate = true;
+        });
+    }
+
+    function destroyInstancePool(type) {
+        let pool = window.instancePools[type];
+        if (!pool) return;
+        pool.meshes.forEach(iMesh => {
+            scene.remove(iMesh);
+            // Don't dispose shared geometry/material
+        });
+        delete window.instancePools[type];
+    }
+
+    function rebuildAllPools() {
+        let types = new Set(window.placedTrees.map(t => t.type));
+        // Also rebuild existing pools that may now be empty
+        Object.keys(window.instancePools).forEach(t => types.add(t));
+        types.forEach(type => rebuildInstancePool(type));
+    }
+
+    function destroyAllPools() {
+        Object.keys(window.instancePools).forEach(type => destroyInstancePool(type));
+    }
+
     function createTree(type, x, z, scale, rot) {
-        let group = new THREE.Group();
-        group.position.set(x, 0, z);
-        
+        // Raycast for ground Y
         let groundY = 0;
         let downRay = new THREE.Raycaster(new THREE.Vector3(x, 200, z), new THREE.Vector3(0, -1, 0));
         let hits = downRay.intersectObject(plane);
         if(hits.length > 0) groundY = hits[0].point.y;
-        group.position.y = groundY;
 
-        if (window.customModels[type] && window.customModels[type] !== 'LOADING') {
-            let clone = window.customModels[type].clone();
-            group.add(clone);
-        } else {
-            if (type === 'BUSH') {
-                let bMesh = new THREE.Mesh(bushGeo, bushLeavesMat);
-                bMesh.position.y = 0.5; bMesh.castShadow = true; bMesh.receiveShadow = true;
-                group.add(bMesh);
-            } else if (type === 'TREE') {
-                let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
-                tMesh.position.y = 2.0; tMesh.castShadow = true;
-                let lMesh = new THREE.Mesh(leafGeo, treeLeavesMat);
-                lMesh.position.y = 5.0; lMesh.scale.set(1, 0.8, 1);
-                lMesh.castShadow = true; lMesh.receiveShadow = true;
-                group.add(tMesh); group.add(lMesh);
+        // Push data
+        window.placedTrees.push({ type: type, x: x, z: z, y: groundY, scale: scale, rot: rot });
 
-            } else if (type === 'ROCK') {
-                let rMesh = new THREE.Mesh(rockGeo, rockMat);
-                rMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-                rMesh.scale.set(1 + Math.random(), 0.5 + Math.random(), 1 + Math.random());
-                rMesh.position.y = 0.5; rMesh.castShadow = true; rMesh.receiveShadow = true;
-                group.add(rMesh);
-
-            } else if (type === 'PINE') {
-                let tMesh = new THREE.Mesh(trunkGeo, treeTrunkMat);
-                tMesh.position.y = 2.0; tMesh.castShadow = true;
-                let lMesh = new THREE.Mesh(pineGeo, treeLeavesMat);
-                lMesh.position.y = 6.0; 
-                lMesh.castShadow = true; lMesh.receiveShadow = true;
-                group.add(tMesh); group.add(lMesh);
-            } else {
-                let tempGeo = new THREE.BoxGeometry(2, 5, 2);
-                let tempMat = new THREE.MeshLambertMaterial({ color: 0x64748b, wireframe: true });
-                let tMesh = new THREE.Mesh(tempGeo, tempMat);
-                tMesh.position.y = 2.5;
-                group.add(tMesh);
-                
-                if (window.ASSET_REGISTRY[type] && !window.customModels[type]) {
-                    window.loadAsset(type);
-                }
-            }
+        // Ensure asset is loading
+        if (window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].file && !window.customModels[type]) {
+            window.loadAsset(type);
         }
-        
-        group.scale.set(scale, scale, scale); group.rotation.y = rot;
-        treesGroup.add(group);
-        window.placedTrees.push({ type: type, x: x, z: z, scale: scale, rot: rot, mesh: group, meshRef: group });
+
+        // Rebuild visual pool for this type
+        rebuildInstancePool(type);
     }
 
 
@@ -3076,8 +3169,8 @@
             state.blocks.forEach(b => createTargetAbsolute(b.x, b.y, b.z, b.color));
         }
         
-        treesGroup.clear();
         window.placedTrees.length = 0;
+        destroyAllPools();
         if (state.trees) {
             state.trees.forEach(t => createTree(t.type, t.x, t.z, t.scale, t.rot));
         }
@@ -3413,7 +3506,12 @@
         }
 
         if(window.placedTrees) {
-            for(let t of window.placedTrees) t.mesh.position.y = getH(t.mesh.position.x, t.mesh.position.z);
+            let poolsDirty = new Set();
+            for(let t of window.placedTrees) {
+                let newY = getH(t.x, t.z);
+                if (Math.abs((t.y||0) - newY) > 0.01) { t.y = newY; poolsDirty.add(t.type); }
+            }
+            poolsDirty.forEach(type => rebuildInstancePool(type));
         }
         for(let h of courseHoles) {
             for(let key in h.tees) {
@@ -3573,8 +3671,8 @@
         targets.length = 0;
         
         if(window.placedTrees) {
-            window.placedTrees.forEach(t => scene.remove(t.mesh));
             window.placedTrees.length = 0;
+            destroyAllPools();
         }
         
         // BUG-05 FIX: Use modern teeMeshes/tees structure
@@ -3802,8 +3900,9 @@
                 if (d < minDist) { minDist = d; closest = i; }
             }
             if (closest !== null) {
-                treesGroup.remove(window.placedTrees[closest].mesh);
+                let removedType = window.placedTrees[closest].type;
                 window.placedTrees.splice(closest, 1);
+                rebuildInstancePool(removedType);
             }
             return;
         }
