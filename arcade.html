@@ -118,15 +118,7 @@
       transition: transform 0.1s;
   }
   .controls button:active { transform: scale(0.95); }
-  .btn-home {
-      position: absolute; top: 20px; left: 20px;
-      background: rgba(15, 23, 42, 0.8); color: #fff;
-      width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
-      border-radius: 15px; text-decoration: none; font-size: 24px;
-      border: 2px solid #eab308;
-      pointer-events: auto; transition: all 0.2s;
-  }
-  .btn-home:hover { background: #eab308; color: #000; transform: scale(1.1); }
+  /* .btn-home removed — consolidated into #top-bar */
   .palette-btn { width: 40px; height: 40px; border-radius: 8px; cursor: pointer; border: 3px solid transparent; transition: transform 0.1s;}
   .palette-btn.active { border-color: white; transform: scale(1.1); }
   
@@ -176,8 +168,15 @@
   }
   
   #top-bar {
-      position: absolute; top: 15px; left: 15px; right: 15px;
-      display: flex; justify-content: space-between; pointer-events: none; z-index: 101;
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; z-index: 101;
+  }
+  #top-bar .top-left, #top-bar .top-center, #top-bar .top-right {
+      display: flex; gap: 8px; align-items: center;
+  }
+  #top-bar .top-center {
+      position: absolute; left: 50%; transform: translateX(-50%);
   }
   
   .sys-btn {
@@ -214,27 +213,8 @@
 <script src="physics.js?v=4"></script>
 </head>
 <body>
-<a href="hub.html" class="btn-home" style="z-index: 1000;">🏠</a>
-
-<div id="memory-budget-container" style="position:absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 8px 20px; border-radius: 20px; border: 1px solid #eab308; display: flex; align-items: center; gap: 15px; pointer-events: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
-    <span style="color: #eab308; font-size: 11px; font-weight:900; letter-spacing:1px;">ASSET BUDGET</span>
-    <div style="width: 150px; height: 10px; background: #334155; border-radius: 5px; overflow: hidden; position: relative;">
-        <div id="memory-budget-bar" style="width: 0%; height: 100%; background: #4ade80; transition: width 0.3s, background 0.3s;"></div>
-    </div>
-    <span id="memory-budget-text" style="color: #fff; font-size: 14px; font-weight: 900;">0 / 20</span>
-</div>
-
-<div id="biome-selector-container" style="position:absolute; top: 20px; right: 20px; z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 5px 15px; border-radius: 20px; border: 1px solid #38bdf8; display: flex; align-items: center; gap: 10px; pointer-events: auto;">
-    <span style="color: #94a3b8; font-size: 12px; font-weight:bold;">ENVIRONMENT</span>
-    <select id="biome-select" onchange="changeBiome(this.value)" style="background: transparent; color: #38bdf8; border: none; font-weight: bold; outline: none; cursor: pointer; text-transform:uppercase;">
-        <option value="ALL">Show All Assets</option>
-        <option value="GLOBAL">Generic (Global)</option>
-        <option value="DESERT">Desert</option>
-        <option value="SNOW">Snow</option>
-        <option value="MOON">Moon</option>
-        <option value="AUTUMN">Autumn</option>
-    </select>
-</div>
+<!-- Standalone btn-home + floating Asset Budget + floating Biome selector REMOVED -->
+<!-- All consolidated into #top-bar below -->
 
 <div id="ui-layer">
 
@@ -366,19 +346,40 @@
         0.0m x 0.0m
     </div>
     
-    <!-- MODE TOGGLE UI & TOP BAR -->
+    <!-- UNIFIED TOP BAR: 3 zones (left / center / right) -->
     <div id="top-bar">
-        <div style="display:flex; gap:10px;">
-            <button class="sys-btn" onclick="toggleMenu()">☰ MENU</button>
+        <!-- LEFT: Mode buttons -->
+        <div class="top-left">
+            <button class="sys-btn" onclick="toggleMenu()">☰</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
             <button id="tool-testputt" class="sys-btn" onclick="setMode('BUILD'); setTool('TEST_PUTT')" style="border-color:#10b981; color:#10b981;">🏌️ DROP PUTT</button>
-            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🔥 TEST HOLE</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🔥 TESTA BANAN</button>
         </div>
-        <div style="display:flex; gap:10px;">
-            <button class="sys-btn" id="tool-inspect" onclick="setTool('INSPECT')">👀 INSPECT</button>
-            <button class="sys-btn" onclick="performUndo()" style="color:#f87171;">↩️ UNDO</button>
-            <button id="btn-toggle-unit" class="sys-btn" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 M' : '📏 YD';">📏 YD</button>
-            <a href="hub.html" class="sys-btn" style="text-decoration:none;">🏠</a>
+        <!-- CENTER: Asset Budget (BUILD only) -->
+        <div class="top-center">
+            <div id="memory-budget-container" style="background: rgba(15,23,42,0.9); padding: 6px 16px; border-radius: 20px; border: 1px solid #eab308; display: flex; align-items: center; gap: 12px; pointer-events: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                <span style="color: #eab308; font-size: 10px; font-weight:900; letter-spacing:1px;">ASSETS</span>
+                <div style="width: 120px; height: 8px; background: #334155; border-radius: 4px; overflow: hidden;">
+                    <div id="memory-budget-bar" style="width: 0%; height: 100%; background: #4ade80; transition: width 0.3s, background 0.3s;"></div>
+                </div>
+                <span id="memory-budget-text" style="color: #fff; font-size: 12px; font-weight: 900;">0 / 40</span>
+            </div>
+        </div>
+        <!-- RIGHT: Environment + utilities -->
+        <div class="top-right">
+            <div id="biome-selector-container" style="background: rgba(15,23,42,0.9); padding: 5px 12px; border-radius: 20px; border: 1px solid #475569; display: flex; align-items: center; gap: 8px; pointer-events: auto;">
+                <span style="color: #94a3b8; font-size: 10px; font-weight:bold;">🌍</span>
+                <select id="biome-select" onchange="changeBiome(this.value)" style="background: transparent; color: #38bdf8; border: none; font-weight: bold; outline: none; cursor: pointer; text-transform:uppercase; font-size: 12px;">
+                    <option value="ALL">All Assets</option>
+                    <option value="GLOBAL">Generic</option>
+                    <option value="DESERT">Desert</option>
+                    <option value="SNOW">Snow</option>
+                    <option value="MOON">Moon</option>
+                    <option value="AUTUMN">Autumn</option>
+                </select>
+            </div>
+            <button id="btn-toggle-unit" class="sys-btn" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 M' : '📏 YD';" style="font-size:12px; padding:8px 10px;">📏 YD</button>
+            <a href="hub.html" class="sys-btn" style="text-decoration:none; font-size:16px; padding:8px 12px;">🏠</a>
         </div>
     </div>
     
@@ -386,6 +387,7 @@
         <button onclick="document.getElementById('publish-modal').style.display='flex'; toggleMenu();">☁️ Save / Publish</button>
         <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Clear Course</button>
         <div style="height:1px; background:#475569; margin:5px 0;"></div>
+        <button onclick="performUndo(); toggleMenu();" style="color:#f87171;">↩️ Undo</button>
         <button onclick="document.getElementById('settings-modal').style.display='flex'; toggleMenu();">⚙️ Game Settings</button>
     </div>
     
@@ -401,6 +403,7 @@
 
     <!-- PRO UI: VÄNSTER VERKTYGSLISTA -->
     <div id="left-toolbar">
+        <button id="tool-inspect" onclick="setTool('INSPECT')"><span style="font-size:16px;">👀</span> INSPECT</button>
         <button id="tool-sculpt" onclick="setTool('SCULPT')" class="active"><span style="font-size:16px;">⛰️</span> SCULPT</button>
         <button id="tool-smooth" onclick="setTool('SMOOTH')"><span style="font-size:16px;">🧽</span> SMOOTH</button>
         <button id="tool-flatten" onclick="setTool('FLATTEN')"><span style="font-size:16px;">📐</span> FLATTEN</button>
@@ -602,6 +605,36 @@
                         <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">ELEVATION (FT)</label>
                         <input type="number" id="set-altitude" value="0" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
                     </div>
+                    
+                    <!-- TIME OF DAY (Fas 4: UI) -->
+                    <div style="margin-top:15px; border-top:1px solid #334155; padding-top:12px;">
+                        <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">☀️ TIME OF DAY</label>
+                        <input type="range" id="set-time" min="0" max="24" step="0.5" value="12" oninput="if(window.setTimeOfDay) window.setTimeOfDay(parseFloat(this.value));" style="width:100%; accent-color:#fbbf24;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+                            <span id="time-label" style="color:#fff; font-size:12px; font-weight:bold;">12:00 — Midday</span>
+                            <div style="display:flex; gap:4px;">
+                                <button onclick="if(window.setTimeOfDay) window.setTimeOfDay(5);" style="background:#e94560; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">🌅 Dawn</button>
+                                <button onclick="if(window.setTimeOfDay) window.setTimeOfDay(12);" style="background:#4a90d9; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">☀️ Day</button>
+                                <button onclick="if(window.setTimeOfDay) window.setTimeOfDay(17);" style="background:#ff8c00; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">🌇 Golden</button>
+                                <button onclick="if(window.setTimeOfDay) window.setTimeOfDay(0);" style="background:#1a1a2e; color:#fff; border:1px solid #475569; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">🌙 Night</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BALL TRACER STYLE -->
+                    <div style="margin-top:12px; border-top:1px solid #334155; padding-top:10px;">
+                        <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:8px;">✨ BALL TRACER</label>
+                        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:5px;">
+                            <button id="tracer-btn-CLASSIC" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('CLASSIC');" style="background:#334155; color:#fff; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold; outline:2px solid #fff;">⚪ Classic</button>
+                            <button id="tracer-btn-NEON_GREEN" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('NEON_GREEN');" style="background:#064e3b; color:#00ff88; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">💚 Neon</button>
+                            <button id="tracer-btn-NEON_PINK" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('NEON_PINK');" style="background:#4a044e; color:#ff44ff; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">💜 Pink</button>
+                            <button id="tracer-btn-FIRE" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('FIRE');" style="background:#451a03; color:#ff8800; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">🔥 Fire</button>
+                            <button id="tracer-btn-ICE" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('ICE');" style="background:#0c2d48; color:#44aaff; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">❄️ Ice</button>
+                            <button id="tracer-btn-RAINBOW" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('RAINBOW');" style="background:linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00ff00,#0088ff,#8800ff); color:#fff; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold; text-shadow:0 1px 3px #000;">🌈 Rainbow</button>
+                            <button id="tracer-btn-PHANTOM" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('PHANTOM');" style="background:#1e1b4b; color:#8888cc; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">👻 Phantom</button>
+                            <button id="tracer-btn-PRO_DOT" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('PRO_DOT');" style="background:#1c1917; color:#fbbf24; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">📍 Pro Dot</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -745,8 +778,299 @@
     }, 500);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Sky
-    scene.fog = new THREE.Fog(0x87CEEB, 300, 2500); // Increased view distance
+    scene.background = new THREE.Color(0x87CEEB); // Sky (overridden by TimeOfDay engine)
+    scene.fog = new THREE.Fog(0x87CEEB, 300, 2500); // Fog (overridden by TimeOfDay engine)
+
+    // ============================================================
+    // DYNAMIC TIME OF DAY ENGINE (Fas 1+2)
+    // ============================================================
+    window.currentTimeOfDay = 12;
+    window.currentWeather = 'CLEAR';
+
+    const TIME_KEYS = [0, 5, 7, 12, 17, 19, 24];
+    const TIME_PRESETS = {
+        0:  { skyTop:[10,10,26],    skyBot:[26,26,46],    sunColor:null,           sunY:-50,  ambient:0.05, ambColor:[68,102,170],  dirInt:0.05, dirColor:[68,102,170],  fogNear:30,  fogFar:200,  fogColor:[10,10,26],    glowBoost:3.0 },
+        5:  { skyTop:[26,26,46],    skyBot:[233,69,96],   sunColor:[255,107,53],   sunY:20,   ambient:0.15, ambColor:[255,170,130], dirInt:0.3,  dirColor:[255,136,85],  fogNear:80,  fogFar:600,  fogColor:[233,69,96],   glowBoost:1.5 },
+        7:  { skyTop:[255,154,86],  skyBot:[255,215,0],   sunColor:[255,170,0],    sunY:40,   ambient:0.3,  ambColor:[255,220,170], dirInt:0.5,  dirColor:[255,204,119], fogNear:150, fogFar:1200, fogColor:[255,215,0],   glowBoost:0.5 },
+        12: { skyTop:[74,144,217],  skyBot:[135,206,235],  sunColor:[255,255,255], sunY:150,  ambient:0.4,  ambColor:[255,255,255], dirInt:0.8,  dirColor:[255,255,255], fogNear:300, fogFar:2500, fogColor:[135,206,235], glowBoost:0.0 },
+        17: { skyTop:[255,107,53],  skyBot:[255,217,61],  sunColor:[255,140,0],    sunY:35,   ambient:0.35, ambColor:[255,200,150], dirInt:0.6,  dirColor:[255,170,68],  fogNear:120, fogFar:900,  fogColor:[255,217,61],  glowBoost:0.3 },
+        19: { skyTop:[45,27,105],   skyBot:[233,69,96],   sunColor:[255,69,0],     sunY:10,   ambient:0.2,  ambColor:[200,130,170], dirInt:0.3,  dirColor:[255,102,68],  fogNear:80,  fogFar:500,  fogColor:[233,69,96],   glowBoost:1.0 },
+        24: { skyTop:[10,10,26],    skyBot:[26,26,46],    sunColor:null,           sunY:-50,  ambient:0.05, ambColor:[68,102,170],  dirInt:0.05, dirColor:[68,102,170],  fogNear:30,  fogFar:200,  fogColor:[10,10,26],    glowBoost:3.0 }
+    };
+
+    // Sky gradient canvas (2x256 vertical gradient)
+    const skyCanvas = document.createElement('canvas');
+    skyCanvas.width = 2; skyCanvas.height = 256;
+    const skyCtx = skyCanvas.getContext('2d');
+    const skyTexture = new THREE.CanvasTexture(skyCanvas);
+
+    function lerpVal(a, b, t) { return a + (b - a) * t; }
+    function lerpArr(a, b, t) { return a.map((v, i) => lerpVal(v, b[i], t)); }
+
+    function getInterpolatedPreset(hour) {
+        let h = ((hour % 24) + 24) % 24;
+        let lo = 0, hi = 24;
+        for (let i = 0; i < TIME_KEYS.length - 1; i++) {
+            if (h >= TIME_KEYS[i] && h <= TIME_KEYS[i + 1]) {
+                lo = TIME_KEYS[i]; hi = TIME_KEYS[i + 1]; break;
+            }
+        }
+        let t = hi === lo ? 0 : (h - lo) / (hi - lo);
+        let A = TIME_PRESETS[lo], B = TIME_PRESETS[hi];
+        return {
+            skyTop: lerpArr(A.skyTop, B.skyTop, t),
+            skyBot: lerpArr(A.skyBot, B.skyBot, t),
+            sunColor: A.sunColor && B.sunColor ? lerpArr(A.sunColor, B.sunColor, t) : (B.sunColor || A.sunColor),
+            sunY: lerpVal(A.sunY, B.sunY, t),
+            ambient: lerpVal(A.ambient, B.ambient, t),
+            ambColor: lerpArr(A.ambColor, B.ambColor, t),
+            dirInt: lerpVal(A.dirInt, B.dirInt, t),
+            dirColor: lerpArr(A.dirColor, B.dirColor, t),
+            fogNear: lerpVal(A.fogNear, B.fogNear, t),
+            fogFar: lerpVal(A.fogFar, B.fogFar, t),
+            fogColor: lerpArr(A.fogColor, B.fogColor, t),
+            glowBoost: lerpVal(A.glowBoost, B.glowBoost, t)
+        };
+    }
+
+    window.setTimeOfDay = function(hour) {
+        window.currentTimeOfDay = hour;
+        let p = getInterpolatedPreset(hour);
+
+        // 1. Sky gradient
+        let grad = skyCtx.createLinearGradient(0, 0, 0, 256);
+        grad.addColorStop(0, `rgb(${p.skyTop[0]|0},${p.skyTop[1]|0},${p.skyTop[2]|0})`);
+        grad.addColorStop(1, `rgb(${p.skyBot[0]|0},${p.skyBot[1]|0},${p.skyBot[2]|0})`);
+        skyCtx.fillStyle = grad;
+        skyCtx.fillRect(0, 0, 2, 256);
+        skyTexture.needsUpdate = true;
+        scene.background = skyTexture;
+
+        // 2. Fog
+        scene.fog.color.setRGB(p.fogColor[0]/255, p.fogColor[1]/255, p.fogColor[2]/255);
+        scene.fog.near = p.fogNear;
+        scene.fog.far = p.fogFar;
+
+        // 3. Ambient light
+        if (typeof ambientLight !== 'undefined') {
+            ambientLight.intensity = p.ambient;
+            ambientLight.color.setRGB(p.ambColor[0]/255, p.ambColor[1]/255, p.ambColor[2]/255);
+        }
+
+        // 4. Directional light (sun)
+        if (typeof dirLight !== 'undefined') {
+            dirLight.intensity = p.dirInt;
+            dirLight.color.setRGB(p.dirColor[0]/255, p.dirColor[1]/255, p.dirColor[2]/255);
+            // Sun orbit
+            let angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
+            dirLight.position.set(Math.cos(angle) * 100, Math.max(10, p.sunY), Math.sin(angle) * 100);
+        }
+
+        // 5. Sun mesh visual
+        if (typeof sunMesh !== 'undefined') {
+            let angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
+            sunMesh.position.set(Math.cos(angle) * 400, p.sunY, Math.sin(angle) * 400);
+            if (p.sunColor) {
+                sunMesh.material.color.setRGB(p.sunColor[0]/255, p.sunColor[1]/255, p.sunColor[2]/255);
+                sunMesh.visible = true;
+            } else {
+                sunMesh.visible = false; // Midnight: no sun
+            }
+        }
+
+        // 6. Glow assets (Fas 2)
+        updateGlowAssets(p.glowBoost);
+
+        // 6b. Tracer glow sync with time
+        updateTracerForTimeOfDay(hour);
+
+        // 7. Update UI label
+        let lbl = document.getElementById('time-label');
+        if (lbl) {
+            let hh = Math.floor(hour); let mm = Math.round((hour - hh) * 60);
+            let names = {0:'Midnight',5:'Dawn',7:'Sunrise',12:'Midday',17:'Golden Hour',19:'Sunset',24:'Midnight'};
+            let closest = TIME_KEYS.reduce((a,b) => Math.abs(b-hour) < Math.abs(a-hour) ? b : a);
+            lbl.innerText = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0') + ' \u2014 ' + (names[closest] || '');
+        }
+        let slider = document.getElementById('set-time');
+        if (slider && parseFloat(slider.value) !== hour) slider.value = hour;
+    };
+
+    // FAS 2: Glow-tree night mode
+    const MAX_GLOW_LIGHTS = 20;
+    let activeGlowLights = [];
+
+    function updateGlowAssets(glowBoost) {
+        if (!window.placedTrees) return;
+        let glowTrees = window.placedTrees.filter(obj => obj.type === 'R_GLOW');
+
+        // Sort by distance to camera, closest first
+        if (typeof camera !== 'undefined') {
+            glowTrees.sort((a, b) => {
+                let dA = (a.x - camera.position.x) ** 2 + (a.z - camera.position.z) ** 2;
+                let dB = (b.x - camera.position.x) ** 2 + (b.z - camera.position.z) ** 2;
+                return dA - dB;
+            });
+        }
+
+        // Remove all existing glow lights
+        activeGlowLights.forEach(l => scene.remove(l));
+        activeGlowLights = [];
+
+        glowTrees.forEach((obj, idx) => {
+            // Update emissive intensity on the mesh
+            if (obj.meshRef) {
+                obj.meshRef.traverse(child => {
+                    if (child.isMesh && child.material) {
+                        let baseBoost = 0.1;
+                        child.material.emissiveIntensity = baseBoost + glowBoost * 0.9;
+                        if (glowBoost > 0.5) {
+                            // Saturate emissive color for night glow
+                            child.material.emissive = new THREE.Color(0.2 * glowBoost, 0.8 * glowBoost, 0.3 * glowBoost);
+                        }
+                        child.material.needsUpdate = true;
+                    }
+                });
+            }
+
+            // Add PointLight for nearby glow trees (max 20)
+            if (glowBoost > 0.3 && idx < MAX_GLOW_LIGHTS) {
+                let light = new THREE.PointLight(
+                    new THREE.Color(0.3, 1.0, 0.5), // Green-ish glow
+                    glowBoost * 2.5,
+                    30, // distance
+                    2   // decay
+                );
+                light.position.set(obj.x, 8, obj.z);
+                scene.add(light);
+                activeGlowLights.push(light);
+            }
+        });
+    }
+
+    // ============================================================
+    // TRACER STYLES & GLOW BALL ENGINE
+    // ============================================================
+    window.currentTracerStyle = 'CLASSIC';
+
+    const TRACER_STYLES = {
+        'CLASSIC':    { core: '#ffffff', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: null,      dashed: false, label: '⚪ Classic' },
+        'NEON_GREEN': { core: '#00ff88', glow: '#00ff44', glowInt: 1.5, ballEmissive: '#00ff88', ballLight: true,  vertexFn: null,      dashed: false, label: '💚 Neon' },
+        'NEON_PINK':  { core: '#ff00ff', glow: '#ff44ff', glowInt: 1.5, ballEmissive: '#ff44ff', ballLight: true,  vertexFn: null,      dashed: false, label: '💜 Pink' },
+        'FIRE':       { core: '#ff8800', glow: '#ff4400', glowInt: 1.2, ballEmissive: '#ff6600', ballLight: true,  vertexFn: 'fire',    dashed: false, label: '🔥 Fire' },
+        'ICE':        { core: '#44aaff', glow: '#2266ff', glowInt: 1.0, ballEmissive: '#4488ff', ballLight: true,  vertexFn: 'ice',     dashed: false, label: '❄️ Ice' },
+        'RAINBOW':    { core: '#ffffff', glow: '#ffffff', glowInt: 0.8, ballEmissive: '#ffffff', ballLight: true,  vertexFn: 'rainbow', dashed: false, label: '🌈 Rainbow' },
+        'PHANTOM':    { core: '#8888cc', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: 'fade',    dashed: false, label: '👻 Phantom' },
+        'PRO_DOT':    { core: '#fbbf24', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: null,      dashed: true,  label: '📍 Pro Dot' }
+    };
+
+    function hslToRgb(h, s, l) {
+        let r, g, b;
+        if (s === 0) { r = g = b = l; } else {
+            let hue2rgb = (p, q, t) => { if(t<0)t+=1; if(t>1)t-=1; if(t<1/6) return p+(q-p)*6*t; if(t<1/2) return q; if(t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
+            let q = l < 0.5 ? l*(1+s) : l+s-l*s; let p = 2*l-q;
+            r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
+        }
+        return [r, g, b];
+    }
+
+    function getTracerVertexColor(vertexFn, index, total) {
+        let t = index / Math.max(total, 1);
+        switch(vertexFn) {
+            case 'fire': return [1.0, Math.max(0, 1.0 - t * 1.5), 0];
+            case 'ice':  return [0.2 + t * 0.8, 0.5 + t * 0.5, 1.0];
+            case 'rainbow': {
+                let hue = ((t * 360 + performance.now() * 0.05) % 360) / 360;
+                return hslToRgb(hue, 1.0, 0.5);
+            }
+            case 'fade': return [0.53, 0.53, 0.8];
+            default: return null;
+        }
+    }
+
+    window.setTracerStyle = function(styleName) {
+        let style = TRACER_STYLES[styleName];
+        if (!style) return;
+        window.currentTracerStyle = styleName;
+
+        // Core line
+        if (typeof tracerMat !== 'undefined') {
+            tracerMat.color.set(style.core);
+            tracerMat.vertexColors = !!style.vertexFn;
+            tracerMat.needsUpdate = true;
+        }
+
+        // Glow overlay
+        if (typeof glowTracer !== 'undefined') {
+            if (style.glow) {
+                glowTracerMat.color.set(style.glow);
+                glowTracer.visible = true;
+                glowTracerMat.opacity = 0.3;
+            } else {
+                glowTracer.visible = false;
+            }
+            glowTracerMat.needsUpdate = true;
+        }
+
+        // PRO_DOT dashed
+        if (typeof tracerMat !== 'undefined') {
+            if (style.dashed && !(tracerMat instanceof THREE.LineDashedMaterial)) {
+                tracerMat.color.set(style.core);
+            }
+        }
+
+        // Ball skin
+        applyBallSkin(style);
+
+        // Update UI buttons
+        document.querySelectorAll('.tracer-btn').forEach(b => b.style.outline = 'none');
+        let activeBtn = document.getElementById('tracer-btn-' + styleName);
+        if (activeBtn) activeBtn.style.outline = '2px solid #fff';
+
+        // Sync with current TimeOfDay
+        updateTracerForTimeOfDay(window.currentTimeOfDay || 12);
+    };
+
+    function applyBallSkin(style) {
+        if (!window.ballMesh || !window.ballMesh.material) return;
+        let mat = window.ballMesh.material;
+        if (style.ballEmissive) {
+            mat.emissive = new THREE.Color(style.ballEmissive);
+            let nightFactor = (window.currentTimeOfDay < 6 || window.currentTimeOfDay > 19) ? 1.5 : 0.2;
+            mat.emissiveIntensity = nightFactor;
+        } else {
+            mat.emissive = new THREE.Color(0x000000);
+            mat.emissiveIntensity = 0;
+        }
+        mat.needsUpdate = true;
+    }
+
+    function updateTracerForTimeOfDay(hour) {
+        let nightFactor = 0;
+        if (hour < 5 || hour > 20) nightFactor = 1.0;
+        else if (hour < 7) nightFactor = 1.0 - (hour - 5) / 2;
+        else if (hour > 18) nightFactor = (hour - 18) / 2;
+
+        let style = TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
+
+        // Glow overlay
+        if (typeof glowTracer !== 'undefined' && typeof glowTracerMat !== 'undefined' && style.glow) {
+            glowTracerMat.opacity = 0.15 + nightFactor * 0.5;
+            glowTracerMat.needsUpdate = true;
+        }
+
+        // Ball glow light
+        if (window.ballGlowLight) {
+            window.ballGlowLight.intensity = nightFactor * (style.glowInt || 0) * 2.0;
+            if (style.ballEmissive) window.ballGlowLight.color.set(style.ballEmissive);
+        }
+
+        // Ball emissive
+        if (window.ballMesh && window.ballMesh.material && style.ballEmissive) {
+            window.ballMesh.material.emissiveIntensity = 0.1 + nightFactor * 1.5;
+            window.ballMesh.material.needsUpdate = true;
+        }
+    }
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000); // Rendering up to 4000m
     // Camera just behind and above ball
@@ -1062,6 +1386,9 @@
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     sunMesh.position.set(200, 150, -400); 
     scene.add(sunMesh);
+
+    // Initialize TimeOfDay engine to default (midday)
+    setTimeout(() => { if(window.setTimeOfDay) window.setTimeOfDay(12); }, 100);
 
     // 2. CREATE FLOOR
     const tCanvas = document.createElement('canvas');
@@ -1397,18 +1724,31 @@
         
         group.scale.set(scale, scale, scale); group.rotation.y = rot;
         treesGroup.add(group);
-        window.placedTrees.push({ type: type, x: x, z: z, scale: scale, rot: rot, mesh: group });
+        window.placedTrees.push({ type: type, x: x, z: z, scale: scale, rot: rot, mesh: group, meshRef: group });
     }
 
 
     const MAX_TRACER_POINTS = 6000;
     const tracerPositions = new Float32Array(MAX_TRACER_POINTS * 3);
+    const tracerColors = new Float32Array(MAX_TRACER_POINTS * 3); // Per-vertex colors
     const tracerGeo = new THREE.BufferGeometry();
     tracerGeo.setAttribute('position', new THREE.BufferAttribute(tracerPositions, 3));
+    tracerGeo.setAttribute('color', new THREE.BufferAttribute(tracerColors, 3));
     tracerGeo.setDrawRange(0, 0);
-    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3 });
+    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3, vertexColors: false });
     const flightTracer = new THREE.Line(tracerGeo, tracerMat);
     scene.add(flightTracer);
+
+    // Glow overlay (same geometry, additive blending)
+    const glowTracerMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const glowTracer = new THREE.Line(tracerGeo, glowTracerMat);
+    glowTracer.visible = false;
+    scene.add(glowTracer);
+
+    // Ball glow PointLight (follows ball during flight)
+    window.ballGlowLight = new THREE.PointLight(0x00ff88, 0, 15, 2);
+    scene.add(window.ballGlowLight);
+
     let tracerPointsCount = 0;
 
     const targets = [];
@@ -1827,6 +2167,11 @@
     let playState = 'IDLE'; 
     let playingHoleIndex = 0;
     
+    // BUG-07 FIX: Initialize wind variables at boot to prevent NaN
+    window.currentWindMph = 0;
+    window.currentWindDir = 0;
+    window.currentWindVec = [0, 0, 0];
+    
     window.playerScores = Array(18).fill(null);
     window.matchSettings = {
         tournamentMode: false,
@@ -2044,6 +2389,11 @@
             alert("Hole " + (index+1) + " is not fully built!");
             return;
         }
+        
+        // BUG-06 FIX: Set pinMesh when teleporting to a new hole
+        if (hole.flagMesh) {
+            window.pinMesh = hole.flagMesh;
+        }
 
         window.players.forEach((p, idx) => {
             p.holedOut = false;
@@ -2071,7 +2421,9 @@
         updatePlayerBanner();
         
         window.ballLocked = false;
-        if (playState !== 'ROUND_PUTTING') playState = 'ROUND_IDLE'; 
+        // BUG-P02 FIX: Reset isPuttingMode to prevent state leak between players
+        window.isPuttingMode = false;
+        playState = 'ROUND_IDLE'; 
         
         ball.visible = true;
         ball.position.set(p.lie.x, p.lie.y, p.lie.z);
@@ -2084,9 +2436,32 @@
         let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         let dir = new THREE.Vector3().subVectors(fv, ball.position).normalize();
         
-        let camDist = 5; let camHeight = 3;
-        camera.position.copy(ball.position).add(new THREE.Vector3(-dir.x * camDist, camHeight, -dir.z * camDist)); 
-        controls.target.copy(ball.position).add(new THREE.Vector3(dir.x * 20, 0, dir.z * 20)); 
+        // BUG-P09 FIX: Detect green lie and use putt-camera if on green
+        let lieSurf = localGetTerrainAt(ball.position.x, ball.position.z);
+        let isOnGreen = lieSurf && lieSurf.type === 'GREEN';
+        
+        if (isOnGreen) {
+            // Putt-kamera: låg vinkel, nära bollen
+            let camDist = 2.5; let camHeight = 0.4;
+            camera.position.copy(ball.position).add(new THREE.Vector3(-dir.x * camDist, camHeight, -dir.z * camDist)); 
+            controls.target.copy(fv);
+            
+            // Set putting mode for this player
+            let mode = window.matchSettings ? window.matchSettings.autoPutt : 'TOUR_PRO';
+            if (mode === 'OFF') {
+                window.isPuttingMode = true;
+            }
+            
+            // Set putter-appropriate defaults in manual input fields
+            if(document.getElementById('in-speed')) document.getElementById('in-speed').value = '6';
+            if(document.getElementById('in-la')) document.getElementById('in-la').value = '1.5';
+            if(document.getElementById('in-backspin')) document.getElementById('in-backspin').value = '30';
+            if(document.getElementById('in-sidespin')) document.getElementById('in-sidespin').value = '0';
+        } else {
+            let camDist = 5; let camHeight = 3;
+            camera.position.copy(ball.position).add(new THREE.Vector3(-dir.x * camDist, camHeight, -dir.z * camDist)); 
+            controls.target.copy(ball.position).add(new THREE.Vector3(dir.x * 20, 0, dir.z * 20)); 
+        }
         controls.enabled = true;
         controls.update();
 
@@ -2248,31 +2623,57 @@
         let tbody = document.getElementById('scorecard-tbody');
         if(!tbody) return;
         
-        let htmlMode = '';
         let maxHoles = 18; 
         if (!courseHoles[9] || !courseHoles[9].flag) maxHoles = 9; 
         
-        let parOut = 0; let parIn = 0;
-        let scoreOut = 0; let scoreIn = 0;
+        let htmlMode = '';
         
+        // HEADER ROW: Hole numbers
+        let trHeader = `<tr style="color:#94a3b8; font-size:11px;"><td></td>`;
+        for(let i=0; i<maxHoles; i++) trHeader += `<td>${i+1}</td>`;
+        if(maxHoles >= 9) trHeader += `<td>OUT</td>`;
+        if(maxHoles > 9) trHeader += `<td>IN</td><td>TOT</td>`;
+        trHeader += `</tr>`;
+        htmlMode += trHeader;
+        
+        // PAR ROW
         let trPar = `<tr style="color:#fbbf24; border-bottom:1px solid #334155;"><td>PAR</td>`;
-        let trScore = `<tr style="color:#fff;"><td>SCORE</td>`;
-        
-        for(let i=0; i<9; i++) {
-            let hole = courseHoles[i];
-            let p = hole ? hole.par : '-';
-            let s = window.playerScores[i] !== null ? window.playerScores[i] : '-';
-            
-            if(p !== '-') parOut += p;
-            if(s !== '-') scoreOut += s;
-            
-            trPar += `<td>${p}</td>`;
-            trScore += `<td>${s}</td>`;
+        let parOut = 0, parIn = 0;
+        for(let i=0; i<maxHoles; i++) {
+            let par = courseHoles[i] ? (courseHoles[i].par || 4) : '-';
+            if(par !== '-') { if(i < 9) parOut += par; else parIn += par; }
+            trPar += `<td>${par}</td>`;
         }
-        trPar += `<td style="color:#fbbf24">${parOut > 0 ? parOut : '-'}</td>`;
-        trScore += `<td style="color:#fbbf24">${scoreOut > 0 ? scoreOut : '-'}</td></tr>`;
+        if(maxHoles >= 9) trPar += `<td style="color:#fbbf24">${parOut || '-'}</td>`;
+        if(maxHoles > 9) trPar += `<td style="color:#fbbf24">${parIn || '-'}</td><td style="color:#fbbf24">${(parOut+parIn) || '-'}</td>`;
+        trPar += `</tr>`;
+        htmlMode += trPar;
         
-        htmlMode += trPar + trScore;
+        // BUG-P04+P05 FIX: Score rows per player using correct data source
+        let players = window.players || [];
+        for(let pi=0; pi<players.length; pi++) {
+            let pl = players[pi];
+            let scoreOut = 0, scoreIn = 0, hasOut = false, hasIn = false;
+            let trScore = `<tr style="color:#fff; border-bottom:1px solid #1e293b;"><td style="color:${pl.color || '#fff'}">${pl.name || 'P'+(pi+1)}</td>`;
+            for(let i=0; i<maxHoles; i++) {
+                let s = (pl.scores && pl.scores[i] !== null && pl.scores[i] !== undefined) ? pl.scores[i] : null;
+                let par = courseHoles[i] ? (courseHoles[i].par || 4) : 4;
+                let cellColor = '#fff';
+                if(s !== null) {
+                    let diff = s - par;
+                    if(diff < 0) cellColor = '#4ade80'; // Under par
+                    else if(diff > 0) cellColor = '#f87171'; // Over par
+                    if(i < 9) { scoreOut += s; hasOut = true; }
+                    else { scoreIn += s; hasIn = true; }
+                }
+                trScore += `<td style="color:${cellColor}">${s !== null ? s : '-'}</td>`;
+            }
+            if(maxHoles >= 9) trScore += `<td style="color:#fbbf24">${hasOut ? scoreOut : '-'}</td>`;
+            if(maxHoles > 9) trScore += `<td style="color:#fbbf24">${hasIn ? scoreIn : '-'}</td><td style="color:#fbbf24; font-weight:900">${(hasOut||hasIn) ? (scoreOut+scoreIn) : '-'}</td>`;
+            trScore += `</tr>`;
+            htmlMode += trScore;
+        }
+        
         tbody.innerHTML = htmlMode;
     }
     
@@ -2397,9 +2798,12 @@
             azimDeg: (data.azimDeg || 0) + aimOffsetDeg, 
             isLiveData: data.isLiveData || false
         };
+        // BUG-06 FIX: Use actual flag data from courseHoles instead of dead window.pinMesh
         var cupPosLocal = null;
-        if (window.pinMesh) {
-            cupPosLocal = [window.pinMesh.position.x, -window.pinMesh.position.z, window.pinMesh.position.y];
+        let activeHoleIdx = (playState === 'ROUND_IDLE' || playState === 'ROUND_FLYING') ? playingHoleIndex : currentHoleIndex;
+        let activeHole = courseHoles[activeHoleIdx];
+        if (activeHole && activeHole.flag && activeHole.flagMesh) {
+            cupPosLocal = [activeHole.flagMesh.position.x, -activeHole.flagMesh.position.z, activeHole.flagMesh.position.y];
         }
         
         let envAlt = window.matchSettings ? window.matchSettings.altitude : 0;
@@ -2564,6 +2968,9 @@
         
         tracerPointsCount = 0;
         flightTracer.geometry.setDrawRange(0, 0);
+        // Glow tracer shares geometry - ensure visibility matches style
+        let tStyle = TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
+        if (typeof glowTracer !== 'undefined') glowTracer.visible = !!(tStyle && tStyle.glow);
         isFlying = true;
     }
 
@@ -2806,15 +3213,18 @@
                 let targetPos = new THREE.Vector3(window.ballPos.x, window.ballPos.y, window.ballPos.z - 10);
                 let camOffset = new THREE.Vector3(0, 0.4, 2.5); 
                 
-                if (typeof currentHole !== 'undefined' && courseHoles[currentHole] && courseHoles[currentHole].flag) {
-                    let fPos = courseHoles[currentHole].flag;
+                // BUG-01 FIX: Use currentHoleIndex instead of non-existent currentHole
+                if (courseHoles[currentHoleIndex] && courseHoles[currentHoleIndex].flag) {
+                    let fPos = courseHoles[currentHoleIndex].flag;
                     targetPos.set(fPos.x, fPos.y, fPos.z);
-                    let dir = new THREE.Vector3().subVectors(window.ballPos, fPos);
+                    let dir = new THREE.Vector3().subVectors(window.ballPos, new THREE.Vector3(fPos.x, fPos.y, fPos.z));
                     dir.y = 0;
                     if(dir.lengthSq() > 0) {
                         dir.normalize();
                         camOffset = dir.multiplyScalar(2.5).add(new THREE.Vector3(0, 0.4, 0));
                     }
+                    // BUG-06 FIX: Set pinMesh so cup physics work
+                    window.pinMesh = courseHoles[currentHoleIndex].flagMesh;
                 }
                 
                 camera.position.copy(window.ballPos).add(camOffset);
@@ -2828,6 +3238,16 @@
                     }
                     window.greenBeads = [];
                 }
+                
+                // FIX: Set putter-appropriate defaults instead of driver data
+                if(document.getElementById('in-speed')) document.getElementById('in-speed').value = '6';
+                if(document.getElementById('in-la')) document.getElementById('in-la').value = '1.5';
+                if(document.getElementById('in-backspin')) document.getElementById('in-backspin').value = '30';
+                if(document.getElementById('in-sidespin')) document.getElementById('in-sidespin').value = '0';
+                if(document.getElementById('in-hla')) document.getElementById('in-hla').value = '0';
+                
+                // Cache terrain biome data immediately for accurate lie detection
+                window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
             }
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
             isSculpting = true;
@@ -2914,6 +3334,15 @@
         let lt = document.getElementById('left-toolbar'); if(lt) lt.style.display = mode === 'BUILD' ? 'grid' : 'none';
         let rt = document.getElementById('right-toolbar'); if(rt) rt.style.display = mode === 'BUILD' ? 'flex' : 'none';
         
+        // Unified Top Bar: Toggle build-only elements
+        let assetBudget = document.getElementById('memory-budget-container');
+        if(assetBudget) assetBudget.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        let biomeSelector = document.getElementById('biome-selector-container');
+        if(biomeSelector) biomeSelector.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        // DROP PUTT button only visible in BUILD mode
+        let dropPuttBtn = document.getElementById('tool-testputt');
+        if(dropPuttBtn) dropPuttBtn.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        
         let playControls = document.getElementById('play-controls');
         if (playControls) playControls.style.display = (mode === 'PLAY' || mode === 'TEST') ? 'flex' : 'none';
         
@@ -2943,7 +3372,15 @@
             ghostBlock.visible = false;
             playState = 'ROUND_IDLE';
             window.activePlayerId = 'tester';
-            window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true } ];
+            window.activePlayerIndex = 0; // BUG-08 FIX: Set activePlayerIndex
+            window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true, scores: Array(18).fill(null), scoreVsPar: Array(18).fill(null), holedOut: false, prevPos: null } ];
+            
+            // BUG-06 FIX: Set pinMesh from current hole's flag
+            let testHole = courseHoles[currentHoleIndex] || courseHoles[0];
+            if (testHole && testHole.flagMesh) {
+                window.pinMesh = testHole.flagMesh;
+            }
+            
             let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red) : null;
             if(tee) {
                 window.ballPos.x = tee.x; window.ballPos.y = tee.y + 0.2; window.ballPos.z = tee.z;
@@ -3001,8 +3438,12 @@
         document.getElementById('green-btn-easy').style.color = diff === 'EASY' ? '#0f172a' : '#94a3b8';
         document.getElementById('green-btn-med').style.background = diff === 'MED' ? '#fbbf24' : '#334155';
         document.getElementById('green-btn-med').style.color = diff === 'MED' ? '#0f172a' : '#94a3b8';
-        document.getElementById('green-btn-hard').style.background = diff === 'HARD' ? '#fbbf24' : '#334155';
-        document.getElementById('green-btn-hard').style.color = diff === 'HARD' ? '#0f172a' : '#94a3b8';
+        // BUG-02 FIX: green-btn-hard safely handled (element may not exist)
+        let hardBtn = document.getElementById('green-btn-hard');
+        if (hardBtn) {
+            hardBtn.style.background = diff === 'HARD' ? '#fbbf24' : '#334155';
+            hardBtn.style.color = diff === 'HARD' ? '#0f172a' : '#94a3b8';
+        }
     }
 
     function setTool(toolName) {
@@ -3013,7 +3454,7 @@
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
             if(btn) {
-                if(t === 'testputt' || t === 'inspect') btn.className = 'sys-btn'; // Bevara top-bar styling
+                if(t === 'testputt') btn.className = 'sys-btn'; // Bevara top-bar styling
                 else btn.className = '';
             }
         });
@@ -3022,7 +3463,7 @@
         if (activeBtn) {
             if (toolName === 'SMART_GREEN') activeBtn.className = 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = 'active-yellow';
-            else if (toolName === 'TEST_PUTT' || toolName === 'INSPECT') activeBtn.className = 'sys-btn active'; // Special styling
+            else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
             else activeBtn.className = 'active';
         }
         
@@ -3136,11 +3577,15 @@
             window.placedTrees.length = 0;
         }
         
+        // BUG-05 FIX: Use modern teeMeshes/tees structure
         for(let i=0; i<18; i++) {
-            if(courseHoles[i].teeMesh) { scene.remove(courseHoles[i].teeMesh); courseHoles[i].teeMesh=null; }
-            if(courseHoles[i].flagMesh) { scene.remove(courseHoles[i].flagMesh); courseHoles[i].flagMesh=null; }
-            courseHoles[i].tee = null;
-            courseHoles[i].flag = null;
+            let h = courseHoles[i];
+            for(let key in h.teeMeshes) {
+                if(h.teeMeshes[key]) { scene.remove(h.teeMeshes[key]); h.teeMeshes[key] = null; }
+            }
+            if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh = null; }
+            h.tees = { red: null, yellow: null, white: null, black: null };
+            h.flag = null;
         }
         
         let pos = planeGeo.attributes.position;
@@ -3458,16 +3903,10 @@
     const targetPaintColor = new THREE.Color();
     let previousFrameHitPoint = null;
     
-    window.localGetTerrainAt = function(threeX, threeZ) {
-        let gx = Math.round((threeX + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
-        let gz = Math.round((threeZ + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
-        if(gx < 0) gx = 0; if(gx > TERRAIN_SEGS) gx = TERRAIN_SEGS;
-        if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
-        let idx = gz * (TERRAIN_SEGS+1) + gx;
-        let positions = planeGeo.attributes.position.array;
-        let height = positions[idx * 3 + 2];
-        return { z: height };
-    };
+    // BUG-03 FIX: REMOVED the stripped duplicate of localGetTerrainAt that was
+    // overwriting the full version (rad 1222-1297) which returns {z, normal, type}.
+    // The full version at line 1222 is now the only active one, enabling
+    // break-lines and green beads to work correctly.
 
     function updateSplinePreview() {
         // Rensa gamla sfärer och mesh
@@ -4097,11 +4536,28 @@
                     tracerPositions[tracerPointsCount * 3] = p.x;
                     tracerPositions[tracerPointsCount * 3 + 1] = p.z + 0.0213;
                     tracerPositions[tracerPointsCount * 3 + 2] = -p.y;
+                    
+                    // Per-vertex color for gradient tracers
+                    let style = TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
+                    if (style && style.vertexFn) {
+                        let vc = getTracerVertexColor(style.vertexFn, tracerPointsCount, flightData.path.length);
+                        if (vc) {
+                            tracerColors[tracerPointsCount * 3] = vc[0];
+                            tracerColors[tracerPointsCount * 3 + 1] = vc[1];
+                            tracerColors[tracerPointsCount * 3 + 2] = vc[2];
+                        }
+                    }
                     tracerPointsCount++;
                 }
             }
             flightTracer.geometry.attributes.position.needsUpdate = true;
+            if (flightTracer.geometry.attributes.color) flightTracer.geometry.attributes.color.needsUpdate = true;
             flightTracer.geometry.setDrawRange(0, tracerPointsCount);
+            
+            // Ball glow light follows ball position
+            if (window.ballGlowLight) {
+                window.ballGlowLight.position.copy(ball.position);
+            }
             
             // --- FLIGHT CAMERA SYSTEM ---
             if (window.camFollowMode === 'FREE') {
@@ -4208,13 +4664,41 @@
                         distToPin = window.ballMesh.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
                         
                         // --- SMART AUTO-AIM EFTER SLAG ---
-                        // Standard default-beteende för nästa slag är mot target progression (pin/green center)
                         if (window.aimTarget) {
                             window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z);
                             let aimDir = new THREE.Vector3().subVectors(window.aimTarget, window.ballMesh.position).normalize();
                             if(aimDir.lengthSq() < 0.01) aimDir.set(0, 0, -1);
                             camera.position.copy(window.ballMesh.position).add(new THREE.Vector3(-aimDir.x * 5, 2, -aimDir.z * 5));
                             controls.target.copy(window.aimTarget);
+                        }
+                    }
+                    
+                    // BUG-P01 FIX: Check physics holed result FIRST (hole-in-one, chip-in, sunk putt)
+                    if (flightData.metrics && flightData.metrics.holed && playState === 'ROUND_IDLE') {
+                        let p = window.players[window.activePlayerIndex];
+                        if (p && !p.holedOut) {
+                            p.holedOut = true;
+                            let pop = document.getElementById('score-popup');
+                            let total = p.strokes + p.penaltyStrokes;
+                            let par = hole ? (hole.par || 4) : 4;
+                            let scoreText = logHoleScoreText(total, par);
+                            
+                            // Special celebration for chip-in / hole-in-one
+                            if (total === 1) {
+                                pop.innerText = '🏆 HOLE IN ONE!';
+                                pop.style.color = '#fbbf24';
+                            } else if (distToPin > 5) {
+                                pop.innerText = '⛳ HOLED FROM ' + window.formatDistStr(distToPin) + '! ' + scoreText;
+                                pop.style.color = '#4ade80';
+                            } else {
+                                pop.innerText = '⛳ HOLED! ' + scoreText;
+                                pop.style.color = '#4ade80';
+                            }
+                            pop.style.opacity = '1';
+                            pop.style.transform = 'translate(-50%, -60%) scale(1.2)';
+                            console.log('⛳ HOLED! Total: ' + total + ', Par: ' + par + ' -> ' + scoreText);
+                            setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -60%) scale(1.0)'; evaluateNextTurn(); }, 4000);
+                            return; // Skip gimme/auto-putt — ball is in the hole!
                         }
                     }
                     
@@ -4237,19 +4721,22 @@
                         let mode = window.matchSettings ? window.matchSettings.autoPutt : 'TOUR_PRO';
                         
                         // Gimme check
-                        if (!shouldConcede && distFt <= gimmeMax) {
+                        if (shouldConcede) {
+                            // Auto-concede handled by evaluateNextTurn
+                            evaluateNextTurn();
+                        } else if (!shouldConcede && distFt <= gimmeMax) {
                             p.strokes += 1;
                             p.holedOut = true;
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
                             setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
-                        } else if (!shouldConcede && (isGreen || distToPin < 20.0) && mode !== 'OFF') {
-                            // AUTO-PUTT LOGIC (On Green or very close Fringe)
+                        } else if (!shouldConcede && (isGreen || (lieSurface && (lieSurface.type === 'FAIRWAY' || lieSurface.type === 'SEMI-ROUGH') && distToPin < 5.0)) && mode !== 'OFF') {
+                            // BUG-P03 FIX: Auto-putt only from GREEN or close fringe (within 5m), not from rough/sand at 20m
                             let putts = 2;
                             if (mode === 'TOUR_PRO') {
-                                // Tour Pro Probability Math
+                                // Tour Pro Probability Math (BUG-P08 FIX: realistic 3-putt)
                                 let p1 = Math.max(0, 100 - (distFt * 6.2)); // 10ft = ~38% chance
-                                let p3 = distFt > 20 ? (distFt - 20) * 0.8 : 0; // Starts from 20ft, e.g. 40ft = 16% risk
+                                let p3 = distFt > 30 ? (distFt - 30) * 0.15 : 0; // BUG-P08: Realistic ~5% at 60ft
                                 let rand = Math.random() * 100;
                                 if (rand < p1) putts = 1;
                                 else if (rand > (100 - p3)) putts = 3;
