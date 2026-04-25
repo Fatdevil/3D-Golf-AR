@@ -444,6 +444,16 @@
             </div>
         </div>
 
+        <!-- Inställningar för Test Putt -->
+        <div id="putt-settings-group" class="prop-panel" style="display:none; flex-direction:column; gap:5px;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Green Speed (Stimp)</label>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <input type="range" id="stimp-slider" min="6" max="15" step="0.5" value="10" oninput="updateStimp(this.value)" style="width:140px; accent-color:#38bdf8; cursor:pointer;" title="Change Stimp">
+                <span id="stimp-val" style="color:#fff; font-weight:bold; font-size:12px; width:30px; text-align:right;">10.0</span>
+            </div>
+            <div style="color:#94a3b8; font-size:10px;">Higher stimp makes the ball roll faster and break more.</div>
+        </div>
+
         <!-- Hål-väljare -->
         <div id="hole-picker-group" class="prop-panel">
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Hole Setup</label>
@@ -2999,6 +3009,7 @@
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
         document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
         document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
+        document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
         document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'SMART_GREEN' || toolName === 'RIDGE') ? 'flex' : 'none';
         document.getElementById('green-diff-group').style.display = (toolName === 'SMART_GREEN') ? 'flex' : 'none';
         
@@ -3051,6 +3062,18 @@
         if(toolName !== 'MEASURE') {
             document.getElementById('measure-hud').style.display = 'none';
             if(typeof measureLines !== 'undefined') measureLines.visible = false;
+        }
+    }
+
+    // Anropas när Stimp-reglaget i TEST_PUTT ändras
+    function updateStimp(val) {
+        document.getElementById('stimp-val').innerText = parseFloat(val).toFixed(1);
+        window.GREEN_STIMP = parseFloat(val);
+        if(typeof window.greenBeads !== 'undefined') {
+            if(typeof greenBeadsGroup !== 'undefined') {
+                window.greenBeads.forEach(b => greenBeadsGroup.remove(b));
+            }
+            window.greenBeads = [];
         }
     }
 
