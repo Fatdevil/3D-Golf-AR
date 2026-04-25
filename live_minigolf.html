@@ -312,6 +312,12 @@
         
         <!-- Track Settings -->
         <div id="track-settings-group" style="display:none; flex-direction:column; gap:2px; margin:0 5px;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Tema</label>
+            <select id="track-theme-select" style="background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px; font-size:10px; margin-bottom:5px; outline:none; cursor:pointer;">
+                <option value="CLASSIC">Classic (Gräs & Trä)</option>
+                <option value="MODERN">Modern (Kakel & Betong)</option>
+                <option value="CARNIVAL">Carnival (Blått & Röd/Vitt)</option>
+            </select>
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Höjd-Offset (Y)</label>
             <input type="number" id="track-y-offset" value="0" step="0.5" style="width:70px; background:#1e293b; color:#fff; border:1px solid #475569; padding:4px; border-radius:4px;">
             <div style="display:flex; gap:2px; margin-top:5px;">
@@ -2332,7 +2338,7 @@
                 // Kolla bara så långt bollen kommer röra sig under denna tick + radie
                 window.physWallRay.far = dist + 0.0215; 
                 
-                let intersects = window.physWallRay.intersectObjects(tracks, false);
+                let intersects = window.physWallRay.intersectObjects(tracks, true);
                 if (intersects.length > 0) {
                     let hit = intersects[0];
                     // Kontrollera att det vi träffat faktiskt är en "vägg" (brant normal) och inte ett platt golv.
@@ -2384,7 +2390,7 @@
                     let rayOriginY = pz !== undefined ? pz + 0.1 : 100;
                     window.physRay.set(new THREE.Vector3(threeX, rayOriginY, threeZ), new THREE.Vector3(0, -1, 0));
                     
-                    let intersects = window.physRay.intersectObjects(tracks, false);
+                    let intersects = window.physRay.intersectObjects(tracks, true);
                     if (intersects.length > 0) {
                         let hit = intersects[0];
                         // Returnera banans data.
@@ -3514,46 +3520,108 @@
         clearSpline();
     };
 
+    function createStripeTexture(color1, color2) {
+        let canvas = document.createElement('canvas');
+        canvas.width = 64; canvas.height = 64;
+        let ctx = canvas.getContext('2d');
+        ctx.fillStyle = color1; ctx.fillRect(0, 0, 64, 64);
+        ctx.fillStyle = color2; ctx.fillRect(32, 0, 32, 64); // Ränder
+        let tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+        tex.magFilter = THREE.NearestFilter; // Krispiga (Low-Poly look)
+        return tex;
+    }
+
+    function createTileTexture(color1, color2) {
+        let canvas = document.createElement('canvas');
+        canvas.width = 64; canvas.height = 64;
+        let ctx = canvas.getContext('2d');
+        ctx.fillStyle = color1; ctx.fillRect(0, 0, 64, 64);
+        ctx.fillStyle = color2; ctx.fillRect(0, 0, 32, 32); ctx.fillRect(32, 32, 32, 32); // Kakel
+        let tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+        tex.magFilter = THREE.NearestFilter;
+        return tex;
+    }
+
     window.createMinigolfTrack = function(pts) {
         if(pts.length < 2) return;
         if(typeof saveUndoState === 'function') saveUndoState();
         
         let curve = new THREE.CatmullRomCurve3(pts);
+        let trackLength = curve.getLength();
         
-        // Define the "U" shape profile for the minigolf track
-        let trackWidth = 2.0; // Total width is 4 meters (-2 to +2)
+        let theme = document.getElementById('track-theme-select')?.value || 'CLASSIC';
+        
+        let trackWidth = 2.0; 
         let borderHeight = 0.4;
         let borderThickness = 0.2;
         let floorHeight = 0.1;
         
-        let shape = new THREE.Shape();
-        shape.moveTo(-trackWidth, 0); // Bottom left outer
-        shape.lineTo(trackWidth, 0); // Bottom right outer
+        // --- GOLVET ---
+        let floorShape = new THREE.Shape();
+        floorShape.moveTo(-trackWidth + borderThickness, 0);
+        floorShape.lineTo(trackWidth - borderThickness, 0);
+        floorShape.lineTo(trackWidth - borderThickness, floorHeight);
+        floorShape.lineTo(-trackWidth + borderThickness, floorHeight);
+        floorShape.lineTo(-trackWidth + borderThickness, 0);
         
-        shape.lineTo(trackWidth, borderHeight); // Right outer wall up
-        shape.lineTo(trackWidth - borderThickness, borderHeight); // Right top wall
-        shape.lineTo(trackWidth - borderThickness, floorHeight); // Right inner wall down
+        // --- VÄNSTER SARG ---
+        let leftWallShape = new THREE.Shape();
+        leftWallShape.moveTo(-trackWidth, 0);
+        leftWallShape.lineTo(-trackWidth + borderThickness, 0);
+        leftWallShape.lineTo(-trackWidth + borderThickness, borderHeight);
+        leftWallShape.lineTo(-trackWidth, borderHeight);
+        leftWallShape.lineTo(-trackWidth, 0);
         
-        shape.lineTo(-trackWidth + borderThickness, floorHeight); // Floor across to left
-        
-        shape.lineTo(-trackWidth + borderThickness, borderHeight); // Left inner wall up
-        shape.lineTo(-trackWidth, borderHeight); // Left top wall
-        shape.lineTo(-trackWidth, 0); // Left outer wall down (close shape)
+        // --- HÖGER SARG ---
+        let rightWallShape = new THREE.Shape();
+        rightWallShape.moveTo(trackWidth - borderThickness, 0);
+        rightWallShape.lineTo(trackWidth, 0);
+        rightWallShape.lineTo(trackWidth, borderHeight);
+        rightWallShape.lineTo(trackWidth - borderThickness, borderHeight);
+        rightWallShape.lineTo(trackWidth - borderThickness, 0);
         
         let extrudeSettings = {
-            steps: pts.length * 15, // Smoothness along the curve
+            steps: Math.max(10, Math.floor(trackLength * 2)), 
             bevelEnabled: false,
             extrudePath: curve
         };
         
-        let geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        let floorGeo = new THREE.ExtrudeGeometry(floorShape, extrudeSettings);
+        let wallsGeo = new THREE.ExtrudeGeometry([leftWallShape, rightWallShape], extrudeSettings);
         
-        // Temporärt gräsmaterial
-        let mat = new THREE.MeshLambertMaterial({ color: 0x4ade80, side: THREE.DoubleSide });
+        let floorMat, wallMat;
         
-        let pMesh = new THREE.Mesh(geo, mat);
-        pMesh.castShadow = true;
-        pMesh.receiveShadow = true;
+        // Applicera Stylized Premium Material baserat på tema!
+        if (theme === 'MODERN') {
+            let tileTex = createTileTexture('#cbd5e1', '#94a3b8');
+            tileTex.repeat.set(2, trackLength / 2); // UV-skalning för att undvika utdragen textur
+            floorMat = new THREE.MeshStandardMaterial({ map: tileTex, roughness: 0.8, metalness: 0.1 });
+            wallMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.9 }); // Matt betong
+        } else if (theme === 'CARNIVAL') {
+            floorMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.6 }); // Plastig mjuk blå
+            let stripeTex = createStripeTexture('#ef4444', '#ffffff');
+            stripeTex.repeat.set(1, trackLength);
+            wallMat = new THREE.MeshStandardMaterial({ map: stripeTex, roughness: 0.4 }); // Glansigare rör
+        } else {
+            // CLASSIC
+            floorMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 1.0 }); // Matt gräs
+            wallMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.9 }); // Matt trä
+        }
+        
+        let floorMesh = new THREE.Mesh(floorGeo, floorMat);
+        floorMesh.castShadow = true; floorMesh.receiveShadow = true;
+        floorMesh.userData.type = 'MINIGOLF_TRACK_FLOOR'; // Tagg för fysik / debug
+        
+        let wallMesh = new THREE.Mesh(wallsGeo, wallMat);
+        wallMesh.castShadow = true; wallMesh.receiveShadow = true;
+        wallMesh.userData.type = 'MINIGOLF_TRACK_WALL';
+        
+        let pMesh = new THREE.Group();
+        pMesh.add(floorMesh);
+        pMesh.add(wallMesh);
+        pMesh.userData.type = 'MINIGOLF_TRACK'; // Huvudtagg
         
         let rObj = {
             id: Math.random().toString(36).substr(2, 9),
