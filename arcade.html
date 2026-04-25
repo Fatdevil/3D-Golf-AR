@@ -348,7 +348,8 @@
         <div style="display:flex; gap:10px;">
             <button class="sys-btn" onclick="toggleMenu()">☰ MENY</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
-            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🏌️ PLAY</button>
+            <button id="tool-testputt" class="sys-btn" onclick="setMode('BUILD'); setTool('TEST_PUTT')" style="border-color:#10b981; color:#10b981;">🏌️ DROP PUTT</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🔥 TEST TEE</button>
         </div>
         <div style="display:flex; gap:10px;">
             <button class="sys-btn" id="tool-inspect" onclick="setTool('INSPECT')">👀 INSPECT</button>
@@ -386,7 +387,6 @@
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
         <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')"><span style="font-size:16px;">⛳</span> GREEN</button>
-        <button id="tool-testputt" onclick="setTool('TEST_PUTT')"><span style="font-size:16px;">🏌️</span> PUTT</button>
         <button id="tool-ridge" onclick="setTool('RIDGE')"><span style="font-size:16px;">🍔</span> RIDGE</button>
         <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
         <button id="tool-forest" onclick="setTool('FOREST')"><span style="font-size:16px;">🌲</span> FOREST</button>
@@ -2996,13 +2996,17 @@
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
-            if(btn) btn.className = '';
+            if(btn) {
+                if(t === 'testputt') btn.className = 'sys-btn'; // Bevara top-bar styling
+                else btn.className = '';
+            }
         });
         
         let activeBtn = document.getElementById('tool-' + toolName.toLowerCase().replace('_',''));
         if (activeBtn) {
             if (toolName === 'SMART_GREEN') activeBtn.className = 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = 'active-yellow';
+            else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active'; // Special styling
             else activeBtn.className = 'active';
         }
         
