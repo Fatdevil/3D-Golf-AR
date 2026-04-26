@@ -527,6 +527,7 @@
             <input type="number" id="in-sidespin" value="0" title="Sidespin (rpm)" style="width:70px;">
             <input type="hidden" id="in-stimp" value="10.0">
             <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Camera Mode">🎥 BROADCAST</button>
+            <button onclick="takePenaltyDrop()" style="background:#ef4444; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Add Penalty Stroke">🛑 PENALTY</button>
             <button onclick="fireShot()">🔥 SHOOT</button>
         </div>
     </div>
@@ -741,13 +742,26 @@
         if (typeof appMode === 'undefined' || appMode !== 'PLAY' || !window.matchSettings || !window.matchSettings.mulligans) return;
         if (playState !== 'ROUND_IDLE') return;
 
-        let p = window.players[window.activePlayerIndex];
+        let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
+        let p = window.players[lastIdx];
+        
         if (p && p.prevPos) {
+            if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
+            
+            if (window.activePlayerIndex !== lastIdx) {
+                window.activePlayerIndex = lastIdx;
+            }
+            
+            p.holedOut = false;
+            if (p.scores) p.scores[playingHoleIndex] = null;
+            if (p.scoreVsPar) p.scoreVsPar[playingHoleIndex] = null;
+
             ball.position.set(p.prevPos.x, p.prevPos.y, p.prevPos.z);
             p.strokes = (p.prevStrokes !== undefined) ? p.prevStrokes : p.strokes;
             p.penaltyStrokes = (p.prevPenalty !== undefined) ? p.prevPenalty : p.penaltyStrokes;
             
             p.prevPos = null;
+            window.lastShotPlayerIndex = undefined;
 
             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
             if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
@@ -770,12 +784,89 @@
             if (window.resetAimTarget) window.resetAimTarget();
         }
     };
+
+    window.takePenaltyDrop = function() {
+        if (typeof appMode === 'undefined' || appMode !== 'PLAY') return;
+        if (playState !== 'ROUND_IDLE') return;
+
+        let p = window.players[window.activePlayerIndex];
+        if (p) {
+            if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
+            
+            p.penaltyStrokes++;
+            document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
+            if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+
+            let pop = document.getElementById('score-popup');
+            if(pop) {
+                pop.innerText = "PENALTY DROP (+1)";
+                pop.style.color = "#ef4444";
+                pop.style.opacity = '1';
+                pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
+                setTimeout(() => { pop.style.opacity = '0'; pop.style.color = "#fcd34d"; }, 2500);
+            }
+            
+            window.camFollowMode = 'FREE';
+            let btnCam = document.getElementById('btn-cam-mode');
+            if(btnCam) {
+                btnCam.innerText = '🎥 FREE CAM';
+                btnCam.style.background = '#ec4899';
+            }
+            controls.enabled = true;
+            controls.update();
+            
+            let tools = document.getElementById('play-tools');
+            let confirmBtn = document.getElementById('btn-confirm-drop');
+            if (!confirmBtn) {
+                confirmBtn = document.createElement('button');
+                confirmBtn.id = 'btn-confirm-drop';
+                confirmBtn.innerText = '✅ CONFIRM DROP HERE';
+                confirmBtn.style.background = '#10b981';
+                confirmBtn.style.color = '#fff';
+                confirmBtn.style.padding = '8px 15px';
+                confirmBtn.style.fontWeight = 'bold';
+                confirmBtn.style.border = 'none';
+                confirmBtn.style.borderRadius = '6px';
+                confirmBtn.style.cursor = 'pointer';
+                confirmBtn.onclick = function() {
+                    let dropX = controls.target.x;
+                    let dropZ = controls.target.z;
+                    let h = 0.3;
+                    if(typeof localGetTerrainAt === 'function') {
+                        let surf = localGetTerrainAt(dropX, dropZ);
+                        if(surf) h = surf.h + 0.1;
+                    }
+                    ball.position.set(dropX, h, dropZ);
+                    ball.velocity.set(0,0,0);
+                    ball.angularVelocity.set(0,0,0);
+                    
+                    p.lie = {x: dropX, y: h, z: dropZ};
+                    p.prevPos = {x: dropX, y: h, z: dropZ}; 
+                    
+                    if(window.resetAimTarget) window.resetAimTarget();
+                    
+                    window.camFollowMode = 'BROADCAST';
+                    if(btnCam) {
+                        btnCam.innerText = '🎥 BROADCAST';
+                        btnCam.style.background = '#4f46e5';
+                    }
+                    camera.position.set(dropX, h + 4, dropZ + 10);
+                    controls.target.copy(ball.position);
+                    controls.update();
+                    
+                    this.remove();
+                };
+                tools.insertBefore(confirmBtn, tools.firstChild);
+            }
+        }
+    };
     
     setInterval(() => {
         let mBtn = document.getElementById('btn-mulligan');
         if (mBtn) {
             if (typeof appMode !== 'undefined' && appMode === 'PLAY' && typeof playState !== 'undefined' && playState === 'ROUND_IDLE' && window.matchSettings && window.matchSettings.mulligans) {
-                let p = window.players ? window.players[window.activePlayerIndex] : null;
+                let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
+                let p = window.players ? window.players[lastIdx] : null;
                 if (p && p.prevPos) {
                     mBtn.style.display = 'block';
                     return;
@@ -2544,7 +2635,15 @@
         if (!list) return;
         list.innerHTML = '';
         
-        const hole1 = courseHoles[0] || {};
+        let firstPlayableHole = 0;
+        for (let i = 0; i < 18; i++) {
+            let hole = courseHoles[i];
+            if (hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) && hole.flag) {
+                firstPlayableHole = i;
+                break;
+            }
+        }
+        const hole1 = courseHoles[firstPlayableHole] || {};
         const tees = hole1.tees || {};
         
         const tOpts = [];
@@ -2613,16 +2712,25 @@
     window.startRound = function() {
         if(appMode !== 'PLAY') return;
 
-        let hole1 = courseHoles[0];
-        let h1HasTee = hole1 && hole1.tees && (hole1.tees.yellow || hole1.tees.white || hole1.tees.red || hole1.tees.black);
-        if(!hole1 || !h1HasTee || !hole1.flag) {
-            alert("Hole 1 is missing a tee or a flag!");
+        let firstPlayableHole = -1;
+        for (let i = 0; i < 18; i++) {
+            let hole = courseHoles[i];
+            let hasTee = hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black);
+            if (hole && hasTee && hole.flag) {
+                firstPlayableHole = i;
+                break;
+            }
+        }
+
+        if(firstPlayableHole === -1) {
+            alert("Banan saknar spelbara hål! (Kräver Tee och Flagga)");
             return;
         }
         
-        let firstAvailableTee = hole1.tees.yellow ? 'yellow' : (hole1.tees.white ? 'white' : (hole1.tees.red ? 'red' : 'black'));
+        let holeStart = courseHoles[firstPlayableHole];
+        let firstAvailableTee = holeStart.tees.yellow ? 'yellow' : (holeStart.tees.white ? 'white' : (holeStart.tees.red ? 'red' : 'black'));
         window.setupPlayers.forEach(p => {
-            if (!hole1.tees[p.tee]) p.tee = firstAvailableTee;
+            if (!holeStart.tees[p.tee]) p.tee = firstAvailableTee;
         });
         
         window.renderPlayerRoster();
@@ -2726,7 +2834,8 @@
         
         // BUG-P09 FIX: Detect green lie and use putt-camera if on green
         let lieSurf = localGetTerrainAt(ball.position.x, ball.position.z);
-        let isOnGreen = lieSurf && lieSurf.type === 'GREEN';
+        let distToPin = new THREE.Vector3(ball.position.x, ball.position.y, ball.position.z).distanceTo(fv);
+        let isOnGreen = lieSurf && (lieSurf.type === 'GREEN' || ((lieSurf.type === 'SEMI-ROUGH' || lieSurf.type === 'FAIRWAY') && distToPin < 5.0));
         
         if (isOnGreen) {
             // Putt-kamera: låg vinkel, nära bollen
@@ -2776,7 +2885,7 @@
 
         if (p.strokes + p.penaltyStrokes >= maxScore && maxConcede !== 99 && !p.holedOut) {
             p.holedOut = true;
-            p.strokes = maxScore;
+            p.strokes = maxScore - p.penaltyStrokes;
             
             let pop = document.getElementById('score-popup');
             pop.innerText = "AUTO CONCEDE (" + maxScore + ")";
@@ -2804,9 +2913,9 @@
         
         let nextPlayer = getNextPlayerIndex();
         if(nextPlayer === -1) {
-            setTimeout(nextHole, 2500);
+            window.nextTurnTimeout = setTimeout(nextHole, 2500);
         } else {
-            setTimeout(() => {
+            window.nextTurnTimeout = setTimeout(() => {
                 switchTurnTo(nextPlayer);
             }, p.holedOut ? 2500 : 1000);
         }
@@ -2818,7 +2927,16 @@
         document.getElementById('settings-modal').style.display = 'none';
 
         playState = 'ROUND_IDLE';
-        playingHoleIndex = 0;
+        let firstPlayableHole = 0;
+        for (let i = 0; i < 18; i++) {
+            let hole = courseHoles[i];
+            let hasTee = hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black);
+            if (hole && hasTee && hole.flag) {
+                firstPlayableHole = i;
+                break;
+            }
+        }
+        playingHoleIndex = firstPlayableHole;
         
         window.players = window.setupPlayers.map(sp => ({
             id: sp.name + "_" + Math.random().toString(36).substring(7),
@@ -2886,9 +3004,16 @@
     }
     
     function startNextHole() {
-        playingHoleIndex++;
-        let activeT = courseHoles[playingHoleIndex] ? (courseHoles[playingHoleIndex].tees.yellow || courseHoles[playingHoleIndex].tees.white || courseHoles[playingHoleIndex].tees.red || courseHoles[playingHoleIndex].tees.black) : null;
-        if(playingHoleIndex > 17 || !activeT) {
+        let nextPlayableHole = -1;
+        for (let i = playingHoleIndex + 1; i < 18; i++) {
+            let hole = courseHoles[i];
+            let hasTee = hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black);
+            if (hole && hasTee && hole.flag) {
+                nextPlayableHole = i;
+                break;
+            }
+        }
+        if(nextPlayableHole === -1) {
             let pop = document.getElementById('score-popup');
             pop.innerText = "ROUND COMPLETE!";
             pop.style.opacity = '1';
@@ -2905,6 +3030,7 @@
             return;
         }
         
+        playingHoleIndex = nextPlayableHole;
         teleportToHole(playingHoleIndex);
     }
     function renderScorecard() {
@@ -3055,6 +3181,8 @@
             p.prevPos = { x: ball.position.x, y: ball.position.y, z: ball.position.z };
             p.prevStrokes = p.strokes;
             p.prevPenalty = p.penaltyStrokes;
+            
+            window.lastShotPlayerIndex = window.activePlayerIndex;
             
             p.strokes++;
             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
@@ -4992,7 +5120,7 @@
                             pop.style.opacity = '1';
                             pop.style.transform = 'translate(-50%, -60%) scale(1.2)';
                             console.log('⛳ HOLED! Total: ' + total + ', Par: ' + par + ' -> ' + scoreText);
-                            setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -60%) scale(1.0)'; evaluateNextTurn(); }, 4000);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -60%) scale(1.0)'; evaluateNextTurn(); }, 4000);
                             return; // Skip gimme/auto-putt — ball is in the hole!
                         }
                     }
@@ -5024,7 +5152,7 @@
                             p.holedOut = true;
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
                         } else if (!shouldConcede && (isGreen || (lieSurface && (lieSurface.type === 'FAIRWAY' || lieSurface.type === 'SEMI-ROUGH') && distToPin < 5.0)) && mode !== 'OFF') {
                             // BUG-P03 FIX: Auto-putt only from GREEN or close fringe (within 5m), not from rough/sand at 20m
                             let putts = 2;
@@ -5047,7 +5175,7 @@
                             p.holedOut = true;
                             pop.innerText = `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
                             pop.style.opacity = '1';
-                            setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
                         } else {
                             // Vi är inte klara. Nytt slag ELLER Manuell Putt!
                             if (isGreen && mode === 'OFF') {
