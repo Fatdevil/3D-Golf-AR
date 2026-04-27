@@ -1868,19 +1868,24 @@
                 scaleY: def.scaleY || 1.0
             }));
         }
-        // GLTF models
+        // GLTF models — use WORLD transforms (includes parent container scale)
         let model = window.customModels[type];
         if (!model || model === 'LOADING') return null;
+        model.updateWorldMatrix(true, true); // Force full hierarchy matrix update
         let subs = [];
         model.traverse(child => {
             if (child.isMesh) {
+                let worldPos = new THREE.Vector3();
+                let worldScale = new THREE.Vector3();
+                child.getWorldPosition(worldPos);
+                child.getWorldScale(worldScale);
                 subs.push({
                     geometry: child.geometry,
                     material: child.material,
-                    offsetY: child.position.y || 0,
-                    offsetX: child.position.x || 0,
-                    offsetZ: child.position.z || 0,
-                    childScale: child.scale.clone()
+                    offsetY: worldPos.y,
+                    offsetX: worldPos.x,
+                    offsetZ: worldPos.z,
+                    childScale: worldScale
                 });
             }
         });
@@ -2281,12 +2286,22 @@
                 heights.push(Math.round(pos[i] * 100) / 100);
             }
 
+            // Water heightmap
+            let waterHeights = [];
+            if (typeof waterGeo !== 'undefined' && waterGeo) {
+                let wPos = waterGeo.attributes.position.array;
+                for (let i = 2; i < wPos.length; i += 3) {
+                    waterHeights.push(Math.round(wPos[i] * 100) / 100);
+                }
+            }
+
             let payload = {
                 v: 1, // Version for future compat
                 h: dumpHoles,
                 t: dumpTargets,
                 r: dumpTrees,
-                m: heights
+                m: heights,
+                w: waterHeights.length > 0 ? waterHeights : undefined
             };
 
             let json = JSON.stringify(payload);
@@ -2362,6 +2377,16 @@
                 }
                 planeGeo.attributes.position.needsUpdate = true;
                 planeGeo.computeVertexNormals();
+            }
+
+            // Restore water heightmap
+            if (data.w && data.w.length > 0 && typeof waterGeo !== 'undefined' && waterGeo) {
+                let wPos = waterGeo.attributes.position.array;
+                let wIdx = 0;
+                for (let i = 2; i < wPos.length && wIdx < data.w.length; i += 3) {
+                    wPos[i] = data.w[wIdx++];
+                }
+                waterGeo.attributes.position.needsUpdate = true;
             }
             
             console.log('Imported shared course: ' + (result.trees ? result.trees.length : 0) + ' trees, ' + (result.holes ? result.holes.length : 0) + ' holes');
@@ -3373,7 +3398,9 @@
             }
         };
         
-        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        if (!window.terrainBiomeData) {
+            window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        }
         
         let result = window.GolfPhysics.simulateFlight(launchConfig, envCtx);
         if (!result) return;
