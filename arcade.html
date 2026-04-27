@@ -1540,8 +1540,8 @@
     dirLight.shadow.camera.right = 100;
     scene.add(dirLight);
     
-    // Create Minecraft sun
-    const sunGeo = new THREE.BoxGeometry(20, 20, 20);
+    // Create sun sphere
+    const sunGeo = new THREE.SphereGeometry(15, 16, 16);
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     sunMesh.position.set(200, 150, -400); 
@@ -1680,7 +1680,7 @@
         transparent: true, 
         opacity: 0.85, 
         alphaMap: waterTex, 
-        alphaTest: 0.5, 
+        alphaTest: 0.01, 
         depthWrite: false 
     });
     const waterMesh = new THREE.Mesh(waterGeo, waterMat);
