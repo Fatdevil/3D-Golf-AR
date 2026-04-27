@@ -3438,6 +3438,7 @@
         
         flightData = result; 
         flightTick = 0;
+        window._lastFlightFrame = null; // Reset delta-time tracker
         isFlying = true;
         
         tracerPointsCount = 0;
@@ -4999,8 +5000,13 @@
         // Om bollen flyger, hämta nästa punkt i trajectory
         if (isFlying && flightData && flightData.path && flightTick < flightData.path.length) {
             
-            // Vi spelar p fram 3 ticks per frame för att det ska gå snabbt nog visuellt!
-            var step = 3; 
+            // Delta-time based stepping: match real-time regardless of framerate
+            // Physics dt = 0.005s per tick, so 200 ticks = 1 second of real time
+            var now = performance.now();
+            if (!window._lastFlightFrame) window._lastFlightFrame = now;
+            var deltaMs = Math.min(now - window._lastFlightFrame, 50); // Cap at 50ms to avoid jumps
+            window._lastFlightFrame = now;
+            var step = Math.max(1, Math.round(deltaMs / 5)); // 5ms per physics tick
             var newTick = Math.min(flightTick + step, flightData.path.length - 1);
             
             var point = flightData.path[newTick];
