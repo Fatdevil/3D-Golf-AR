@@ -1687,6 +1687,30 @@
     waterMesh.rotation.x = -Math.PI / 2;
     waterMesh.receiveShadow = true;
     scene.add(waterMesh);
+
+    // Regenerate water alpha mask from heightmap data
+    // Called after loading water heights to ensure visibility
+    function rebuildWaterMask() {
+        if (typeof wCtx === 'undefined' || typeof waterGeo === 'undefined') return;
+        wCtx.fillStyle = '#000000';
+        wCtx.fillRect(0, 0, 4096, 4096);
+        let wPosArr = waterGeo.attributes.position.array;
+        let count = waterGeo.attributes.position.count;
+        let segs = TERRAIN_SEGS;
+        let pixPerSeg = 4096 / segs;
+        wCtx.fillStyle = '#ffffff';
+        for (let i = 0; i < count; i++) {
+            let z = wPosArr[i * 3 + 2];
+            if (z > -90) {
+                let gx = i % (segs + 1);
+                let gz = Math.floor(i / (segs + 1));
+                let px = gx * pixPerSeg;
+                let py = gz * pixPerSeg;
+                wCtx.fillRect(px - pixPerSeg, py - pixPerSeg, pixPerSeg * 3, pixPerSeg * 3);
+            }
+        }
+        waterTex.needsUpdate = true;
+    }
     
     const gridMat = new THREE.MeshBasicMaterial({ 
         map: gridTex, 
@@ -2387,6 +2411,8 @@
                     wPos[i] = data.w[wIdx++];
                 }
                 waterGeo.attributes.position.needsUpdate = true;
+                // Rebuild water alpha mask from loaded heightmap
+                rebuildWaterMask();
             }
             
             console.log('Imported shared course: ' + (result.trees ? result.trees.length : 0) + ' trees, ' + (result.holes ? result.holes.length : 0) + ' holes');
@@ -2519,6 +2545,11 @@
                     pos.needsUpdate = true;
                     if(wPos) wPos.needsUpdate = true;
                     planeGeo.computeVertexNormals();
+
+                    // Rebuild water alpha mask from loaded heightmap
+                    if (waterArr && waterArr.some(v => v > -90)) {
+                        rebuildWaterMask();
+                    }
 
                     if(arr.terrain_biomemap) {
                         let img = new Image();
