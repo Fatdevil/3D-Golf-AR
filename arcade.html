@@ -5625,17 +5625,19 @@
             if (window.camFollowMode === 'FREE') {
                 // Free cam: user controls via OrbitControls
             } else if (gameCamPhase === 'FLIGHT_FOLLOW') {
-                // Look-ahead: kameran tittar 0.5s framåt i banan
-                let aheadTick = Math.min(flightTick + 100, flightData.path.length - 1);
-                let aheadP = flightData.path[aheadTick];
+                let shotDir = new THREE.Vector3(0, 0, -1);
+                if (window.aimTarget && window.shotStartPos) {
+                    shotDir.subVectors(window.aimTarget, window.shotStartPos);
+                    shotDir.y = 0;
+                    if (shotDir.lengthSq() > 0.01) shotDir.normalize();
+                }
                 
-                let targetCamX = aheadP.x;
-                let targetCamY = Math.max(CAM.FLIGHT_HEIGHT_MIN, window.ballMesh.position.y + 3);
-                let targetCamZ = -aheadP.y + CAM.FLIGHT_BEHIND;
+                let targetCamPos = window.ballMesh.position.clone().sub(shotDir.multiplyScalar(CAM.FLIGHT_BEHIND));
+                targetCamPos.y = Math.max(CAM.FLIGHT_HEIGHT_MIN, window.ballMesh.position.y + 3);
                 
-                camera.position.x += (targetCamX - camera.position.x) * CAM.FLIGHT_LERP;
-                camera.position.y += (targetCamY - camera.position.y) * CAM.FLIGHT_LERP;
-                camera.position.z += (targetCamZ - camera.position.z) * CAM.FLIGHT_LERP;
+                camera.position.x += (targetCamPos.x - camera.position.x) * CAM.FLIGHT_LERP;
+                camera.position.y += (targetCamPos.y - camera.position.y) * CAM.FLIGHT_LERP;
+                camera.position.z += (targetCamPos.z - camera.position.z) * CAM.FLIGHT_LERP;
                 camera.lookAt(window.ballMesh.position);
             }
             
