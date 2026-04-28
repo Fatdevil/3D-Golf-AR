@@ -168,7 +168,10 @@
                 <input type="password" id="theme-password" placeholder="golfadmin123">
             </div>
             
-            <button onclick="saveThemeToCloud()" style="background:#10b981; color:#fff; margin-top:0;">💾 Save Theme</button>
+            <div style="display:flex; gap:10px; margin-top:0;">
+                <button onclick="saveThemeToCloud()" style="background:#10b981; color:#fff; flex:2;">💾 Save Theme</button>
+                <button onclick="loadSelectedThemeUI()" style="background:#475569; color:#f8fafc; flex:1;" title="Discard unsaved changes">↩️ Revert</button>
+            </div>
             <div id="theme-log" style="font-size:11px; color:#4ade80; display:none; text-align:center;">Theme saved successfully!</div>
         </div>
     </div>
@@ -323,7 +326,20 @@
 
         // Mark
         const grid = new THREE.GridHelper(50, 50, 0x475569, 0x475569);
+        grid.position.y = 0.01;
         scene.add(grid);
+
+        // Palette Plane för Live Preview
+        const paletteCanvas = document.createElement('canvas');
+        paletteCanvas.width = 1024;
+        paletteCanvas.height = 1024;
+        const paletteCtx = paletteCanvas.getContext('2d');
+        const paletteTex = new THREE.CanvasTexture(paletteCanvas);
+        const paletteMat = new THREE.MeshLambertMaterial({ map: paletteTex });
+        const paletteGeo = new THREE.PlaneGeometry(50, 50);
+        paletteGeo.rotateX(-Math.PI / 2);
+        const palettePlane = new THREE.Mesh(paletteGeo, paletteMat);
+        scene.add(palettePlane);
 
         // Grupper
         const modelGroup = new THREE.Group();
@@ -556,9 +572,44 @@
     function updateCanvasPreview(config) {
         if(scene) {
             scene.background = new THREE.Color(config.skyColor || '#87ceeb');
-            // We could also update the plane material color to roughColor
-            if(plane && plane.material) {
-                plane.material.color.setHex(parseInt((config.roughColor || '#4a782b').replace('#','0x')));
+            
+            if(typeof paletteCtx !== 'undefined' && paletteCtx) {
+                // Fyll bakgrund
+                paletteCtx.fillStyle = config.roughColor || '#4a782b';
+                paletteCtx.fillRect(0, 0, 1024, 1024);
+                
+                let colors = [
+                    { name: "OB", col: config.obColor || '#ef4444' },
+                    { name: "Waste", col: config.wasteColor || '#c2af7c' },
+                    { name: "Bunker", col: config.bunkerColor || '#e0d8a4' },
+                    { name: "Fescue", col: config.fescueColor || '#2d4c1a' },
+                    { name: "Rough", col: config.roughColor || '#4a782b' },
+                    { name: "Semi-Rough", col: config.semiColor || '#6b9e3d' },
+                    { name: "Fairway", col: config.fairwayColor || '#7db952' },
+                    { name: "Foregreen", col: config.foregreenColor || '#8bc45d' },
+                    { name: "Green", col: config.greenColor || '#98ce68' },
+                    { name: "Tee Box", col: config.teeColor || '#7cb54c' },
+                    { name: "Water", col: config.waterColor || '#38bdf8' }
+                ];
+                
+                let h = 1024 / colors.length;
+                for(let i=0; i<colors.length; i++) {
+                    paletteCtx.fillStyle = colors[i].col;
+                    paletteCtx.fillRect(0, i*h, 1024, h);
+                    
+                    // Text
+                    paletteCtx.fillStyle = '#ffffff';
+                    paletteCtx.font = "bold 28px Arial";
+                    paletteCtx.fillText(colors[i].name, 20, i*h + h/2 + 10);
+                    
+                    // Outline för läsbarhet
+                    paletteCtx.lineWidth = 3;
+                    paletteCtx.strokeStyle = '#000000';
+                    paletteCtx.strokeText(colors[i].name, 20, i*h + h/2 + 10);
+                }
+                if(palettePlane && palettePlane.material.map) {
+                    palettePlane.material.map.needsUpdate = true;
+                }
             }
         }
     }
