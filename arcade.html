@@ -783,7 +783,8 @@
     let currentEditCode = null;
     
     window.takeMulligan = function() {
-        if (typeof appMode === 'undefined' || appMode !== 'PLAY' || !window.matchSettings || !window.matchSettings.mulligans) return;
+        if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
+        if (appMode === 'PLAY' && (!window.matchSettings || !window.matchSettings.mulligans)) return;
         if (playState !== 'ROUND_IDLE') return;
 
         let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
@@ -830,7 +831,7 @@
     };
 
     window.takePenaltyDrop = function() {
-        if (typeof appMode === 'undefined' || appMode !== 'PLAY') return;
+        if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
         if (playState !== 'ROUND_IDLE') return;
 
         let p = window.players[window.activePlayerIndex];
@@ -3320,10 +3321,10 @@
         window.ballMesh.velocity = new THREE.Vector3(0,0,0);
         window.ballMesh.angularVelocity = new THREE.Vector3(0,0,0);
         
-        window.aimTarget = new THREE.Vector3();
-        
         let hole = courseHoles[playingHoleIndex];
         let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+        window.aimTarget = fv.clone();
+        
         let dir = new THREE.Vector3().subVectors(fv, window.ballMesh.position).normalize();
         
         // BUG-P09 FIX: Detect green lie and use putt-camera if on green
@@ -4913,7 +4914,7 @@
         const mmc = document.getElementById('minimap-container');
         if(mmc) {
             mmc.addEventListener('mousedown', (e) => {
-                if (appMode !== 'PLAY' || playState !== 'ROUND_IDLE') return;
+                if ((appMode !== 'PLAY' && appMode !== 'TEST') || playState !== 'ROUND_IDLE') return;
                 
                 let rect = mmc.getBoundingClientRect();
                 let x = e.clientX - rect.left;
