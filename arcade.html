@@ -378,13 +378,13 @@
                     <option value="AUTUMN">Autumn</option>
                 </select>
             </div>
-            <button id="btn-toggle-unit" class="sys-btn" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 M' : '📏 YD';" style="font-size:12px; padding:8px 10px;">📏 YD</button>
             <a href="hub.html" class="sys-btn" style="text-decoration:none; font-size:16px; padding:8px 12px;">🏠</a>
         </div>
     </div>
     
     <div id="dropdown-menu">
         <button onclick="document.getElementById('publish-modal').style.display='flex'; toggleMenu();">☁️ Save / Publish</button>
+        <button id="btn-toggle-unit" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 Meter' : '📏 Yards'; toggleMenu();">📏 Yards</button>
         <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Clear Course</button>
     </div>
     
