@@ -81,9 +81,12 @@
                     <option value="PLANTS">Plants</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label>Icon</label>
-                <input type="text" id="asset-icon" value="🌳">
+            <div class="form-group" style="align-items:flex-start;">
+                <label>Thumbnail</label>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <img id="thumb-preview" src="" alt="None" style="width:40px; height:40px; border-radius:4px; border:1px solid #475569; object-fit:cover; background:#000;">
+                    <button id="btn-snap" onclick="snapThumbnail()" style="margin:0; padding:6px 10px; font-size:12px; border-radius:4px;">📸 CAPTURE</button>
+                </div>
             </div>
         </div>
 
@@ -165,7 +168,7 @@
         const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
         camera.position.set(0, 10, 30);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
         renderer.outputEncoding = THREE.sRGBEncoding;
         container.appendChild(renderer.domElement);
@@ -201,6 +204,7 @@
 
         let currentModel = null;
         let base64Data = null;
+        let thumbnailBase64 = null;
 
         // --- PREVIEW LOGIC ---
         function updateHitbox() {
@@ -281,6 +285,24 @@
             updateHitbox();
         }
 
+        function snapThumbnail() {
+            // Hide helpers for clean shot
+            grid.visible = false;
+            hitboxGroup.visible = false;
+            
+            // Force a render so it's clean
+            renderer.render(scene, camera);
+            
+            // Capture canvas
+            const dataUrl = renderer.domElement.toDataURL('image/png');
+            thumbnailBase64 = dataUrl;
+            document.getElementById('thumb-preview').src = dataUrl;
+            
+            // Restore helpers
+            grid.visible = true;
+            hitboxGroup.visible = document.getElementById('toggle-hitbox').checked;
+        }
+
         // --- EVENT LISTENERS ---
         let fileSizeMB = 0;
 
@@ -356,8 +378,12 @@
                 assets.forEach(a => {
                     const div = document.createElement('div');
                     div.className = 'lib-item';
+                    const thumbHtml = (a.config && a.config.thumbnail) 
+                        ? `<img src="${a.config.thumbnail}" style="width:30px; height:30px; object-fit:cover; border-radius:4px;">` 
+                        : `<div class="icon">📦</div>`;
+                    
                     div.innerHTML = `
-                        <div class="icon">${a.icon || '📦'}</div>
+                        ${thumbHtml}
                         <div class="details">
                             <span class="name">${a.name}</span>
                             <span class="subcat">${a.subcategory || a.category}</span>
@@ -378,10 +404,16 @@
                 document.getElementById('asset-id').value = assetInfo.id;
                 document.getElementById('asset-name').value = assetInfo.name;
                 document.getElementById('asset-subcat').value = assetInfo.subcategory || 'TREES';
-                document.getElementById('asset-icon').value = assetInfo.icon || '';
                 
                 // Populate Config if exists
                 if (assetInfo.config) {
+                    if (assetInfo.config.thumbnail) {
+                        thumbnailBase64 = assetInfo.config.thumbnail;
+                        document.getElementById('thumb-preview').src = thumbnailBase64;
+                    } else {
+                        thumbnailBase64 = null;
+                        document.getElementById('thumb-preview').src = '';
+                    }
                     if (assetInfo.config.targetHeight) document.getElementById('target-height').value = assetInfo.config.targetHeight;
                     if (assetInfo.config.yOffset) document.getElementById('y-offset').value = assetInfo.config.yOffset;
                     if (assetInfo.config.brightness !== undefined) document.getElementById('brightness').value = assetInfo.config.brightness;
@@ -479,7 +511,6 @@
             const id = document.getElementById('asset-id').value;
             const name = document.getElementById('asset-name').value;
             const subcat = document.getElementById('asset-subcat').value;
-            const icon = document.getElementById('asset-icon').value;
             
             const pType = document.getElementById('physics-type').value;
             let physicsConf = { type: pType };
@@ -500,7 +531,7 @@
                 brightness: parseFloat(document.getElementById('brightness').value),
                 cat: 'nature',
                 subcat: subcat,
-                icon: icon,
+                thumbnail: thumbnailBase64,
                 physics: physicsConf,
                 biomes: Array.from(document.querySelectorAll('.biome-cb:checked')).map(cb => cb.value),
                 fileSizeMB: parseFloat(fileSizeMB)
@@ -513,7 +544,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        id, name, category: 'nature', subcategory: subcat, icon, file_data: base64Data, config, password: pass
+                        id, name, category: 'nature', subcategory: subcat, icon: '', file_data: base64Data, config, password: pass
                     })
                 });
                 
