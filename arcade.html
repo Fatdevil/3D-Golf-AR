@@ -2145,19 +2145,45 @@
         if (!model || model === 'LOADING') return null;
         model.updateWorldMatrix(true, true); // Force full hierarchy matrix update
         let subs = [];
+        let isTree = window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].subcat === 'TREES';
+
         model.traverse(child => {
             if (child.isMesh) {
                 let worldPos = new THREE.Vector3();
                 let worldScale = new THREE.Vector3();
                 child.getWorldPosition(worldPos);
                 child.getWorldScale(worldScale);
+                
+                let isColorable = true;
+                if (isTree) {
+                    let name = (child.name || "").toLowerCase();
+                    let matName = (child.material && child.material.name) ? child.material.name.toLowerCase() : "";
+                    
+                    if (name.includes('trunk') || name.includes('wood') || name.includes('bark') || name.includes('stem') || name.includes('branch') || name.includes('rock') || name.includes('stone')) {
+                        isColorable = false;
+                    }
+                    if (matName.includes('trunk') || matName.includes('wood') || matName.includes('bark') || matName.includes('stem') || matName.includes('branch') || matName.includes('rock') || matName.includes('stone')) {
+                        isColorable = false;
+                    }
+                    
+                    if (isColorable && child.material && child.material.color) {
+                        let c = child.material.color;
+                        let isBrown = (c.r > c.g) && (c.g >= c.b) && (c.r < 0.7);
+                        let isGrey = Math.abs(c.r - c.g) < 0.05 && Math.abs(c.g - c.b) < 0.05 && c.r < 0.6;
+                        if (isBrown || isGrey) {
+                            isColorable = false;
+                        }
+                    }
+                }
+
                 subs.push({
                     geometry: child.geometry,
                     material: child.material,
                     offsetY: worldPos.y,
                     offsetX: worldPos.x,
                     offsetZ: worldPos.z,
-                    childScale: worldScale
+                    childScale: worldScale,
+                    isColorable: isColorable
                 });
             }
         });
@@ -2185,7 +2211,8 @@
                 y: sub.offsetY || 0,
                 z: sub.offsetZ || 0,
                 sy: sub.scaleY || 1.0,
-                cs: sub.childScale || null
+                cs: sub.childScale || null,
+                isColorable: sub.isColorable !== false
             });
         });
         window.instancePools[type] = pool;
@@ -2214,7 +2241,7 @@
                 _iMatrix.compose(_iPos, _iQuat, _iScale);
                 iMesh.setMatrixAt(i, _iMatrix);
                 
-                if (t.color) {
+                if (t.color && off.isColorable) {
                     iMesh.setColorAt(i, new THREE.Color(t.color));
                 } else {
                     iMesh.setColorAt(i, new THREE.Color(0xffffff));
