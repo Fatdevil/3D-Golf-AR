@@ -413,6 +413,7 @@
         <button id="tool-hole" onclick="setTool('HOLE')"><span style="font-size:16px;">🕳️</span> HOLE</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
         <button id="tool-eraser" onclick="setTool('ERASER')"><span style="font-size:16px;">🗑️</span> ERASER</button>
+        <button id="tool-colorize" onclick="setTool('COLORIZE')"><span style="font-size:16px;">🎨</span> COLORIZE</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button onclick="performUndo()" style="color:#f87171; grid-column:1 / -1;"><span style="font-size:16px;">↩️</span> UNDO</button>
     </div>
@@ -470,6 +471,13 @@
             <div id="nature-assets-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
                 <!-- Populated dynamically -->
             </div>
+        </div>
+
+        <!-- Färg för Objekt (COLORIZE) -->
+        <div id="colorize-picker-group" class="prop-panel" style="display:none;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Asset Color</label>
+            <input type="color" id="asset-color-picker" value="#ffffff" oninput="window.activeColorizeColor = this.value; if(currentTool==='COLORIZE' && typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.material.color.setHex(parseInt(this.value.replace('#','0x')));" style="width:100%; height:40px; border:none; border-radius:6px; cursor:pointer;">
+            <button onclick="document.getElementById('asset-color-picker').value='#ffffff'; window.activeColorizeColor='#ffffff'; if(currentTool==='COLORIZE' && typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.material.color.setHex(0xffffff);" style="margin-top:10px; width:100%; padding:8px; background:#334155; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Reset to Default</button>
         </div>
 
         <!-- Inställningar för Test Putt -->
@@ -2154,6 +2162,7 @@
         let pool = { meshes: [], subOffsets: [], activeCount: 0 };
         subs.forEach(sub => {
             let iMesh = new THREE.InstancedMesh(sub.geometry, sub.material, INSTANCE_MAX);
+            iMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(INSTANCE_MAX * 3), 3);
             iMesh.count = 0;
             iMesh.castShadow = true;
             iMesh.receiveShadow = true;
@@ -2193,12 +2202,19 @@
                 }
                 _iMatrix.compose(_iPos, _iQuat, _iScale);
                 iMesh.setMatrixAt(i, _iMatrix);
+                
+                if (t.color) {
+                    iMesh.setColorAt(i, new THREE.Color(t.color));
+                } else {
+                    iMesh.setColorAt(i, new THREE.Color(0xffffff));
+                }
             });
         });
 
         pool.meshes.forEach(iMesh => {
             iMesh.count = pool.activeCount;
             iMesh.instanceMatrix.needsUpdate = true;
+            if (iMesh.instanceColor) iMesh.instanceColor.needsUpdate = true;
         });
     }
 
@@ -4050,6 +4066,25 @@
             }
             return;
         }
+
+        // === COLORIZE TOOL ===
+        if (currentTool === 'COLORIZE' && e.button === 0 && lastHitPoint) {
+            saveUndoState();
+            let closest = null; let minDist = 3.5;
+            for (let i = 0; i < window.placedTrees.length; i++) {
+                let t = window.placedTrees[i];
+                let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
+                if (d < minDist) { minDist = d; closest = i; }
+            }
+            if (closest !== null) {
+                let col = window.activeColorizeColor || '#ffffff';
+                if (window.placedTrees[closest].color !== col) {
+                    window.placedTrees[closest].color = col;
+                    rebuildInstancePool(window.placedTrees[closest].type);
+                }
+            }
+            return;
+        }
         
         let isModifyingClick = e.button === 0 || e.button === 2;
         if(currentTool !== 'PAINT' && currentTool !== 'MEASURE' || isModifyingClick) { 
@@ -4293,7 +4328,7 @@
     function setTool(toolName) {
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure', 'eraser'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure', 'eraser', 'colorize'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -4315,6 +4350,7 @@
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
         document.getElementById('nature-picker-group').style.display = (toolName === 'NATURE') ? 'flex' : 'none';
         document.getElementById('hole-picker-group').style.display = (toolName === 'HOLE') ? 'flex' : 'none';
+        document.getElementById('colorize-picker-group').style.display = (toolName === 'COLORIZE') ? 'flex' : 'none';
         document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
         document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'SMART_GREEN' || toolName === 'RIDGE') ? 'flex' : 'none';
         document.getElementById('green-diff-group').style.display = (toolName === 'SMART_GREEN') ? 'flex' : 'none';
@@ -4343,6 +4379,9 @@
             sculptBrushCursor.material.color.setHex(0x38bdf8); // Light Blue for Ramp
         } else if(toolName === 'SPLINE') {
             sculptBrushCursor.material.color.setHex(0xec4899); // Rosa för Spline
+        } else if(toolName === 'COLORIZE') {
+            let hex = (window.activeColorizeColor || '#ffffff').replace('#', '0x');
+            sculptBrushCursor.material.color.setHex(parseInt(hex));
         }
         
         let hintHtml = "";
@@ -4359,6 +4398,7 @@
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
         else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Measure Box</b><br>Right Click: <b>Clear Box</b>";
         else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
+        else if (toolName === 'COLORIZE') hintHtml = "Left Click/Drag: <b>Paint object with selected color</b>";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
@@ -4552,14 +4592,31 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             raycaster.setFromCamera(mouse, camera);
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
-                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE') {
+                
+                if (currentTool === 'COLORIZE' && event.buttons === 1) {
+                    let closest = null; let minDist = 3.5;
+                    for (let i = 0; i < window.placedTrees.length; i++) {
+                        let t = window.placedTrees[i];
+                        let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
+                        if (d < minDist) { minDist = d; closest = i; }
+                    }
+                    if (closest !== null) {
+                        let col = window.activeColorizeColor || '#ffffff';
+                        if (window.placedTrees[closest].color !== col) {
+                            window.placedTrees[closest].color = col;
+                            rebuildInstancePool(window.placedTrees[closest].type);
+                        }
+                    }
+                }
+                
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
