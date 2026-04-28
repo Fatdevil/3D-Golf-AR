@@ -353,8 +353,7 @@
         <div class="top-left">
             <button class="sys-btn" onclick="toggleMenu()">☰</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
-            <button id="tool-testputt" class="sys-btn" onclick="setMode('BUILD'); setTool('TEST_PUTT')" style="border-color:#10b981; color:#10b981;">🏌️ DROP PUTT</button>
-            <button id="btn-mode-play" class="sys-btn" onclick="setMode('PLAY')">🔥 TESTA BANAN</button>
+            <button id="btn-mode-play" class="sys-btn" onclick="setMode('TEST')">🔥 TESTA BANAN</button>
         </div>
         <!-- CENTER: Asset Budget (BUILD only) -->
         <div class="top-center">
@@ -3681,6 +3680,59 @@
     });
     
     let waterLevelTarget = 0;
+    // === TEST MODE: Double-click to place ball ===
+    renderer.domElement.addEventListener('dblclick', e => {
+        if (appMode !== 'TEST' || isFlying || playState !== 'ROUND_IDLE') return;
+        
+        // Raycast to terrain
+        let rect = renderer.domElement.getBoundingClientRect();
+        let mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        let my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        let rc = new THREE.Raycaster();
+        rc.setFromCamera(new THREE.Vector2(mx, my), camera);
+        let hits = rc.intersectObject(plane);
+        if (hits.length === 0) return;
+        
+        let pt = hits[0].point;
+        window.ballPos.x = pt.x;
+        window.ballPos.y = pt.y + 0.1;
+        window.ballPos.z = pt.z;
+        window.ballMesh.position.set(pt.x, pt.y + 0.1, pt.z);
+        window.ballMesh.visible = true;
+        
+        // Auto-detect putting distance
+        let hole = courseHoles[currentHoleIndex] || courseHoles[0];
+        if (hole && hole.flag) {
+            let distToFlag = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z).distanceTo(pt);
+            let isPutt = distToFlag < CAM.PUTT_THRESHOLD;
+            window.isPuttingMode = isPutt;
+            gameCamPhase = isPutt ? 'PUTT_AIM' : 'IDLE_AIM';
+            
+            if (window.aimTarget) window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z);
+            window.pinMesh = hole.flagMesh;
+        }
+        
+        // Set appropriate shot defaults based on distance
+        if (window.isPuttingMode) {
+            if(document.getElementById('in-speed')) document.getElementById('in-speed').value = '6';
+            if(document.getElementById('in-la')) document.getElementById('in-la').value = '1.5';
+            if(document.getElementById('in-backspin')) document.getElementById('in-backspin').value = '30';
+        } else {
+            if(document.getElementById('in-speed')) document.getElementById('in-speed').value = '130';
+            if(document.getElementById('in-la')) document.getElementById('in-la').value = '14';
+            if(document.getElementById('in-backspin')) document.getElementById('in-backspin').value = '2500';
+        }
+        if(document.getElementById('in-sidespin')) document.getElementById('in-sidespin').value = '0';
+        if(document.getElementById('in-hla')) document.getElementById('in-hla').value = '0';
+        
+        // Toast feedback
+        let toast = document.createElement('div');
+        toast.innerText = window.isPuttingMode ? '⛳ Boll placerad på green!' : '🏌️ Boll placerad!';
+        toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:10px 20px;border-radius:10px;font-weight:bold;font-size:14px;z-index:9999;pointer-events:none;';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s'; }, 1500);
+        setTimeout(() => toast.remove(), 2000);
+    });
 
     renderer.domElement.addEventListener('pointerdown', e => {
         if(appMode !== 'BUILD') return;
@@ -3713,56 +3765,7 @@
             }
             controls.enabled = false;
         } else if(currentTool === 'TEST_PUTT') {
-            if(e.button === 0 && lastHitPoint) {
-                console.log("DROP PUTT CLICKED!", lastHitPoint);
-                setMode('TEST');
-                let pos = lastHitPoint.clone();
-                window.ballPos.x = pos.x; 
-                window.ballPos.y = pos.y + 0.1; 
-                window.ballPos.z = pos.z;
-                
-                window.ballMesh.position.copy(window.ballPos);
-                window.ballMesh.visible = true;
-                
-                let targetPos = new THREE.Vector3(window.ballPos.x, window.ballPos.y, window.ballPos.z - 10);
-                let camOffset = new THREE.Vector3(0, 0.4, 2.5); 
-                
-                // BUG-01 FIX: Use currentHoleIndex instead of non-existent currentHole
-                if (courseHoles[currentHoleIndex] && courseHoles[currentHoleIndex].flag) {
-                    let fPos = courseHoles[currentHoleIndex].flag;
-                    targetPos.set(fPos.x, fPos.y, fPos.z);
-                    let dir = new THREE.Vector3().subVectors(window.ballPos, new THREE.Vector3(fPos.x, fPos.y, fPos.z));
-                    dir.y = 0;
-                    if(dir.lengthSq() > 0) {
-                        dir.normalize();
-                        camOffset = dir.multiplyScalar(2.5).add(new THREE.Vector3(0, 0.4, 0));
-                    }
-                    // BUG-06 FIX: Set pinMesh so cup physics work
-                    window.pinMesh = courseHoles[currentHoleIndex].flagMesh;
-                }
-                
-                camera.position.copy(window.ballPos).add(camOffset);
-                controls.target.copy(targetPos);
-                controls.update();
-                
-                window.isPuttingMode = true;
-                if(typeof window.greenBeads !== 'undefined') {
-                    if(typeof greenBeadsGroup !== 'undefined') {
-                        window.greenBeads.forEach(b => greenBeadsGroup.remove(b));
-                    }
-                    window.greenBeads = [];
-                }
-                
-                // FIX: Set putter-appropriate defaults instead of driver data
-                if(document.getElementById('in-speed')) document.getElementById('in-speed').value = '6';
-                if(document.getElementById('in-la')) document.getElementById('in-la').value = '1.5';
-                if(document.getElementById('in-backspin')) document.getElementById('in-backspin').value = '30';
-                if(document.getElementById('in-sidespin')) document.getElementById('in-sidespin').value = '0';
-                if(document.getElementById('in-hla')) document.getElementById('in-hla').value = '0';
-                
-                // Cache terrain biome data immediately for accurate lie detection
-                window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
-            }
+            // Legacy handler — no longer reachable from UI
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'SMART_GREEN' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP') {
             isSculpting = true;
             controls.enabled = false; 
@@ -3853,9 +3856,7 @@
         if(assetBudget) assetBudget.style.display = mode === 'BUILD' ? 'flex' : 'none';
         let biomeSelector = document.getElementById('biome-selector-container');
         if(biomeSelector) biomeSelector.style.display = mode === 'BUILD' ? 'flex' : 'none';
-        // DROP PUTT button only visible in BUILD mode
-        let dropPuttBtn = document.getElementById('tool-testputt');
-        if(dropPuttBtn) dropPuttBtn.style.display = mode === 'BUILD' ? 'flex' : 'none';
+
         
         let playControls = document.getElementById('play-controls');
         if (playControls) playControls.style.display = (mode === 'PLAY' || mode === 'TEST') ? 'flex' : 'none';
