@@ -669,9 +669,17 @@
                     config: config
                 })
             });
-            const data = await res.json();
+            
+            let data;
+            try {
+                data = await res.json();
+            } catch(jsonErr) {
+                const text = await res.text();
+                throw new Error(`Server returned non-JSON: ${res.status} ${text.substring(0, 100)}`);
+            }
+            
             if(data.error) {
-                alert("Error: " + data.error);
+                alert("Server error: " + data.error);
             } else {
                 allThemes[themeId] = config; // Update local cache
                 let msg = document.getElementById('theme-log');
@@ -680,7 +688,8 @@
                 logMsg(`Saved theme: ${themeId}`);
             }
         } catch(e) {
-            alert("Network error saving theme.");
+            alert("Fetch failed: " + e.message);
+            console.error("Save Theme Error:", e);
         }
     }
 
