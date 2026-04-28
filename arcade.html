@@ -445,16 +445,16 @@
         <div id="color-picker-group" class="prop-panel">
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Material Palette</label>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-                <div id="pal-ob" class="palette-btn active" style="background:#ef4444; position:relative;" onclick="setPaletteColor('ob', this)">OB <span onclick="event.stopPropagation(); window.openColorPicker('ob')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-bunker" class="palette-btn" style="background:#e0d8a4; color:#5c4b1a; position:relative;" onclick="setPaletteColor('bunker', this)">Bunker <span onclick="event.stopPropagation(); window.openColorPicker('bunker')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-waste" class="palette-btn" style="background:#c2af7c; color:#3d2e10; position:relative;" onclick="setPaletteColor('waste', this)">Waste <span onclick="event.stopPropagation(); window.openColorPicker('waste')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-tee" class="palette-btn" style="background:#7cb54c; color:#1a3a00; position:relative;" onclick="setPaletteColor('tee', this)">Tee Box <span onclick="event.stopPropagation(); window.openColorPicker('tee')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-green" class="palette-btn" style="background:#98ce68; color:#1a3a00; position:relative;" onclick="setPaletteColor('green', this)">Green <span onclick="event.stopPropagation(); window.openColorPicker('green')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-foregreen" class="palette-btn" style="background:#8bc45d; color:#1a3a00; position:relative;" onclick="setPaletteColor('foregreen', this)">Foregreen <span onclick="event.stopPropagation(); window.openColorPicker('foregreen')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-fairway" class="palette-btn" style="background:#7db952; color:#1a3a00; position:relative;" onclick="setPaletteColor('fairway', this)">Fairway <span onclick="event.stopPropagation(); window.openColorPicker('fairway')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-semi" class="palette-btn" style="background:#6b9e3d; position:relative;" onclick="setPaletteColor('semi', this)">Semi-Rough <span onclick="event.stopPropagation(); window.openColorPicker('semi')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-rough" class="palette-btn" style="background:#4a782b; position:relative;" onclick="setPaletteColor('rough', this)">Rough <span onclick="event.stopPropagation(); window.openColorPicker('rough')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
-                <div id="pal-fescue" class="palette-btn" style="background:#2d4c1a; position:relative;" onclick="setPaletteColor('fescue', this)">Fescue <span onclick="event.stopPropagation(); window.openColorPicker('fescue')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer;">⚙️</span></div>
+                <div id="pal-ob" class="palette-btn active" style="background:#ef4444; position:relative;" onclick="setPaletteColor('ob', this)">OB <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('ob')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-bunker" class="palette-btn" style="background:#e0d8a4; color:#5c4b1a; position:relative;" onclick="setPaletteColor('bunker', this)">Bunker <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('bunker')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-waste" class="palette-btn" style="background:#c2af7c; color:#3d2e10; position:relative;" onclick="setPaletteColor('waste', this)">Waste <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('waste')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-tee" class="palette-btn" style="background:#7cb54c; color:#1a3a00; position:relative;" onclick="setPaletteColor('tee', this)">Tee Box <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('tee')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-green" class="palette-btn" style="background:#98ce68; color:#1a3a00; position:relative;" onclick="setPaletteColor('green', this)">Green <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('green')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-foregreen" class="palette-btn" style="background:#8bc45d; color:#1a3a00; position:relative;" onclick="setPaletteColor('foregreen', this)">Foregreen <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('foregreen')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-fairway" class="palette-btn" style="background:#7db952; color:#1a3a00; position:relative;" onclick="setPaletteColor('fairway', this)">Fairway <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fairway')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-semi" class="palette-btn" style="background:#6b9e3d; position:relative;" onclick="setPaletteColor('semi', this)">Semi-Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('semi')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-rough" class="palette-btn" style="background:#4a782b; position:relative;" onclick="setPaletteColor('rough', this)">Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('rough')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-fescue" class="palette-btn" style="background:#2d4c1a; position:relative;" onclick="setPaletteColor('fescue', this)">Fescue <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fescue')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
             </div>
         </div>
 
@@ -1359,15 +1359,16 @@
             let btn = document.getElementById('pal-' + materialKey);
             if(btn) btn.style.background = picker.value;
             
-            // Uppdatera penselns färg om den är aktiv
-            if (window.currentBrushType === materialKey) {
-                window.currentBrushColor = parseInt(picker.value.replace('#', '0x'));
-                if(window.ghostBlock) window.ghostBlock.material.color.setHex(window.currentBrushColor);
-            }
-            
             // Byt pixlar på marken
             if (window.recolorTerrain) {
                 window.recolorTerrain(oldConfig, window.CURRENT_BIOME_CONFIG);
+            }
+            
+            // Uppdatera penseln om knappen redan var aktiv
+            if (btn && btn.classList.contains('active')) {
+                if (window.setPaletteColor) {
+                    window.setPaletteColor(materialKey, btn);
+                }
             }
             
             // Ändra Dropdown till CUSTOM
