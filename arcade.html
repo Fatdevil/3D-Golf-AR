@@ -387,8 +387,6 @@
     <div id="dropdown-menu">
         <button onclick="document.getElementById('publish-modal').style.display='flex'; toggleMenu();">☁️ Save / Publish</button>
         <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Clear Course</button>
-        <div style="height:1px; background:#475569; margin:5px 0;"></div>
-        <button onclick="performUndo(); toggleMenu();" style="color:#f87171;">↩️ Undo</button>
     </div>
     
     <script>
@@ -420,6 +418,8 @@
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-hole" onclick="setTool('HOLE')"><span style="font-size:16px;">🕳️</span> HOLE</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
+        <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
+        <button onclick="performUndo()" style="color:#f87171; grid-column:1 / -1;"><span style="font-size:16px;">↩️</span> UNDO</button>
     </div>
 
     <!-- PRO UI: HÖGER EGENSKAPSPANEL -->
