@@ -3295,7 +3295,7 @@
             let lieY = activeT.y + 0.3;
             if (typeof localGetTerrainAt === 'function') {
                 let surf = localGetTerrainAt(activeT.x, activeT.z);
-                if (surf) lieY = surf.y + 0.0213;
+                if (surf && surf.z !== undefined) lieY = surf.z + 0.0213;
             }
             p.teePosition = { x: activeT.x, y: lieY, z: activeT.z };
             p.lie = { x: activeT.x, y: lieY, z: activeT.z }; 
