@@ -1692,29 +1692,24 @@
                                         mat.onBeforeCompile = (shader) => {
                                             shader.vertexShader = shader.vertexShader.replace(
                                                 '#include <color_pars_vertex>',
-                                                '#include <color_pars_vertex>\n#ifdef USE_INSTANCING\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\n#endif'
+                                                '#include <color_pars_vertex>\n#ifdef USE_INSTANCING\nattribute vec3 instanceTrunkColor;\n#endif\nvarying vec3 vInstanceTrunkColor;'
                                             );
                                             shader.vertexShader = shader.vertexShader.replace(
                                                 '#include <color_vertex>',
-                                                '#include <color_vertex>\n#ifdef USE_INSTANCING\nvInstanceTrunkColor = instanceTrunkColor;\n#endif'
+                                                '#include <color_vertex>\n#ifdef USE_INSTANCING\nvInstanceTrunkColor = instanceTrunkColor;\n#else\nvInstanceTrunkColor = vec3(1.0);\n#endif'
                                             );
                                             shader.fragmentShader = shader.fragmentShader.replace(
                                                 '#include <color_pars_fragment>',
-                                                '#include <color_pars_fragment>\n#ifdef USE_INSTANCING\nvarying vec3 vInstanceTrunkColor;\n#endif'
+                                                '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;'
                                             );
                                             shader.fragmentShader = shader.fragmentShader.replace(
                                                 '#include <color_fragment>',
                                                 `
 #if defined( USE_COLOR_ALPHA )
     vec3 texC = diffuseColor.rgb;
-    bool isBrown = (texC.r > texC.g + 0.02) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
-    bool isGrey = abs(texC.r - texC.g) < 0.08 && abs(texC.g - texC.b) < 0.08 && texC.r < 0.6;
-    vec3 targetColor = vec3(1.0);
-    #ifdef USE_INSTANCING
-        targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
-    #else
-        targetColor = vColor.rgb;
-    #endif
+    bool isBrown = (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
+    bool isGrey = abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
+    vec3 targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
     float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
     if (tintStr > 0.02) {
         float lum = dot(texC, vec3(0.299, 0.587, 0.114));
@@ -1724,14 +1719,9 @@
     diffuseColor.a *= vColor.a;
 #elif defined( USE_COLOR )
     vec3 texC = diffuseColor.rgb;
-    bool isBrown = (texC.r > texC.g + 0.02) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
-    bool isGrey = abs(texC.r - texC.g) < 0.08 && abs(texC.g - texC.b) < 0.08 && texC.r < 0.6;
-    vec3 targetColor = vec3(1.0);
-    #ifdef USE_INSTANCING
-        targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
-    #else
-        targetColor = vColor;
-    #endif
+    bool isBrown = (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
+    bool isGrey = abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
+    vec3 targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
     float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
     if (tintStr > 0.02) {
         float lum = dot(texC, vec3(0.299, 0.587, 0.114));
