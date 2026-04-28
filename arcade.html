@@ -3883,6 +3883,19 @@
             controls.target.set(0, 0, -30);
             controls.update();
         } else if (mode === 'TEST') {
+            // === COURSE VALIDATION GATE ===
+            let validHole = courseHoles.find(h => h && h.flag && h.tees && (h.tees.yellow || h.tees.white || h.tees.red || h.tees.black));
+            if (!validHole) {
+                // Show inline toast instead of alert
+                let toast = document.createElement('div');
+                toast.innerHTML = '⚠️ Lägg till minst <b>1 hål</b> med <b>Tee</b> och <b>Flagga</b> för att testa!';
+                toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;padding:14px 28px;border-radius:12px;font-weight:bold;font-size:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);animation:fadeInUp 0.3s ease;';
+                document.body.appendChild(toast);
+                setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s'; }, 2500);
+                setTimeout(() => toast.remove(), 3000);
+                return; // Stay in BUILD mode
+            }
+            
             controls.enabled = true;
             ghostBlock.visible = false;
             playState = 'ROUND_IDLE';
