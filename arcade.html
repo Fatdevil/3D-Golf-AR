@@ -1677,10 +1677,10 @@
     const waterMat = new THREE.MeshLambertMaterial({ 
         color: 0x38bdf8, 
         transparent: true, 
-        opacity: 0.85, 
+        opacity: 0.95, 
         alphaMap: waterTex, 
         alphaTest: 0.01, 
-        depthWrite: false 
+        depthWrite: true 
     });
     const waterMesh = new THREE.Mesh(waterGeo, waterMat);
     waterMesh.rotation.x = -Math.PI / 2;
