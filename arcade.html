@@ -5339,6 +5339,28 @@
             }
         }
 
+        // === WIND-DRIVEN WATER WAVES ===
+        {
+            let wArr = waterGeo.attributes.position.array;
+            let windMph = window.currentWindMph || 0;
+            let windRad = (window.currentWindDir || 0) * Math.PI / 180;
+            let amp = Math.min(windMph * 0.004, 0.15);  // Wave height from wind (capped)
+            let t = performance.now() * 0.001;
+            
+            if (amp > 0.001) {
+                let wdx = Math.cos(windRad);
+                let wdy = Math.sin(windRad);
+                for (let i = 0; i < wArr.length; i += 3) {
+                    let baseZ = wArr[i + 2];
+                    if (baseZ > -90) { // Only animate visible water
+                        let phase = wArr[i] * wdx + wArr[i + 1] * wdy;
+                        wArr[i + 2] = baseZ + Math.sin(t * 2.5 + phase * 0.3) * amp;
+                    }
+                }
+                waterGeo.attributes.position.needsUpdate = true;
+            }
+        }
+
         renderer.clear();
         renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
         renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
