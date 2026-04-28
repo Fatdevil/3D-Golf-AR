@@ -39,37 +39,93 @@
 
     <div id="library-sidebar">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 10px;">
-            <h1 style="margin:0; border:none; padding:0;">Cloud Library</h1>
+            <h1 style="margin:0; border:none; padding:0;">Cloud Database</h1>
             <button onclick="window.location.href='index.html'" style="margin:0; padding:6px 12px; background:#475569; color:#f8fafc; font-size:11px; border-radius:4px;">⬅ HOME</button>
         </div>
-        <select id="lib-biome-filter" style="margin-bottom:10px; width:100%;" onchange="renderLibrary()">
-            <option value="ALL">All Biomes</option>
-            <option value="GLOBAL">Global</option>
-            <option value="DESERT">Desert</option>
-            <option value="SNOW">Snow</option>
-            <option value="MOON">Moon</option>
-            <option value="AUTUMN">Autumn</option>
-        </select>
         
-        <!-- BIOME WEIGHT CALCULATOR -->
-        <div id="biome-weight-calc" style="background:#0f172a; padding:10px; border-radius:6px; margin-bottom:10px; font-size:11px; border:1px solid #475569; display:none;">
-            <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:4px;">
-                <span>Global Assets:</span> <span id="weight-global" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <button id="tab-btn-assets" onclick="switchLibTab('ASSETS')" style="flex:1; margin:0; padding:8px; background:#38bdf8; color:#0f172a; font-size:12px;">📦 Assets</button>
+            <button id="tab-btn-themes" onclick="switchLibTab('THEMES')" style="flex:1; margin:0; padding:8px; background:#334155; color:#94a3b8; font-size:12px;">🎨 Themes</button>
+        </div>
+
+        <!-- ASSET TAB -->
+        <div id="tab-content-assets" style="display:flex; flex-direction:column;">
+            <select id="lib-biome-filter" style="margin-bottom:10px; width:100%;" onchange="renderLibrary()">
+                <option value="ALL">All Biomes</option>
+                <option value="GLOBAL">Global</option>
+                <option value="DESERT">Desert</option>
+                <option value="SNOW">Snow</option>
+                <option value="MOON">Moon</option>
+                <option value="AUTUMN">Autumn</option>
+            </select>
+            
+            <!-- BIOME WEIGHT CALCULATOR -->
+            <div id="biome-weight-calc" style="background:#0f172a; padding:10px; border-radius:6px; margin-bottom:10px; font-size:11px; border:1px solid #475569; display:none;">
+                <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:4px;">
+                    <span>Global Assets:</span> <span id="weight-global" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:6px;">
+                    <span id="weight-biome-label">Biome Assets:</span> <span id="weight-biome" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
+                </div>
+                <div style="height:1px; background:#334155; margin-bottom:6px;"></div>
+                <div style="display:flex; justify-content:space-between; color:#38bdf8; font-weight:bold;">
+                    <span>TOTAL LOAD:</span> <span id="weight-total">0.0 / 40.0 MB</span>
+                </div>
+                <div style="width:100%; height:4px; background:#334155; border-radius:2px; margin-top:6px; overflow:hidden;">
+                    <div id="weight-bar" style="width:0%; height:100%; background:#4ade80;"></div>
+                </div>
             </div>
-            <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:6px;">
-                <span id="weight-biome-label">Biome Assets:</span> <span id="weight-biome" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
-            </div>
-            <div style="height:1px; background:#334155; margin-bottom:6px;"></div>
-            <div style="display:flex; justify-content:space-between; color:#38bdf8; font-weight:bold;">
-                <span>TOTAL LOAD:</span> <span id="weight-total">0.0 / 40.0 MB</span>
-            </div>
-            <div style="width:100%; height:4px; background:#334155; border-radius:2px; margin-top:6px; overflow:hidden;">
-                <div id="weight-bar" style="width:0%; height:100%; background:#4ade80;"></div>
+
+            <div id="library-list" style="display:flex; flex-direction:column; gap:8px;">
+                <div style="color:#94a3b8; font-size:12px;">Loading assets...</div>
             </div>
         </div>
 
-        <div id="library-list" style="display:flex; flex-direction:column; gap:8px;">
-            <div style="color:#94a3b8; font-size:12px;">Loading assets...</div>
+        <!-- THEMES TAB -->
+        <div id="tab-content-themes" style="display:none; flex-direction:column; gap:10px; overflow-y:auto; padding-right:5px;">
+            <div class="form-group">
+                <label>Theme to Edit</label>
+                <select id="theme-selector" onchange="loadSelectedThemeUI()">
+                    <option value="GLOBAL">Global (Default Base)</option>
+                    <option value="AUTUMN">Autumn</option>
+                    <option value="DESERT">Desert</option>
+                    <option value="SNOW">Snow</option>
+                    <option value="MOON">Moon</option>
+                </select>
+            </div>
+            
+            <div class="form-group" style="margin-top:5px;">
+                <label>Sky / Fog Color</label>
+                <input type="color" id="theme-sky" value="#87ceeb" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            <div class="form-group">
+                <label>Fairway Color</label>
+                <input type="color" id="theme-fairway" value="#3a5a22" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            <div class="form-group">
+                <label>Rough Color</label>
+                <input type="color" id="theme-rough" value="#2d4a18" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            <div class="form-group">
+                <label>Green Color</label>
+                <input type="color" id="theme-green" value="#4a8522" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            <div class="form-group">
+                <label>Sand Color</label>
+                <input type="color" id="theme-sand" value="#d4b872" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            <div class="form-group">
+                <label>Water Color</label>
+                <input type="color" id="theme-water" value="#38bdf8" style="width:100%; height:30px; cursor:pointer;">
+            </div>
+            
+            <div class="form-group" style="margin-top:10px;">
+                <label>Admin Password</label>
+                <input type="password" id="theme-password" placeholder="golfadmin123">
+            </div>
+            
+            <button onclick="saveThemeToCloud()" style="background:#10b981; color:#fff; margin-top:0;">💾 Save Theme</button>
+            <div id="theme-log" style="font-size:11px; color:#4ade80; display:none; text-align:center;">Theme saved successfully!</div>
         </div>
     </div>
 
@@ -393,8 +449,129 @@
         
         // --- CLOUD LIBRARY LOGIC ---
         let allLibraryAssets = [];
+    let allThemes = {};
+
+    function switchLibTab(tab) {
+        let btnAssets = document.getElementById('tab-btn-assets');
+        let btnThemes = document.getElementById('tab-btn-themes');
+        let contentAssets = document.getElementById('tab-content-assets');
+        let contentThemes = document.getElementById('tab-content-themes');
         
-        async function fetchLibrary() {
+        if (tab === 'ASSETS') {
+            btnAssets.style.background = '#38bdf8'; btnAssets.style.color = '#0f172a';
+            btnThemes.style.background = '#334155'; btnThemes.style.color = '#94a3b8';
+            contentAssets.style.display = 'flex';
+            contentThemes.style.display = 'none';
+            logMsg("Switched to Asset Library.");
+        } else {
+            btnThemes.style.background = '#38bdf8'; btnThemes.style.color = '#0f172a';
+            btnAssets.style.background = '#334155'; btnAssets.style.color = '#94a3b8';
+            contentThemes.style.display = 'flex';
+            contentAssets.style.display = 'none';
+            loadSelectedThemeUI();
+            logMsg("Switched to Theme Settings.");
+        }
+    }
+
+    async function fetchThemes() {
+        try {
+            const res = await fetch('/api/biomes');
+            if(res.ok) {
+                const data = await res.json();
+                data.forEach(t => {
+                    allThemes[t.id] = t.config;
+                });
+            }
+        } catch(e) {
+            console.error("Failed to fetch themes:", e);
+        }
+    }
+
+    function loadSelectedThemeUI() {
+        let themeId = document.getElementById('theme-selector').value;
+        let config = allThemes[themeId] || {};
+        
+        // Sätt default färger om de inte finns
+        document.getElementById('theme-sky').value = config.skyColor || '#87ceeb';
+        document.getElementById('theme-fairway').value = config.fairwayColor || '#3a5a22';
+        document.getElementById('theme-rough').value = config.roughColor || '#2d4a18';
+        document.getElementById('theme-green').value = config.greenColor || '#4a8522';
+        document.getElementById('theme-sand').value = config.sandColor || '#d4b872';
+        document.getElementById('theme-water').value = config.waterColor || '#38bdf8';
+        
+        // Instant preview in the canvas!
+        updateCanvasPreview(config);
+    }
+
+    function updateCanvasPreview(config) {
+        if(scene) {
+            scene.background = new THREE.Color(config.skyColor || '#87ceeb');
+            // We could also update the plane material color to roughColor
+            if(plane && plane.material) {
+                plane.material.color.setHex(parseInt((config.roughColor || '#2d4a18').replace('#','0x')));
+            }
+        }
+    }
+
+    // Add event listeners to color inputs to update preview live
+    ['sky','fairway','rough','green','sand','water'].forEach(key => {
+        let el = document.getElementById('theme-' + key);
+        if(el) {
+            el.addEventListener('input', () => {
+                let config = {
+                    skyColor: document.getElementById('theme-sky').value,
+                    fairwayColor: document.getElementById('theme-fairway').value,
+                    roughColor: document.getElementById('theme-rough').value,
+                    greenColor: document.getElementById('theme-green').value,
+                    sandColor: document.getElementById('theme-sand').value,
+                    waterColor: document.getElementById('theme-water').value
+                };
+                updateCanvasPreview(config);
+            });
+        }
+    });
+
+    async function saveThemeToCloud() {
+        let password = document.getElementById('theme-password').value;
+        if (!password) { alert("Admin password required!"); return; }
+        
+        let themeId = document.getElementById('theme-selector').value;
+        let config = {
+            skyColor: document.getElementById('theme-sky').value,
+            fairwayColor: document.getElementById('theme-fairway').value,
+            roughColor: document.getElementById('theme-rough').value,
+            greenColor: document.getElementById('theme-green').value,
+            sandColor: document.getElementById('theme-sand').value,
+            waterColor: document.getElementById('theme-water').value
+        };
+        
+        try {
+            const res = await fetch('/api/biomes', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    adminPassword: password,
+                    id: themeId,
+                    name: themeId,
+                    config: config
+                })
+            });
+            const data = await res.json();
+            if(data.error) {
+                alert("Error: " + data.error);
+            } else {
+                allThemes[themeId] = config; // Update local cache
+                let msg = document.getElementById('theme-log');
+                msg.style.display = 'block';
+                setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                logMsg(`Saved theme: ${themeId}`);
+            }
+        } catch(e) {
+            alert("Network error saving theme.");
+        }
+    }
+
+    async function fetchLibrary() {
             try {
                 const res = await fetch('/api/assets');
                 allLibraryAssets = await res.json();
@@ -563,6 +740,7 @@
         }
         
         // Load library on start
+        fetchThemes();
         fetchLibrary();
 
         // Koppla sliders till uppdatering
