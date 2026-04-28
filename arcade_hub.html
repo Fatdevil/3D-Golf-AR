@@ -8,151 +8,302 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
 
 body {
-  margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc;
+  margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #0b0f19; color: #f8fafc;
   min-height: 100vh;
-  background-image: radial-gradient(circle at 50% 0%, rgba(234, 179, 8, 0.15), transparent 40%),
-                    radial-gradient(circle at 100% 100%, rgba(239, 68, 68, 0.1), transparent 30%);
   overflow-x: hidden;
+  display: flex; flex-direction: column;
 }
-.max-w { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
-.header .logo { font-size: 32px; font-weight: 900; letter-spacing: -1px; background: linear-gradient(135deg, #facc15, #ef4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display:flex; align-items:center; gap:10px;}
+
+.max-w { max-width: 1400px; width: 100%; margin: 0 auto; padding: 40px 40px; box-sizing: border-box; flex: 1; display: flex; flex-direction: column; }
+
+/* HEADER */
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.back-btn { display: inline-block; color: #94a3b8; text-decoration: none; font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; transition: color 0.2s; margin-bottom: 10px; }
+.back-btn:hover { color: #fff; }
+.header-title { font-size: 42px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; color: rgba(255,255,255,0.9); margin:0;}
+
 .profile-chip { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
 .profile-avatar { width: 36px; height: 36px; border-radius: 50%; background: #eab308; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #0f172a; }
-.grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-@media(max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
-.card { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; padding: 30px; backdrop-filter: blur(20px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; overflow: hidden; }
-.card h2 { margin: 0 0 20px 0; font-weight: 800; font-size: 24px; color: #e2e8f0; }
 
-.course-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 16px; margin-bottom: 12px; transition: all 0.2s; cursor: pointer; border: 1px solid transparent; }
-.course-item:hover { background: rgba(234,179,8,0.1); border-color: rgba(234,179,8,0.3); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(234,179,8,0.15);}
-.course-info h4 { margin: 0 0 4px 0; font-size: 16px; color: #fff; }
-.course-info p { margin: 0; font-size: 12px; color: #94a3b8; }
-.btn-play { background: #eab308; color: #0f172a; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; transition: transform 0.1s; }
+/* TRACKMAN GRID */
+.trackman-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  flex: 1; /* Fills remaining height */
+  min-height: 500px;
+}
+
+@media(max-width: 1100px) { .trackman-grid { grid-template-columns: repeat(2, 1fr); } }
+@media(max-width: 600px) { .trackman-grid { grid-template-columns: 1fr; } }
+
+.tm-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  background-color: #1e293b;
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.tm-card:hover {
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.1);
+  z-index: 10;
+}
+
+.tm-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(to top, rgba(15,23,42,1) 0%, rgba(15,23,42,0.6) 30%, rgba(15,23,42,0) 100%);
+  pointer-events: none;
+}
+
+.tm-content {
+  position: relative;
+  z-index: 2;
+  padding: 30px;
+  text-align: center;
+}
+
+.tm-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(5px);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 15px;
+}
+
+.tm-card h2 {
+  font-size: 38px;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin: 0 0 10px 0;
+  color: #fff;
+  letter-spacing: -1px;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.tm-card p {
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* MODALS */
+.tm-modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(11, 15, 25, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  overflow-y: auto;
+  padding: 40px 20px;
+}
+
+.tm-modal-content {
+  max-width: 800px;
+  margin: 0 auto;
+  background: #1e293b;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 24px;
+  padding: 40px;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  animation: modalIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tm-close {
+  position: absolute;
+  top: 20px; right: 30px;
+  background: none; border: none;
+  color: #64748b; font-size: 40px; font-weight: 300;
+  cursor: pointer; transition: color 0.2s;
+}
+.tm-close:hover { color: #fff; }
+
+/* LIST ITEMS */
+.course-item { display: flex; align-items: center; justify-content: space-between; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 16px; margin-bottom: 12px; transition: all 0.2s; border: 1px solid transparent; }
+.course-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); transform: translateY(-2px); }
+.course-info h4 { margin: 0 0 6px 0; font-size: 18px; color: #fff; font-weight: 800; }
+.course-info p { margin: 0; font-size: 13px; color: #94a3b8; }
+
+.btn-play { background: #eab308; color: #0f172a; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; transition: transform 0.1s, filter 0.2s; }
+.btn-play:hover { filter: brightness(1.1); }
 .btn-play:active { transform: scale(0.95); }
-
-.action-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; border-radius: 20px; text-decoration: none; color: #fff; font-weight: 900; font-size: 18px; text-align: center; gap: 10px; transition: all 0.2s; border: 2px solid transparent; }
-.action-btn.creator { background: linear-gradient(135deg, rgba(56,189,248,0.1), rgba(59,130,246,0.2)); border-color: rgba(56,189,248,0.4); }
-.action-btn.creator:hover { background: rgba(56,189,248,0.3); transform: translateY(-3px); box-shadow: 0 10px 30px rgba(56,189,248,0.3); }
-
-.icon-large { font-size: 32px; }
 
 /* LM Status globalt */
 #lm-status { position:fixed; bottom: 20px; right: 20px; background: rgba(15,23,42,0.9); padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; color: #94a3b8; z-index: 1000; display:flex; align-items:center; gap: 8px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-.back-btn { display: flex; align-items: center; gap: 8px; color: #94a3b8; text-decoration: none; font-weight: 700; transition: color 0.2s; }
-.back-btn:hover { color: #fff; }
+
+/* Logo i botten */
+.footer-logo { text-align: center; margin-top: 30px; font-weight: 900; font-size: 20px; letter-spacing: 4px; color: rgba(255,255,255,0.1); }
 </style>
 </head>
 <body>
 
 <div class="max-w">
   <header class="header">
-    <div style="display:flex; flex-direction:column; gap:8px;">
-        <a href="hub.html" class="back-btn">← Tillbaka till GOLF OS</a>
-        <div class="logo">👾 GOLF OS ARCADE</div>
+    <div>
+        <a href="hub.html" class="back-btn">← GOLF OS</a>
+        <h1 class="header-title">Select Activity</h1>
     </div>
     <div class="profile-chip">
       <div class="profile-avatar">ST</div>
       <div>
-        <div style="font-weight: 800; font-size: 14px;">Stellan</div>
+        <div style="font-weight: 800; font-size: 14px; color:#fff;">Stellan</div>
         <div style="font-size: 11px; color:#94a3b8;">Arcade Player</div>
       </div>
     </div>
   </header>
 
-  <div class="grid-layout">
-    <!-- Vänster kolumn: Intro & Bygga -->
-    <div style="display: flex; flex-direction: column; gap: 20px;">
-        <div class="card" style="padding: 30px;">
-          <h1 style="font-size:32px; margin:0 0 10px 0; color:#fff;">Welcome to the Madness.</h1>
-          <p style="color:#cbd5e1; font-size:16px; line-height:1.5; margin:0;">
-            Arcade-läget bjuder på galen fysik, extrema boosts och vansinniga bandesign. Bygg från grunden eller spela communityns banor!
-          </p>
-        </div>
-        
-        <div class="card" style="padding: 30px; display:flex; flex-direction:column; gap:15px;">
-           <a href="#" onclick="if(confirm('Detta kastar din eventuella osparade arbetskopia. Är du redo för ett blankt papper?')) window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'" class="action-btn creator" style="padding: 20px; font-size:20px;">
-             <span class="icon-large" style="font-size: 32px;">🏗️</span>
-             SKAPA NY ARCADE-BANA
-             <span style="font-weight: 600; font-size: 12px; color:#93c5fd; margin-top: 5px;">Klassiskt fritt skulpterande</span>
-           </a>
-        </div>
+  <div class="trackman-grid">
+    
+    <!-- PRACTICE -->
+    <div class="tm-card" style="background-image: url('golf_practice.png');">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="color:#fff;">Coming Soon</div>
+         <h2>Practice</h2>
+         <p>Target practice and launch monitor warm-up.</p>
+      </div>
+    </div>
+    
+    <!-- COURSES -->
+    <div class="tm-card" style="background-image: url('golf_courses.png');" onclick="openModal('modal-courses')">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="background:#eab308; color:#0f172a;">Community</div>
+         <h2 style="color:#fde047;">Courses</h2>
+         <p>Play your drafts and challenge the world.</p>
+      </div>
     </div>
 
-    <!-- Höger kolumn: Spela Banor -->
-    <div class="card" id="play-section" style="border-top: 4px solid #ef4444;">
-        <h2 style="font-size:24px; color:#f8fafc; display:flex; align-items:center; gap:10px;">🏌️ Spela Banor & Utkast</h2>
-        <p style="color:#94a3b8; font-size:14px; margin-bottom: 25px;">Fortsätt på dina utkast eller spela andras banor!</p>
-        
-        <div id="course-list">
-          <div id="drafts-container"></div>
-          
-          <div style="margin: 25px 0; height:1px; background:rgba(255,255,255,0.1);"></div>
-          <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase;">Moln-Banor (Community)</h3>
-          
-          <div id="ugc-container">
-             <!-- Fetched from API -->
-             <div style="color:#94a3b8; text-align:center; padding:20px;">Laddar moln-banor...</div>
-          </div>
-        </div>
+    <!-- BUILD -->
+    <div class="tm-card" style="background-image: url('golf_build.png');" onclick="openModal('modal-build')">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="background:#38bdf8; color:#0f172a;">Editor</div>
+         <h2 style="color:#e0f2fe;">Build</h2>
+         <p>Sculpt, build and publish your own crazy courses.</p>
+      </div>
     </div>
+
+    <!-- GAMES -->
+    <div class="tm-card" style="background-image: url('golf_games.png');">
+      <div class="tm-overlay"></div>
+      <div class="tm-content">
+         <div class="tm-badge" style="color:#fff;">Coming Soon</div>
+         <h2>Games</h2>
+         <p>Neon-putting, moongolf, and party challenges.</p>
+      </div>
+    </div>
+
   </div>
+  
+  <div class="footer-logo">GOLF OS ARCADE</div>
 </div>
 
+<!-- MODAL: BUILD -->
+<div id="modal-build" class="tm-modal" onclick="if(event.target===this) closeModal('modal-build')">
+   <div class="tm-modal-content">
+      <button class="tm-close" onclick="closeModal('modal-build')">&times;</button>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">Build Mode</h2>
+      <p style="color:#94a3b8; margin-bottom:30px;">Create a new course or continue working on a saved draft.</p>
+      
+      <button class="btn-play" style="width:100%; font-size:18px; padding:20px; margin-bottom:30px; background:#38bdf8; color:#0f172a;" onclick="if(confirm('Kastar osparad data. Nytt projekt?')) window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'">
+        + CREATE NEW COURSE
+      </button>
+      
+      <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase; margin-bottom:15px;">Your Drafts</h3>
+      <div id="drafts-container"></div>
+   </div>
+</div>
+
+<!-- MODAL: COURSES -->
+<div id="modal-courses" class="tm-modal" onclick="if(event.target===this) closeModal('modal-courses')">
+   <div class="tm-modal-content">
+      <button class="tm-close" onclick="closeModal('modal-courses')">&times;</button>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">Play Courses</h2>
+      <p style="color:#94a3b8; margin-bottom:30px;">Discover community creations.</p>
+      
+      <div id="ugc-container">
+         <div style="color:#94a3b8; text-align:center; padding:20px;">Laddar moln-banor...</div>
+      </div>
+   </div>
+</div>
+
+<!-- LM STATUS -->
 <div id="lm-status">
    <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
    <span id="lm-status-text">LM Frånkopplad</span>
 </div>
 
 <script>
+function openModal(id) { document.getElementById(id).style.display = 'block'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
 function playCourse(courseCode) {
     let url = "arcade.html?v=" + Date.now() + "&autorun=setup";
-    if(courseCode) {
-        url += "&course=" + courseCode;
-    }
+    if(courseCode) { url += "&course=" + courseCode; }
     window.location.href = url;
 }
 
 function loadDrafts() {
     let drafts = JSON.parse(localStorage.getItem('golf_os_my_drafts') || "[]");
     let hasLocalCopy = localStorage.getItem('arcade_custom_level') !== null;
-    
     let html = '';
     
     if (hasLocalCopy) {
         html += `
         <div class="course-item" style="border-color:#eab308; background:rgba(234,179,8,0.1);">
             <div class="course-info">
-              <h4 style="color:#fde047; font-size: 18px;">⚠️ Snabbutkast (WIP)</h4>
+              <h4 style="color:#fde047;">⚠️ Snabbutkast (WIP)</h4>
               <p>Din absolut senaste session i editor</p>
             </div>
             <div style="display:flex; gap:10px;">
-                <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build'">Bygg</button>
-                <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('')">Spela</button>
+                <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build'">Edit</button>
+                <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('')">Play</button>
             </div>
         </div>`;
     }
     
     if (drafts.length > 0) {
-        html += `<h3 style="color:#94a3b8; font-size:14px; margin-top:20px; margin-bottom:10px; text-transform:uppercase;">Dina Sparade Utkast (Moln)</h3>`;
         drafts.reverse().forEach(d => {
              let dDate = new Date(d.date).toLocaleDateString();
              html += `
-             <div class="course-item" style="border-color:#38bdf8; background:rgba(56,189,248,0.1);">
+             <div class="course-item">
                 <div class="course-info">
-                  <h4 style="color:#93c5fd; font-size: 16px;">${d.name}</h4>
+                  <h4>${d.name}</h4>
                   <p>Sparat: ${dDate}</p>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=${d.code}'">Bygg</button>
-                    <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('${d.code}')">Spela</button>
+                    <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=${d.code}'">Edit</button>
+                    <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('${d.code}')">Play</button>
                 </div>
              </div>`;
         });
     }
 
     if (!hasLocalCopy && drafts.length === 0) {
-        html = "<p style='color:#94a3b8; font-size:14px;'>Du har inga pågående utkast. Klicka på Skapa Ny Bana för att börja!</p>";
+        html += "<p style='color:#94a3b8; font-size:14px; text-align:center;'>No drafts found.</p>";
     }
     
     let container = document.getElementById('drafts-container');
@@ -163,9 +314,7 @@ async function loadUGC() {
     try {
         let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses');
         let courses = await res.json();
-        
         let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
-        
         let html = '';
         courses.forEach(c => {
             let isLiked = likedLocal.includes(c.share_code);
@@ -173,29 +322,26 @@ async function loadUGC() {
             let formattedDate = new Date(c.created_at).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
             
             html += `
-            <div class="course-item" style="border:1px solid rgba(239, 68, 68, 0.3); align-items:center;">
+            <div class="course-item">
               <div class="course-info" style="flex:1;">
-                <h4 style="font-size:18px; color:#f8fafc;">${c.name}</h4>
+                <h4>${c.name}</h4>
                 <p>by <span style="color:#e2e8f0;">${c.author}</span> • Code: <strong>${c.share_code}</strong> • ${formattedDate}</p>
               </div>
               <div style="display:flex; gap:15px; align-items:center;">
-                  <div style="text-align:center; cursor:pointer; min-width:40px; transition: transform 0.2s;" onclick="${isLiked ? '' : `likeCourse(event, '${c.share_code}')`}" class="like-btn" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                  <div style="text-align:center; cursor:pointer; min-width:40px; transition: transform 0.2s;" onclick="${isLiked ? '' : `likeCourse(event, '${c.share_code}')`}" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
                       <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:20px;">❤️</div>
                       <div id="likes-${c.share_code}" style="font-size:12px; color:#cbd5e1; font-weight:bold;">${c.likes || 0}</div>
                   </div>
-                  <button class="btn-play" style="background:#ef4444; color:#fff;" onclick="playCourse('${c.share_code}')">Spela</button>
+                  <button class="btn-play" style="background:#ef4444; color:#fff;" onclick="playCourse('${c.share_code}')">Play</button>
               </div>
-            </div>
-            `;
+            </div>`;
         });
         
         if (courses.length === 0) {
            html = "<div style='color:#94a3b8; padding:20px; text-align:center;'>Inga publicerade banor hittades.</div>";
         }
-        
         document.getElementById('ugc-container').innerHTML = html;
     } catch(e) {
-        console.error("Error loading Cloud Courses:", e);
         document.getElementById('ugc-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">Kunde inte ladda banor från nätverket. Servern kan vara nere.</div>`;
     }
 }
@@ -215,7 +361,7 @@ async function likeCourse(event, code) {
     
     try {
         await fetch('https://3d-golf-ar-production.up.railway.app/api/courses/'+code+'/like', {method: 'POST'});
-    } catch(e) { console.error("Like failed", e); }
+    } catch(e) {}
 }
 
 // LM BRYGGE STATUS KOD
