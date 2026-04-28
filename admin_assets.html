@@ -47,6 +47,24 @@
             <option value="MOON">Moon</option>
             <option value="AUTUMN">Autumn</option>
         </select>
+        
+        <!-- BIOME WEIGHT CALCULATOR -->
+        <div id="biome-weight-calc" style="background:#0f172a; padding:10px; border-radius:6px; margin-bottom:10px; font-size:11px; border:1px solid #475569; display:none;">
+            <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:4px;">
+                <span>Global Assets:</span> <span id="weight-global" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; color:#94a3b8; margin-bottom:6px;">
+                <span id="weight-biome-label">Biome Assets:</span> <span id="weight-biome" style="color:#f8fafc; font-weight:bold;">0.0 MB</span>
+            </div>
+            <div style="height:1px; background:#334155; margin-bottom:6px;"></div>
+            <div style="display:flex; justify-content:space-between; color:#38bdf8; font-weight:bold;">
+                <span>TOTAL LOAD:</span> <span id="weight-total">0.0 / 40.0 MB</span>
+            </div>
+            <div style="width:100%; height:4px; background:#334155; border-radius:2px; margin-top:6px; overflow:hidden;">
+                <div id="weight-bar" style="width:0%; height:100%; background:#4ade80;"></div>
+            </div>
+        </div>
+
         <div id="library-list" style="display:flex; flex-direction:column; gap:8px;">
             <div style="color:#94a3b8; font-size:12px;">Loading assets...</div>
         </div>
@@ -389,11 +407,63 @@
             
             if (allLibraryAssets.length === 0) {
                 list.innerHTML = '<div style="color:#94a3b8; font-size:12px;">No custom assets found.</div>';
+                document.getElementById('biome-weight-calc').style.display = 'none';
                 return;
             }
             
             const filter = document.getElementById('lib-biome-filter').value;
             
+            // --- WEIGHT CALCULATION ---
+            let globalWeight = 0;
+            let biomeWeight = 0;
+            
+            allLibraryAssets.forEach(a => {
+                const size = parseFloat(a.config?.fileSizeMB) || 0;
+                const biomes = a.config?.biomes || [];
+                
+                if (biomes.includes('GLOBAL')) {
+                    globalWeight += size;
+                } else if (filter !== 'ALL' && filter !== 'GLOBAL' && biomes.includes(filter)) {
+                    biomeWeight += size;
+                }
+            });
+            
+            const calcDiv = document.getElementById('biome-weight-calc');
+            if (filter === 'ALL') {
+                calcDiv.style.display = 'none';
+            } else {
+                calcDiv.style.display = 'block';
+                document.getElementById('weight-global').innerText = globalWeight.toFixed(2) + ' MB';
+                
+                if (filter === 'GLOBAL') {
+                    document.getElementById('weight-biome-label').innerText = 'Biome Assets:';
+                    document.getElementById('weight-biome').innerText = '0.00 MB';
+                } else {
+                    document.getElementById('weight-biome-label').innerText = filter + ' Assets:';
+                    document.getElementById('weight-biome').innerText = biomeWeight.toFixed(2) + ' MB';
+                }
+                
+                const totalLoad = globalWeight + biomeWeight;
+                const totalSpan = document.getElementById('weight-total');
+                totalSpan.innerText = totalLoad.toFixed(2) + ' / 40.0 MB';
+                
+                const bar = document.getElementById('weight-bar');
+                const pct = (totalLoad / 40.0) * 100;
+                bar.style.width = Math.min(pct, 100) + '%';
+                
+                if (totalLoad < 20) {
+                    bar.style.background = '#4ade80'; // Green
+                    totalSpan.style.color = '#38bdf8';
+                } else if (totalLoad < 35) {
+                    bar.style.background = '#fbbf24'; // Yellow
+                    totalSpan.style.color = '#fbbf24';
+                } else {
+                    bar.style.background = '#ef4444'; // Red
+                    totalSpan.style.color = '#ef4444';
+                }
+            }
+            // -------------------------
+
             const filteredAssets = allLibraryAssets.filter(a => {
                 if (filter === 'ALL') return true;
                 if (!a.config || !a.config.biomes) return false;

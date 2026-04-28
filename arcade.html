@@ -356,15 +356,9 @@
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
             <button id="btn-mode-play" class="sys-btn" onclick="setMode('TEST')">🔥 TESTA BANAN</button>
         </div>
-        <!-- CENTER: Asset Budget (BUILD only) -->
+        <!-- CENTER: Asset Budget removed (Managed by Admin) -->
         <div class="top-center">
-            <div id="memory-budget-container" style="background: rgba(15,23,42,0.9); padding: 6px 16px; border-radius: 20px; border: 1px solid #eab308; display: flex; align-items: center; gap: 12px; pointer-events: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-                <span style="color: #eab308; font-size: 10px; font-weight:900; letter-spacing:1px;">ASSETS</span>
-                <div style="width: 120px; height: 8px; background: #334155; border-radius: 4px; overflow: hidden;">
-                    <div id="memory-budget-bar" style="width: 0%; height: 100%; background: #4ade80; transition: width 0.3s, background 0.3s;"></div>
-                </div>
-                <span id="memory-budget-text" style="color: #fff; font-size: 12px; font-weight: 900;">0 / 40</span>
-            </div>
+            <!-- Asset budget UI removed -->
         </div>
         <!-- RIGHT: Environment + utilities -->
         <div class="top-right">
@@ -1516,30 +1510,7 @@
     // --- MEMORY BUDGET LOGIC ---
     window.MAX_ASSET_BUDGET_MB = 40.0;
     window.updateMemoryBudget = function() {
-        let loadedMB = 0;
-        for(let k in window.customModels) {
-            // Count unique loaded assets (ignore 'LOADING' state or failures)
-            if(window.customModels[k] && window.customModels[k] !== 'LOADING') {
-                if (window.ASSET_REGISTRY[k] && window.ASSET_REGISTRY[k].fileSizeMB) {
-                    loadedMB += window.ASSET_REGISTRY[k].fileSizeMB;
-                } else {
-                    loadedMB += 1.0; // fallback till 1.0 MB för okända/hårdkodade assets
-                }
-            }
-        }
-        
-        let pct = (loadedMB / window.MAX_ASSET_BUDGET_MB) * 100;
-        let bar = document.getElementById('memory-budget-bar');
-        let txt = document.getElementById('memory-budget-text');
-        
-        if(bar && txt) {
-            bar.style.width = Math.min(pct, 100) + '%';
-            txt.innerText = loadedMB.toFixed(1) + ' / ' + window.MAX_ASSET_BUDGET_MB.toFixed(1) + ' MB';
-            
-            if (pct < 50) bar.style.background = '#4ade80'; // Grönt
-            else if (pct < 85) bar.style.background = '#fbbf24'; // Gult (Varning)
-            else bar.style.background = '#ef4444'; // Rött (Kritisk)
-        }
+        // Obsolete: Admin handles budget per biome.
     };
     
     // Preload models
