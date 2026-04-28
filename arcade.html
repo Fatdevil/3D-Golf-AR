@@ -68,19 +68,20 @@
   
   .controls {
       position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      box-sizing: border-box;
-      background: rgba(15, 23, 42, 0.95);
-      padding: 20px;
-      border-top-left-radius: 20px;
-      border-top-right-radius: 20px;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.90);
+      padding: 10px 20px;
+      border-radius: 20px;
       display: flex;
       gap: 10px;
       justify-content: center;
       align-items: center;
       pointer-events: auto;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      z-index: 50;
   }
   
   .controls input {
@@ -552,16 +553,18 @@
     <div class="controls" id="play-controls">
         <button id="btn-start-round" onclick="startRound()" style="background:#38bdf8; color:#0f172a; padding:12px 30px; font-size:18px; border-radius:8px; font-weight:900; border:none; cursor:pointer;">⛳ START ROUND</button>
         <div id="play-tools" style="display:none; align-items:center; gap:10px;">
-            <input type="number" id="in-speed" value="130" title="Ball Speed (mph)" style="width:65px;">
-            <input type="number" id="in-la" value="14" title="Launch Angle (deg)" style="width:60px;">
-            <input type="number" id="in-hla" value="0" title="Azimuth / HLA (deg)" style="width:60px;">
-            <input type="number" id="in-backspin" value="2500" title="Backspin (rpm)" style="width:70px;">
-            <input type="number" id="in-sidespin" value="0" title="Sidespin (rpm)" style="width:70px;">
+            <div id="manual-tools" style="display:flex; align-items:center; gap:10px;">
+                <input type="number" id="in-speed" value="130" title="Ball Speed (mph)" style="width:65px;">
+                <input type="number" id="in-la" value="14" title="Launch Angle (deg)" style="width:60px;">
+                <input type="number" id="in-hla" value="0" title="Azimuth / HLA (deg)" style="width:60px;">
+                <input type="number" id="in-backspin" value="2500" title="Backspin (rpm)" style="width:70px;">
+                <input type="number" id="in-sidespin" value="0" title="Sidespin (rpm)" style="width:70px;">
+                <button onclick="fireShot()">🔥 SHOOT</button>
+            </div>
             <input type="hidden" id="in-stimp" value="10.0">
             <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Camera Mode">🎥 AUTO</button>
             <button id="btn-flyover" onclick="startFlyover()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Hole Flyover">🚁 FLYOVER</button>
             <button onclick="takePenaltyDrop()" style="background:#ef4444; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Add Penalty Stroke">🛑 PENALTY</button>
-            <button onclick="fireShot()">🔥 SHOOT</button>
         </div>
     </div>
     
@@ -4347,6 +4350,9 @@
 
         let dataBtn = document.getElementById('btn-toggle-data');
         if(dataBtn) dataBtn.style.display = mode === 'BUILD' ? 'none' : 'block';
+        
+        let manualTools = document.getElementById('manual-tools');
+        if(manualTools) manualTools.style.display = mode === 'PLAY' ? 'none' : 'flex';
         
         let gsProHud = document.getElementById('gspro-hud');
         if(gsProHud && mode === 'BUILD') gsProHud.classList.add('hidden');
