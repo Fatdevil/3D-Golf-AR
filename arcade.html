@@ -485,10 +485,16 @@
         </div>
 
         <!-- Färg för Objekt (COLORIZE) -->
-        <div id="colorize-picker-group" class="prop-panel" style="display:none;">
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Asset Color</label>
-            <input type="color" id="asset-color-picker" value="#ffffff" oninput="window.activeColorizeColor = this.value; if(currentTool==='COLORIZE' && typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.material.color.setHex(parseInt(this.value.replace('#','0x')));" style="width:100%; height:40px; border:none; border-radius:6px; cursor:pointer;">
-            <button onclick="document.getElementById('asset-color-picker').value='#ffffff'; window.activeColorizeColor='#ffffff'; if(currentTool==='COLORIZE' && typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.material.color.setHex(0xffffff);" style="margin-top:10px; width:100%; padding:8px; background:#334155; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Reset to Default</button>
+        <div id="colorize-picker-group" class="prop-panel" style="display:none; flex-direction:column; gap:10px;">
+            <div>
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Canopy / Leaves Color</label>
+                <input type="color" id="asset-color-picker" value="#ffffff" oninput="window.activeColorizeColor = this.value; if(currentTool==='COLORIZE' && typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.material.color.setHex(parseInt(this.value.replace('#','0x')));" style="width:100%; height:40px; border:none; border-radius:6px; cursor:pointer;">
+            </div>
+            <div>
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Trunk / Base Color</label>
+                <input type="color" id="asset-trunk-picker" value="#ffffff" oninput="window.activeTrunkColor = this.value;" style="width:100%; height:40px; border:none; border-radius:6px; cursor:pointer;">
+            </div>
+            <button onclick="document.getElementById('asset-color-picker').value='#ffffff'; window.activeColorizeColor='#ffffff'; document.getElementById('asset-trunk-picker').value='#ffffff'; window.activeTrunkColor='#ffffff'; if(currentTool==='COLORIZE' && typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.material.color.setHex(0xffffff);" style="width:100%; padding:8px; background:#334155; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Reset Colors</button>
         </div>
 
         <!-- Inställningar för Test Putt -->
@@ -1684,6 +1690,18 @@
                                     let isTree = window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].subcat === 'TREES';
                                     if (isTree) {
                                         mat.onBeforeCompile = (shader) => {
+                                            shader.vertexShader = shader.vertexShader.replace(
+                                                '#include <color_pars_vertex>',
+                                                '#include <color_pars_vertex>\n#ifdef USE_INSTANCING\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\n#endif'
+                                            );
+                                            shader.vertexShader = shader.vertexShader.replace(
+                                                '#include <color_vertex>',
+                                                '#include <color_vertex>\n#ifdef USE_INSTANCING\nvInstanceTrunkColor = instanceTrunkColor;\n#endif'
+                                            );
+                                            shader.fragmentShader = shader.fragmentShader.replace(
+                                                '#include <color_pars_fragment>',
+                                                '#include <color_pars_fragment>\n#ifdef USE_INSTANCING\nvarying vec3 vInstanceTrunkColor;\n#endif'
+                                            );
                                             shader.fragmentShader = shader.fragmentShader.replace(
                                                 '#include <color_fragment>',
                                                 `
@@ -1691,26 +1709,34 @@
     vec3 texC = diffuseColor.rgb;
     bool isBrown = (texC.r > texC.g + 0.02) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
     bool isGrey = abs(texC.r - texC.g) < 0.08 && abs(texC.g - texC.b) < 0.08 && texC.r < 0.6;
-    if (!isBrown && !isGrey) {
-        float tintStr = distance(vColor.rgb, vec3(1.0, 1.0, 1.0));
-        if (tintStr > 0.02) {
-            float lum = dot(texC, vec3(0.299, 0.587, 0.114));
-            vec3 tinted = vColor.rgb * (lum * 1.8);
-            diffuseColor.rgb = mix(texC, tinted, 0.95);
-        }
+    vec3 targetColor = vec3(1.0);
+    #ifdef USE_INSTANCING
+        targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
+    #else
+        targetColor = vColor.rgb;
+    #endif
+    float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
+    if (tintStr > 0.02) {
+        float lum = dot(texC, vec3(0.299, 0.587, 0.114));
+        vec3 tinted = targetColor * (lum * 1.8);
+        diffuseColor.rgb = mix(texC, tinted, 0.95);
     }
     diffuseColor.a *= vColor.a;
 #elif defined( USE_COLOR )
     vec3 texC = diffuseColor.rgb;
     bool isBrown = (texC.r > texC.g + 0.02) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
     bool isGrey = abs(texC.r - texC.g) < 0.08 && abs(texC.g - texC.b) < 0.08 && texC.r < 0.6;
-    if (!isBrown && !isGrey) {
-        float tintStr = distance(vColor, vec3(1.0, 1.0, 1.0));
-        if (tintStr > 0.02) {
-            float lum = dot(texC, vec3(0.299, 0.587, 0.114));
-            vec3 tinted = vColor * (lum * 1.8);
-            diffuseColor.rgb = mix(texC, tinted, 0.95);
-        }
+    vec3 targetColor = vec3(1.0);
+    #ifdef USE_INSTANCING
+        targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
+    #else
+        targetColor = vColor;
+    #endif
+    float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
+    if (tintStr > 0.02) {
+        float lum = dot(texC, vec3(0.299, 0.587, 0.114));
+        vec3 tinted = targetColor * (lum * 1.8);
+        diffuseColor.rgb = mix(texC, tinted, 0.95);
     }
 #endif
                                                 `
@@ -2237,6 +2263,7 @@
         subs.forEach(sub => {
             let iMesh = new THREE.InstancedMesh(sub.geometry, sub.material, INSTANCE_MAX);
             iMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(INSTANCE_MAX * 3), 3);
+            iMesh.geometry.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array(INSTANCE_MAX * 3), 3));
             iMesh.count = 0;
             iMesh.castShadow = true;
             iMesh.receiveShadow = true;
@@ -2283,6 +2310,8 @@
                 } else {
                     iMesh.setColorAt(i, new THREE.Color(0xffffff));
                 }
+                let tCol = t.trunkColor ? new THREE.Color(t.trunkColor) : new THREE.Color(0xffffff);
+                iMesh.geometry.attributes.instanceTrunkColor.setXYZ(i, tCol.r, tCol.g, tCol.b);
             });
         });
 
@@ -2290,6 +2319,7 @@
             iMesh.count = pool.activeCount;
             iMesh.instanceMatrix.needsUpdate = true;
             if (iMesh.instanceColor) iMesh.instanceColor.needsUpdate = true;
+            if (iMesh.geometry.attributes.instanceTrunkColor) iMesh.geometry.attributes.instanceTrunkColor.needsUpdate = true;
         });
     }
 
@@ -2518,7 +2548,7 @@
         
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({ par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null }));
-        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color})) : [];
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
         let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
         
@@ -2577,7 +2607,7 @@
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
         }));
-        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color})) : [];
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
         
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
         let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
@@ -2965,7 +2995,7 @@
                     }
 
                     if(arr.trees && Array.isArray(arr.trees)) {
-                        arr.trees.forEach(t => createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c));
+                        arr.trees.forEach(t => createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c, t.tc));
                     }
                 }
             } catch(e) {
@@ -4180,8 +4210,10 @@
             }
             if (closest !== null) {
                 let col = window.activeColorizeColor || '#ffffff';
-                if (window.placedTrees[closest].color !== col) {
+                let tCol = window.activeTrunkColor || '#ffffff';
+                if (window.placedTrees[closest].color !== col || window.placedTrees[closest].trunkColor !== tCol) {
                     window.placedTrees[closest].color = col;
+                    window.placedTrees[closest].trunkColor = tCol;
                     rebuildInstancePool(window.placedTrees[closest].type);
                 }
             }
@@ -4711,8 +4743,10 @@
                     }
                     if (closest !== null) {
                         let col = window.activeColorizeColor || '#ffffff';
-                        if (window.placedTrees[closest].color !== col) {
+                        let tCol = window.activeTrunkColor || '#ffffff';
+                        if (window.placedTrees[closest].color !== col || window.placedTrees[closest].trunkColor !== tCol) {
                             window.placedTrees[closest].color = col;
+                            window.placedTrees[closest].trunkColor = tCol;
                             rebuildInstancePool(window.placedTrees[closest].type);
                         }
                     }
