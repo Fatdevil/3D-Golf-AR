@@ -149,6 +149,7 @@
   #left-toolbar button.active { background: #38bdf8; color: #0f172a; }
   #left-toolbar button.active-green { background: #4ade80; color: #0f172a; }
   #left-toolbar button.active-yellow { background: #fbbf24; color: #0f172a; }
+  #left-toolbar button.active-red { background: #ef4444; color: #fff; }
   
   #right-toolbar {
       position: absolute;
@@ -417,6 +418,7 @@
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-hole" onclick="setTool('HOLE')"><span style="font-size:16px;">🕳️</span> HOLE</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
+        <button id="tool-eraser" onclick="setTool('ERASER')"><span style="font-size:16px;">🗑️</span> ERASER</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button onclick="performUndo()" style="color:#f87171; grid-column:1 / -1;"><span style="font-size:16px;">↩️</span> UNDO</button>
     </div>
@@ -3784,6 +3786,36 @@
         if(appMode !== 'BUILD') return;
         if(currentTool === 'INSPECT') return;
         
+        // === ERASER TOOL ===
+        if (currentTool === 'ERASER' && e.button === 0 && lastHitPoint) {
+            saveUndoState();
+            
+            // 1. Try removing a nature object (tree/rock/plant)
+            let closest = null; let minDist = 3.5;
+            for (let i = 0; i < window.placedTrees.length; i++) {
+                let t = window.placedTrees[i];
+                let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
+                if (d < minDist) { minDist = d; closest = i; }
+            }
+            if (closest !== null) {
+                let removedType = window.placedTrees[closest].type;
+                window.placedTrees.splice(closest, 1);
+                rebuildInstancePool(removedType);
+                return;
+            }
+            
+            // 2. Try removing a block
+            let hit = getIntersect();
+            if (hit && hit.object !== plane) {
+                scene.remove(hit.object);
+                let idx = targets.findIndex(t => t.mesh === hit.object);
+                if (idx !== -1) targets.splice(idx, 1);
+                saveLevel();
+                return;
+            }
+            return;
+        }
+        
         let isModifyingClick = e.button === 0 || e.button === 2;
         if(currentTool !== 'PAINT' && currentTool !== 'MEASURE' || isModifyingClick) { 
              if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE') saveUndoState(); 
@@ -4026,7 +4058,7 @@
     function setTool(toolName) {
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure', 'eraser'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -4041,6 +4073,7 @@
             if (toolName === 'SMART_GREEN') activeBtn.className = 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = 'active-yellow';
             else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
+            else if (toolName === 'ERASER') activeBtn.className = 'active-red';
             else activeBtn.className = 'active';
         }
         
@@ -4090,6 +4123,7 @@
         else if (toolName === 'TEST_PUTT') hintHtml = "Left Click: <b>Drop Ball & Test Putt</b>";
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
         else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Measure Box</b><br>Right Click: <b>Clear Box</b>";
+        else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
