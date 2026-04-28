@@ -4120,6 +4120,11 @@
             document.getElementById('measure-hud').style.display = 'none';
             if(typeof measureLines !== 'undefined') measureLines.visible = false;
         }
+        if(toolName !== 'SPLINE') {
+            let pnl = document.getElementById('spline-action-panel');
+            if(pnl) pnl.style.display = 'none';
+            if(typeof window.clearSpline === 'function') window.clearSpline();
+        }
     }
 
     // Anropas när Stimp-reglaget i TEST_PUTT ändras
