@@ -508,6 +508,29 @@
             </div>
         </div>
 
+        <!-- Environment Preview -->
+        <div id="env-preview-group" class="prop-panel">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">☀️ Environment</label>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Sun</span>
+                <span id="sun-label" style="color:#fbbf24; font-size:11px; font-weight:bold;">12:00</span>
+            </div>
+            <input type="range" id="sun-slider" min="5" max="21" value="12" step="0.5" oninput="updateSunPreview(this.value)" style="width:100%; accent-color:#fbbf24; cursor:pointer;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Wind</span>
+                <span id="wind-label" style="color:#38bdf8; font-size:11px; font-weight:bold;">0 mph</span>
+            </div>
+            <input type="range" id="wind-slider" min="0" max="30" value="0" step="1" oninput="updateWindPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Wind Dir</span>
+                <span id="winddir-label" style="color:#38bdf8; font-size:11px; font-weight:bold;">N</span>
+            </div>
+            <input type="range" id="winddir-slider" min="0" max="359" value="0" step="1" oninput="updateWindDirPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+        </div>
+
     </div>
 
     <!-- Tool hint i botten -->
@@ -995,6 +1018,29 @@
         }
         let slider = document.getElementById('set-time');
         if (slider && parseFloat(slider.value) !== hour) slider.value = hour;
+    };
+
+    // === ENVIRONMENT PREVIEW CONTROLS ===
+    window.updateSunPreview = function(val) {
+        let h = parseFloat(val);
+        window.setTimeOfDay(h);
+        let hh = Math.floor(h); let mm = Math.round((h - hh) * 60);
+        let lbl = document.getElementById('sun-label');
+        if (lbl) lbl.innerText = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+    };
+    
+    window.updateWindPreview = function(val) {
+        window.currentWindMph = parseFloat(val);
+        let lbl = document.getElementById('wind-label');
+        if (lbl) lbl.innerText = val + ' mph';
+    };
+    
+    window.updateWindDirPreview = function(val) {
+        window.currentWindDir = parseFloat(val);
+        let dirs = ['N','NE','E','SE','S','SW','W','NW'];
+        let idx = Math.round(parseFloat(val) / 45) % 8;
+        let lbl = document.getElementById('winddir-label');
+        if (lbl) lbl.innerText = dirs[idx] + ' (' + val + '°)';
     };
 
     // ============================================================
