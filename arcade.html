@@ -418,6 +418,17 @@
         <button onclick="performUndo()" style="color:#f87171; grid-column:1 / -1;"><span style="font-size:16px;">↩️</span> UNDO</button>
     </div>
 
+    <div id="memory-budget-ui" style="position:absolute; top:20px; right:120px; background:rgba(15,23,42,0.9); padding:8px 15px; border-radius:8px; border:1px solid #475569; display:none; pointer-events:none; z-index:1000; flex-direction:column; align-items:center;">
+        <div style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Map Size Budget</div>
+        <div style="display:flex; align-items:baseline; gap:5px;">
+            <span id="mem-current" style="color:#4ade80; font-weight:bold; font-size:18px;">0.00</span>
+            <span style="color:#94a3b8; font-size:12px;">/ 20.0 MB</span>
+        </div>
+        <div style="width:100%; background:#1e293b; height:4px; border-radius:2px; margin-top:5px; overflow:hidden;">
+            <div id="mem-bar" style="height:100%; background:#4ade80; width:0%;"></div>
+        </div>
+    </div>
+
     <!-- PRO UI: HÖGER EGENSKAPSPANEL -->
     <div id="right-toolbar">
         
@@ -2239,7 +2250,7 @@
         Object.keys(window.instancePools).forEach(type => destroyInstancePool(type));
     }
 
-    function createTree(type, x, z, scale, rot) {
+    function createTree(type, x, z, scale, rot, color) {
         // Raycast for ground Y
         let groundY = 0;
         let downRay = new THREE.Raycaster(new THREE.Vector3(x, 200, z), new THREE.Vector3(0, -1, 0));
@@ -2247,7 +2258,7 @@
         if(hits.length > 0) groundY = hits[0].point.y;
 
         // Push data
-        window.placedTrees.push({ type: type, x: x, z: z, y: groundY, scale: scale, rot: rot });
+        window.placedTrees.push({ type: type, x: x, z: z, y: groundY, scale: scale, rot: rot, color: color });
 
         // Ensure asset is loading
         if (window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].file && !window.customModels[type]) {
@@ -2438,6 +2449,33 @@
         }
     });
 
+    function updateMemoryBudget() {
+        if (appMode !== 'BUILD') return;
+        
+        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
+        let dumpHoles = courseHoles.map(h => ({ par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null }));
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color})) : [];
+        let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
+        let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
+        
+        let baseStr = JSON.stringify({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees, terrain_heightmap: { ground: hm, water: w_hm } });
+        let byteSize = new Blob([baseStr]).size;
+        let totalMB = (byteSize / (1024 * 1024)) + 2.5; // +2.5MB uppskattning för texturer (biome map + water mask)
+        
+        let memCur = document.getElementById('mem-current');
+        let memBar = document.getElementById('mem-bar');
+        
+        if(memCur) memCur.innerText = totalMB.toFixed(2);
+        if(memBar) {
+            let pct = (totalMB / 20.0) * 100;
+            memBar.style.width = Math.min(100, pct) + "%";
+            if (pct > 90) { memBar.style.background = "#ef4444"; memCur.style.color = "#ef4444"; }
+            else if (pct > 75) { memBar.style.background = "#fbbf24"; memCur.style.color = "#fbbf24"; }
+            else { memBar.style.background = "#4ade80"; memCur.style.color = "#4ade80"; }
+        }
+    }
+    setInterval(updateMemoryBudget, 2000);
+
     function saveLevel() {
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
@@ -2475,7 +2513,7 @@
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
         }));
-        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot})) : [];
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color})) : [];
         
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
         let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
@@ -2547,7 +2585,7 @@
             let dumpHoles = courseHoles.map(h => ({
                 par: h.par, tees: h.tees, flag: h.flag ? {x:h.flag.x, y:h.flag.y, z:h.flag.z} : null
             }));
-            let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({t:t.type, x:Math.round(t.x*10)/10, z:Math.round(t.z*10)/10, s:Math.round(t.scale*100)/100, r:Math.round((t.rot||0)*100)/100})) : [];
+            let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({t:t.type, x:Math.round(t.x*10)/10, z:Math.round(t.z*10)/10, s:Math.round(t.scale*100)/100, r:Math.round((t.rot||0)*100)/100, c:t.color})) : [];
 
             // Compact terrain heightmap (only Y values, rounded to 2 decimals)
             let heights = [];
@@ -2863,7 +2901,7 @@
                     }
 
                     if(arr.trees && Array.isArray(arr.trees)) {
-                        arr.trees.forEach(t => createTree(t.type, t.x, t.z, t.s, t.r));
+                        arr.trees.forEach(t => createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c));
                     }
                 }
             } catch(e) {
