@@ -2599,6 +2599,25 @@
     let flightData = null;
     let flightTick = 0;
     
+    // === UNIFIED CAMERA SYSTEM ===
+    const CAM = {
+        AIM_HEIGHT: 2.0,           // Normal aim: höjd ovan boll
+        AIM_DISTANCE: 5.0,         // Normal aim: meter bakom boll
+        PUTT_HEIGHT: 0.4,          // Putt aim: låg för att läsa green
+        PUTT_DISTANCE: 2.5,        // Putt aim: tight bakom boll
+        PUTT_THRESHOLD: 25,        // Meter till flagga för auto-putt-kamera
+        FLIGHT_LERP: 0.08,         // Mjukhet vid följning i luft
+        FLIGHT_HEIGHT_MIN: 3.0,    // Min kamerahöjd under flight
+        FLIGHT_BEHIND: 12.0,       // Meter bakom boll under flight
+        LANDING_LERP: 0.06,        // Mjukhet vid landning
+        LANDING_HEIGHT: 3.0,       // Kamerahöjd vid landning
+        LANDING_BEHIND: 10.0,      // Meter bakom landningspunkt
+        AIM_LERP: 0.08,            // Mjukhet vid aim-transition
+        SETTLE_DURATION: 90,       // Frames att vänta innan aim-transition
+    };
+    let gameCamPhase = 'IDLE_AIM';  // TEE_AIM | PUTT_AIM | FLIGHT_FOLLOW | LANDING_SETTLE | IDLE_AIM
+    let landingSettleTimer = 0;
+    
     let playState = 'IDLE'; 
     let playingHoleIndex = 0;
     
@@ -3147,20 +3166,16 @@
         tbody.innerHTML = htmlMode;
     }
     
-    window.camFollowMode = 'BROADCAST'; 
+    window.camFollowMode = 'AUTO'; 
     window.toggleCamMode = function() {
         let btn = document.getElementById('btn-cam-mode');
-        if (window.camFollowMode === 'BROADCAST') {
-            window.camFollowMode = 'FOLLOW';
-            btn.innerText = '🎥 FOLLOW';
-            btn.style.background = '#64748b'; 
-        } else if (window.camFollowMode === 'FOLLOW') {
+        if (window.camFollowMode === 'AUTO') {
             window.camFollowMode = 'FREE';
             btn.innerText = '🎥 FREE CAM';
             btn.style.background = '#ec4899'; 
         } else {
-            window.camFollowMode = 'BROADCAST';
-            btn.innerText = '🎥 BROADCAST';
+            window.camFollowMode = 'AUTO';
+            btn.innerText = '🎥 AUTO';
             btn.style.background = '#4f46e5'; 
         }
     };
@@ -3222,8 +3237,9 @@
     window.shotStartPos = null;
 
     function executeArcadeShot(data) {
-        if (window.camFollowMode !== 'FREE') {
-            controls.enabled = false; 
+        if (window.camFollowMode === 'AUTO') {
+            controls.enabled = false;
+            gameCamPhase = 'FLIGHT_FOLLOW';
         } else {
             controls.enabled = true;
         }
@@ -3243,7 +3259,7 @@
             p.strokes++;
             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
             if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
-            broadcastCamPhase = 'TEE';
+            // Camera phase set in executeArcadeShot
             startPos = [ball.position.x, -ball.position.z, ball.position.y]; 
         } else {
             ball.position.set(0, 0.3, 0);
@@ -5046,57 +5062,22 @@
                 window.ballGlowLight.position.copy(ball.position);
             }
             
-            // --- FLIGHT CAMERA SYSTEM ---
+            // === UNIFIED FLIGHT CAMERA ===
             if (window.camFollowMode === 'FREE') {
-                // FREE CAM: Släpp kameran fri. Användaren styr med OrbitControls!
-                // Gör ingenting åt kamera-positionen.
-            } else if (window.camFollowMode === 'FOLLOW') {
-                // GSPRO REACTIVE FOLLOW (Classic Drone)
-                let targetCamX = ball.position.x;
-                let targetCamY = Math.max(3, ball.position.y + 3);
-                let targetCamZ = ball.position.z + 12; // Konstant 12m offset bakom
+                // Free cam: user controls via OrbitControls
+            } else if (gameCamPhase === 'FLIGHT_FOLLOW') {
+                // Look-ahead: kameran tittar 0.5s framåt i banan
+                let aheadTick = Math.min(flightTick + 100, flightData.path.length - 1);
+                let aheadP = flightData.path[aheadTick];
                 
-                camera.position.x += (targetCamX - camera.position.x) * 0.1;
-                camera.position.y += (targetCamY - camera.position.y) * 0.1;
-                camera.position.z += (targetCamZ - camera.position.z) * 0.1;
+                let targetCamX = aheadP.x;
+                let targetCamY = Math.max(CAM.FLIGHT_HEIGHT_MIN, ball.position.y + 3);
+                let targetCamZ = -aheadP.y + CAM.FLIGHT_BEHIND;
+                
+                camera.position.x += (targetCamX - camera.position.x) * CAM.FLIGHT_LERP;
+                camera.position.y += (targetCamY - camera.position.y) * CAM.FLIGHT_LERP;
+                camera.position.z += (targetCamZ - camera.position.z) * CAM.FLIGHT_LERP;
                 camera.lookAt(ball.position);
-            } else {
-                // TV BROADCAST / PROACTIVE LOOK-AHEAD
-                if (playState === 'ROUND_FLYING') {
-                    // För ROUND mode använder vi The TV Broadcast Director (Multi-angle)
-                    if (broadcastCamPhase === 'TEE') {
-                        camera.lookAt(ball.position);
-                        if (flightTick > 45 && flightData.path.length > 90) {
-                            broadcastCamPhase = 'LANDING';
-                            let finalPhys = flightData.path[flightData.path.length-1];
-                            landingCamPos.set(finalPhys.x, finalPhys.z + 3, -finalPhys.y - 15);
-                            camera.position.copy(landingCamPos);
-                        }
-                    } else if (broadcastCamPhase === 'LANDING') {
-                        camera.lookAt(ball.position);
-                    }
-                } else {
-                    // TRACKMAN PROACTIVE LOOK-AHEAD
-                    // Leta upp framtiden (ca 0.5s fram = 100 ticks vid 5ms/tick)
-                    let aheadTick = Math.min(flightTick + 100, flightData.path.length - 1);
-                    let aheadP = flightData.path[aheadTick];
-                    let currP = flightData.path[flightTick];
-                    
-                    // Eftersom koden ej skickar vx just nu i metrics-pathen, kör vi en vMag approx:
-                    let bVel = currP.vMag || 30; // vMag läggs ofta in i simFlight för tracers
-                    
-                    let zScale = 1.0 + (bVel / 50.0) * 0.8; // Skalar Z-offset från fart
-                    
-                    let targetCamX = aheadP.x;
-                    let targetCamY = Math.max(3, (aheadP.z + 0.0213) + Math.abs(currP.vz || 0) * 0.05); // Y=Höjd i threeJS
-                    let targetCamZ = -aheadP.y + (10 * zScale); // Fartskalat bakom The Look-Ahead Point
-                    
-                    // Mjuk Interpolering mot framtiden
-                    camera.position.x += (targetCamX - camera.position.x) * 0.15;
-                    camera.position.y += (targetCamY - camera.position.y) * 0.15;
-                    camera.position.z += (targetCamZ - camera.position.z) * 0.15;
-                    camera.lookAt(ball.position); // Position at future, look at ball today!
-                }
             }
             
             // COLLISION DETECTION! Krockar bollen med ett block?
@@ -5153,10 +5134,14 @@
                         // --- SMART AUTO-AIM EFTER SLAG ---
                         if (window.aimTarget) {
                             window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z);
-                            let aimDir = new THREE.Vector3().subVectors(window.aimTarget, window.ballMesh.position).normalize();
-                            if(aimDir.lengthSq() < 0.01) aimDir.set(0, 0, -1);
-                            camera.position.copy(window.ballMesh.position).add(new THREE.Vector3(-aimDir.x * 5, 2, -aimDir.z * 5));
-                            controls.target.copy(window.aimTarget);
+                        }
+                        
+                        // Transition camera to aim phase
+                        if (window.camFollowMode === 'AUTO') {
+                            let isPutt = distToPin < CAM.PUTT_THRESHOLD;
+                            gameCamPhase = isPutt ? 'PUTT_AIM' : 'IDLE_AIM';
+                            window.isPuttingMode = isPutt;
+                            landingSettleTimer = CAM.SETTLE_DURATION; // Smooth transition delay
                         }
                     }
                     
@@ -5270,6 +5255,30 @@
                     }, 2000);
                 }
             }
+        }
+
+        // === UNIFIED AIM CAMERA (runs when NOT flying) ===
+        if (!isFlying && window.camFollowMode === 'AUTO' && (gameCamPhase === 'IDLE_AIM' || gameCamPhase === 'PUTT_AIM') && playState === 'ROUND_IDLE' && window.aimTarget) {
+            if (landingSettleTimer > 0) {
+                landingSettleTimer--;
+                // During settle: smooth lerp to aim position
+            }
+            let isPutt = gameCamPhase === 'PUTT_AIM';
+            let camH = isPutt ? CAM.PUTT_HEIGHT : CAM.AIM_HEIGHT;
+            let camD = isPutt ? CAM.PUTT_DISTANCE : CAM.AIM_DISTANCE;
+            
+            let aimDir = new THREE.Vector3().subVectors(window.aimTarget, window.ballMesh.position).normalize();
+            if (aimDir.lengthSq() < 0.01) aimDir.set(0, 0, -1);
+            
+            let targetPos = window.ballMesh.position.clone().add(
+                new THREE.Vector3(-aimDir.x * camD, camH, -aimDir.z * camD)
+            );
+            
+            camera.position.x += (targetPos.x - camera.position.x) * CAM.AIM_LERP;
+            camera.position.y += (targetPos.y - camera.position.y) * CAM.AIM_LERP;
+            camera.position.z += (targetPos.z - camera.position.z) * CAM.AIM_LERP;
+            controls.target.copy(window.aimTarget);
+            controls.enabled = true;
         }
 
         renderer.clear();
