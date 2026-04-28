@@ -1346,6 +1346,57 @@
         waterColor: '#38bdf8'
     };
 
+    function hexToRgb(hex) {
+        let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    }
+
+    function colorMatch(r1, g1, b1, r2, g2, b2) {
+        return Math.abs(r1 - r2) < 5 && Math.abs(g1 - g2) < 5 && Math.abs(b1 - b2) < 5;
+    }
+
+    window.recolorTerrain = function(oldConfig, newConfig) {
+        if (!window.pCtx || !window.mapTex) return;
+        let imgData = window.pCtx.getImageData(0, 0, 4096, 4096);
+        let data = imgData.data;
+        
+        let keys = ['ob', 'bunker', 'waste', 'tee', 'green', 'foregreen', 'fairway', 'semi', 'rough', 'fescue'];
+        let colorMap = [];
+        keys.forEach(k => {
+            let oldHex = oldConfig[k + 'Color'];
+            let newHex = newConfig[k + 'Color'];
+            if (oldHex && newHex && oldHex !== newHex) {
+                let oldRgb = hexToRgb(oldHex);
+                let newRgb = hexToRgb(newHex);
+                if (oldRgb && newRgb) {
+                    colorMap.push({ old: oldRgb, new: newRgb });
+                }
+            }
+        });
+        
+        if (colorMap.length === 0) return; // Inget att byta ut
+        
+        for (let i = 0; i < data.length; i += 4) {
+            let r = data[i], g = data[i+1], b = data[i+2];
+            for (let j = 0; j < colorMap.length; j++) {
+                if (colorMatch(r, g, b, colorMap[j].old.r, colorMap[j].old.g, colorMap[j].old.b)) {
+                    data[i] = colorMap[j].new.r;
+                    data[i+1] = colorMap[j].new.g;
+                    data[i+2] = colorMap[j].new.b;
+                    break;
+                }
+            }
+        }
+        window.pCtx.putImageData(imgData, 0, 0);
+        window.mapTex.needsUpdate = true;
+        window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+        if(window.rebuildGreenMask) window.rebuildGreenMask();
+    };
+
     window.ACTIVE_BIOME = 'ALL';
     window.changeBiome = function(val) {
         window.ACTIVE_BIOME = val;
@@ -1354,6 +1405,9 @@
         // Applicera färgerna från valt tema, eller Global som fallback
         let targetBiome = (val === 'ALL') ? 'GLOBAL' : val;
         let config = window.CLOUD_BIOMES[targetBiome];
+        
+        // Spara den gamla konfigurationen för att kunna byta ut pixlar
+        let oldConfig = Object.assign({}, window.CURRENT_BIOME_CONFIG);
         
         // Om inget specifikt tema finns ännu, hämta global eller behåll nuvarande
         if(!config && targetBiome !== 'GLOBAL') {
@@ -1382,6 +1436,11 @@
             if (typeof scene !== 'undefined' && scene) {
                 scene.background = new THREE.Color(window.CURRENT_BIOME_CONFIG.skyColor);
                 if (scene.fog) scene.fog.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.skyColor.replace('#','0x')));
+            }
+            
+            // Uppdatera terrängens canvas pixlar i realtid
+            if(window.recolorTerrain) {
+                window.recolorTerrain(oldConfig, window.CURRENT_BIOME_CONFIG);
             }
             
             // Uppdatera vatten
@@ -1672,12 +1731,14 @@
     const paintCanvas = document.createElement('canvas');
     paintCanvas.width = 4096; paintCanvas.height = 4096;
     const pCtx = paintCanvas.getContext('2d', { willReadFrequently: true });
+    window.pCtx = pCtx;
     
     pCtx.fillStyle = '#4a782b';
     pCtx.fillRect(0, 0, 4096, 4096);
     
     const mapTex = new THREE.CanvasTexture(paintCanvas);
     mapTex.magFilter = THREE.LinearFilter;
+    window.mapTex = mapTex;
     
     window.greenMaskCanvas = document.createElement('canvas');
     window.greenMaskCanvas.width = 4096; window.greenMaskCanvas.height = 4096;
