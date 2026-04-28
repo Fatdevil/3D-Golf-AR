@@ -32,6 +32,7 @@ async function initDB() {
                 trees JSONB DEFAULT '[]',
                 terrain_heightmap TEXT,
                 terrain_biomemap TEXT,
+                theme_data JSONB DEFAULT '{}',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
@@ -120,7 +121,7 @@ function generateShareCode() {
 
 app.post('/api/courses', async (req, res) => {
     try {
-        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, edit_code } = req.body;
+        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, edit_code, theme_data } = req.body;
         
         // Validering
         if (!holes) return res.status(400).json({ error: 'Missing holes data' });
@@ -128,19 +129,20 @@ app.post('/api/courses', async (req, res) => {
         const draftStatus = is_draft === true;
         const c_name = name || 'My Golf Course';
         const c_author = author || 'Anonymous';
+        const c_theme_data = theme_data || {};
 
         if (edit_code) {
             // Överskriv en existerande bana om koden matchar!
             const updateResult = await pool.query(
                 `UPDATE courses 
-                 SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, is_draft=$8
+                 SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, is_draft=$8, theme_data=$10
                  WHERE share_code=$9 
                  RETURNING share_code`,
                 [
                     c_name, c_author, 
                     JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
                     terrain_heightmap, terrain_biomemap, draftStatus, 
-                    edit_code.toUpperCase()
+                    edit_code.toUpperCase(), JSON.stringify(c_theme_data)
                 ]
             );
             
@@ -154,12 +156,12 @@ app.post('/api/courses', async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
-                terrain_heightmap, terrain_biomemap, draftStatus
+                terrain_heightmap, terrain_biomemap, draftStatus, JSON.stringify(c_theme_data)
             ]
         );
 

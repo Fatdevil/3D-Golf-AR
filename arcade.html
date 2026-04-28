@@ -2476,7 +2476,8 @@
                 terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
                 terrain_biomemap: biome,
                 terrain_watermask: w_mask,
-                is_draft: options.isDraft
+                is_draft: options.isDraft,
+                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG }
             };
             
             if (options.overwrite && currentEditCode) {
@@ -2698,6 +2699,7 @@
                     if(typeof savedStr.holes === 'string') savedStr.holes = JSON.parse(savedStr.holes);
                     if(typeof savedStr.targets === 'string') savedStr.targets = JSON.parse(savedStr.targets);
                     if(typeof savedStr.trees === 'string') savedStr.trees = JSON.parse(savedStr.trees);
+                    if(typeof savedStr.theme_data === 'string') savedStr.theme_data = JSON.parse(savedStr.theme_data);
                 } else {
                     console.error("Course not found!");
                 }
@@ -2724,6 +2726,48 @@
             
             try {
                 var arr = savedStr;
+                
+                // Ladda tema och färger
+                if (arr.theme_data && typeof arr.theme_data === 'object' && Object.keys(arr.theme_data).length > 0) {
+                    let td = arr.theme_data;
+                    if (td.config) {
+                        window.CURRENT_BIOME_CONFIG = td.config;
+                        if(td.biomeId) {
+                            window.ACTIVE_BIOME = td.biomeId;
+                            let select = document.getElementById('biome-select');
+                            if(select) select.value = td.biomeId;
+                        }
+                        
+                        // Uppdatera sky och vatten
+                        if (typeof scene !== 'undefined' && scene) {
+                            scene.background = new THREE.Color(window.CURRENT_BIOME_CONFIG.skyColor);
+                            if (scene.fog) scene.fog.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.skyColor.replace('#','0x')));
+                        }
+                        if (typeof waterMaterial !== 'undefined' && waterMaterial) {
+                            waterMaterial.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.waterColor.replace('#','0x')));
+                        }
+                        
+                        // Uppdatera material palettens UI
+                        let keys = ['ob', 'bunker', 'waste', 'tee', 'green', 'foregreen', 'fairway', 'semi', 'rough', 'fescue'];
+                        keys.forEach(k => {
+                            let el = document.getElementById('pal-' + k);
+                            if(el) {
+                                el.style.background = window.CURRENT_BIOME_CONFIG[k + 'Color'];
+                            }
+                        });
+                        
+                        // Toggle gear icons
+                        let gearIcons = document.querySelectorAll('.color-edit-icon');
+                        let isCustom = (window.ACTIVE_BIOME === 'CUSTOM');
+                        gearIcons.forEach(icon => {
+                            icon.style.display = isCustom ? 'inline-block' : 'none';
+                        });
+                        
+                        if(isCustom) {
+                            window.CLOUD_BIOMES['CUSTOM'] = Object.assign({}, window.CURRENT_BIOME_CONFIG);
+                        }
+                    }
+                }
 
                 if (arr.targets && Array.isArray(arr.targets)) {
                     arr.targets.forEach(function(a) {
