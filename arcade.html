@@ -256,7 +256,7 @@
                 </div>
             </div>
             <!-- Score Section -->
-            <div style="background:#38bdf8; width:60px; border-top-right-radius:8px; border-bottom-right-radius:8px; display:flex; align-items:center; justify-content:center;">
+            <div style="background:#38bdf8; min-width:60px; padding: 0 15px; border-top-right-radius:8px; border-bottom-right-radius:8px; display:flex; align-items:center; justify-content:center;">
                 <span id="pb-score" style="color:#0f172a; font-weight:900; font-size:24px;">E</span>
             </div>
         </div>
@@ -3465,7 +3465,8 @@
         if (totalVsPar > 0) totalDisplay = "+" + totalVsPar;
         else if (totalVsPar < 0) totalDisplay = totalVsPar.toString();
         
-        document.getElementById('pb-score').innerHTML = totalDisplay + " <span style='font-size:12px; color:#94a3b8;'>| " + p.name + "</span>";
+        document.getElementById('pb-name').innerText = p.name;
+        document.getElementById('pb-score').innerHTML = totalDisplay;
         
         let totalStrokes = p.strokes + p.penaltyStrokes;
         document.getElementById('pb-shot').innerText = "Shot " + (totalStrokes + 1);
@@ -4352,6 +4353,9 @@
         
         let hamburgerBtn = document.getElementById('btn-hamburger');
         if (hamburgerBtn) hamburgerBtn.style.display = mode === 'PLAY' ? 'none' : 'block';
+        
+        let pb = document.getElementById('player-banner');
+        if (pb) pb.style.top = mode === 'PLAY' ? '20px' : '70px';
         
         if (mode === 'BUILD') {
             playState = 'BUILDING'; // Nollställ playState från tidigare test-rundor
