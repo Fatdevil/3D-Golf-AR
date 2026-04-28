@@ -18,7 +18,7 @@ window.GolfPhysics = (function() {
         rollingDecel: 0.8,
         spinDampingPerBounce: 0.85, // Ändrad från 0.75. Mindre direkt spin-död, gör att wedgar spinner mer på greenen (GSPro-stil)
         minBounceVerticalSpeed: 1.0,
-        stopSpeed: 0.1
+        stopSpeed: 0.25
     };
 
     // Hjälpfunktioner för miljö och vektorer
@@ -348,7 +348,7 @@ window.GolfPhysics = (function() {
         let t = 0;
         // lastSampleTime utfasas till förmån för direkta dt-ticks i path.
         // Simulator-loop
-        while (state.phase !== "stopped" && t < 25.0) { // Safety break efter max 25 sek in-miljö
+        while (state.phase !== "stopped" && state.phase !== "holed" && t < 25.0) { // Safety break efter max 25 sek in-miljö
             
             // Kolla luft-kollisioner (Träd) innan vi flyttar oss
             // SPAWN IMMUNITY: Give the ball 0.2s to escape a bad lie or tree trunk
