@@ -1680,6 +1680,35 @@
                                             mat.emissive = mat.color.clone().multiplyScalar(boost);
                                         }
                                     }
+
+                                    let isTree = window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].subcat === 'TREES';
+                                    if (isTree) {
+                                        mat.onBeforeCompile = (shader) => {
+                                            shader.fragmentShader = shader.fragmentShader.replace(
+                                                '#include <color_fragment>',
+                                                `
+#if defined( USE_COLOR_ALPHA )
+	diffuseColor *= vColor;
+#elif defined( USE_COLOR )
+	diffuseColor.rgb *= vColor;
+#endif
+#if defined( USE_INSTANCING_COLOR )
+    vec3 texC = diffuseColor.rgb;
+    bool isBrown = (texC.r > texC.g + 0.02) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
+    bool isGrey = abs(texC.r - texC.g) < 0.08 && abs(texC.g - texC.b) < 0.08 && texC.r < 0.6;
+    if (!isBrown && !isGrey) {
+        float tintStr = distance(vInstanceColor.rgb, vec3(1.0, 1.0, 1.0));
+        if (tintStr > 0.02) {
+            float lum = dot(texC, vec3(0.299, 0.587, 0.114));
+            vec3 tinted = vInstanceColor.rgb * (lum * 1.8);
+            diffuseColor.rgb = mix(texC, tinted, 0.95);
+        }
+    }
+#endif
+                                                `
+                                            );
+                                        };
+                                    }
                                     mat.needsUpdate = true;
                                 }
                             });
