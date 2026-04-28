@@ -239,6 +239,24 @@ app.post('/api/assets', async (req, res) => {
     }
 });
 
+// Ta bort en custom asset (kräver lösenord)
+app.delete('/api/assets/:id', async (req, res) => {
+    try {
+        const { password } = req.body;
+        if (password !== 'golfadmin123') {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const result = await pool.query("DELETE FROM custom_assets WHERE id = $1 RETURNING id", [req.params.id]);
+        if(result.rows.length === 0) {
+            return res.status(404).json({ error: 'Asset not found' });
+        }
+        res.json({ success: true, deleted_id: result.rows[0].id });
+    } catch(err) {
+        console.error("Error deleting asset:", err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 // --- SERVING STATIC FILES (För Railway Deploy) ---
 // Gör så att hela public/ eller roten serveras som en hemsida
 app.use(express.static(__dirname));

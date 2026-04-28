@@ -10,6 +10,7 @@
     <style>
         body { margin: 0; padding: 0; background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; overflow: hidden; }
         #canvas-container { flex: 1; position: relative; }
+        #library-sidebar { width: 300px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #334155; }
         #sidebar { width: 400px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #334155; }
         h1 { margin: 0 0 10px 0; font-size: 20px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
@@ -21,9 +22,27 @@
         .row { display: flex; gap: 10px; }
         .row > div { flex: 1; }
         #log { font-size: 12px; padding: 10px; background: #000; border-radius: 4px; min-height: 20px; color: #4ade80; }
+        
+        /* Library Styles */
+        .lib-item { background: #0f172a; padding: 10px; border-radius: 6px; cursor: pointer; border: 1px solid #334155; display: flex; align-items: center; gap: 10px; transition: border-color 0.2s; }
+        .lib-item:hover { border-color: #38bdf8; }
+        .lib-item .icon { font-size: 20px; }
+        .lib-item .details { display: flex; flex-direction: column; }
+        .lib-item .name { font-weight: bold; font-size: 13px; color: #f8fafc; }
+        .lib-item .subcat { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
+        
+        #btn-delete { background: #ef4444; color: white; display: none; margin-top:0; }
+        #btn-delete:hover { background: #dc2626; }
     </style>
 </head>
 <body>
+
+    <div id="library-sidebar">
+        <h1>Cloud Library</h1>
+        <div id="library-list" style="display:flex; flex-direction:column; gap:8px;">
+            <div style="color:#94a3b8; font-size:12px;">Loading assets...</div>
+        </div>
+    </div>
 
     <div id="canvas-container">
         <!-- Overlay HUD -->
@@ -130,7 +149,10 @@
             <input type="password" id="admin-pass" placeholder="Enter password">
         </div>
 
-        <button id="btn-save">PUBLISH TO CLOUD</button>
+        <div class="row" style="margin-top:10px;">
+            <button id="btn-save" style="margin-top:0;">PUBLISH TO CLOUD</button>
+            <button id="btn-delete">DELETE FROM CLOUD</button>
+        </div>
         <div id="log">Awaiting file...</div>
     </div>
 
@@ -317,6 +339,99 @@
                 document.getElementById('log').innerText = "Model loaded successfully.";
             });
         }
+        
+        // --- CLOUD LIBRARY LOGIC ---
+        async function fetchLibrary() {
+            try {
+                const res = await fetch('/api/assets');
+                const assets = await res.json();
+                const list = document.getElementById('library-list');
+                list.innerHTML = '';
+                
+                if (assets.length === 0) {
+                    list.innerHTML = '<div style="color:#94a3b8; font-size:12px;">No custom assets found.</div>';
+                    return;
+                }
+                
+                assets.forEach(a => {
+                    const div = document.createElement('div');
+                    div.className = 'lib-item';
+                    div.innerHTML = `
+                        <div class="icon">${a.icon || '📦'}</div>
+                        <div class="details">
+                            <span class="name">${a.name}</span>
+                            <span class="subcat">${a.subcategory || a.category}</span>
+                        </div>
+                    `;
+                    div.onclick = () => loadAssetFromLibrary(a);
+                    list.appendChild(div);
+                });
+            } catch(e) {
+                console.error(e);
+            }
+        }
+        
+        async function loadAssetFromLibrary(assetInfo) {
+            document.getElementById('log').innerText = "Downloading " + assetInfo.id + "...";
+            try {
+                // Populate Form
+                document.getElementById('asset-id').value = assetInfo.id;
+                document.getElementById('asset-name').value = assetInfo.name;
+                document.getElementById('asset-subcat').value = assetInfo.subcategory || 'TREES';
+                document.getElementById('asset-icon').value = assetInfo.icon || '';
+                
+                // Populate Config if exists
+                if (assetInfo.config) {
+                    if (assetInfo.config.targetHeight) document.getElementById('target-height').value = assetInfo.config.targetHeight;
+                    if (assetInfo.config.yOffset) document.getElementById('y-offset').value = assetInfo.config.yOffset;
+                    if (assetInfo.config.brightness !== undefined) document.getElementById('brightness').value = assetInfo.config.brightness;
+                    
+                    if (assetInfo.config.physics) {
+                        const physType = assetInfo.config.physics.type || 'tree';
+                        document.getElementById('physics-type').value = physType;
+                        document.getElementById('physics-type').dispatchEvent(new Event('change'));
+                        
+                        if (physType === 'tree') {
+                            if (assetInfo.config.physics.trunkRadius) document.getElementById('tree-trunk').value = assetInfo.config.physics.trunkRadius;
+                            if (assetInfo.config.physics.canopyRadius) document.getElementById('tree-canopy').value = assetInfo.config.physics.canopyRadius;
+                        } else {
+                            if (assetInfo.config.physics.radius) document.getElementById('sphere-radius').value = assetInfo.config.physics.radius;
+                        }
+                    }
+                    
+                    // Checkboxes (Biomes)
+                    document.querySelectorAll('.biome-cb').forEach(cb => {
+                        cb.checked = assetInfo.config.biomes && assetInfo.config.biomes.includes(cb.value);
+                    });
+                }
+                
+                // Show Delete button
+                document.getElementById('btn-delete').style.display = 'block';
+                
+                // Update Value Labels
+                ['target-height', 'y-offset', 'brightness', 'tree-trunk', 'tree-canopy', 'sphere-radius'].forEach(id => {
+                    document.getElementById(id).dispatchEvent(new Event('input'));
+                });
+
+                // Fetch Base64 data
+                const res = await fetch('/api/assets/' + assetInfo.id + '/download');
+                const data = await res.json();
+                
+                if (data.file_data) {
+                    base64Data = data.file_data;
+                    loadModelFromBase64(base64Data);
+                    document.getElementById('log').innerText = "Loaded from Cloud: " + assetInfo.name;
+                } else {
+                    document.getElementById('log').innerText = "❌ Missing 3D data";
+                }
+            } catch(e) {
+                console.error(e);
+                document.getElementById('log').innerText = "❌ Failed to load asset";
+            }
+        }
+        
+        // Load library on start
+        fetchLibrary();
 
         // Koppla sliders till uppdatering
         ['target-height', 'y-offset', 'brightness', 'tree-trunk', 'tree-canopy', 'sphere-radius'].forEach(id => {
@@ -405,6 +520,40 @@
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById('log').innerText = "✅ Successfully Published: " + id;
+                    document.getElementById('btn-delete').style.display = 'block'; // Show delete now that it exists
+                    fetchLibrary(); // Refresh library
+                } else {
+                    document.getElementById('log').innerText = "❌ Error: " + data.error;
+                }
+            } catch(e) {
+                document.getElementById('log').innerText = "❌ Exception: " + e.message;
+            }
+        });
+        
+        // --- DELETE FRÅN BACKEND ---
+        document.getElementById('btn-delete').addEventListener('click', async () => {
+            const pass = document.getElementById('admin-pass').value;
+            if (!pass) return alert("Password required to delete");
+            const id = document.getElementById('asset-id').value;
+            
+            if (!confirm("Are you sure you want to permanently delete '" + id + "' from the Cloud? This will break any courses using it.")) return;
+            
+            document.getElementById('log').innerText = "Deleting...";
+            try {
+                const res = await fetch('/api/assets/' + id, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pass })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('log').innerText = "✅ Successfully Deleted: " + id;
+                    document.getElementById('btn-delete').style.display = 'none';
+                    // Clear 3D view
+                    while(modelGroup.children.length > 0) modelGroup.remove(modelGroup.children[0]);
+                    base64Data = null;
+                    fetchLibrary(); // Refresh library
                 } else {
                     document.getElementById('log').innerText = "❌ Error: " + data.error;
                 }
