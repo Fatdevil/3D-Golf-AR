@@ -4356,6 +4356,9 @@
         let gsProHud = document.getElementById('gspro-hud');
         if(gsProHud && mode === 'BUILD') gsProHud.classList.add('hidden');
         
+        let toolHints = document.getElementById('tool-hints');
+        if(toolHints) toolHints.style.display = mode === 'BUILD' ? 'block' : 'none';
+        
         let hamburgerBtn = document.getElementById('btn-hamburger');
         if (hamburgerBtn) hamburgerBtn.style.display = mode === 'PLAY' ? 'none' : 'block';
         
