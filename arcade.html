@@ -3402,11 +3402,11 @@
         
         let nextPlayer = getNextPlayerIndex();
         if(nextPlayer === -1) {
-            window.nextTurnTimeout = setTimeout(nextHole, 2500);
+            window.nextTurnTimeout = setTimeout(nextHole, 1500);
         } else {
             window.nextTurnTimeout = setTimeout(() => {
                 switchTurnTo(nextPlayer);
-            }, p.holedOut ? 2500 : 1000);
+            }, p.holedOut ? 1500 : 500);
         }
     }
 
@@ -5738,7 +5738,7 @@
                             pop.style.opacity = '1';
                             pop.style.transform = 'translate(-50%, -60%) scale(1.2)';
                             console.log('⛳ HOLED! Total: ' + total + ', Par: ' + par + ' -> ' + scoreText);
-                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -60%) scale(1.0)'; evaluateNextTurn(); }, 4000);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -60%) scale(1.0)'; evaluateNextTurn(); }, 2500);
                             return; // Skip gimme/auto-putt — ball is in the hole!
                         }
                     }
@@ -5770,7 +5770,7 @@
                             p.holedOut = true;
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
-                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2500);
                         } else if (!shouldConcede && (isGreen || (lieSurface && (lieSurface.type === 'FAIRWAY' || lieSurface.type === 'SEMI-ROUGH') && distToPin < 5.0)) && mode !== 'OFF') {
                             // BUG-P03 FIX: Auto-putt only from GREEN or close fringe (within 5m), not from rough/sand at 20m
                             let putts = 2;
@@ -5793,7 +5793,7 @@
                             p.holedOut = true;
                             pop.innerText = `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
                             pop.style.opacity = '1';
-                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 4000);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2500);
                         } else {
                             // Vi är inte klara. Nytt slag ELLER Manuell Putt!
                             if (isGreen && mode === 'OFF') {
@@ -5813,7 +5813,7 @@
                             // Evaluate who plays next (this player is not done)
                             evaluateNextTurn();
                         }
-                    }, 2000);
+                    }, 500);
                 } else {
                     // ARCADE MODE: Klassisk reset efter 2 sekunder
                     setTimeout(() => {
@@ -5821,7 +5821,7 @@
                         camera.position.set(0, 4, 10);
                         controls.target.set(0, 0, -20);
                         controls.update();
-                    }, 2000);
+                    }, 500);
                 }
             }
         }
