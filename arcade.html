@@ -1495,6 +1495,13 @@
                 }
             });
             
+            // Visa eller dölj färg-kugghjulen beroende på om vi är i CUSTOM-läget
+            let gearIcons = document.querySelectorAll('.color-edit-icon');
+            let isCustom = (window.ACTIVE_BIOME === 'CUSTOM');
+            gearIcons.forEach(icon => {
+                icon.style.display = isCustom ? 'inline-block' : 'none';
+            });
+            
             // Uppdatera ghost block färg
             let activePal = document.querySelector('.palette-btn.active');
             if (activePal && activePal.id && activePal.id.startsWith('pal-')) {
