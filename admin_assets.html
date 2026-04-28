@@ -39,6 +39,14 @@
 
     <div id="library-sidebar">
         <h1>Cloud Library</h1>
+        <select id="lib-biome-filter" style="margin-bottom:10px; width:100%;" onchange="renderLibrary()">
+            <option value="ALL">All Biomes</option>
+            <option value="GLOBAL">Global</option>
+            <option value="DESERT">Desert</option>
+            <option value="SNOW">Snow</option>
+            <option value="MOON">Moon</option>
+            <option value="AUTUMN">Autumn</option>
+        </select>
         <div id="library-list" style="display:flex; flex-direction:column; gap:8px;">
             <div style="color:#94a3b8; font-size:12px;">Loading assets...</div>
         </div>
@@ -363,19 +371,41 @@
         }
         
         // --- CLOUD LIBRARY LOGIC ---
+        let allLibraryAssets = [];
+        
         async function fetchLibrary() {
             try {
                 const res = await fetch('/api/assets');
-                const assets = await res.json();
-                const list = document.getElementById('library-list');
-                list.innerHTML = '';
-                
-                if (assets.length === 0) {
-                    list.innerHTML = '<div style="color:#94a3b8; font-size:12px;">No custom assets found.</div>';
-                    return;
-                }
-                
-                assets.forEach(a => {
+                allLibraryAssets = await res.json();
+                renderLibrary();
+            } catch(e) {
+                console.error(e);
+            }
+        }
+        
+        function renderLibrary() {
+            const list = document.getElementById('library-list');
+            list.innerHTML = '';
+            
+            if (allLibraryAssets.length === 0) {
+                list.innerHTML = '<div style="color:#94a3b8; font-size:12px;">No custom assets found.</div>';
+                return;
+            }
+            
+            const filter = document.getElementById('lib-biome-filter').value;
+            
+            const filteredAssets = allLibraryAssets.filter(a => {
+                if (filter === 'ALL') return true;
+                if (!a.config || !a.config.biomes) return false;
+                return a.config.biomes.includes(filter);
+            });
+            
+            if (filteredAssets.length === 0) {
+                list.innerHTML = '<div style="color:#94a3b8; font-size:12px;">No assets in this biome.</div>';
+                return;
+            }
+            
+            filteredAssets.forEach(a => {
                     const div = document.createElement('div');
                     div.className = 'lib-item';
                     const thumbHtml = (a.config && a.config.thumbnail) 
