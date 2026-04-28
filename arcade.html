@@ -445,16 +445,16 @@
         <div id="color-picker-group" class="prop-panel">
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Material Palette</label>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-                <div class="palette-btn active" style="background:#ef4444;" onclick="setBlockColor(0xef4444, this)">OB</div>
-                <div class="palette-btn" style="background:#e0d8a4; color:#5c4b1a;" onclick="setBlockColor(0xe0d8a4, this)">Bunker</div>
-                <div class="palette-btn" style="background:#c2af7c; color:#3d2e10;" onclick="setBlockColor(0xc2af7c, this)">Waste</div>
-                <div class="palette-btn" style="background:#7cb54c; color:#1a3a00;" onclick="setBlockColor(0x7cb54c, this)">Tee Box</div>
-                <div class="palette-btn" style="background:#98ce68; color:#1a3a00;" onclick="setBlockColor(0x98ce68, this)">Green</div>
-                <div class="palette-btn" style="background:#8bc45d; color:#1a3a00;" onclick="setBlockColor(0x8bc45d, this)">Foregreen</div>
-                <div class="palette-btn" style="background:#7db952; color:#1a3a00;" onclick="setBlockColor(0x7db952, this)">Fairway</div>
-                <div class="palette-btn" style="background:#6b9e3d;" onclick="setBlockColor(0x6b9e3d, this)">Semi-Rough</div>
-                <div class="palette-btn" style="background:#4a782b;" onclick="setBlockColor(0x4a782b, this)">Rough</div>
-                <div class="palette-btn" style="background:#2d4c1a;" onclick="setBlockColor(0x2d4c1a, this)">Fescue</div>
+                <div id="pal-ob" class="palette-btn active" style="background:#ef4444;" onclick="setPaletteColor('ob', this)">OB</div>
+                <div id="pal-bunker" class="palette-btn" style="background:#e0d8a4; color:#5c4b1a;" onclick="setPaletteColor('bunker', this)">Bunker</div>
+                <div id="pal-waste" class="palette-btn" style="background:#c2af7c; color:#3d2e10;" onclick="setPaletteColor('waste', this)">Waste</div>
+                <div id="pal-tee" class="palette-btn" style="background:#7cb54c; color:#1a3a00;" onclick="setPaletteColor('tee', this)">Tee Box</div>
+                <div id="pal-green" class="palette-btn" style="background:#98ce68; color:#1a3a00;" onclick="setPaletteColor('green', this)">Green</div>
+                <div id="pal-foregreen" class="palette-btn" style="background:#8bc45d; color:#1a3a00;" onclick="setPaletteColor('foregreen', this)">Foregreen</div>
+                <div id="pal-fairway" class="palette-btn" style="background:#7db952; color:#1a3a00;" onclick="setPaletteColor('fairway', this)">Fairway</div>
+                <div id="pal-semi" class="palette-btn" style="background:#6b9e3d;" onclick="setPaletteColor('semi', this)">Semi-Rough</div>
+                <div id="pal-rough" class="palette-btn" style="background:#4a782b;" onclick="setPaletteColor('rough', this)">Rough</div>
+                <div id="pal-fescue" class="palette-btn" style="background:#2d4c1a;" onclick="setPaletteColor('fescue', this)">Fescue</div>
             </div>
         </div>
 
@@ -1330,10 +1330,81 @@
         window.buildNatureUI();
     };
 
+    window.CLOUD_BIOMES = {};
+    window.CURRENT_BIOME_CONFIG = {
+        skyColor: '#87ceeb',
+        obColor: '#ef4444',
+        bunkerColor: '#e0d8a4',
+        wasteColor: '#c2af7c',
+        teeColor: '#7cb54c',
+        greenColor: '#98ce68',
+        foregreenColor: '#8bc45d',
+        fairwayColor: '#7db952',
+        semiColor: '#6b9e3d',
+        roughColor: '#4a782b',
+        fescueColor: '#2d4c1a',
+        waterColor: '#38bdf8'
+    };
+
     window.ACTIVE_BIOME = 'ALL';
     window.changeBiome = function(val) {
         window.ACTIVE_BIOME = val;
         window.buildNatureUI();
+        
+        // Applicera färgerna från valt tema, eller Global som fallback
+        let targetBiome = (val === 'ALL') ? 'GLOBAL' : val;
+        let config = window.CLOUD_BIOMES[targetBiome];
+        
+        // Om inget specifikt tema finns ännu, hämta global eller behåll nuvarande
+        if(!config && targetBiome !== 'GLOBAL') {
+            config = window.CLOUD_BIOMES['GLOBAL'] || window.CURRENT_BIOME_CONFIG;
+        } else if (!config) {
+            config = window.CURRENT_BIOME_CONFIG;
+        }
+        
+        if (config) {
+            window.CURRENT_BIOME_CONFIG = {
+                skyColor: config.skyColor || window.CURRENT_BIOME_CONFIG.skyColor,
+                obColor: config.obColor || window.CURRENT_BIOME_CONFIG.obColor,
+                bunkerColor: config.bunkerColor || window.CURRENT_BIOME_CONFIG.bunkerColor,
+                wasteColor: config.wasteColor || window.CURRENT_BIOME_CONFIG.wasteColor,
+                teeColor: config.teeColor || window.CURRENT_BIOME_CONFIG.teeColor,
+                greenColor: config.greenColor || window.CURRENT_BIOME_CONFIG.greenColor,
+                foregreenColor: config.foregreenColor || window.CURRENT_BIOME_CONFIG.foregreenColor,
+                fairwayColor: config.fairwayColor || window.CURRENT_BIOME_CONFIG.fairwayColor,
+                semiColor: config.semiColor || window.CURRENT_BIOME_CONFIG.semiColor,
+                roughColor: config.roughColor || window.CURRENT_BIOME_CONFIG.roughColor,
+                fescueColor: config.fescueColor || window.CURRENT_BIOME_CONFIG.fescueColor,
+                waterColor: config.waterColor || window.CURRENT_BIOME_CONFIG.waterColor
+            };
+            
+            // Uppdatera 3D-scenen
+            if (typeof scene !== 'undefined' && scene) {
+                scene.background = new THREE.Color(window.CURRENT_BIOME_CONFIG.skyColor);
+                if (scene.fog) scene.fog.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.skyColor.replace('#','0x')));
+            }
+            
+            // Uppdatera vatten
+            if (typeof waterMaterial !== 'undefined' && waterMaterial) {
+                waterMaterial.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.waterColor.replace('#','0x')));
+            }
+            
+            // Uppdatera HTML-paletten
+            let keys = ['ob', 'bunker', 'waste', 'tee', 'green', 'foregreen', 'fairway', 'semi', 'rough', 'fescue'];
+            keys.forEach(k => {
+                let el = document.getElementById('pal-' + k);
+                if(el) {
+                    el.style.background = window.CURRENT_BIOME_CONFIG[k + 'Color'];
+                }
+            });
+            
+            // Uppdatera ghost block färg
+            let activePal = document.querySelector('.palette-btn.active');
+            if (activePal && activePal.id && activePal.id.startsWith('pal-')) {
+                let type = activePal.id.split('-')[1];
+                setPaletteColor(type, activePal);
+            }
+        }
     };
 
     window.buildNatureUI = function() {
@@ -1380,7 +1451,25 @@
             console.error("Failed to load cloud assets", e);
         }
     };
+
+    window.fetchCloudBiomes = async function() {
+        try {
+            let res = await fetch('/api/biomes');
+            if(res.ok) {
+                let data = await res.json();
+                data.forEach(t => {
+                    window.CLOUD_BIOMES[t.id] = t.config;
+                });
+                // Applicera "ALL" / "GLOBAL" som start-tema om det finns
+                window.changeBiome('ALL');
+            }
+        } catch(e) {
+            console.error("Failed to fetch biomes", e);
+        }
+    };
+
     window.fetchCloudAssets();
+    window.fetchCloudBiomes();
     
     const dracoLoader = new THREE.DRACOLoader();
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
@@ -4138,6 +4227,12 @@
             window.greenBeads = [];
         }
     }
+
+    window.setPaletteColor = function(type, btnEl) {
+        let hexStr = window.CURRENT_BIOME_CONFIG[type + 'Color'] || '#ffffff';
+        let hexCol = parseInt(hexStr.replace('#', '0x'));
+        setBlockColor(hexCol, btnEl);
+    };
 
     function setBlockColor(hexCol, btnEl) {
         currentBuildColor = hexCol;
