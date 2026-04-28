@@ -37,6 +37,14 @@ async function initDB() {
             );
         `);
         
+        // Uppdatera existerande tabell om den saknar kolumnen
+        try {
+            await pool.query(`ALTER TABLE courses ADD COLUMN theme_data JSONB DEFAULT '{}';`);
+            console.log("Database Migration: Added theme_data to courses");
+        } catch (e) {
+            // Kolumnen finns troligen redan
+        }
+        
         // Tabell för anpassade 3D-modeller (Assets)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS custom_assets (
