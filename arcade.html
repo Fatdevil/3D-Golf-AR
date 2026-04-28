@@ -119,8 +119,8 @@
   }
   .controls button:active { transform: scale(0.95); }
   /* .btn-home removed — consolidated into #top-bar */
-  .palette-btn { width: 40px; height: 40px; border-radius: 8px; cursor: pointer; border: 3px solid transparent; transition: transform 0.1s;}
-  .palette-btn.active { border-color: white; transform: scale(1.1); }
+  .palette-btn { width:100%; height:auto; padding:8px 4px; border-radius:8px; cursor:pointer; border:3px solid transparent; transition:transform 0.1s; font-size:10px; font-weight:800; color:#fff; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:0.5px; }
+  .palette-btn.active { border-color:white; transform:scale(1.05); }
   
   /* NEW PRO UI LAYOUT */
   #left-toolbar {
@@ -448,16 +448,16 @@
         <!-- Färg för block / Målning -->
         <div id="color-picker-group" class="prop-panel">
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Material Palette</label>
-            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
-                <div class="palette-btn active" style="background:#ef4444;" onclick="setBlockColor(0xef4444, this)" title="Red Block / Lava (OB)"></div>
-                <div class="palette-btn" style="background:#e0d8a4;" onclick="setBlockColor(0xe0d8a4, this)" title="Sand / Bunker"></div>
-                <div class="palette-btn" style="background:#c2af7c;" onclick="setBlockColor(0xc2af7c, this)" title="Waste Area"></div>
-                <div class="palette-btn" style="background:#98ce68;" onclick="setBlockColor(0x98ce68, this)" title="Putting Green"></div>
-                <div class="palette-btn" style="background:#8bc45d;" onclick="setBlockColor(0x8bc45d, this)" title="Foregreen"></div>
-                <div class="palette-btn" style="background:#7db952;" onclick="setBlockColor(0x7db952, this)" title="Fairway"></div>
-                <div class="palette-btn" style="background:#6b9e3d;" onclick="setBlockColor(0x6b9e3d, this)" title="Semi-Rough"></div>
-                <div class="palette-btn" style="background:#4a782b;" onclick="setBlockColor(0x4a782b, this)" title="Rough"></div>
-                <div class="palette-btn" style="background:#2d4c1a;" onclick="setBlockColor(0x2d4c1a, this)" title="Deep Rough / Fescue"></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
+                <div class="palette-btn active" style="background:#ef4444;" onclick="setBlockColor(0xef4444, this)">OB</div>
+                <div class="palette-btn" style="background:#e0d8a4; color:#5c4b1a;" onclick="setBlockColor(0xe0d8a4, this)">Bunker</div>
+                <div class="palette-btn" style="background:#c2af7c; color:#3d2e10;" onclick="setBlockColor(0xc2af7c, this)">Waste</div>
+                <div class="palette-btn" style="background:#98ce68; color:#1a3a00;" onclick="setBlockColor(0x98ce68, this)">Green</div>
+                <div class="palette-btn" style="background:#8bc45d; color:#1a3a00;" onclick="setBlockColor(0x8bc45d, this)">Foregreen</div>
+                <div class="palette-btn" style="background:#7db952; color:#1a3a00;" onclick="setBlockColor(0x7db952, this)">Fairway</div>
+                <div class="palette-btn" style="background:#6b9e3d;" onclick="setBlockColor(0x6b9e3d, this)">Semi-Rough</div>
+                <div class="palette-btn" style="background:#4a782b;" onclick="setBlockColor(0x4a782b, this)">Rough</div>
+                <div class="palette-btn" style="background:#2d4c1a;" onclick="setBlockColor(0x2d4c1a, this)">Fescue</div>
             </div>
         </div>
 
