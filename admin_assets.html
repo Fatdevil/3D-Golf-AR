@@ -98,28 +98,72 @@
                 <label>Sky / Fog Color</label>
                 <input type="color" id="theme-sky" value="#87ceeb" style="width:100%; height:30px; cursor:pointer;">
             </div>
-            <div class="form-group">
-                <label>Fairway Color</label>
-                <input type="color" id="theme-fairway" value="#3a5a22" style="width:100%; height:30px; cursor:pointer;">
+            
+            <div class="form-group" style="margin-top:5px; border-top: 1px solid #334155; padding-top: 5px;">
+                <label style="color:#f8fafc;">Material Palette</label>
             </div>
-            <div class="form-group">
-                <label>Rough Color</label>
-                <input type="color" id="theme-rough" value="#2d4a18" style="width:100%; height:30px; cursor:pointer;">
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>OB</label>
+                    <input type="color" id="theme-ob" value="#ef4444" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Bunker</label>
+                    <input type="color" id="theme-bunker" value="#e0d8a4" style="width:100%; height:30px; cursor:pointer;">
+                </div>
             </div>
-            <div class="form-group">
-                <label>Green Color</label>
-                <input type="color" id="theme-green" value="#4a8522" style="width:100%; height:30px; cursor:pointer;">
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Waste</label>
+                    <input type="color" id="theme-waste" value="#c2af7c" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Tee Box</label>
+                    <input type="color" id="theme-tee" value="#7cb54c" style="width:100%; height:30px; cursor:pointer;">
+                </div>
             </div>
-            <div class="form-group">
-                <label>Sand Color</label>
-                <input type="color" id="theme-sand" value="#d4b872" style="width:100%; height:30px; cursor:pointer;">
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Green</label>
+                    <input type="color" id="theme-green" value="#98ce68" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Foregreen</label>
+                    <input type="color" id="theme-foregreen" value="#8bc45d" style="width:100%; height:30px; cursor:pointer;">
+                </div>
             </div>
-            <div class="form-group">
-                <label>Water Color</label>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Fairway</label>
+                    <input type="color" id="theme-fairway" value="#7db952" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Semi-Rough</label>
+                    <input type="color" id="theme-semi" value="#6b9e3d" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Rough</label>
+                    <input type="color" id="theme-rough" value="#4a782b" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Fescue</label>
+                    <input type="color" id="theme-fescue" value="#2d4c1a" style="width:100%; height:30px; cursor:pointer;">
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-top:5px; border-top: 1px solid #334155; padding-top: 5px;">
+                <label>Water Tool Color</label>
                 <input type="color" id="theme-water" value="#38bdf8" style="width:100%; height:30px; cursor:pointer;">
             </div>
             
-            <div class="form-group" style="margin-top:10px;">
+            <div class="form-group" style="margin-top:10px; border-top: 1px solid #334155; padding-top: 10px;">
                 <label>Admin Password</label>
                 <input type="password" id="theme-password" placeholder="golfadmin123">
             </div>
@@ -493,10 +537,16 @@
         
         // Sätt default färger om de inte finns
         document.getElementById('theme-sky').value = config.skyColor || '#87ceeb';
-        document.getElementById('theme-fairway').value = config.fairwayColor || '#3a5a22';
-        document.getElementById('theme-rough').value = config.roughColor || '#2d4a18';
-        document.getElementById('theme-green').value = config.greenColor || '#4a8522';
-        document.getElementById('theme-sand').value = config.sandColor || '#d4b872';
+        document.getElementById('theme-ob').value = config.obColor || '#ef4444';
+        document.getElementById('theme-bunker').value = config.bunkerColor || '#e0d8a4';
+        document.getElementById('theme-waste').value = config.wasteColor || '#c2af7c';
+        document.getElementById('theme-tee').value = config.teeColor || '#7cb54c';
+        document.getElementById('theme-green').value = config.greenColor || '#98ce68';
+        document.getElementById('theme-foregreen').value = config.foregreenColor || '#8bc45d';
+        document.getElementById('theme-fairway').value = config.fairwayColor || '#7db952';
+        document.getElementById('theme-semi').value = config.semiColor || '#6b9e3d';
+        document.getElementById('theme-rough').value = config.roughColor || '#4a782b';
+        document.getElementById('theme-fescue').value = config.fescueColor || '#2d4c1a';
         document.getElementById('theme-water').value = config.waterColor || '#38bdf8';
         
         // Instant preview in the canvas!
@@ -508,22 +558,28 @@
             scene.background = new THREE.Color(config.skyColor || '#87ceeb');
             // We could also update the plane material color to roughColor
             if(plane && plane.material) {
-                plane.material.color.setHex(parseInt((config.roughColor || '#2d4a18').replace('#','0x')));
+                plane.material.color.setHex(parseInt((config.roughColor || '#4a782b').replace('#','0x')));
             }
         }
     }
 
     // Add event listeners to color inputs to update preview live
-    ['sky','fairway','rough','green','sand','water'].forEach(key => {
+    ['sky','ob','bunker','waste','tee','green','foregreen','fairway','semi','rough','fescue','water'].forEach(key => {
         let el = document.getElementById('theme-' + key);
         if(el) {
             el.addEventListener('input', () => {
                 let config = {
                     skyColor: document.getElementById('theme-sky').value,
-                    fairwayColor: document.getElementById('theme-fairway').value,
-                    roughColor: document.getElementById('theme-rough').value,
+                    obColor: document.getElementById('theme-ob').value,
+                    bunkerColor: document.getElementById('theme-bunker').value,
+                    wasteColor: document.getElementById('theme-waste').value,
+                    teeColor: document.getElementById('theme-tee').value,
                     greenColor: document.getElementById('theme-green').value,
-                    sandColor: document.getElementById('theme-sand').value,
+                    foregreenColor: document.getElementById('theme-foregreen').value,
+                    fairwayColor: document.getElementById('theme-fairway').value,
+                    semiColor: document.getElementById('theme-semi').value,
+                    roughColor: document.getElementById('theme-rough').value,
+                    fescueColor: document.getElementById('theme-fescue').value,
                     waterColor: document.getElementById('theme-water').value
                 };
                 updateCanvasPreview(config);
@@ -538,10 +594,16 @@
         let themeId = document.getElementById('theme-selector').value;
         let config = {
             skyColor: document.getElementById('theme-sky').value,
-            fairwayColor: document.getElementById('theme-fairway').value,
-            roughColor: document.getElementById('theme-rough').value,
+            obColor: document.getElementById('theme-ob').value,
+            bunkerColor: document.getElementById('theme-bunker').value,
+            wasteColor: document.getElementById('theme-waste').value,
+            teeColor: document.getElementById('theme-tee').value,
             greenColor: document.getElementById('theme-green').value,
-            sandColor: document.getElementById('theme-sand').value,
+            foregreenColor: document.getElementById('theme-foregreen').value,
+            fairwayColor: document.getElementById('theme-fairway').value,
+            semiColor: document.getElementById('theme-semi').value,
+            roughColor: document.getElementById('theme-rough').value,
+            fescueColor: document.getElementById('theme-fescue').value,
             waterColor: document.getElementById('theme-water').value
         };
         
