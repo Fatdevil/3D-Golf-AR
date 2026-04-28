@@ -50,6 +50,16 @@ async function initDB() {
             );
         `);
 
+        // Tabell för dynamiska miljöinställningar (Biomes)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS biomes (
+                id VARCHAR(50) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                config JSONB NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         try {
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS likes INT DEFAULT 0;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT false;`);
@@ -256,6 +266,39 @@ app.delete('/api/assets/:id', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
+// --- BIOMES API ---
+app.get('/api/biomes', async (req, res) => {
+    try {
+        const result = await pool.query("SELECT id, name, config FROM biomes");
+        res.json(result.rows);
+    } catch(err) {
+        console.error("GET /api/biomes Error:", err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+app.post('/api/biomes', async (req, res) => {
+    try {
+        const { adminPassword, id, name, config } = req.body;
+        if(adminPassword !== 'golfadmin123') {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if(!id || !config) return res.status(400).json({ error: 'Missing required fields' });
+        
+        await pool.query(`
+            INSERT INTO biomes (id, name, config) 
+            VALUES ($1, $2, $3)
+            ON CONFLICT (id) DO UPDATE SET config = $3, name = $2, updated_at = CURRENT_TIMESTAMP
+        `, [id, name || id, config]);
+        
+        res.json({ success: true, id: id });
+    } catch(err) {
+        console.error("POST /api/biomes Error:", err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 
 // --- SERVING STATIC FILES (För Railway Deploy) ---
 // Gör så att hela public/ eller roten serveras som en hemsida
