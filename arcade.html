@@ -3690,9 +3690,21 @@
         
         let startPos = [0, 0.3, 0];
         
-        if (playState === 'ROUND_IDLE') {
+        if (playState === 'ROUND_IDLE' || playState === 'IDLE') {
             playState = 'ROUND_FLYING';
             let p = window.players[window.activePlayerIndex];
+            
+            if (p && p.holedOut) {
+                // Reset hole for testing/mulligan if holed out
+                p.strokes = 0;
+                p.penaltyStrokes = 0;
+                p.holedOut = false;
+                if (p.teePosition) {
+                    window.ballMesh.position.set(p.teePosition.x, p.teePosition.y, p.teePosition.z);
+                } else if (typeof window.ballPos !== 'undefined') {
+                    window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
+                }
+            }
             
             p.prevPos = { x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z };
             p.prevStrokes = p.strokes;
@@ -3703,10 +3715,11 @@
             p.strokes++;
             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
             if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
-            // Camera phase set in executeArcadeShot
+            
             startPos = [window.ballMesh.position.x, -window.ballMesh.position.z, window.ballMesh.position.y]; 
         } else {
-            window.ballMesh.position.set(0, 0.3, 0);
+            // Failsafe for rogue shots
+            startPos = [window.ballMesh.position.x, -window.ballMesh.position.z, window.ballMesh.position.y];
         }
         
         window.shotStartPos = { x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z };
