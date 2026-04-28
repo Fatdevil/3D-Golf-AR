@@ -1692,7 +1692,11 @@
     const waterGeo = planeGeo.clone(); 
     waterGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
     let wPos = waterGeo.attributes.position.array;
-    for(let i=0; i<waterGeo.attributes.position.count; i++) wPos[i*3 + 2] = -99.0;
+    window.waterBaseZ = new Float32Array(waterGeo.attributes.position.count);
+    for(let i=0; i<waterGeo.attributes.position.count; i++) {
+        wPos[i*3 + 2] = -99.0;
+        window.waterBaseZ[i] = -99.0;
+    }
     
     const waterMat = new THREE.MeshLambertMaterial({ 
         color: 0x38bdf8, 
@@ -2428,6 +2432,7 @@
                 let wIdx = 0;
                 for (let i = 2; i < wPos.length && wIdx < data.w.length; i += 3) {
                     wPos[i] = data.w[wIdx++];
+                    window.waterBaseZ[(i-2)/3] = wPos[i];
                 }
                 waterGeo.attributes.position.needsUpdate = true;
                 // Rebuild water alpha mask from loaded heightmap
@@ -2558,7 +2563,10 @@
                         for(let i=0; i<groundArr.length; i++) pos.setZ(i, groundArr[i]);
                     }
                     if(waterArr && wPos) {
-                        for(let i=0; i<waterArr.length; i++) wPos.setZ(i, waterArr[i]);
+                        for(let i=0; i<waterArr.length; i++) {
+                            wPos.setZ(i, waterArr[i]);
+                            window.waterBaseZ[i] = waterArr[i];
+                        }
                     }
 
                     pos.needsUpdate = true;
@@ -3589,7 +3597,12 @@
         
         if (state.wHeights && typeof waterGeo !== 'undefined' && waterGeo) {
             let wPosArr = waterGeo.attributes.position.array;
-            for(let i=0; i<wPosArr.length; i++) wPosArr[i] = state.wHeights[i];
+            for(let i=0; i<wPosArr.length; i++) {
+                wPosArr[i] = state.wHeights[i];
+            }
+            for(let i=2; i<wPosArr.length; i+=3) {
+                window.waterBaseZ[(i-2)/3] = wPosArr[i];
+            }
             waterGeo.attributes.position.needsUpdate = true;
         }
         
@@ -4930,6 +4943,7 @@
                     // Skulptera WATER-MESHEN till EXAKT vattenLevelTarget
                     if (wPosArray) {
                         wPosArray[i*3 + 2] = waterLevelTarget; 
+                        window.waterBaseZ[i] = waterLevelTarget;
                         waterGeo.attributes.position.needsUpdate = true;
                     }
                     
@@ -5403,7 +5417,7 @@
                 let wdx = Math.cos(windRad);
                 let wdy = Math.sin(windRad);
                 for (let i = 0; i < wArr.length; i += 3) {
-                    let baseZ = wArr[i + 2];
+                    let baseZ = window.waterBaseZ[i / 3];
                     if (baseZ > -90) { // Only animate visible water
                         let phase = wArr[i] * wdx + wArr[i + 1] * wdy;
                         wArr[i + 2] = baseZ + Math.sin(t * 2.5 + phase * 0.3) * amp;
