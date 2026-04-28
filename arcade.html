@@ -3832,20 +3832,18 @@
         let btnPlay = document.getElementById('btn-mode-play');
 
         if(btnBuild) {
-            btnBuild.style.display = mode === 'PLAY' ? 'none' : 'block';
-            btnBuild.style.background = mode === 'BUILD' ? '#38bdf8' : '#0f172a';
-            btnBuild.style.color = mode === 'BUILD' ? '#0f172a' : '#38bdf8';
+            btnBuild.style.display = mode === 'BUILD' ? 'none' : 'block';
+            btnBuild.style.background = '#0f172a';
+            btnBuild.style.color = '#38bdf8';
         }
         
         if (btnPlay) {
-            btnPlay.style.display = mode === 'PLAY' ? 'none' : 'block';
-            if (mode === 'BUILD' || mode === 'TEST') {
-                btnPlay.innerHTML = mode === 'TEST' ? '🏌️ TESTA' : '🔥 TESTA BANAN';
-                btnPlay.onclick = () => setMode('TEST');
-                btnPlay.style.background = mode === 'TEST' ? '#ef4444' : '#0f172a';
-                btnPlay.style.color = mode === 'TEST' ? '#fff' : '#ef4444';
-                btnPlay.style.borderColor = '#ef4444';
-            }
+            btnPlay.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'none' : 'block';
+            btnPlay.innerHTML = '🔥 TESTA BANAN';
+            btnPlay.onclick = () => setMode('TEST');
+            btnPlay.style.background = '#0f172a';
+            btnPlay.style.color = '#ef4444';
+            btnPlay.style.borderColor = '#ef4444';
         }
         
         let lt = document.getElementById('left-toolbar'); if(lt) lt.style.display = mode === 'BUILD' ? 'grid' : 'none';
