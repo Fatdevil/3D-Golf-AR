@@ -23,18 +23,7 @@
       justify-content: space-between;
   }
   
-  .score-hud {
-      background: rgba(15, 23, 42, 0.8);
-      color: #fff;
-      padding: 15px 30px;
-      margin: 20px auto;
-      border-radius: 20px;
-      font-size: 28px;
-      font-weight: 900;
-      text-shadow: 0px 2px 4px rgba(0,0,0,0.5);
-      border: 2px solid #4ade80;
-      pointer-events: auto;
-  }
+
   
   #score-popup {
       position: absolute;
@@ -246,7 +235,7 @@
        <span id="lm-status-text" style="text-transform: uppercase;">LM Frånkopplad</span>
     </div>
 
-    <div class="score-hud">SCORE: <span id="score-val">0</span></div>
+
     <div id="score-popup">+500 POP!</div>
     
     <!-- GSPRO PLAYER BANNER (Top Left) -->
@@ -4354,9 +4343,7 @@
         let startBtn = document.getElementById('btn-start-round');
         if (startBtn) startBtn.style.display = mode === 'PLAY' ? 'block' : 'none';
 
-        let scoreHud = document.querySelector('.score-hud');
-        if(scoreHud) scoreHud.style.display = (mode === 'BUILD' || mode === 'TEST') ? 'none' : 'block';
-        
+
         let dataBtn = document.getElementById('btn-toggle-data');
         if(dataBtn) dataBtn.style.display = mode === 'BUILD' ? 'none' : 'block';
         
@@ -5673,7 +5660,6 @@
                         scene.remove(t.mesh); // PANG! Block försvinner.
                         
                         points += 500;
-                        document.getElementById('score-val').textContent = points;
                         
                         // Popp-effekt
                         let pop = document.getElementById('score-popup');
