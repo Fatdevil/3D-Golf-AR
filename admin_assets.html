@@ -292,6 +292,13 @@
     </div>
 
     <script>
+        // Liten hjälp-funktion
+        function logMsg(str) {
+            console.log(str);
+            let el = document.getElementById('log');
+            if(el) el.innerText = str;
+        }
+
         // --- THREE.JS SETUP ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
