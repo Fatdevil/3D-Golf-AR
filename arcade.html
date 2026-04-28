@@ -352,7 +352,7 @@
     <div id="top-bar">
         <!-- LEFT: Mode buttons -->
         <div class="top-left">
-            <button class="sys-btn" onclick="toggleMenu()">☰</button>
+            <button id="btn-hamburger" class="sys-btn" onclick="toggleMenu()">☰</button>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="border-color:#38bdf8; color:#38bdf8;">🔨 BUILD</button>
             <button id="btn-mode-play" class="sys-btn" onclick="setMode('TEST')">🔥 TESTA BANAN</button>
         </div>
@@ -373,7 +373,7 @@
                     <option value="AUTUMN">Autumn</option>
                 </select>
             </div>
-            <a href="hub.html" class="sys-btn" style="text-decoration:none; font-size:16px; padding:8px 12px;">🏠</a>
+            <a href="arcade_hub.html" class="sys-btn" style="text-decoration:none; font-size:16px; padding:8px 12px;">🏠</a>
         </div>
     </div>
     
@@ -4324,7 +4324,7 @@
         let btnPlay = document.getElementById('btn-mode-play');
 
         if(btnBuild) {
-            btnBuild.style.display = mode === 'BUILD' ? 'none' : 'block';
+            btnBuild.style.display = mode === 'TEST' ? 'block' : 'none';
             btnBuild.style.background = '#0f172a';
             btnBuild.style.color = '#38bdf8';
         }
@@ -4362,6 +4362,9 @@
         
         let gsProHud = document.getElementById('gspro-hud');
         if(gsProHud && mode === 'BUILD') gsProHud.classList.add('hidden');
+        
+        let hamburgerBtn = document.getElementById('btn-hamburger');
+        if (hamburgerBtn) hamburgerBtn.style.display = mode === 'PLAY' ? 'none' : 'block';
         
         if (mode === 'BUILD') {
             playState = 'BUILDING'; // Nollställ playState från tidigare test-rundor

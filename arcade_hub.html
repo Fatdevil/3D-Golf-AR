@@ -280,7 +280,6 @@ function loadDrafts() {
             </div>
             <div style="display:flex; gap:10px;">
                 <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build'">Edit</button>
-                <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('')">Play</button>
             </div>
         </div>`;
     }
@@ -296,7 +295,6 @@ function loadDrafts() {
                 </div>
                 <div style="display:flex; gap:10px;">
                     <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=${d.code}'">Edit</button>
-                    <button class="btn-play" style="font-size:12px; padding: 10px;" onclick="playCourse('${d.code}')">Play</button>
                 </div>
              </div>`;
         });
