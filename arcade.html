@@ -3892,7 +3892,8 @@
         
         flightData = result; 
         flightTick = 0;
-        window._lastFlightFrame = null; // Reset delta-time tracker
+        window._flightStartTime = null; // Reset delta-time tracker
+        window._lastProcessedTick = 0;
         isFlying = true;
         
         tracerPointsCount = 0;
@@ -5561,24 +5562,35 @@
         // Om bollen flyger, hämta nästa punkt i trajectory
         if (isFlying && flightData && flightData.path && flightTick < flightData.path.length) {
             
-            // Delta-time based stepping: match real-time regardless of framerate
-            // Physics dt = 0.005s per tick, so 200 ticks = 1 second of real time
             var now = performance.now();
-            if (!window._lastFlightFrame) window._lastFlightFrame = now;
-            var deltaMs = Math.min(now - window._lastFlightFrame, 50); // Cap at 50ms to avoid jumps
-            window._lastFlightFrame = now;
-            var step = Math.max(1, Math.round(deltaMs / 5)); // 5ms per physics tick
-            var newTick = Math.min(flightTick + step, flightData.path.length - 1);
+            if (!window._flightStartTime) {
+                window._flightStartTime = now;
+                window._lastProcessedTick = 0;
+            }
             
-            var point = flightData.path[newTick];
+            var elapsedMs = now - window._flightStartTime;
             
-            // Konvertera Fysik (x: Sida, y: Framåt, z: Höjd) till ThreeJS
-            // X = Sida (x)
-            // Y = Höjd (z)
-            // Z = Framåt (Negativ y)
-            window.ballMesh.position.set(point.x, point.z + 0.0213, -point.y);
+            // Physics dt = 0.005s = 5ms per tick
+            var exactTick = elapsedMs / 5.0;
+            var newTick = Math.floor(exactTick);
             
-            for (let k = flightTick; k <= newTick; k++) {
+            if (newTick >= flightData.path.length - 1) {
+                newTick = flightData.path.length - 1;
+                var pt = flightData.path[newTick];
+                window.ballMesh.position.set(pt.x, pt.z + 0.0213, -pt.y);
+            } else {
+                var t = exactTick - newTick; // Lerp factor 0.0 -> 1.0
+                var p1 = flightData.path[newTick];
+                var p2 = flightData.path[newTick + 1];
+                
+                var lerpX = p1.x + (p2.x - p1.x) * t;
+                var lerpY = p1.y + (p2.y - p1.y) * t;
+                var lerpZ = p1.z + (p2.z - p1.z) * t;
+                
+                window.ballMesh.position.set(lerpX, lerpZ + 0.0213, -lerpY);
+            }
+            
+            for (let k = window._lastProcessedTick; k <= newTick; k++) {
                 if (tracerPointsCount < MAX_TRACER_POINTS) {
                     let p = flightData.path[k];
                     tracerPositions[tracerPointsCount * 3] = p.x;
@@ -5598,6 +5610,8 @@
                     tracerPointsCount++;
                 }
             }
+            window._lastProcessedTick = newTick + 1;
+            
             flightTracer.geometry.attributes.position.needsUpdate = true;
             if (flightTracer.geometry.attributes.color) flightTracer.geometry.attributes.color.needsUpdate = true;
             flightTracer.geometry.setDrawRange(0, tracerPointsCount);
