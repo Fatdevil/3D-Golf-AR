@@ -330,7 +330,7 @@ window.GolfPhysics = (function() {
         
         let path = [];
         path.push({ 
-            x: 0, y: 0, z: 0, 
+            x: startPosXZY[0], y: startPosXZY[1], z: startPosXZY[2], 
             vx: vel[0], vy: vel[1], vz: vel[2],
             time: 0 
         });

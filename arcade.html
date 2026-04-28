@@ -3292,8 +3292,13 @@
             p.penaltyStrokes = 0;
             
             let activeT = hole.tees[p.tee] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
-            p.teePosition = { x: activeT.x, y: activeT.y, z: activeT.z };
-            p.lie = { x: activeT.x, y: activeT.y + 0.3, z: activeT.z }; 
+            let lieY = activeT.y + 0.3;
+            if (typeof localGetTerrainAt === 'function') {
+                let surf = localGetTerrainAt(activeT.x, activeT.z);
+                if (surf) lieY = surf.y + 0.0213;
+            }
+            p.teePosition = { x: activeT.x, y: lieY, z: activeT.z };
+            p.lie = { x: activeT.x, y: lieY, z: activeT.z }; 
         });
 
         let startPlayerIdx = getNextPlayerIndex();
@@ -5636,9 +5641,9 @@
                 let targetCamPos = window.ballMesh.position.clone().sub(shotDir.multiplyScalar(CAM.FLIGHT_BEHIND));
                 targetCamPos.y = Math.max(CAM.FLIGHT_HEIGHT_MIN, window.ballMesh.position.y + 3);
                 
-                camera.position.x += (targetCamPos.x - camera.position.x) * CAM.FLIGHT_LERP;
-                camera.position.y += (targetCamPos.y - camera.position.y) * CAM.FLIGHT_LERP;
-                camera.position.z += (targetCamPos.z - camera.position.z) * CAM.FLIGHT_LERP;
+                camera.position.x += (targetCamPos.x - camera.position.x) * 0.9;
+                camera.position.y += (targetCamPos.y - camera.position.y) * 0.9;
+                camera.position.z += (targetCamPos.z - camera.position.z) * 0.9;
                 camera.lookAt(window.ballMesh.position);
             }
             
