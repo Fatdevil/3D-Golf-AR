@@ -352,6 +352,24 @@ window.GolfPhysics = (function() {
         };
 
         let t = 0;
+        let _dbgFirstGroundHit = false;
+        let _dbgTreeHitCount = 0;
+        
+        // === FORENSICS: Scan terrain heights ahead of ball ===
+        if (envCtx && envCtx.getTerrainAt) {
+            let scanLog = [];
+            let fwdX = vel[0] / (vecMag(vel) || 1);
+            let fwdY = vel[1] / (vecMag(vel) || 1);
+            for (let d = 0; d <= 250; d += 10) {
+                let px = startPosXZY[0] + fwdX * d;
+                let py = startPosXZY[1] + fwdY * d;
+                let ti = envCtx.getTerrainAt(px, py);
+                scanLog.push({ dist: d, terrainZ: ti ? ti.z.toFixed(2) : 'N/A', type: ti ? ti.type : '?' });
+            }
+            console.log('🔬 TERRAIN SCAN (every 10m ahead):', JSON.stringify(scanLog));
+            console.log('🔬 BALL START Z:', startPosXZY[2].toFixed(3), 'TERRAIN AT START Z:', (envCtx.getTerrainAt(startPosXZY[0], startPosXZY[1]) || {z:0}).z.toFixed(3));
+        }
+        
         // lastSampleTime utfasas till förmån för direkta dt-ticks i path.
         // Simulator-loop
         while (state.phase !== "stopped" && state.phase !== "holed" && t < 25.0) { // Safety break efter max 25 sek in-miljö
@@ -415,8 +433,14 @@ window.GolfPhysics = (function() {
                             let hitProbabilityPerMeter = 0.40; 
                             let currentTickRisk = distTraveled * hitProbabilityPerMeter;
                             
+                            _dbgTreeHitCount++;
+                            let distFromStart = Math.sqrt((state.pos[0]-startPosXZY[0])**2 + (state.pos[1]-startPosXZY[1])**2);
+                            if (_dbgTreeHitCount <= 5) {
+                                console.log(`🌲 CANOPY CHECK #${_dbgTreeHitCount}: dist=${distFromStart.toFixed(1)}m, ballZ=${state.pos[2].toFixed(1)}m, treeH=${treeHeight.toFixed(1)}m, risk=${currentTickRisk.toFixed(4)}, speed=${speed.toFixed(1)}m/s`);
+                            }
+                            
                             if (Math.random() < currentTickRisk) {
-                                console.log(`🏌️‍♂️🌲 KROCK! Bollen fastnade i lövverket på höjd: ${state.pos[2].toFixed(1)}m`);
+                                console.log(`🏌️‍♂️🌲 KROCK! Bollen fastnade i lövverket på höjd: ${state.pos[2].toFixed(1)}m, dist=${distFromStart.toFixed(1)}m, treeHeight=${treeHeight.toFixed(1)}m`);
                                 state.vel[0] *= 0.1;
                                 state.vel[1] *= 0.1;
                                 state.vel[2] = -2.0; // Bollen dröser neråt ruffen
@@ -495,6 +519,24 @@ window.GolfPhysics = (function() {
 
             // Markkontakt och Fysik-övergång via 3D Slopes (Bypass om vi är över koppen!)
             if (state.pos[2] <= tInfo.z && state.phase !== "stopped" && !overCup) {
+                
+                // === FORENSICS: Log first ground collision ===
+                if (!_dbgFirstGroundHit && state.phase === 'flight') {
+                    _dbgFirstGroundHit = true;
+                    let distFromStart = Math.sqrt((state.pos[0]-startPosXZY[0])**2 + (state.pos[1]-startPosXZY[1])**2);
+                    console.log('🔬 FIRST GROUND HIT:', JSON.stringify({
+                        time: t.toFixed(3),
+                        distFromStartM: distFromStart.toFixed(1),
+                        distFromStartYds: (distFromStart * 1.09361).toFixed(1),
+                        ballZ: state.pos[2].toFixed(3),
+                        terrainZ: tInfo.z.toFixed(3),
+                        prevBallZ: prevPos[2].toFixed(3),
+                        terrainType: tInfo.type,
+                        ballPos: { x: state.pos[0].toFixed(2), y: state.pos[1].toFixed(2) },
+                        velZ: state.vel[2].toFixed(2),
+                        treeHitsBeforeGround: _dbgTreeHitCount
+                    }));
+                }
                 
                 // 1. Beräkna den exakta tidpunkten då bollen dök igenom z-kartan
                 let travelZ = prevPos[2] - state.pos[2];
