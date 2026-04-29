@@ -4087,8 +4087,37 @@
             window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
         }
         
+        // === DEBUG: Diagnose 40-yard flight bug ===
+        let dbgTerrain = envCtx.getTerrainAt(launchConfig.startPos[0], launchConfig.startPos[1]);
+        console.log("🔍 LAUNCH DEBUG:", JSON.stringify({
+            ballSpeedMph: launchConfig.ballSpeedMph,
+            launchAngleDeg: launchConfig.launchAngleDeg,
+            totalSpinRpm: launchConfig.totalSpinRpm,
+            azimDeg: launchConfig.azimDeg,
+            isTeeShot: launchConfig.isTeeShot,
+            isLiveData: launchConfig.isLiveData,
+            startPos: launchConfig.startPos,
+            terrainAtStart: dbgTerrain ? dbgTerrain.type : 'UNKNOWN',
+            terrainZ: dbgTerrain ? dbgTerrain.z : 'N/A',
+            hasBiomeData: !!window.terrainBiomeData
+        }, null, 2));
+        
         let result = window.GolfPhysics.simulateFlight(launchConfig, envCtx);
         if (!result) return;
+        
+        // === DEBUG: Flight result ===
+        let dbgFinal = result.path[result.path.length - 1];
+        console.log("🔍 FLIGHT RESULT:", JSON.stringify({
+            pathLength: result.path.length,
+            finalPos: { x: dbgFinal.x.toFixed(2), y: dbgFinal.y.toFixed(2), z: dbgFinal.z.toFixed(2) },
+            carryMeters: result.metrics.carryMeters.toFixed(1),
+            carryYards: (result.metrics.carryMeters * 1.09361).toFixed(1),
+            totalMeters: Math.sqrt(dbgFinal.x*dbgFinal.x + dbgFinal.y*dbgFinal.y).toFixed(1),
+            totalYards: (Math.sqrt(dbgFinal.x*dbgFinal.x + dbgFinal.y*dbgFinal.y) * 1.09361).toFixed(1),
+            apex: result.metrics.apexMeters.toFixed(1),
+            bounces: result.metrics.bounceCount,
+            finalTerrain: result.metrics.finalTerrainType
+        }, null, 2));
         
         flightData = result; 
         flightTick = 0;
