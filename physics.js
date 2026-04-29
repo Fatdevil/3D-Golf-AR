@@ -685,22 +685,31 @@ window.GolfPhysics = (function() {
                     // Green firmness affects tangential retention:
                     //   SOFT: ball digs in → less tangential speed retained
                     //   FIRM: ball skips off → more tangential speed retained
-                    let greenE_T = 0.75; // NORMAL default
+                    let greenE_T = 0.50; // NORMAL default (squared curve: at 35° → e_t=0.697)
                     if (impactTerrainType === 'GREEN') {
                         let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
-                        if (firmness === 'SOFT') greenE_T = 0.65;
-                        else if (firmness === 'FIRM') greenE_T = 0.82;
+                        if (firmness === 'SOFT') greenE_T = 0.38;   // More absorption
+                        else if (firmness === 'FIRM') greenE_T = 0.60; // More skip
                     }
                     const E_T_BASE = {
-                        'GREEN': greenE_T, 'FAIRWAY': 0.88, 'TEE': 0.88,
-                        'SEMI-ROUGH': 0.72, 'ROUGH': 0.62, 'DEEP ROUGH': 0.52,
-                        'SAND': 0.42, 'WASTE': 0.78
+                        'GREEN': greenE_T, 'FAIRWAY': 0.58, 'TEE': 0.58,
+                        'SEMI-ROUGH': 0.45, 'ROUGH': 0.35, 'DEEP ROUGH': 0.25,
+                        'SAND': 0.20, 'WASTE': 0.52
                     };
                     let e_t_base = E_T_BASE[impactTerrainType] || 0.78;
-                    let e_t = Math.max(0.40, e_t_base - 0.004 * incidenceAngleDeg);
-                    // Driver fairway (38°): 0.88 - 0.152 = 0.728
-                    // Wedge fairway (35°): 0.88 - 0.140 = 0.740
-                    // 7-iron fairway (25°): 0.88 - 0.100 = 0.780
+                    // Shallow angles (putts) should retain nearly all tangential speed
+                    // At 0° (pure roll): e_t = 1.0 (no energy loss)
+                    // At 45° (steep impact): e_t = e_t_base (full restitution effect)
+                    // Squared curve: gentle at low angles, aggressive at high angles
+                    let angleFactor = Math.min(1.0, incidenceAngleDeg / 45.0);
+                    angleFactor = angleFactor * angleFactor; // Squared: gentle for putts, steep for wedges
+                    let e_t = 1.0 - angleFactor * (1.0 - e_t_base);
+                    e_t = Math.max(0.40, e_t);
+                    // Putt 1.5°:  factor=0.001 → e_t=0.999 (zero loss)
+                    // Chip 10°:   factor=0.049 → e_t=0.988
+                    // 7-iron 25°: factor=0.309 → e_t=0.932 (fairway 0.88→0.963)
+                    // Wedge 35°:  factor=0.605 → e_t=0.849 (green 0.75→0.849)
+                    // Driver 38°: factor=0.713 → e_t=0.914 (fairway 0.88→0.914)
                     
                     // Bounce Physics
                     let bounceVel = vecAdd(
