@@ -782,6 +782,27 @@ window.GolfPhysics = (function() {
 
             // Phase transitions for ground movement
             if (state.phase === "skid" || state.phase === "roll") {
+                // Tvinga bollen att "hug the ground" under rullning (följa backar)
+                let freshT = envCtx && envCtx.getTerrainAt ? envCtx.getTerrainAt(state.pos[0], state.pos[1], state.pos[2]) : tInfo;
+                
+                // Om vi svävar exakt över koppen, låt bli att tvinga upp den till marknivå
+                let overCup = false;
+                if (envCtx && envCtx.cupPositionLocal) {
+                    let dX = state.pos[0] - envCtx.cupPositionLocal[0];
+                    let dY = state.pos[1] - envCtx.cupPositionLocal[1];
+                    if (dX*dX + dY*dY < 0.054*0.054) overCup = true;
+                }
+
+                if (!overCup) {
+                    state.pos[2] = freshT.z; // Fix: Clamp to ground
+                    
+                    // Projicera hastigheten längs markens lutning
+                    let dot = state.vel[0]*freshT.normal[0] + state.vel[1]*freshT.normal[1] + state.vel[2]*freshT.normal[2];
+                    state.vel[0] -= dot * freshT.normal[0];
+                    state.vel[1] -= dot * freshT.normal[1];
+                    state.vel[2] -= dot * freshT.normal[2];
+                }
+
                 let speedXY = vecMag(state.vel);
                 
                 // Övergång Skid -> Roll
@@ -807,37 +828,35 @@ window.GolfPhysics = (function() {
                 let isBelowGround = state.pos[2] < tInfo.z;
                 let isInsideCupVolume = state.pos[2] >= cupBottomZ;
 
+                let dX = state.pos[0] - envCtx.cupPositionLocal[0];
+                let dY = state.pos[1] - envCtx.cupPositionLocal[1];
+                let distToCenter = Math.sqrt(dX*dX + dY*dY);
+
                 // Är vi i närheten av koppen ovanifrån (margin of error för hopp)
-                if (state.pos[2] <= (tInfo.z + 0.08) && !isBelowGround) {
-                    let dX = state.pos[0] - envCtx.cupPositionLocal[0];
-                    let dY = state.pos[1] - envCtx.cupPositionLocal[1];
-                    let distToCenter = Math.sqrt(dX*dX + dY*dY);
+                if (state.pos[2] <= (tInfo.z + 0.08) && !isBelowGround && distToCenter < 0.054) {
+                    let speedXY = vecMag([state.vel[0], state.vel[1], 0]);
+                    let offsetFactor = distToCenter / 0.054; 
                     
-                    if (distToCenter < 0.054) { // Över hålet (inom 54mm)
-                        let speedXY = vecMag([state.vel[0], state.vel[1], 0]);
-                        let offsetFactor = distToCenter / 0.054; 
-                        
-                        let captureThreshold = 1.63 - (offsetFactor * 0.7); 
-                        
-                        if (speedXY <= captureThreshold || (state.phase !== 'roll' && state.phase !== 'skid' && state.vel[2] < 0)) {
-                            // Vi ramlar i hålet! Tillåt gravitation att verka
-                            state.phase = "flight"; 
-                            // Tryck bollen nedåt direkt för att undvika konstig lip-hanging
-                            if (state.vel[2] >= 0) state.vel[2] = -0.5;
-                        } else if (speedXY > captureThreshold && speedXY <= 2.2 && offsetFactor > 0.3) {
-                            // LIP OUT!
-                            console.log("😥 LIP OUT! Fart: " + speedXY.toFixed(2) + " m/s, Offset: " + offsetFactor.toFixed(2));
-                            state.vel[0] = state.vel[0] * 0.4 + (dX * 18.0); 
-                            state.vel[1] = state.vel[1] * 0.4 + (dY * 18.0);
-                            state.vel[2] = 0.5; 
-                            state.pos[0] += (dX / distToCenter) * 0.02;
-                            state.pos[1] += (dY / distToCenter) * 0.02;
-                            state.phase = "bounce"; 
-                        }
+                    let captureThreshold = 1.63 - (offsetFactor * 0.7); 
+                    
+                    if (speedXY <= captureThreshold || (state.phase !== 'roll' && state.phase !== 'skid' && state.vel[2] < 0)) {
+                        // Vi ramlar i hålet! Tillåt gravitation att verka
+                        state.phase = "flight"; 
+                        // Tryck bollen nedåt direkt för att undvika konstig lip-hanging
+                        if (state.vel[2] >= 0) state.vel[2] = -0.5;
+                    } else if (speedXY > captureThreshold && speedXY <= 2.2 && offsetFactor > 0.3) {
+                        // LIP OUT!
+                        console.log("😥 LIP OUT! Fart: " + speedXY.toFixed(2) + " m/s, Offset: " + offsetFactor.toFixed(2));
+                        state.vel[0] = state.vel[0] * 0.4 + (dX * 18.0); 
+                        state.vel[1] = state.vel[1] * 0.4 + (dY * 18.0);
+                        state.vel[2] = 0.5; 
+                        state.pos[0] += (dX / distToCenter) * 0.02;
+                        state.pos[1] += (dY / distToCenter) * 0.02;
+                        state.phase = "bounce"; 
                     }
                 } 
                 // Om vi redan ÄR nere i hålet (under markytan Z)
-                else if (isBelowGround && isInsideCupVolume) {
+                else if (isBelowGround && isInsideCupVolume && distToCenter < 0.055) {
                     let dX = state.pos[0] - envCtx.cupPositionLocal[0];
                     let dY = state.pos[1] - envCtx.cupPositionLocal[1];
                     let distToCenter = Math.sqrt(dX*dX + dY*dY);
