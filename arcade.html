@@ -388,6 +388,12 @@
         <div style="position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); border-left:8px solid transparent; border-right:8px solid transparent; border-top:8px solid rgba(40,40,40,0.9);"></div>
     </div>
     
+    <!-- ELEVATION PROFILE (Tour de France style) -->
+    <div id="elevation-profile-container" style="display:none; position:absolute; bottom:370px; right:20px; width:220px; height:80px; background:rgba(15,23,42,0.90); border:2px solid rgba(255,255,255,0.2); border-bottom:none; border-radius:8px 8px 0 0; z-index:10; font-family:'Inter',sans-serif; overflow:hidden;">
+        <div style="position:absolute; top:2px; left:8px; color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; z-index:2;">Elevation Profile</div>
+        <canvas id="elevation-canvas" width="220" height="80" style="width:100%; height:100%;"></canvas>
+    </div>
+
     <!-- MINIMAP CONTAINER (UI wrapper för kameran) -->
     <div id="minimap-container" style="display:none; position:absolute; bottom:20px; right:20px; width:220px; height:340px; border:2px solid rgba(255,255,255,0.2); background:transparent; pointer-events:auto; z-index:10; font-family:'Inter',sans-serif;">
         <!-- HEADER -->
@@ -6016,6 +6022,143 @@
                 scene.add(window.breakLineMesh);
             }
 
+            // --- ELEVATION PROFILE (Tour de France style cross-section) ---
+            let epContainer = document.getElementById('elevation-profile-container');
+            let epCanvas = document.getElementById('elevation-canvas');
+            if (epContainer && epCanvas && window.ballPos && hole && hole.flag) {
+                epContainer.style.display = 'block';
+                let ctx = epCanvas.getContext('2d');
+                let W = 220, H = 80;
+                
+                // Sample terrain heights from ball to flag + 3m overshoot
+                let bx = window.ballPos.x, bz = window.ballPos.z;
+                let fx = hole.flag.x, fz = hole.flag.z;
+                let totalDist = Math.sqrt((fx-bx)*(fx-bx) + (fz-bz)*(fz-bz));
+                let overshoot = 3.0; // Show 3m past the flag
+                let sampleDist = totalDist + overshoot;
+                if (sampleDist < 1) sampleDist = 1;
+                let dirX = (fx - bx) / (totalDist || 1);
+                let dirZ = (fz - bz) / (totalDist || 1);
+                
+                let samples = [];
+                let sampleStep = 0.25; // every 25cm
+                let numSamples = Math.ceil(sampleDist / sampleStep);
+                if (numSamples > 400) numSamples = 400;
+                
+                let minH = Infinity, maxH = -Infinity;
+                for (let i = 0; i <= numSamples; i++) {
+                    let d = i * sampleStep;
+                    let sx = bx + dirX * d;
+                    let sz = bz + dirZ * d;
+                    let surf = localGetTerrainAt(sx, -sz);
+                    let h = surf ? surf.z : 0;
+                    samples.push({ d: d, h: h, isGreen: surf && surf.type === 'GREEN' });
+                    if (h < minH) minH = h;
+                    if (h > maxH) maxH = h;
+                }
+                
+                // Exaggerate vertical range for visibility (min 0.05m range)
+                let hRange = maxH - minH;
+                if (hRange < 0.05) { hRange = 0.05; minH = (minH + maxH) / 2 - 0.025; maxH = minH + 0.05; }
+                let padding = hRange * 0.15;
+                minH -= padding;
+                maxH += padding;
+                hRange = maxH - minH;
+                
+                // Clear and draw
+                ctx.clearRect(0, 0, W, H);
+                
+                // Draw filled gradient terrain profile
+                let topMargin = 16; // Space for title
+                let botMargin = 14; // Space for distance labels
+                let drawH = H - topMargin - botMargin;
+                
+                let gradient = ctx.createLinearGradient(0, topMargin, 0, H - botMargin);
+                gradient.addColorStop(0, 'rgba(76, 175, 80, 0.7)');  // Brighter green top
+                gradient.addColorStop(1, 'rgba(27, 94, 32, 0.9)');   // Dark green bottom
+                
+                ctx.beginPath();
+                ctx.moveTo(0, H - botMargin); // Bottom left
+                for (let i = 0; i < samples.length; i++) {
+                    let x = (samples[i].d / sampleDist) * W;
+                    let y = topMargin + drawH * (1 - (samples[i].h - minH) / hRange);
+                    if (i === 0) ctx.lineTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.lineTo(W, H - botMargin); // Bottom right
+                ctx.closePath();
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                // Draw terrain outline
+                ctx.beginPath();
+                for (let i = 0; i < samples.length; i++) {
+                    let x = (samples[i].d / sampleDist) * W;
+                    let y = topMargin + drawH * (1 - (samples[i].h - minH) / hRange);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                // Flag position marker (vertical dashed line)
+                let flagX = (totalDist / sampleDist) * W;
+                let flagSurf = localGetTerrainAt(fx, -fz);
+                let flagH = flagSurf ? flagSurf.z : 0;
+                let flagY = topMargin + drawH * (1 - (flagH - minH) / hRange);
+                
+                ctx.beginPath();
+                ctx.setLineDash([3, 3]);
+                ctx.moveTo(flagX, topMargin);
+                ctx.lineTo(flagX, H - botMargin);
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Flag icon
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(flagX - 1, flagY - 10, 2, 10);
+                ctx.beginPath();
+                ctx.moveTo(flagX + 1, flagY - 10);
+                ctx.lineTo(flagX + 8, flagY - 7);
+                ctx.lineTo(flagX + 1, flagY - 4);
+                ctx.fillStyle = '#ef4444';
+                ctx.fill();
+                
+                // Ball position dot
+                let ballSurf = localGetTerrainAt(bx, -bz);
+                let ballH = ballSurf ? ballSurf.z : 0;
+                let ballY = topMargin + drawH * (1 - (ballH - minH) / hRange);
+                ctx.beginPath();
+                ctx.arc(0, ballY, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // Height difference annotation
+                let heightDiff = flagH - ballH;
+                let diffText = (heightDiff >= 0 ? '▲' : '▼') + ' ' + Math.abs(heightDiff).toFixed(2) + 'm';
+                let diffColor = heightDiff >= 0 ? '#f87171' : '#60a5fa';
+                ctx.font = 'bold 9px Inter, sans-serif';
+                ctx.fillStyle = diffColor;
+                ctx.textAlign = 'center';
+                ctx.fillText(diffText, flagX, topMargin + 10);
+                
+                // Distance label at bottom
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '8px Inter, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText('Ball', 2, H - 3);
+                ctx.textAlign = 'center';
+                ctx.fillText(totalDist.toFixed(1) + 'm', flagX, H - 3);
+                ctx.textAlign = 'right';
+                ctx.fillText('+' + overshoot.toFixed(0) + 'm', W - 2, H - 3);
+            }
+
         } else {
             // Outside activation distance — cleanup all green viz
             if (window.greenBeads && window.greenBeads.length > 0) {
@@ -6030,6 +6173,8 @@
                 scene.remove(window.greenGridMesh);
                 window.greenGridMesh = null;
             }
+            let epContainer = document.getElementById('elevation-profile-container');
+            if (epContainer) epContainer.style.display = 'none';
         }
 
         applySculpting();
