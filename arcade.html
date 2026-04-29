@@ -617,7 +617,9 @@
                 <button id="btn-set-tee-yellow" onclick="setHoleItem('TEE_YELLOW')" class="hole-item-btn active" style="background:#facc15; color:#0f172a; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">🟡 Yellow Tee</button>
                 <button id="btn-set-tee-white" onclick="setHoleItem('TEE_WHITE')" class="hole-item-btn" style="background:#1e293b; color:#fff; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">⚪ White Tee</button>
                 <button id="btn-set-tee-black" onclick="setHoleItem('TEE_BLACK')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">⚫ Black Tee</button>
-                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; grid-column:1 / -1;">⛳ Flag</button>
+                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; grid-column:1 / 2;">⛳ Flag</button>
+                <button id="btn-set-target" onclick="setHoleItem('TARGET')" class="hole-item-btn" style="background:#1e293b; color:#fbbf24; border:1px solid #475569; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; grid-column:2 / 3;">🎯 Siktpunkt</button>
+                <button id="btn-draw-lines" onclick="drawRangeLines()" class="hole-item-btn" style="background:#38bdf8; color:#0f172a; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; grid-column:1 / -1; margin-top:5px;">📏 Rita Avståndslinjer</button>
             </div>
         </div>
 
@@ -2729,6 +2731,109 @@
         return group;
     }
 
+    function createTargetObject(x, y, z) {
+        let group = new THREE.Group();
+        
+        let ringGeo1 = new THREE.RingGeometry(0.5, 2.0, 32);
+        let ringMat1 = new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide });
+        let ring1 = new THREE.Mesh(ringGeo1, ringMat1);
+        ring1.rotation.x = -Math.PI / 2;
+        ring1.position.set(0, 0.05, 0);
+        group.add(ring1);
+        
+        let ringGeo2 = new THREE.RingGeometry(2.0, 4.0, 32);
+        let ringMat2 = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        let ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+        ring2.rotation.x = -Math.PI / 2;
+        ring2.position.set(0, 0.04, 0);
+        group.add(ring2);
+
+        let ringGeo3 = new THREE.RingGeometry(4.0, 6.0, 32);
+        let ringMat3 = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide });
+        let ring3 = new THREE.Mesh(ringGeo3, ringMat3);
+        ring3.rotation.x = -Math.PI / 2;
+        ring3.position.set(0, 0.03, 0);
+        group.add(ring3);
+        
+        group.position.set(x, y, z);
+        scene.add(group);
+        return group;
+    }
+
+    window.rangeLinesGroup = new THREE.Group();
+    
+    window.drawRangeLines = function() {
+        let hole = courseHoles[currentHoleIndex];
+        if(!hole.tees.yellow || !hole.flag) {
+            alert("Placera Yellow Tee och Siktpunkt/Flagga först för att rita linjer!");
+            return;
+        }
+        hole.rangeLinesEnabled = true;
+        renderRangeLines();
+        saveLevel();
+    };
+
+    window.renderRangeLines = function() {
+        scene.remove(window.rangeLinesGroup);
+        window.rangeLinesGroup = new THREE.Group();
+        scene.add(window.rangeLinesGroup);
+        
+        for(let h=0; h<courseHoles.length; h++) {
+            let hole = courseHoles[h];
+            if(hole.rangeLinesEnabled && hole.tees.yellow && hole.flag) {
+                let tx = hole.tees.yellow.x;
+                let tz = hole.tees.yellow.z;
+                let fx = hole.flag.x;
+                let fz = hole.flag.z;
+                
+                let dx = fx - tx;
+                let dz = fz - tz;
+                let totalDist = Math.hypot(dx, dz);
+                let angle = Math.atan2(dz, dx);
+                
+                let stepMeters = window.useMeters ? 50 : 50 / 1.09361; // 50 yards in meters
+                
+                for(let dist = stepMeters; dist < totalDist; dist += stepMeters) {
+                    let lx = tx + Math.cos(angle) * dist;
+                    let lz = tz + Math.sin(angle) * dist;
+                    
+                    let px = Math.floor(lx + TERRAIN_SIZE/2);
+                    let pz = Math.floor(lz + TERRAIN_SIZE/2);
+                    if(px >= 0 && px < TERRAIN_SEGS && pz >= 0 && pz < TERRAIN_SEGS) {
+                        let idx = pz * (TERRAIN_SEGS + 1) + px;
+                        let height = planeGeo.attributes.position.array[idx * 3 + 1];
+                        
+                        let lineGeo = new THREE.PlaneGeometry(10, 0.5); 
+                        let lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+                        let lineMesh = new THREE.Mesh(lineGeo, lineMat);
+                        
+                        lineMesh.position.set(lx, height + 0.1, lz);
+                        lineMesh.rotation.y = -angle + Math.PI/2;
+                        lineMesh.rotation.x = -Math.PI / 2;
+                        window.rangeLinesGroup.add(lineMesh);
+                        
+                        // Add distance text or simple marker on the side
+                        let sideX = lx + Math.cos(angle + Math.PI/2) * 6;
+                        let sideZ = lz + Math.sin(angle + Math.PI/2) * 6;
+                        let sHeight = height;
+                        let spx = Math.floor(sideX + TERRAIN_SIZE/2);
+                        let spz = Math.floor(sideZ + TERRAIN_SIZE/2);
+                        if(spx >= 0 && spx < TERRAIN_SEGS && spz >= 0 && spz < TERRAIN_SEGS) {
+                            sHeight = planeGeo.attributes.position.array[(spz * (TERRAIN_SEGS + 1) + spx) * 3 + 1];
+                        }
+                        
+                        let signGeo = new THREE.BoxGeometry(1, 0.1, 1);
+                        let signMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                        let signMesh = new THREE.Mesh(signGeo, signMat);
+                        signMesh.position.set(sideX, sHeight + 0.1, sideZ);
+                        signMesh.rotation.y = -angle + Math.PI/2;
+                        window.rangeLinesGroup.add(signMesh);
+                    }
+                }
+            }
+        }
+    };
+
     window.changeHole = function(dir) {
         currentHoleIndex += dir;
         if(currentHoleIndex < 0) currentHoleIndex = 17;
@@ -2762,6 +2867,7 @@
         else if(action === 'TEE_YELLOW') { activeBtn = document.getElementById('btn-set-tee-yellow'); activeBtn.style.background = '#facc15'; activeBtn.style.color = '#000'; }
         else if(action === 'TEE_WHITE') { activeBtn = document.getElementById('btn-set-tee-white'); activeBtn.style.background = '#fff'; activeBtn.style.color = '#000'; }
         else if(action === 'TEE_BLACK') { activeBtn = document.getElementById('btn-set-tee-black'); activeBtn.style.background = '#000'; activeBtn.style.color = '#fff'; }
+        else if(action === 'TARGET') { activeBtn = document.getElementById('btn-set-target'); activeBtn.style.background = '#fbbf24'; activeBtn.style.color = '#000'; }
         else { activeBtn = document.getElementById('btn-set-flag'); activeBtn.style.background = '#38bdf8'; activeBtn.style.color = '#0f172a'; }
         
         if(activeBtn) activeBtn.classList.add('active');
@@ -2829,7 +2935,7 @@
         if (appMode !== 'BUILD') return;
         
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
-        let dumpHoles = courseHoles.map(h => ({ par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null }));
+        let dumpHoles = courseHoles.map(h => ({ par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z, isTarget: h.flag.isTarget} : null, rangeLinesEnabled: h.rangeLinesEnabled }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
         let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
@@ -3225,8 +3331,10 @@
                         
                         if(hSync.flag) {
                             h.flag = hSync.flag;
-                            h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                            if (h.flag.isTarget) h.flagMesh = createTargetObject(h.flag.x, h.flag.y, h.flag.z);
+                            else h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
                         }
+                        if(hSync.rangeLinesEnabled) h.rangeLinesEnabled = true;
                     }
                     if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
                 }
@@ -3284,6 +3392,7 @@
                 console.error("Parse error", e);
             }
         }
+        if(typeof window.renderRangeLines === 'function') window.renderRangeLines();
         
         if (autoRun === 'setup') {
             setMode('PLAY');
@@ -4424,7 +4533,8 @@
                 
                 h.flag = hState.flag ? JSON.parse(JSON.stringify(hState.flag)) : null;
                 if(h.flag) {
-                    h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
+                    if (h.flag.isTarget) h.flagMesh = createTargetObject(h.flag.x, h.flag.y, h.flag.z);
+                    else h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
                 } else {
                     h.flagMesh = null;
                 }
@@ -5200,6 +5310,10 @@
                 if (hole.flagMesh) scene.remove(hole.flagMesh);
                 hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
                 hole.flagMesh = createFlagObject(hole.flag.x, hole.flag.y, hole.flag.z);
+            } else if (currentHoleAction === 'TARGET') {
+                if (hole.flagMesh) scene.remove(hole.flagMesh);
+                hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z, isTarget: true };
+                hole.flagMesh = createTargetObject(hole.flag.x, hole.flag.y, hole.flag.z);
             }
             saveLevel();
             return;
