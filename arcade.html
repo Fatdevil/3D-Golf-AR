@@ -60,7 +60,7 @@
 
   /* DYNAMIC HUD (Top Left) */
   #dynamic-hud {
-      position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; pointer-events: none;
+      position: absolute; top: 110px; left: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; pointer-events: none;
   }
   .dh-tile { background: rgba(15,23,42,0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; min-width: 160px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
   .dh-label { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -3858,7 +3858,16 @@
             startPos = [window.ballMesh.position.x, -window.ballMesh.position.z, window.ballMesh.position.y];
         }
         
-        window.shotStartPos = { x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z };
+        // Failsafe: Ensure the ball is never launched from UNDER ground (e.g. buried tees)
+        if (typeof window.localGetTerrainAt === 'function') {
+            let t = window.localGetTerrainAt(startPos[0], -startPos[1]);
+            if (t && startPos[2] < t.z) {
+                console.warn(`[Physics] Failsafe: Ball started underground (Z=${startPos[2].toFixed(3)}), snapping to terrain (Z=${t.z.toFixed(3)})`);
+                startPos[2] = t.z + 0.022; // 22mm (slightly above terrain to prevent instant clipping)
+            }
+        }
+        
+        window.shotStartPos = new THREE.Vector3(startPos[0], startPos[2], -startPos[1]);
 
         var vStimpEl = document.getElementById('in-stimp');
         window.GREEN_STIMP = vStimpEl ? (parseFloat(vStimpEl.value) || 10.0) : 10.0;
@@ -4491,6 +4500,8 @@
         
         let lt = document.getElementById('left-toolbar'); if(lt) lt.style.display = mode === 'BUILD' ? 'grid' : 'none';
         let rt = document.getElementById('right-toolbar'); if(rt) rt.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        
+        let tb = document.getElementById('top-bar'); if(tb) tb.style.display = mode === 'PLAY' ? 'none' : 'flex';
         
         // Unified Top Bar: Toggle build-only elements
         let assetBudget = document.getElementById('memory-budget-container');
