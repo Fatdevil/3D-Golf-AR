@@ -3481,8 +3481,6 @@
         window.activePlayerIndex = idx;
         let p = window.players[idx];
         
-        updatePlayerBanner();
-        
         window.ballLocked = false;
         // BUG-P02 FIX: Reset isPuttingMode to prevent state leak between players
         window.isPuttingMode = false;
@@ -3490,6 +3488,10 @@
         
         window.ballMesh.visible = true;
         window.ballMesh.position.set(p.lie.x, p.lie.y, p.lie.z);
+        
+        // Uppdatera banner EFTER bollen flyttats!
+        updatePlayerBanner();
+        
         window.ballMesh.velocity = new THREE.Vector3(0,0,0);
         window.ballMesh.angularVelocity = new THREE.Vector3(0,0,0);
         
@@ -3860,6 +3862,7 @@
         
         if (playState === 'ROUND_IDLE' || playState === 'IDLE') {
             playState = 'ROUND_FLYING';
+            if (document.getElementById('play-tools')) document.getElementById('play-tools').style.display = 'none';
             let p = window.players[window.activePlayerIndex];
             
             if (p && p.holedOut) {
@@ -5923,7 +5926,8 @@
                 if (window.shotStartPos) {
                     let finalPhys = flightData.path[flightData.path.length-1];
                     let dX = finalPhys.x - window.shotStartPos.x;
-                    let dZ = finalPhys.z - window.shotStartPos.z;
+                    // Fysikens Y-axel är djup (framåt). ThreeJS Z-axel är djup.
+                    let dZ = -finalPhys.y - window.shotStartPos.z;
                     
                     let totalM = Math.sqrt(dX*dX + dZ*dZ);
                     let carryM = (flightData.metrics.carryMeters || 0);
@@ -5940,6 +5944,7 @@
                 
                 if (playState === 'ROUND_FLYING') {
                     playState = 'ROUND_IDLE';
+                    if (document.getElementById('play-tools')) document.getElementById('play-tools').style.display = 'flex';
                     let hole = courseHoles[playingHoleIndex];
                     let distToPin = 999;
                     if(hole && hole.flag) {
@@ -6178,44 +6183,44 @@
         // --- LIE & CONDITIONS HUD ---
         let lieHud = document.getElementById('lie-conditions-hud');
         if ((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE') {
-            if(lieHud) lieHud.style.display = 'block';
-            if (typeof localGetTerrainAt === 'function') {
-                let surf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
-                let isTee = (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 0);
-                
-                let lType = isTee ? 'FAIRWAY' : (surf ? (surf.type || 'FAIRWAY') : 'FAIRWAY');
-                
-                if (document.getElementById('lie-text')) {
-                    document.getElementById('lie-text').innerText = isTee ? 'TEE' : lType;
-                }
-                
-                let iconCol = '#16a34a'; // Fairway
-                if (lType === 'WATER') iconCol = '#38bdf8';
-                else if (lType === 'SAND' || lType === 'WASTE') iconCol = '#fcd34d';
-                else if (lType === 'DEEP ROUGH') iconCol = '#14532d';
-                else if (lType === 'ROUGH') iconCol = '#15803d';
-                else if (lType === 'SEMI-ROUGH') iconCol = '#22c55e';
-                else if (lType === 'OB') iconCol = '#ef4444';
-                else iconCol = '#4ade80'; // Tee / Green
-                
-                if (document.getElementById('lie-icon')) {
-                    document.getElementById('lie-icon').style.background = iconCol;
-                }
-                
-                let powStr = "100%"; let spinStr = "100%"; let powCol = "#4ade80";
-                if (!isTee) {
-                    if (lType === 'ROUGH') { powStr = "85 - 95%"; spinStr = "60 - 70%"; powCol = "#fbbf24"; }
-                    else if (lType === 'DEEP ROUGH') { powStr = "75 - 90%"; spinStr = "40 - 60%"; powCol = "#ef4444"; }
-                    else if (lType === 'SAND') { powStr = "80 - 95%"; spinStr = "70 - 85%"; powCol = "#fbbf24"; }
-                    else if (lType === 'SEMI-ROUGH') { powStr = "95 - 98%"; spinStr = "90 - 95%"; powCol = "#a3e635"; }
-                }
-                if (document.getElementById('lie-power')) {
-                    document.getElementById('lie-power').innerText = powStr;
-                    document.getElementById('lie-power').style.color = powCol;
-                }
-                if (document.getElementById('lie-spin')) {
-                    document.getElementById('lie-spin').innerText = spinStr;
-                    document.getElementById('lie-spin').style.color = powCol;
+            try {
+                if(lieHud) lieHud.style.display = 'block';
+                if (typeof localGetTerrainAt === 'function') {
+                    let surf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
+                    let isTee = (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 0);
+                    
+                    let lType = isTee ? 'FAIRWAY' : (surf ? (surf.type || 'FAIRWAY') : 'FAIRWAY');
+                    
+                    if (document.getElementById('lie-text')) {
+                        document.getElementById('lie-text').innerText = isTee ? 'TEE' : lType;
+                    }
+                    
+                    let iconCol = '#16a34a'; // Fairway
+                    if (lType === 'WATER') iconCol = '#38bdf8';
+                    else if (lType === 'SAND' || lType === 'WASTE') iconCol = '#fcd34d';
+                    else if (lType === 'DEEP ROUGH') iconCol = '#14532d';
+                    else if (lType === 'ROUGH') iconCol = '#15803d';
+                    else if (lType === 'SEMI-ROUGH') iconCol = '#22c55e';
+                    else if (lType === 'OB') iconCol = '#ef4444';
+                    else iconCol = '#4ade80'; // Tee / Green
+                    
+                    if (document.getElementById('lie-icon')) {
+                        document.getElementById('lie-icon').style.background = iconCol;
+                    }
+                    
+                    let powStr = "100%"; let spinStr = "100%"; let powCol = "#4ade80";
+                    if (!isTee) {
+                        if (lType === 'ROUGH') { powStr = "85 - 95%"; spinStr = "60 - 70%"; powCol = "#fbbf24"; }
+                        else if (lType === 'DEEP ROUGH') { powStr = "75 - 90%"; spinStr = "40 - 60%"; powCol = "#f87171"; }
+                        else if (lType === 'SEMI-ROUGH') { powStr = "95 - 98%"; spinStr = "85 - 95%"; }
+                        else if (lType === 'SAND' || lType === 'WASTE') { powStr = "80 - 95%"; spinStr = "40 - 60%"; powCol = "#fbbf24"; }
+                    }
+                    
+                    if (document.getElementById('lie-power')) document.getElementById('lie-power').innerText = powStr;
+                    if (document.getElementById('lie-power')) document.getElementById('lie-power').style.color = powCol;
+                    if (document.getElementById('lie-spin')) document.getElementById('lie-spin').innerText = spinStr;
+                    let spinCol = powCol;
+                    if (document.getElementById('lie-spin')) document.getElementById('lie-spin').style.color = spinCol;
                 }
                 
                 if (window.aimTarget && document.getElementById('lie-distance')) {
@@ -6228,6 +6233,8 @@
                     let sign = elevDistM > 0 ? "+" : (elevDistM < 0 ? "-" : "");
                     document.getElementById('lie-elevation').innerText = sign + Math.abs(elevDistM).toFixed(1) + "m";
                 }
+            } catch (e) {
+                console.error("[Lie HUD Error]:", e);
             }
         } else {
             if(lieHud) lieHud.style.display = 'none';
