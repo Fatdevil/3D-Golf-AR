@@ -42,7 +42,7 @@
   
   /* HAMBURGER MENU */
   #hamburger-btn {
-      position: absolute; top: 20px; right: 20px; background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; cursor: pointer; z-index: 1000; backdrop-filter: blur(10px); transition: background 0.2s;
+      position: absolute; top: 20px; right: 20px; background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; cursor: pointer; z-index: 1000; backdrop-filter: blur(10px); transition: background 0.2s; pointer-events: auto;
   }
   #hamburger-btn:hover { background: rgba(255,255,255,0.1); }
   #hamburger-btn svg { width: 24px; height: 24px; stroke: #fff; display: block; }
@@ -62,7 +62,7 @@
   #dynamic-hud {
       position: absolute; top: 110px; left: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; pointer-events: none;
   }
-  .dh-tile { background: rgba(15,23,42,0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; min-width: 160px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+  .dh-tile { background: rgba(15,23,42,0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; min-width: 190px; gap: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
   .dh-label { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
   .dh-val { color: #fff; font-size: 16px; font-weight: 900; }
   .dh-val.highlight { color: #38bdf8; }
