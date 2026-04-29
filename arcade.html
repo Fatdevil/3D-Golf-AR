@@ -193,7 +193,34 @@
       position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(15,23,42,0.8); padding: 8px 15px; border-radius: 8px;
       color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
-  }</style>
+  }
+  
+  #global-loader {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: #0f172a;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  }
+  #global-loader.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(1.05);
+  }
+  .loader-spinner {
+      width: 50px; height: 50px;
+      border: 4px solid rgba(255,255,255,0.1);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+  }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+  </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -204,6 +231,12 @@
 <script src="physics.js?v=4"></script>
 </head>
 <body>
+<div id="global-loader">
+   <div class="loader-spinner"></div>
+   <div style="color: #fff; font-size: 24px; font-weight: 900; letter-spacing: 2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">VIRTUAL GOLF OS</div>
+   <div style="color: #94a3b8; font-size: 14px; margin-top: 10px; font-weight: 600;">Loading Environment...</div>
+</div>
+
 <!-- Standalone btn-home + floating Asset Budget + floating Biome selector REMOVED -->
 <!-- All consolidated into #top-bar below -->
 
@@ -3007,6 +3040,8 @@
         
         setTimeout(() => {
             if (typeof pCtx !== 'undefined') window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+            let loader = document.getElementById('global-loader');
+            if (loader) loader.classList.add('hidden');
         }, 800);
     }
     
