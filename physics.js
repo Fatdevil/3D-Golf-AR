@@ -18,7 +18,7 @@ window.GolfPhysics = (function() {
         rollingDecel: 0.8,
         spinDampingPerBounce: 0.85, // Ändrad från 0.75. Mindre direkt spin-död, gör att wedgar spinner mer på greenen (GSPro-stil)
         minBounceVerticalSpeed: 1.0,
-        stopSpeed: 0.50 // Ökad från 0.25 för att förhindra extremt långsam osynlig rullning i slutet av puttar
+        stopSpeed: 0.05 // Sänkt från 0.50. 0.50 kapade av rullningen alldeles för tidigt (~1.1 mph). 0.05 låter bollen rulla ut naturligt.
     };
 
     // Hjälpfunktioner för miljö och vektorer
@@ -134,16 +134,19 @@ window.GolfPhysics = (function() {
             let spinTractionMag = 0;
 
             // Fix 2: Spin-induced roll braking (applies in both roll and skid phases)
-            // After bounce, spin direction is unreliable (transformed by reflection).
-            // Any remaining spin at surface contact creates friction — always brake.
-            let spinMag = vecMag(state.spin);
-            let spinRpm = (spinMag * 60) / (2 * Math.PI);
-            if (spinRpm > 100) {
-                let spinSurfaceSpeed = spinMag * RADIUS; // m/s at ball surface
-                // Fix 4: spinBrake cap 8.0 for high-spin wedge shots
-                let spinBrake = Math.min(spinSurfaceSpeed * 0.50, 8.0);
-                // Always add as braking (negative spinTractionMag = more friction)
-                spinTractionMag = -spinBrake;
+            // Determine if spin is backspin or topspin relative to travel direction
+            let v_spin = [-state.spin[1] * RADIUS, state.spin[0] * RADIUS, 0];
+            let dirXY = vSpeed > 0.001 ? [currentV[0]/vSpeed, currentV[1]/vSpeed] : [0,0];
+            let spinDotDir = v_spin[0] * dirXY[0] + v_spin[1] * dirXY[1];
+            
+            // If spinDotDir > 0, the contact point is moving forward faster than pure sliding -> BACKSPIN
+            if (spinDotDir > 0.5) { // Only apply aggressive braking for noticeable backspin
+                let spinBrake = Math.min(spinDotDir * 0.50, 8.0);
+                spinTractionMag = -spinBrake; // Negative means it adds to effective friction
+            } else if (spinDotDir < -0.5) {
+                // Topspin could theoretically push the ball forward if slipping
+                // For now, just don't brake it artificially.
+                spinTractionMag = 0;
             }
 
             // Kinetisk glidfas ("Skid") har ungefär 50-80% högre friktion än rullfriktion
@@ -501,7 +504,7 @@ window.GolfPhysics = (function() {
                  state.spin[2] *= spinDecay;
             }
             
-            if (state.phase === "roll") {
+            if (state.phase === "roll" || state.phase === "skid") {
                 // BYPASS KOPPEN FÖR ATT INTE TVINGAS TILL GRÄS-YTAN I HÅLET
                 let insideCup = false;
                 if (envCtx && envCtx.cupPositionLocal) {
@@ -536,7 +539,8 @@ window.GolfPhysics = (function() {
             }
 
             // Markkontakt och Fysik-övergång via 3D Slopes (Bypass om vi är över koppen!)
-            if (state.pos[2] <= tInfo.z && state.phase !== "stopped" && !overCup) {
+            // Only trigger collision physics if we are falling/bouncing. If already skidding/rolling, we hug the ground naturally.
+            if (state.pos[2] <= tInfo.z && (state.phase === "flight" || state.phase === "bounce") && !overCup) {
                 
                 // === FORENSICS: Log first ground collision ===
                 if (!_dbgFirstGroundHit && state.phase === 'flight') {
@@ -773,24 +777,26 @@ window.GolfPhysics = (function() {
                         metrics.bounceCount++;
                     }
                 }
+                // (Skid/roll transitions handled below)
+            } // END COLLISION BLOCK
 
-                if (state.phase === "skid" || state.phase === "roll") {
-                    let speedXY = vecMag(state.vel);
-                    
-                    // Övergång Skid -> Roll
-                    if (state.phase === "skid") {
-                        // Så länge forward speed skiljer sig drastiskt från spinn-speed, sladdar vi!
-                        let spinSpeed = Math.sqrt(state.spin[0]*state.spin[0] + state.spin[1]*state.spin[1]) * RADIUS;
-                        // Ren approximationsgräns. I snitt ca 10-20% av en putt.
-                        if (Math.abs(speedXY - spinSpeed) < 1.0 || speedXY < 2.0) {
-                            state.phase = "roll"; // Hjulet har fått fäste!
-                        }
+            // Phase transitions for ground movement
+            if (state.phase === "skid" || state.phase === "roll") {
+                let speedXY = vecMag(state.vel);
+                
+                // Övergång Skid -> Roll
+                if (state.phase === "skid") {
+                    // Så länge forward speed skiljer sig drastiskt från spinn-speed, sladdar vi!
+                    let spinSpeed = Math.sqrt(state.spin[0]*state.spin[0] + state.spin[1]*state.spin[1]) * RADIUS;
+                    // Ren approximationsgräns. I snitt ca 10-20% av en putt.
+                    if (Math.abs(speedXY - spinSpeed) < 1.0 || speedXY < 2.0) {
+                        state.phase = "roll"; // Hjulet har fått fäste!
                     }
+                }
 
-                    if (speedXY < GROUND.stopSpeed) {
-                        state.phase = "stopped";
-                        state.vel = [0, 0, 0];
-                    }
+                if (speedXY < GROUND.stopSpeed) {
+                    state.phase = "stopped";
+                    state.vel = [0, 0, 0];
                 }
             }
 
