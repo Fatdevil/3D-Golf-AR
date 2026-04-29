@@ -432,6 +432,14 @@
             </div>
             <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="background:#4ade80; color:#0f172a; border:none; padding:8px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; width:100%;">⬆️ RAISE</button>
             
+            <label id="hardness-label" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Brush Hardness</label>
+            <input type="range" id="hardness-slider" min="0" max="100" value="100" oninput="updateBrushHardness()" style="width:140px; accent-color:#f43f5e; cursor:pointer;" title="Change hardness">
+            
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:5px; display:flex; align-items:center; gap:5px; cursor:pointer;">
+                <input type="checkbox" id="retro-filter-cb" onchange="toggleRetroFilter()" style="accent-color:#38bdf8; cursor:pointer;">
+                Sharp Edges (Retro)
+            </label>
+            
             <div id="green-diff-group" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #475569;">
                 <label style="color:#fbbf24; font-size:10px; font-weight:bold; text-transform:uppercase;">Green Diff</label>
                 <div style="display:flex; justify-content:space-between; width:100%; gap:4px;">
@@ -3984,6 +3992,21 @@
             sculptBrushCursor.geometry = new THREE.RingGeometry(currentBrushSize - 0.5, currentBrushSize, 32);
         }
     };
+    
+    window.currentBrushHardness = 1.0;
+    window.updateBrushHardness = function() {
+        let val = document.getElementById('hardness-slider') ? document.getElementById('hardness-slider').value : 100;
+        window.currentBrushHardness = parseInt(val) / 100;
+    };
+    
+    window.toggleRetroFilter = function() {
+        let isRetro = document.getElementById('retro-filter-cb') ? document.getElementById('retro-filter-cb').checked : false;
+        if (typeof mapTex !== 'undefined') {
+            mapTex.magFilter = isRetro ? THREE.NearestFilter : THREE.LinearFilter;
+            mapTex.minFilter = isRetro ? THREE.NearestFilter : THREE.LinearFilter;
+            mapTex.needsUpdate = true;
+        }
+    };
 
     const undoStack = [];
     window.performUndo = function() {
@@ -5226,6 +5249,15 @@
                 }
             } else {
                 let brushColor = '#' + targetPaintColor.getHexString();
+                let hardness = window.currentBrushHardness !== undefined ? window.currentBrushHardness : 1.0;
+                
+                if (hardness < 1.0) {
+                    pCtx.shadowBlur = cRad * (1.0 - hardness) * 2;
+                    pCtx.shadowColor = brushColor;
+                } else {
+                    pCtx.shadowBlur = 0;
+                }
+                
                 pCtx.strokeStyle = brushColor;
                 pCtx.fillStyle = brushColor;
                 pCtx.lineWidth = cRad * 2;
@@ -5239,6 +5271,7 @@
                     pCtx.lineTo(pCtx2X, pCtx2Z);
                     pCtx.stroke();
                 }
+                pCtx.shadowBlur = 0; // Reset
             }
             if(mapTex) mapTex.needsUpdate = true;
         }
