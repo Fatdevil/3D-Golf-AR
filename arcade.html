@@ -664,9 +664,12 @@
         <div style="background:#0f172a; padding:30px; border-radius:20px; border:2px solid #38bdf8; width:700px; text-align:left; box-shadow: 0 10px 40px rgba(56,189,248,0.3); max-height:90vh; overflow-y:auto;">
             <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:28px; border-bottom:1px solid #334155; padding-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
                 <span>⚙️ GOLF OS <span style="color:#38bdf8;">ROUND SETUP</span></span>
-                <label style="font-size:14px; background:transparent; border:2px solid #ef4444; padding:5px 10px; border-radius:8px; cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:5px; color:#ef4444;" title="Låser upp Trackman Handicap krav">
-                    <input type="checkbox" id="set-tournament-mode" onchange="toggleTournamentMode(this.checked)" style="accent-color:#ef4444;"> Tournament Mode
-                </label>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <label style="font-size:14px; background:transparent; border:2px solid #ef4444; padding:5px 10px; border-radius:8px; cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:5px; color:#ef4444;" title="Låser upp Trackman Handicap krav">
+                        <input type="checkbox" id="set-tournament-mode" onchange="toggleTournamentMode(this.checked)" style="accent-color:#ef4444;"> Tournament Mode
+                    </label>
+                    <button onclick="document.getElementById('settings-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:28px;cursor:pointer;line-height:1;">&times;</button>
+                </div>
             </h2>
 
             <div style="display:flex; gap:20px; margin-top:20px;">
@@ -919,8 +922,12 @@
                     </tbody>
                 </table>
             </div>
-            <div style="margin-top:20px; text-align:center;">
+            <div id="scorecard-footer" style="margin-top:20px; text-align:center; display:flex; gap:15px; justify-content:center;">
                 <button onclick="document.getElementById('scorecard-modal').style.display='none'" style="background:#38bdf8; color:#0f172a; border:none; padding:12px 30px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">Close Scorecard</button>
+            </div>
+            <div id="scorecard-endround-btns" style="display:none; margin-top:15px; text-align:center; display:flex; gap:15px; justify-content:center;">
+                <button onclick="document.getElementById('scorecard-modal').style.display='none'; commitSettingsAndStart();" style="background:#10b981; color:#fff; border:none; padding:14px 30px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🔄 Play Again</button>
+                <button onclick="window.location.href='arcade_hub.html'" style="background:#6366f1; color:#fff; border:none; padding:14px 30px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(99,102,241,0.4);">🏠 Return to Hub</button>
             </div>
         </div>
     </div>
@@ -942,10 +949,9 @@
     };
     
     window.openMatchSettings = function() {
+        // Match is active if we're in ROUND_IDLE or ROUND_FLYING
         let isMatchActive = (typeof playState !== 'undefined' && 
-            playState !== 'BUILDING' && playState !== 'SETUP' && 
-            window.players && window.players.length > 0 &&
-            window.players.some(p => p.strokes > 0 || !p.holedOut === false));
+            (playState === 'ROUND_IDLE' || playState === 'ROUND_FLYING'));
         
         if (isMatchActive) {
             // ACTIVE MATCH: Show safe in-round settings only
@@ -963,7 +969,7 @@
                 modal.style.display = 'flex';
             }
         } else {
-            // PRE-MATCH: Show full setup modal
+            // PRE-MATCH or POST-MATCH: Show full setup modal
             document.getElementById('settings-modal').style.display = 'flex';
         }
     };
@@ -2789,6 +2795,11 @@
         cRed += "<td style='color:#fbbf24;'>"+sumRed+"</td></tr>";
         
         tbody.innerHTML += cHtml + cBlack + cWhite + cYellow + cRed;
+        // Mid-round scorecard view: show close, hide end-round buttons
+        let endBtns = document.getElementById('scorecard-endround-btns');
+        if (endBtns) endBtns.style.display = 'none';
+        let closeBtn = document.getElementById('scorecard-footer');
+        if (closeBtn) closeBtn.style.display = 'flex';
         document.getElementById('scorecard-modal').style.display = 'flex';
     };
     
@@ -3791,12 +3802,23 @@
             pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
             setTimeout(() => { pop.style.opacity = '0'; }, 3000);
             
-            playState = 'IDLE';
+            playState = 'ROUND_COMPLETE';
             document.getElementById('player-banner').style.display = 'none';
             document.getElementById('play-tools').style.display = 'none';
-            document.getElementById('btn-start-round').style.display = 'block';
+            document.getElementById('btn-start-round').style.display = 'none';
+            
+            // Hide minimap and lie HUD
+            let mapCont = document.getElementById('minimap-container');
+            if (mapCont) mapCont.style.display = 'none';
+            let lieHud = document.getElementById('lie-conditions-hud');
+            if (lieHud) lieHud.style.display = 'none';
             
             renderScorecard();
+            // Show end-round action buttons, hide close button
+            let endBtns = document.getElementById('scorecard-endround-btns');
+            if (endBtns) endBtns.style.display = 'flex';
+            let closeBtn = document.getElementById('scorecard-footer');
+            if (closeBtn) closeBtn.style.display = 'none';
             document.getElementById('scorecard-modal').style.display = 'flex';
             return;
         }
