@@ -3297,7 +3297,7 @@
         LANDING_HEIGHT: 3.0,       // Kamerahöjd vid landning
         LANDING_BEHIND: 10.0,      // Meter bakom landningspunkt
         AIM_LERP: 0.08,            // Mjukhet vid aim-transition
-        SETTLE_DURATION: 90,       // Frames att vänta innan aim-transition
+        SETTLE_DURATION: 45,       // Frames att vänta innan aim-transition
     };
     let gameCamPhase = 'IDLE_AIM';  // TEE_AIM | PUTT_AIM | FLIGHT_FOLLOW | LANDING_SETTLE | IDLE_AIM | HOLE_FLYOVER
     let landingSettleTimer = 0;
@@ -3640,7 +3640,7 @@
         pop.style.color = "#38bdf8";
         pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
         pop.style.opacity = '1';
-        setTimeout(() => { pop.style.opacity = '0'; pop.style.color = "#fcd34d"; }, 2500);
+        setTimeout(() => { pop.style.opacity = '0'; pop.style.color = "#fcd34d"; }, 1500);
     }
     
     window.evaluateNextTurn = function() {
@@ -3687,7 +3687,7 @@
         } else {
             window.nextTurnTimeout = setTimeout(() => {
                 switchTurnTo(nextPlayer);
-            }, p.holedOut ? 1500 : 500);
+            }, p.holedOut ? 1000 : 200);
         }
     }
 
@@ -4224,6 +4224,8 @@
         flightTick = 0;
         window._flightStartTime = null; // Reset delta-time tracker
         window._lastProcessedTick = 0;
+        window._rollStartTick = null; // Reset roll acceleration tracker
+        window._flightAccumMs = 0;
         isFlying = true;
         
         tracerPointsCount = 0;
@@ -5936,19 +5938,39 @@
             if (!window._flightStartTime) {
                 window._flightStartTime = now;
                 window._lastProcessedTick = 0;
+                window._flightAccumMs = 0;
+                window._lastFrameTime = now;
             }
             
-            var elapsedMs = now - window._flightStartTime;
+            var frameDeltaMs = Math.min(now - (window._lastFrameTime || now), 50); // cap at 50ms
+            window._lastFrameTime = now;
+            
+            // Determine playback speed based on ball phase
+            // Flight: 1x real-time, Roll/Skid/Bounce: accelerate progressively
+            var speedMultiplier = 1.0;
+            if (flightData.path[flightTick]) {
+                let curPhase = flightData.path[flightTick].phase;
+                if (curPhase === 'roll' || curPhase === 'skid' || curPhase === 'bounce') {
+                    // Start at 2x, ramp up to 5x over 2 seconds of rolling
+                    let rollStartTick = flightTick;
+                    // Find how long we've been in roll phase
+                    let rollDurationMs = (flightTick - (window._rollStartTick || flightTick)) * 5.0;
+                    if (!window._rollStartTick) window._rollStartTick = flightTick;
+                    speedMultiplier = Math.min(5.0, 2.0 + rollDurationMs / 1500.0);
+                }
+            }
+            
+            window._flightAccumMs += frameDeltaMs * speedMultiplier;
             
             // Physics dt = 0.005s = 5ms per tick
-            var exactTick = elapsedMs / 5.0;
-            var newTick = Math.floor(exactTick);
+            var newTick = Math.floor(window._flightAccumMs / 5.0);
             
             if (newTick >= flightData.path.length - 1) {
                 newTick = flightData.path.length - 1;
                 var pt = flightData.path[newTick];
                 window.ballMesh.position.set(pt.x, pt.z + 0.0213, -pt.y);
             } else {
+                var exactTick = window._flightAccumMs / 5.0;
                 var t = exactTick - newTick; // Lerp factor 0.0 -> 1.0
                 var p1 = flightData.path[newTick];
                 var p2 = flightData.path[newTick + 1];
@@ -6125,7 +6147,7 @@
                             pop.style.opacity = '1';
                             pop.style.transform = 'translate(-50%, -60%) scale(1.2)';
                             console.log('⛳ HOLED! Total: ' + total + ', Par: ' + par + ' -> ' + scoreText);
-                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -60%) scale(1.0)'; evaluateNextTurn(); }, 2500);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; pop.style.transform = 'translate(-50%, -60%) scale(1.0)'; evaluateNextTurn(); }, 1500);
                             return; // Skip gimme/auto-putt — ball is in the hole!
                         }
                     }
@@ -6157,7 +6179,7 @@
                             p.holedOut = true;
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
-                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2500);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
                         } else if (!shouldConcede && (isGreen || (lieSurface && (lieSurface.type === 'FAIRWAY' || lieSurface.type === 'SEMI-ROUGH') && distToPin < 5.0)) && mode !== 'OFF') {
                             // BUG-P03 FIX: Auto-putt only from GREEN or close fringe (within 5m), not from rough/sand at 20m
                             let putts = 2;
@@ -6180,7 +6202,7 @@
                             p.holedOut = true;
                             pop.innerText = `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
                             pop.style.opacity = '1';
-                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2500);
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
                         } else {
                             // Vi är inte klara. Nytt slag ELLER Manuell Putt!
                             if (isGreen && mode === 'OFF') {
@@ -6200,7 +6222,7 @@
                             // Evaluate who plays next (this player is not done)
                             evaluateNextTurn();
                         }
-                    }, 500);
+                    }, 200);
                 } else {
                     // ARCADE MODE: Klassisk reset efter 2 sekunder
                     setTimeout(() => {
