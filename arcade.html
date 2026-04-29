@@ -5913,9 +5913,12 @@
             // --- REAL-TIME HUD UPDATE ---
             if (window.shotStartPos && flightData.path[newTick]) {
                 let curP = flightData.path[newTick];
+                // shotStartPos is THREE.Vector3(physX, physHeight, -physY)
+                // curP is physics: {x: physX, y: physY, z: physHeight}
+                // Distance in XY plane (ground): dX = physX diff, dY = physY diff
                 let dX = curP.x - window.shotStartPos.x;
-                let dZ = curP.z - window.shotStartPos.z; // Kom ihåg att 3D rymden kan ha z = -y från physics
-                let totalM = Math.sqrt(dX*dX + dZ*dZ);
+                let dY = curP.y - (-window.shotStartPos.z); // physY_start = -shotStartPos.z
+                let totalM = Math.sqrt(dX*dX + dY*dY);
                 
                 let elTotal = document.getElementById('hud-total');
                 if (elTotal) elTotal.innerText = window.formatDistStr(totalM);
@@ -5954,19 +5957,23 @@
                 // --- UPPDATERA CARRY/TOTAL I HUD ---
                 if (window.shotStartPos) {
                     let finalPhys = flightData.path[flightData.path.length-1];
+                    // shotStartPos is THREE.Vector3(physX, physHeight, -physY)
+                    // finalPhys is physics: {x: physX, y: physY, z: physHeight}
                     let dX = finalPhys.x - window.shotStartPos.x;
-                    // Fysikens Y-axel är djup (framåt). ThreeJS Z-axel är djup.
-                    let dZ = -finalPhys.y - window.shotStartPos.z;
+                    let dY = finalPhys.y - (-window.shotStartPos.z); // physY_start = -shotStartPos.z
                     
-                    let totalM = Math.sqrt(dX*dX + dZ*dZ);
+                    let totalM = Math.sqrt(dX*dX + dY*dY);
                     let carryM = (flightData.metrics.carryMeters || 0);
+                    
+                    // Sanity: total should never be less than carry
+                    if (totalM < carryM) totalM = carryM;
                     
                     if (document.getElementById('hud-carry')) {
                         document.getElementById('hud-carry').innerText = window.formatDistStr(carryM);
                         if (document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
                         if (document.getElementById('hud-total')) document.getElementById('hud-total').innerText = window.formatDistStr(totalM); 
                         
-                        let offPath = Math.abs(finalPhys.x);
+                        let offPath = Math.abs(finalPhys.x - window.shotStartPos.x);
                         if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = window.formatDistStr(offPath);
                     }
                 }

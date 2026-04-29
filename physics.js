@@ -338,7 +338,7 @@ window.GolfPhysics = (function() {
         path.push({ 
             x: startPosXZY[0], y: startPosXZY[1], z: startPosXZY[2], 
             vx: vel[0], vy: vel[1], vz: vel[2],
-            time: 0 
+            time: 0, phase: 'flight' 
         });
         
         let metrics = {
@@ -560,7 +560,7 @@ window.GolfPhysics = (function() {
                 state.vel = [...impactVel];
                 
                 if (metrics.bounceCount === 0 && state.phase === 'flight') {
-                    metrics.carryMeters = Math.sqrt(state.pos[0]*state.pos[0] + state.pos[1]*state.pos[1]);
+                    metrics.carryMeters = Math.sqrt((state.pos[0]-startPosXZY[0])*(state.pos[0]-startPosXZY[0]) + (state.pos[1]-startPosXZY[1])*(state.pos[1]-startPosXZY[1]));
                 }
                 
                 // Bestäm markens fysikegenskaper
@@ -645,7 +645,7 @@ window.GolfPhysics = (function() {
                 
                 if (state.phase === "flight" || state.phase === "bounce") {
                     if (state.phase === "flight") {
-                        metrics.carryMeters = Math.sqrt(state.pos[0]*state.pos[0] + state.pos[1]*state.pos[1]);
+                        metrics.carryMeters = Math.sqrt((state.pos[0]-startPosXZY[0])*(state.pos[0]-startPosXZY[0]) + (state.pos[1]-startPosXZY[1])*(state.pos[1]-startPosXZY[1]));
                         metrics.flightTime = t - dt + f * dt;
                         
                         console.log(`⛳ IMPACT DATA (${impactTerrainType}) ⛳`);
@@ -806,12 +806,12 @@ window.GolfPhysics = (function() {
             path.push({ 
                 x: state.pos[0], y: state.pos[1], z: state.pos[2], 
                 vx: state.vel[0], vy: state.vel[1], vz: state.vel[2],
-                time: t 
+                time: t, phase: state.phase 
             });
         }
 
         
-        metrics.totalMeters = Math.sqrt(state.pos[0]*state.pos[0] + state.pos[1]*state.pos[1]);
+        metrics.totalMeters = Math.sqrt((state.pos[0]-startPosXZY[0])*(state.pos[0]-startPosXZY[0]) + (state.pos[1]-startPosXZY[1])*(state.pos[1]-startPosXZY[1]));
         metrics.totalTime = t;
 
         return { path: path, metrics: metrics };
