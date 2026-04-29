@@ -57,9 +57,10 @@ window.GolfPhysics = (function() {
         
         // Drag Crisis Re-kurva (Värden från referenstabell)
         // Högre fart => mer turbolens => minskat drag. 
-        if (vMag > 65) cd = 0.19;
-        else if (vMag > 50) cd = lerp(0.22, 0.19, (vMag - 50) / 15);
-        else if (vMag > 20) cd = lerp(0.26, 0.22, (vMag - 20) / 30);
+        // Fix 3: Driver C_D base — 0.19 was too low at high Re, giving 225 yds instead of 215
+        if (vMag > 65) cd = 0.22;
+        else if (vMag > 50) cd = lerp(0.24, 0.22, (vMag - 50) / 15);
+        else if (vMag > 20) cd = lerp(0.26, 0.24, (vMag - 20) / 30);
         else cd = 0.26;
         
         // Spin-dependent drag — Bearman & Harvey (1976) windtunnel data
@@ -132,26 +133,17 @@ window.GolfPhysics = (function() {
 
             let spinTractionMag = 0;
 
-            // Backspin-induced roll braking (applies in both roll and skid phases)
-            // High backspin at landing creates friction force opposing forward motion
-            // Remaining spin after bounce ≈ 60% of impact spin (slip-bounce)
+            // Fix 2: Spin-induced roll braking (applies in both roll and skid phases)
+            // After bounce, spin direction is unreliable (transformed by reflection).
+            // Any remaining spin at surface contact creates friction — always brake.
             let spinMag = vecMag(state.spin);
             let spinRpm = (spinMag * 60) / (2 * Math.PI);
             if (spinRpm > 100) {
                 let spinSurfaceSpeed = spinMag * RADIUS; // m/s at ball surface
-                // Backspin opposes forward roll — check spin direction vs velocity
-                let spinVelDir = vecCross(state.spin, N);
-                let dirFb = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,1,0];
-                let spinDotDir = spinVelDir[0]*dirFb[0] + spinVelDir[1]*dirFb[1] + spinVelDir[2]*dirFb[2];
-                
-                if (spinDotDir < 0) {
-                    // Backspin: adds braking force proportional to surface speed
-                    let spinBrake = Math.min(spinSurfaceSpeed * 0.50, 6.0); // m/s², cap at 6.0
-                    spinTractionMag = -spinBrake; // Negative = increases friction
-                } else {
-                    // Topspin: reduces friction (ball rolls further)
-                    spinTractionMag = Math.min(spinSurfaceSpeed * 0.15, 2.0);
-                }
+                // Fix 4: spinBrake cap 8.0 for high-spin wedge shots
+                let spinBrake = Math.min(spinSurfaceSpeed * 0.50, 8.0);
+                // Always add as braking (negative spinTractionMag = more friction)
+                spinTractionMag = -spinBrake;
             }
 
             // Kinetisk glidfas ("Skid") har ungefär 50-80% högre friktion än rullfriktion
@@ -244,11 +236,13 @@ window.GolfPhysics = (function() {
         state.pos = vecAdd(state.pos, vecScale(dp, dt));
         state.vel = vecAdd(state.vel, vecScale(dv, dt));
         
-        // Dynamisk spin decay: baserad på hastighet (Claude/Trackman spec)
-        // ~7%/s vid 67m/s (150mph), ~2.8%/s vid 13.4m/s (30mph)
+        // Fix 1: Spin decay — increased minimum from 2.8% to 5.0% per second
+        // Old: 2.8%-7.0% range gave only 3.6% average → 79% spin at impact (too high)
+        // New: 5.0%-7.0% range gives ~6% average → 63% spin at impact (matches Trackman)
+        // Verification: 9000 × e^(-0.060 × 6.62) = 9000 × 0.672 = 6048 rpm at landing
         let speedMs = vecMag(state.vel);
         let t_speed = Math.max(0, Math.min(1, (speedMs - 13.4) / (67.0 - 13.4)));
-        let decayRate = 0.028 + t_speed * (0.070 - 0.028);
+        let decayRate = 0.050 + t_speed * (0.070 - 0.050);
         
         state.spin = vecScale(state.spin, Math.exp(-decayRate * dt)); 
     }
@@ -495,9 +489,12 @@ window.GolfPhysics = (function() {
                 }
             }
             
-            // Mark-spinn decay (spin dör snabbt ut under Skid/Roll fas tills den matchar rörelsen)
+            // Mark-spinn decay (spin dör ut under Skid/Roll fas tills den matchar rörelsen)
+            // Speed-dependent: fast ball sheds spin quickly, slow ball retains spin for braking
             if (state.phase === "skid" || state.phase === "roll") {
-                 let spinDecay = 1.0 - (dt * 2.5); // Dödar spinn successivt
+                 let rollSpeed = vecMag(state.vel);
+                 let decayFactor = 0.3 + Math.min(rollSpeed / 10.0, 1.0) * 0.9; // 0.3 at rest, 1.2 at 10+ m/s
+                 let spinDecay = 1.0 - (dt * decayFactor);
                  if (spinDecay < 0) spinDecay = 0;
                  state.spin[0] *= spinDecay;
                  state.spin[1] *= spinDecay;
