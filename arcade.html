@@ -260,7 +260,8 @@
         </div>
         
         <button class="hb-btn" onclick="window.location.href='arcade_hub.html'">← Return to Hub</button>
-        <button class="hb-btn" onclick="toggleHamburgerMenu(); document.getElementById('settings-modal').style.display='flex';">⚙️ Match Settings</button>
+        <button class="hb-btn" onclick="toggleHamburgerMenu(); openMatchSettings();">⚙️ Match Settings</button>
+        <button class="hb-btn" id="hb-scorecard-btn" style="display:none;" onclick="toggleHamburgerMenu(); if(typeof showScorecard==='function') showScorecard();">📋 Scorecard</button>
         
         <div class="hb-section-title">Data Tiles (HUD)</div>
         
@@ -787,6 +788,71 @@
         </div>
     </div>
 
+    <!-- IN-ROUND SETTINGS MODAL (Safe settings only during active match) -->
+    <div id="inround-settings-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto; font-family:'Inter', sans-serif;">
+        <div style="background:#0f172a; padding:30px; border-radius:20px; border:2px solid #38bdf8; width:500px; text-align:left; box-shadow: 0 10px 40px rgba(56,189,248,0.3); max-height:90vh; overflow-y:auto;">
+            <h2 style="color:#fff; margin-top:0; font-weight:900; font-size:24px; border-bottom:1px solid #334155; padding-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                <span>⚙️ IN-ROUND <span style="color:#38bdf8;">SETTINGS</span></span>
+                <button onclick="document.getElementById('inround-settings-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:28px;cursor:pointer;">&times;</button>
+            </h2>
+            
+            <div style="background:#1e293b; padding:15px; border-radius:12px; border:1px solid #334155; margin-bottom:15px;">
+                <h3 style="color:#4ade80; margin:0 0 12px 0; font-size:14px;">🌍 ENVIRONMENT (ändras direkt)</h3>
+                <div style="margin-bottom:12px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">WIND STRENGTH</label>
+                    <select id="ir-wind" onchange="if(window.matchSettings) window.matchSettings.windStrength=parseInt(this.value);" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
+                        <option value="0">Calm (0-2 mph)</option>
+                        <option value="1">Breezy (5-10 mph)</option>
+                        <option value="2">Gusty (10-18 mph)</option>
+                        <option value="3">Windy (18-25 mph)</option>
+                        <option value="4">Storm (25+ mph)</option>
+                    </select>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                        <span>GREEN STIMP</span>
+                        <span id="ir-stimp-val" style="color:#fff;">10.0</span>
+                    </label>
+                    <input type="range" id="ir-stimp" min="6" max="14" step="0.5" value="10" oninput="document.getElementById('ir-stimp-val').innerText=this.value; if(window.matchSettings) { window.matchSettings.greenStimp=parseFloat(this.value); window.GREEN_STIMP=parseFloat(this.value); } if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value=this.value;" style="width:100%; accent-color:#4ade80;">
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">GREEN FIRMNESS</label>
+                    <select id="ir-firmness" onchange="if(window.matchSettings) window.matchSettings.greenFirmness=this.value;" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
+                        <option value="SOFT">Soft (Less Bounce)</option>
+                        <option value="NORMAL" selected>Normal</option>
+                        <option value="FIRM">Firm (More Bounce)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="background:#1e293b; padding:15px; border-radius:12px; border:1px solid #334155; margin-bottom:15px;">
+                <h3 style="color:#fbbf24; margin:0 0 12px 0; font-size:14px;">✨ VISUALS</h3>
+                <div style="margin-bottom:10px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">☀️ TIME OF DAY</label>
+                    <input type="range" id="ir-time" min="0" max="24" step="0.5" value="12" oninput="if(window.setTimeOfDay) window.setTimeOfDay(parseFloat(this.value));" style="width:100%; accent-color:#fbbf24;">
+                </div>
+                <div>
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:8px;">BALL TRACER</label>
+                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:5px;">
+                        <button onclick="if(window.setTracerStyle) window.setTracerStyle('CLASSIC');" style="background:#334155; color:#fff; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">⚪ Classic</button>
+                        <button onclick="if(window.setTracerStyle) window.setTracerStyle('NEON_GREEN');" style="background:#064e3b; color:#00ff88; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">💚 Neon</button>
+                        <button onclick="if(window.setTracerStyle) window.setTracerStyle('FIRE');" style="background:#451a03; color:#ff8800; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">🔥 Fire</button>
+                        <button onclick="if(window.setTracerStyle) window.setTracerStyle('ICE');" style="background:#0c2d48; color:#44aaff; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">❄️ Ice</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background:rgba(239,68,68,0.1); padding:12px; border-radius:10px; border:1px solid rgba(239,68,68,0.3);">
+                <div style="color:#f87171; font-size:12px; font-weight:bold; margin-bottom:4px;">🔒 LÅST UNDER MATCH</div>
+                <div style="color:#94a3b8; font-size:11px;">Gimme Distance, Auto-Putt, Mulligans, Auto Concede och Player Roster kan bara ändras innan matchen startas.</div>
+            </div>
+            
+            <div style="text-align:center; margin-top:15px;">
+                <button onclick="document.getElementById('inround-settings-modal').style.display='none'" style="background:#38bdf8; color:#0f172a; border:none; padding:12px 40px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(56,189,248,0.4);">✅ DONE</button>
+            </div>
+        </div>
+    </div>
+
     <!-- CONFIRM MODAL -->
     <div id="confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto;">
         <div style="background:#1e293b; padding:30px; border-radius:20px; border:2px solid #ef4444; width:400px; text-align:center; box-shadow: 0 10px 40px rgba(239,68,68,0.3);">
@@ -864,7 +930,42 @@
     // --- HUD & HAMBURGER MENU LOGIC ---
     window.toggleHamburgerMenu = function() {
         let menu = document.getElementById('hamburger-menu');
-        if (menu) menu.classList.toggle('open');
+        if (menu) {
+            menu.classList.toggle('open');
+            // Show scorecard button only during active match
+            let scBtn = document.getElementById('hb-scorecard-btn');
+            if (scBtn) {
+                let isMatch = (typeof playState !== 'undefined' && playState !== 'BUILDING' && playState !== 'SETUP' && window.players && window.players.length > 0);
+                scBtn.style.display = isMatch ? 'block' : 'none';
+            }
+        }
+    };
+    
+    window.openMatchSettings = function() {
+        let isMatchActive = (typeof playState !== 'undefined' && 
+            playState !== 'BUILDING' && playState !== 'SETUP' && 
+            window.players && window.players.length > 0 &&
+            window.players.some(p => p.strokes > 0 || !p.holedOut === false));
+        
+        if (isMatchActive) {
+            // ACTIVE MATCH: Show safe in-round settings only
+            let modal = document.getElementById('inround-settings-modal');
+            if (modal) {
+                // Sync current values to in-round controls
+                if (window.matchSettings) {
+                    let irWind = document.getElementById('ir-wind');
+                    if (irWind) irWind.value = window.matchSettings.windStrength || 0;
+                    let irStimp = document.getElementById('ir-stimp');
+                    if (irStimp) { irStimp.value = window.matchSettings.greenStimp || 10; document.getElementById('ir-stimp-val').innerText = irStimp.value; }
+                    let irFirm = document.getElementById('ir-firmness');
+                    if (irFirm) irFirm.value = window.matchSettings.greenFirmness || 'NORMAL';
+                }
+                modal.style.display = 'flex';
+            }
+        } else {
+            // PRE-MATCH: Show full setup modal
+            document.getElementById('settings-modal').style.display = 'flex';
+        }
     };
     
     window.renderDynamicHUD = function() {
