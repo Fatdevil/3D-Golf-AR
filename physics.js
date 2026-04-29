@@ -260,30 +260,36 @@ window.GolfPhysics = (function() {
         let spinMult = 1.0;
         
         if (!input.isLiveData) {
+            // TEE SHOT OVERRIDE: First shot is always perfectly teed up, regardless of terrain color under it.
+            if (input.isTeeShot) lieType = 'FAIRWAY';
+            
             if (lieType === 'ROUGH') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
                 if (Math.random() < 0.15 && vla > 15) {
-                    speedMult = 1.05; spinMult = 0.35;
+                    speedMult = 1.02; spinMult = 0.40;
                     console.log("💥 TRACKMAN FLYER-LIE DETECTED! Zero spin, hot velocity.");
                 } else {
-                    speedMult = 1.0 - (0.50 - (0.45 * vlaFactor)); 
-                    spinMult = 1.0 - (0.65 - (0.50 * vlaFactor));
+                    // Milder penalty for Arcade: max 15% speed loss for Driver, 5% for Wedge
+                    speedMult = 1.0 - (0.15 - (0.10 * vlaFactor)); 
+                    spinMult = 1.0 - (0.40 - (0.30 * vlaFactor));
                 }
             } else if (lieType === 'SEMI-ROUGH') {
-                speedMult = 0.95; spinMult = 0.93; 
+                speedMult = 0.98; spinMult = 0.95; 
             } else if (lieType === 'DEEP ROUGH') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
                 if (Math.random() < 0.25 && vla > 20) {
-                    speedMult = 1.05; spinMult = 0.20;
+                    speedMult = 1.03; spinMult = 0.30;
                     console.log("💥 TRACKMAN FLYER-LIE DETECTED (DEEP ROUGH)! Zero spin, hot velocity.");
                 } else {
-                    speedMult = 1.0 - (0.80 - (0.45 * vlaFactor));
-                    spinMult = 1.0 - (0.85 - (0.50 * vlaFactor));
+                    // Max 25% speed loss for Driver, 10% for Wedge
+                    speedMult = 1.0 - (0.25 - (0.15 * vlaFactor));
+                    spinMult = 1.0 - (0.60 - (0.40 * vlaFactor));
                 }
             } else if (lieType === 'SAND') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 20) / 30)); 
-                speedMult = 1.0 - (0.40 - (0.25 * vlaFactor));
-                spinMult = 1.0 - (0.45 - (0.25 * vlaFactor));
+                // Max 20% speed loss for low loft, 5% for high loft
+                speedMult = 1.0 - (0.20 - (0.15 * vlaFactor));
+                spinMult = 1.0 - (0.30 - (0.20 * vlaFactor));
             }
         }
         

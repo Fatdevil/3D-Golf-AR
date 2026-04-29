@@ -3886,7 +3886,8 @@
             totalSpinRpm: data.totalSpinRpm,
             spinAxisDeg: data.spinAxisDeg || 0,
             azimDeg: (data.azimDeg || 0) + aimOffsetDeg, 
-            isLiveData: data.isLiveData || false
+            isLiveData: data.isLiveData || false,
+            isTeeShot: (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1) // Just updated from 0 to 1 in this function
         };
         // BUG-06 FIX: Use actual flag data from courseHoles instead of dead window.pinMesh
         var cupPosLocal = null;
