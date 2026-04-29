@@ -2384,8 +2384,8 @@
     const greenBeadsGroup = new THREE.Group();
     scene.add(greenBeadsGroup);
     window.greenBeads = [];
-    const beadGeo = new THREE.SphereGeometry(0.04, 8, 8);
-    const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+    const beadGeo = new THREE.SphereGeometry(0.06, 6, 6);
+    const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
     
     window.breakLineMesh = null;
     
@@ -5831,14 +5831,14 @@
             let hole = courseHoles[playingHoleIndex];
             if (hole && hole.flag) {
                 if (window.greenBeads.length === 0) {
-                    // Generera ett stort grid runt flaggan/bollen
-                    for(let x=-8; x<=8; x+=0.6) {
-                        for(let z=-8; z<=8; z+=0.6) {
+                    // Trackman-style: sparse beads covering entire green
+                    // 2.5m spacing, ±25m from flag — non-green beads auto-hidden
+                    for(let x=-25; x<=25; x+=2.5) {
+                        for(let z=-25; z<=25; z+=2.5) {
                             let bead = new THREE.Mesh(beadGeo, beadMat);
                             bead.startX = hole.flag.x + x;
                             bead.startZ = hole.flag.z + z;
                             bead.position.set(bead.startX, 0, bead.startZ);
-                            // Sprid start-tiden lite så de inte alla "poppar" samtidigt
                             bead.distOffset = Math.random(); 
                             greenBeadsGroup.add(bead);
                             window.greenBeads.push(bead);
@@ -5897,7 +5897,7 @@
                     let dX = bead.position.x - bead.startX;
                     let dZ = bead.position.z - bead.startZ;
                     let traveled = Math.sqrt(dX*dX + dZ*dZ);
-                    if (traveled > (0.8 + bead.distOffset * 0.4)) {
+                    if (traveled > (2.0 + bead.distOffset * 1.0)) {
                         bead.position.x = bead.startX;
                         bead.position.z = bead.startZ;
                     }
