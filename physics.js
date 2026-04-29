@@ -53,7 +53,6 @@ window.GolfPhysics = (function() {
 
     // Aerodynamiska koefficient-kurvor (Trackman Data)
     function getDragCoefficient(vMag, spinRateRpm) {
-        let vMph = vMag * 2.23694;
         let cd = 0.22;
         
         // Drag Crisis Re-kurva (Värden från referenstabell)
@@ -63,10 +62,19 @@ window.GolfPhysics = (function() {
         else if (vMag > 20) cd = lerp(0.26, 0.22, (vMag - 20) / 30);
         else cd = 0.26;
         
-        // Ökad fart ger snabbare spinn, mer drag (upp till +4%)
-        let spinPenalty = (spinRateRpm / 3000.0) * 0.020;
+        // Spin-dependent drag — Bearman & Harvey (1976) windtunnel data
+        // Spin ratio = ω×r / v — higher spin ratio = more drag
+        // Driver (2000rpm/130mph): spinRatio ≈ 0.18 → minimal effect
+        // Wedge (9000rpm/103mph): spinRatio ≈ 0.44 → significant drag increase
+        let omega = (spinRateRpm * 2 * Math.PI) / 60;
+        let spinRatio = (omega * RADIUS) / Math.max(vMag, 0.1);
         
-        return cd + spinPenalty;
+        // Activate above spinRatio 0.10 to avoid disturbing low-spin shots
+        let cdSpin = spinRatio > 0.10
+            ? 0.18 * (spinRatio - 0.10)
+            : 0;
+        
+        return Math.min(cd + cdSpin, 0.55); // Cap against unreasonable values
     }
 
     function getLiftCoefficient(vMag, spinParam, spinRateRpm) {
@@ -124,18 +132,31 @@ window.GolfPhysics = (function() {
 
             let spinTractionMag = 0;
 
+            // Backspin-induced roll braking (applies in both roll and skid phases)
+            // High backspin at landing creates friction force opposing forward motion
+            // Remaining spin after bounce ≈ 60% of impact spin (slip-bounce)
+            let spinMag = vecMag(state.spin);
+            let spinRpm = (spinMag * 60) / (2 * Math.PI);
+            if (spinRpm > 100) {
+                let spinSurfaceSpeed = spinMag * RADIUS; // m/s at ball surface
+                // Backspin opposes forward roll — check spin direction vs velocity
+                let spinVelDir = vecCross(state.spin, N);
+                let dirFb = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,1,0];
+                let spinDotDir = spinVelDir[0]*dirFb[0] + spinVelDir[1]*dirFb[1] + spinVelDir[2]*dirFb[2];
+                
+                if (spinDotDir < 0) {
+                    // Backspin: adds braking force proportional to surface speed
+                    let spinBrake = Math.min(spinSurfaceSpeed * 0.50, 6.0); // m/s², cap at 6.0
+                    spinTractionMag = -spinBrake; // Negative = increases friction
+                } else {
+                    // Topspin: reduces friction (ball rolls further)
+                    spinTractionMag = Math.min(spinSurfaceSpeed * 0.15, 2.0);
+                }
+            }
+
             // Kinetisk glidfas ("Skid") har ungefär 50-80% högre friktion än rullfriktion
             if (state.phase === "skid") {
                 mu *= 1.7; 
-                
-                // SPINN-ÖVERFÖRING (Energi från rotation -> translation)
-                let spinVel = vecCross(state.spin, N); 
-                let dirFallback = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,1,0];
-                let dirDotSpin = spinVel[0]*dirFallback[0] + spinVel[1]*dirFallback[1] + spinVel[2]*dirFallback[2];
-                
-                // dirDotSpin < 0 (Backspin) ökar friktionen (biter). 
-                // dirDotSpin > 0 (Topspin) minskar friktionen (rullar vidare).
-                spinTractionMag = dirDotSpin * 0.15; // Tuning coefficient
             }
             
             let frictionAccelMag = mu * normalForceMag;
