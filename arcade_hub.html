@@ -190,12 +190,12 @@ body {
   <div class="trackman-grid">
     
     <!-- PRACTICE -->
-    <div class="tm-card" style="background-image: url('golf_practice.png');" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build&mode=range'">
+    <div class="tm-card" style="background-image: url('golf_practice.png');">
       <div class="tm-overlay"></div>
       <div class="tm-content">
-         <div class="tm-badge" style="background:#eab308; color:#0f172a;">Range</div>
-         <h2 style="color:#fde047;">Practice</h2>
-         <p>Build a driving range or practice on target.</p>
+         <div class="tm-badge" style="color:#fff;">Practice</div>
+         <h2>Range</h2>
+         <p>Välj en sparad range och slå bollar.</p>
       </div>
     </div>
     
@@ -241,9 +241,14 @@ body {
       <h2 style="font-size:32px; font-weight:900; margin-top:0;">Build Mode</h2>
       <p style="color:#94a3b8; margin-bottom:30px;">Create a new course or continue working on a saved draft.</p>
       
-      <button class="btn-play" style="width:100%; font-size:18px; padding:20px; margin-bottom:30px; background:#38bdf8; color:#0f172a;" onclick="if(confirm('Kastar osparad data. Nytt projekt?')) window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'">
-        + CREATE NEW COURSE
-      </button>
+      <div style="display:flex; gap:15px; margin-bottom:30px;">
+          <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#38bdf8; color:#0f172a;" onclick="if(confirm('Kastar osparad data. Nytt projekt?')) window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'">
+            + BYGG BANA
+          </button>
+          <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#eab308; color:#0f172a;" onclick="if(confirm('Kastar osparad data. Nytt projekt?')) window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build&mode=range'">
+            + BYGG RANGE
+          </button>
+      </div>
       
       <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase; margin-bottom:15px;">Your Drafts</h3>
       <div id="drafts-container"></div>
