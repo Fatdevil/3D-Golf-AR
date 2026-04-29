@@ -5946,17 +5946,18 @@
             window._lastFrameTime = now;
             
             // Determine playback speed based on ball phase
-            // Flight: 1x real-time, Roll/Skid/Bounce: accelerate progressively
+            // Flight + Bounce: 1x real-time (realistic), Roll: ramp up after 1.5s
             var speedMultiplier = 1.0;
             if (flightData.path[flightTick]) {
                 let curPhase = flightData.path[flightTick].phase;
-                if (curPhase === 'roll' || curPhase === 'skid' || curPhase === 'bounce') {
-                    // Start at 2x, ramp up to 5x over 2 seconds of rolling
-                    let rollStartTick = flightTick;
-                    // Find how long we've been in roll phase
-                    let rollDurationMs = (flightTick - (window._rollStartTick || flightTick)) * 5.0;
+                if (curPhase === 'roll' || curPhase === 'skid') {
                     if (!window._rollStartTick) window._rollStartTick = flightTick;
-                    speedMultiplier = Math.min(5.0, 2.0 + rollDurationMs / 1500.0);
+                    // How long we've been rolling (in real playback ms)
+                    let rollDurationMs = (flightTick - window._rollStartTick) * 5.0;
+                    // Stay at 1x for first 1.5s, then ramp smoothly to 4x over next 1.5s
+                    if (rollDurationMs > 1500) {
+                        speedMultiplier = Math.min(4.0, 1.0 + (rollDurationMs - 1500) / 500.0);
+                    }
                 }
             }
             
