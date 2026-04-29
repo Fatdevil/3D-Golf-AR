@@ -5857,8 +5857,8 @@
             // --- BEADS (toggle: window.greenBeadsEnabled) ---
             if (window.greenBeadsEnabled) {
                 if (window.greenBeads.length === 0) {
-                    for(let x=-25; x<=25; x+=2.5) {
-                        for(let z=-25; z<=25; z+=2.5) {
+                    for(let x=-40; x<=40; x+=2.5) {
+                        for(let z=-40; z<=40; z+=2.5) {
                             let bead = new THREE.Mesh(beadGeo, beadMat);
                             bead.startX = hole.flag.x + x;
                             bead.startZ = hole.flag.z + z;
