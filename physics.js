@@ -679,10 +679,24 @@ window.GolfPhysics = (function() {
                     let vPerp = vecScale(N, vDotN);  // Vektor rakt in i marken
                     let vTan = vecSub(V, vPerp);     // Hastighet längs ytan
                     
+                    // Angle-dependent tangential restitution (Sports Engineering 2023)
+                    // Steep impacts lose more tangential speed than shallow ones
+                    // Values account for coexistence with Penner spin-bite model (line 702+)
+                    const E_T_BASE = {
+                        'GREEN': 0.75, 'FAIRWAY': 0.88, 'TEE': 0.88,
+                        'SEMI-ROUGH': 0.72, 'ROUGH': 0.62, 'DEEP ROUGH': 0.52,
+                        'SAND': 0.42, 'WASTE': 0.78
+                    };
+                    let e_t_base = E_T_BASE[impactTerrainType] || 0.78;
+                    let e_t = Math.max(0.40, e_t_base - 0.004 * incidenceAngleDeg);
+                    // Driver fairway (38°): 0.88 - 0.152 = 0.728
+                    // Wedge fairway (35°): 0.88 - 0.140 = 0.740
+                    // 7-iron fairway (25°): 0.88 - 0.100 = 0.780
+                    
                     // Bounce Physics
                     let bounceVel = vecAdd(
                         vecScale(vPerp, -cRestitution),  // Normal forces push out
-                        vecScale(vTan, 1.0 - cFriction)  // Friction kills tangential speed
+                        vecScale(vTan, e_t)              // Angle-dependent tangential restitution
                     );
 
                     // Fysiskt korrekt spin-bite på lutningar inspirerat av Penner

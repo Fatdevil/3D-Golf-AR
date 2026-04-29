@@ -109,9 +109,9 @@ console.log(`  ✅ Target: 180-188 yds → ${iron7Ok ? 'PASS ✅' : 'FAIL ❌'}`
 // Test 3: Wedge
 const wedge = runTest('TEST 3: WEDGE (Primary Fix Target)', 103, 35, 0, 9000, 0);
 const wedgeOk = wedge.carryYds >= 125 && wedge.carryYds <= 135;
-const wedgeApexOk = wedge.apexFt >= 90 && wedge.apexFt <= 140;
+const wedgeApexOk = wedge.apexFt >= 130 && wedge.apexFt <= 150;
 console.log(`  ✅ Carry Target: 128-133 yds → ${wedgeOk ? 'PASS ✅' : 'FAIL ❌'}`);
-console.log(`  ✅ Apex Target: 110-130 ft → ${wedgeApexOk ? 'PASS ✅' : 'WARN ⚠️'}`);
+console.log(`  ✅ Apex Target: 130-150 ft → ${wedgeApexOk ? 'PASS ✅' : 'WARN ⚠️'}`);
 console.log(`  ✅ Roll Target: 4-7 yds → ${wedge.rollYds >= 2 && wedge.rollYds <= 10 ? 'PASS ✅' : 'FAIL ❌'}`);
 
 // Summary
