@@ -1043,7 +1043,7 @@
                     let dropZ = controls.target.z;
                     let h = 0.3;
                     if(typeof localGetTerrainAt === 'function') {
-                        let surf = localGetTerrainAt(dropX, dropZ);
+                        let surf = localGetTerrainAt(dropX, -dropZ);
                         if(surf) h = surf.h + 0.1;
                     }
                     window.ballMesh.position.set(dropX, h, dropZ);
@@ -3461,7 +3461,7 @@
             let activeT = hole.tees[p.tee] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
             let lieY = activeT.y + 0.3;
             if (typeof localGetTerrainAt === 'function') {
-                let surf = localGetTerrainAt(activeT.x, activeT.z);
+                let surf = localGetTerrainAt(activeT.x, -activeT.z);
                 if (surf && surf.z !== undefined) lieY = surf.z + 0.0213;
             }
             p.teePosition = { x: activeT.x, y: lieY, z: activeT.z };
@@ -3502,7 +3502,7 @@
         let dir = new THREE.Vector3().subVectors(fv, window.ballMesh.position).normalize();
         
         // BUG-P09 FIX: Detect green lie and use putt-camera if on green
-        let lieSurf = localGetTerrainAt(window.ballMesh.position.x, window.ballMesh.position.z);
+        let lieSurf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
         let distToPin = new THREE.Vector3(window.ballMesh.position.x, window.ballMesh.position.y, window.ballMesh.position.z).distanceTo(fv);
         let isOnGreen = lieSurf && (lieSurf.type === 'GREEN' || ((lieSurf.type === 'SEMI-ROUGH' || lieSurf.type === 'FAIRWAY') && distToPin < 5.0));
         
@@ -3895,7 +3895,7 @@
         
         // Failsafe: Ensure the ball is never launched from UNDER ground (e.g. buried tees)
         if (typeof window.localGetTerrainAt === 'function') {
-            let t = window.localGetTerrainAt(startPos[0], -startPos[1]);
+            let t = window.localGetTerrainAt(startPos[0], startPos[1]);
             if (t && startPos[2] < t.z) {
                 console.warn(`[Physics] Failsafe: Ball started underground (Z=${startPos[2].toFixed(3)}), snapping to terrain (Z=${t.z.toFixed(3)})`);
                 startPos[2] = t.z + 0.022; // 22mm (slightly above terrain to prevent instant clipping)
@@ -5963,11 +5963,11 @@
                     
                     if (document.getElementById('hud-carry')) {
                         document.getElementById('hud-carry').innerText = window.formatDistStr(carryM);
-                        document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
-                        document.getElementById('hud-total').innerText = window.formatDistStr(totalM); 
+                        if (document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
+                        if (document.getElementById('hud-total')) document.getElementById('hud-total').innerText = window.formatDistStr(totalM); 
                         
                         let offPath = Math.abs(finalPhys.x);
-                        document.getElementById('hud-offline').innerText = window.formatDistStr(offPath);
+                        if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = window.formatDistStr(offPath);
                     }
                 }
                 
@@ -6026,7 +6026,7 @@
                         let pop = document.getElementById('score-popup');
                         pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
                         
-                        let lieSurface = localGetTerrainAt(window.ballMesh.position.x, window.ballMesh.position.z);
+                        let lieSurface = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
                         let isGreen = lieSurface && lieSurface.type === 'GREEN';
                         let distFt = distToPin * 3.28084;
                         let gimmeMax = window.matchSettings ? window.matchSettings.gimmeDist : 10;
