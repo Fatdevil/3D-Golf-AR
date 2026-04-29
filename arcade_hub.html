@@ -155,6 +155,19 @@ body {
 
 /* Logo i botten */
 .footer-logo { text-align: center; margin-top: 30px; font-weight: 900; font-size: 20px; letter-spacing: 4px; color: rgba(255,255,255,0.1); }
+
+/* COURSE GRID (Trackman Style) */
+.tm-modal-content.wide { max-width: 1200px; }
+.course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+.course-card { position: relative; background: #1e293b; border-radius: 16px; overflow: hidden; height: 220px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.2s, box-shadow 0.2s; }
+.course-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.3); }
+.course-card-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; transition: transform 0.5s; }
+.course-card:hover .course-card-bg { transform: scale(1.05); }
+.course-card-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, transparent 100%); padding: 30px 15px 15px 15px; box-sizing: border-box; }
+.course-card-title { color: #fff; font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 0 0 4px 0; line-height: 1.1; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+.course-card-meta { color: #e2e8f0; font-size: 12px; margin: 2px 0; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+.course-card-diff { color: #fbbf24; font-size: 13px; margin-top: 5px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+.course-card-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; color: #fff; border: 1px solid rgba(255,255,255,0.2); z-index: 2; }
 </style>
 </head>
 <body>
@@ -239,13 +252,12 @@ body {
 
 <!-- MODAL: COURSES -->
 <div id="modal-courses" class="tm-modal" onclick="if(event.target===this) closeModal('modal-courses')">
-   <div class="tm-modal-content">
+   <div class="tm-modal-content wide">
       <button class="tm-close" onclick="closeModal('modal-courses')">&times;</button>
-      <h2 style="font-size:32px; font-weight:900; margin-top:0;">Play Courses</h2>
-      <p style="color:#94a3b8; margin-bottom:30px;">Discover community creations.</p>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">COURSES</h2>
       
-      <div id="ugc-container">
-         <div style="color:#94a3b8; text-align:center; padding:20px;">Laddar moln-banor...</div>
+      <div id="ugc-container" class="course-grid">
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar moln-banor...</div>
       </div>
    </div>
 </div>
@@ -314,24 +326,35 @@ async function loadUGC() {
         let courses = await res.json();
         let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
         let html = '';
-        courses.forEach(c => {
+        let placeholders = [
+            'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80',
+            'https://images.unsplash.com/photo-1535136104956-6134eb9bdc22?w=800&q=80',
+            'https://images.unsplash.com/photo-1593118247619-e2d6f056869e?w=800&q=80',
+            'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=800&q=80'
+        ];
+        
+        courses.forEach((c, i) => {
             let isLiked = likedLocal.includes(c.share_code);
-            let heartColor = isLiked ? '#ef4444' : '#64748b';
-            let formattedDate = new Date(c.created_at).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+            let heartColor = isLiked ? '#ef4444' : '#fff';
+            let bgImg = placeholders[i % placeholders.length];
+            
+            // Random difficulty 1-5 dots for demo
+            let diffRating = (c.name.length % 5) + 1; 
+            let diffDots = '●'.repeat(diffRating) + '○'.repeat(5 - diffRating);
             
             html += `
-            <div class="course-item">
-              <div class="course-info" style="flex:1;">
-                <h4>${c.name}</h4>
-                <p>by <span style="color:#e2e8f0;">${c.author}</span> • Code: <strong>${c.share_code}</strong> • ${formattedDate}</p>
-              </div>
-              <div style="display:flex; gap:15px; align-items:center;">
-                  <div style="text-align:center; cursor:pointer; min-width:40px; transition: transform 0.2s;" onclick="${isLiked ? '' : `likeCourse(event, '${c.share_code}')`}" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-                      <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:20px;">❤️</div>
-                      <div id="likes-${c.share_code}" style="font-size:12px; color:#cbd5e1; font-weight:bold;">${c.likes || 0}</div>
+            <div class="course-card" onclick="playCourse('${c.share_code}')">
+               <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
+               <div class="course-card-overlay">
+                  <div class="course-card-badge">VIRTUAL GOLF OS</div>
+                  <h4 class="course-card-title">${c.name}</h4>
+                  <div class="course-card-meta">${c.author}</div>
+                  <div class="course-card-meta">PAR 72 - 6800 YDS</div>
+                  <div class="course-card-diff">Difficulty: ${diffDots}</div>
+                  <div style="position:absolute; bottom:15px; right:15px; text-align:center; cursor:pointer; z-index:10;" onclick="${isLiked ? 'event.stopPropagation()' : `likeCourse(event, '${c.share_code}')`}">
+                       <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:16px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">❤️ ${c.likes || 0}</div>
                   </div>
-                  <button class="btn-play" style="background:#ef4444; color:#fff;" onclick="playCourse('${c.share_code}')">Play</button>
-              </div>
+               </div>
             </div>`;
         });
         
