@@ -261,7 +261,7 @@
         
         <button class="hb-btn" onclick="window.location.href='arcade_hub.html'">← Return to Hub</button>
         <button class="hb-btn" onclick="toggleHamburgerMenu(); openMatchSettings();">⚙️ Match Settings</button>
-        <button class="hb-btn" id="hb-scorecard-btn" style="display:none;" onclick="toggleHamburgerMenu(); if(typeof showScorecard==='function') showScorecard();">📋 Scorecard</button>
+        <button class="hb-btn" id="hb-scorecard-btn" style="display:none;" onclick="toggleHamburgerMenu(); renderScorecard(); let eB=document.getElementById('scorecard-endround-btns'); if(eB) eB.style.display='none'; let cB=document.getElementById('scorecard-footer'); if(cB) cB.style.display='flex'; document.getElementById('scorecard-modal').style.display='flex';">📋 Scorecard</button>
         
         <div class="hb-section-title">Data Tiles (HUD)</div>
         
