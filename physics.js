@@ -682,8 +682,17 @@ window.GolfPhysics = (function() {
                     // Angle-dependent tangential restitution (Sports Engineering 2023)
                     // Steep impacts lose more tangential speed than shallow ones
                     // Values account for coexistence with Penner spin-bite model (line 702+)
+                    // Green firmness affects tangential retention:
+                    //   SOFT: ball digs in → less tangential speed retained
+                    //   FIRM: ball skips off → more tangential speed retained
+                    let greenE_T = 0.75; // NORMAL default
+                    if (impactTerrainType === 'GREEN') {
+                        let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
+                        if (firmness === 'SOFT') greenE_T = 0.65;
+                        else if (firmness === 'FIRM') greenE_T = 0.82;
+                    }
                     const E_T_BASE = {
-                        'GREEN': 0.75, 'FAIRWAY': 0.88, 'TEE': 0.88,
+                        'GREEN': greenE_T, 'FAIRWAY': 0.88, 'TEE': 0.88,
                         'SEMI-ROUGH': 0.72, 'ROUGH': 0.62, 'DEEP ROUGH': 0.52,
                         'SAND': 0.42, 'WASTE': 0.78
                     };
@@ -700,7 +709,14 @@ window.GolfPhysics = (function() {
                     );
 
                     // Fysiskt korrekt spin-bite på lutningar inspirerat av Penner
-                    const GRIP = impactTerrainType === 'GREEN' ? 0.98 : 0.85; 
+                    // Green firmness affects grip: SOFT grips more (spin bites deeper)
+                    let GRIP = 0.85; // Non-green default
+                    if (impactTerrainType === 'GREEN') {
+                        let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
+                        if (firmness === 'SOFT') GRIP = 1.0;        // Maximum grip — ball digs in
+                        else if (firmness === 'FIRM') GRIP = 0.92;  // Less grip — ball skips
+                        else GRIP = 0.98;                           // NORMAL
+                    }
                     let vContactY = V[1] + (state.spin[0] * RADIUS);
                     let vContactX = V[0] - (state.spin[1] * RADIUS);
                     
@@ -715,7 +731,16 @@ window.GolfPhysics = (function() {
                     state.spin[1] -= (2.5 * deltaVX / RADIUS); 
 
                     state.vel = bounceVel;
-                    state.spin = vecScale(state.spin, GROUND.spinDampingPerBounce);
+                    // Green firmness affects spin retention per bounce:
+                    //   SOFT: more spin survives (ball embeds slightly, gentler impact)
+                    //   FIRM: less spin survives (harder impact kills spin faster)
+                    let spinDamp = GROUND.spinDampingPerBounce; // 0.85 default
+                    if (impactTerrainType === 'GREEN') {
+                        let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
+                        if (firmness === 'SOFT') spinDamp = 0.90;   // More spin retained
+                        else if (firmness === 'FIRM') spinDamp = 0.78; // Less spin retained
+                    }
+                    state.spin = vecScale(state.spin, spinDamp);
                     
                     // Är studsen för mjuk uppåt längs ytan? => Rullfas
                     let bounceZMag = vecMag(vecScale(vPerp, -cRestitution));
