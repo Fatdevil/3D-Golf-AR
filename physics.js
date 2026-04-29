@@ -18,7 +18,7 @@ window.GolfPhysics = (function() {
         rollingDecel: 0.8,
         spinDampingPerBounce: 0.85, // Ändrad från 0.75. Mindre direkt spin-död, gör att wedgar spinner mer på greenen (GSPro-stil)
         minBounceVerticalSpeed: 1.0,
-        stopSpeed: 0.25
+        stopSpeed: 0.50 // Ökad från 0.25 för att förhindra extremt långsam osynlig rullning i slutet av puttar
     };
 
     // Hjälpfunktioner för miljö och vektorer
