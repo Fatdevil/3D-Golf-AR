@@ -2799,19 +2799,31 @@
                 return;
             }
             
-            cacheObj.updateMatrixWorld(true);
-            
-            let meshes = [];
+            // Extract RAW meshes from the cached object (ignoring the container's 
+            // scale/centering transform which is designed for on-course placement)
+            let rawMeshes = [];
             cacheObj.traverse(child => { 
                 if (child.isMesh) {
-                    meshes.push({
+                    rawMeshes.push({
                         geometry: child.geometry,
-                        material: child.material,
-                        matrix: child.matrixWorld.clone()
+                        material: child.material
                     });
                 } 
             });
-            if (meshes.length === 0) return;
+            if (rawMeshes.length === 0) return;
+            
+            // Calculate a clean scale factor from the raw geometry's bounding box
+            // (same logic as loadAsset but we apply it ourselves for horizon placement)
+            let combinedBox = new THREE.Box3();
+            rawMeshes.forEach(m => {
+                let geoBox = new THREE.Box3().setFromBufferAttribute(m.geometry.attributes.position);
+                combinedBox.union(geoBox);
+            });
+            let rawSize = combinedBox.getSize(new THREE.Vector3());
+            let rawCenter = combinedBox.getCenter(new THREE.Vector3());
+            let tHeight = assetConf.targetHeight || 12.0;
+            let rawScale = (rawSize.y > 0.001) ? (tHeight / rawSize.y) : 1.0;
+            if (!isFinite(rawScale)) rawScale = 1.0;
             
             let count = countTarget || 50;
             
@@ -2833,9 +2845,13 @@
                 return x - Math.floor(x);
             };
             
-            meshes.forEach((m, meshIndex) => {
+            // Precompute the geometry-centering matrix (ground the model at y=0)
+            let geoOffsetMatrix = new THREE.Matrix4().makeTranslation(
+                -rawCenter.x, -combinedBox.min.y, -rawCenter.z
+            );
+            
+            rawMeshes.forEach((m, meshIndex) => {
                 let instMesh = new THREE.InstancedMesh(m.geometry, m.material.clone(), count);
-                let dummy = new THREE.Object3D();
                 
                 if (instMesh.material.color) {
                     instMesh.material.color.lerp(tintColor, 0.4); // 40% tint
@@ -2847,21 +2863,31 @@
                     let sRand3 = seededRandom(i * 10 + 3 + meshIndex);
                     
                     let angle = angleStart + (sRand1 * (angleEnd - angleStart));
-                    // Push radius further back dynamically based on object size
-                    let tHeight = window.ASSET_REGISTRY[assetId].targetHeight || 12.0;
+                    // Push radius further back for larger objects
                     let baseRadius = 650 + (tHeight * 0.8); 
                     let radius = baseRadius + (sRand2 * 200); 
                     
-                    let s = 0.8 + sRand3 * 0.6; // Scale variance
+                    let sVar = 0.8 + sRand3 * 0.6; // Scale variance
+                    let finalScale = rawScale * sVar;
                     let rY = sRand1 * Math.PI * 2;
                     
-                    dummy.position.set(Math.cos(angle) * radius, -0.5, Math.sin(angle) * radius);
-                    dummy.rotation.set(0, rY, 0);
-                    dummy.scale.set(s, s, s);
-                    dummy.updateMatrix();
+                    // Build clean instance matrix: Scale → Center geometry → Rotate → Position
+                    let instanceMatrix = new THREE.Matrix4();
+                    // 1. Start with geometry centering (move raw geo so base is at y=0)
+                    instanceMatrix.copy(geoOffsetMatrix);
+                    // 2. Apply scale
+                    let scaleMat = new THREE.Matrix4().makeScale(finalScale, finalScale, finalScale);
+                    instanceMatrix.premultiply(scaleMat);
+                    // 3. Apply rotation
+                    let rotMat = new THREE.Matrix4().makeRotationY(rY);
+                    instanceMatrix.premultiply(rotMat);
+                    // 4. Apply position (at horizon radius, grounded at y=0)
+                    let posMat = new THREE.Matrix4().makeTranslation(
+                        Math.cos(angle) * radius, 0, Math.sin(angle) * radius
+                    );
+                    instanceMatrix.premultiply(posMat);
                     
-                    let finalMatrix = new THREE.Matrix4().multiplyMatrices(dummy.matrix, m.matrix);
-                    instMesh.setMatrixAt(i, finalMatrix);
+                    instMesh.setMatrixAt(i, instanceMatrix);
                 }
                 instMesh.instanceMatrix.needsUpdate = true;
                 window.sceneryGroup.add(instMesh);
