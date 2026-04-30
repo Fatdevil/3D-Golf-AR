@@ -704,60 +704,67 @@
 
         <!-- Environment Preview -->
         <div id="env-preview-group" class="prop-panel" style="display:flex;">
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">☀️ Environment</label>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Sun</span>
-                <span id="sun-label" style="color:#fbbf24; font-size:11px; font-weight:bold;">12:00</span>
-            </div>
-            <input type="range" id="sun-slider" min="5" max="21" value="12" step="0.5" oninput="updateSunPreview(this.value)" style="width:100%; accent-color:#fbbf24; cursor:pointer;">
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Wind</span>
-                <span id="wind-label" style="color:#38bdf8; font-size:11px; font-weight:bold;">0 mph</span>
-            </div>
-            <input type="range" id="wind-slider" min="0" max="30" value="0" step="1" oninput="updateWindPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Wind Dir</span>
-                <span id="winddir-label" style="color:#38bdf8; font-size:11px; font-weight:bold;">N</span>
-            </div>
-            <input type="range" id="winddir-slider" min="0" max="359" value="0" step="1" oninput="updateWindDirPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
-            
-            <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
-                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🖼️ Panorama Background</label>
-                <div id="panorama-name" style="color:#64748b; font-size:9px; margin:4px 0;">No panorama loaded</div>
-                <div style="display:flex; gap:4px;">
-                    <label style="flex:1; background:#1e293b; color:#38bdf8; border:1px solid #334155; padding:6px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:center;">
-                        📂 Upload
-                        <input type="file" id="panorama-upload" accept="image/*" onchange="window.loadPanorama(this)" style="display:none;">
-                    </label>
-                    <button onclick="window.removePanorama()" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:6px 10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px;">✕</button>
+            <label onclick="window.togglePanel('env-content', this)" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                <span>☀️ Environment</span>
+                <span class="chevron" style="color:#475569;">▼</span>
+            </label>
+            <div id="env-content" style="display:flex; flex-direction:column; gap:5px; margin-top:5px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Sun</span>
+                    <span id="sun-label" style="color:#fbbf24; font-size:11px; font-weight:bold;">12:00</span>
                 </div>
-            </div>
-            
-            <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
-                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding</label>
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:3px; margin-top:4px;">
-                    <button class="surr-btn" onclick="setSurrounding('OFF', this)" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🚫 Off</button>
-                    <button class="surr-btn" onclick="setSurrounding('GRASS', this)" style="background:#2d4c1a; color:#a3e635; border:1px solid #2d4c1a; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌿 Grass</button>
-                    <button class="surr-btn" onclick="setSurrounding('OCEAN', this)" style="background:#1e3a5f; color:#38bdf8; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌊 Ocean</button>
-                    <button class="surr-btn" onclick="setSurrounding('LAKE', this)" style="background:#2a6b7a; color:#67e8f9; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">💧 Lake</button>
-                    <button class="surr-btn" onclick="setSurrounding('SAND', this)" style="background:#a38d5c; color:#fef3c7; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🏜️ Sand</button>
-                    <button class="surr-btn" onclick="setSurrounding('FIELD', this)" style="background:#6b7a2a; color:#d9f99d; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌾 Field</button>
-                    <button class="surr-btn" onclick="setSurrounding('SNOW', this)" style="background:#cbd5e1; color:#1e293b; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">❄️ Snow</button>
+                <input type="range" id="sun-slider" min="5" max="21" value="12" step="0.5" oninput="updateSunPreview(this.value)" style="width:100%; accent-color:#fbbf24; cursor:pointer;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Wind</span>
+                    <span id="wind-label" style="color:#38bdf8; font-size:11px; font-weight:bold;">0 mph</span>
                 </div>
-                <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
-                    <span style="color:#64748b; font-size:8px;">Custom:</span>
-                    <input type="color" id="surr-custom-color" value="#2d4c1a" onchange="setSurrounding('CUSTOM', null, this.value)" style="width:28px; height:20px; border:none; cursor:pointer; border-radius:3px;">
+                <input type="range" id="wind-slider" min="0" max="30" value="0" step="1" oninput="updateWindPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="color:#cbd5e1; font-size:11px; font-weight:600;">Wind Dir</span>
+                    <span id="winddir-label" style="color:#38bdf8; font-size:11px; font-weight:bold;">N</span>
+                </div>
+                <input type="range" id="winddir-slider" min="0" max="359" value="0" step="1" oninput="updateWindDirPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🖼️ Panorama Background</label>
+                    <div id="panorama-name" style="color:#64748b; font-size:9px; margin:4px 0;">No panorama loaded</div>
+                    <div style="display:flex; gap:4px;">
+                        <label style="flex:1; background:#1e293b; color:#38bdf8; border:1px solid #334155; padding:6px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:center;">
+                            📂 Upload
+                            <input type="file" id="panorama-upload" accept="image/*" onchange="window.loadPanorama(this)" style="display:none;">
+                        </label>
+                        <button onclick="window.removePanorama()" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:6px 10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px;">✕</button>
+                    </div>
+                </div>
+                
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding</label>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:3px; margin-top:4px;">
+                        <button class="surr-btn" onclick="setSurrounding('OFF', this)" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🚫 Off</button>
+                        <button class="surr-btn" onclick="setSurrounding('GRASS', this)" style="background:#2d4c1a; color:#a3e635; border:1px solid #2d4c1a; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌿 Grass</button>
+                        <button class="surr-btn" onclick="setSurrounding('OCEAN', this)" style="background:#1e3a5f; color:#38bdf8; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌊 Ocean</button>
+                        <button class="surr-btn" onclick="setSurrounding('LAKE', this)" style="background:#2a6b7a; color:#67e8f9; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">💧 Lake</button>
+                        <button class="surr-btn" onclick="setSurrounding('SAND', this)" style="background:#a38d5c; color:#fef3c7; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🏜️ Sand</button>
+                        <button class="surr-btn" onclick="setSurrounding('FIELD', this)" style="background:#6b7a2a; color:#d9f99d; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌾 Field</button>
+                        <button class="surr-btn" onclick="setSurrounding('SNOW', this)" style="background:#cbd5e1; color:#1e293b; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">❄️ Snow</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                        <span style="color:#64748b; font-size:8px;">Custom:</span>
+                        <input type="color" id="surr-custom-color" value="#2d4c1a" onchange="setSurrounding('CUSTOM', null, this.value)" style="width:28px; height:20px; border:none; cursor:pointer; border-radius:3px;">
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Terrain Analysis Panel -->
         <div id="terrain-analysis-group" class="prop-panel" style="display:flex;">
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🗺️ Terrain Analysis</label>
-            <div style="display:flex; flex-direction:column; gap:5px;">
+            <label onclick="window.togglePanel('terrain-content', this)" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                <span>🗺️ Terrain Analysis</span>
+                <span class="chevron" style="color:#475569;">▼</span>
+            </label>
+            <div id="terrain-content" style="display:flex; flex-direction:column; gap:5px; margin-top:5px;">
                 <button id="btn-slope-overlay" onclick="window.toggleSlopeOverlay()" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px 10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px; text-align:left; transition:all 0.2s;">
                     📊 Slope Gradient
                 </button>
@@ -767,8 +774,8 @@
                 <button id="btn-elevation-heatmap" onclick="window.toggleElevationHeatmap()" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px 10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px; text-align:left; transition:all 0.2s;">
                     🌡️ Elevation Heatmap
                 </button>
+                <div style="color:#64748b; font-size:9px; margin-top:4px;">Slope: 🟢&lt;3% 🟡3-8% 🔴&gt;8% | Elev: 🔵Low 🟢Mid 🔴High</div>
             </div>
-            <div style="color:#64748b; font-size:9px; margin-top:4px;">Slope: 🟢&lt;3% 🟡3-8% 🔴&gt;8% | Elev: 🔵Low 🟢Mid 🔴High</div>
         </div>
 
     </div>
@@ -2538,6 +2545,20 @@
             surroundMat.color.setHex(0x2d4c1a);
             surroundPlane.visible = true;
             window.currentSurrounding = 'GRASS';
+        }
+    };
+    
+    window.togglePanel = function(id, labelEl) {
+        let el = document.getElementById(id);
+        let chevron = labelEl.querySelector('.chevron');
+        if (!el || !chevron) return;
+        
+        if (el.style.display === 'none') {
+            el.style.display = 'flex';
+            chevron.innerHTML = '▼';
+        } else {
+            el.style.display = 'none';
+            chevron.innerHTML = '◀';
         }
     };
     
