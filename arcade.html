@@ -5628,18 +5628,21 @@
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
             if(btn) {
-                if(t === 'testputt') btn.className = 'sys-btn'; // Bevara top-bar styling
-                else btn.className = '';
+                let isPro = btn.classList.contains('pro-tool');
+                if(t === 'testputt') btn.className = 'sys-btn';
+                else btn.className = isPro ? 'pro-tool' : '';
             }
         });
         
         let activeBtn = document.getElementById('tool-' + toolName.toLowerCase().replace('_',''));
         if (activeBtn) {
-            if (toolName === 'SMART_GREEN') activeBtn.className = 'active-green';
-            else if (toolName === 'MEASURE') activeBtn.className = 'active-yellow';
+            let isPro = activeBtn.classList.contains('pro-tool');
+            let base = isPro ? 'pro-tool ' : '';
+            if (toolName === 'SMART_GREEN') activeBtn.className = base + 'active-green';
+            else if (toolName === 'MEASURE') activeBtn.className = base + 'active-yellow';
             else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
-            else if (toolName === 'ERASER') activeBtn.className = 'active-red';
-            else activeBtn.className = 'active';
+            else if (toolName === 'ERASER') activeBtn.className = base + 'active-red';
+            else activeBtn.className = base + 'active';
         }
         
         document.getElementById('color-picker-group').style.display = (toolName === 'BLOCK' || toolName === 'PAINT') ? 'flex' : 'none';
