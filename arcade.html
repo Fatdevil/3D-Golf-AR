@@ -1548,16 +1548,26 @@
             dirLight.position.set(Math.cos(angle) * 100, Math.max(10, p.sunY), Math.sin(angle) * 100);
         }
 
-        // 5. Sun mesh visual
+        // 5. Sun mesh visual (cinematic: orbits behind mountains)
         if (typeof sunMesh !== 'undefined') {
             let angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
-            sunMesh.position.set(Math.cos(angle) * 400, p.sunY, Math.sin(angle) * 400);
+            let sunOrbitR = 13000; // Behind scenery mountains
+            let sunHeight = p.sunY * 32.5; // Scale height proportionally (was 150 at 400m → 4875 at 13000m)
+            sunMesh.position.set(Math.cos(angle) * sunOrbitR, sunHeight, Math.sin(angle) * sunOrbitR);
             if (p.sunColor) {
                 sunMesh.material.color.setRGB(p.sunColor[0]/255, p.sunColor[1]/255, p.sunColor[2]/255);
                 let sunBrightness = (p.sunColor[0] + p.sunColor[1] + p.sunColor[2]) / 765;
                 sunMesh.visible = sunBrightness > 0.01;
+                // Sync glow sprite
+                if (window.sunGlow) {
+                    window.sunGlow.position.copy(sunMesh.position);
+                    window.sunGlow.material.color.copy(sunMesh.material.color);
+                    window.sunGlow.material.opacity = 0.15 * sunBrightness;
+                    window.sunGlow.visible = sunMesh.visible;
+                }
             } else {
-                sunMesh.visible = false; // Midnight: no sun
+                sunMesh.visible = false;
+                if (window.sunGlow) window.sunGlow.visible = false;
             }
         }
 
@@ -2385,12 +2395,26 @@
     dirLight.shadow.camera.right = 100;
     scene.add(dirLight);
     
-    // Create sun sphere
-    const sunGeo = new THREE.SphereGeometry(15, 16, 16);
-    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffe600 });
+    // Create cinematic sun (large sphere at 13000m orbit, behind mountains)
+    const sunGeo = new THREE.SphereGeometry(500, 32, 32);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffe600, fog: false });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-    sunMesh.position.set(200, 150, -400); 
+    sunMesh.position.set(200, 4875, -13000); 
     scene.add(sunMesh);
+    
+    // Atmospheric glow halo around the sun
+    const glowGeo = new THREE.SphereGeometry(1800, 32, 32);
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: 0xffe600,
+        fog: false,
+        transparent: true,
+        opacity: 0.12,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    window.sunGlow = new THREE.Mesh(glowGeo, glowMat);
+    window.sunGlow.position.copy(sunMesh.position);
+    scene.add(window.sunGlow);
 
     // Initialize TimeOfDay engine to default (midday)
     setTimeout(() => { if(window.setTimeOfDay) window.setTimeOfDay(12); }, 100);
