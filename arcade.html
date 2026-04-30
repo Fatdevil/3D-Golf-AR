@@ -2643,44 +2643,61 @@
             }
         }
         
-        // Paint gradient bands on the 4096x4096 canvas
-        // Band widths (in downsampled pixels, 1px ≈ ~0.9m):
-        // 0-5: semi-rough, 5-12: rough, 12-20: fescue
+        // Paint gradient to a TEMP canvas at native BFS resolution, then scale up smoothly
         let semiEnd = 5, roughEnd = 12, fescueEnd = 20;
+        
+        let tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = w; tmpCanvas.height = h;
+        let tmpCtx = tmpCanvas.getContext('2d');
+        // Start with fully transparent
+        tmpCtx.clearRect(0, 0, w, h);
+        
+        // Build ImageData directly for pixel-perfect control
+        let tmpImgData = tmpCtx.createImageData(w, h);
+        let tmpPx = tmpImgData.data;
         
         for(let y = 0; y < h; y++) {
             for(let x = 0; x < w; x++) {
                 let d = dist[y * w + x];
-                if(d <= 0 || d === -1) continue; // Skip good grass and unreached
+                if(d <= 0 || d === -1) continue;
                 
-                // Check if this pixel is protected at full res
+                // Check protection at source resolution
                 let fsi = (y * scale * 4096 + x * scale) * 4;
                 let pr = srcData[fsi], pg = srcData[fsi+1], pb = srcData[fsi+2];
                 if(isProtected(pr,pg,pb)) continue;
                 
-                let color;
+                let r, g, b;
                 if(d <= semiEnd) {
-                    // Interpolate fairway → semi-rough
                     let t = d / semiEnd;
-                    color = `rgb(${Math.round(fairwayRgb[0]*(1-t)+semiRgb[0]*t)},${Math.round(fairwayRgb[1]*(1-t)+semiRgb[1]*t)},${Math.round(fairwayRgb[2]*(1-t)+semiRgb[2]*t)})`;
+                    r = Math.round(fairwayRgb[0]*(1-t)+semiRgb[0]*t);
+                    g = Math.round(fairwayRgb[1]*(1-t)+semiRgb[1]*t);
+                    b = Math.round(fairwayRgb[2]*(1-t)+semiRgb[2]*t);
                 } else if(d <= roughEnd) {
                     let t = (d - semiEnd) / (roughEnd - semiEnd);
-                    color = `rgb(${Math.round(semiRgb[0]*(1-t)+roughRgb[0]*t)},${Math.round(semiRgb[1]*(1-t)+roughRgb[1]*t)},${Math.round(semiRgb[2]*(1-t)+roughRgb[2]*t)})`;
+                    r = Math.round(semiRgb[0]*(1-t)+roughRgb[0]*t);
+                    g = Math.round(semiRgb[1]*(1-t)+roughRgb[1]*t);
+                    b = Math.round(semiRgb[2]*(1-t)+roughRgb[2]*t);
                 } else if(d <= fescueEnd) {
                     let t = (d - roughEnd) / (fescueEnd - roughEnd);
-                    color = `rgb(${Math.round(roughRgb[0]*(1-t)+fescueRgb[0]*t)},${Math.round(roughRgb[1]*(1-t)+fescueRgb[1]*t)},${Math.round(roughRgb[2]*(1-t)+fescueRgb[2]*t)})`;
+                    r = Math.round(roughRgb[0]*(1-t)+fescueRgb[0]*t);
+                    g = Math.round(roughRgb[1]*(1-t)+fescueRgb[1]*t);
+                    b = Math.round(roughRgb[2]*(1-t)+fescueRgb[2]*t);
                 } else {
-                    continue; // Beyond fescue band
+                    continue;
                 }
                 
-                // Paint the 4x4 block on the full-res canvas
-                pCtx.fillStyle = color;
-                pCtx.fillRect(x * scale, y * scale, scale, scale);
+                let pi = (y * w + x) * 4;
+                tmpPx[pi] = r; tmpPx[pi+1] = g; tmpPx[pi+2] = b; tmpPx[pi+3] = 255;
             }
         }
+        tmpCtx.putImageData(tmpImgData, 0, 0);
+        
+        // Scale up with bilinear smoothing onto main canvas
+        pCtx.imageSmoothingEnabled = true;
+        pCtx.imageSmoothingQuality = 'high';
+        pCtx.drawImage(tmpCanvas, 0, 0, w, h, 0, 0, 4096, 4096);
         
         mapTex.needsUpdate = true;
-        // Refresh biome cache for physics
         window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
     };
     
