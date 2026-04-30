@@ -2372,6 +2372,10 @@
                 let tex = new THREE.Texture(img);
                 tex.needsUpdate = true;
                 tex.wrapS = THREE.RepeatWrapping;
+                tex.minFilter = THREE.LinearFilter; // No mipmaps — keeps it sharp
+                tex.magFilter = THREE.LinearFilter;
+                tex.generateMipmaps = false;
+                tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Max quality at angles
                 
                 panoCylMat.map = tex;
                 panoCylMat.opacity = 0.85;
@@ -2383,9 +2387,9 @@
                 let nameEl = document.getElementById('panorama-name');
                 if(nameEl) nameEl.textContent = '✅ ' + name;
                 
-                // Save panorama data to level (downscaled for storage)
+                // Save panorama data to level (high quality for sharp rendering)
                 let saveCanvas = document.createElement('canvas');
-                let maxW = 2048;
+                let maxW = 4096;
                 let scale = Math.min(1, maxW / img.width);
                 saveCanvas.width = img.width * scale;
                 saveCanvas.height = img.height * scale;
@@ -2393,7 +2397,7 @@
                 
                 courseHoles[currentHoleIndex].panorama = {
                     name: name,
-                    data: saveCanvas.toDataURL('image/jpeg', 0.7)
+                    data: saveCanvas.toDataURL('image/jpeg', 0.9)
                 };
                 saveLevel();
             };
@@ -2425,6 +2429,10 @@
                 let tex = new THREE.Texture(img);
                 tex.needsUpdate = true;
                 tex.wrapS = THREE.RepeatWrapping;
+                tex.minFilter = THREE.LinearFilter;
+                tex.magFilter = THREE.LinearFilter;
+                tex.generateMipmaps = false;
+                tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
                 panoCylMat.map = tex;
                 panoCylMat.opacity = 0.85;
                 panoCylMat.transparent = true;
