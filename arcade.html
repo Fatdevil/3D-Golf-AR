@@ -1309,7 +1309,7 @@
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Sky (overridden by TimeOfDay engine)
-    scene.fog = new THREE.Fog(0x87CEEB, 300, 2500); // Fog (overridden by TimeOfDay engine)
+    scene.fog = new THREE.Fog(0x87CEEB, 200, 1800); // Fog (blends terrain edges, overridden by TimeOfDay engine)
 
     // ============================================================
     // DYNAMIC TIME OF DAY ENGINE (Fas 1+2)
@@ -1380,6 +1380,17 @@
         scene.fog.color.setRGB(p.fogColor[0]/255, p.fogColor[1]/255, p.fogColor[2]/255);
         scene.fog.near = p.fogNear;
         scene.fog.far = p.fogFar;
+        
+        // Sync surrounding ground plane with fog for seamless horizon
+        if(typeof surroundMat !== 'undefined') {
+            // Blend fescue green with fog color based on time of day
+            let fogR = p.fogColor[0]/255, fogG = p.fogColor[1]/255, fogB = p.fogColor[2]/255;
+            surroundMat.color.setRGB(
+                0.18 * 0.6 + fogR * 0.4,
+                0.30 * 0.6 + fogG * 0.4,
+                0.10 * 0.6 + fogB * 0.4
+            );
+        }
 
         // 3. Ambient light
         if (typeof ambientLight !== 'undefined') {
@@ -2299,6 +2310,16 @@
     plane.rotation.x = -Math.PI / 2;
     plane.receiveShadow = true;
     scene.add(plane);
+    
+    // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
+    let surroundSize = 5000;
+    let surroundGeo = new THREE.PlaneGeometry(surroundSize, surroundSize);
+    let surroundMat = new THREE.MeshLambertMaterial({ color: 0x2d4c1a }); // Dark fescue green
+    let surroundPlane = new THREE.Mesh(surroundGeo, surroundMat);
+    surroundPlane.rotation.x = -Math.PI / 2;
+    surroundPlane.position.y = -0.5; // Slightly below terrain to avoid z-fighting
+    surroundPlane.receiveShadow = true;
+    scene.add(surroundPlane);
     
     window.minimapMat = planeMat.clone();
     window.minimapMat.extensions = { derivatives: true };
