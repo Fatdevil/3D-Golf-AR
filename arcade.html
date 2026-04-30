@@ -718,6 +718,18 @@
                 <span id="winddir-label" style="color:#38bdf8; font-size:11px; font-weight:bold;">N</span>
             </div>
             <input type="range" id="winddir-slider" min="0" max="359" value="0" step="1" oninput="updateWindDirPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+            
+            <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🖼️ Panorama Background</label>
+                <div id="panorama-name" style="color:#64748b; font-size:9px; margin:4px 0;">No panorama loaded</div>
+                <div style="display:flex; gap:4px;">
+                    <label style="flex:1; background:#1e293b; color:#38bdf8; border:1px solid #334155; padding:6px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:center;">
+                        📂 Upload
+                        <input type="file" id="panorama-upload" accept="image/*" onchange="window.loadPanorama(this)" style="display:none;">
+                    </label>
+                    <button onclick="window.removePanorama()" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:6px 10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px;">✕</button>
+                </div>
+            </div>
         </div>
 
         <!-- Terrain Analysis Panel -->
@@ -2321,6 +2333,96 @@
     surroundPlane.receiveShadow = true;
     scene.add(surroundPlane);
     
+    // === PANORAMA CYLINDER SYSTEM ===
+    let panoRadius = 2000, panoHeight = 600;
+    let panoCylGeo = new THREE.CylinderGeometry(panoRadius, panoRadius, panoHeight, 64, 1, true);
+    let panoCylMat = new THREE.MeshBasicMaterial({ side: THREE.BackSide, transparent: true, opacity: 0, fog: true });
+    let panoCylMesh = new THREE.Mesh(panoCylGeo, panoCylMat);
+    panoCylMesh.position.y = panoHeight * 0.3; // Trees sit above horizon
+    panoCylMesh.visible = false;
+    scene.add(panoCylMesh);
+    window.panoramaName = null;
+    
+    window.loadPanorama = function(input) {
+        if(!input.files || !input.files[0]) return;
+        let file = input.files[0];
+        let name = file.name.replace(/\.[^.]+$/, ''); // Strip extension
+        
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            let img = new Image();
+            img.onload = function() {
+                let tex = new THREE.Texture(img);
+                tex.needsUpdate = true;
+                tex.wrapS = THREE.RepeatWrapping;
+                
+                panoCylMat.map = tex;
+                panoCylMat.opacity = 0.85;
+                panoCylMat.transparent = true;
+                panoCylMat.needsUpdate = true;
+                panoCylMesh.visible = true;
+                
+                window.panoramaName = name;
+                let nameEl = document.getElementById('panorama-name');
+                if(nameEl) nameEl.textContent = '✅ ' + name;
+                
+                // Save panorama data to level (downscaled for storage)
+                let saveCanvas = document.createElement('canvas');
+                let maxW = 2048;
+                let scale = Math.min(1, maxW / img.width);
+                saveCanvas.width = img.width * scale;
+                saveCanvas.height = img.height * scale;
+                saveCanvas.getContext('2d').drawImage(img, 0, 0, saveCanvas.width, saveCanvas.height);
+                
+                courseHoles[currentHoleIndex].panorama = {
+                    name: name,
+                    data: saveCanvas.toDataURL('image/jpeg', 0.7)
+                };
+                saveLevel();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    
+    window.removePanorama = function() {
+        panoCylMat.map = null;
+        panoCylMat.opacity = 0;
+        panoCylMesh.visible = false;
+        panoCylMat.needsUpdate = true;
+        window.panoramaName = null;
+        let nameEl = document.getElementById('panorama-name');
+        if(nameEl) nameEl.textContent = 'No panorama loaded';
+        if(courseHoles[currentHoleIndex]) {
+            delete courseHoles[currentHoleIndex].panorama;
+            saveLevel();
+        }
+    };
+    
+    // Restore panorama from saved level data
+    window.restorePanorama = function() {
+        let hole = courseHoles[currentHoleIndex];
+        if(hole && hole.panorama && hole.panorama.data) {
+            let img = new Image();
+            img.onload = function() {
+                let tex = new THREE.Texture(img);
+                tex.needsUpdate = true;
+                tex.wrapS = THREE.RepeatWrapping;
+                panoCylMat.map = tex;
+                panoCylMat.opacity = 0.85;
+                panoCylMat.transparent = true;
+                panoCylMat.needsUpdate = true;
+                panoCylMesh.visible = true;
+                window.panoramaName = hole.panorama.name;
+                let nameEl = document.getElementById('panorama-name');
+                if(nameEl) nameEl.textContent = '✅ ' + hole.panorama.name;
+            };
+            img.src = hole.panorama.data;
+        } else {
+            window.removePanorama();
+        }
+    };
+    
     window.minimapMat = planeMat.clone();
     window.minimapMat.extensions = { derivatives: true };
     window.heatmapShaderRef = null;
@@ -3691,6 +3793,7 @@
         if(currentHoleIndex > 17) currentHoleIndex = 0;
         document.getElementById('hole-ui-num').innerText = "Hole " + (currentHoleIndex + 1);
         document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par;
+        if(typeof window.restorePanorama === 'function') window.restorePanorama();
     };
     
     window.changeHolePar = function(dir) {
