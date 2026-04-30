@@ -422,6 +422,11 @@
             // För enkelhetens skull låter vi loader:n skala till 1m, sedan multiplicerar vi med tHeight.
             currentModel.scale.setScalar(tHeight);
             currentModel.position.y = yOff;
+            
+            // Skala upp markytan (Grid + Palette Plane)
+            let groundScale = Math.max(1, tHeight / 15.0);
+            if (typeof grid !== 'undefined') grid.scale.setScalar(groundScale);
+            if (typeof palettePlane !== 'undefined') palettePlane.scale.setScalar(groundScale);
 
             // Justera brightness
             currentModel.traverse((child) => {
