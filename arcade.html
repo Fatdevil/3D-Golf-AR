@@ -774,6 +774,7 @@
                                 <select id="scenery-N" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-N" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                         <!-- EAST -->
@@ -792,6 +793,7 @@
                                 <select id="scenery-E" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-E" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                         <!-- SOUTH -->
@@ -810,6 +812,7 @@
                                 <select id="scenery-S" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-S" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                         <!-- WEST -->
@@ -828,6 +831,7 @@
                                 <select id="scenery-W" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-W" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                     </div>
@@ -2666,6 +2670,13 @@
                 window.surroundConfig.sceneryS = document.getElementById('scenery-S').value;
                 window.surroundConfig.sceneryW = document.getElementById('scenery-W').value;
             }
+            let cntN = document.getElementById('scenery-cnt-N');
+            if (cntN) {
+                window.surroundConfig.sceneryCntN = parseInt(document.getElementById('scenery-cnt-N').value) || 50;
+                window.surroundConfig.sceneryCntE = parseInt(document.getElementById('scenery-cnt-E').value) || 50;
+                window.surroundConfig.sceneryCntS = parseInt(document.getElementById('scenery-cnt-S').value) || 50;
+                window.surroundConfig.sceneryCntW = parseInt(document.getElementById('scenery-cnt-W').value) || 50;
+            }
             
             // Save to course data
             if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
@@ -2725,7 +2736,7 @@
         
         window.sceneryGroup = new THREE.Group();
         
-        const buildQuadrant = (assetId, angleStart, angleEnd, horizonColorKey) => {
+        const buildQuadrant = (assetId, angleStart, angleEnd, horizonColorKey, countTarget) => {
             if (!assetId || assetId === 'NONE' || !window.ASSET_REGISTRY[assetId]) return;
             
             let assetConf = window.ASSET_REGISTRY[assetId];
@@ -2741,9 +2752,7 @@
             cacheObj.traverse(child => { if (child.isMesh) meshes.push(child); });
             if (meshes.length === 0) return;
             
-            let density = 1.0;
-            let count = Math.max(10, Math.floor(150 / (assetConf.targetHeight / 10)));
-            count = Math.min(count, 150); // Max instances per quadrant
+            let count = countTarget || 50;
             
             let getCol = (key) => {
                 let hexStr = window.CURRENT_BIOME_CONFIG[key];
@@ -2786,10 +2795,10 @@
         let cS = window.surroundConfig.S;
         let cW = window.surroundConfig.W;
         
-        buildQuadrant(window.surroundConfig.sceneryN, Math.PI * 1.25, Math.PI * 1.75, cN); // North
-        buildQuadrant(window.surroundConfig.sceneryE, Math.PI * 1.75, Math.PI * 2.25, cE); // East
-        buildQuadrant(window.surroundConfig.sceneryS, Math.PI * 0.25, Math.PI * 0.75, cS); // South
-        buildQuadrant(window.surroundConfig.sceneryW, Math.PI * 0.75, Math.PI * 1.25, cW); // West
+        buildQuadrant(window.surroundConfig.sceneryN, Math.PI * 1.25, Math.PI * 1.75, cN, window.surroundConfig.sceneryCntN); // North
+        buildQuadrant(window.surroundConfig.sceneryE, Math.PI * 1.75, Math.PI * 2.25, cE, window.surroundConfig.sceneryCntE); // East
+        buildQuadrant(window.surroundConfig.sceneryS, Math.PI * 0.25, Math.PI * 0.75, cS, window.surroundConfig.sceneryCntS); // South
+        buildQuadrant(window.surroundConfig.sceneryW, Math.PI * 0.75, Math.PI * 1.25, cW, window.surroundConfig.sceneryCntW); // West
         
         scene.add(window.sceneryGroup);
     };
@@ -2847,6 +2856,11 @@
         if (!window.surroundConfig.sceneryS) window.surroundConfig.sceneryS = 'NONE';
         if (!window.surroundConfig.sceneryW) window.surroundConfig.sceneryW = 'NONE';
         
+        if (window.surroundConfig.sceneryCntN === undefined) window.surroundConfig.sceneryCntN = 50;
+        if (window.surroundConfig.sceneryCntE === undefined) window.surroundConfig.sceneryCntE = 50;
+        if (window.surroundConfig.sceneryCntS === undefined) window.surroundConfig.sceneryCntS = 50;
+        if (window.surroundConfig.sceneryCntW === undefined) window.surroundConfig.sceneryCntW = 50;
+        
         // Update UI
         let elN = document.getElementById('surr-N');
         if(elN) {
@@ -2861,6 +2875,13 @@
                 document.getElementById('scenery-E').value = window.surroundConfig.sceneryE;
                 document.getElementById('scenery-S').value = window.surroundConfig.sceneryS;
                 document.getElementById('scenery-W').value = window.surroundConfig.sceneryW;
+            }
+            let cntN = document.getElementById('scenery-cnt-N');
+            if (cntN) {
+                document.getElementById('scenery-cnt-N').value = window.surroundConfig.sceneryCntN;
+                document.getElementById('scenery-cnt-E').value = window.surroundConfig.sceneryCntE;
+                document.getElementById('scenery-cnt-S').value = window.surroundConfig.sceneryCntS;
+                document.getElementById('scenery-cnt-W').value = window.surroundConfig.sceneryCntW;
             }
         }
         
