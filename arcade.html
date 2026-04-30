@@ -2514,20 +2514,23 @@
         for(let i = 2; i < ePos.length; i += 3) ePos[i] = pos[i] + 0.08;
         elevHeatGeo.attributes.position.needsUpdate = true;
         
-        // Find height range
-        let hMin = Infinity, hMax = -Infinity;
-        for(let i = 2; i < pos.length; i += 3) {
-            if(pos[i] < hMin) hMin = pos[i];
-            if(pos[i] > hMax) hMax = pos[i];
-        }
+        // Find median height for LOCAL normalization (makes small green undulations pop)
+        let heights = [];
+        for(let i = 2; i < pos.length; i += 3) heights.push(pos[i]);
+        heights.sort((a,b) => a - b);
+        let median = heights[Math.floor(heights.length / 2)];
         
-        let range = hMax - hMin;
-        if(range < 0.01) range = 1; // Avoid division by zero on flat terrain
+        // Map ±1.5m from median to full color range — ultra sensitive for green design
+        let sensitivity = 1.5; // meters — ±1.5m = full blue→red
+        let rangeMin = median - sensitivity;
+        let rangeMax = median + sensitivity;
+        let range = rangeMax - rangeMin;
+        if(range < 0.01) range = 1;
         
         // Color: Blue (low) → Green (mid) → Red (high)
         for(let idx = 0; idx < total; idx++) {
             let h = pos[idx*3+2];
-            let t = (h - hMin) / range; // 0 = lowest, 1 = highest
+            let t = Math.max(0, Math.min(1, (h - rangeMin) / range)); // 0 = lowest, 1 = highest, clamped
             
             let r, g, b;
             if(t < 0.5) {
