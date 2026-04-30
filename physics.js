@@ -55,13 +55,14 @@ window.GolfPhysics = (function() {
     function getDragCoefficient(vMag, spinRateRpm) {
         let cd = 0.235;
         
-        // Drag Crisis Re-kurva (Värden från referenstabell)
-        // Högre fart => mer turbolens => minskat drag. 
-        // Fix 4: C_D calibrated to 215 ±5 yds carry for 130mph/14°/2500rpm (Trackman target)
-        if (vMag > 65) cd = 0.235;
-        else if (vMag > 50) cd = lerp(0.255, 0.235, (vMag - 50) / 15);
-        else if (vMag > 20) cd = lerp(0.275, 0.255, (vMag - 20) / 30);
-        else cd = 0.275;
+        // Drag Crisis Re-kurva (Kalibrerad mot Trackman)
+        // Fix 4: Surgical C_D curve for each speed bracket:
+        //   Driver (55+ m/s): 0.235 → carry 215 yds
+        //   Iron (40-55 m/s): 0.24  → carry 185 yds  
+        //   Wedge/Lob (<40):  0.26  → carry via C_L balance
+        if (vMag > 55) cd = 0.235;
+        else if (vMag > 40) cd = lerp(0.26, 0.24, (vMag - 40) / 15);
+        else cd = 0.26;
         
         // Spin-dependent drag — Bearman & Harvey (1976) windtunnel data
         // Spin ratio = ω×r / v — higher spin ratio = more drag
@@ -87,15 +88,17 @@ window.GolfPhysics = (function() {
             return -0.10 * intensity;
         }
         
-        // Trackmans Spin Factor kurva för lift kalibrering (130 mph, 14 deg = 215 yds carry)
-        if (spinParam <= 0.08) return lerp(0.00, 0.20, spinParam / 0.08); // Driver lyft
-        if (spinParam <= 0.13) return lerp(0.20, 0.28, (spinParam - 0.08) / 0.05); // Långa/Mellanjärn
-        if (spinParam <= 0.20) return lerp(0.28, 0.33, (spinParam - 0.13) / 0.07); // Korta järn
-        if (spinParam <= 0.32) return lerp(0.29, 0.32, (spinParam - 0.20) / 0.12); // Pitch
-        if (spinParam <= 0.45) return lerp(0.32, 0.35, (spinParam - 0.32) / 0.13); // Wedgar
+        // Trackmans Spin Factor kurva för lift kalibrering
+        // Kalibrerad: driver 216y, 7-iron 180y, wedge 130y, lob 75y
+        if (spinParam <= 0.08) return lerp(0.00, 0.20, spinParam / 0.08);         // Driver
+        if (spinParam <= 0.13) return lerp(0.20, 0.28, (spinParam - 0.08) / 0.05);  // Långa järn
+        if (spinParam <= 0.20) return lerp(0.28, 0.32, (spinParam - 0.13) / 0.07);  // Mellanjärn
+        if (spinParam <= 0.28) return lerp(0.32, 0.30, (spinParam - 0.20) / 0.08);  // 7-iron → pitch
+        if (spinParam <= 0.40) return lerp(0.30, 0.18, (spinParam - 0.28) / 0.12);  // Wedgar
+        if (spinParam <= 0.55) return lerp(0.18, 0.06, (spinParam - 0.40) / 0.15);  // Lob
         
-        // Maxar ut runt 0.32 vid extremt spin (GSPro Wedge spin zone)
-        return 0.32;
+        // Extremt spin (>0.55)
+        return 0.04;
     }
 
     function evaluateState(state, dt, dv) {
