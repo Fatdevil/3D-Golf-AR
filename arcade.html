@@ -603,6 +603,10 @@
                 <div id="pal-rough" class="palette-btn" style="background:#4a782b; position:relative;" onclick="setPaletteColor('rough', this)">Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('rough')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
                 <div id="pal-fescue" class="palette-btn" style="background:#2d4c1a; position:relative;" onclick="setPaletteColor('fescue', this)">Fescue <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fescue')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
             </div>
+            <div style="margin-top:8px; border-top:1px solid #334155; padding-top:8px;">
+                <button id="btn-auto-rough" onclick="window.executeAutoRough()" style="width:100%; background: linear-gradient(135deg, #4a782b 0%, #6b9e3d 50%, #2d4c1a 100%); color:#fff; font-weight:bold; padding:10px; border-radius:6px; border:none; cursor:pointer; font-size:11px; letter-spacing:0.5px; transition: all 0.2s;">🌿 AUTO-ROUGH GRADIENT</button>
+                <div style="color:#64748b; font-size:9px; margin-top:4px;">Generates Fairway → Semi-Rough → Rough → Fescue bands automatically</div>
+            </div>
         </div>
 
         <!-- Naturväljare -->
@@ -2505,6 +2509,285 @@
             else elS.style.color = '#ef4444';
         }
         if(elB) elB.textContent = biome;
+    };
+    
+    // === AUTO-ROUGH GRADIENT SYSTEM ===
+    window.executeAutoRough = function() {
+        saveUndoState();
+        let cfg = window.CURRENT_BIOME_CONFIG;
+        
+        // Parse biome hex colors to RGB
+        function hexToRgb(hex) {
+            let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+            return [r, g, b];
+        }
+        
+        let fairwayRgb = hexToRgb(cfg.fairwayColor);
+        let greenRgb = hexToRgb(cfg.greenColor);
+        let foregreenRgb = hexToRgb(cfg.foregreenColor);
+        let teeRgb = hexToRgb(cfg.teeColor);
+        let semiRgb = hexToRgb(cfg.semiColor);
+        let roughRgb = hexToRgb(cfg.roughColor);
+        let fescueRgb = hexToRgb(cfg.fescueColor);
+        
+        // "Good grass" colors that we grow from
+        let goodColors = [fairwayRgb, greenRgb, foregreenRgb, teeRgb];
+        // "Neutral" colors (rough/fescue/semi) that we overwrite
+        let neutralColors = [semiRgb, roughRgb, fescueRgb, hexToRgb(cfg.roughColor)];
+        // "Protected" colors (OB, bunker, waste, water) — never overwrite
+        let obRgb = hexToRgb(cfg.obColor);
+        let bunkerRgb = hexToRgb(cfg.bunkerColor);
+        let wasteRgb = hexToRgb(cfg.wasteColor);
+        let waterRgb = hexToRgb(cfg.waterColor);
+        let protectedColors = [obRgb, bunkerRgb, wasteRgb, waterRgb];
+        
+        // Work on downsampled grid for performance (1024x1024 from 4096x4096)
+        let scale = 4;
+        let w = 4096 / scale; // 1024
+        let h = 4096 / scale;
+        
+        // Read paint canvas
+        let srcData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        
+        function colorDist(r1,g1,b1,r2,g2,b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
+        function isGoodGrass(r,g,b) {
+            for(let c of goodColors) { if(colorDist(r,g,b,c[0],c[1],c[2]) < 2000) return true; }
+            return false;
+        }
+        function isProtected(r,g,b) {
+            for(let c of protectedColors) { if(colorDist(r,g,b,c[0],c[1],c[2]) < 2000) return true; }
+            // Also protect good grass from being painted over
+            return isGoodGrass(r,g,b);
+        }
+        
+        // Build distance field using BFS on downsampled grid
+        let dist = new Int16Array(w * h).fill(-1);
+        let queue = [];
+        
+        // Seed: all "good grass" pixels at distance 0
+        for(let y = 0; y < h; y++) {
+            for(let x = 0; x < w; x++) {
+                let sx = x * scale, sy = y * scale;
+                let si = (sy * 4096 + sx) * 4;
+                let r = srcData[si], g = srcData[si+1], b = srcData[si+2];
+                if(isGoodGrass(r,g,b)) {
+                    dist[y * w + x] = 0;
+                    queue.push(y * w + x);
+                }
+            }
+        }
+        
+        // BFS flood — expand outward
+        let maxDist = 25; // ~25 pixels at 1/4 scale = ~25m
+        let head = 0;
+        let dx = [1,-1,0,0, 1,-1,1,-1];
+        let dy = [0,0,1,-1, 1,-1,-1,1];
+        
+        while(head < queue.length) {
+            let idx = queue[head++];
+            let cx = idx % w, cy = Math.floor(idx / w);
+            let cd = dist[idx];
+            if(cd >= maxDist) continue;
+            
+            for(let d = 0; d < 8; d++) {
+                let nx = cx + dx[d], ny = cy + dy[d];
+                if(nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+                let ni = ny * w + nx;
+                if(dist[ni] !== -1) continue;
+                
+                // Check if this pixel is protected
+                let sx = nx * scale, sy = ny * scale;
+                let si = (sy * 4096 + sx) * 4;
+                let r = srcData[si], g = srcData[si+1], b = srcData[si+2];
+                if(isProtected(r,g,b)) {
+                    dist[ni] = 0; // Mark as visited but don't expand color
+                    continue;
+                }
+                
+                let newDist = cd + (d < 4 ? 1 : 1.41);
+                dist[ni] = Math.round(newDist);
+                queue.push(ni);
+            }
+        }
+        
+        // Paint gradient bands on the 4096x4096 canvas
+        // Band widths (in downsampled pixels, 1px ≈ ~0.9m):
+        // 0-5: semi-rough, 5-12: rough, 12-20: fescue
+        let semiEnd = 5, roughEnd = 12, fescueEnd = 20;
+        
+        for(let y = 0; y < h; y++) {
+            for(let x = 0; x < w; x++) {
+                let d = dist[y * w + x];
+                if(d <= 0 || d === -1) continue; // Skip good grass and unreached
+                
+                // Check if this pixel is protected at full res
+                let fsi = (y * scale * 4096 + x * scale) * 4;
+                let pr = srcData[fsi], pg = srcData[fsi+1], pb = srcData[fsi+2];
+                if(isProtected(pr,pg,pb)) continue;
+                
+                let color;
+                if(d <= semiEnd) {
+                    // Interpolate fairway → semi-rough
+                    let t = d / semiEnd;
+                    color = `rgb(${Math.round(fairwayRgb[0]*(1-t)+semiRgb[0]*t)},${Math.round(fairwayRgb[1]*(1-t)+semiRgb[1]*t)},${Math.round(fairwayRgb[2]*(1-t)+semiRgb[2]*t)})`;
+                } else if(d <= roughEnd) {
+                    let t = (d - semiEnd) / (roughEnd - semiEnd);
+                    color = `rgb(${Math.round(semiRgb[0]*(1-t)+roughRgb[0]*t)},${Math.round(semiRgb[1]*(1-t)+roughRgb[1]*t)},${Math.round(semiRgb[2]*(1-t)+roughRgb[2]*t)})`;
+                } else if(d <= fescueEnd) {
+                    let t = (d - roughEnd) / (fescueEnd - roughEnd);
+                    color = `rgb(${Math.round(roughRgb[0]*(1-t)+fescueRgb[0]*t)},${Math.round(roughRgb[1]*(1-t)+fescueRgb[1]*t)},${Math.round(roughRgb[2]*(1-t)+fescueRgb[2]*t)})`;
+                } else {
+                    continue; // Beyond fescue band
+                }
+                
+                // Paint the 4x4 block on the full-res canvas
+                pCtx.fillStyle = color;
+                pCtx.fillRect(x * scale, y * scale, scale, scale);
+            }
+        }
+        
+        mapTex.needsUpdate = true;
+        // Refresh biome cache for physics
+        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+    };
+    
+    // === SPLINE FAIRWAY CORRIDOR ===
+    window.executeSplineFairway = function() {
+        if(splinePoints.length < 2) return;
+        saveUndoState();
+        
+        let widthSlider = document.getElementById('spline-width-slider');
+        let pathWidth = widthSlider ? parseFloat(widthSlider.value) : 15;
+        let halfW = pathWidth / 2;
+        
+        let curve = new THREE.CatmullRomCurve3(splinePoints);
+        let numSamples = Math.max(100, splinePoints.length * 30);
+        let densePts = curve.getPoints(numSamples);
+        
+        // Get terrain height at each sample to compute smooth target heights
+        let targetHeights = [];
+        for(let pt of densePts) {
+            let surf = localGetTerrainAt(pt.x, -pt.z);
+            targetHeights.push(surf ? surf.z : 0);
+        }
+        
+        // Smooth the target heights (moving average) for gentle slopes
+        let smoothed = new Float32Array(targetHeights.length);
+        let kernelSize = 7;
+        for(let i = 0; i < targetHeights.length; i++) {
+            let sum = 0, count = 0;
+            for(let k = -kernelSize; k <= kernelSize; k++) {
+                let idx = Math.max(0, Math.min(targetHeights.length-1, i + k));
+                sum += targetHeights[idx];
+                count++;
+            }
+            smoothed[i] = sum / count;
+        }
+        
+        // 1. SCULPT: Flatten terrain along the corridor
+        let positions = planeGeo.attributes.position.array;
+        let step = TERRAIN_SIZE / TERRAIN_SEGS;
+        
+        // For each dense point, flatten terrain within pathWidth
+        for(let i = 0; i < densePts.length; i++) {
+            let px = densePts[i].x;
+            let pz = densePts[i].z;
+            let targetY = smoothed[i];
+            
+            // Get tangent for perpendicular direction
+            let tangent = curve.getTangentAt(i / densePts.length);
+            
+            // Grid bounding box
+            let gxMin = Math.max(0, Math.floor((px - halfW - 5 + TERRAIN_SIZE/2) / step));
+            let gxMax = Math.min(TERRAIN_SEGS, Math.ceil((px + halfW + 5 + TERRAIN_SIZE/2) / step));
+            let gzMin = Math.max(0, Math.floor((pz - halfW - 5 + TERRAIN_SIZE/2) / step));
+            let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((pz + halfW + 5 + TERRAIN_SIZE/2) / step));
+            
+            for(let gz = gzMin; gz <= gzMax; gz++) {
+                for(let gx = gxMin; gx <= gxMax; gx++) {
+                    let idx = gz * (TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1]; // World Z = -local Y
+                    
+                    let distX = vx - px;
+                    let distZ = vz - pz;
+                    let dist = Math.sqrt(distX*distX + distZ*distZ);
+                    
+                    if(dist < halfW + 5) {
+                        let influence;
+                        if(dist < halfW) {
+                            influence = 1.0; // Full flatten inside path
+                        } else {
+                            // Smooth falloff edge (5m transition)
+                            influence = 1.0 - ((dist - halfW) / 5.0);
+                            influence = Math.max(0, influence * influence * (3 - 2 * influence));
+                        }
+                        
+                        let currentH = positions[idx*3+2];
+                        positions[idx*3+2] = currentH + (targetY - currentH) * influence * 0.3;
+                    }
+                }
+            }
+        }
+        
+        // Multiple passes for smoother result
+        for(let pass = 0; pass < 3; pass++) {
+            for(let i = 0; i < densePts.length; i++) {
+                let px = densePts[i].x;
+                let pz = densePts[i].z;
+                let targetY = smoothed[i];
+                
+                let gxMin = Math.max(0, Math.floor((px - halfW + TERRAIN_SIZE/2) / step));
+                let gxMax = Math.min(TERRAIN_SEGS, Math.ceil((px + halfW + TERRAIN_SIZE/2) / step));
+                let gzMin = Math.max(0, Math.floor((pz - halfW + TERRAIN_SIZE/2) / step));
+                let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((pz + halfW + TERRAIN_SIZE/2) / step));
+                
+                for(let gz = gzMin; gz <= gzMax; gz++) {
+                    for(let gx = gxMin; gx <= gxMax; gx++) {
+                        let idx = gz * (TERRAIN_SEGS+1) + gx;
+                        let vx = positions[idx*3];
+                        let vz = -positions[idx*3+1];
+                        let dist = Math.sqrt((vx-px)**2 + (vz-pz)**2);
+                        
+                        if(dist < halfW) {
+                            positions[idx*3+2] += (targetY - positions[idx*3+2]) * 0.4;
+                        }
+                    }
+                }
+            }
+        }
+        
+        planeGeo.attributes.position.needsUpdate = true;
+        planeGeo.computeVertexNormals();
+        planeGeo.computeBoundingBox();
+        planeGeo.computeBoundingSphere();
+        
+        // 2. PAINT: Draw fairway color along the path
+        let fairwayColor = cfg.fairwayColor;
+        pCtx.strokeStyle = fairwayColor;
+        pCtx.lineCap = 'round';
+        pCtx.lineJoin = 'round';
+        let canvasW = (pathWidth / TERRAIN_SIZE) * 4096;
+        pCtx.lineWidth = canvasW;
+        
+        pCtx.beginPath();
+        for(let i = 0; i < densePts.length; i++) {
+            let cX = ((densePts[i].x + TERRAIN_SIZE/2) / TERRAIN_SIZE) * 4096;
+            let cZ = ((densePts[i].z + TERRAIN_SIZE/2) / TERRAIN_SIZE) * 4096;
+            if(i === 0) pCtx.moveTo(cX, cZ);
+            else pCtx.lineTo(cX, cZ);
+        }
+        pCtx.stroke();
+        
+        mapTex.needsUpdate = true;
+        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        
+        // Refresh overlays
+        if(window.slopeOverlayActive) window.updateSlopeOverlay();
+        if(window.contourLinesActive) window.updateContourLines();
+        snapObjectsToGround();
+        
+        clearSpline();
     };
     
     window.minimapMat.onBeforeCompile = function(shader) {
@@ -7294,18 +7577,41 @@
     animate();
 </script>
 
-<div id="spline-action-panel" style="display:none; position:absolute; bottom:120px; left:50%; transform:translateX(-50%); background:#0f172a; border:2px solid #38bdf8; border-radius:12px; padding:15px; z-index:400; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center;">
-    <h3 style="margin:0 0 10px 0; color:#fff; font-size:14px; text-transform:uppercase; letter-spacing:1px;">Spline Ready</h3>
-    <div style="display:flex; gap:10px;">
-        <button onclick="executeSplineBoundary('GREEN')" style="background:#4ade80; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">⛳ Fill Green</button>
-        <button onclick="executeSplineBoundary('FAIRWAY')" style="background:#22c55e; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🌿 Fill Fairway</button>
-        <button onclick="executeSplineBoundary('BUNKER')" style="background:#fbbf24; color:#0f172a; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🏖️ Fill Bunker</button>
+<div id="spline-action-panel" style="display:none; position:absolute; bottom:120px; left:50%; transform:translateX(-50%); background:#0f172a; border:2px solid #38bdf8; border-radius:12px; padding:15px 20px; z-index:400; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center; min-width:420px;">
+    <h3 style="margin:0 0 10px 0; color:#fff; font-size:14px; text-transform:uppercase; letter-spacing:1px;">〰️ Spline Ready</h3>
+    
+    <!-- Width Slider -->
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+        <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Width</span>
+        <input type="range" id="spline-width-slider" min="5" max="40" value="15" step="1" style="flex:1; accent-color:#38bdf8; cursor:pointer;">
+        <span id="spline-width-val" style="color:#38bdf8; font-weight:bold; font-size:13px; min-width:35px;">15m</span>
     </div>
-    <div style="display:flex; gap:10px; margin-top:10px;">
-        <button onclick="executeSplinePath('FLAT_ROAD')" style="background:#475569; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🛣️ Extrude Flat Road</button>
-        <button onclick="executeSplinePath('TUBE')" style="background:#3b82f6; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">🚰 Extrude 3D Tube</button>
-        <button onclick="clearSpline()" style="background:#ef4444; color:#fff; font-weight:bold; padding:8px 15px; border-radius:6px; border:none; cursor:pointer;">❌ Clear All</button>
+    <script>
+        document.getElementById('spline-width-slider').addEventListener('input', function() {
+            document.getElementById('spline-width-val').textContent = this.value + 'm';
+        });
+    </script>
+    
+    <!-- Row 1: Fairway Corridor (NEW!) -->
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <button onclick="executeSplineFairway()" style="flex:1; background:linear-gradient(135deg, #22c55e, #15803d); color:#fff; font-weight:bold; padding:10px 15px; border-radius:6px; border:none; cursor:pointer; font-size:12px;">🌿 Fairway Corridor</button>
+        <button onclick="executeSplinePath('FLAT_ROAD')" style="flex:1; background:#475569; color:#fff; font-weight:bold; padding:10px 15px; border-radius:6px; border:none; cursor:pointer; font-size:12px;">🛣️ Cart Path</button>
     </div>
+    
+    <!-- Row 2: Fill area -->
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <button onclick="executeSplineBoundary('GREEN')" style="flex:1; background:#4ade80; color:#0f172a; font-weight:bold; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-size:11px;">⛳ Fill Green</button>
+        <button onclick="executeSplineBoundary('FAIRWAY')" style="flex:1; background:#22c55e; color:#0f172a; font-weight:bold; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-size:11px;">🌿 Fill Fairway</button>
+        <button onclick="executeSplineBoundary('BUNKER')" style="flex:1; background:#fbbf24; color:#0f172a; font-weight:bold; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-size:11px;">🏖️ Fill Bunker</button>
+    </div>
+    
+    <!-- Row 3: 3D objects + Clear -->
+    <div style="display:flex; gap:8px;">
+        <button onclick="executeSplinePath('TUBE')" style="flex:1; background:#3b82f6; color:#fff; font-weight:bold; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-size:11px;">🚰 3D Tube</button>
+        <button onclick="clearSpline()" style="flex:1; background:#ef4444; color:#fff; font-weight:bold; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-size:11px;">❌ Clear</button>
+    </div>
+    
+    <div style="color:#64748b; font-size:9px; margin-top:8px;">🌿 Fairway Corridor = Sculpt + Paint along path. Width slider controls corridor size.</div>
 </div>
 
 </body>
