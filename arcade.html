@@ -589,6 +589,11 @@
                 Sharp Edges (Retro)
             </label>
             
+            <label style="color:#4ade80; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:5px; display:flex; align-items:center; gap:5px; cursor:pointer;" title="Prevents sculpting on the outermost edges to blend with surrounding">
+                <input type="checkbox" id="lock-edge-cb" checked onchange="window.lockEdges = this.checked" style="accent-color:#4ade80; cursor:pointer;">
+                🔒 Lock Terrain Edges
+            </label>
+            
             <div id="green-diff-group" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #475569;">
                 <label style="color:#fbbf24; font-size:10px; font-weight:bold; text-transform:uppercase;">Green Diff</label>
                 <div style="display:flex; justify-content:space-between; width:100%; gap:4px;">
@@ -5537,6 +5542,8 @@
         if(btn) { btn.style.background = '#38bdf8'; btn.style.color = '#0f172a'; }
     };
     
+    window.lockEdges = true;
+
     window.currentBrushHardness = 1.0;
     window.updateBrushHardness = function() {
         let val = document.getElementById('hardness-slider') ? document.getElementById('hardness-slider').value : 100;
@@ -6915,7 +6922,7 @@
                 let vz = -positions[i*3 + 1]; 
                 
                 // Edge lock - don't include extreme edges in smooth calculation
-                if (Math.abs(vx) > (TERRAIN_SIZE/2) - 2 || Math.abs(vz) > (TERRAIN_SIZE/2) - 2) continue;
+                if (window.lockEdges && (Math.abs(vx) > (TERRAIN_SIZE/2) - 2 || Math.abs(vz) > (TERRAIN_SIZE/2) - 2)) continue;
                 
                 let d = 0;
                 if (l2 === 0) {
@@ -6939,7 +6946,7 @@
             let vz = -positions[i*3 + 1]; 
             
             // Lås yttersta kanterna (4 meter) så de alltid är 0 - eliminerar spikar mot omgivningen
-            if (Math.abs(vx) > (TERRAIN_SIZE/2) - 4 || Math.abs(vz) > (TERRAIN_SIZE/2) - 4) {
+            if (window.lockEdges && (Math.abs(vx) > (TERRAIN_SIZE/2) - 4 || Math.abs(vz) > (TERRAIN_SIZE/2) - 4)) {
                 // Tvinga till 0 om det råkat bli spikar tidigare (auto-läkning av kanter)
                 positions[i*3 + 2] = 0;
                 updatePos = true;
