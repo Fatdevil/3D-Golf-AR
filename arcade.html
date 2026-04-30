@@ -2348,11 +2348,25 @@
     
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
     let surroundSize = 20000;
-    let surroundGeo = new THREE.PlaneGeometry(surroundSize, surroundSize);
+    let sShape = new THREE.Shape();
+    sShape.moveTo(-surroundSize/2, -surroundSize/2);
+    sShape.lineTo(surroundSize/2, -surroundSize/2);
+    sShape.lineTo(surroundSize/2, surroundSize/2);
+    sShape.lineTo(-surroundSize/2, surroundSize/2);
+    sShape.lineTo(-surroundSize/2, -surroundSize/2);
+    let sHole = new THREE.Path();
+    let hSize = (TERRAIN_SIZE/2) - 2; // Hole slightly smaller than terrain so edges perfectly overlap
+    sHole.moveTo(-hSize, -hSize);
+    sHole.lineTo(-hSize, hSize);
+    sHole.lineTo(hSize, hSize);
+    sHole.lineTo(hSize, -hSize);
+    sHole.lineTo(-hSize, -hSize);
+    sShape.holes.push(sHole);
+    let surroundGeo = new THREE.ShapeGeometry(sShape);
     let surroundMat = new THREE.MeshLambertMaterial({ color: 0x2d4c1a }); // Dark fescue green
     let surroundPlane = new THREE.Mesh(surroundGeo, surroundMat);
     surroundPlane.rotation.x = -Math.PI / 2;
-    surroundPlane.position.y = -0.5; // Slightly below terrain to avoid z-fighting
+    surroundPlane.position.y = -0.1; // Tucked closely under the locked y=0 edges of the terrain
     surroundPlane.receiveShadow = true;
     scene.add(surroundPlane);
     
