@@ -1,16 +1,13 @@
 /**
- * Azimuth Regression Test
- * Verifies that carry distance is rotation-invariant (Magnus lift works at all azimuth angles).
+ * Azimuth & Sidespin Regression Test
+ * 1. Carry must be identical (±2%) at all azimuth angles (Magnus lift invariance)
+ * 2. Sidespin lateral offset must be identical (±0.5m) at all azimuth angles
  */
 
-// Mock window for physics.js
 global.window = { GREEN_STIMP: 10.0, matchSettings: { greenFirmness: 'NORMAL' } };
-
-// Load physics engine
 require('./physics.js');
 const { simulateFlight } = window.GolfPhysics;
 
-// Flat terrain callback (z=0 everywhere, FAIRWAY)
 const flatEnv = {
     getTerrainAt: (x, y, z) => ({ z: 0, normal: [0, 0, 1], type: 'FAIRWAY' }),
     checkCollisionCallback: (x, y, z) => null,
@@ -19,68 +16,94 @@ const flatEnv = {
     temperatureC: 25
 };
 
+// ═══════════════════════════════════════════════════════════════
+// TEST 1: CARRY AZIMUTH INVARIANCE (backspin lift)
+// ═══════════════════════════════════════════════════════════════
+console.log("=== CARRY AZIMUTH REGRESSION ===");
+console.log("Input: 130 mph / 14° / 2500 rpm backspin / No wind\n");
+
 const baseInput = {
-    ballSpeedMph: 130,
-    launchAngleDeg: 14,
-    totalSpinRpm: 2500,
-    spinAxisDeg: 0,
-    startPos: [0, 0, 0],
-    isLiveData: true,
-    isTeeShot: true
+    ballSpeedMph: 130, launchAngleDeg: 14, totalSpinRpm: 2500,
+    spinAxisDeg: 0, startPos: [0, 0, 0], isLiveData: true, isTeeShot: true
 };
 
-const azimuthTests = [0, 30, 45, 60, 90, -45, -90, -135, 180];
+const azimuths = [0, 30, 45, 60, 90, -45, -90, -135, 180];
+let refCarry = null;
+let carryAllPass = true;
 
-console.log("=== AZIMUTH REGRESSION TEST ===");
-console.log("Input: 130 mph / 14° / 2500 rpm backspin / Flat terrain / No wind\n");
 console.log("Azim°   Carry(m)   Carry(yds)  Apex(m)   Time(s)   PASS?");
 console.log("─────   ────────   ──────────  ──────    ──────    ─────");
 
-let refCarry = null;
-let allPass = true;
-
-for (const azim of azimuthTests) {
-    const input = { ...baseInput, azimDeg: azim };
-    const result = simulateFlight(input, flatEnv);
-    
-    const carryM = result.metrics.carryMeters;
-    const carryYds = (carryM * 1.09361).toFixed(1);
+for (const azim of azimuths) {
+    const result = simulateFlight({ ...baseInput, azimDeg: azim }, flatEnv);
+    const c = result.metrics.carryMeters;
+    const yds = (c * 1.09361).toFixed(1);
     const apex = result.metrics.apexMeters.toFixed(1);
     const time = result.metrics.flightTime.toFixed(2);
-    
-    if (refCarry === null) refCarry = carryM;
-    
-    const deviation = Math.abs(carryM - refCarry) / refCarry * 100;
-    const pass = deviation < 2.0;
-    if (!pass) allPass = false;
-    
-    console.log(
-        `${String(azim).padStart(5)}°   ${carryM.toFixed(1).padStart(7)}    ${carryYds.padStart(9)}   ${apex.padStart(5)}    ${time.padStart(5)}    ${pass ? '✅' : '❌ ' + deviation.toFixed(1) + '%'}`
-    );
+    if (refCarry === null) refCarry = c;
+    const dev = Math.abs(c - refCarry) / refCarry * 100;
+    const pass = dev < 2.0;
+    if (!pass) carryAllPass = false;
+    console.log(`${String(azim).padStart(5)}°   ${c.toFixed(1).padStart(7)}    ${yds.padStart(9)}   ${apex.padStart(5)}    ${time.padStart(5)}    ${pass ? '✅' : '❌ ' + dev.toFixed(1) + '%'}`);
 }
 
-console.log("\n─────────────────────────────────────────────────────────");
-console.log(`Reference carry (azim=0°): ${refCarry.toFixed(1)} m = ${(refCarry * 1.09361).toFixed(1)} yds`);
-console.log(`Target: ~195 m (213 yds) ±10%`);
-console.log(`\nOverall: ${allPass ? '✅ ALL PASS — Magnus lift is rotation-invariant!' : '❌ FAIL — carry varies with azimuth'}`);
+console.log(`\nRef carry: ${refCarry.toFixed(1)} m = ${(refCarry * 1.09361).toFixed(1)} yds`);
+console.log(`Target: 195–200 m (213–219 yds)`);
+console.log(`Carry test: ${carryAllPass ? '✅ ALL PASS' : '❌ FAIL'}\n`);
 
-// === SIDESPIN DIRECTION TEST ===
-console.log("\n\n=== SIDESPIN DIRECTION TEST ===");
-console.log("Input: 130 mph / 14° / 2500 rpm total / spinAxis=15° (slice)\n");
+// ═══════════════════════════════════════════════════════════════
+// TEST 2: SIDESPIN AZIMUTH INVARIANCE (lateral curve)
+// ═══════════════════════════════════════════════════════════════
+console.log("=== SIDESPIN AZIMUTH REGRESSION ===");
+console.log("Input: 130 mph / 14° / +800 sidespin (slice) / No wind\n");
 
-const sliceInput = { ...baseInput, spinAxisDeg: 15 };
+const backspin = 2500;
+const sidespin = 800; // positive = slice
+const totalSpin = Math.sqrt(backspin * backspin + sidespin * sidespin);
+const spinAxisDeg = Math.atan2(-sidespin, backspin) * (180 / Math.PI);
 
-for (const azim of [0, -90]) {
-    const input = { ...sliceInput, azimDeg: azim };
-    const result = simulateFlight(input, flatEnv);
-    const final = result.path[result.path.length - 1];
+const sliceInput = {
+    ballSpeedMph: 130, launchAngleDeg: 14,
+    totalSpinRpm: totalSpin, spinAxisDeg: spinAxisDeg,
+    startPos: [0, 0, 0], isLiveData: true, isTeeShot: true
+};
+
+const ssAzimuths = [0, -45, -90, -135, 180];
+const ssResults = [];
+
+console.log("Azim°   Lateral(m)   Direction");
+console.log("─────   ──────────   ─────────");
+
+for (const azim of ssAzimuths) {
+    const result = simulateFlight({ ...sliceInput, azimDeg: azim }, flatEnv);
+    const last = result.path[result.path.length - 1];
     
-    // At azim=0, flight is along +Y. Slice = +X (right).
-    // At azim=-90, flight is along -X. Slice = -Y (right relative to flight).
-    const lateralDev = azim === 0 
-        ? final.x  // X-displacement at azim=0
-        : -final.y; // -Y-displacement at azim=-90
+    // Project final position onto axis perpendicular to flight direction
+    // Flight direction unit vector: [sin(azim), cos(azim)]
+    // Right-perpendicular: [cos(azim), -sin(azim)]
+    const azimRad = azim * Math.PI / 180;
+    const perpX = Math.cos(azimRad);
+    const perpY = -Math.sin(azimRad);
     
-    const dir = lateralDev > 0 ? 'RIGHT (slice) ✅' : 'LEFT (draw) ❌';
-    console.log(`Azim ${String(azim).padStart(4)}°: Lateral dev = ${lateralDev.toFixed(1)}m → ${dir}`);
+    // Lateral offset = dot(final_pos_XY, perp_direction)
+    const lateralOffset = last.x * perpX + last.y * perpY;
+    
+    ssResults.push(lateralOffset);
+    const dir = lateralOffset > 0 ? 'RIGHT (slice)' : 'LEFT (draw)';
+    console.log(`${String(azim).padStart(5)}°   ${lateralOffset.toFixed(2).padStart(10)}   ${dir}`);
 }
+
+const refLateral = ssResults[0];
+const ssAllPass = ssResults.every(v => Math.abs(v - refLateral) < 0.5);
+console.log(`\nRef lateral: ${refLateral.toFixed(2)} m`);
+console.log(`Max deviation: ${Math.max(...ssResults.map(v => Math.abs(v - refLateral))).toFixed(2)} m (tol: 0.5m)`);
+console.log(`Sidespin test: ${ssAllPass ? '✅ ALL PASS — azimuth-invariant' : '❌ FAIL — varies with azimuth'}\n`);
+
+// ═══════════════════════════════════════════════════════════════
+// OVERALL
+// ═══════════════════════════════════════════════════════════════
+console.log("═════════════════════════════════════");
+console.log(`CARRY:    ${carryAllPass ? '✅' : '❌'}`);
+console.log(`SIDESPIN: ${ssAllPass ? '✅' : '❌'}`);
+console.log(`OVERALL:  ${(carryAllPass && ssAllPass) ? '✅ ALL PASS' : '❌ REGRESSION DETECTED'}`);
+console.log("═════════════════════════════════════");

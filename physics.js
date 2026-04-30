@@ -53,15 +53,15 @@ window.GolfPhysics = (function() {
 
     // Aerodynamiska koefficient-kurvor (Trackman Data)
     function getDragCoefficient(vMag, spinRateRpm) {
-        let cd = 0.22;
+        let cd = 0.235;
         
         // Drag Crisis Re-kurva (Värden från referenstabell)
         // Högre fart => mer turbolens => minskat drag. 
-        // Fix 3: Driver C_D base — 0.19 was too low at high Re, giving 225 yds instead of 215
-        if (vMag > 65) cd = 0.22;
-        else if (vMag > 50) cd = lerp(0.24, 0.22, (vMag - 50) / 15);
-        else if (vMag > 20) cd = lerp(0.26, 0.24, (vMag - 20) / 30);
-        else cd = 0.26;
+        // Fix 4: C_D calibrated to 215 ±5 yds carry for 130mph/14°/2500rpm (Trackman target)
+        if (vMag > 65) cd = 0.235;
+        else if (vMag > 50) cd = lerp(0.255, 0.235, (vMag - 50) / 15);
+        else if (vMag > 20) cd = lerp(0.275, 0.255, (vMag - 20) / 30);
+        else cd = 0.275;
         
         // Spin-dependent drag — Bearman & Harvey (1976) windtunnel data
         // Spin ratio = ω×r / v — higher spin ratio = more drag
@@ -337,10 +337,13 @@ window.GolfPhysics = (function() {
         let sX =  sBackspin * Math.cos(azimRads);
         let sY = -sBackspin * Math.sin(azimRads);
         
-        // Sidespin: behålls kring Z-axeln (vertikal) — matchar originalkoden.
-        // TODO: Sidespin kring Z ger korrekt kurva vid VISSA azimuth men inte alla.
-        // Fullständig sidespin-rotation kräver dedikerat regressionstestning med Trackman-data.
-        let sZ = sSidespin;
+        // Sidespin: axel parallell med flygriktning i XY → ger lateral krökning
+        // RELATIVT skottets riktning, inte world-space. Tecken negeras så att
+        // Trackman positiv spinAxis (slice) → höger krökning via Magnus cross-produkt.
+        sX -= sSidespin * Math.sin(azimRads);
+        sY -= sSidespin * Math.cos(azimRads);
+        
+        let sZ = 0; // All spin hanteras i roterade XY-komponenter
         let spin = [sX, sY, sZ];
         
         let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;
