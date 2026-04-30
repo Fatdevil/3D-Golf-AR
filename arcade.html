@@ -6913,6 +6913,10 @@
             for(let i = 0; i < count; i++) {
                 let vx = positions[i*3];
                 let vz = -positions[i*3 + 1]; 
+                
+                // Edge lock - don't include extreme edges in smooth calculation
+                if (Math.abs(vx) > (TERRAIN_SIZE/2) - 2 || Math.abs(vz) > (TERRAIN_SIZE/2) - 2) continue;
+                
                 let d = 0;
                 if (l2 === 0) {
                     d = Math.sqrt((vx - p1.x)*(vx - p1.x) + (vz - p1.z)*(vz - p1.z));
@@ -6933,6 +6937,14 @@
         for(let i = 0; i < count; i++) {
             let vx = positions[i*3];
             let vz = -positions[i*3 + 1]; 
+            
+            // Lås yttersta kanterna (4 meter) så de alltid är 0 - eliminerar spikar mot omgivningen
+            if (Math.abs(vx) > (TERRAIN_SIZE/2) - 4 || Math.abs(vz) > (TERRAIN_SIZE/2) - 4) {
+                // Tvinga till 0 om det råkat bli spikar tidigare (auto-läkning av kanter)
+                positions[i*3 + 2] = 0;
+                updatePos = true;
+                continue;
+            }
             
             let dist = 0;
             if (l2 === 0) {
