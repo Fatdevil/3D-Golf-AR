@@ -318,8 +318,13 @@
         controls.maxDistance = 5000;
         
         window.resetCamera = function() {
-            camera.position.set(0, 10, 30);
-            controls.target.set(0, 5, 0);
+            let th = 15;
+            let el = document.getElementById('target-height');
+            if (el && el.value) th = parseFloat(el.value);
+            let dist = Math.max(30, th * 2.5);
+            let h = Math.max(10, th / 2);
+            camera.position.set(0, h, dist);
+            controls.target.set(0, h, 0);
             controls.update();
         };
 
@@ -435,6 +440,11 @@
             });
 
             updateHitbox();
+            
+            // Auto-frame the camera if the object is huge
+            if (tHeight > 100 && window.resetCamera) {
+                window.resetCamera();
+            }
         }
 
         function snapThumbnail() {
