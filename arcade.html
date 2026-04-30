@@ -750,19 +750,48 @@
                 </div>
                 
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
-                    <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding</label>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:3px; margin-top:4px;">
-                        <button class="surr-btn" onclick="setSurrounding('OFF', this)" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🚫 Off</button>
-                        <button class="surr-btn" onclick="setSurrounding('GRASS', this)" style="background:#2d4c1a; color:#a3e635; border:1px solid #2d4c1a; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌿 Grass</button>
-                        <button class="surr-btn" onclick="setSurrounding('OCEAN', this)" style="background:#1e3a5f; color:#38bdf8; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌊 Ocean</button>
-                        <button class="surr-btn" onclick="setSurrounding('LAKE', this)" style="background:#2a6b7a; color:#67e8f9; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">💧 Lake</button>
-                        <button class="surr-btn" onclick="setSurrounding('SAND', this)" style="background:#a38d5c; color:#fef3c7; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🏜️ Sand</button>
-                        <button class="surr-btn" onclick="setSurrounding('FIELD', this)" style="background:#6b7a2a; color:#d9f99d; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌾 Field</button>
-                        <button class="surr-btn" onclick="setSurrounding('SNOW', this)" style="background:#cbd5e1; color:#1e293b; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">❄️ Snow</button>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
-                        <span style="color:#64748b; font-size:8px;">Custom:</span>
-                        <input type="color" id="surr-custom-color" value="#2d4c1a" onchange="setSurrounding('CUSTOM', null, this.value)" style="width:28px; height:20px; border:none; cursor:pointer; border-radius:3px;">
+                    <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding Horizon</label>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:5px;">
+                        <div>
+                            <div style="color:#64748b; font-size:9px;">North</div>
+                            <select id="surr-N" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                <option value="roughColor">🟢 Rough</option>
+                                <option value="wasteColor">🟡 Waste</option>
+                                <option value="fescueColor" selected>🌲 Fescue</option>
+                                <option value="waterColor">💧 Water</option>
+                                <option value="oceanColor">🌊 Ocean</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div style="color:#64748b; font-size:9px;">East</div>
+                            <select id="surr-E" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                <option value="roughColor">🟢 Rough</option>
+                                <option value="wasteColor">🟡 Waste</option>
+                                <option value="fescueColor" selected>🌲 Fescue</option>
+                                <option value="waterColor">💧 Water</option>
+                                <option value="oceanColor">🌊 Ocean</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div style="color:#64748b; font-size:9px;">South</div>
+                            <select id="surr-S" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                <option value="roughColor">🟢 Rough</option>
+                                <option value="wasteColor">🟡 Waste</option>
+                                <option value="fescueColor" selected>🌲 Fescue</option>
+                                <option value="waterColor">💧 Water</option>
+                                <option value="oceanColor">🌊 Ocean</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div style="color:#64748b; font-size:9px;">West</div>
+                            <select id="surr-W" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                <option value="roughColor">🟢 Rough</option>
+                                <option value="wasteColor">🟡 Waste</option>
+                                <option value="fescueColor" selected>🌲 Fescue</option>
+                                <option value="waterColor">💧 Water</option>
+                                <option value="oceanColor">🌊 Ocean</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2376,8 +2405,69 @@
     sHole.lineTo(-hSize, -hSize);
     sShape.holes.push(sHole);
     let surroundGeo = new THREE.ShapeGeometry(sShape);
-    let surroundMat = new THREE.MeshLambertMaterial({ color: 0x2d4c1a }); // Dark fescue green
-    let surroundPlane = new THREE.Mesh(surroundGeo, surroundMat);
+    window.surroundMat = new THREE.MeshLambertMaterial({ color: 0xffffff }); // Base color white
+    
+    // Default colors to fescue
+    window.surroundMat.userData = {
+        colorN: { value: new THREE.Color(0x2d4c1a) },
+        colorE: { value: new THREE.Color(0x2d4c1a) },
+        colorS: { value: new THREE.Color(0x2d4c1a) },
+        colorW: { value: new THREE.Color(0x2d4c1a) }
+    };
+    
+    window.surroundMat.onBeforeCompile = (shader) => {
+        shader.uniforms.colorN = window.surroundMat.userData.colorN;
+        shader.uniforms.colorE = window.surroundMat.userData.colorE;
+        shader.uniforms.colorS = window.surroundMat.userData.colorS;
+        shader.uniforms.colorW = window.surroundMat.userData.colorW;
+        
+        shader.vertexShader = `
+            varying vec3 vSurroundWorldPos;
+        ` + shader.vertexShader;
+        
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <worldpos_vertex>',
+            `#include <worldpos_vertex>
+             vSurroundWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+            `
+        );
+        
+        shader.fragmentShader = `
+            uniform vec3 colorN;
+            uniform vec3 colorE;
+            uniform vec3 colorS;
+            uniform vec3 colorW;
+            varying vec3 vSurroundWorldPos;
+        ` + shader.fragmentShader;
+        
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <color_fragment>',
+            `#include <color_fragment>
+             // Calculate angle from center (-PI to PI)
+             float angle = atan(vSurroundWorldPos.z, vSurroundWorldPos.x); 
+             if (angle < 0.0) angle += 6.28318530718;
+             
+             // X+ is East (0), Z+ is South (PI/2), X- is West (PI), Z- is North (3PI/2)
+             float wE = max(0.0, cos(angle));
+             float wS = max(0.0, sin(angle));
+             float wW = max(0.0, -cos(angle));
+             float wN = max(0.0, -sin(angle));
+             
+             // Sharpen the blend slightly so corners aren't too muddy
+             wE = pow(wE, 1.5);
+             wS = pow(wS, 1.5);
+             wW = pow(wW, 1.5);
+             wN = pow(wN, 1.5);
+             
+             float sum = wE + wS + wW + wN;
+             vec3 finalColor = (colorE * wE + colorS * wS + colorW * wW + colorN * wN) / sum;
+             
+             diffuseColor.rgb = finalColor;
+            `
+        );
+    };
+
+    let surroundPlane = new THREE.Mesh(surroundGeo, window.surroundMat);
     surroundPlane.rotation.x = -Math.PI / 2;
     surroundPlane.position.y = -0.1; // Tucked closely under the locked y=0 edges of the terrain
     surroundPlane.receiveShadow = true;
@@ -2507,66 +2597,83 @@
         FIELD:  { color: 0x6b7a2a, label: '🌾 Field' },
         SNOW:   { color: 0xcbd5e1, label: '❄️ Snow' }
     };
-    window.currentSurrounding = 'GRASS';
     
-    window.setSurrounding = function(preset, btn, customColor) {
-        let color = 0x2d4c1a;
-        if(preset === 'OFF') {
-            window.currentSurrounding = 'OFF';
-            window.customSurroundColor = null;
-        } else if(preset === 'CUSTOM' && customColor) {
-            color = parseInt(customColor.replace('#', '0x'));
-            window.currentSurrounding = 'CUSTOM';
-            window.customSurroundColor = customColor;
-        } else if(SURROUND_PRESETS[preset]) {
-            color = SURROUND_PRESETS[preset].color;
-            window.currentSurrounding = preset;
-            window.customSurroundColor = null;
+    // Store active config
+    window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' };
+
+    window.updateSurroundColors = function() {
+        if(!window.surroundMat || !window.CURRENT_BIOME_CONFIG) return;
+        
+        let elN = document.getElementById('surr-N');
+        if(elN) {
+            window.surroundConfig.N = document.getElementById('surr-N').value;
+            window.surroundConfig.E = document.getElementById('surr-E').value;
+            window.surroundConfig.S = document.getElementById('surr-S').value;
+            window.surroundConfig.W = document.getElementById('surr-W').value;
+            
+            // Save to course data
+            if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
+                courseHoles[currentHoleIndex].surroundConfig = Object.assign({}, window.surroundConfig);
+                if (typeof saveLevel === 'function') saveLevel();
+            }
         }
         
-        surroundMat.color.setHex(color);
-        surroundPlane.visible = (preset !== 'OFF');
-        
-        // Highlight active button
-        document.querySelectorAll('.surr-btn').forEach(b => {
-            b.style.borderColor = '#334155';
-            b.style.outline = 'none';
-        });
-        if(btn) { btn.style.borderColor = '#38bdf8'; btn.style.outline = '1px solid #38bdf8'; }
-        
-        // Save to course data
-        courseHoles[currentHoleIndex].surrounding = {
-            preset: window.currentSurrounding,
-            customColor: window.customSurroundColor
+        let getCol = (key) => {
+            if(key === 'oceanColor') {
+                let wHexStr = window.CURRENT_BIOME_CONFIG.waterColor || '#38bdf8';
+                let wc = new THREE.Color(parseInt(wHexStr.replace('#', '0x')));
+                wc.lerp(new THREE.Color(0x0f172a), 0.5); // Darken 50%
+                return wc;
+            }
+            let hexStr = window.CURRENT_BIOME_CONFIG[key] || '#2d4c1a';
+            return new THREE.Color(parseInt(hexStr.replace('#', '0x')));
         };
-        saveLevel();
+        
+        let cN = getCol(window.surroundConfig.N);
+        let cE = getCol(window.surroundConfig.E);
+        let cS = getCol(window.surroundConfig.S);
+        let cW = getCol(window.surroundConfig.W);
+        
+        if(window.surroundMat.userData.colorN) {
+            window.surroundMat.userData.colorN.value.copy(cN);
+            window.surroundMat.userData.colorE.value.copy(cE);
+            window.surroundMat.userData.colorS.value.copy(cS);
+            window.surroundMat.userData.colorW.value.copy(cW);
+        }
+    };
+    
+    window.setSurrounding = function() {
+        // Legacy function, replaced by updateSurroundColors
     };
     
     window.restoreSurrounding = function() {
         let hole = courseHoles[currentHoleIndex];
-        if(hole && hole.surrounding) {
-            let s = hole.surrounding;
-            if(s.preset === 'OFF') {
-                surroundPlane.visible = false;
-            } else if(s.preset === 'CUSTOM' && s.customColor) {
-                surroundMat.color.setHex(parseInt(s.customColor.replace('#', '0x')));
-                surroundPlane.visible = true;
-                let cp = document.getElementById('surr-custom-color');
-                if(cp) cp.value = s.customColor;
-            } else if(SURROUND_PRESETS[s.preset]) {
-                surroundMat.color.setHex(SURROUND_PRESETS[s.preset].color);
-                surroundPlane.visible = true;
-            }
-            window.currentSurrounding = s.preset;
-            window.customSurroundColor = s.customColor;
+        surroundPlane.visible = true; // Always visible now
+        
+        if(hole && hole.surroundConfig) {
+            window.surroundConfig = Object.assign({}, hole.surroundConfig);
+        } else if(hole && hole.surrounding) {
+            // Legacy migration
+            let p = hole.surrounding.preset;
+            let mapKey = 'fescueColor';
+            if (p === 'OCEAN' || p === 'LAKE') mapKey = 'oceanColor';
+            else if (p === 'SAND') mapKey = 'wasteColor';
             
-            // Highlight correct button
-            document.querySelectorAll('.surr-btn').forEach(b => { b.style.borderColor = '#334155'; b.style.outline = 'none'; });
+            window.surroundConfig = { N: mapKey, E: mapKey, S: mapKey, W: mapKey };
         } else {
-            surroundMat.color.setHex(0x2d4c1a);
-            surroundPlane.visible = true;
-            window.currentSurrounding = 'GRASS';
+            window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' };
         }
+        
+        // Update UI
+        let elN = document.getElementById('surr-N');
+        if(elN) {
+            document.getElementById('surr-N').value = window.surroundConfig.N;
+            document.getElementById('surr-E').value = window.surroundConfig.E;
+            document.getElementById('surr-S').value = window.surroundConfig.S;
+            document.getElementById('surr-W').value = window.surroundConfig.W;
+        }
+        
+        window.updateSurroundColors();
     };
     
     window.togglePanel = function(id, labelEl) {
@@ -4446,6 +4553,11 @@
                         
                         if(isCustom) {
                             window.CLOUD_BIOMES['CUSTOM'] = Object.assign({}, window.CURRENT_BIOME_CONFIG);
+                        }
+                        
+                        // Uppdatera även 4-riktningars horisontfärger så de matchar nya biomet
+                        if (window.updateSurroundColors) {
+                            window.updateSurroundColors();
                         }
                     }
                 }
