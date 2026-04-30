@@ -304,7 +304,7 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color('#334155');
 
-        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
         camera.position.set(0, 10, 30);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -315,7 +315,7 @@
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 5, 0);
         controls.minDistance = 2;
-        controls.maxDistance = 150;
+        controls.maxDistance = 5000;
         
         window.resetCamera = function() {
             camera.position.set(0, 10, 30);
