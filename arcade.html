@@ -991,6 +991,12 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- FOG DENSITY -->
+                    <div style="margin-top:15px; border-top:1px solid #334155; padding-top:12px;">
+                        <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">🌫️ FOG DENSITY</label>
+                        <input type="range" id="set-fog" min="0.1" max="4.0" step="0.1" value="1.0" oninput="window.updateFogDensity(this.value)" style="width:100%; accent-color:#94a3b8;">
+                    </div>
 
                     <!-- BALL TRACER STYLE -->
                     <div style="margin-top:12px; border-top:1px solid #334155; padding-top:10px;">
@@ -1488,6 +1494,14 @@
         };
     }
 
+    window.updateFogDensity = function(val) {
+        let mult = parseFloat(val);
+        if(!window.CURRENT_BIOME_CONFIG) window.CURRENT_BIOME_CONFIG = {};
+        window.CURRENT_BIOME_CONFIG.fogDensity = mult;
+        if(window.setTimeOfDay) window.setTimeOfDay(window.currentTimeOfDay);
+        // Force rendering update if needed
+    };
+
     window.setTimeOfDay = function(hour) {
         window.currentTimeOfDay = hour;
         let p = getInterpolatedPreset(hour);
@@ -1504,9 +1518,10 @@
         scene.background = skyTexture;
 
         // 2. Fog
+        let fogMult = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.fogDensity) ? window.CURRENT_BIOME_CONFIG.fogDensity : 1.0;
         scene.fog.color.setRGB(p.fogColor[0]/255, p.fogColor[1]/255, p.fogColor[2]/255);
-        scene.fog.near = p.fogNear;
-        scene.fog.far = p.fogFar;
+        scene.fog.near = p.fogNear / fogMult;
+        scene.fog.far = p.fogFar / fogMult;
         
         // Surround plane color is now handled by the Surrounding system (Grass/Ocean/etc)
         // and natural THREE.Fog handles the horizon blending automatically.
