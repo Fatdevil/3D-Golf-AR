@@ -1642,7 +1642,7 @@
         // Distribute on upper hemisphere (y > 0)
         let theta = Math.random() * Math.PI * 2;
         let phi = Math.acos(Math.random() * 0.85 + 0.15); // 0.15-1.0 = above horizon
-        let r = 800;
+        let r = 14000; // Behind mountains (max ~9750m) and sun (13000m), within camera.far (15000m)
         starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
         starPositions[i * 3 + 1] = r * Math.cos(phi); // Always positive (upper hemisphere)
         starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
