@@ -570,8 +570,16 @@
     <!-- PRO UI: HÖGER EGENSKAPSPANEL -->
     <div id="right-toolbar">
         
-        <!-- Inställningar för skulptering -->
-        <div id="sculpt-settings-group" class="prop-panel" style="display:flex;">
+        <!-- FLIKAR / TABS -->
+        <div id="right-tabs" style="display:flex; background:rgba(15,23,42,0.95); border-radius:12px; border:1px solid #475569; overflow:hidden; margin-bottom:0px; box-shadow:0 10px 30px rgba(0,0,0,0.5); pointer-events:auto;">
+            <button onclick="window.switchRightTab('TOOLS')" id="tab-btn-TOOLS" style="flex:1; padding:10px 0; background:#38bdf8; color:#0f172a; border:none; font-size:10px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🛠️ TOOLS</button>
+            <button onclick="window.switchRightTab('ENV')" id="tab-btn-ENV" style="flex:1; padding:10px 0; background:transparent; color:#94a3b8; border:none; border-left:1px solid #475569; font-size:10px; font-weight:bold; cursor:pointer; transition:all 0.2s;">🌍 ENV</button>
+            <button onclick="window.switchRightTab('MAP')" id="tab-btn-MAP" style="flex:1; padding:10px 0; background:transparent; color:#94a3b8; border:none; border-left:1px solid #475569; font-size:10px; font-weight:bold; cursor:pointer; transition:all 0.2s;">📊 MAP</button>
+        </div>
+
+        <div id="tab-content-TOOLS" style="display:flex; flex-direction:column; gap:10px;">
+            <!-- Inställningar för skulptering -->
+            <div id="sculpt-settings-group" class="prop-panel" style="display:flex;">
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Brush Size</label>
             <input type="range" id="brush-slider" min="2" max="25" value="6" oninput="updateBrushSize()" style="width:140px; accent-color:#38bdf8; cursor:pointer;" title="Change size">
             <div style="display:flex; justify-content:space-between; width:100%; gap:4px;">
@@ -701,9 +709,11 @@
                 <button id="btn-toggle-unit" onclick="toggleRangeUnit()" style="background:#1e293b; color:#eab308; border:1px solid #475569; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; grid-column:1 / -1; margin-top:5px;">📐 Enhet: Meter</button>
             </div>
         </div>
+        </div> <!-- End of tab-content-TOOLS -->
 
-        <!-- Environment Preview -->
-        <div id="env-preview-group" class="prop-panel" style="display:flex;">
+        <div id="tab-content-ENV" style="display:none; flex-direction:column; gap:10px;">
+            <!-- Environment Preview -->
+            <div id="env-preview-group" class="prop-panel" style="display:flex;">
             <label onclick="window.togglePanel('env-content', this)" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
                 <span>☀️ Environment</span>
                 <span class="chevron" style="color:#475569;">▼</span>
@@ -755,11 +765,14 @@
                         <input type="color" id="surr-custom-color" value="#2d4c1a" onchange="setSurrounding('CUSTOM', null, this.value)" style="width:28px; height:20px; border:none; cursor:pointer; border-radius:3px;">
                     </div>
                 </div>
+                </div>
             </div>
         </div>
+        </div> <!-- End of tab-content-ENV -->
 
-        <!-- Terrain Analysis Panel -->
-        <div id="terrain-analysis-group" class="prop-panel" style="display:flex;">
+        <div id="tab-content-MAP" style="display:none; flex-direction:column; gap:10px;">
+            <!-- Terrain Analysis Panel -->
+            <div id="terrain-analysis-group" class="prop-panel" style="display:flex;">
             <label onclick="window.togglePanel('terrain-content', this)" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
                 <span>🗺️ Terrain Analysis</span>
                 <span class="chevron" style="color:#475569;">▼</span>
@@ -777,6 +790,7 @@
                 <div style="color:#64748b; font-size:9px; margin-top:4px;">Slope: 🟢&lt;3% 🟡3-8% 🔴&gt;8% | Elev: 🔵Low 🟢Mid 🔴High</div>
             </div>
         </div>
+        </div> <!-- End of tab-content-MAP -->
 
     </div>
 
@@ -2568,6 +2582,29 @@
             el.style.display = 'none';
             chevron.innerHTML = '◀';
         }
+    };
+    
+    window.switchRightTab = function(tabName) {
+        let tTools = document.getElementById('tab-content-TOOLS');
+        let tEnv = document.getElementById('tab-content-ENV');
+        let tMap = document.getElementById('tab-content-MAP');
+        if (tTools) tTools.style.display = (tabName === 'TOOLS') ? 'flex' : 'none';
+        if (tEnv) tEnv.style.display = (tabName === 'ENV') ? 'flex' : 'none';
+        if (tMap) tMap.style.display = (tabName === 'MAP') ? 'flex' : 'none';
+        
+        let tabs = ['TOOLS', 'ENV', 'MAP'];
+        tabs.forEach(t => {
+            let btn = document.getElementById('tab-btn-' + t);
+            if (btn) {
+                if (t === tabName) {
+                    btn.style.background = '#38bdf8';
+                    btn.style.color = '#0f172a';
+                } else {
+                    btn.style.background = 'transparent';
+                    btn.style.color = '#94a3b8';
+                }
+            }
+        });
     };
     
     window.minimapMat = planeMat.clone();
@@ -6144,6 +6181,9 @@
         if (ipadBtn) {
             ipadBtn.style.display = (toolName === 'SCULPT' || toolName === 'RIDGE') ? 'block' : 'none';
         }
+        
+        // Auto-switch right toolbar to TOOLS tab so the user sees the active tool settings
+        if (window.switchRightTab) window.switchRightTab('TOOLS');
         
         // Uppdatera markörens färg beroende på verktyg bygger på samma basfärger
         if(toolName === 'SMOOTH') {
