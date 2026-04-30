@@ -483,12 +483,13 @@
         <button id="tool-smooth" onclick="setTool('SMOOTH')"><span style="font-size:16px;">🧽</span> SMOOTH</button>
         <button id="tool-flatten" onclick="setTool('FLATTEN')"><span style="font-size:16px;">📐</span> FLATTEN</button>
         <button id="tool-ramp" onclick="setTool('RAMP')"><span style="font-size:16px;">📉</span> RAMP</button>
+        <button id="tool-noise" onclick="setTool('NOISE')"><span style="font-size:16px;">🌊</span> NOISE</button>
         <button id="tool-water" onclick="setTool('WATER')"><span style="font-size:16px;">💧</span> WATER</button>
         <button id="tool-spline" onclick="setTool('SPLINE')"><span style="font-size:16px;">〰️</span> SPLINE</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
         <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')"><span style="font-size:16px;">⛳</span> SMART GREEN</button>
-        <button id="tool-ridge" onclick="setTool('RIDGE')"><span style="font-size:16px;">🍔</span> RIDGE</button>
+        <button id="tool-ridge" onclick="setTool('RIDGE')"><span style="font-size:16px;">📊</span> RIDGE</button>
         <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
         <button id="tool-forest" onclick="setTool('FOREST')"><span style="font-size:16px;">🌲</span> FOREST</button>
         <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
@@ -5071,6 +5072,10 @@
         else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
         else if (toolName === 'COLORIZE') hintHtml = "Left Click/Drag: <b>Paint object with selected color</b>";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
+        else if (toolName === 'RAMP') hintHtml = "Left Drag: <b>Draw ramp</b> from start to cursor — creates linear slope";
+        else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b>";
+        else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter random trees</b> within brush area";
+        else if (toolName === 'NOISE') hintHtml = "Hold Left: <b>Add organic bumps</b><br>Hold Right: <b>Erode terrain</b>";
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
         
