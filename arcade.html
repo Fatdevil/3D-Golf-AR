@@ -2799,50 +2799,36 @@
                 return;
             }
             
-            // Get the loadAsset-applied model node and invert its transform
-            // loadAsset creates: container → model (with scale+centering baked in)
-            // We need each child's NATIVE GLTF transform WITHOUT loadAsset's scaling
+            // SIMPLE APPROACH: loadAsset already scales the model to targetHeight
+            // and grounds it at y=0. Use that transform directly!
             cacheObj.updateMatrixWorld(true);
-            let model = cacheObj.children[0]; // The GLTF scene with loadAsset transforms
-            if (!model) return;
-            let modelMatrixInverse = new THREE.Matrix4().copy(model.matrixWorld).invert();
             
-            // Extract meshes with their GLTF-native transforms
-            let nativeMeshes = [];
+            // Get the world-space bounding box of the fully-transformed model
+            let worldBox = new THREE.Box3().setFromObject(cacheObj);
+            let worldCenter = worldBox.getCenter(new THREE.Vector3());
+            let tHeight = assetConf.targetHeight || 12.0;
+            
+            // Extract meshes with their full world matrices (includes loadAsset scaling)
+            let meshes = [];
             let totalVertices = 0;
             cacheObj.traverse(child => { 
                 if (child.isMesh) {
-                    let nativeMatrix = new THREE.Matrix4().multiplyMatrices(modelMatrixInverse, child.matrixWorld);
                     let vertCount = child.geometry.attributes.position ? child.geometry.attributes.position.count : 0;
                     totalVertices += vertCount;
-                    nativeMeshes.push({
+                    meshes.push({
                         geometry: child.geometry,
                         material: child.material,
-                        nativeMatrix: nativeMatrix
+                        worldMatrix: child.matrixWorld.clone()
                     });
                 } 
             });
-            if (nativeMeshes.length === 0) return;
+            if (meshes.length === 0) return;
             
-            // Compute bounding box in GLTF-native space (without loadAsset scaling)
-            let nativeBox = new THREE.Box3();
-            nativeMeshes.forEach(m => {
-                if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-                let geoBox = m.geometry.boundingBox.clone().applyMatrix4(m.nativeMatrix);
-                nativeBox.union(geoBox);
-            });
-            let nativeSize = nativeBox.getSize(new THREE.Vector3());
-            let nativeCenter = nativeBox.getCenter(new THREE.Vector3());
-            let tHeight = assetConf.targetHeight || 12.0;
-            let rawScale = (nativeSize.y > 0.001) ? (tHeight / nativeSize.y) : 1.0;
-            if (!isFinite(rawScale)) rawScale = 1.0;
-            
-            // Performance budget: auto-cap instance count based on vertex complexity
-            // Budget: ~2 million total vertices per quadrant
+            // Performance budget: auto-cap instances based on vertex count
             let vertexBudget = 2000000;
             let maxByBudget = Math.max(5, Math.floor(vertexBudget / Math.max(1, totalVertices)));
             let count = Math.min(countTarget || 50, maxByBudget);
-            console.log(`Scenery ${assetId}: ${nativeMeshes.length} meshes, ${totalVertices} verts/model, capped to ${count} instances (budget: ${maxByBudget})`);
+            console.log(`Scenery ${assetId}: ${meshes.length} meshes, ${totalVertices} verts, ${count} instances, height=${(worldBox.max.y - worldBox.min.y).toFixed(1)}m`);
             
             let getCol = (key) => {
                 let hexStr = window.CURRENT_BIOME_CONFIG[key];
@@ -2862,7 +2848,12 @@
                 return x - Math.floor(x);
             };
             
-            nativeMeshes.forEach((m, meshIndex) => {
+            // Matrix to center the model at origin (loadAsset already grounds at y=0)
+            let toOrigin = new THREE.Matrix4().makeTranslation(
+                -worldCenter.x, 0, -worldCenter.z
+            );
+            
+            meshes.forEach((m, meshIndex) => {
                 let instMesh = new THREE.InstancedMesh(m.geometry, m.material.clone(), count);
                 
                 if (instMesh.material.color) {
@@ -2879,24 +2870,19 @@
                     let radius = baseRadius + (sRand2 * 200); 
                     
                     let sVar = 0.8 + sRand3 * 0.6;
-                    let finalScale = rawScale * sVar;
                     let rY = sRand1 * Math.PI * 2;
                     
-                    // Build instance matrix:
-                    // 1. Apply mesh's native GLTF transform (preserves internal model structure)
-                    let instanceMatrix = new THREE.Matrix4().copy(m.nativeMatrix);
-                    // 2. Center the model (ground at y=0, center x/z)
-                    let centerMat = new THREE.Matrix4().makeTranslation(
-                        -nativeCenter.x, -nativeBox.min.y, -nativeCenter.z
-                    );
-                    instanceMatrix.premultiply(centerMat);
-                    // 3. Scale to target height with variance
-                    let scaleMat = new THREE.Matrix4().makeScale(finalScale, finalScale, finalScale);
+                    // Start with mesh's world matrix (already scaled by loadAsset)
+                    let instanceMatrix = new THREE.Matrix4().copy(m.worldMatrix);
+                    // Remove model center offset  
+                    instanceMatrix.premultiply(toOrigin);
+                    // Apply height variance
+                    let scaleMat = new THREE.Matrix4().makeScale(sVar, sVar, sVar);
                     instanceMatrix.premultiply(scaleMat);
-                    // 4. Rotate randomly
+                    // Random rotation
                     let rotMat = new THREE.Matrix4().makeRotationY(rY);
                     instanceMatrix.premultiply(rotMat);
-                    // 5. Position at horizon
+                    // Position at horizon
                     let posMat = new THREE.Matrix4().makeTranslation(
                         Math.cos(angle) * radius, 0, Math.sin(angle) * radius
                     );
