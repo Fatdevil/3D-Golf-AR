@@ -2668,10 +2668,8 @@
                 
                 let r, g, b;
                 if(d <= semiEnd) {
-                    let t = d / semiEnd;
-                    r = Math.round(fairwayRgb[0]*(1-t)+semiRgb[0]*t);
-                    g = Math.round(fairwayRgb[1]*(1-t)+semiRgb[1]*t);
-                    b = Math.round(fairwayRgb[2]*(1-t)+semiRgb[2]*t);
+                    // Pure semi-rough (no fairway interpolation to avoid foregreen/tee confusion)
+                    r = semiRgb[0]; g = semiRgb[1]; b = semiRgb[2];
                 } else if(d <= roughEnd) {
                     let t = (d - semiEnd) / (roughEnd - semiEnd);
                     r = Math.round(semiRgb[0]*(1-t)+roughRgb[0]*t);
@@ -2696,6 +2694,27 @@
         pCtx.imageSmoothingEnabled = true;
         pCtx.imageSmoothingQuality = 'high';
         pCtx.drawImage(tmpCanvas, 0, 0, w, h, 0, 0, 4096, 4096);
+        
+        // CRITICAL: Restore all original "good grass" pixels that bilinear bleed may have overwritten
+        let restoredData = pCtx.getImageData(0, 0, 4096, 4096);
+        let resPx = restoredData.data;
+        for(let i = 0; i < srcData.length; i += 4) {
+            let sr = srcData[i], sg = srcData[i+1], sb = srcData[i+2];
+            if(isGoodGrass(sr, sg, sb)) {
+                resPx[i] = sr; resPx[i+1] = sg; resPx[i+2] = sb; resPx[i+3] = srcData[i+3];
+            }
+        }
+        // Also restore protected surfaces (bunker, water, OB, waste)
+        for(let i = 0; i < srcData.length; i += 4) {
+            let sr = srcData[i], sg = srcData[i+1], sb = srcData[i+2];
+            for(let c of protectedColors) {
+                if(colorDist(sr,sg,sb,c[0],c[1],c[2]) < 2000) {
+                    resPx[i] = sr; resPx[i+1] = sg; resPx[i+2] = sb; resPx[i+3] = srcData[i+3];
+                    break;
+                }
+            }
+        }
+        pCtx.putImageData(restoredData, 0, 0);
         
         mapTex.needsUpdate = true;
         window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
