@@ -2281,23 +2281,25 @@
     // Add vertex colors
     let slopeColors = new Float32Array((TERRAIN_SEGS+1)*(TERRAIN_SEGS+1)*3);
     slopeOverlayGeo.setAttribute('color', new THREE.BufferAttribute(slopeColors, 3));
-    let slopeOverlayMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+    let slopeOverlayMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
     let slopeOverlayMesh = new THREE.Mesh(slopeOverlayGeo, slopeOverlayMat);
     slopeOverlayMesh.rotation.x = -Math.PI / 2;
-    slopeOverlayMesh.position.y = 0.15;
+    slopeOverlayMesh.renderOrder = 1;
     slopeOverlayMesh.visible = false;
     scene.add(slopeOverlayMesh);
     
-    // Contour line overlay — canvas drawn on a second plane
+    // Contour line overlay — uses terrain-following geometry with canvas texture
     let contourCanvas = document.createElement('canvas');
     contourCanvas.width = 2048; contourCanvas.height = 2048;
     let contourCtx = contourCanvas.getContext('2d');
     let contourTex = new THREE.CanvasTexture(contourCanvas);
     contourTex.minFilter = THREE.LinearFilter;
-    let contourMat = new THREE.MeshBasicMaterial({ map: contourTex, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
-    let contourMesh = new THREE.Mesh(new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE), contourMat);
+    let contourGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
+    contourGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    let contourMat = new THREE.MeshBasicMaterial({ map: contourTex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 });
+    let contourMesh = new THREE.Mesh(contourGeo, contourMat);
     contourMesh.rotation.x = -Math.PI / 2;
-    contourMesh.position.y = 0.2;
+    contourMesh.renderOrder = 2;
     contourMesh.visible = false;
     scene.add(contourMesh);
     
@@ -2356,9 +2358,16 @@
         ctx.clearRect(0, 0, 2048, 2048);
         
         let pos = planeGeo.attributes.position.array;
+        let cPos = contourGeo.attributes.position.array;
         let segs = TERRAIN_SEGS;
         let res = 2048;
         let ratio = res / (segs + 1);
+        
+        // Copy terrain positions so contour mesh follows terrain
+        for(let i = 0; i < pos.length; i++) cPos[i] = pos[i];
+        // Lift Z slightly to avoid z-fighting (handled by polygonOffset, but belt-and-suspenders)
+        for(let i = 2; i < cPos.length; i += 3) cPos[i] = pos[i] + 0.05;
+        contourGeo.attributes.position.needsUpdate = true;
         
         // Find height range
         let hMin = Infinity, hMax = -Infinity;
@@ -2367,12 +2376,16 @@
             if(pos[i] > hMax) hMax = pos[i];
         }
         
-        let interval = 1.0; // 1 meter contour lines
-        if(hMax - hMin > 30) interval = 2.0;
-        if(hMax - hMin > 60) interval = 5.0;
+        // Skip if terrain is completely flat
+        if(hMax - hMin < 0.1) {
+            contourTex.needsUpdate = true;
+            return;
+        }
         
-        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-        ctx.lineWidth = 1.5;
+        let interval = 0.5; // 0.5 meter contour lines
+        if(hMax - hMin > 20) interval = 1.0;
+        if(hMax - hMin > 40) interval = 2.0;
+        if(hMax - hMin > 80) interval = 5.0;
         
         // Major lines every 5x interval
         let majorInterval = interval * 5;
@@ -2380,12 +2393,11 @@
         // Marching squares per contour level
         for(let level = Math.ceil(hMin / interval) * interval; level <= hMax; level += interval) {
             let isMajor = Math.abs(level % majorInterval) < 0.01;
-            ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)';
-            ctx.lineWidth = isMajor ? 2.0 : 1.0;
+            ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = isMajor ? 3.0 : 1.5;
             ctx.beginPath();
             let hasSegment = false;
             
-            // Simplified contour: scan rows for level crossings
             for(let z = 0; z < segs; z++) {
                 for(let x = 0; x < segs; x++) {
                     let idx00 = z * (segs+1) + x;
@@ -2396,24 +2408,19 @@
                     let h00 = pos[idx00*3+2], h10 = pos[idx10*3+2];
                     let h01 = pos[idx01*3+2], h11 = pos[idx11*3+2];
                     
-                    // Check edges for crossings
                     let pts = [];
-                    // Top edge
                     if((h00 - level) * (h10 - level) < 0) {
                         let t = (level - h00) / (h10 - h00);
                         pts.push([(x + t) * ratio, z * ratio]);
                     }
-                    // Bottom edge
                     if((h01 - level) * (h11 - level) < 0) {
                         let t = (level - h01) / (h11 - h01);
                         pts.push([(x + t) * ratio, (z+1) * ratio]);
                     }
-                    // Left edge
                     if((h00 - level) * (h01 - level) < 0) {
                         let t = (level - h00) / (h01 - h00);
                         pts.push([x * ratio, (z + t) * ratio]);
                     }
-                    // Right edge
                     if((h10 - level) * (h11 - level) < 0) {
                         let t = (level - h10) / (h11 - h10);
                         pts.push([(x+1) * ratio, (z + t) * ratio]);
@@ -2427,6 +2434,32 @@
                 }
             }
             if(hasSegment) ctx.stroke();
+            
+            // Draw height label on major lines
+            if(isMajor && hasSegment) {
+                // Find a point on this contour for the label
+                for(let z = Math.floor(segs/2); z < Math.floor(segs/2)+5; z++) {
+                    for(let x = 0; x < segs; x++) {
+                        let idx00 = z * (segs+1) + x;
+                        let idx10 = z * (segs+1) + (x+1);
+                        let h00 = pos[idx00*3+2], h10 = pos[idx10*3+2];
+                        if((h00 - level) * (h10 - level) < 0) {
+                            let t = (level - h00) / (h10 - h00);
+                            let lx = (x + t) * ratio;
+                            let ly = z * ratio;
+                            ctx.font = 'bold 18px Arial';
+                            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+                            ctx.lineWidth = 3;
+                            let txt = level.toFixed(1) + 'm';
+                            ctx.strokeText(txt, lx + 5, ly - 5);
+                            ctx.fillText(txt, lx + 5, ly - 5);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
         }
         contourTex.needsUpdate = true;
     };
