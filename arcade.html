@@ -2832,7 +2832,7 @@
         planeGeo.computeBoundingSphere();
         
         // 2. PAINT: Draw fairway color along the path
-        let fairwayColor = cfg.fairwayColor;
+        let fairwayColor = window.CURRENT_BIOME_CONFIG.fairwayColor;
         pCtx.strokeStyle = fairwayColor;
         pCtx.lineCap = 'round';
         pCtx.lineJoin = 'round';
@@ -6225,9 +6225,9 @@
         
         pCtx.closePath();
         
-        if(layerType === 'GREEN') pCtx.fillStyle = '#98ce68';
-        else if(layerType === 'FAIRWAY') pCtx.fillStyle = '#659c35';
-        else if(layerType === 'BUNKER') pCtx.fillStyle = '#dcb871';
+        if(layerType === 'GREEN') pCtx.fillStyle = window.CURRENT_BIOME_CONFIG.greenColor;
+        else if(layerType === 'FAIRWAY') pCtx.fillStyle = window.CURRENT_BIOME_CONFIG.fairwayColor;
+        else if(layerType === 'BUNKER') pCtx.fillStyle = window.CURRENT_BIOME_CONFIG.bunkerColor;
         
         pCtx.fill();
         pCtx.restore();
