@@ -775,7 +775,7 @@
                                 <select id="scenery-N" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
-                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-N" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-N" min="1" max="400" value="50" oninput="window.debouncedUpdateScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                         <!-- EAST -->
@@ -795,7 +795,7 @@
                                 <select id="scenery-E" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
-                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-E" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-E" min="1" max="400" value="50" oninput="window.debouncedUpdateScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                         <!-- SOUTH -->
@@ -815,7 +815,7 @@
                                 <select id="scenery-S" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
-                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-S" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-S" min="1" max="400" value="50" oninput="window.debouncedUpdateScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                         <!-- WEST -->
@@ -835,7 +835,7 @@
                                 <select id="scenery-W" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
                                     <option value="NONE">❌ No 3D Scenery</option>
                                 </select>
-                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-W" min="1" max="400" value="50" onchange="window.updateSurroundScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
+                                <div style="display:flex; align-items:center; gap:2px;"><span style="font-size:8px; color:#64748b;">Antal</span><input type="range" id="scenery-cnt-W" min="1" max="400" value="50" oninput="window.debouncedUpdateScenery()" style="width:100%; height:4px; margin:0; cursor:pointer;"></div>
                             </div>
                         </div>
                     </div>
@@ -1485,7 +1485,7 @@
         return {
             skyTop: lerpArr(A.skyTop, B.skyTop, t),
             skyBot: lerpArr(A.skyBot, B.skyBot, t),
-            sunColor: A.sunColor && B.sunColor ? lerpArr(A.sunColor, B.sunColor, t) : (B.sunColor || A.sunColor),
+            sunColor: (A.sunColor && B.sunColor) ? lerpArr(A.sunColor, B.sunColor, t) : (A.sunColor && !B.sunColor) ? A.sunColor.map(v => v * (1 - t)) : (!A.sunColor && B.sunColor) ? B.sunColor.map(v => v * t) : null,
             sunY: lerpVal(A.sunY, B.sunY, t),
             ambient: lerpVal(A.ambient, B.ambient, t),
             ambColor: lerpArr(A.ambColor, B.ambColor, t),
@@ -1551,7 +1551,8 @@
             sunMesh.position.set(Math.cos(angle) * 400, p.sunY, Math.sin(angle) * 400);
             if (p.sunColor) {
                 sunMesh.material.color.setRGB(p.sunColor[0]/255, p.sunColor[1]/255, p.sunColor[2]/255);
-                sunMesh.visible = true;
+                let sunBrightness = (p.sunColor[0] + p.sunColor[1] + p.sunColor[2]) / 765;
+                sunMesh.visible = sunBrightness > 0.01;
             } else {
                 sunMesh.visible = false; // Midnight: no sun
             }
@@ -2539,6 +2540,7 @@
     };
 
     let surroundPlane = new THREE.Mesh(surroundGeo, window.surroundMat);
+    window.surroundPlane = surroundPlane; // Global reference for cross-scope access
     surroundPlane.rotation.x = -Math.PI / 2;
     surroundPlane.position.y = -0.1; // Tucked closely under the locked y=0 edges of the terrain
     surroundPlane.receiveShadow = true;
@@ -2660,14 +2662,6 @@
     };
     
     // === SURROUNDING ENVIRONMENT SYSTEM ===
-    const SURROUND_PRESETS = {
-        GRASS:  { color: 0x2d4c1a, label: '🌿 Grass' },
-        OCEAN:  { color: 0x1e3a5f, label: '🌊 Ocean' },
-        LAKE:   { color: 0x2a6b7a, label: '💧 Lake' },
-        SAND:   { color: 0xa38d5c, label: '🏜️ Sand' },
-        FIELD:  { color: 0x6b7a2a, label: '🌾 Field' },
-        SNOW:   { color: 0xcbd5e1, label: '❄️ Snow' }
-    };
     
     // Store active config
     window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' };
@@ -2727,9 +2721,9 @@
         let wK = window.surroundConfig.W;
         
         if (nK === 'NONE' && eK === 'NONE' && sK === 'NONE' && wK === 'NONE') {
-            if (typeof surroundPlane !== 'undefined') surroundPlane.visible = false;
+            if (window.surroundPlane) window.surroundPlane.visible = false;
         } else {
-            if (typeof surroundPlane !== 'undefined') surroundPlane.visible = true;
+            if (window.surroundPlane) window.surroundPlane.visible = true;
         }
         
         let cN = getCol(nK);
@@ -2747,8 +2741,24 @@
     
     // --- 3D SCENERY ENGINE ---
     window.sceneryGroup = null;
+    
+    // Debounced scenery update (BUG-9 fix)
+    window._sceneryDebounceTimer = null;
+    window.debouncedUpdateScenery = function() {
+        clearTimeout(window._sceneryDebounceTimer);
+        window._sceneryDebounceTimer = setTimeout(() => {
+            window.updateSurroundScenery();
+        }, 250);
+    };
+    
     window.updateSurroundScenery = function() {
+        // BUG-1 fix: Dispose cloned materials and instance buffers before removing
         if (window.sceneryGroup) {
+            window.sceneryGroup.traverse(child => {
+                if (child.isInstancedMesh) {
+                    if (child.material) child.material.dispose();
+                }
+            });
             scene.remove(window.sceneryGroup);
             window.sceneryGroup = null;
         }
@@ -2756,13 +2766,23 @@
         let scN = document.getElementById('scenery-N');
         if (!scN || typeof window.ASSET_REGISTRY === 'undefined') return;
         
-        // Save UI selection to config
+        // Save UI selection to config (scenery type)
         window.surroundConfig.sceneryN = document.getElementById('scenery-N').value;
         window.surroundConfig.sceneryE = document.getElementById('scenery-E').value;
         window.surroundConfig.sceneryS = document.getElementById('scenery-S').value;
         window.surroundConfig.sceneryW = document.getElementById('scenery-W').value;
+        // BUG-2 fix: Also save count values from sliders
+        let _cntEl = document.getElementById('scenery-cnt-N');
+        if (_cntEl) {
+            window.surroundConfig.sceneryCntN = parseInt(document.getElementById('scenery-cnt-N').value) || 50;
+            window.surroundConfig.sceneryCntE = parseInt(document.getElementById('scenery-cnt-E').value) || 50;
+            window.surroundConfig.sceneryCntS = parseInt(document.getElementById('scenery-cnt-S').value) || 50;
+            window.surroundConfig.sceneryCntW = parseInt(document.getElementById('scenery-cnt-W').value) || 50;
+        }
+        // BUG-13 fix: Persist to courseHoles AND save to disk
         if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
             courseHoles[currentHoleIndex].surroundConfig = Object.assign({}, window.surroundConfig);
+            if (typeof saveLevel === 'function') saveLevel();
         }
         
         window.sceneryGroup = new THREE.Group();
@@ -2886,13 +2906,9 @@
         });
     };
     
-    window.setSurrounding = function() {
-        // Legacy function, replaced by updateSurroundColors
-    };
-    
     window.restoreSurrounding = function() {
         let hole = courseHoles[currentHoleIndex];
-        surroundPlane.visible = true; // Always visible now
+        if (window.surroundPlane) window.surroundPlane.visible = true; // Always visible now
         
         if(hole && hole.surroundConfig) {
             window.surroundConfig = Object.assign({}, hole.surroundConfig);
@@ -4087,7 +4103,11 @@
         if (!pool) return;
         pool.meshes.forEach(iMesh => {
             scene.remove(iMesh);
-            // Don't dispose shared geometry/material
+            // BUG-10 fix: Dispose instance-specific buffers (not shared geometry)
+            if (iMesh.instanceMatrix) iMesh.instanceMatrix.array = null;
+            if (iMesh.instanceColor) iMesh.instanceColor.array = null;
+            let trunkAttr = iMesh.geometry.getAttribute('instanceTrunkColor');
+            if (trunkAttr) iMesh.geometry.deleteAttribute('instanceTrunkColor');
         });
         delete window.instancePools[type];
     }
