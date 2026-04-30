@@ -7040,6 +7040,7 @@
                 let removedType = window.placedTrees[closest].type;
                 window.placedTrees.splice(closest, 1);
                 rebuildInstancePool(removedType);
+                saveLevel();
             }
             return;
         }
