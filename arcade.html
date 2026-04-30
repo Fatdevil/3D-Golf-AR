@@ -5348,7 +5348,25 @@
                 return;
             }
             
-            // 2. Try removing a block
+            // 2. Try removing an envObject (spline ROAD/TUBE)
+            let envObjs = courseHoles[currentHoleIndex].envObjects;
+            if(envObjs && envObjs.length > 0) {
+                let hit3D = getIntersect();
+                if(hit3D) {
+                    for(let i = envObjs.length - 1; i >= 0; i--) {
+                        if(envObjs[i].mesh === hit3D.object) {
+                            scene.remove(envObjs[i].mesh);
+                            envObjs[i].mesh.geometry.dispose();
+                            envObjs[i].mesh.material.dispose();
+                            envObjs.splice(i, 1);
+                            saveLevel();
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            // 3. Try removing a block
             let hit = getIntersect();
             if (hit && hit.object !== plane) {
                 scene.remove(hit.object);
