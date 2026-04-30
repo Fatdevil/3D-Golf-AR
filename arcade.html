@@ -2372,6 +2372,15 @@
                 let tex = new THREE.Texture(img);
                 tex.needsUpdate = true;
                 tex.wrapS = THREE.RepeatWrapping;
+                
+                // Calculate how many times to tile the image horizontally to prevent stretching
+                let imgAspect = img.width / img.height;
+                let cylCircumference = 2 * Math.PI * 2000; // panoRadius is 2000
+                let cylHeight = 600; // panoHeight is 600
+                let idealWidth = cylHeight * imgAspect;
+                let repeats = Math.max(1, Math.round(cylCircumference / idealWidth));
+                tex.repeat.set(repeats, 1);
+                
                 tex.minFilter = THREE.LinearFilter; // No mipmaps — keeps it sharp
                 tex.magFilter = THREE.LinearFilter;
                 tex.generateMipmaps = false;
@@ -2429,6 +2438,14 @@
                 let tex = new THREE.Texture(img);
                 tex.needsUpdate = true;
                 tex.wrapS = THREE.RepeatWrapping;
+                
+                let imgAspect = img.width / img.height;
+                let cylCircumference = 2 * Math.PI * 2000;
+                let cylHeight = 600;
+                let idealWidth = cylHeight * imgAspect;
+                let repeats = Math.max(1, Math.round(cylCircumference / idealWidth));
+                tex.repeat.set(repeats, 1);
+                
                 tex.minFilter = THREE.LinearFilter;
                 tex.magFilter = THREE.LinearFilter;
                 tex.generateMipmaps = false;
