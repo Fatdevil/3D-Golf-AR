@@ -1422,16 +1422,8 @@
         scene.fog.near = p.fogNear;
         scene.fog.far = p.fogFar;
         
-        // Sync surrounding ground plane with fog for seamless horizon
-        if(typeof surroundMat !== 'undefined') {
-            // Blend fescue green with fog color based on time of day
-            let fogR = p.fogColor[0]/255, fogG = p.fogColor[1]/255, fogB = p.fogColor[2]/255;
-            surroundMat.color.setRGB(
-                0.18 * 0.6 + fogR * 0.4,
-                0.30 * 0.6 + fogG * 0.4,
-                0.10 * 0.6 + fogB * 0.4
-            );
-        }
+        // Surround plane color is now handled by the Surrounding system (Grass/Ocean/etc)
+        // and natural THREE.Fog handles the horizon blending automatically.
 
         // 3. Ambient light
         if (typeof ambientLight !== 'undefined') {
