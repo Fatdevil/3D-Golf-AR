@@ -412,6 +412,17 @@
         <canvas id="elevation-canvas" width="220" height="80" style="width:100%; height:100%;"></canvas>
     </div>
 
+    <!-- GREEN READ PANEL (visible in PLAY/TEST mode) -->
+    <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:10px 12px; z-index:11; backdrop-filter:blur(8px); min-width:140px;">
+        <div style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; text-align:center;">📖 Green Read</div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button id="gr-slope" onclick="window.toggleSlopeOverlay()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:left; transition:all 0.2s;">📊 Slope</button>
+            <button id="gr-contour" onclick="window.toggleContourLines()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:left; transition:all 0.2s;">🏔️ Contour</button>
+            <button id="gr-elev" onclick="window.toggleElevationHeatmap()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:left; transition:all 0.2s;">🌡️ Elevation</button>
+        </div>
+        <div style="color:#475569; font-size:8px; margin-top:6px; text-align:center;">G · C · H to toggle</div>
+    </div>
+
     <!-- MINIMAP CONTAINER (UI wrapper för kameran) -->
     <div id="minimap-container" style="display:none; position:absolute; bottom:20px; right:20px; width:220px; height:340px; border:2px solid rgba(255,255,255,0.2); background:transparent; pointer-events:auto; z-index:10; font-family:'Inter',sans-serif;">
         <!-- HEADER -->
@@ -2470,22 +2481,21 @@
     window.toggleSlopeOverlay = function() {
         window.slopeOverlayActive = !window.slopeOverlayActive;
         slopeOverlayMesh.visible = window.slopeOverlayActive;
-        let btn = document.getElementById('btn-slope-overlay');
-        if(btn) {
-            btn.style.borderColor = window.slopeOverlayActive ? '#4ade80' : '#475569';
-            btn.style.color = window.slopeOverlayActive ? '#4ade80' : '#94a3b8';
-        }
+        // Sync both build and play buttons
+        ['btn-slope-overlay', 'gr-slope'].forEach(id => {
+            let btn = document.getElementById(id);
+            if(btn) { btn.style.borderColor = window.slopeOverlayActive ? '#4ade80' : '#475569'; btn.style.color = window.slopeOverlayActive ? '#4ade80' : '#94a3b8'; }
+        });
         if(window.slopeOverlayActive) window.updateSlopeOverlay();
     };
     
     window.toggleContourLines = function() {
         window.contourLinesActive = !window.contourLinesActive;
         contourMesh.visible = window.contourLinesActive;
-        let btn = document.getElementById('btn-contour-lines');
-        if(btn) {
-            btn.style.borderColor = window.contourLinesActive ? '#4ade80' : '#475569';
-            btn.style.color = window.contourLinesActive ? '#4ade80' : '#94a3b8';
-        }
+        ['btn-contour-lines', 'gr-contour'].forEach(id => {
+            let btn = document.getElementById(id);
+            if(btn) { btn.style.borderColor = window.contourLinesActive ? '#4ade80' : '#475569'; btn.style.color = window.contourLinesActive ? '#4ade80' : '#94a3b8'; }
+        });
         if(window.contourLinesActive) window.updateContourLines();
     };
     
@@ -2558,11 +2568,10 @@
     window.toggleElevationHeatmap = function() {
         window.elevationHeatmapActive = !window.elevationHeatmapActive;
         elevHeatMesh.visible = window.elevationHeatmapActive;
-        let btn = document.getElementById('btn-elevation-heatmap');
-        if(btn) {
-            btn.style.borderColor = window.elevationHeatmapActive ? '#38bdf8' : '#475569';
-            btn.style.color = window.elevationHeatmapActive ? '#38bdf8' : '#94a3b8';
-        }
+        ['btn-elevation-heatmap', 'gr-elev'].forEach(id => {
+            let btn = document.getElementById(id);
+            if(btn) { btn.style.borderColor = window.elevationHeatmapActive ? '#38bdf8' : '#475569'; btn.style.color = window.elevationHeatmapActive ? '#38bdf8' : '#94a3b8'; }
+        });
         if(window.elevationHeatmapActive) window.updateElevationHeatmap();
     };
     
@@ -5594,6 +5603,7 @@
         
         let lt = document.getElementById('left-toolbar'); if(lt) lt.style.display = mode === 'BUILD' ? 'grid' : 'none';
         let rt = document.getElementById('right-toolbar'); if(rt) rt.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        let grp = document.getElementById('green-read-panel'); if(grp) grp.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'block' : 'none';
         
         let tb = document.getElementById('top-bar'); if(tb) tb.style.display = mode === 'PLAY' ? 'none' : 'flex';
         
@@ -6158,6 +6168,17 @@
             ghostBlock.visible = false;
         }
     }
+    
+    // --- GREEN READ KEYBOARD SHORTCUTS (PLAY/TEST mode) ---
+    window.addEventListener('keydown', (e) => {
+        if(appMode !== 'PLAY' && appMode !== 'TEST') return;
+        if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        let key = e.key.toLowerCase();
+        if(key === 'g') { window.toggleSlopeOverlay(); e.preventDefault(); }
+        if(key === 'c') { window.toggleContourLines(); e.preventDefault(); }
+        if(key === 'h') { window.toggleElevationHeatmap(); e.preventDefault(); }
+    });
     
     // --- WASD NAVIGERING FÖR BUILD-LÄGET & UNDO (Ctrl+Z) ---
     window.addEventListener('keydown', (e) => {
