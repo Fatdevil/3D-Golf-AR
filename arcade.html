@@ -2896,9 +2896,9 @@
                 }
                 
                 for(let i = 0; i < count; i++) {
-                    let sRand1 = seededRandom(i * 10 + 1 + meshIndex);
-                    let sRand2 = seededRandom(i * 10 + 2 + meshIndex);
-                    let sRand3 = seededRandom(i * 10 + 3 + meshIndex);
+                    let sRand1 = seededRandom(i * 10 + 1);
+                    let sRand2 = seededRandom(i * 10 + 2);
+                    let sRand3 = seededRandom(i * 10 + 3);
                     
                     let angle = angleStart + (sRand1 * (angleEnd - angleStart));
                     // Scale radius based on model height: small trees close, big mountains FAR
