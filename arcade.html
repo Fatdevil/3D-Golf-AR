@@ -2763,8 +2763,18 @@
                 return;
             }
             
+            cacheObj.updateMatrixWorld(true);
+            
             let meshes = [];
-            cacheObj.traverse(child => { if (child.isMesh) meshes.push(child); });
+            cacheObj.traverse(child => { 
+                if (child.isMesh) {
+                    meshes.push({
+                        geometry: child.geometry,
+                        material: child.material,
+                        matrix: child.matrixWorld.clone()
+                    });
+                } 
+            });
             if (meshes.length === 0) return;
             
             let count = countTarget || 50;
@@ -2779,8 +2789,8 @@
             };
             let tintColor = getCol(horizonColorKey);
             
-            meshes.forEach(mesh => {
-                let instMesh = new THREE.InstancedMesh(mesh.geometry, mesh.material.clone(), count);
+            meshes.forEach(m => {
+                let instMesh = new THREE.InstancedMesh(m.geometry, m.material.clone(), count);
                 let dummy = new THREE.Object3D();
                 
                 if (instMesh.material.color) {
@@ -2798,7 +2808,9 @@
                     dummy.rotation.set(0, rY, 0);
                     dummy.scale.set(s, s, s);
                     dummy.updateMatrix();
-                    instMesh.setMatrixAt(i, dummy.matrix);
+                    
+                    let finalMatrix = new THREE.Matrix4().multiplyMatrices(dummy.matrix, m.matrix);
+                    instMesh.setMatrixAt(i, finalMatrix);
                 }
                 instMesh.instanceMatrix.needsUpdate = true;
                 window.sceneryGroup.add(instMesh);
