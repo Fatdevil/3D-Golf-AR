@@ -763,6 +763,7 @@
                             <div style="color:#64748b; font-size:9px;">North</div>
                             <div style="display:flex; flex-direction:column; gap:2px;">
                                 <select id="surr-N" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ Ingen</option>
                                     <option value="roughColor">🟢 Rough</option>
                                     <option value="wasteColor">🟡 Waste</option>
                                     <option value="fescueColor" selected>🌲 Fescue</option>
@@ -782,6 +783,7 @@
                             <div style="color:#64748b; font-size:9px;">East</div>
                             <div style="display:flex; flex-direction:column; gap:2px;">
                                 <select id="surr-E" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ Ingen</option>
                                     <option value="roughColor">🟢 Rough</option>
                                     <option value="wasteColor">🟡 Waste</option>
                                     <option value="fescueColor" selected>🌲 Fescue</option>
@@ -801,6 +803,7 @@
                             <div style="color:#64748b; font-size:9px;">South</div>
                             <div style="display:flex; flex-direction:column; gap:2px;">
                                 <select id="surr-S" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ Ingen</option>
                                     <option value="roughColor">🟢 Rough</option>
                                     <option value="wasteColor">🟡 Waste</option>
                                     <option value="fescueColor" selected>🌲 Fescue</option>
@@ -820,6 +823,7 @@
                             <div style="color:#64748b; font-size:9px;">West</div>
                             <div style="display:flex; flex-direction:column; gap:2px;">
                                 <select id="surr-W" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ Ingen</option>
                                     <option value="roughColor">🟢 Rough</option>
                                     <option value="wasteColor">🟡 Waste</option>
                                     <option value="fescueColor" selected>🌲 Fescue</option>
@@ -2701,6 +2705,7 @@
         }
         
         let getCol = (key) => {
+            if (key === 'NONE') key = 'skyColor'; // 'Ingen' blends directly into sky
             let hexStr = window.CURRENT_BIOME_CONFIG[key];
             if (!hexStr && key === 'oceanColor') {
                 // Fallback for old saves missing oceanColor
@@ -2716,10 +2721,21 @@
             return new THREE.Color(parseInt(hexStr.replace('#', '0x')));
         };
         
-        let cN = getCol(window.surroundConfig.N);
-        let cE = getCol(window.surroundConfig.E);
-        let cS = getCol(window.surroundConfig.S);
-        let cW = getCol(window.surroundConfig.W);
+        let nK = window.surroundConfig.N;
+        let eK = window.surroundConfig.E;
+        let sK = window.surroundConfig.S;
+        let wK = window.surroundConfig.W;
+        
+        if (nK === 'NONE' && eK === 'NONE' && sK === 'NONE' && wK === 'NONE') {
+            if (typeof surroundPlane !== 'undefined') surroundPlane.visible = false;
+        } else {
+            if (typeof surroundPlane !== 'undefined') surroundPlane.visible = true;
+        }
+        
+        let cN = getCol(nK);
+        let cE = getCol(eK);
+        let cS = getCol(sK);
+        let cW = getCol(wK);
         
         if(window.surroundMat.userData.colorN) {
             window.surroundMat.userData.colorN.value.copy(cN);
