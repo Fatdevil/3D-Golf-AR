@@ -140,6 +140,18 @@
   #left-toolbar button.active-green { background: #4ade80; color: #0f172a; }
   #left-toolbar button.active-yellow { background: #fbbf24; color: #0f172a; }
   #left-toolbar button.active-red { background: #ef4444; color: #fff; }
+  #left-toolbar:not(.pro-mode) .pro-tool { display: none !important; }
+  #left-toolbar:not(.pro-mode) .pro-divider { display: none !important; }
+  #btn-pro-toggle {
+      grid-column: 1 / -1; margin-top: 4px;
+      background: rgba(56, 189, 248, 0.1) !important;
+      border: 1px dashed #475569 !important;
+      color: #94a3b8 !important;
+      font-size: 9px !important; height: 32px !important;
+      letter-spacing: 1px;
+  }
+  #btn-pro-toggle:hover { background: rgba(56, 189, 248, 0.2) !important; color: #38bdf8 !important; }
+  #left-toolbar.pro-mode #btn-pro-toggle { border-color: #38bdf8 !important; color: #38bdf8 !important; }
   
   #right-toolbar {
       position: absolute;
@@ -474,6 +486,30 @@
         window.useMeters = false;
         window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
         window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
+        
+        window.toggleProMode = function() {
+            let tb = document.getElementById('left-toolbar');
+            let btn = document.getElementById('btn-pro-toggle');
+            let isPro = tb.classList.toggle('pro-mode');
+            btn.textContent = isPro ? '⚡ PRO MODE' : '🔧 BASIC MODE';
+            localStorage.setItem('arcade_pro_mode', isPro ? '1' : '0');
+            // If switching to BASIC and current tool is a pro-tool, fallback to INSPECT
+            if (!isPro && typeof currentTool !== 'undefined') {
+                let proTools = ['FLATTEN','RAMP','NOISE','WATER','SPLINE','SMART_GREEN','RIDGE','FOREST','ERASER','COLORIZE'];
+                if (proTools.includes(currentTool)) {
+                    if (typeof setTool === 'function') setTool('INSPECT');
+                }
+            }
+        };
+        // Restore PRO mode from localStorage on boot
+        document.addEventListener('DOMContentLoaded', function() {
+            if (localStorage.getItem('arcade_pro_mode') === '1') {
+                let tb = document.getElementById('left-toolbar');
+                let btn = document.getElementById('btn-pro-toggle');
+                if (tb) { tb.classList.add('pro-mode'); }
+                if (btn) { btn.textContent = '⚡ PRO MODE'; }
+            }
+        });
     </script>
 
     <!-- PRO UI: VÄNSTER VERKTYGSLISTA -->
@@ -481,25 +517,26 @@
         <button id="tool-inspect" onclick="setTool('INSPECT')"><span style="font-size:16px;">👀</span> INSPECT</button>
         <button id="tool-sculpt" onclick="setTool('SCULPT')" class="active"><span style="font-size:16px;">⛰️</span> SCULPT</button>
         <button id="tool-smooth" onclick="setTool('SMOOTH')"><span style="font-size:16px;">🧽</span> SMOOTH</button>
-        <button id="tool-flatten" onclick="setTool('FLATTEN')"><span style="font-size:16px;">📐</span> FLATTEN</button>
-        <button id="tool-ramp" onclick="setTool('RAMP')"><span style="font-size:16px;">📉</span> RAMP</button>
-        <button id="tool-noise" onclick="setTool('NOISE')"><span style="font-size:16px;">🌊</span> NOISE</button>
-        <button id="tool-water" onclick="setTool('WATER')"><span style="font-size:16px;">💧</span> WATER</button>
-        <button id="tool-spline" onclick="setTool('SPLINE')"><span style="font-size:16px;">〰️</span> SPLINE</button>
+        <button id="tool-flatten" onclick="setTool('FLATTEN')" class="pro-tool"><span style="font-size:16px;">📐</span> FLATTEN</button>
+        <button id="tool-ramp" onclick="setTool('RAMP')" class="pro-tool"><span style="font-size:16px;">📉</span> RAMP</button>
+        <button id="tool-noise" onclick="setTool('NOISE')" class="pro-tool"><span style="font-size:16px;">🌊</span> NOISE</button>
+        <button id="tool-water" onclick="setTool('WATER')" class="pro-tool"><span style="font-size:16px;">💧</span> WATER</button>
+        <button id="tool-spline" onclick="setTool('SPLINE')" class="pro-tool"><span style="font-size:16px;">〰️</span> SPLINE</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
-        <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')"><span style="font-size:16px;">⛳</span> SMART GREEN</button>
-        <button id="tool-ridge" onclick="setTool('RIDGE')"><span style="font-size:16px;">📊</span> RIDGE</button>
+        <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')" class="pro-tool"><span style="font-size:16px;">⛳</span> SMART GREEN</button>
+        <button id="tool-ridge" onclick="setTool('RIDGE')" class="pro-tool"><span style="font-size:16px;">📊</span> RIDGE</button>
         <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
-        <button id="tool-forest" onclick="setTool('FOREST')"><span style="font-size:16px;">🌲</span> FOREST</button>
+        <button id="tool-forest" onclick="setTool('FOREST')" class="pro-tool"><span style="font-size:16px;">🌲</span> FOREST</button>
         <button id="tool-block" onclick="setTool('BLOCK')"><span style="font-size:16px;">🧱</span> BLOCK</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-hole" onclick="setTool('HOLE')"><span style="font-size:16px;">🕳️</span> HOLE</button>
         <button id="tool-measure" onclick="setTool('MEASURE')"><span style="font-size:16px;">📏</span> MEASURE</button>
-        <button id="tool-eraser" onclick="setTool('ERASER')"><span style="font-size:16px;">🗑️</span> ERASER</button>
-        <button id="tool-colorize" onclick="setTool('COLORIZE')"><span style="font-size:16px;">🎨</span> COLORIZE</button>
+        <button id="tool-eraser" onclick="setTool('ERASER')" class="pro-tool"><span style="font-size:16px;">🗑️</span> ERASER</button>
+        <button id="tool-colorize" onclick="setTool('COLORIZE')" class="pro-tool"><span style="font-size:16px;">🎨</span> COLORIZE</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button onclick="performUndo()" style="color:#f87171; grid-column:1 / -1;"><span style="font-size:16px;">↩️</span> UNDO</button>
+        <button id="btn-pro-toggle" onclick="toggleProMode()">🔧 BASIC MODE</button>
     </div>
 
     <div id="memory-budget-ui" style="position:absolute; top:20px; right:120px; background:rgba(15,23,42,0.9); padding:8px 15px; border-radius:8px; border:1px solid #475569; display:none; pointer-events:none; z-index:1000; flex-direction:column; align-items:center;">
