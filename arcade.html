@@ -758,53 +758,77 @@
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
                     <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding Horizon</label>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:5px;">
+                        <!-- NORTH -->
                         <div>
                             <div style="color:#64748b; font-size:9px;">North</div>
-                            <select id="surr-N" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
-                                <option value="roughColor">🟢 Rough</option>
-                                <option value="wasteColor">🟡 Waste</option>
-                                <option value="fescueColor" selected>🌲 Fescue</option>
-                                <option value="waterColor">💧 Water</option>
-                                <option value="oceanColor">🌊 Ocean</option>
-                                <option value="horizonColor">🌫️ Horizon</option>
-                                <option value="skyColor">⛅ Sky</option>
-                            </select>
+                            <div style="display:flex; flex-direction:column; gap:2px;">
+                                <select id="surr-N" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="roughColor">🟢 Rough</option>
+                                    <option value="wasteColor">🟡 Waste</option>
+                                    <option value="fescueColor" selected>🌲 Fescue</option>
+                                    <option value="waterColor">💧 Water</option>
+                                    <option value="oceanColor">🌊 Ocean</option>
+                                    <option value="horizonColor">🌫️ Horizon</option>
+                                    <option value="skyColor">⛅ Sky</option>
+                                </select>
+                                <select id="scenery-N" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ No 3D Scenery</option>
+                                </select>
+                            </div>
                         </div>
+                        <!-- EAST -->
                         <div>
                             <div style="color:#64748b; font-size:9px;">East</div>
-                            <select id="surr-E" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
-                                <option value="roughColor">🟢 Rough</option>
-                                <option value="wasteColor">🟡 Waste</option>
-                                <option value="fescueColor" selected>🌲 Fescue</option>
-                                <option value="waterColor">💧 Water</option>
-                                <option value="oceanColor">🌊 Ocean</option>
-                                <option value="horizonColor">🌫️ Horizon</option>
-                                <option value="skyColor">⛅ Sky</option>
-                            </select>
+                            <div style="display:flex; flex-direction:column; gap:2px;">
+                                <select id="surr-E" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="roughColor">🟢 Rough</option>
+                                    <option value="wasteColor">🟡 Waste</option>
+                                    <option value="fescueColor" selected>🌲 Fescue</option>
+                                    <option value="waterColor">💧 Water</option>
+                                    <option value="oceanColor">🌊 Ocean</option>
+                                    <option value="horizonColor">🌫️ Horizon</option>
+                                    <option value="skyColor">⛅ Sky</option>
+                                </select>
+                                <select id="scenery-E" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ No 3D Scenery</option>
+                                </select>
+                            </div>
                         </div>
+                        <!-- SOUTH -->
                         <div>
                             <div style="color:#64748b; font-size:9px;">South</div>
-                            <select id="surr-S" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
-                                <option value="roughColor">🟢 Rough</option>
-                                <option value="wasteColor">🟡 Waste</option>
-                                <option value="fescueColor" selected>🌲 Fescue</option>
-                                <option value="waterColor">💧 Water</option>
-                                <option value="oceanColor">🌊 Ocean</option>
-                                <option value="horizonColor">🌫️ Horizon</option>
-                                <option value="skyColor">⛅ Sky</option>
-                            </select>
+                            <div style="display:flex; flex-direction:column; gap:2px;">
+                                <select id="surr-S" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="roughColor">🟢 Rough</option>
+                                    <option value="wasteColor">🟡 Waste</option>
+                                    <option value="fescueColor" selected>🌲 Fescue</option>
+                                    <option value="waterColor">💧 Water</option>
+                                    <option value="oceanColor">🌊 Ocean</option>
+                                    <option value="horizonColor">🌫️ Horizon</option>
+                                    <option value="skyColor">⛅ Sky</option>
+                                </select>
+                                <select id="scenery-S" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ No 3D Scenery</option>
+                                </select>
+                            </div>
                         </div>
+                        <!-- WEST -->
                         <div>
                             <div style="color:#64748b; font-size:9px;">West</div>
-                            <select id="surr-W" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
-                                <option value="roughColor">🟢 Rough</option>
-                                <option value="wasteColor">🟡 Waste</option>
-                                <option value="fescueColor" selected>🌲 Fescue</option>
-                                <option value="waterColor">💧 Water</option>
-                                <option value="oceanColor">🌊 Ocean</option>
-                                <option value="horizonColor">🌫️ Horizon</option>
-                                <option value="skyColor">⛅ Sky</option>
-                            </select>
+                            <div style="display:flex; flex-direction:column; gap:2px;">
+                                <select id="surr-W" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="roughColor">🟢 Rough</option>
+                                    <option value="wasteColor">🟡 Waste</option>
+                                    <option value="fescueColor" selected>🌲 Fescue</option>
+                                    <option value="waterColor">💧 Water</option>
+                                    <option value="oceanColor">🌊 Ocean</option>
+                                    <option value="horizonColor">🌫️ Horizon</option>
+                                    <option value="skyColor">⛅ Sky</option>
+                                </select>
+                                <select id="scenery-W" onchange="window.updateSurroundScenery()" class="scenery-dropdown" style="width:100%; background:#0f172a; color:#38bdf8; border:1px dashed #334155; border-radius:4px; padding:3px; font-size:10px; cursor:pointer;">
+                                    <option value="NONE">❌ No 3D Scenery</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2069,6 +2093,12 @@
                 };
             });
             window.buildNatureUI(); // Rebuild UI with cloud assets
+            if (typeof window.populateSceneryDropdowns === 'function') {
+                window.populateSceneryDropdowns();
+            }
+            if (typeof window.updateSurroundScenery === 'function') {
+                window.updateSurroundScenery();
+            }
         } catch(e) {
             console.error("Failed to load cloud assets", e);
         }
@@ -2629,6 +2659,14 @@
             window.surroundConfig.S = document.getElementById('surr-S').value;
             window.surroundConfig.W = document.getElementById('surr-W').value;
             
+            let scN = document.getElementById('scenery-N');
+            if (scN) {
+                window.surroundConfig.sceneryN = document.getElementById('scenery-N').value;
+                window.surroundConfig.sceneryE = document.getElementById('scenery-E').value;
+                window.surroundConfig.sceneryS = document.getElementById('scenery-S').value;
+                window.surroundConfig.sceneryW = document.getElementById('scenery-W').value;
+            }
+            
             // Save to course data
             if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
                 courseHoles[currentHoleIndex].surroundConfig = Object.assign({}, window.surroundConfig);
@@ -2665,6 +2703,122 @@
         }
     };
     
+    // --- 3D SCENERY ENGINE ---
+    window.sceneryGroup = null;
+    window.updateSurroundScenery = function() {
+        if (window.sceneryGroup) {
+            scene.remove(window.sceneryGroup);
+            window.sceneryGroup = null;
+        }
+        
+        let scN = document.getElementById('scenery-N');
+        if (!scN || typeof window.ASSET_REGISTRY === 'undefined') return;
+        
+        // Save UI selection to config
+        window.surroundConfig.sceneryN = document.getElementById('scenery-N').value;
+        window.surroundConfig.sceneryE = document.getElementById('scenery-E').value;
+        window.surroundConfig.sceneryS = document.getElementById('scenery-S').value;
+        window.surroundConfig.sceneryW = document.getElementById('scenery-W').value;
+        if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
+            courseHoles[currentHoleIndex].surroundConfig = Object.assign({}, window.surroundConfig);
+        }
+        
+        window.sceneryGroup = new THREE.Group();
+        
+        const buildQuadrant = (assetId, angleStart, angleEnd, horizonColorKey) => {
+            if (!assetId || assetId === 'NONE' || !window.ASSET_REGISTRY[assetId]) return;
+            
+            let assetConf = window.ASSET_REGISTRY[assetId];
+            if (!assetConf.file && !assetConf.cloudId) return;
+            
+            let cacheObj = window.customModels[assetId];
+            if (!cacheObj || cacheObj === 'LOADING') {
+                if (cacheObj !== 'LOADING') window.loadAsset(assetId, () => window.updateSurroundScenery());
+                return;
+            }
+            
+            let meshes = [];
+            cacheObj.traverse(child => { if (child.isMesh) meshes.push(child); });
+            if (meshes.length === 0) return;
+            
+            let density = 1.0;
+            let count = Math.max(10, Math.floor(150 / (assetConf.targetHeight / 10)));
+            count = Math.min(count, 150); // Max instances per quadrant
+            
+            let getCol = (key) => {
+                let hexStr = window.CURRENT_BIOME_CONFIG[key];
+                if (!hexStr && key === 'oceanColor') return new THREE.Color(0x1e3a5f);
+                if (!hexStr && key === 'horizonColor') return new THREE.Color(0xffffff);
+                if (!hexStr && key === 'skyColor') return new THREE.Color(0x87ceeb);
+                if (!hexStr) return new THREE.Color(0x2d4c1a);
+                return new THREE.Color(parseInt(hexStr.replace('#', '0x')));
+            };
+            let tintColor = getCol(horizonColorKey);
+            
+            meshes.forEach(mesh => {
+                let instMesh = new THREE.InstancedMesh(mesh.geometry, mesh.material.clone(), count);
+                let dummy = new THREE.Object3D();
+                
+                if (instMesh.material.color) {
+                    instMesh.material.color.lerp(tintColor, 0.4); // 40% tint
+                }
+                
+                for(let i = 0; i < count; i++) {
+                    let angle = angleStart + (Math.random() * (angleEnd - angleStart));
+                    let radius = 480 + (Math.random() * 80); // Place between 480m and 560m
+                    
+                    let s = 0.8 + Math.random() * 0.6; // Scale variance
+                    let rY = Math.random() * Math.PI * 2;
+                    
+                    dummy.position.set(Math.cos(angle) * radius, -0.1, Math.sin(angle) * radius);
+                    dummy.rotation.set(0, rY, 0);
+                    dummy.scale.set(s, s, s);
+                    dummy.updateMatrix();
+                    instMesh.setMatrixAt(i, dummy.matrix);
+                }
+                instMesh.instanceMatrix.needsUpdate = true;
+                window.sceneryGroup.add(instMesh);
+            });
+        };
+        
+        let cN = window.surroundConfig.N;
+        let cE = window.surroundConfig.E;
+        let cS = window.surroundConfig.S;
+        let cW = window.surroundConfig.W;
+        
+        buildQuadrant(window.surroundConfig.sceneryN, Math.PI * 1.25, Math.PI * 1.75, cN); // North
+        buildQuadrant(window.surroundConfig.sceneryE, Math.PI * 1.75, Math.PI * 2.25, cE); // East
+        buildQuadrant(window.surroundConfig.sceneryS, Math.PI * 0.25, Math.PI * 0.75, cS); // South
+        buildQuadrant(window.surroundConfig.sceneryW, Math.PI * 0.75, Math.PI * 1.25, cW); // West
+        
+        scene.add(window.sceneryGroup);
+    };
+
+    window.populateSceneryDropdowns = function() {
+        let selects = document.querySelectorAll('.scenery-dropdown');
+        if (selects.length === 0 || typeof window.ASSET_REGISTRY === 'undefined') return;
+        
+        // Build options HTML from registry
+        let optionsHtml = '<option value="NONE">❌ No 3D Scenery</option>';
+        for (let key in window.ASSET_REGISTRY) {
+            let a = window.ASSET_REGISTRY[key];
+            if (a.isCloud || key.startsWith('R_')) {
+                // Determine icon
+                let ic = a.icon || '📦';
+                if (a.cat === 'buildings') ic = '🏙️';
+                if (a.cat === 'nature') ic = '🌲';
+                optionsHtml += `<option value="${key}">${ic} ${key}</option>`;
+            }
+        }
+        
+        selects.forEach(sel => {
+            let currentVal = sel.value;
+            sel.innerHTML = optionsHtml;
+            sel.value = currentVal;
+            if (!sel.value) sel.value = 'NONE';
+        });
+    };
+    
     window.setSurrounding = function() {
         // Legacy function, replaced by updateSurroundColors
     };
@@ -2682,10 +2836,16 @@
             if (p === 'OCEAN' || p === 'LAKE') mapKey = 'oceanColor';
             else if (p === 'SAND') mapKey = 'wasteColor';
             
-            window.surroundConfig = { N: mapKey, E: mapKey, S: mapKey, W: mapKey };
+            window.surroundConfig = { N: mapKey, E: mapKey, S: mapKey, W: mapKey, sceneryN: 'NONE', sceneryE: 'NONE', sceneryS: 'NONE', sceneryW: 'NONE' };
         } else {
-            window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' };
+            window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor', sceneryN: 'NONE', sceneryE: 'NONE', sceneryS: 'NONE', sceneryW: 'NONE' };
         }
+        
+        // Ensure scenery properties exist
+        if (!window.surroundConfig.sceneryN) window.surroundConfig.sceneryN = 'NONE';
+        if (!window.surroundConfig.sceneryE) window.surroundConfig.sceneryE = 'NONE';
+        if (!window.surroundConfig.sceneryS) window.surroundConfig.sceneryS = 'NONE';
+        if (!window.surroundConfig.sceneryW) window.surroundConfig.sceneryW = 'NONE';
         
         // Update UI
         let elN = document.getElementById('surr-N');
@@ -2694,6 +2854,14 @@
             document.getElementById('surr-E').value = window.surroundConfig.E;
             document.getElementById('surr-S').value = window.surroundConfig.S;
             document.getElementById('surr-W').value = window.surroundConfig.W;
+            
+            let scN = document.getElementById('scenery-N');
+            if (scN) {
+                document.getElementById('scenery-N').value = window.surroundConfig.sceneryN;
+                document.getElementById('scenery-E').value = window.surroundConfig.sceneryE;
+                document.getElementById('scenery-S').value = window.surroundConfig.sceneryS;
+                document.getElementById('scenery-W').value = window.surroundConfig.sceneryW;
+            }
         }
         
         window.updateSurroundColors();
