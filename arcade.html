@@ -3917,7 +3917,8 @@
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, 
             tees: h.tees,
-            flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
+            flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
+            panorama: h.panorama || null
         }));
         
         localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
@@ -3947,7 +3948,8 @@
         
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
-            par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null
+            par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
+            panorama: h.panorama || null
         }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
         
@@ -4276,6 +4278,7 @@
                         let hSync = arr.holes[i];
                         let h = courseHoles[i];
                         h.par = hSync.par || 4;
+                        if(hSync.panorama) h.panorama = hSync.panorama;
                         if(hSync.tee) { h.tees.yellow = {x: hSync.tee.x, y: hSync.tee.y, z: hSync.tee.z}; }
                         if(hSync.tees) {
                             for(let tType in hSync.tees) {
@@ -4344,6 +4347,9 @@
                     if(arr.trees && Array.isArray(arr.trees)) {
                         arr.trees.forEach(t => createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c, t.tc));
                     }
+                    
+                    // Restore panorama for current hole
+                    if(typeof window.restorePanorama === 'function') window.restorePanorama();
                 }
             } catch(e) {
                 console.error("Parse error", e);
