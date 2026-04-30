@@ -1411,6 +1411,8 @@
         // 1. Sky gradient
         let grad = skyCtx.createLinearGradient(0, 0, 0, 256);
         grad.addColorStop(0, `rgb(${p.skyTop[0]|0},${p.skyTop[1]|0},${p.skyTop[2]|0})`);
+        // Push the bottom color up to the horizon (approx 0.5 to 0.6) so it perfectly matches the fog
+        grad.addColorStop(0.55, `rgb(${p.skyBot[0]|0},${p.skyBot[1]|0},${p.skyBot[2]|0})`);
         grad.addColorStop(1, `rgb(${p.skyBot[0]|0},${p.skyBot[1]|0},${p.skyBot[2]|0})`);
         skyCtx.fillStyle = grad;
         skyCtx.fillRect(0, 0, 2, 256);
@@ -2345,7 +2347,7 @@
     scene.add(plane);
     
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
-    let surroundSize = 5000;
+    let surroundSize = 20000;
     let surroundGeo = new THREE.PlaneGeometry(surroundSize, surroundSize);
     let surroundMat = new THREE.MeshLambertMaterial({ color: 0x2d4c1a }); // Dark fescue green
     let surroundPlane = new THREE.Mesh(surroundGeo, surroundMat);
