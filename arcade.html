@@ -734,6 +734,7 @@
             <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding</label>
                 <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:3px; margin-top:4px;">
+                    <button class="surr-btn" onclick="setSurrounding('OFF', this)" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🚫 Off</button>
                     <button class="surr-btn" onclick="setSurrounding('GRASS', this)" style="background:#2d4c1a; color:#a3e635; border:1px solid #2d4c1a; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌿 Grass</button>
                     <button class="surr-btn" onclick="setSurrounding('OCEAN', this)" style="background:#1e3a5f; color:#38bdf8; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌊 Ocean</button>
                     <button class="surr-btn" onclick="setSurrounding('LAKE', this)" style="background:#2a6b7a; color:#67e8f9; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">💧 Lake</button>
@@ -2451,18 +2452,22 @@
     window.currentSurrounding = 'GRASS';
     
     window.setSurrounding = function(preset, btn, customColor) {
-        let color;
-        if(preset === 'CUSTOM' && customColor) {
+        let color = 0x2d4c1a;
+        if(preset === 'OFF') {
+            window.currentSurrounding = 'OFF';
+            window.customSurroundColor = null;
+        } else if(preset === 'CUSTOM' && customColor) {
             color = parseInt(customColor.replace('#', '0x'));
             window.currentSurrounding = 'CUSTOM';
             window.customSurroundColor = customColor;
-        } else {
+        } else if(SURROUND_PRESETS[preset]) {
             color = SURROUND_PRESETS[preset].color;
             window.currentSurrounding = preset;
             window.customSurroundColor = null;
         }
         
         surroundMat.color.setHex(color);
+        surroundPlane.visible = (preset !== 'OFF');
         
         // Highlight active button
         document.querySelectorAll('.surr-btn').forEach(b => {
@@ -2483,12 +2488,16 @@
         let hole = courseHoles[currentHoleIndex];
         if(hole && hole.surrounding) {
             let s = hole.surrounding;
-            if(s.preset === 'CUSTOM' && s.customColor) {
+            if(s.preset === 'OFF') {
+                surroundPlane.visible = false;
+            } else if(s.preset === 'CUSTOM' && s.customColor) {
                 surroundMat.color.setHex(parseInt(s.customColor.replace('#', '0x')));
+                surroundPlane.visible = true;
                 let cp = document.getElementById('surr-custom-color');
                 if(cp) cp.value = s.customColor;
             } else if(SURROUND_PRESETS[s.preset]) {
                 surroundMat.color.setHex(SURROUND_PRESETS[s.preset].color);
+                surroundPlane.visible = true;
             }
             window.currentSurrounding = s.preset;
             window.customSurroundColor = s.customColor;
@@ -2497,6 +2506,7 @@
             document.querySelectorAll('.surr-btn').forEach(b => { b.style.borderColor = '#334155'; b.style.outline = 'none'; });
         } else {
             surroundMat.color.setHex(0x2d4c1a);
+            surroundPlane.visible = true;
             window.currentSurrounding = 'GRASS';
         }
     };
