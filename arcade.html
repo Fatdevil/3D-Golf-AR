@@ -418,7 +418,7 @@
     </div>
 
     <!-- GREEN READ PANEL (visible in PLAY/TEST mode) -->
-    <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:10px 12px; z-index:11; backdrop-filter:blur(8px); min-width:140px;">
+    <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:10px 12px; z-index:11; backdrop-filter:blur(8px); min-width:140px; pointer-events:auto;">
         <div style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; text-align:center;">📖 Green Read</div>
         <div style="display:flex; flex-direction:column; gap:5px;">
             <button id="gr-slope" onclick="window.toggleSlopeOverlay()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:left; transition:all 0.2s;">📊 Slope</button>
@@ -6518,7 +6518,7 @@
         if(toolHints) toolHints.style.display = mode === 'BUILD' ? 'block' : 'none';
         
         let hamburgerBtn = document.getElementById('btn-hamburger');
-        if (hamburgerBtn) hamburgerBtn.style.display = mode === 'PLAY' ? 'none' : 'block';
+        if (hamburgerBtn) hamburgerBtn.style.display = (mode === 'PLAY' || mode === 'TEST') ? 'none' : 'block';
         
         let pb = document.getElementById('player-banner');
         if (pb) pb.style.top = mode === 'PLAY' ? '20px' : '70px';
@@ -6558,6 +6558,17 @@
             if (testHole && testHole.flagMesh) {
                 window.pinMesh = testHole.flagMesh;
             }
+            
+            // Set playingHoleIndex so minimap/green-read work
+            playingHoleIndex = currentHoleIndex;
+            
+            // Show the SHOOT controls (play-tools) so user can fire shots
+            let ptTools = document.getElementById('play-tools');
+            if (ptTools) ptTools.style.display = 'flex';
+            
+            // Show minimap
+            let mmC = document.getElementById('minimap-container');
+            if (mmC) mmC.style.display = 'block';
             
             let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red) : null;
             if(tee) {
