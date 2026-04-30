@@ -641,6 +641,12 @@
                 <div id="pal-semi" class="palette-btn" style="background:#6b9e3d; position:relative;" onclick="setPaletteColor('semi', this)">Semi-Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('semi')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
                 <div id="pal-rough" class="palette-btn" style="background:#4a782b; position:relative;" onclick="setPaletteColor('rough', this)">Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('rough')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
                 <div id="pal-fescue" class="palette-btn" style="background:#2d4c1a; position:relative;" onclick="setPaletteColor('fescue', this)">Fescue <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fescue')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                
+                <div style="margin-top:6px; margin-bottom:2px; border-top:1px solid #334155; padding-top:6px;">
+                    <div style="color:#64748b; font-size:9px; font-weight:bold; margin-bottom:4px; text-transform:uppercase;">Surroundings</div>
+                    <div id="pal-ocean" class="palette-btn" style="background:#1e3a5f; color:#cbd5e1; position:relative;" onclick="setPaletteColor('ocean', this)">🌊 Ocean <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('ocean')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                    <div id="pal-horizon" class="palette-btn" style="background:#ffffff; color:#0f172a; position:relative;" onclick="setPaletteColor('horizon', this)">🌫️ Horizon <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('horizon')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                </div>
             </div>
             <div style="margin-top:8px; border-top:1px solid #334155; padding-top:8px;">
                 <button id="btn-auto-rough" onclick="window.executeAutoRough()" style="width:100%; background: linear-gradient(135deg, #4a782b 0%, #6b9e3d 50%, #2d4c1a 100%); color:#fff; font-weight:bold; padding:10px; border-radius:6px; border:none; cursor:pointer; font-size:11px; letter-spacing:0.5px; transition: all 0.2s;">🌿 AUTO-ROUGH GRADIENT</button>
@@ -760,6 +766,8 @@
                                 <option value="fescueColor" selected>🌲 Fescue</option>
                                 <option value="waterColor">💧 Water</option>
                                 <option value="oceanColor">🌊 Ocean</option>
+                                <option value="horizonColor">🌫️ Horizon</option>
+                                <option value="skyColor">⛅ Sky</option>
                             </select>
                         </div>
                         <div>
@@ -770,6 +778,8 @@
                                 <option value="fescueColor" selected>🌲 Fescue</option>
                                 <option value="waterColor">💧 Water</option>
                                 <option value="oceanColor">🌊 Ocean</option>
+                                <option value="horizonColor">🌫️ Horizon</option>
+                                <option value="skyColor">⛅ Sky</option>
                             </select>
                         </div>
                         <div>
@@ -780,6 +790,8 @@
                                 <option value="fescueColor" selected>🌲 Fescue</option>
                                 <option value="waterColor">💧 Water</option>
                                 <option value="oceanColor">🌊 Ocean</option>
+                                <option value="horizonColor">🌫️ Horizon</option>
+                                <option value="skyColor">⛅ Sky</option>
                             </select>
                         </div>
                         <div>
@@ -790,6 +802,8 @@
                                 <option value="fescueColor" selected>🌲 Fescue</option>
                                 <option value="waterColor">💧 Water</option>
                                 <option value="oceanColor">🌊 Ocean</option>
+                                <option value="horizonColor">🌫️ Horizon</option>
+                                <option value="skyColor">⛅ Sky</option>
                             </select>
                         </div>
                     </div>
@@ -1843,7 +1857,9 @@
         semiColor: '#6b9e3d',
         roughColor: '#4a782b',
         fescueColor: '#2d4c1a',
-        waterColor: '#38bdf8'
+        waterColor: '#38bdf8',
+        oceanColor: '#1e3a5f',
+        horizonColor: '#ffffff'
     };
 
     window.openColorPicker = function(materialKey) {
@@ -1967,7 +1983,9 @@
                 semiColor: config.semiColor || window.CURRENT_BIOME_CONFIG.semiColor,
                 roughColor: config.roughColor || window.CURRENT_BIOME_CONFIG.roughColor,
                 fescueColor: config.fescueColor || window.CURRENT_BIOME_CONFIG.fescueColor,
-                waterColor: config.waterColor || window.CURRENT_BIOME_CONFIG.waterColor
+                waterColor: config.waterColor || window.CURRENT_BIOME_CONFIG.waterColor,
+                oceanColor: config.oceanColor || window.CURRENT_BIOME_CONFIG.oceanColor || '#1e3a5f',
+                horizonColor: config.horizonColor || window.CURRENT_BIOME_CONFIG.horizonColor || '#ffffff'
             };
             
             // Uppdatera 3D-scenen
@@ -2619,13 +2637,18 @@
         }
         
         let getCol = (key) => {
-            if(key === 'oceanColor') {
+            let hexStr = window.CURRENT_BIOME_CONFIG[key];
+            if (!hexStr && key === 'oceanColor') {
+                // Fallback for old saves missing oceanColor
                 let wHexStr = window.CURRENT_BIOME_CONFIG.waterColor || '#38bdf8';
                 let wc = new THREE.Color(parseInt(wHexStr.replace('#', '0x')));
                 wc.lerp(new THREE.Color(0x0f172a), 0.5); // Darken 50%
                 return wc;
             }
-            let hexStr = window.CURRENT_BIOME_CONFIG[key] || '#2d4c1a';
+            if (!hexStr && key === 'horizonColor') hexStr = '#ffffff';
+            if (!hexStr && key === 'skyColor') hexStr = '#87ceeb';
+            if (!hexStr) hexStr = '#2d4c1a'; // Ultimate fallback
+
             return new THREE.Color(parseInt(hexStr.replace('#', '0x')));
         };
         
