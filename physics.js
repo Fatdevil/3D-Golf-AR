@@ -324,16 +324,23 @@ window.GolfPhysics = (function() {
         let vZ = speedMS * Math.sin(launchRads);
         let vel = [vX, vY, vZ];
 
-        // Start spinnvektor (ROTERAD med azimuth för korrekt Magnus-kraft i alla riktningar)
-        // Backspin-axeln ska vara VINKELRÄT mot flygriktningen i XY-planet.
-        // Om bollen flyger framåt (azim=0): backspin kring X-axeln.
-        // Om bollen flyger åt sidan (azim=-90°): backspin kring Y-axeln.
-        let sBackspin = wRads * Math.cos(spinAxisRads);  // backspin-komponent (rpm → rad/s)
-        let sSidespin = wRads * Math.sin(spinAxisRads);  // sidespin-komponent
+        // Start spinnvektor (KOMPLETT rotation med azimuth)
+        // Backspin-axeln: VINKELRÄT mot flygriktning i XY-planet → ger vertikal Magnus-lyft.
+        // Sidespin-axeln: PARALLELL med flygriktning i XY-planet → ger lateral Magnus-krökning.
+        // Båda måste roteras med azimuth så att Magnus-krafter alltid är relativa till skottets riktning.
+        let wRads = spinFinal * 2 * Math.PI / 60;       // rpm → rad/s
+        let spinAxisRads = spinAxisIn * Math.PI / 180;   // deg → rad
+        let sBackspin = wRads * Math.cos(spinAxisRads);  // backspin-komponent
+        let sSidespin = wRads * Math.sin(spinAxisRads);  // sidespin-komponent (draw/fade)
         
-        let sX = sBackspin * Math.cos(azimRads);         // Roterad backspin X
-        let sY = -sBackspin * Math.sin(azimRads);        // Roterad backspin Y
-        let sZ = sSidespin;                               // Sidespin förblir kring Z (vertikal axel)
+        // Backspin: axel vinkelrät mot flygriktning i XY → ger vertikal Magnus-lyft
+        let sX =  sBackspin * Math.cos(azimRads);
+        let sY = -sBackspin * Math.sin(azimRads);
+        
+        // Sidespin: behålls kring Z-axeln (vertikal) — matchar originalkoden.
+        // TODO: Sidespin kring Z ger korrekt kurva vid VISSA azimuth men inte alla.
+        // Fullständig sidespin-rotation kräver dedikerat regressionstestning med Trackman-data.
+        let sZ = sSidespin;
         let spin = [sX, sY, sZ];
         
         let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;
