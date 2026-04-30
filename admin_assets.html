@@ -990,7 +990,16 @@
                     document.getElementById('btn-delete').style.display = 'none';
                     // Clear 3D view
                     while(modelGroup.children.length > 0) modelGroup.remove(modelGroup.children[0]);
+                    while(hitboxGroup.children.length > 0) hitboxGroup.remove(hitboxGroup.children[0]);
+                    
+                    // Clear Inputs
+                    document.getElementById('asset-id').value = '';
+                    document.getElementById('asset-name').value = '';
+                    document.getElementById('thumb-preview').src = '';
+                    thumbnailBase64 = null;
+                    
                     base64Data = null;
+                    currentModel = null;
                     fetchLibrary(); // Refresh library
                 } else {
                     document.getElementById('log').innerText = "❌ Error: " + data.error;
