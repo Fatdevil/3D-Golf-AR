@@ -3320,8 +3320,7 @@
         transparent: true, 
         opacity: 0.95, 
         alphaMap: waterTex, 
-        alphaTest: 0.01, 
-        depthWrite: true 
+        depthWrite: false // changed to false to avoid z-fighting artifacts with transparent edges
     });
     const waterMesh = new THREE.Mesh(waterGeo, waterMat);
     waterMesh.rotation.x = -Math.PI / 2;
