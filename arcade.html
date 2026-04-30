@@ -2811,8 +2811,10 @@
                     let sRand3 = seededRandom(i * 10 + 3 + meshIndex);
                     
                     let angle = angleStart + (sRand1 * (angleEnd - angleStart));
-                    // Place between 650m and 850m (further back from playable area)
-                    let radius = 650 + (sRand2 * 200); 
+                    // Push radius further back dynamically based on object size
+                    let tHeight = window.ASSET_REGISTRY[assetId].targetHeight || 12.0;
+                    let baseRadius = 650 + (tHeight * 0.8); 
+                    let radius = baseRadius + (sRand2 * 200); 
                     
                     let s = 0.8 + sRand3 * 0.6; // Scale variance
                     let rY = sRand1 * Math.PI * 2;
