@@ -2733,111 +2733,94 @@
         let numSamples = Math.max(100, splinePoints.length * 30);
         let densePts = curve.getPoints(numSamples);
         
-        // Get terrain height at each sample to compute smooth target heights
-        let targetHeights = [];
+        // Snap spline points to terrain height
         for(let pt of densePts) {
             let surf = localGetTerrainAt(pt.x, -pt.z);
-            targetHeights.push(surf ? surf.z : 0);
+            pt.y = surf ? surf.z : 0;
         }
         
-        // Smooth the target heights (moving average) for gentle slopes
-        let smoothed = new Float32Array(targetHeights.length);
-        let kernelSize = 7;
-        for(let i = 0; i < targetHeights.length; i++) {
-            let sum = 0, count = 0;
-            for(let k = -kernelSize; k <= kernelSize; k++) {
-                let idx = Math.max(0, Math.min(targetHeights.length-1, i + k));
-                sum += targetHeights[idx];
-                count++;
+        // Smooth heights along path (moving average)
+        let smoothedY = [];
+        let kernel = 7;
+        for(let i = 0; i < densePts.length; i++) {
+            let sum = 0, cnt = 0;
+            for(let k = -kernel; k <= kernel; k++) {
+                let j = Math.max(0, Math.min(densePts.length-1, i + k));
+                sum += densePts[j].y; cnt++;
             }
-            smoothed[i] = sum / count;
+            smoothedY.push(sum / cnt);
         }
         
-        // 1. SCULPT: Flatten terrain along the corridor
+        // 1. SCULPT: For each terrain vertex, find closest point on curve
         let positions = planeGeo.attributes.position.array;
         let step = TERRAIN_SIZE / TERRAIN_SEGS;
+        let changed = false;
         
-        // For each dense point, flatten terrain within pathWidth
-        for(let i = 0; i < densePts.length; i++) {
-            let px = densePts[i].x;
-            let pz = densePts[i].z;
-            let targetY = smoothed[i];
-            
-            // Get tangent for perpendicular direction
-            let tangent = curve.getTangentAt(i / densePts.length);
-            
-            // Grid bounding box
-            let gxMin = Math.max(0, Math.floor((px - halfW - 5 + TERRAIN_SIZE/2) / step));
-            let gxMax = Math.min(TERRAIN_SEGS, Math.ceil((px + halfW + 5 + TERRAIN_SIZE/2) / step));
-            let gzMin = Math.max(0, Math.floor((pz - halfW - 5 + TERRAIN_SIZE/2) / step));
-            let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((pz + halfW + 5 + TERRAIN_SIZE/2) / step));
-            
-            for(let gz = gzMin; gz <= gzMax; gz++) {
-                for(let gx = gxMin; gx <= gxMax; gx++) {
+        // Build path bounding box for early exit
+        let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
+        for(let pt of densePts) {
+            if(pt.x < pathMinX) pathMinX = pt.x;
+            if(pt.x > pathMaxX) pathMaxX = pt.x;
+            if(pt.z < pathMinZ) pathMinZ = pt.z;
+            if(pt.z > pathMaxZ) pathMaxZ = pt.z;
+        }
+        let margin = halfW + 10;
+        
+        let gxStart = Math.max(0, Math.floor((pathMinX - margin + TERRAIN_SIZE/2) / step));
+        let gxEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxX + margin + TERRAIN_SIZE/2) / step));
+        let gzStart = Math.max(0, Math.floor((pathMinZ - margin + TERRAIN_SIZE/2) / step));
+        let gzEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + TERRAIN_SIZE/2) / step));
+        
+        // Multiple passes for convergence
+        for(let pass = 0; pass < 4; pass++) {
+            for(let gz = gzStart; gz <= gzEnd; gz++) {
+                for(let gx = gxStart; gx <= gxEnd; gx++) {
                     let idx = gz * (TERRAIN_SEGS+1) + gx;
-                    let vx = positions[idx*3];
-                    let vz = -positions[idx*3+1]; // World Z = -local Y
+                    let vx = positions[idx*3];       // local X = world X
+                    let vz = -positions[idx*3+1];    // local Y = -world Z
                     
-                    let distX = vx - px;
-                    let distZ = vz - pz;
-                    let dist = Math.sqrt(distX*distX + distZ*distZ);
+                    // Find closest dense point
+                    let bestDist = Infinity;
+                    let bestIdx = 0;
+                    for(let i = 0; i < densePts.length; i++) {
+                        let d = (vx - densePts[i].x)**2 + (vz - densePts[i].z)**2;
+                        if(d < bestDist) { bestDist = d; bestIdx = i; }
+                    }
+                    bestDist = Math.sqrt(bestDist);
                     
-                    if(dist < halfW + 5) {
+                    if(bestDist < halfW + 5) {
+                        let targetH = smoothedY[bestIdx];
+                        let currentH = positions[idx*3+2];
+                        
                         let influence;
-                        if(dist < halfW) {
-                            influence = 1.0; // Full flatten inside path
+                        if(bestDist < halfW) {
+                            influence = 1.0;
                         } else {
-                            // Smooth falloff edge (5m transition)
-                            influence = 1.0 - ((dist - halfW) / 5.0);
+                            influence = 1.0 - ((bestDist - halfW) / 5.0);
                             influence = Math.max(0, influence * influence * (3 - 2 * influence));
                         }
                         
-                        let currentH = positions[idx*3+2];
-                        positions[idx*3+2] = currentH + (targetY - currentH) * influence * 0.3;
+                        positions[idx*3+2] = currentH + (targetH - currentH) * influence * 0.5;
+                        changed = true;
                     }
                 }
             }
         }
         
-        // Multiple passes for smoother result
-        for(let pass = 0; pass < 3; pass++) {
-            for(let i = 0; i < densePts.length; i++) {
-                let px = densePts[i].x;
-                let pz = densePts[i].z;
-                let targetY = smoothed[i];
-                
-                let gxMin = Math.max(0, Math.floor((px - halfW + TERRAIN_SIZE/2) / step));
-                let gxMax = Math.min(TERRAIN_SEGS, Math.ceil((px + halfW + TERRAIN_SIZE/2) / step));
-                let gzMin = Math.max(0, Math.floor((pz - halfW + TERRAIN_SIZE/2) / step));
-                let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((pz + halfW + TERRAIN_SIZE/2) / step));
-                
-                for(let gz = gzMin; gz <= gzMax; gz++) {
-                    for(let gx = gxMin; gx <= gxMax; gx++) {
-                        let idx = gz * (TERRAIN_SEGS+1) + gx;
-                        let vx = positions[idx*3];
-                        let vz = -positions[idx*3+1];
-                        let dist = Math.sqrt((vx-px)**2 + (vz-pz)**2);
-                        
-                        if(dist < halfW) {
-                            positions[idx*3+2] += (targetY - positions[idx*3+2]) * 0.4;
-                        }
-                    }
-                }
-            }
+        if(changed) {
+            planeGeo.attributes.position.needsUpdate = true;
+            planeGeo.computeVertexNormals();
+            planeGeo.computeBoundingBox();
+            planeGeo.computeBoundingSphere();
+            snapObjectsToGround();
         }
-        
-        planeGeo.attributes.position.needsUpdate = true;
-        planeGeo.computeVertexNormals();
-        planeGeo.computeBoundingBox();
-        planeGeo.computeBoundingSphere();
         
         // 2. PAINT: Draw fairway color along the path
         let fairwayColor = window.CURRENT_BIOME_CONFIG.fairwayColor;
         pCtx.strokeStyle = fairwayColor;
         pCtx.lineCap = 'round';
         pCtx.lineJoin = 'round';
-        let canvasW = (pathWidth / TERRAIN_SIZE) * 4096;
-        pCtx.lineWidth = canvasW;
+        pCtx.lineWidth = (pathWidth / TERRAIN_SIZE) * 4096;
         
         pCtx.beginPath();
         for(let i = 0; i < densePts.length; i++) {
@@ -2854,7 +2837,6 @@
         // Refresh overlays
         if(window.slopeOverlayActive) window.updateSlopeOverlay();
         if(window.contourLinesActive) window.updateContourLines();
-        snapObjectsToGround();
         
         clearSpline();
     };
