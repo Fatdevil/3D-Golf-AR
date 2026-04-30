@@ -2508,15 +2508,15 @@
         let dz = (hD - hU) / (2 * step);
         let slopePct = Math.sqrt(dx*dx + dz*dz) * 100;
         
-        // Biome from canvas
+        // Biome from canvas — read directly from paint canvas for real-time accuracy
         let biome = 'ROUGH';
-        if(window.terrainBiomeData) {
+        try {
             let cX = Math.floor(((hitPoint.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
             let cZ = Math.floor(((hitPoint.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
             cX = Math.max(0, Math.min(4095, cX));
             cZ = Math.max(0, Math.min(4095, cZ));
-            let pIdx = (cZ * 4096 + cX) * 4;
-            let r = window.terrainBiomeData[pIdx], g = window.terrainBiomeData[pIdx+1], b = window.terrainBiomeData[pIdx+2];
+            let pixelData = pCtx.getImageData(cX, cZ, 1, 1).data;
+            let r = pixelData[0], g = pixelData[1], b = pixelData[2];
             function cDist(r1,g1,b1,r2,g2,b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
             let cfg = window.CURRENT_BIOME_CONFIG;
             let best = 99999;
@@ -2528,7 +2528,7 @@
                 let d = cDist(r,g,b,cr,cg,cb);
                 if(d < best) { best = d; biome = names[key]; }
             }
-        }
+        } catch(e) { /* pCtx not ready yet */ }
         
         let elH = document.getElementById('elev-height');
         let elS = document.getElementById('elev-slope');
