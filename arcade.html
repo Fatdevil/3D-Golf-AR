@@ -1940,8 +1940,8 @@
             }
             
             // Uppdatera vatten
-            if (typeof waterMaterial !== 'undefined' && waterMaterial) {
-                waterMaterial.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.waterColor.replace('#','0x')));
+            if (typeof window.waterMat !== 'undefined' && window.waterMat) {
+                window.waterMat.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.waterColor.replace('#','0x')));
             }
             
             // Uppdatera HTML-paletten
@@ -3315,14 +3315,14 @@
         window.waterBaseZ[i] = -99.0;
     }
     
-    const waterMat = new THREE.MeshLambertMaterial({ 
+    window.waterMat = new THREE.MeshLambertMaterial({ 
         color: 0x38bdf8, 
         transparent: true, 
         opacity: 0.95, 
         alphaMap: waterTex, 
         depthWrite: false // changed to false to avoid z-fighting artifacts with transparent edges
     });
-    const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+    const waterMesh = new THREE.Mesh(waterGeo, window.waterMat);
     waterMesh.rotation.x = -Math.PI / 2;
     waterMesh.receiveShadow = true;
     scene.add(waterMesh);
@@ -4374,8 +4374,8 @@
                             scene.background = new THREE.Color(window.CURRENT_BIOME_CONFIG.skyColor);
                             if (scene.fog) scene.fog.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.skyColor.replace('#','0x')));
                         }
-                        if (typeof waterMaterial !== 'undefined' && waterMaterial) {
-                            waterMaterial.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.waterColor.replace('#','0x')));
+                        if (typeof window.waterMat !== 'undefined' && window.waterMat) {
+                            window.waterMat.color.setHex(parseInt(window.CURRENT_BIOME_CONFIG.waterColor.replace('#','0x')));
                         }
                         
                         // Uppdatera material palettens UI
