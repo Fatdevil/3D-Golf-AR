@@ -1525,7 +1525,10 @@
         let fogMult = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.fogDensity) ? window.CURRENT_BIOME_CONFIG.fogDensity : 1.0;
         scene.fog.color.setRGB(p.fogColor[0]/255, p.fogColor[1]/255, p.fogColor[2]/255);
         scene.fog.near = p.fogNear / fogMult;
-        scene.fog.far = p.fogFar / fogMult;
+        // Extend fog.far to cover scenery distance (so mountains aren't hidden)
+        let baseFogFar = p.fogFar / fogMult;
+        let sceneryMaxDist = window._sceneryMaxRadius || 0;
+        scene.fog.far = Math.max(baseFogFar, sceneryMaxDist * 1.3);
         
         // Surround plane color is now handled by the Surrounding system (Grass/Ocean/etc)
         // and natural THREE.Fog handles the horizon blending automatically.
@@ -1839,7 +1842,7 @@
         }
     }
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000); // Rendering up to 4000m
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 15000); // Extended for distant scenery (mountains etc)00m
     // Camera just behind and above ball
     camera.position.set(0, 2, 5); 
 
@@ -2866,8 +2869,9 @@
                     let sRand3 = seededRandom(i * 10 + 3 + meshIndex);
                     
                     let angle = angleStart + (sRand1 * (angleEnd - angleStart));
-                    let baseRadius = 650 + (tHeight * 0.8); 
-                    let radius = baseRadius + (sRand2 * 200); 
+                    // Scale radius based on model height: small trees close, big mountains FAR
+                    let baseRadius = Math.max(650, tHeight * 3); 
+                    let radius = baseRadius + (sRand2 * baseRadius * 0.3); 
                     
                     let sVar = 0.8 + sRand3 * 0.6;
                     let rY = sRand1 * Math.PI * 2;
@@ -2900,12 +2904,27 @@
         let cS = window.surroundConfig.S;
         let cW = window.surroundConfig.W;
         
+        // Track max scenery distance for dynamic fog extension
+        let maxTH = 0;
+        [window.surroundConfig.sceneryN, window.surroundConfig.sceneryE, window.surroundConfig.sceneryS, window.surroundConfig.sceneryW].forEach(id => {
+            if (id && id !== 'NONE' && window.ASSET_REGISTRY[id]) {
+                let h = window.ASSET_REGISTRY[id].targetHeight || 12;
+                if (h > maxTH) maxTH = h;
+            }
+        });
+        window._sceneryMaxRadius = Math.max(650, maxTH * 3) * 1.3;
+        
         buildQuadrant(window.surroundConfig.sceneryN, Math.PI * 1.25, Math.PI * 1.75, cN, window.surroundConfig.sceneryCntN); // North
         buildQuadrant(window.surroundConfig.sceneryE, Math.PI * 1.75, Math.PI * 2.25, cE, window.surroundConfig.sceneryCntE); // East
         buildQuadrant(window.surroundConfig.sceneryS, Math.PI * 0.25, Math.PI * 0.75, cS, window.surroundConfig.sceneryCntS); // South
         buildQuadrant(window.surroundConfig.sceneryW, Math.PI * 0.75, Math.PI * 1.25, cW, window.surroundConfig.sceneryCntW); // West
         
         scene.add(window.sceneryGroup);
+        
+        // Refresh fog to account for new scenery distance
+        if (window.setTimeOfDay && window.currentTimeOfDay !== undefined) {
+            window.setTimeOfDay(window.currentTimeOfDay);
+        }
     };
 
     window.populateSceneryDropdowns = function() {
