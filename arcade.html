@@ -207,6 +207,12 @@
       background: rgba(15,23,42,0.8); padding: 8px 15px; border-radius: 8px;
       color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
   }
+  #elevation-hud {
+      position: absolute; bottom: 55px; left: 50%; transform: translateX(-50%);
+      background: rgba(15,23,42,0.92); padding: 8px 18px; border-radius: 10px;
+      pointer-events: none; border: 1px solid #475569; z-index: 100;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  }
   
   #global-loader {
       position: fixed;
@@ -684,11 +690,36 @@
             <input type="range" id="winddir-slider" min="0" max="359" value="0" step="1" oninput="updateWindDirPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
         </div>
 
+        <!-- Terrain Analysis Panel -->
+        <div id="terrain-analysis-group" class="prop-panel" style="display:flex;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🗺️ Terrain Analysis</label>
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                <button id="btn-slope-overlay" onclick="window.toggleSlopeOverlay()" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px 10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px; text-align:left; transition:all 0.2s;">
+                    📊 Slope Gradient
+                </button>
+                <button id="btn-contour-lines" onclick="window.toggleContourLines()" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px 10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px; text-align:left; transition:all 0.2s;">
+                    🏔️ Contour Lines
+                </button>
+            </div>
+            <div style="color:#64748b; font-size:9px; margin-top:4px;">Green &lt;3% · Yellow 3-8% · Red &gt;8%</div>
+        </div>
+
     </div>
 
     <!-- Tool hint i botten -->
     <div id="tool-hints">
         Hold Left: <b>Raise Ground</b> | Hold Right: <b>Lower Ground</b>
+    </div>
+    
+    <!-- Terrain Elevation HUD -->
+    <div id="elevation-hud">
+        <div style="display:flex; gap:15px; align-items:center;">
+            <div><span style="color:#94a3b8; font-size:9px; text-transform:uppercase; display:block;">Elevation</span><span id="elev-height" style="color:#4ade80; font-size:16px; font-weight:900;">0.0m</span></div>
+            <div style="width:1px; height:25px; background:#475569;"></div>
+            <div><span style="color:#94a3b8; font-size:9px; text-transform:uppercase; display:block;">Slope</span><span id="elev-slope" style="color:#fbbf24; font-size:16px; font-weight:900;">0.0%</span></div>
+            <div style="width:1px; height:25px; background:#475569;"></div>
+            <div><span style="color:#94a3b8; font-size:9px; text-transform:uppercase; display:block;">Surface</span><span id="elev-biome" style="color:#38bdf8; font-size:11px; font-weight:700;">ROUGH</span></div>
+        </div>
     </div>
     
     <div class="controls" id="play-controls">
@@ -2239,6 +2270,242 @@
     window.minimapMat = planeMat.clone();
     window.minimapMat.extensions = { derivatives: true };
     window.heatmapShaderRef = null;
+    
+    // === SLOPE OVERLAY SYSTEM ===
+    let slopeOverlayGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
+    slopeOverlayGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    // Add vertex colors
+    let slopeColors = new Float32Array((TERRAIN_SEGS+1)*(TERRAIN_SEGS+1)*3);
+    slopeOverlayGeo.setAttribute('color', new THREE.BufferAttribute(slopeColors, 3));
+    let slopeOverlayMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+    let slopeOverlayMesh = new THREE.Mesh(slopeOverlayGeo, slopeOverlayMat);
+    slopeOverlayMesh.rotation.x = -Math.PI / 2;
+    slopeOverlayMesh.position.y = 0.15;
+    slopeOverlayMesh.visible = false;
+    scene.add(slopeOverlayMesh);
+    
+    // Contour line overlay — canvas drawn on a second plane
+    let contourCanvas = document.createElement('canvas');
+    contourCanvas.width = 2048; contourCanvas.height = 2048;
+    let contourCtx = contourCanvas.getContext('2d');
+    let contourTex = new THREE.CanvasTexture(contourCanvas);
+    contourTex.minFilter = THREE.LinearFilter;
+    let contourMat = new THREE.MeshBasicMaterial({ map: contourTex, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
+    let contourMesh = new THREE.Mesh(new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE), contourMat);
+    contourMesh.rotation.x = -Math.PI / 2;
+    contourMesh.position.y = 0.2;
+    contourMesh.visible = false;
+    scene.add(contourMesh);
+    
+    window.slopeOverlayActive = false;
+    window.contourLinesActive = false;
+    
+    window.updateSlopeOverlay = function() {
+        let pos = planeGeo.attributes.position.array;
+        let sPos = slopeOverlayGeo.attributes.position.array;
+        let cols = slopeOverlayGeo.attributes.color.array;
+        let segs = TERRAIN_SEGS;
+        let step = TERRAIN_SIZE / segs;
+        
+        // Copy positions from terrain
+        for(let i = 0; i < sPos.length; i++) sPos[i] = pos[i];
+        // Lift slightly
+        for(let i = 2; i < sPos.length; i += 3) sPos[i] = pos[i] + 0.1;
+        
+        for(let z = 0; z <= segs; z++) {
+            for(let x = 0; x <= segs; x++) {
+                let idx = z * (segs+1) + x;
+                let h = pos[idx*3+2];
+                
+                // Calculate slope from neighbors
+                let hR = (x < segs) ? pos[(z*(segs+1)+(x+1))*3+2] : h;
+                let hL = (x > 0)    ? pos[(z*(segs+1)+(x-1))*3+2] : h;
+                let hU = (z > 0)    ? pos[((z-1)*(segs+1)+x)*3+2] : h;
+                let hD = (z < segs) ? pos[((z+1)*(segs+1)+x)*3+2] : h;
+                
+                let dx = (hR - hL) / (2 * step);
+                let dz = (hD - hU) / (2 * step);
+                let slopePct = Math.sqrt(dx*dx + dz*dz) * 100;
+                
+                // Color: green (0-3%) → yellow (3-8%) → red (8%+)
+                let r, g, b;
+                if(slopePct < 3) {
+                    let t = slopePct / 3;
+                    r = t * 1.0;       g = 0.85; b = 0.1 * t;
+                } else if(slopePct < 8) {
+                    let t = (slopePct - 3) / 5;
+                    r = 1.0;           g = 0.85 * (1-t); b = 0;
+                } else {
+                    r = 1.0;           g = 0; b = 0;
+                }
+                cols[idx*3]   = r;
+                cols[idx*3+1] = g;
+                cols[idx*3+2] = b;
+            }
+        }
+        slopeOverlayGeo.attributes.position.needsUpdate = true;
+        slopeOverlayGeo.attributes.color.needsUpdate = true;
+    };
+    
+    window.updateContourLines = function() {
+        let ctx = contourCtx;
+        ctx.clearRect(0, 0, 2048, 2048);
+        
+        let pos = planeGeo.attributes.position.array;
+        let segs = TERRAIN_SEGS;
+        let res = 2048;
+        let ratio = res / (segs + 1);
+        
+        // Find height range
+        let hMin = Infinity, hMax = -Infinity;
+        for(let i = 2; i < pos.length; i += 3) {
+            if(pos[i] < hMin) hMin = pos[i];
+            if(pos[i] > hMax) hMax = pos[i];
+        }
+        
+        let interval = 1.0; // 1 meter contour lines
+        if(hMax - hMin > 30) interval = 2.0;
+        if(hMax - hMin > 60) interval = 5.0;
+        
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.lineWidth = 1.5;
+        
+        // Major lines every 5x interval
+        let majorInterval = interval * 5;
+        
+        // Marching squares per contour level
+        for(let level = Math.ceil(hMin / interval) * interval; level <= hMax; level += interval) {
+            let isMajor = Math.abs(level % majorInterval) < 0.01;
+            ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)';
+            ctx.lineWidth = isMajor ? 2.0 : 1.0;
+            ctx.beginPath();
+            let hasSegment = false;
+            
+            // Simplified contour: scan rows for level crossings
+            for(let z = 0; z < segs; z++) {
+                for(let x = 0; x < segs; x++) {
+                    let idx00 = z * (segs+1) + x;
+                    let idx10 = z * (segs+1) + (x+1);
+                    let idx01 = (z+1) * (segs+1) + x;
+                    let idx11 = (z+1) * (segs+1) + (x+1);
+                    
+                    let h00 = pos[idx00*3+2], h10 = pos[idx10*3+2];
+                    let h01 = pos[idx01*3+2], h11 = pos[idx11*3+2];
+                    
+                    // Check edges for crossings
+                    let pts = [];
+                    // Top edge
+                    if((h00 - level) * (h10 - level) < 0) {
+                        let t = (level - h00) / (h10 - h00);
+                        pts.push([(x + t) * ratio, z * ratio]);
+                    }
+                    // Bottom edge
+                    if((h01 - level) * (h11 - level) < 0) {
+                        let t = (level - h01) / (h11 - h01);
+                        pts.push([(x + t) * ratio, (z+1) * ratio]);
+                    }
+                    // Left edge
+                    if((h00 - level) * (h01 - level) < 0) {
+                        let t = (level - h00) / (h01 - h00);
+                        pts.push([x * ratio, (z + t) * ratio]);
+                    }
+                    // Right edge
+                    if((h10 - level) * (h11 - level) < 0) {
+                        let t = (level - h10) / (h11 - h10);
+                        pts.push([(x+1) * ratio, (z + t) * ratio]);
+                    }
+                    
+                    if(pts.length >= 2) {
+                        ctx.moveTo(pts[0][0], pts[0][1]);
+                        ctx.lineTo(pts[1][0], pts[1][1]);
+                        hasSegment = true;
+                    }
+                }
+            }
+            if(hasSegment) ctx.stroke();
+        }
+        contourTex.needsUpdate = true;
+    };
+    
+    window.toggleSlopeOverlay = function() {
+        window.slopeOverlayActive = !window.slopeOverlayActive;
+        slopeOverlayMesh.visible = window.slopeOverlayActive;
+        let btn = document.getElementById('btn-slope-overlay');
+        if(btn) {
+            btn.style.borderColor = window.slopeOverlayActive ? '#4ade80' : '#475569';
+            btn.style.color = window.slopeOverlayActive ? '#4ade80' : '#94a3b8';
+        }
+        if(window.slopeOverlayActive) window.updateSlopeOverlay();
+    };
+    
+    window.toggleContourLines = function() {
+        window.contourLinesActive = !window.contourLinesActive;
+        contourMesh.visible = window.contourLinesActive;
+        let btn = document.getElementById('btn-contour-lines');
+        if(btn) {
+            btn.style.borderColor = window.contourLinesActive ? '#4ade80' : '#475569';
+            btn.style.color = window.contourLinesActive ? '#4ade80' : '#94a3b8';
+        }
+        if(window.contourLinesActive) window.updateContourLines();
+    };
+    
+    // Update elevation HUD — called from onMouseMove
+    window.updateElevationHUD = function(hitPoint) {
+        if(!hitPoint) return;
+        let positions = planeGeo.attributes.position.array;
+        let gx = Math.round((hitPoint.x + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+        let gz = Math.round((hitPoint.z + (TERRAIN_SIZE/2)) / (TERRAIN_SIZE/TERRAIN_SEGS));
+        gx = Math.max(0, Math.min(TERRAIN_SEGS, gx));
+        gz = Math.max(0, Math.min(TERRAIN_SEGS, gz));
+        
+        let idx = gz * (TERRAIN_SEGS+1) + gx;
+        let h = positions[idx*3+2];
+        
+        // Slope calculation
+        let step = TERRAIN_SIZE / TERRAIN_SEGS;
+        let hR = (gx < TERRAIN_SEGS) ? positions[(gz*(TERRAIN_SEGS+1)+(gx+1))*3+2] : h;
+        let hL = (gx > 0) ? positions[(gz*(TERRAIN_SEGS+1)+(gx-1))*3+2] : h;
+        let hU = (gz > 0) ? positions[((gz-1)*(TERRAIN_SEGS+1)+gx)*3+2] : h;
+        let hD = (gz < TERRAIN_SEGS) ? positions[((gz+1)*(TERRAIN_SEGS+1)+gx)*3+2] : h;
+        let dx = (hR - hL) / (2 * step);
+        let dz = (hD - hU) / (2 * step);
+        let slopePct = Math.sqrt(dx*dx + dz*dz) * 100;
+        
+        // Biome from canvas
+        let biome = 'ROUGH';
+        if(window.terrainBiomeData) {
+            let cX = Math.floor(((hitPoint.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+            let cZ = Math.floor(((hitPoint.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
+            cX = Math.max(0, Math.min(4095, cX));
+            cZ = Math.max(0, Math.min(4095, cZ));
+            let pIdx = (cZ * 4096 + cX) * 4;
+            let r = window.terrainBiomeData[pIdx], g = window.terrainBiomeData[pIdx+1], b = window.terrainBiomeData[pIdx+2];
+            function cDist(r1,g1,b1,r2,g2,b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
+            let cfg = window.CURRENT_BIOME_CONFIG;
+            let best = 99999;
+            let names = {ob:'OB', bunker:'BUNKER', waste:'WASTE', tee:'TEE', green:'GREEN', foregreen:'FOREGREEN', fairway:'FAIRWAY', semi:'SEMI-ROUGH', rough:'ROUGH', fescue:'FESCUE'};
+            for(let key in names) {
+                let hex = cfg[key+'Color'];
+                if(!hex) continue;
+                let cr = parseInt(hex.slice(1,3),16), cg = parseInt(hex.slice(3,5),16), cb = parseInt(hex.slice(5,7),16);
+                let d = cDist(r,g,b,cr,cg,cb);
+                if(d < best) { best = d; biome = names[key]; }
+            }
+        }
+        
+        let elH = document.getElementById('elev-height');
+        let elS = document.getElementById('elev-slope');
+        let elB = document.getElementById('elev-biome');
+        if(elH) elH.textContent = h.toFixed(1) + 'm';
+        if(elS) {
+            elS.textContent = slopePct.toFixed(1) + '%';
+            // Color the slope: green < 3%, yellow 3-8%, red > 8%
+            if(slopePct < 3) elS.style.color = '#4ade80';
+            else if(slopePct < 8) elS.style.color = '#fbbf24';
+            else elS.style.color = '#ef4444';
+        }
+        if(elB) elB.textContent = biome;
+    };
     
     window.minimapMat.onBeforeCompile = function(shader) {
         shader.uniforms.uFlagHeight = { value: 0.0 };
@@ -4855,7 +5122,10 @@
                 planeGeo.computeVertexNormals(); 
                 planeGeo.computeBoundingBox();
                 planeGeo.computeBoundingSphere();
-                snapObjectsToGround(); 
+                snapObjectsToGround();
+                // Refresh terrain analysis overlays
+                if(window.slopeOverlayActive) window.updateSlopeOverlay();
+                if(window.contourLinesActive) window.updateContourLines();
             }
         } else if(currentTool === 'MEASURE' && isMeasuring) {
             isMeasuring = false;
@@ -5312,6 +5582,7 @@
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
                 lastHitPoint = intersects[0].point;
+                if(typeof window.updateElevationHUD === 'function') window.updateElevationHUD(lastHitPoint);
                 
                 if (currentTool === 'COLORIZE' && event.buttons === 1) {
                     let closest = null; let minDist = 3.5;
