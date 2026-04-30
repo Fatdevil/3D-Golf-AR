@@ -324,16 +324,16 @@ window.GolfPhysics = (function() {
         let vZ = speedMS * Math.sin(launchRads);
         let vel = [vX, vY, vZ];
 
-        // Start spinnvektor
-        let wRads = spinFinal * 2 * Math.PI / 60; // rpm -> rad/s
-        let spinAxisRads = spinAxisIn * Math.PI / 180;
+        // Start spinnvektor (ROTERAD med azimuth för korrekt Magnus-kraft i alla riktningar)
+        // Backspin-axeln ska vara VINKELRÄT mot flygriktningen i XY-planet.
+        // Om bollen flyger framåt (azim=0): backspin kring X-axeln.
+        // Om bollen flyger åt sidan (azim=-90°): backspin kring Y-axeln.
+        let sBackspin = wRads * Math.cos(spinAxisRads);  // backspin-komponent (rpm → rad/s)
+        let sSidespin = wRads * Math.sin(spinAxisRads);  // sidespin-komponent
         
-        // Om spinAxis = 0 -> rent backspin -> snurrar kring X-axeln.
-        // Trackman-konvention (positiv SpinAxis = Slice = Bollen böjer höger)
-        // För att det ska böja höger i vår fysik (positiv x-kraft), måste sZ vara negativt.
-        let sX = wRads * Math.cos(spinAxisRads);
-        let sY = 0;
-        let sZ = wRads * Math.sin(spinAxisRads);
+        let sX = sBackspin * Math.cos(azimRads);         // Roterad backspin X
+        let sY = -sBackspin * Math.sin(azimRads);        // Roterad backspin Y
+        let sZ = sSidespin;                               // Sidespin förblir kring Z (vertikal axel)
         let spin = [sX, sY, sZ];
         
         let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;
