@@ -2799,33 +2799,50 @@
                 return;
             }
             
-            // Extract RAW meshes from the cached object (ignoring the container's 
-            // scale/centering transform which is designed for on-course placement)
-            let rawMeshes = [];
+            // Get the loadAsset-applied model node and invert its transform
+            // loadAsset creates: container → model (with scale+centering baked in)
+            // We need each child's NATIVE GLTF transform WITHOUT loadAsset's scaling
+            cacheObj.updateMatrixWorld(true);
+            let model = cacheObj.children[0]; // The GLTF scene with loadAsset transforms
+            if (!model) return;
+            let modelMatrixInverse = new THREE.Matrix4().copy(model.matrixWorld).invert();
+            
+            // Extract meshes with their GLTF-native transforms
+            let nativeMeshes = [];
+            let totalVertices = 0;
             cacheObj.traverse(child => { 
                 if (child.isMesh) {
-                    rawMeshes.push({
+                    let nativeMatrix = new THREE.Matrix4().multiplyMatrices(modelMatrixInverse, child.matrixWorld);
+                    let vertCount = child.geometry.attributes.position ? child.geometry.attributes.position.count : 0;
+                    totalVertices += vertCount;
+                    nativeMeshes.push({
                         geometry: child.geometry,
-                        material: child.material
+                        material: child.material,
+                        nativeMatrix: nativeMatrix
                     });
                 } 
             });
-            if (rawMeshes.length === 0) return;
+            if (nativeMeshes.length === 0) return;
             
-            // Calculate a clean scale factor from the raw geometry's bounding box
-            // (same logic as loadAsset but we apply it ourselves for horizon placement)
-            let combinedBox = new THREE.Box3();
-            rawMeshes.forEach(m => {
-                let geoBox = new THREE.Box3().setFromBufferAttribute(m.geometry.attributes.position);
-                combinedBox.union(geoBox);
+            // Compute bounding box in GLTF-native space (without loadAsset scaling)
+            let nativeBox = new THREE.Box3();
+            nativeMeshes.forEach(m => {
+                if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+                let geoBox = m.geometry.boundingBox.clone().applyMatrix4(m.nativeMatrix);
+                nativeBox.union(geoBox);
             });
-            let rawSize = combinedBox.getSize(new THREE.Vector3());
-            let rawCenter = combinedBox.getCenter(new THREE.Vector3());
+            let nativeSize = nativeBox.getSize(new THREE.Vector3());
+            let nativeCenter = nativeBox.getCenter(new THREE.Vector3());
             let tHeight = assetConf.targetHeight || 12.0;
-            let rawScale = (rawSize.y > 0.001) ? (tHeight / rawSize.y) : 1.0;
+            let rawScale = (nativeSize.y > 0.001) ? (tHeight / nativeSize.y) : 1.0;
             if (!isFinite(rawScale)) rawScale = 1.0;
             
-            let count = countTarget || 50;
+            // Performance budget: auto-cap instance count based on vertex complexity
+            // Budget: ~2 million total vertices per quadrant
+            let vertexBudget = 2000000;
+            let maxByBudget = Math.max(5, Math.floor(vertexBudget / Math.max(1, totalVertices)));
+            let count = Math.min(countTarget || 50, maxByBudget);
+            console.log(`Scenery ${assetId}: ${nativeMeshes.length} meshes, ${totalVertices} verts/model, capped to ${count} instances (budget: ${maxByBudget})`);
             
             let getCol = (key) => {
                 let hexStr = window.CURRENT_BIOME_CONFIG[key];
@@ -2845,16 +2862,11 @@
                 return x - Math.floor(x);
             };
             
-            // Precompute the geometry-centering matrix (ground the model at y=0)
-            let geoOffsetMatrix = new THREE.Matrix4().makeTranslation(
-                -rawCenter.x, -combinedBox.min.y, -rawCenter.z
-            );
-            
-            rawMeshes.forEach((m, meshIndex) => {
+            nativeMeshes.forEach((m, meshIndex) => {
                 let instMesh = new THREE.InstancedMesh(m.geometry, m.material.clone(), count);
                 
                 if (instMesh.material.color) {
-                    instMesh.material.color.lerp(tintColor, 0.4); // 40% tint
+                    instMesh.material.color.lerp(tintColor, 0.4);
                 }
                 
                 for(let i = 0; i < count; i++) {
@@ -2863,25 +2875,28 @@
                     let sRand3 = seededRandom(i * 10 + 3 + meshIndex);
                     
                     let angle = angleStart + (sRand1 * (angleEnd - angleStart));
-                    // Push radius further back for larger objects
                     let baseRadius = 650 + (tHeight * 0.8); 
                     let radius = baseRadius + (sRand2 * 200); 
                     
-                    let sVar = 0.8 + sRand3 * 0.6; // Scale variance
+                    let sVar = 0.8 + sRand3 * 0.6;
                     let finalScale = rawScale * sVar;
                     let rY = sRand1 * Math.PI * 2;
                     
-                    // Build clean instance matrix: Scale → Center geometry → Rotate → Position
-                    let instanceMatrix = new THREE.Matrix4();
-                    // 1. Start with geometry centering (move raw geo so base is at y=0)
-                    instanceMatrix.copy(geoOffsetMatrix);
-                    // 2. Apply scale
+                    // Build instance matrix:
+                    // 1. Apply mesh's native GLTF transform (preserves internal model structure)
+                    let instanceMatrix = new THREE.Matrix4().copy(m.nativeMatrix);
+                    // 2. Center the model (ground at y=0, center x/z)
+                    let centerMat = new THREE.Matrix4().makeTranslation(
+                        -nativeCenter.x, -nativeBox.min.y, -nativeCenter.z
+                    );
+                    instanceMatrix.premultiply(centerMat);
+                    // 3. Scale to target height with variance
                     let scaleMat = new THREE.Matrix4().makeScale(finalScale, finalScale, finalScale);
                     instanceMatrix.premultiply(scaleMat);
-                    // 3. Apply rotation
+                    // 4. Rotate randomly
                     let rotMat = new THREE.Matrix4().makeRotationY(rY);
                     instanceMatrix.premultiply(rotMat);
-                    // 4. Apply position (at horizon radius, grounded at y=0)
+                    // 5. Position at horizon
                     let posMat = new THREE.Matrix4().makeTranslation(
                         Math.cos(angle) * radius, 0, Math.sin(angle) * radius
                     );
