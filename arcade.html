@@ -7124,14 +7124,6 @@
             let vx = positions[i*3];
             let vz = -positions[i*3 + 1]; 
             
-            // Lås yttersta kanterna (4 meter) så de alltid är 0 - eliminerar spikar mot omgivningen
-            if (window.lockEdges && (Math.abs(vx) > (TERRAIN_SIZE/2) - 4 || Math.abs(vz) > (TERRAIN_SIZE/2) - 4)) {
-                // Tvinga till 0 om det råkat bli spikar tidigare (auto-läkning av kanter)
-                positions[i*3 + 2] = 0;
-                updatePos = true;
-                continue;
-            }
-            
             let dist = 0;
             if (l2 === 0) {
                 dist = Math.sqrt((vx - p1.x)*(vx - p1.x) + (vz - p1.z)*(vz - p1.z));
@@ -7140,6 +7132,25 @@
                 let projX = p1.x + t * (p2.x - p1.x);
                 let projZ = p1.z + t * (p2.z - p1.z);
                 dist = Math.sqrt((vx - projX)*(vx - projX) + (vz - projZ)*(vz - projZ));
+            }
+            
+            // Handle WATER MESH extension independently of edge locking
+            // We flatten the water mesh 12 meters beyond the brush radius to ensure the geometric "plunge" 
+            // happens safely outside the alpha mask, completely eliminating jagged edges!
+            if (currentTool === 'WATER' && wPosArray) {
+                if (dist < radius + 12) {
+                    wPosArray[i*3 + 2] = waterLevelTarget; 
+                    window.waterBaseZ[i] = waterLevelTarget;
+                    waterGeo.attributes.position.needsUpdate = true;
+                }
+            }
+
+            // Lås yttersta kanterna (4 meter) så de alltid är 0 - eliminerar spikar mot omgivningen
+            if (window.lockEdges && (Math.abs(vx) > (TERRAIN_SIZE/2) - 4 || Math.abs(vz) > (TERRAIN_SIZE/2) - 4)) {
+                // Tvinga till 0 om det råkat bli spikar tidigare (auto-läkning av kanter)
+                positions[i*3 + 2] = 0;
+                updatePos = true;
+                continue;
             }
             
             if (dist < radius) {
@@ -7237,14 +7248,6 @@
                     
                     // Skulptera terrängen (Mjuka slänter in i sjön)
                     positions[i*3 + 2] += (bottomTarget - positions[i*3 + 2]) * 0.2 * falloff;
-                    
-                    // Skulptera WATER-MESHEN till EXAKT vattenLevelTarget
-                    if (wPosArray) {
-                        wPosArray[i*3 + 2] = waterLevelTarget; 
-                        window.waterBaseZ[i] = waterLevelTarget;
-                        waterGeo.attributes.position.needsUpdate = true;
-                    }
-                    
                     updatePos = true;
                 }
             }
