@@ -730,6 +730,22 @@
                     <button onclick="window.removePanorama()" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:6px 10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px;">✕</button>
                 </div>
             </div>
+            
+            <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding</label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:3px; margin-top:4px;">
+                    <button class="surr-btn" onclick="setSurrounding('GRASS', this)" style="background:#2d4c1a; color:#a3e635; border:1px solid #2d4c1a; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌿 Grass</button>
+                    <button class="surr-btn" onclick="setSurrounding('OCEAN', this)" style="background:#1e3a5f; color:#38bdf8; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌊 Ocean</button>
+                    <button class="surr-btn" onclick="setSurrounding('LAKE', this)" style="background:#2a6b7a; color:#67e8f9; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">💧 Lake</button>
+                    <button class="surr-btn" onclick="setSurrounding('SAND', this)" style="background:#a38d5c; color:#fef3c7; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🏜️ Sand</button>
+                    <button class="surr-btn" onclick="setSurrounding('FIELD', this)" style="background:#6b7a2a; color:#d9f99d; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🌾 Field</button>
+                    <button class="surr-btn" onclick="setSurrounding('SNOW', this)" style="background:#cbd5e1; color:#1e293b; border:1px solid #334155; padding:5px 2px; font-size:8px; border-radius:4px; font-weight:bold; cursor:pointer;">❄️ Snow</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                    <span style="color:#64748b; font-size:8px;">Custom:</span>
+                    <input type="color" id="surr-custom-color" value="#2d4c1a" onchange="setSurrounding('CUSTOM', null, this.value)" style="width:28px; height:20px; border:none; cursor:pointer; border-radius:3px;">
+                </div>
+            </div>
         </div>
 
         <!-- Terrain Analysis Panel -->
@@ -2423,6 +2439,68 @@
         }
     };
     
+    // === SURROUNDING ENVIRONMENT SYSTEM ===
+    const SURROUND_PRESETS = {
+        GRASS:  { color: 0x2d4c1a, label: '🌿 Grass' },
+        OCEAN:  { color: 0x1e3a5f, label: '🌊 Ocean' },
+        LAKE:   { color: 0x2a6b7a, label: '💧 Lake' },
+        SAND:   { color: 0xa38d5c, label: '🏜️ Sand' },
+        FIELD:  { color: 0x6b7a2a, label: '🌾 Field' },
+        SNOW:   { color: 0xcbd5e1, label: '❄️ Snow' }
+    };
+    window.currentSurrounding = 'GRASS';
+    
+    window.setSurrounding = function(preset, btn, customColor) {
+        let color;
+        if(preset === 'CUSTOM' && customColor) {
+            color = parseInt(customColor.replace('#', '0x'));
+            window.currentSurrounding = 'CUSTOM';
+            window.customSurroundColor = customColor;
+        } else {
+            color = SURROUND_PRESETS[preset].color;
+            window.currentSurrounding = preset;
+            window.customSurroundColor = null;
+        }
+        
+        surroundMat.color.setHex(color);
+        
+        // Highlight active button
+        document.querySelectorAll('.surr-btn').forEach(b => {
+            b.style.borderColor = '#334155';
+            b.style.outline = 'none';
+        });
+        if(btn) { btn.style.borderColor = '#38bdf8'; btn.style.outline = '1px solid #38bdf8'; }
+        
+        // Save to course data
+        courseHoles[currentHoleIndex].surrounding = {
+            preset: window.currentSurrounding,
+            customColor: window.customSurroundColor
+        };
+        saveLevel();
+    };
+    
+    window.restoreSurrounding = function() {
+        let hole = courseHoles[currentHoleIndex];
+        if(hole && hole.surrounding) {
+            let s = hole.surrounding;
+            if(s.preset === 'CUSTOM' && s.customColor) {
+                surroundMat.color.setHex(parseInt(s.customColor.replace('#', '0x')));
+                let cp = document.getElementById('surr-custom-color');
+                if(cp) cp.value = s.customColor;
+            } else if(SURROUND_PRESETS[s.preset]) {
+                surroundMat.color.setHex(SURROUND_PRESETS[s.preset].color);
+            }
+            window.currentSurrounding = s.preset;
+            window.customSurroundColor = s.customColor;
+            
+            // Highlight correct button
+            document.querySelectorAll('.surr-btn').forEach(b => { b.style.borderColor = '#334155'; b.style.outline = 'none'; });
+        } else {
+            surroundMat.color.setHex(0x2d4c1a);
+            window.currentSurrounding = 'GRASS';
+        }
+    };
+    
     window.minimapMat = planeMat.clone();
     window.minimapMat.extensions = { derivatives: true };
     window.heatmapShaderRef = null;
@@ -3794,6 +3872,7 @@
         document.getElementById('hole-ui-num').innerText = "Hole " + (currentHoleIndex + 1);
         document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par;
         if(typeof window.restorePanorama === 'function') window.restorePanorama();
+        if(typeof window.restoreSurrounding === 'function') window.restoreSurrounding();
     };
     
     window.changeHolePar = function(dir) {
@@ -3918,7 +3997,8 @@
             par: h.par, 
             tees: h.tees,
             flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
-            panorama: h.panorama || null
+            panorama: h.panorama || null,
+            surrounding: h.surrounding || null
         }));
         
         localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
@@ -3949,7 +4029,8 @@
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
-            panorama: h.panorama || null
+            panorama: h.panorama || null,
+            surrounding: h.surrounding || null
         }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
         
@@ -4279,6 +4360,7 @@
                         let h = courseHoles[i];
                         h.par = hSync.par || 4;
                         if(hSync.panorama) h.panorama = hSync.panorama;
+                        if(hSync.surrounding) h.surrounding = hSync.surrounding;
                         if(hSync.tee) { h.tees.yellow = {x: hSync.tee.x, y: hSync.tee.y, z: hSync.tee.z}; }
                         if(hSync.tees) {
                             for(let tType in hSync.tees) {
@@ -4348,8 +4430,9 @@
                         arr.trees.forEach(t => createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c, t.tc));
                     }
                     
-                    // Restore panorama for current hole
+                    // Restore panorama and surrounding for current hole
                     if(typeof window.restorePanorama === 'function') window.restorePanorama();
+                    if(typeof window.restoreSurrounding === 'function') window.restoreSurrounding();
                 }
             } catch(e) {
                 console.error("Parse error", e);
