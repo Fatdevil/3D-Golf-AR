@@ -6969,9 +6969,9 @@
         if (startBtn) startBtn.style.display = mode === 'PLAY' ? 'block' : 'none';
         
         // Range mode: hide course-only buttons
-        let isRange = !!window._isRangeMode;
-        let flyBtn = document.getElementById('btn-flyover'); if(flyBtn) flyBtn.style.display = isRange ? 'none' : '';
-        let penBtn = document.getElementById('btn-penalty'); if(penBtn) penBtn.style.display = isRange ? 'none' : '';
+        let isRangeHide = !!window._isRangeMode;
+        let flyBtn = document.getElementById('btn-flyover'); if(flyBtn) flyBtn.style.display = isRangeHide ? 'none' : '';
+        let penBtn = document.getElementById('btn-penalty'); if(penBtn) penBtn.style.display = isRangeHide ? 'none' : '';
 
 
         let dataBtn = document.getElementById('btn-toggle-data');
