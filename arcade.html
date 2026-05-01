@@ -5002,6 +5002,7 @@
                 terrain_biomemap: biome,
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
+                is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
                 theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG }
             };
             
@@ -5031,7 +5032,8 @@
                     localStorage.setItem('golf_os_my_drafts', JSON.stringify(drafts));
                 }
                 
-                let href = window.location.origin + window.location.pathname + (options.isDraft ? "?edit=" : "?course=") + data.share_code;
+                let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
+                let href = window.location.origin + window.location.pathname + (options.isDraft ? "?edit=" : "?course=") + data.share_code + (isRange ? '&mode=range' : '');
                 
                 window.history.pushState({}, '', href);
                 
@@ -5440,8 +5442,13 @@
         } else if (autoRun === 'edit_build' || autoRun === 'build') {
             setMode('BUILD');
         } else if (courseCode || editCode) {
-            setMode('PLAY');
-            if (typeof startRound === 'function') setTimeout(startRound, 500);
+            let isRange = params.get('mode') === 'range';
+            if (isRange) {
+                setMode('TEST');
+            } else {
+                setMode('PLAY');
+                if (typeof startRound === 'function') setTimeout(startRound, 500);
+            }
         } else if (!autoRun && !courseCode && !editCode) {
             setMode('TEST');
         }
