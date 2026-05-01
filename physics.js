@@ -310,10 +310,10 @@ window.GolfPhysics = (function() {
             } else if (lieType === 'SEMI-ROUGH') {
                 speedMult = 0.98; spinMult = 0.95; 
             } else if (lieType === 'FESCUE') {
-                // Fescue: stiff wiry grass, eats spin, moderate speed loss
+                // Fescue: stiff wiry grass wraps clubface — ball exits hot but spinless (flyer-lie)
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35));
-                speedMult = 1.0 - (0.30 - (0.20 * vlaFactor)); // 30% loss driver, 10% wedge
-                spinMult = 1.0 - (0.55 - (0.35 * vlaFactor));  // 55% spin loss driver, 20% wedge
+                speedMult = 1.0 - (0.20 - (0.10 * vlaFactor)); // 20% loss driver, 10% wedge (milder than DEEP ROUGH)
+                spinMult = 1.0 - (0.65 - (0.45 * vlaFactor));  // 65% spin loss driver, 20% wedge (harder than DEEP ROUGH)
             } else if (lieType === 'DEEP ROUGH') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
                 if (Math.random() < 0.25 && vla > 20) {
