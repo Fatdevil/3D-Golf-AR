@@ -309,7 +309,7 @@ window.GolfPhysics = (function() {
                 }
             } else if (lieType === 'SEMI-ROUGH') {
                 speedMult = 0.98; spinMult = 0.95; 
-            } else if (lieType === 'DEEP ROUGH') {
+            } else if (lieType === 'DEEP ROUGH' || lieType === 'FESCUE') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
                 if (Math.random() < 0.25 && vla > 20) {
                     speedMult = 1.03; spinMult = 0.30;
@@ -647,17 +647,19 @@ window.GolfPhysics = (function() {
                         baseCor = 0.62; cFriction = 0.15; cRollingDecel = 0.5;
                     }
                 } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
-                    baseCor = 0.58; cFriction = 0.15; cRollingDecel = 1.18; // roll_mu 0.12 (was 0.08)
+                    baseCor = 0.58; cFriction = 0.15; cRollingDecel = 1.18; // roll_mu 0.12
+                } else if (impactTerrainType === 'FOREGREEN') {
+                    baseCor = 0.60; cFriction = 0.14; cRollingDecel = 0.88; // Between green and fairway (apron cut)
                 } else if (impactTerrainType === 'SEMI-ROUGH') {
-                    baseCor = 0.50; cFriction = 0.20; cRollingDecel = 2.16; // roll_mu 0.22 (was 0.10)
+                    baseCor = 0.50; cFriction = 0.20; cRollingDecel = 2.16; // roll_mu 0.22
                 } else if (impactTerrainType === 'ROUGH') {
-                    baseCor = 0.43; cFriction = 0.25; cRollingDecel = 3.92; // roll_mu 0.40 (was 0.15)
-                } else if (impactTerrainType === 'DEEP ROUGH') {
-                    baseCor = 0.35; cFriction = 0.35; cRollingDecel = 5.89; // roll_mu 0.60 (was 0.25)
+                    baseCor = 0.43; cFriction = 0.25; cRollingDecel = 3.92; // roll_mu 0.40
+                } else if (impactTerrainType === 'DEEP ROUGH' || impactTerrainType === 'FESCUE') {
+                    baseCor = 0.35; cFriction = 0.35; cRollingDecel = 5.89; // roll_mu 0.60
                 } else if (impactTerrainType === 'SAND') {
-                    baseCor = 0.30; cFriction = 0.50; cRollingDecel = 6.38; // roll_mu 0.65 (was 0.40)
+                    baseCor = 0.30; cFriction = 0.50; cRollingDecel = 6.38; // roll_mu 0.65
                 } else if (impactTerrainType === 'WASTE') {
-                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 2.16; // roll_mu 0.22 (was 0.05, overcorrected 0.55)
+                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 2.16; // roll_mu 0.22
                 }
                 
                 // Variabel COR-ekvation (Sports Engineering 2023)
@@ -726,8 +728,8 @@ window.GolfPhysics = (function() {
                         else if (firmness === 'FIRM') greenE_T = 0.60; // More skip
                     }
                     const E_T_BASE = {
-                        'GREEN': greenE_T, 'FAIRWAY': 0.58, 'TEE': 0.58,
-                        'SEMI-ROUGH': 0.45, 'ROUGH': 0.35, 'DEEP ROUGH': 0.25,
+                        'GREEN': greenE_T, 'FOREGREEN': 0.55, 'FAIRWAY': 0.58, 'TEE': 0.58,
+                        'SEMI-ROUGH': 0.45, 'ROUGH': 0.35, 'DEEP ROUGH': 0.25, 'FESCUE': 0.25,
                         'SAND': 0.20, 'WASTE': 0.52
                     };
                     let e_t_base = E_T_BASE[impactTerrainType] || 0.78;
