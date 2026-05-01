@@ -6414,7 +6414,7 @@
         isFlying = true;
     }
 
-    let appMode = 'PLAY'; 
+    let appMode = 'BUILD'; // Fas 1: Builder always starts in BUILD mode
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
@@ -6874,7 +6874,7 @@
         if (btnPlay) {
             btnPlay.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'none' : 'block';
             btnPlay.innerHTML = '🔥 TESTA BANAN';
-            btnPlay.onclick = () => setMode('TEST');
+            btnPlay.onclick = () => window.testCourse(); // Fas 1: Route to arcade instead of inline play
             btnPlay.style.background = '#0f172a';
             btnPlay.style.color = '#ef4444';
             btnPlay.style.borderColor = '#ef4444';
@@ -9466,6 +9466,21 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // === Fas 1: TESTA BANAN — save full course + open in arcade ===
+    window.testCourse = function() {
+        try {
+            let newTab = window.open('about:blank', '_blank');
+            saveLevel({ full: true });
+            let url = 'arcade.html?source=local&autorun=setup';
+            if (newTab) { newTab.location.href = url; }
+            else { window.location.href = url; }
+        } catch(e) {
+            console.error('testCourse failed:', e);
+            alert('Kunde inte spara: ' + e.message);
+        }
+    };
+
+    setMode('BUILD'); // Fas 1: Force BUILD mode at boot
     animate();
 </script>
 
