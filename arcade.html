@@ -5456,6 +5456,7 @@
         } else if (courseCode || editCode) {
             let isRange = params.get('mode') === 'range';
             if (isRange) {
+                window._isRangeMode = true;
                 setMode('TEST');
             } else {
                 setMode('PLAY');
@@ -8637,10 +8638,46 @@
                 
                 if (playState === 'ROUND_FLYING') {
                     playState = 'ROUND_IDLE';
-                    // Sync ballPos with ball mesh position after landing
-                    window.ballPos.x = window.ballMesh.position.x;
-                    window.ballPos.y = window.ballMesh.position.y;
-                    window.ballPos.z = window.ballMesh.position.z;
+                    
+                    // RANGE MODE: Reset ball to tee after each shot
+                    if (window._isRangeMode && courseHoles[0] && courseHoles[0].tees && courseHoles[0].tees.range) {
+                        let rangeTee = courseHoles[0].tees.range;
+                        window.ballPos.x = rangeTee.x;
+                        window.ballPos.y = rangeTee.y + 0.2;
+                        window.ballPos.z = rangeTee.z;
+                        window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
+                        window.ballMesh.visible = true;
+                        
+                        // Reset camera behind tee, looking along range direction
+                        let dir = rangeTee.rot || 0;
+                        let behindDist = 12, lookAheadDist = 30;
+                        camera.position.set(
+                            window.ballPos.x - Math.sin(dir) * behindDist,
+                            window.ballPos.y + 3,
+                            window.ballPos.z - Math.cos(dir) * behindDist
+                        );
+                        controls.target.set(
+                            window.ballPos.x + Math.sin(dir) * lookAheadDist,
+                            window.ballPos.y,
+                            window.ballPos.z + Math.cos(dir) * lookAheadDist
+                        );
+                        controls.update();
+                        
+                        // Reset aim target along range direction
+                        if (window.aimTarget) {
+                            window.aimTarget.set(
+                                rangeTee.x + Math.sin(dir) * 200,
+                                rangeTee.y,
+                                rangeTee.z + Math.cos(dir) * 200
+                            );
+                        }
+                    } else {
+                        // COURSE MODE: Ball stays where it landed
+                        window.ballPos.x = window.ballMesh.position.x;
+                        window.ballPos.y = window.ballMesh.position.y;
+                        window.ballPos.z = window.ballMesh.position.z;
+                    }
+                    
                     if (document.getElementById('play-tools')) document.getElementById('play-tools').style.display = 'flex';
                     let hole = courseHoles[playingHoleIndex];
                     let distToPin = 999;
