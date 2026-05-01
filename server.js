@@ -72,6 +72,7 @@ async function initDB() {
         try {
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS likes INT DEFAULT 0;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT false;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_range BOOLEAN DEFAULT false;`);
         } catch(e) {}
         console.log("✅ Database schema ready");
     } catch(err) {
@@ -84,18 +85,40 @@ if(process.env.DATABASE_URL) {
     initDB();
 }
 
-// --- API ENDPOINTS ---
+// --- HEALTH & DB CHECK ---
+let DB_AVAILABLE = false;
+
+// Check DB connectivity once at startup
+if (process.env.DATABASE_URL) {
+    pool.query('SELECT 1').then(() => {
+        DB_AVAILABLE = true;
+        console.log('✅ Database connection confirmed');
+    }).catch(err => {
+        DB_AVAILABLE = false;
+        console.warn('⚠️ Database not reachable, running in local dev mode (empty API responses)');
+    });
+}
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', db_connected: !!process.env.DATABASE_URL });
+    res.json({ status: 'ok', db_connected: DB_AVAILABLE });
 });
 
-app.get('/api/courses', async (req, res) => {
+// Middleware: If no database, return graceful empty responses
+function requireDB(req, res, next) {
+    if (!DB_AVAILABLE) {
+        // Return empty arrays for GET, error for POST
+        if (req.method === 'GET') return res.json([]);
+        return res.status(503).json({ error: 'No database configured (local dev mode)' });
+    }
+    next();
+}
+
+app.get('/api/courses', requireDB, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT share_code, name, author, likes, created_at 
             FROM courses 
-            WHERE is_draft = false OR is_draft IS NULL
+            WHERE (is_draft = false OR is_draft IS NULL) AND (is_range = false OR is_range IS NULL)
             ORDER BY created_at DESC 
             LIMIT 50
         `);
@@ -106,7 +129,7 @@ app.get('/api/courses', async (req, res) => {
     }
 });
 
-app.post('/api/courses/:share_code/like', async (req, res) => {
+app.post('/api/courses/:share_code/like', requireDB, async (req, res) => {
     try {
         const code = req.params.share_code.toUpperCase();
         const result = await pool.query(`
@@ -127,14 +150,15 @@ function generateShareCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-app.post('/api/courses', async (req, res) => {
+app.post('/api/courses', requireDB, async (req, res) => {
     try {
-        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, edit_code, theme_data } = req.body;
+        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, is_range, edit_code, theme_data } = req.body;
         
         // Validering
         if (!holes) return res.status(400).json({ error: 'Missing holes data' });
 
         const draftStatus = is_draft === true;
+        const rangeStatus = is_range === true;
         const c_name = name || 'My Golf Course';
         const c_author = author || 'Anonymous';
         const c_theme_data = theme_data || {};
@@ -143,14 +167,14 @@ app.post('/api/courses', async (req, res) => {
             // Överskriv en existerande bana om koden matchar!
             const updateResult = await pool.query(
                 `UPDATE courses 
-                 SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, is_draft=$8, theme_data=$10
+                 SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, is_draft=$8, theme_data=$10, is_range=$11
                  WHERE share_code=$9 
                  RETURNING share_code`,
                 [
                     c_name, c_author, 
                     JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
                     terrain_heightmap, terrain_biomemap, draftStatus, 
-                    edit_code.toUpperCase(), JSON.stringify(c_theme_data)
+                    edit_code.toUpperCase(), JSON.stringify(c_theme_data), rangeStatus
                 ]
             );
             
@@ -164,12 +188,12 @@ app.post('/api/courses', async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
-                terrain_heightmap, terrain_biomemap, draftStatus, JSON.stringify(c_theme_data)
+                terrain_heightmap, terrain_biomemap, draftStatus, JSON.stringify(c_theme_data), rangeStatus
             ]
         );
 
@@ -180,7 +204,7 @@ app.post('/api/courses', async (req, res) => {
     }
 });
 
-app.get('/api/courses/:share_code', async (req, res) => {
+app.get('/api/courses/:share_code', requireDB, async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM courses WHERE share_code = $1", [req.params.share_code.toUpperCase()]);
         if(result.rows.length === 0) {
@@ -193,10 +217,27 @@ app.get('/api/courses/:share_code', async (req, res) => {
     }
 });
 
+// --- RANGES API ---
+app.get('/api/ranges', requireDB, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT share_code, name, author, likes, created_at 
+            FROM courses 
+            WHERE is_range = true AND (is_draft = false OR is_draft IS NULL)
+            ORDER BY created_at DESC 
+            LIMIT 50
+        `);
+        res.json(result.rows);
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // --- ASSET MANAGER API ---
 
 // Hämta alla custom assets (Mindre payload, exkluderar den tunga file_data vid lista)
-app.get('/api/assets', async (req, res) => {
+app.get('/api/assets', requireDB, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT id, name, category, subcategory, icon, config, created_at 
@@ -211,7 +252,7 @@ app.get('/api/assets', async (req, res) => {
 });
 
 // Hämta en specifik custom asset INKLUSIVE base64-filen
-app.get('/api/assets/:id/download', async (req, res) => {
+app.get('/api/assets/:id/download', requireDB, async (req, res) => {
     try {
         const result = await pool.query("SELECT file_data FROM custom_assets WHERE id = $1", [req.params.id]);
         if(result.rows.length === 0) {
@@ -225,7 +266,7 @@ app.get('/api/assets/:id/download', async (req, res) => {
 });
 
 // Spara/Uppdatera en custom asset
-app.post('/api/assets', async (req, res) => {
+app.post('/api/assets', requireDB, async (req, res) => {
     try {
         const { id, name, category, subcategory, icon, file_data, config, password } = req.body;
         
@@ -260,7 +301,7 @@ app.post('/api/assets', async (req, res) => {
 });
 
 // Ta bort en custom asset (kräver lösenord)
-app.delete('/api/assets/:id', async (req, res) => {
+app.delete('/api/assets/:id', requireDB, async (req, res) => {
     try {
         const { password } = req.body;
         if (password !== 'golfadmin123') {
@@ -278,7 +319,7 @@ app.delete('/api/assets/:id', async (req, res) => {
 });
 
 // --- BIOMES API ---
-app.get('/api/biomes', async (req, res) => {
+app.get('/api/biomes', requireDB, async (req, res) => {
     try {
         const result = await pool.query("SELECT id, name, config FROM biomes");
         res.json(result.rows);
@@ -288,7 +329,7 @@ app.get('/api/biomes', async (req, res) => {
     }
 });
 
-app.post('/api/biomes', async (req, res) => {
+app.post('/api/biomes', requireDB, async (req, res) => {
     try {
         const { adminPassword, id, name, config } = req.body;
         if(adminPassword !== 'golfadmin123') {
@@ -311,7 +352,14 @@ app.post('/api/biomes', async (req, res) => {
 
 
 // --- SERVING STATIC FILES (För Railway Deploy) ---
-// Gör så att hela public/ eller roten serveras som en hemsida
+// Disable cache for HTML files during development
+app.use((req, res, next) => {
+    if (req.path.endsWith('.html') || req.path === '/') {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+    }
+    next();
+});
 app.use(express.static(__dirname));
 
 // Fallback för allt annat (Catch-all)

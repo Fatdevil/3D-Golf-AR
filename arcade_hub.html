@@ -190,7 +190,7 @@ body {
   <div class="trackman-grid">
     
     <!-- PRACTICE -->
-    <div class="tm-card" style="background-image: url('golf_practice.png');">
+    <div class="tm-card" style="background-image: url('golf_practice.png');" onclick="openModal('modal-ranges')">
       <div class="tm-overlay"></div>
       <div class="tm-content">
          <div class="tm-badge" style="color:#fff;">Practice</div>
@@ -267,6 +267,18 @@ body {
    </div>
 </div>
 
+<!-- MODAL: RANGES -->
+<div id="modal-ranges" class="tm-modal" onclick="if(event.target===this) closeModal('modal-ranges')">
+   <div class="tm-modal-content wide">
+      <button class="tm-close" onclick="closeModal('modal-ranges')">&times;</button>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">RANGES</h2>
+      <p style="color:#94a3b8; margin-bottom:20px;">Välj en sparad driving range och börja slå bollar direkt.</p>
+      <div id="range-container" class="course-grid">
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar ranges...</div>
+      </div>
+   </div>
+</div>
+
 <!-- LM STATUS -->
 <div id="lm-status">
    <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
@@ -280,6 +292,11 @@ function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function playCourse(courseCode) {
     let url = "arcade.html?v=" + Date.now() + "&autorun=setup";
     if(courseCode) { url += "&course=" + courseCode; }
+    window.location.href = url;
+}
+
+function playRange(rangeCode) {
+    let url = "arcade.html?v=" + Date.now() + "&course=" + rangeCode + "&mode=range";
     window.location.href = url;
 }
 
@@ -424,7 +441,41 @@ function initLaunchMonitorBridge() {
 // Boot
 loadDrafts();
 loadUGC();
+loadRanges();
 initLaunchMonitorBridge();
+
+async function loadRanges() {
+    try {
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/ranges');
+        let ranges = await res.json();
+        let html = '';
+        let placeholders = [
+            'https://images.unsplash.com/photo-1535132011086-b8818f016104?w=800&q=80',
+            'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80'
+        ];
+        
+        ranges.forEach((r, i) => {
+            let bgImg = placeholders[i % placeholders.length];
+            html += `
+            <div class="course-card" onclick="playRange('${r.share_code}')">
+               <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
+               <div class="course-card-overlay">
+                  <div class="course-card-badge" style="background:rgba(234,179,8,0.8);">DRIVING RANGE</div>
+                  <h4 class="course-card-title">${r.name}</h4>
+                  <div class="course-card-meta">${r.author}</div>
+                  <div class="course-card-meta">PRACTICE MODE</div>
+               </div>
+            </div>`;
+        });
+        
+        if (ranges.length === 0) {
+           html = "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Inga publicerade ranges hittades. Bygg en via Build → BYGG RANGE!</div>";
+        }
+        document.getElementById('range-container').innerHTML = html;
+    } catch(e) {
+        document.getElementById('range-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center; grid-column: 1 / -1;">Kunde inte ladda ranges.</div>`;
+    }
+}
 
 </script>
 </body>
