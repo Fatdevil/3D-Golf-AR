@@ -9063,8 +9063,15 @@
             renderer.clear(true, true, false);
             
             let hole = courseHoles[playingHoleIndex];
+            // Range mode: use aimTarget as virtual flag (no real flag exists)
+            let flagTarget = null;
             if (hole && hole.flag) {
-                let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+                flagTarget = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+            } else if (window._isRangeMode && window.aimTarget) {
+                flagTarget = window.aimTarget.clone();
+            }
+            if (flagTarget) {
+                let fv = flagTarget;
                 
                 // Gör kameran responsiv mot layouten (Ball till Flagga)
                 minimapCamera.position.set((window.ballMesh.position.x + fv.x)/2, 300, (window.ballMesh.position.z + fv.z)/2);
