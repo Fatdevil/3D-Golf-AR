@@ -15,7 +15,7 @@ window.GolfPhysics = (function() {
     const GROUND = {
         restitution: 0.20,
         bounceFriction: 0.30,
-        rollingDecel: 0.8,
+        rollingDecel: 1.18, // Default FAIRWAY (mu=0.12 × 9.81)
         spinDampingPerBounce: 0.85, // Ändrad från 0.75. Mindre direkt spin-död, gör att wedgar spinner mer på greenen (GSPro-stil)
         minBounceVerticalSpeed: 1.0,
         stopSpeed: 0.05 // Sänkt från 0.50. 0.50 kapade av rullningen alldeles för tidigt (~1.1 mph). 0.05 låter bollen rulla ut naturligt.
@@ -647,17 +647,17 @@ window.GolfPhysics = (function() {
                         baseCor = 0.62; cFriction = 0.15; cRollingDecel = 0.5;
                     }
                 } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
-                    baseCor = 0.58; cFriction = 0.15; cRollingDecel = 0.78; // roll_mu 0.08
+                    baseCor = 0.58; cFriction = 0.15; cRollingDecel = 1.18; // roll_mu 0.12 (was 0.08)
                 } else if (impactTerrainType === 'SEMI-ROUGH') {
-                    baseCor = 0.50; cFriction = 0.20; cRollingDecel = 0.98; // roll_mu 0.10
+                    baseCor = 0.50; cFriction = 0.20; cRollingDecel = 2.16; // roll_mu 0.22 (was 0.10)
                 } else if (impactTerrainType === 'ROUGH') {
-                    baseCor = 0.43; cFriction = 0.25; cRollingDecel = 1.47; // roll_mu 0.15
+                    baseCor = 0.43; cFriction = 0.25; cRollingDecel = 3.92; // roll_mu 0.40 (was 0.15)
                 } else if (impactTerrainType === 'DEEP ROUGH') {
-                    baseCor = 0.35; cFriction = 0.35; cRollingDecel = 2.45; // roll_mu 0.25
+                    baseCor = 0.35; cFriction = 0.35; cRollingDecel = 5.89; // roll_mu 0.60 (was 0.25)
                 } else if (impactTerrainType === 'SAND') {
-                    baseCor = 0.30; cFriction = 0.50; cRollingDecel = 3.92; // roll_mu 0.40
+                    baseCor = 0.30; cFriction = 0.50; cRollingDecel = 6.38; // roll_mu 0.65 (was 0.40)
                 } else if (impactTerrainType === 'WASTE') {
-                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 0.49; // roll_mu 0.05
+                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 5.40; // roll_mu 0.55 (was 0.05)
                 }
                 
                 // Variabel COR-ekvation (Sports Engineering 2023)
