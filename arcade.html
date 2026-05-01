@@ -6979,12 +6979,15 @@
             controls.target.set(0, 0, -30);
             controls.update();
         } else if (mode === 'TEST') {
-            // === COURSE VALIDATION GATE ===
-            let validHole = courseHoles.find(h => h && h.flag && h.tees && (h.tees.yellow || h.tees.white || h.tees.red || h.tees.black));
+            // === COURSE VALIDATION GATE (supports ranges) ===
+            let validHole = courseHoles.find(h => h && (
+                (h.flag && h.tees && (h.tees.yellow || h.tees.white || h.tees.red || h.tees.black)) ||
+                (h.tees && h.tees.range)
+            ));
             if (!validHole) {
                 // Show inline toast instead of alert
                 let toast = document.createElement('div');
-                toast.innerHTML = '⚠️ Lägg till minst <b>1 hål</b> med <b>Tee</b> och <b>Flagga</b> för att testa!';
+                toast.innerHTML = '⚠️ Lägg till minst <b>1 hål</b> med <b>Tee</b> och <b>Flagga</b> (eller en <b>Range Tee</b>) för att testa!';
                 toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;padding:14px 28px;border-radius:12px;font-weight:bold;font-size:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);animation:fadeInUp 0.3s ease;';
                 document.body.appendChild(toast);
                 setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s'; }, 2500);
@@ -7016,13 +7019,43 @@
             let mmC = document.getElementById('minimap-container');
             if (mmC) mmC.style.display = 'block';
             
-            let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red) : null;
+            // Find tee — support range tees as fallback
+            let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red || courseHoles[0].tees.range) : null;
+            let isRangeTee = tee && courseHoles[0].tees.range && tee === courseHoles[0].tees.range;
+            
             if(tee) {
                 window.ballPos.x = tee.x; window.ballPos.y = tee.y + 0.2; window.ballPos.z = tee.z;
                 window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
                 window.ballMesh.visible = true;
-                camera.position.set(window.ballPos.x, window.ballPos.y + 2, window.ballPos.z + 10);
-                controls.target.set(window.ballPos.x, window.ballPos.y, window.ballPos.z - 20);
+                
+                if (isRangeTee) {
+                    // RANGE MODE: Camera behind ball, looking along range direction
+                    let dir = tee.rot || 0; // rotation.y in radians
+                    let behindDist = 12, lookAheadDist = 30;
+                    camera.position.set(
+                        window.ballPos.x - Math.sin(dir) * behindDist,
+                        window.ballPos.y + 3,
+                        window.ballPos.z - Math.cos(dir) * behindDist
+                    );
+                    controls.target.set(
+                        window.ballPos.x + Math.sin(dir) * lookAheadDist,
+                        window.ballPos.y,
+                        window.ballPos.z + Math.cos(dir) * lookAheadDist
+                    );
+                    
+                    // Create dummy pinMesh 300m out for flight engine
+                    if (!window.pinMesh || !window.pinMesh.position) {
+                        window.pinMesh = { position: new THREE.Vector3(
+                            tee.x + Math.sin(dir) * 300,
+                            tee.y,
+                            tee.z + Math.cos(dir) * 300
+                        )};
+                    }
+                } else {
+                    // COURSE MODE: Default camera behind ball
+                    camera.position.set(window.ballPos.x, window.ballPos.y + 2, window.ballPos.z + 10);
+                    controls.target.set(window.ballPos.x, window.ballPos.y, window.ballPos.z - 20);
+                }
                 controls.update();
             }
         } else {
