@@ -309,19 +309,22 @@ window.GolfPhysics = (function() {
                 }
             } else if (lieType === 'SEMI-ROUGH') {
                 speedMult = 0.98; spinMult = 0.95; 
-            } else if (lieType === 'DEEP ROUGH' || lieType === 'FESCUE') {
+            } else if (lieType === 'FESCUE') {
+                // Fescue: stiff wiry grass, eats spin, moderate speed loss
+                let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35));
+                speedMult = 1.0 - (0.30 - (0.20 * vlaFactor)); // 30% loss driver, 10% wedge
+                spinMult = 1.0 - (0.55 - (0.35 * vlaFactor));  // 55% spin loss driver, 20% wedge
+            } else if (lieType === 'DEEP ROUGH') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
                 if (Math.random() < 0.25 && vla > 20) {
                     speedMult = 1.03; spinMult = 0.30;
                     console.log("💥 TRACKMAN FLYER-LIE DETECTED (DEEP ROUGH)! Zero spin, hot velocity.");
                 } else {
-                    // Max 25% speed loss for Driver, 10% for Wedge
                     speedMult = 1.0 - (0.25 - (0.15 * vlaFactor));
                     spinMult = 1.0 - (0.60 - (0.40 * vlaFactor));
                 }
             } else if (lieType === 'SAND') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 20) / 30)); 
-                // Max 20% speed loss for low loft, 5% for high loft
                 speedMult = 1.0 - (0.20 - (0.15 * vlaFactor));
                 spinMult = 1.0 - (0.30 - (0.20 * vlaFactor));
             }
@@ -654,7 +657,9 @@ window.GolfPhysics = (function() {
                     baseCor = 0.50; cFriction = 0.20; cRollingDecel = 2.16; // roll_mu 0.22
                 } else if (impactTerrainType === 'ROUGH') {
                     baseCor = 0.43; cFriction = 0.25; cRollingDecel = 3.92; // roll_mu 0.40
-                } else if (impactTerrainType === 'DEEP ROUGH' || impactTerrainType === 'FESCUE') {
+                } else if (impactTerrainType === 'FESCUE') {
+                    baseCor = 0.38; cFriction = 0.30; cRollingDecel = 4.50; // roll_mu 0.46 — between rough and deep rough
+                } else if (impactTerrainType === 'DEEP ROUGH') {
                     baseCor = 0.35; cFriction = 0.35; cRollingDecel = 5.89; // roll_mu 0.60
                 } else if (impactTerrainType === 'SAND') {
                     baseCor = 0.30; cFriction = 0.50; cRollingDecel = 6.38; // roll_mu 0.65
@@ -740,7 +745,9 @@ window.GolfPhysics = (function() {
                     let angleFactor = Math.min(1.0, incidenceAngleDeg / 45.0);
                     angleFactor = angleFactor * angleFactor; // Squared: gentle for putts, steep for wedges
                     let e_t = 1.0 - angleFactor * (1.0 - e_t_base);
-                    e_t = Math.max(0.40, e_t);
+                    // Floor: 0.40 for most surfaces, 0.15 for fescue (steep angles check the ball hard)
+                    let e_t_floor = (impactTerrainType === 'FESCUE') ? 0.15 : 0.40;
+                    e_t = Math.max(e_t_floor, e_t);
                     // Putt 1.5°:  factor=0.001 → e_t=0.999 (zero loss)
                     // Chip 10°:   factor=0.049 → e_t=0.988
                     // 7-iron 25°: factor=0.309 → e_t=0.932 (fairway 0.88→0.963)
