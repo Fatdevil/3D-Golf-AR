@@ -4940,7 +4940,7 @@
     }
     setInterval(updateMemoryBudget, 2000);
 
-    function saveLevel() {
+    function saveLevel(options) {
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, 
@@ -4950,7 +4950,42 @@
             surrounding: h.surrounding || null
         }));
         
-        localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
+        let data = { targets: dumpTargets, holes: dumpHoles };
+        
+        // Full save: include terrain heightmap, biome texture, water, trees
+        if (options && options.full) {
+            let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2);
+            let w_hm = typeof waterGeo !== 'undefined' ? Array.from(waterGeo.attributes.position.array).filter((v, i) => i % 3 === 2) : [];
+            let biome = pCtx.canvas.toDataURL('image/jpeg', 0.8);
+            let w_mask = (typeof wCtx !== 'undefined') ? wCtx.canvas.toDataURL('image/jpeg', 0.8) : null;
+            let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
+            
+            data.terrain_heightmap = {ground: hm, water: w_hm};
+            data.terrain_biomemap = biome;
+            data.terrain_watermask = w_mask;
+            data.trees = dumpTrees;
+            data.theme_data = { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG };
+            data._fullSave = true;
+        }
+        
+        // Pako-compress full saves to avoid localStorage 5MB limit
+        if (options && options.full && typeof pako !== 'undefined') {
+            try {
+                let jsonStr = JSON.stringify(data);
+                let compressed = pako.deflate(jsonStr);
+                let binaryStr = '';
+                for (let i = 0; i < compressed.length; i++) binaryStr += String.fromCharCode(compressed[i]);
+                let b64 = btoa(binaryStr);
+                localStorage.setItem('arcade_custom_level_z', b64);
+                localStorage.removeItem('arcade_custom_level');
+                console.log('[saveLevel] Compressed: ' + (b64.length / 1024).toFixed(1) + 'KB (raw: ' + (jsonStr.length / 1024).toFixed(1) + 'KB)');
+            } catch(e) {
+                console.error('[saveLevel] Compression failed:', e);
+                localStorage.setItem('arcade_custom_level', JSON.stringify(data));
+            }
+        } else {
+            localStorage.setItem('arcade_custom_level', JSON.stringify(data));
+        }
         if (appMode === 'BUILD') window.hasUnsavedChanges = true;
     }
     

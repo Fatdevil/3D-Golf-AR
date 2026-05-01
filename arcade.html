@@ -5231,8 +5231,46 @@
                 }
             } catch(e) { console.error("Cloud fetch fail:", e); }
         }
+        // === LOCAL BRIDGE: Builder saved full course to localStorage ===
+        let localSource = params.get('source');
+        if (localSource === 'local' && !savedStr) {
+            // Try compressed format first (pako)
+            let lsZ = localStorage.getItem('arcade_custom_level_z');
+            if (lsZ && typeof pako !== 'undefined') {
+                try {
+                    let binaryStr = atob(lsZ);
+                    let bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                    let jsonStr = pako.inflate(bytes, { to: 'string' });
+                    let parsed = JSON.parse(jsonStr);
+                    if (parsed._fullSave) {
+                        savedStr = parsed;
+                        isCloud = true; // So terrain heightmap gets loaded
+                        console.log('✅ Loaded COMPRESSED course from builder (' + (lsZ.length / 1024).toFixed(1) + 'KB)');
+                    } else {
+                        savedStr = parsed;
+                    }
+                } catch(e) {
+                    console.error('Decompression failed:', e);
+                }
+            }
+            // Fallback: uncompressed key
+            if (!savedStr) {
+                let ls = localStorage.getItem('arcade_custom_level');
+                if (ls) {
+                    let parsed = JSON.parse(ls);
+                    if (parsed._fullSave) {
+                        savedStr = parsed;
+                        isCloud = true;
+                        console.log('✅ Loaded course from builder (uncompressed)');
+                    } else {
+                        savedStr = parsed;
+                    }
+                }
+            }
+        }
         
-        if (!isCloud) {
+        if (!isCloud && !savedStr) {
             let ls = localStorage.getItem('arcade_custom_level');
             if(ls) savedStr = JSON.parse(ls);
         }
@@ -5336,7 +5374,7 @@
                 }
 
                 if (isCloud && arr.terrain_heightmap) {
-                    let mapData = JSON.parse(arr.terrain_heightmap);
+                    let mapData = (typeof arr.terrain_heightmap === 'string') ? JSON.parse(arr.terrain_heightmap) : arr.terrain_heightmap;
                     let pos = planeGeo.attributes.position;
                     let wPos = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position : null;
                     
