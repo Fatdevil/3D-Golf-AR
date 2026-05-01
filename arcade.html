@@ -4968,10 +4968,13 @@
         if(!name && !options.isDraft) { showError("Please enter a course name!"); return; }
         
         if (!options.isDraft) {
-            let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
-            if(!h1HasTee || !courseHoles[0].flag) {
-                showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag.");
-                return;
+            let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || window._isRangeMode;
+            if (!isRange) {
+                let h1HasTee = courseHoles[0].tees && (courseHoles[0].tees.red || courseHoles[0].tees.yellow || courseHoles[0].tees.white || courseHoles[0].tees.black);
+                if(!h1HasTee || !courseHoles[0].flag) {
+                    showError("Validation Error: You must build at least Hole 1 with a Tee and a Flag.");
+                    return;
+                }
             }
         }
         
