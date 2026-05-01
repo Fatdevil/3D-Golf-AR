@@ -657,7 +657,7 @@ window.GolfPhysics = (function() {
                 } else if (impactTerrainType === 'SAND') {
                     baseCor = 0.30; cFriction = 0.50; cRollingDecel = 6.38; // roll_mu 0.65 (was 0.40)
                 } else if (impactTerrainType === 'WASTE') {
-                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 5.40; // roll_mu 0.55 (was 0.05)
+                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 2.16; // roll_mu 0.22 (was 0.05, overcorrected 0.55)
                 }
                 
                 // Variabel COR-ekvation (Sports Engineering 2023)
