@@ -6926,7 +6926,9 @@
         let btnPlay = document.getElementById('btn-mode-play');
 
         if(btnBuild) {
-            btnBuild.style.display = mode === 'TEST' ? 'block' : 'none';
+            // Hide BUILD button in Range TEST mode (no builder to go back to)
+            let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
+            btnBuild.style.display = (mode === 'TEST' && !isRange) ? 'block' : 'none';
             btnBuild.style.background = '#0f172a';
             btnBuild.style.color = '#38bdf8';
         }
@@ -6944,7 +6946,9 @@
         let rt = document.getElementById('right-toolbar'); if(rt) rt.style.display = mode === 'BUILD' ? 'flex' : 'none';
         let grp = document.getElementById('green-read-panel'); if(grp) grp.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'block' : 'none';
         
-        let tb = document.getElementById('top-bar'); if(tb) tb.style.display = mode === 'PLAY' ? 'none' : 'flex';
+        let tb = document.getElementById('top-bar');
+        let isRangePlay = (mode === 'TEST' || mode === 'PLAY') && ((new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode);
+        if(tb) tb.style.display = (mode === 'PLAY' || isRangePlay) ? 'none' : 'flex';
         
         // Unified Top Bar: Toggle build-only elements
         let assetBudget = document.getElementById('memory-budget-container');
