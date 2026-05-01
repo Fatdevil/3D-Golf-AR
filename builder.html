@@ -9501,18 +9501,60 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // === Fas 1: TESTA BANAN — save full course + open in arcade ===
+    // === TESTA BANAN — Show workflow guide overlay ===
     window.testCourse = function() {
-        try {
-            let newTab = window.open('about:blank', '_blank');
-            saveLevel({ full: true });
-            let url = 'arcade.html?source=local&autorun=setup';
-            if (newTab) { newTab.location.href = url; }
-            else { window.location.href = url; }
-        } catch(e) {
-            console.error('testCourse failed:', e);
-            alert('Kunde inte spara: ' + e.message);
-        }
+        // Remove existing overlay if present
+        let existing = document.getElementById('test-guide-overlay');
+        if (existing) { existing.remove(); return; }
+        
+        let overlay = document.createElement('div');
+        overlay.id = 'test-guide-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);animation:fadeIn 0.2s ease;';
+        
+        overlay.innerHTML = `
+            <div style="background:#1e293b;border:2px solid #38bdf8;border-radius:20px;padding:40px;max-width:480px;width:90%;box-shadow:0 25px 60px rgba(0,0,0,0.6);text-align:center;font-family:system-ui,sans-serif;">
+                <h2 style="color:#fff;margin:0 0 8px 0;font-size:22px;">🔥 Testa din bana</h2>
+                <p style="color:#94a3b8;margin:0 0 28px 0;font-size:14px;">Följ dessa steg för att provspela</p>
+                
+                <div style="text-align:left;margin-bottom:28px;">
+                    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;">
+                        <span style="background:#38bdf8;color:#0f172a;font-weight:bold;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">1</span>
+                        <div>
+                            <div style="color:#fff;font-weight:600;font-size:15px;">Spara banan som Draft</div>
+                            <div style="color:#94a3b8;font-size:13px;margin-top:2px;">Klicka på <b style="color:#38bdf8;">☰ Meny</b> → <b style="color:#eab308;">Spara Draft</b>. Ge banan ett namn.</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;">
+                        <span style="background:#38bdf8;color:#0f172a;font-weight:bold;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">2</span>
+                        <div>
+                            <div style="color:#fff;font-weight:600;font-size:15px;">Gå till Game Mode</div>
+                            <div style="color:#94a3b8;font-size:13px;margin-top:2px;">Öppna <b style="color:#38bdf8;">Arcade Hub</b> och välj din sparade bana.</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:flex-start;gap:14px;">
+                        <span style="background:#38bdf8;color:#0f172a;font-weight:bold;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">3</span>
+                        <div>
+                            <div style="color:#fff;font-weight:600;font-size:15px;">Spela!</div>
+                            <div style="color:#94a3b8;font-size:13px;margin-top:2px;">Konfigurera match-inställningar och starta runda.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display:flex;gap:12px;">
+                    <button onclick="document.getElementById('test-guide-overlay').remove()" 
+                        style="flex:1;padding:14px;border-radius:12px;border:1px solid #475569;background:transparent;color:#94a3b8;font-size:15px;font-weight:600;cursor:pointer;">
+                        Stäng
+                    </button>
+                    <button onclick="document.getElementById('test-guide-overlay').remove(); document.getElementById('btn-hamburger').click();" 
+                        style="flex:1;padding:14px;border-radius:12px;border:none;background:#eab308;color:#0f172a;font-size:15px;font-weight:bold;cursor:pointer;">
+                        📁 Öppna Meny
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
     };
 
     setMode('BUILD'); // Fas 1: Force BUILD mode at boot
