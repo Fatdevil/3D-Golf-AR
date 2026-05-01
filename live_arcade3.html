@@ -268,6 +268,24 @@
             window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
             window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
         </script>
+        
+        <!-- GREEN VIEW TOGGLES -->
+        <button id="btn-toggle-progrid" onclick="window.terrainShaderUniforms.uShowProGrid.value = !window.terrainShaderUniforms.uShowProGrid.value; this.style.borderColor = window.terrainShaderUniforms.uShowProGrid.value ? '#4ade80' : '#475569';" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#4ade80; border:1px solid #475569; font-weight:800; cursor:pointer;" title="Toggle Pro Grid (Green Only)">🌐 PRO GRID</button>
+
+        <div style="width:2px; height:30px; background:#475569; margin-top:5px;"></div>
+
+        <button id="btn-toggle-contour" onclick="window.terrainShaderUniforms.uShowContours.value = !window.terrainShaderUniforms.uShowContours.value; this.style.borderColor = window.terrainShaderUniforms.uShowContours.value ? '#fff' : '#475569';" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#fff; border:1px solid #475569; font-weight:800; cursor:pointer;" title="Toggle Global Contours">〰️ TOPO</button>
+        <button id="btn-toggle-contour-size" onclick="
+            let vals = [0.50, 0.25, 0.10, 0.05];
+            let labels = ['50cm', '25cm', '10cm', '5cm'];
+            let cur = window.terrainShaderUniforms.uContourInterval.value;
+            let idx = vals.indexOf(cur);
+            idx = (idx + 1) % vals.length;
+            window.terrainShaderUniforms.uContourInterval.value = vals[idx];
+            this.innerText = '📏 ' + labels[idx];
+        " style="padding:10px 10px; border-radius:8px; background:rgba(15,23,42,0.8); color:#94a3b8; border:1px solid #475569; font-weight:800; cursor:pointer;" title="Contour Interval">📏 25cm</button>
+        <button id="btn-toggle-elev" onclick="window.terrainShaderUniforms.uShowElevation.value = !window.terrainShaderUniforms.uShowElevation.value; this.style.borderColor = window.terrainShaderUniforms.uShowElevation.value ? '#fbbf24' : '#475569';" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#fbbf24; border:1px solid #475569; font-weight:800; cursor:pointer;" title="Toggle Global Elevation Heatmap">🌡️ ELEV</button>
+
         <a href="hub.html" style="padding:10px 15px; border-radius:8px; background:#1e293b; color:#fff; border:1px solid #475569; text-decoration:none; display:flex; align-items:center; font-size:18px;" title="Home">🏠</a>
         <button id="btn-toggle-unit" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 M' : '📏 YD';" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#facc15; border:1px solid #facc15; font-weight:800; cursor:pointer;" title="Toggle Unit">📏 YD</button>
         <button id="btn-toggle-data" onclick="document.getElementById('gspro-hud').classList.toggle('hidden')" style="padding:10px 15px; border-radius:8px; background:rgba(15,23,42,0.8); color:#38bdf8; border:1px solid #38bdf8; font-weight:800; cursor:pointer;" title="Shot Data">📊</button>
@@ -805,8 +823,138 @@
     
     const planeMat = new THREE.MeshLambertMaterial({ map: mapTex, vertexColors: false });
     
-    // THE STRIPED FAIRWAY SHADER INJECTION
-    // (Mower stripes removed to fix visual artifacts)
+    // --- THE SURGICAL GREEN VIEW SHADER INJECTION ---
+    window.terrainShaderUniforms = {
+        uShowProGrid: { value: false },
+        uShowContours: { value: false },
+        uShowElevation: { value: false },
+        uContourInterval: { value: 0.25 },
+        uContourThickness: { value: 1.5 },
+        uFlagHeight: { value: 0.0 }, // Uppdateras dynamiskt i resetAimTarget
+        tGreenMask: { value: window.greenMaskTex }
+    };
+
+    planeMat.extensions = { derivatives: true };
+    planeMat.onBeforeCompile = function(shader) {
+        shader.uniforms.uShowProGrid = window.terrainShaderUniforms.uShowProGrid;
+        shader.uniforms.uShowContours = window.terrainShaderUniforms.uShowContours;
+        shader.uniforms.uShowElevation = window.terrainShaderUniforms.uShowElevation;
+        shader.uniforms.uContourInterval = window.terrainShaderUniforms.uContourInterval;
+        shader.uniforms.uContourThickness = window.terrainShaderUniforms.uContourThickness;
+        shader.uniforms.uFlagHeight = window.terrainShaderUniforms.uFlagHeight;
+        shader.uniforms.tGreenMask = window.terrainShaderUniforms.tGreenMask;
+
+        shader.vertexShader = shader.vertexShader.replace(
+            'void main() {',
+            'varying vec3 vWorldPosition;\n varying vec2 vCustomUv;\n void main() {\n vCustomUv = uv;\n'
+        );
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\n vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;\n'
+        );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            'void main() {',
+            `varying vec3 vWorldPosition;
+             varying vec2 vCustomUv;
+             uniform bool uShowProGrid;
+             uniform bool uShowContours;
+             uniform bool uShowElevation;
+             uniform float uContourInterval;
+             uniform float uContourThickness;
+             uniform float uFlagHeight;
+             uniform sampler2D tGreenMask;
+             
+             vec3 getElevationColor(float diff) {
+                 float t = clamp((diff - (-5.0)) / (5.0 - (-5.0)), 0.0, 1.0); // -5m to +5m räckvidd
+                 vec3 lowColor  = vec3(0.0, 0.3, 0.8);
+                 vec3 midColor  = vec3(1.0, 1.0, 1.0); // Neutral för Multiply blending
+                 vec3 highColor = vec3(0.9, 0.1, 0.1);
+                 if (t < 0.5) return mix(lowColor, midColor, t * 2.0);
+                 return mix(midColor, highColor, (t - 0.5) * 2.0);
+             }
+             
+             void main() {`
+        );
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
+            
+            vec4 greenMask = texture2D(tGreenMask, vCustomUv);
+            float heatAlpha = greenMask.r; 
+            
+            float elev = vWorldPosition.y;
+            vec3 finalColor = gl_FragColor.rgb;
+            
+            // --- 1. GLOBAL ELEVATION HEATMAP (BUILDER MODE) ---
+            if (uShowElevation) {
+                float diff = elev - uFlagHeight;
+                vec3 hmColor = getElevationColor(diff);
+                // Multiplicera så att vi behåller Lambert-skuggorna (mörkt förblir mörkt)
+                finalColor = finalColor * hmColor * 1.5; 
+            }
+            
+            // --- 2. GLOBAL CONTOUR LINES (BUILDER MODE) ---
+            if (uShowContours) {
+                float contour = mod(elev, uContourInterval);
+                float fw = fwidth(elev);
+                float lineThreshold = max(uContourThickness * fw, uContourInterval * 0.15);
+                
+                if (contour < lineThreshold) {
+                    finalColor = mix(finalColor, vec3(1.0, 1.0, 1.0), 0.8);
+                }
+            }
+            
+            // --- 3. PRO GRID & SLOPE (GREEN ONLY) ---
+            if (uShowProGrid && heatAlpha > 0.1) {
+                // Slope baserat på världsnormal oberoende av kamera!
+                vec3 dx = dFdx(vWorldPosition);
+                vec3 dy = dFdy(vWorldPosition);
+                vec3 worldNormal = normalize(cross(dx, dy));
+                if (worldNormal.y < 0.0) worldNormal = -worldNormal;
+                
+                float slope = 1.0 - worldNormal.y; // 0.0 = flat
+                
+                float gridInterval = 1.0; 
+                float gridX = mod(vWorldPosition.x, gridInterval);
+                float gridZ = mod(vWorldPosition.z, gridInterval);
+                float fwX = fwidth(vWorldPosition.x);
+                float fwZ = fwidth(vWorldPosition.z);
+                
+                float gridThick = 1.5; 
+                float threshX = gridThick * fwX;
+                float threshZ = gridThick * fwZ;
+                
+                // Mjuka upp rutnätet vid extrema avstånd så det inte flimrar (Moiré)
+                if (threshX < gridInterval * 0.5 && threshZ < gridInterval * 0.5) {
+                    bool isGrid = (gridX < max(threshX, gridInterval * 0.02)) || (gridZ < max(threshZ, gridInterval * 0.02));
+                    
+                    if (isGrid) {
+                        vec3 gridColorFlat = vec3(0.0, 1.0, 0.0); // Grön
+                        vec3 gridColorMid = vec3(1.0, 0.9, 0.0);  // Gul
+                        vec3 gridColorSteep = vec3(1.0, 0.0, 0.0); // Röd
+                        
+                        vec3 gridColor;
+                        float s = clamp(slope * 15.0, 0.0, 1.0); 
+                        if (s < 0.5) {
+                            gridColor = mix(gridColorFlat, gridColorMid, s * 2.0);
+                        } else {
+                            gridColor = mix(gridColorMid, gridColorSteep, (s - 0.5) * 2.0);
+                        }
+                        
+                        // Tona ut rutnätet i fjärran (undvik pixelgröt)
+                        float fade = 1.0 - clamp(max(threshX, threshZ) / (gridInterval * 0.5), 0.0, 1.0);
+                        
+                        finalColor = mix(finalColor, gridColor, heatAlpha * 0.9 * fade);
+                    }
+                }
+            }
+            
+            gl_FragColor = vec4(finalColor, gl_FragColor.a);
+            `
+        );
+    };
 
     const plane = new THREE.Mesh(planeGeo, planeMat);
     plane.rotation.x = -Math.PI / 2;
@@ -907,6 +1055,8 @@
         let hole = courseHoles[playingHoleIndex];
         if (hole && hole.flag) {
             window.aimTarget = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
+            if(window.heatmapShaderRef) window.heatmapShaderRef.uniforms.uFlagHeight.value = hole.flag.y;
+            if(window.terrainShaderUniforms) window.terrainShaderUniforms.uFlagHeight.value = hole.flag.y;
         }
     };
 
