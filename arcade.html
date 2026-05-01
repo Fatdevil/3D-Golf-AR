@@ -9084,8 +9084,8 @@
                 
                 // SKIFTA MINIMAP-KAMERANS CENTRUM
                 // Genom att backa kameran minskar vi problemet att UI täcker bollen
-                let offsetDist = dist * 0.35 + 25; // Push tee towards bottom of minimap
-                minimapCamera.position.sub(dir.clone().multiplyScalar(offsetDist));
+                let offsetDist = dist * 0.30 + 20; // Push tee towards bottom of minimap
+                minimapCamera.position.add(dir.clone().multiplyScalar(offsetDist));
                 
                 // Dynamisk Scale beroende på hålets längd
                 let pad = 20 + offsetDist; // Öka padding proportionerligt
