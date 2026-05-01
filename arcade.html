@@ -9072,30 +9072,45 @@
             }
             if (flagTarget) {
                 let fv = flagTarget;
-                
-                // Gör kameran responsiv mot layouten (Ball till Flagga)
-                minimapCamera.position.set((window.ballMesh.position.x + fv.x)/2, 300, (window.ballMesh.position.z + fv.z)/2);
-                
                 let dist = window.ballMesh.position.distanceTo(fv);
                 
-                // Låt "Uppåt" i kartan peka mot flaggan! (Vi räknar ut detta först för offset)
+                // Direction: ball → flag/aim (= "up" in minimap)
                 let dir = new THREE.Vector3().subVectors(fv, window.ballMesh.position);
                 dir.y = 0; dir.normalize();
                 
-                // SKIFTA MINIMAP-KAMERANS CENTRUM
-                // Genom att backa kameran minskar vi problemet att UI täcker bollen
-                let offsetDist = dist * 0.30 + 20; // Push tee towards bottom of minimap
-                minimapCamera.position.add(dir.clone().multiplyScalar(offsetDist));
+                if (window._isRangeMode) {
+                    // === RANGE MODE: Fixed camera, tee at bottom ===
+                    // Camera centered on ball (tee), looking straight down
+                    minimapCamera.position.set(window.ballMesh.position.x, 300, window.ballMesh.position.z);
+                    
+                    // Asymmetric frustum: 90% forward, 10% behind tee
+                    let rangeView = Math.max(dist, 250); // At least 250m visible
+                    let behindTee = 25; // Small margin behind tee
+                    let aspect = 220 / 340; // minimap aspect ratio
+                    let halfWidth = (rangeView + behindTee) * aspect / 2;
+                    
+                    minimapCamera.top = rangeView;       // Lots of space forward
+                    minimapCamera.bottom = -behindTee;    // Minimal space behind tee
+                    minimapCamera.left = -halfWidth;
+                    minimapCamera.right = halfWidth;
+                    
+                    // Shift camera forward so tee sits at very bottom
+                    minimapCamera.position.add(dir.clone().multiplyScalar((rangeView - behindTee) / 2));
+                } else {
+                    // === COURSE MODE: Dynamic framing (existing behavior) ===
+                    minimapCamera.position.set((window.ballMesh.position.x + fv.x)/2, 300, (window.ballMesh.position.z + fv.z)/2);
+                    
+                    let offsetDist = dist * 0.15 + 15;
+                    minimapCamera.position.sub(dir.clone().multiplyScalar(offsetDist));
+                    
+                    let pad = 20 + offsetDist;
+                    minimapCamera.left = -(dist/2 + pad); 
+                    minimapCamera.right = (dist/2 + pad);
+                    minimapCamera.top = (dist/2 + pad) / 0.64;
+                    minimapCamera.bottom = -(dist/2 + pad) / 0.64;
+                }
                 
-                // Dynamisk Scale beroende på hålets längd
-                let pad = 20 + offsetDist; // Öka padding proportionerligt
-                minimapCamera.left = -(dist/2 + pad); 
-                minimapCamera.right = (dist/2 + pad);
-                // Behåll aspect ratio 220x340 = 0.64
-                minimapCamera.top = (dist/2 + pad) / 0.64;
-                minimapCamera.bottom = -(dist/2 + pad) / 0.64;
                 minimapCamera.updateProjectionMatrix();
-
                 minimapCamera.up.set(dir.x, 0, dir.z);
                 minimapCamera.lookAt(minimapCamera.position.x, 0, minimapCamera.position.z);
                 
