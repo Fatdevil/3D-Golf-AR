@@ -6467,6 +6467,7 @@
         window._lastProcessedTick = 0;
         window._rollStartTick = null; // Reset roll acceleration tracker
         window._flightAccumMs = 0;
+        window._smoothLookTarget = null; // Reset smooth camera lookAt target
         isFlying = true;
         
         tracerPointsCount = 0;
@@ -8574,13 +8575,18 @@
                     if (shotDir.lengthSq() > 0.01) shotDir.normalize();
                 }
                 
-                let targetCamPos = window.ballMesh.position.clone().sub(shotDir.multiplyScalar(CAM.FLIGHT_BEHIND));
+                let targetCamPos = window.ballMesh.position.clone().sub(shotDir.clone().multiplyScalar(CAM.FLIGHT_BEHIND));
                 targetCamPos.y = Math.max(CAM.FLIGHT_HEIGHT_MIN, window.ballMesh.position.y + 3);
                 
-                camera.position.x += (targetCamPos.x - camera.position.x) * 0.9;
-                camera.position.y += (targetCamPos.y - camera.position.y) * 0.9;
-                camera.position.z += (targetCamPos.z - camera.position.z) * 0.9;
-                camera.lookAt(window.ballMesh.position);
+                // Broadcast-style smooth follow (0.05 = gentle tracking, no jitter)
+                camera.position.x += (targetCamPos.x - camera.position.x) * 0.05;
+                camera.position.y += (targetCamPos.y - camera.position.y) * 0.05;
+                camera.position.z += (targetCamPos.z - camera.position.z) * 0.05;
+                
+                // Smooth lookAt via lerped target (prevents rotation whiplash)
+                if (!window._smoothLookTarget) window._smoothLookTarget = window.ballMesh.position.clone();
+                window._smoothLookTarget.lerp(window.ballMesh.position, 0.08);
+                camera.lookAt(window._smoothLookTarget);
             }
             
             // --- REAL-TIME HUD UPDATE ---
