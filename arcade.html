@@ -470,6 +470,10 @@
         <div class="hb-section-title">Green Visualization</div>
         <label class="hb-toggle"><span>🔮 Putt-Read Beads</span><input type="checkbox" id="hb-toggle-beads" checked onchange="window.greenBeadsEnabled=this.checked;"></label>
         <label class="hb-toggle"><span>📐 Green Grid</span><input type="checkbox" id="hb-toggle-grid" checked onchange="window.greenGridEnabled=this.checked; if(window.greenGridMesh) window.greenGridMesh.visible=this.checked;"></label>
+        
+        <div class="hb-section-title">Range Tools</div>
+        <label class="hb-toggle"><span>🎯 Show All Traces</span><input type="checkbox" id="hb-toggle-traces" onchange="window.keepAllTraces=this.checked;"></label>
+        <button class="hb-btn" onclick="window.clearSavedTraces(); toggleHamburgerMenu();">🗑️ Clear All Traces</button>
     </div>
 
     <!-- NEW DYNAMIC HUD -->
@@ -4613,6 +4617,29 @@
     scene.add(window.ballGlowLight);
 
     let tracerPointsCount = 0;
+    window.keepAllTraces = false;
+    let savedTraces = [];
+    
+    window.clearSavedTraces = function() {
+        savedTraces.forEach(t => scene.remove(t));
+        savedTraces.length = 0;
+    };
+    
+    function saveCurrentTrace() {
+        if (tracerPointsCount < 2) return;
+        let posArr = new Float32Array(tracerPointsCount * 3);
+        posArr.set(tracerPositions.subarray(0, tracerPointsCount * 3));
+        let colArr = new Float32Array(tracerPointsCount * 3);
+        colArr.set(tracerColors.subarray(0, tracerPointsCount * 3));
+        
+        let geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+        let mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false });
+        let line = new THREE.Line(geo, mat);
+        scene.add(line);
+        savedTraces.push(line);
+    }
 
     const targets = [];
     
@@ -6470,6 +6497,8 @@
         window._smoothLookTarget = null; // Reset smooth camera lookAt target
         isFlying = true;
         
+        // Save previous trace if "Show All Traces" is enabled
+        if (window.keepAllTraces && tracerPointsCount > 1) saveCurrentTrace();
         tracerPointsCount = 0;
         flightTracer.geometry.setDrawRange(0, 0);
         // Glow tracer shares geometry - ensure visibility matches style
