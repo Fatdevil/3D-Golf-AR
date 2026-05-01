@@ -5194,6 +5194,18 @@
         if (autoRun === 'new_build') {
             if (typeof executeClear === 'function') executeClear();
             else localStorage.removeItem('arcade_custom_level');
+            
+            // Range mode: hide standard tee buttons, show only Range Tee + Flag
+            if (params.get('mode') === 'range') {
+                window._isRangeMode = true;
+                ['btn-set-tee-red','btn-set-tee-yellow','btn-set-tee-white','btn-set-tee-black'].forEach(id => {
+                    let btn = document.getElementById(id);
+                    if (btn) btn.style.display = 'none';
+                });
+                // Auto-select Range Tee as default tool
+                setTimeout(() => { if (typeof setHoleItem === 'function') setHoleItem('TEE_RANGE'); }, 500);
+            }
+            
             setMode('BUILD');
             setTimeout(() => {
                 let loader = document.getElementById('global-loader');
@@ -7470,7 +7482,10 @@
                 hole.tees[teeType] = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z, rot: 0 };
                 
                 if(teeType === 'range') {
+                    // Start range tee facing AWAY from camera (Math.PI = 180°)
+                    hole.tees[teeType].rot = Math.PI;
                     hole.teeMeshes[teeType] = createRangeTeeObject(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z);
+                    hole.teeMeshes[teeType].rotation.y = Math.PI;
                 } else {
                     let col = 0xffffff;
                     if(teeType === 'red') col = 0xef4444;
