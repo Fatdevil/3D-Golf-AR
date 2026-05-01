@@ -6947,6 +6947,8 @@
         
         let lt = document.getElementById('left-toolbar'); if(lt) lt.style.display = mode === 'BUILD' ? 'grid' : 'none';
         let rt = document.getElementById('right-toolbar'); if(rt) rt.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        let elevHud = document.getElementById('elevation-hud'); if(elevHud) elevHud.style.display = mode === 'BUILD' ? 'flex' : 'none';
+        let toolHints = document.getElementById('tool-hints'); if(toolHints) toolHints.style.display = mode === 'BUILD' ? 'block' : 'none';
         let grp = document.getElementById('green-read-panel'); if(grp) grp.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'block' : 'none';
         
         let tb = document.getElementById('top-bar');
