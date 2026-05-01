@@ -7075,6 +7075,14 @@
                             tee.z + Math.cos(dir) * 300
                         )};
                     }
+                    
+                    // Set aim target straight along range direction
+                    if (!window.aimTarget) window.aimTarget = new THREE.Vector3();
+                    window.aimTarget.set(
+                        tee.x + Math.sin(dir) * 200,
+                        tee.y,
+                        tee.z + Math.cos(dir) * 200
+                    );
                 } else {
                     // COURSE MODE: Default camera behind ball
                     camera.position.set(window.ballPos.x, window.ballPos.y + 2, window.ballPos.z + 10);
