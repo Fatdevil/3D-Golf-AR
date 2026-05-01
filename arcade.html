@@ -5434,9 +5434,9 @@
         if (autoRun === 'setup') {
             setMode('PLAY');
             if (typeof startRound === 'function') setTimeout(startRound, 500);
-        } else if (autoRun === 'edit_build' || autoRun === 'build' || editCode) {
+        } else if (autoRun === 'edit_build' || autoRun === 'build') {
             setMode('BUILD');
-        } else if (courseCode) {
+        } else if (courseCode || editCode) {
             setMode('PLAY');
             if (typeof startRound === 'function') setTimeout(startRound, 500);
         } else if (!autoRun && !courseCode && !editCode) {
