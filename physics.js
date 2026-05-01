@@ -260,7 +260,20 @@ window.GolfPhysics = (function() {
      */
     function simulateFlight(input, envCtx) {
         let startPosXZY = input.startPos || [0, 0, 0];
-        let baseSpeedMph = input.ballSpeedMph !== undefined ? input.ballSpeedMph : (input.vMag || 0);
+        
+        // RISK-01 FIX: Never guess units. Require explicit ballSpeedMph.
+        // Old fallback (input.vMag || 0) was dangerous: a vMag in m/s would be
+        // treated as mph → 68 m/s driver → 30 m/s → 75 yards instead of 215.
+        // If ballSpeedMph is missing, log a clear error and abort with 0 speed.
+        let baseSpeedMph = input.ballSpeedMph;
+        if (baseSpeedMph === undefined || baseSpeedMph === null) {
+            console.warn('[physics] ballSpeedMph saknas i input. Kontrollera att LM-bryggan skickar ballSpeedMph (mph). Använder 0.');
+            baseSpeedMph = 0;
+        }
+        
+        // Legacy fields — kept as fallbacks but explicitly documented:
+        // spinTotal: old internal field, always in rpm. Safe fallback.
+        // vLa, vHla, spinAxis: old internal fields. Safe fallbacks.
         let baseSpinRpm = input.totalSpinRpm !== undefined ? input.totalSpinRpm : (input.spinTotal || 2500);
         let vla = input.launchAngleDeg !== undefined ? input.launchAngleDeg : (input.vLa || 0);
         let azimDegIn = input.azimDeg !== undefined ? input.azimDeg : (input.vHla || 0);
@@ -350,7 +363,9 @@ window.GolfPhysics = (function() {
         let spin = [sX, sY, sZ];
         
         let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;
-        let tCelsius = (envCtx && envCtx.temperatureC !== undefined) ? envCtx.temperatureC : 25;
+        // Fallback 15°C = USGA/Trackman standard (59°F). Matches matchSettings.temperatureC default.
+        // Was 25°C — inconsistent with matchSettings which defaults to 15°C since the temperature fix.
+        let tCelsius = (envCtx && envCtx.temperatureC !== undefined) ? envCtx.temperatureC : 15;
         let windVec = (envCtx && envCtx.wind) ? envCtx.wind : [0, 0, 0];
         
         let state = {
@@ -601,7 +616,9 @@ window.GolfPhysics = (function() {
                 // Bestäm markens fysikegenskaper
                 let impactTerrainType = 'FAIRWAY';
                 if (envCtx && envCtx.checkCollisionCallback) {
-                    let impactRes = envCtx.checkCollisionCallback(impactPos[0], impactPos[1], 0);
+                    // BUG-03 FIX: Pass actual impact height (was hardcoded 0) so
+                    // cylinder/sphere/tree physics use correct height for collision.
+                    let impactRes = envCtx.checkCollisionCallback(impactPos[0], impactPos[1], impactPos[2]);
                     if (impactRes && impactRes.type) impactTerrainType = impactRes.type;
                 }
                 
@@ -819,11 +836,23 @@ window.GolfPhysics = (function() {
                 let speedXY = vecMag(state.vel);
                 
                 // Övergång Skid -> Roll
+                // BUG-05 FIX: Surface-specific skid→roll threshold.
+                // Previous universal 2.0 m/s was too high for fast greens (Stimp 12+).
                 if (state.phase === "skid") {
                     // Så länge forward speed skiljer sig drastiskt från spinn-speed, sladdar vi!
                     let spinSpeed = Math.sqrt(state.spin[0]*state.spin[0] + state.spin[1]*state.spin[1]) * RADIUS;
-                    // Ren approximationsgräns. I snitt ca 10-20% av en putt.
-                    if (Math.abs(speedXY - spinSpeed) < 1.0 || speedXY < 2.0) {
+                    const SKID_TO_ROLL_THRESHOLD = {
+                        'GREEN':      0.8,  // Fast surface: low threshold
+                        'TEE':        1.0,
+                        'FAIRWAY':    1.5,
+                        'SEMI-ROUGH': 1.8,
+                        'ROUGH':      2.0,
+                        'DEEP ROUGH': 2.5,
+                        'SAND':       2.5,
+                        'WASTE':      1.5,
+                    };
+                    let skidThreshold = SKID_TO_ROLL_THRESHOLD[state.terrainType] || 1.5;
+                    if (Math.abs(speedXY - spinSpeed) < skidThreshold || speedXY < skidThreshold) {
                         state.phase = "roll"; // Hjulet har fått fäste!
                     }
                 }
@@ -860,12 +889,20 @@ window.GolfPhysics = (function() {
                     } else if (speedXY > captureThreshold && speedXY <= 2.2 && offsetFactor > 0.3) {
                         // LIP OUT!
                         console.log("😥 LIP OUT! Fart: " + speedXY.toFixed(2) + " m/s, Offset: " + offsetFactor.toFixed(2));
-                        state.vel[0] = state.vel[0] * 0.4 + (dX * 18.0); 
+                        state.vel[0] = state.vel[0] * 0.4 + (dX * 18.0);
                         state.vel[1] = state.vel[1] * 0.4 + (dY * 18.0);
-                        state.vel[2] = 0.5; 
                         state.pos[0] += (dX / distToCenter) * 0.02;
                         state.pos[1] += (dY / distToCenter) * 0.02;
-                        state.phase = "bounce"; 
+                        // BUG-06 FIX: A ball in skid phase gliding into the cup should
+                        // not receive an upward vel[2] = +0.5 bounce — it is already
+                        // ground-hugging. Only apply the upward kick for flight/bounce phases.
+                        if (state.phase !== 'skid') {
+                            state.vel[2] = 0.5;
+                            state.phase = "bounce";
+                        } else {
+                            // Skid lip-out: tangential deflection only, stay on ground
+                            state.phase = "roll";
+                        }
                     }
                 } 
                 // Om vi redan ÄR nere i hålet (under markytan Z)

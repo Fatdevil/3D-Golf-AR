@@ -244,6 +244,174 @@
       margin-bottom: 20px;
   }
   @keyframes spin { 100% { transform: rotate(360deg); } }
+
+  /* ============================================================
+   * MOBILE SWING UI — responsive breakpoint + swing components
+   * ============================================================ */
+
+  /* Hide desktop number-input tools on touch/mobile devices */
+  body.swing-mode #manual-tools { display: none !important; }
+
+  /* --- Swing Overlay --- */
+  #swing-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 5000;
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+  }
+  #swing-overlay.active { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+  /* --- Club selector bar --- */
+  #club-selector {
+      display: none;
+      position: fixed;
+      bottom: 100px;
+      left: 0; right: 0;
+      z-index: 4999;
+      justify-content: center;
+      gap: 0;
+      overflow-x: auto;
+      padding: 0 10px;
+      scrollbar-width: none;
+      pointer-events: auto;
+  }
+  #club-selector::-webkit-scrollbar { display: none; }
+  body.swing-mode #club-selector { display: flex; }
+
+  .club-btn {
+      flex: 0 0 auto;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-width: 58px; padding: 8px 6px;
+      background: rgba(15,23,42,0.85);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-right: none;
+      color: #94a3b8;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px; font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+  }
+  .club-btn:first-child { border-radius: 12px 0 0 12px; }
+  .club-btn:last-child  { border-radius: 0 12px 12px 0; border-right: 1px solid rgba(255,255,255,0.12); }
+  .club-btn .club-icon  { font-size: 18px; margin-bottom: 2px; }
+  .club-btn .club-dist  { font-size: 9px; color: #64748b; margin-top: 1px; }
+  .club-btn.selected    { background: rgba(56,189,248,0.25); border-color: #38bdf8; color: #fff; }
+  .club-btn.selected .club-dist { color: #7dd3fc; }
+
+  /* --- Swing launch button --- */
+  #swing-launch-btn {
+      display: none;
+      position: fixed;
+      bottom: 28px;
+      left: 50%; transform: translateX(-50%);
+      z-index: 4999;
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 16px 48px;
+      font-family: 'Inter', sans-serif;
+      font-size: 17px; font-weight: 900;
+      letter-spacing: 1px;
+      cursor: pointer;
+      box-shadow: 0 6px 24px rgba(56,189,248,0.4);
+      pointer-events: auto;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s;
+  }
+  #swing-launch-btn:active { transform: translateX(-50%) scale(0.96); }
+  body.swing-mode #swing-launch-btn { display: block; }
+
+  /* --- Swing Circle Container --- */
+  #swing-circle-container {
+      position: relative;
+      width: 260px; height: 260px;
+      margin-bottom: 20px;
+  }
+  #swing-svg {
+      width: 100%; height: 100%;
+      filter: drop-shadow(0 0 18px rgba(56,189,248,0.35));
+  }
+
+  /* Precision zones on the ring (background arc colours) */
+  .zone-miss    { stroke: rgba(239,68,68,0.35); }
+  .zone-ok      { stroke: rgba(251,191,36,0.45); }
+  .zone-perfect { stroke: rgba(74,222,128,0.60); }
+
+  /* Power ring — animated via stroke-dasharray driven by JS */
+  #power-ring-track { stroke: rgba(255,255,255,0.08); fill: none; }
+  #power-ring-fill  {
+      fill: none;
+      stroke: #38bdf8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.03s linear, stroke 0.2s;
+  }
+
+  /* Direction arm */
+  #dir-arm {
+      stroke: #fff;
+      stroke-width: 3;
+      stroke-linecap: round;
+      transform-origin: 130px 130px;
+      transition: opacity 0.2s;
+      opacity: 0;
+  }
+  #dir-arm.active { opacity: 1; }
+
+  /* Centre dot */
+  #centre-dot { fill: #38bdf8; }
+
+  /* --- Result flash --- */
+  #swing-result-flash {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -60%) scale(0.8);
+      font-family: 'Inter', sans-serif;
+      font-size: 28px; font-weight: 900;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s;
+      z-index: 5001;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  }
+  #swing-result-flash.show {
+      opacity: 1;
+      transform: translate(-50%, -60%) scale(1.1);
+  }
+
+  /* --- Swing info bar (club name + distance) --- */
+  #swing-info {
+      display: none;
+      position: fixed;
+      top: 80px;
+      left: 50%; transform: translateX(-50%);
+      background: rgba(15,23,42,0.88);
+      border: 1px solid rgba(56,189,248,0.3);
+      border-radius: 20px;
+      padding: 8px 22px;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 700;
+      z-index: 4998;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+  }
+  body.swing-mode #swing-info { display: block; }
+  #swing-info .si-club  { color: #38bdf8; }
+  #swing-info .si-dist  { color: #fbbf24; margin-left: 12px; }
+
+  /* Auto-hide desktop penalty/flyover buttons in swing mode on small screens */
+  @media (max-width: 768px) {
+      body.swing-mode #btn-flyover,
+      body.swing-mode #btn-cam-mode { display: none !important; }
+  }
   </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -301,7 +469,7 @@
         
         <div class="hb-section-title">Green Visualization</div>
         <label class="hb-toggle"><span>🔮 Putt-Read Beads</span><input type="checkbox" id="hb-toggle-beads" checked onchange="window.greenBeadsEnabled=this.checked;"></label>
-        <label class="hb-toggle"><span>📐 Green Grid</span><input type="checkbox" id="hb-toggle-grid" onchange="window.greenGridEnabled=this.checked; if(window.greenGridMesh) window.greenGridMesh.visible=this.checked;"></label>
+        <label class="hb-toggle"><span>📐 Green Grid</span><input type="checkbox" id="hb-toggle-grid" checked onchange="window.greenGridEnabled=this.checked; if(window.greenGridMesh) window.greenGridMesh.visible=this.checked;"></label>
     </div>
 
     <!-- NEW DYNAMIC HUD -->
@@ -915,7 +1083,107 @@
             <button onclick="takePenaltyDrop()" style="background:#ef4444; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Add Penalty Stroke">🛑 PENALTY</button>
         </div>
     </div>
-    
+
+    <!-- =====================================================
+         SWING UI — Mobile / Swing-mode Play Interface
+         Activated by SwingEngine.enableSwingMode()
+         ===================================================== -->
+
+    <!-- Info bar: current club + distance to pin -->
+    <div id="swing-info">
+        <span class="si-club" id="si-club-name">Driver</span>
+        <span class="si-dist" id="si-dist-label">---</span>
+    </div>
+
+    <!-- Swing circle overlay (fullscreen, transparent bg → see the 3D scene) -->
+    <div id="swing-overlay">
+        <div id="swing-circle-container">
+            <svg id="swing-svg" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+                <!-- Outer glow ring (decorative) -->
+                <circle cx="130" cy="130" r="118" fill="none" stroke="rgba(56,189,248,0.06)" stroke-width="2"/>
+
+                <!-- Precision zone arcs: miss (red), ok (yellow), perfect (green) -->
+                <!-- Circumference of r=100 ≈ 628px. Zones: miss 40%, ok 30%, perfect 30% -->
+                <!-- Positioned at top (−90° offset). Using dasharray/dashoffset to paint arcs. -->
+                <circle cx="130" cy="130" r="100" fill="none" stroke-width="18" class="zone-miss"
+                    stroke-dasharray="628" stroke-dashoffset="0"
+                    transform="rotate(-90 130 130)"/>
+                <circle cx="130" cy="130" r="100" fill="none" stroke-width="18" class="zone-ok"
+                    stroke-dasharray="188 440"
+                    stroke-dashoffset="-126"
+                    transform="rotate(-90 130 130)"/>
+                <circle cx="130" cy="130" r="100" fill="none" stroke-width="18" class="zone-perfect"
+                    stroke-dasharray="94 534"
+                    stroke-dashoffset="-220"
+                    transform="rotate(-90 130 130)"/>
+
+                <!-- Power ring track (ghost) -->
+                <circle id="power-ring-track" cx="130" cy="130" r="100" stroke-width="8"
+                    stroke-dasharray="628" stroke-dashoffset="0"
+                    transform="rotate(-90 130 130)"/>
+
+                <!-- Power ring fill — JS drives stroke-dashoffset to animate power 0→100→0 -->
+                <circle id="power-ring-fill" cx="130" cy="130" r="100" stroke-width="8"
+                    stroke-dasharray="628" stroke-dashoffset="628"
+                    transform="rotate(-90 130 130)"/>
+
+                <!-- Direction arm — JS rotates via transform attribute -->
+                <line id="dir-arm" x1="130" y1="130" x2="130" y2="38" stroke-width="3"/>
+
+                <!-- Centre pip -->
+                <circle id="centre-dot" cx="130" cy="130" r="6"/>
+
+                <!-- Phase label -->
+                <text id="swing-phase-label" x="130" y="160"
+                    text-anchor="middle" fill="rgba(255,255,255,0.7)"
+                    font-family="Inter,sans-serif" font-size="13" font-weight="700">
+                    TAP TO SET POWER
+                </text>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Club selector swipebar -->
+    <div id="club-selector">
+        <button class="club-btn selected" data-club="DRIVER"  onclick="SwingEngine.selectClub('DRIVER')">
+            <span class="club-icon">🏌️</span><span>Driver</span><span class="club-dist">220y</span>
+        </button>
+        <button class="club-btn" data-club="W3"    onclick="SwingEngine.selectClub('W3')">
+            <span class="club-icon">🪵</span><span>3 Wood</span><span class="club-dist">200y</span>
+        </button>
+        <button class="club-btn" data-club="I5"    onclick="SwingEngine.selectClub('I5')">
+            <span class="club-icon">⛳</span><span>5 Iron</span><span class="club-dist">180y</span>
+        </button>
+        <button class="club-btn" data-club="I7"    onclick="SwingEngine.selectClub('I7')">
+            <span class="club-icon">⛳</span><span>7 Iron</span><span class="club-dist">160y</span>
+        </button>
+        <button class="club-btn" data-club="I9"    onclick="SwingEngine.selectClub('I9')">
+            <span class="club-icon">⛳</span><span>9 Iron</span><span class="club-dist">140y</span>
+        </button>
+        <button class="club-btn" data-club="PW"    onclick="SwingEngine.selectClub('PW')">
+            <span class="club-icon">🏌️</span><span>PW</span><span class="club-dist">120y</span>
+        </button>
+        <button class="club-btn" data-club="SW"    onclick="SwingEngine.selectClub('SW')">
+            <span class="club-icon">🏖️</span><span>Sand</span><span class="club-dist">90y</span>
+        </button>
+        <button class="club-btn" data-club="LW"    onclick="SwingEngine.selectClub('LW')">
+            <span class="club-icon">🎯</span><span>Lob</span><span class="club-dist">60y</span>
+        </button>
+        <button class="club-btn" data-club="PUTT"  onclick="SwingEngine.selectClub('PUTT')">
+            <span class="club-icon">🥅</span><span>Putter</span><span class="club-dist">---</span>
+        </button>
+    </div>
+
+    <!-- Main swing launch button -->
+    <button id="swing-launch-btn"
+        ontouchstart="handleSwingTap(event)"
+        onclick="if(!('ontouchstart' in window)) SwingEngine.onTap()">
+        🏌️ SWING
+    </button>
+
+    <!-- Result quality flash -->
+    <div id="swing-result-flash"></div>
+
     <!-- GOLF OS ROUND SETTINGS -->
     <div id="settings-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center; pointer-events:auto; font-family:'Inter', sans-serif;">
         <div style="background:#0f172a; padding:30px; border-radius:20px; border:2px solid #38bdf8; width:700px; text-align:left; box-shadow: 0 10px 40px rgba(56,189,248,0.3); max-height:90vh; overflow-y:auto;">
@@ -3980,10 +4248,106 @@
     const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
     
     window.greenBeadsEnabled = true;  // Toggle from hamburger menu
-    window.greenGridEnabled = false;  // Toggle from hamburger menu
-    window.greenGridMesh = null;      // Grid line mesh on green surface
+    window.greenGridEnabled = true;   // BUG-01 FIX: Default ON (was false, making grid never visible)
+    window.greenGridMesh = null;      // Grid line mesh on green surface — built ONCE per hole landing
+    window.greenGridForHoleIndex = -1; // Track which hole the grid was built for
     const BEAD_ACTIVATION_DISTANCE = 45; // meters (~50 yards) from flag
     window.breakLineMesh = null;
+
+    // BUG-04 FIX: buildGreenGrid() is called ONCE when ball lands on green,
+    // NOT inside the animate() loop. The animate loop only toggles .visible.
+    window.buildGreenGrid = function(hole, holeIndex) {
+        // Guard: skip rebuild if this hole's grid is already built and visible,
+        // OR if this hole has already been built once (even if mesh was disposed by
+        // an external codepath without resetting the index — e.g. water drop → re-land).
+        if (window.greenGridForHoleIndex === holeIndex) {
+            // Same hole — if mesh still exists, nothing to do
+            if (window.greenGridMesh) return;
+            // Mesh gone but index still set: allow rebuild (e.g. after a manual dispose)
+        }
+        
+        // Dispose previous geometry/material (correct THREE.js order: remove before dispose)
+        if (window.greenGridMesh) {
+            scene.remove(window.greenGridMesh);
+            window.greenGridMesh.geometry.dispose();
+            window.greenGridMesh.material.dispose();
+            window.greenGridMesh = null;
+        }
+        
+        let gridPoints = [];
+        let gridStep = 1.0;  // 1 meter spacing
+        let gridRange = 25;
+        let sampleStep = 0.5;
+        
+        // Horizontal grid lines (X direction)
+        for (let z = -gridRange; z <= gridRange; z += gridStep) {
+            let lineStart = null;
+            for (let x = -gridRange; x <= gridRange; x += sampleStep) {
+                let wx = hole.flag.x + x;
+                let wz = hole.flag.z + z;
+                let surf = localGetTerrainAt(wx, -wz);
+                if (surf && surf.type === 'GREEN') {
+                    let pt = new THREE.Vector3(wx, surf.z + 0.03, wz);
+                    if (lineStart) {
+                        gridPoints.push(lineStart.x, lineStart.y, lineStart.z);
+                        gridPoints.push(pt.x, pt.y, pt.z);
+                    }
+                    lineStart = pt;
+                } else {
+                    lineStart = null;
+                }
+            }
+        }
+        
+        // Vertical grid lines (Z direction)
+        for (let x = -gridRange; x <= gridRange; x += gridStep) {
+            let lineStart = null;
+            for (let z = -gridRange; z <= gridRange; z += sampleStep) {
+                let wx = hole.flag.x + x;
+                let wz = hole.flag.z + z;
+                let surf = localGetTerrainAt(wx, -wz);
+                if (surf && surf.type === 'GREEN') {
+                    let pt = new THREE.Vector3(wx, surf.z + 0.03, wz);
+                    if (lineStart) {
+                        gridPoints.push(lineStart.x, lineStart.y, lineStart.z);
+                        gridPoints.push(pt.x, pt.y, pt.z);
+                    }
+                    lineStart = pt;
+                } else {
+                    lineStart = null;
+                }
+            }
+        }
+        
+        if (gridPoints.length > 0) {
+            let gridGeo = new THREE.BufferGeometry();
+            gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPoints, 3));
+            let gridMat = new THREE.LineBasicMaterial({
+                // BUG-01 FIX: Raised opacity from 0.18 (near-invisible) to 0.45
+                color: 0xffffff, transparent: true, opacity: 0.45,
+                depthTest: true, depthWrite: false
+            });
+            window.greenGridMesh = new THREE.LineSegments(gridGeo, gridMat);
+            // BUG-01 FIX: Set visibility explicitly — don't rely on THREE.js default
+            window.greenGridMesh.visible = window.greenGridEnabled;
+            scene.add(window.greenGridMesh);
+            window.greenGridForHoleIndex = holeIndex;
+            console.log(`📐 Green Grid built for hole ${holeIndex}: ${gridPoints.length / 6} line segments`);
+        }
+    };
+
+    // Reset grid when moving to a new hole.
+    // IMPORTANT: scene.remove() BEFORE dispose() — THREE.js internal refs must
+    // be released from the scene graph before GPU resources are freed.
+    window.resetGreenGrid = function() {
+        if (window.greenGridMesh) {
+            scene.remove(window.greenGridMesh);           // 1. Remove from scene graph first
+            window.greenGridMesh.geometry.dispose();      // 2. Free GPU vertex buffer
+            window.greenGridMesh.material.dispose();      // 3. Free GPU shader/texture
+            window.greenGridMesh = null;                  // 4. Release JS reference
+        }
+        window.greenGridForHoleIndex = -1; // Force rebuild on next green landing
+    };
     
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
     const brushMat = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
@@ -5093,7 +5457,8 @@
         windStrength: 0,
         greenStimp: 10,
         greenFirmness: 'NORMAL',
-        altitude: 0
+        altitude: 0,
+        temperatureC: 15   // USGA/Trackman standard ref (59°F). Was hardcoded 25°C in envCtx.
     };
 
     function updateWindEngine() {
@@ -5317,6 +5682,10 @@
             alert("Hole " + (index+1) + " is not fully built!");
             return;
         }
+
+        // Destroy previous hole's green grid — frees GPU geometry + material.
+        // buildGreenGrid() will rebuild it fresh when ball lands on the new green.
+        if (typeof window.resetGreenGrid === 'function') window.resetGreenGrid();
         
         // BUG-06 FIX: Set pinMesh when teleporting to a new hole
         if (hole.flagMesh) {
@@ -5421,6 +5790,10 @@
         p.lie = {x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z};
 
         if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+        // Sync swing club selector with new ball position after landing
+        if (window.SwingEngine && document.body.classList.contains('swing-mode')) {
+            SwingEngine.updateSwingInfoBar();
+        }
 
         if (p.strokes + p.penaltyStrokes >= maxScore && maxConcede !== 99 && !p.holedOut) {
             p.holedOut = true;
@@ -5708,6 +6081,24 @@
     function triggerRealShot(data) {
         if(isFlying) return;
         
+        // RISK-02 FIX: Normalize BackSpin/SideSpin → TotalSpin/SpinAxis if bridge sends
+        // component form instead of polar form. Handles both casing variants:
+        //   SkyTrak direct protocol: BackSpin, SideSpin (PascalCase)
+        //   Some GSPro variants:     backspin, sidespin (camelCase)
+        // Sign convention: -ss follows Trackman standard (positive spinAxis = fade/right).
+        // This is identical to the conversion in fireShot() (manual UI path).
+        if (data.totalSpinRpm === undefined || data.totalSpinRpm === null) {
+            let bs = data.BackSpin ?? data.backspin ?? null;
+            let ss = data.SideSpin ?? data.sidespin ?? null;
+            if (bs !== null) {
+                bs = parseFloat(bs) || 0;
+                ss = parseFloat(ss) || 0;
+                data.totalSpinRpm = Math.sqrt(bs * bs + ss * ss);
+                data.spinAxisDeg  = Math.atan2(-ss, bs) * (180 / Math.PI);
+                console.log('[LM] Normalized BackSpin/SideSpin → totalSpinRpm:', data.totalSpinRpm.toFixed(0), 'spinAxisDeg:', data.spinAxisDeg.toFixed(1));
+            }
+        }
+        
         if(document.getElementById('hud-cp')) document.getElementById('hud-cp').innerText = typeof data.clubPathDeg === 'number' ? data.clubPathDeg.toFixed(1) + '°' : '---';
         if(document.getElementById('hud-ftp')) document.getElementById('hud-ftp').innerText = typeof data.faceToPathDeg === 'number' ? data.faceToPathDeg.toFixed(1) + '°' : '---';
         if(document.getElementById('hud-aoa')) document.getElementById('hud-aoa').innerText = typeof data.clubAoADeg === 'number' ? data.clubAoADeg.toFixed(1) + '°' : '---';
@@ -5814,6 +6205,13 @@
         }
         
         let envAlt = window.matchSettings ? window.matchSettings.altitude : 0;
+        // TEMP FIX: Wire actual temperature from matchSettings into envCtx.
+        // calculateAirDensity() takes (altFeet, tempC) — if temperatureC is hardcoded
+        // it never reaches the function and all density calcs use 25°C regardless.
+        // Default 15°C = USGA/Trackman standard reference (not 25°C which biases carry long).
+        let envTemp = (window.matchSettings && window.matchSettings.temperatureC !== undefined)
+            ? window.matchSettings.temperatureC
+            : 15;
         
         let windVecStr = JSON.stringify(window.currentWindVec);
         console.log("WIND INJECTED TO PHYSICS:", windVecStr, "SPEED:", window.currentWindMph, "DIR:", window.currentWindDir);
@@ -5821,7 +6219,7 @@
         var envCtx = {
             wind: window.currentWindVec,
             altitudeFeet: envAlt,
-            temperatureC: 25,
+            temperatureC: envTemp,  // Now driven by matchSettings.temperatureC (default 15°C)
             cupPositionLocal: cupPosLocal,
             greenFirmness: window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL',
             checkCollisionCallback: function(x, y, z) { 
@@ -7723,19 +8121,22 @@
                         if (slopeMag > 0.001) {
                             let dirX = fallX / slopeMag;
                             let dirZ = fallZ / slopeMag;
-                            let speed = slopeMag * stimp * 2.0; 
-                            
-                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2);
-                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2); 
+                            let speed = slopeMag * stimp * 2.0;
+                            // BUG-07: Grass grain uses hole-index seed for per-hole variation.
+                            // Multiplier 7.3 (irrational-ish) avoids visible repetition patterns.
+                            let grainSeed = (typeof playingHoleIndex !== 'undefined') ? playingHoleIndex * 7.3 : 0;
+                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2 + grainSeed);
+                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2 + grainSeed);
                             let currentStimp = window.GREEN_STIMP || 10.0;
                             let grainScale = 0.03 * (10.0 / currentStimp);
                             let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
-                            
                             bead.position.x += (dirX * speed + (sx/gl) * grainScale * 25.0) * dt;
                             bead.position.z += (dirZ * speed + (sz/gl) * grainScale * 25.0) * dt;
                         } else {
-                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2);
-                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2); 
+                            // Flat green: grain only, seeded per hole
+                            let grainSeed = (typeof playingHoleIndex !== 'undefined') ? playingHoleIndex * 7.3 : 0;
+                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2 + grainSeed);
+                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2 + grainSeed);
                             let currentStimp = window.GREEN_STIMP || 10.0;
                             let grainScale = 0.03 * (10.0 / currentStimp);
                             let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
@@ -7759,66 +8160,14 @@
                 window.greenBeads = [];
             }
             
-            // --- GREEN GRID (toggle: window.greenGridEnabled) ---
-            if (window.greenGridEnabled && !window.greenGridMesh) {
-                let gridPoints = [];
-                let gridStep = 1.0;  // 1 meter spacing
-                let gridRange = 25;
-                let sampleStep = 0.5;
-                
-                // Horizontal grid lines (X direction)
-                for (let z = -gridRange; z <= gridRange; z += gridStep) {
-                    let lineStart = null;
-                    for (let x = -gridRange; x <= gridRange; x += sampleStep) {
-                        let wx = hole.flag.x + x;
-                        let wz = hole.flag.z + z;
-                        let surf = localGetTerrainAt(wx, -wz);
-                        if (surf && surf.type === 'GREEN') {
-                            let pt = new THREE.Vector3(wx, surf.z + 0.03, wz);
-                            if (lineStart) {
-                                gridPoints.push(lineStart.x, lineStart.y, lineStart.z);
-                                gridPoints.push(pt.x, pt.y, pt.z);
-                            }
-                            lineStart = pt;
-                        } else {
-                            lineStart = null;
-                        }
-                    }
-                }
-                
-                // Vertical grid lines (Z direction)
-                for (let x = -gridRange; x <= gridRange; x += gridStep) {
-                    let lineStart = null;
-                    for (let z = -gridRange; z <= gridRange; z += sampleStep) {
-                        let wx = hole.flag.x + x;
-                        let wz = hole.flag.z + z;
-                        let surf = localGetTerrainAt(wx, -wz);
-                        if (surf && surf.type === 'GREEN') {
-                            let pt = new THREE.Vector3(wx, surf.z + 0.03, wz);
-                            if (lineStart) {
-                                gridPoints.push(lineStart.x, lineStart.y, lineStart.z);
-                                gridPoints.push(pt.x, pt.y, pt.z);
-                            }
-                            lineStart = pt;
-                        } else {
-                            lineStart = null;
-                        }
-                    }
-                }
-                
-                if (gridPoints.length > 0) {
-                    let gridGeo = new THREE.BufferGeometry();
-                    gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPoints, 3));
-                    let gridMat = new THREE.LineBasicMaterial({ 
-                        color: 0xffffff, transparent: true, opacity: 0.18, 
-                        depthTest: true, depthWrite: false 
-                    });
-                    window.greenGridMesh = new THREE.LineSegments(gridGeo, gridMat);
-                    scene.add(window.greenGridMesh);
-                }
-            } else if (!window.greenGridEnabled && window.greenGridMesh) {
-                scene.remove(window.greenGridMesh);
-                window.greenGridMesh = null;
+            // --- GREEN GRID (BUG-01/04 FIX: Persistent mesh, visibility toggle only) ---
+            // buildGreenGrid() is called once when ball lands on green (see landing callback).
+            // Here we only sync visibility with the toggle switch.
+            if (window.greenGridMesh) {
+                window.greenGridMesh.visible = window.greenGridEnabled;
+            } else if (window.greenGridEnabled) {
+                // Fallback: build if somehow missing (e.g. first load with grid ON)
+                window.buildGreenGrid(hole, playingHoleIndex);
             }
 
             // --- GSPro Break Line Indicator (only in putting mode) ---
@@ -8004,9 +8353,10 @@
                 scene.remove(window.breakLineMesh);
                 window.breakLineMesh = null;
             }
+            // BUG-04 FIX: Do NOT destroy greenGridMesh when ball leaves 45m zone.
+            // Grid is persistent until hole changes. Only hide it.
             if (window.greenGridMesh) {
-                scene.remove(window.greenGridMesh);
-                window.greenGridMesh = null;
+                window.greenGridMesh.visible = false;
             }
             let epContainer = document.getElementById('elevation-profile-container');
             if (epContainer) epContainer.style.display = 'none';
@@ -8196,6 +8546,23 @@
                     let distToPin = 999;
                     if(hole && hole.flag) {
                         distToPin = window.ballMesh.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
+                        
+                        // --- BUG-04 FIX: Build green grid ONCE on landing, not in animate loop ---
+                        let landSurf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
+                        if (landSurf && landSurf.type === 'GREEN') {
+                            window.buildGreenGrid(hole, playingHoleIndex);
+                        }
+                        
+                        // --- BUG-02 DIAGNOSTIC: Log normal direction on green for N-S slope verification ---
+                        // Expected: normal.y POSITIVE when north end is higher (ball should roll south).
+                        // If normal.y is NEGATIVE on a known downhill-north green → swap gz-1 to gz+1 in localGetTerrainAt (~line 3918).
+                        if (landSurf && landSurf.type === 'GREEN') {
+                            console.log('[BUG-02 DIAG] Ball landed on GREEN. Terrain normal:',
+                                JSON.stringify({ nx: landSurf.normal[0].toFixed(4), ny: landSurf.normal[1].toFixed(4), nz: landSurf.normal[2].toFixed(4) }),
+                                '| Ball pos:', JSON.stringify({ x: window.ballMesh.position.x.toFixed(2), z: window.ballMesh.position.z.toFixed(2) }),
+                                '| Flag pos:', JSON.stringify({ x: hole.flag.x.toFixed(2), z: hole.flag.z.toFixed(2) })
+                            );
+                        }
                         
                         // --- SMART AUTO-AIM EFTER SLAG ---
                         if (window.aimTarget) {
@@ -8438,6 +8805,11 @@
                     
                     let lType = isTee ? 'FAIRWAY' : (surf ? (surf.type || 'FAIRWAY') : 'FAIRWAY');
                     
+                    // Expose surface to SwingEngine.autoSelectClub — updated every frame.
+                    // Without this, currentBallSurface is always undefined and the
+                    // GREEN override in autoSelectClub never fires.
+                    window.currentBallSurface = lType;
+                    
                     if (document.getElementById('lie-text')) {
                         document.getElementById('lie-text').innerText = isTee ? 'TEE' : lType;
                     }
@@ -8650,6 +9022,438 @@
     
     // Boot:
     initLaunchMonitorBridge();
+
+    // ================================================================
+    //  SWING ENGINE — 2-tap Golf Clash style swing mechanic
+    //  Works with touch (mobile) and pointer/click (desktop).
+    //  All physics parameters calibrated against Trackman PGA Tour data.
+    // ================================================================
+    const SwingEngine = (function() {
+
+        // -----------------------------------------------------------
+        // CLUB_PROFILES — Trackman PGA Tour averages (verified)
+        // Fields: maxSpeed (mph), baseLaunchAngle (°), baseSpin (rpm),
+        //         maxSpread (°): max azimuth deviation on full miss
+        // -----------------------------------------------------------
+        const CLUB_PROFILES = {
+            DRIVER: { maxSpeed: 167, baseLaunchAngle: 10.5, baseSpin:  2500, maxSpread: 12, name: 'Driver',  icon: '🏌️' },
+            W3:     { maxSpeed: 155, baseLaunchAngle: 12.0, baseSpin:  3500, maxSpread: 10, name: '3 Wood',  icon: '🪵' },
+            I5:     { maxSpeed: 140, baseLaunchAngle: 16.0, baseSpin:  5300, maxSpread:  8, name: '5 Iron',  icon: '⛳' },
+            I7:     { maxSpeed: 128, baseLaunchAngle: 18.5, baseSpin:  7100, maxSpread:  7, name: '7 Iron',  icon: '⛳' },
+            I9:     { maxSpeed: 115, baseLaunchAngle: 22.0, baseSpin:  8700, maxSpread:  6, name: '9 Iron',  icon: '⛳' },
+            PW:     { maxSpeed: 103, baseLaunchAngle: 26.0, baseSpin:  9300, maxSpread:  5, name: 'Pitching', icon: '🏌️' },
+            SW:     { maxSpeed:  85, baseLaunchAngle: 32.0, baseSpin: 10200, maxSpread:  5, name: 'Sand',    icon: '🏖️' },
+            LW:     { maxSpeed:  72, baseLaunchAngle: 36.0, baseSpin: 10800, maxSpread:  4, name: 'Lob',     icon: '🎯' },
+            PUTT:   { maxSpeed:  12, baseLaunchAngle:  1.5, baseSpin:   300, maxSpread:  3, name: 'Putter',  icon: '🥅' },
+        };
+
+        // SVG constants — circumference of r=100 ring
+        const CIRC = 2 * Math.PI * 100; // 628.32
+
+        // Timing constants
+        const POWER_CYCLE_MS  = 1600; // Full 0→100→0 power cycle duration
+        const ARM_RPM         = 90;   // Direction arm: degrees per second (1 full rev = 4s)
+
+        // State
+        let _enabled    = false;
+        let _clubKey    = 'DRIVER';
+        let _phase      = 'idle';   // 'idle' | 'power' | 'direction' | 'fired'
+        let _powerPct   = 0;        // 0.0–1.0, captured on tap 1
+        let _armDeg     = 0;        // 0–360, captured on tap 2
+        let _raf        = null;
+        let _phaseStart = 0;
+
+        // DOM refs (lazy — elements exist after HTML parse)
+        function _el(id) { return document.getElementById(id); }
+
+        // -----------------------------------------------------------
+        // autoSelectClub — distance in THREE.js world units (metres)
+        // GREEN surface always forces PUTT regardless of distance.
+        // window.currentBallSurface is populated by the animate-loop
+        // terrain detector (localGetTerrainAt on every frame).
+        // -----------------------------------------------------------
+        function autoSelectClub(distMeters) {
+            // Green override: ball on putting surface → Putter always
+            if (window.currentBallSurface === 'GREEN') return 'PUTT';
+            if (distMeters > 201) return 'DRIVER';
+            if (distMeters > 174) return 'W3';
+            if (distMeters > 151) return 'I5';
+            if (distMeters > 133) return 'I7';
+            if (distMeters > 114) return 'I9';
+            if (distMeters >  91) return 'PW';
+            if (distMeters >  55) return 'SW';
+            if (distMeters >   9) return 'LW';
+            return 'PUTT';
+        }
+
+        // -----------------------------------------------------------
+        // puttForceToSpeed — Werner-Greig µ (must match physics.js)
+        // µ = 1.83 / (stimp × 0.3048 × 9.81) = 0.612 / stimp
+        // -----------------------------------------------------------
+        function puttForceToSpeed(targetDistMeters, stimp) {
+            const mu   = 0.612 / stimp;                       // Verified against physics.js
+            const v0ms = Math.sqrt(2 * mu * 9.81 * targetDistMeters);
+            return v0ms / 0.44704;                            // m/s → mph
+        }
+
+        // -----------------------------------------------------------
+        // mapCircleToPhysics — converts tap results to launchData
+        // powerPct:  0.0 (empty) → 1.0 (perfect full power)
+        // armDeg:    0–360, 0 = top (perfect direction)
+        //            offset from top: positive = right, negative = left
+        // -----------------------------------------------------------
+        function mapCircleToPhysics(powerPct, armDeg, clubKey, distToHoleM) {
+            const club  = CLUB_PROFILES[clubKey];
+            const stimp = window.GREEN_STIMP || 10.0;
+
+            // Arm offset from top: map 0–360 → −180 to +180
+            // Arm top (0°) = perfect shot. 180° = worst possible miss.
+            let armOffset = armDeg;
+            if (armOffset > 180) armOffset -= 360; // −180…+180
+
+            // normalised miss: −1 (full left) → 0 (perfect) → +1 (full right)
+            const normMiss = armOffset / 180.0;
+
+            // Deterministic component of azimuth error (85%)
+            const deterministicMiss = normMiss * club.maxSpread;
+
+            // Random noise (15%) — D5: 85% deterministic + 15% luck
+            // randomNoise spans full maxSpread range (×2 for ±1 range)
+            const randomNoise = (Math.random() - 0.5) * 2 * club.maxSpread;
+            const azimDeg     = deterministicMiss * 0.85 + randomNoise * 0.15;
+
+            // PUTT special case — map power × distToHole → ballSpeedMph via Werner-Greig
+            if (clubKey === 'PUTT') {
+                const targetDist  = Math.max(0.5, distToHoleM) * powerPct;
+                const puttSpeedMph = puttForceToSpeed(targetDist, stimp);
+                return {
+                    ballSpeedMph:   Math.min(puttSpeedMph, club.maxSpeed),
+                    launchAngleDeg: club.baseLaunchAngle,
+                    totalSpinRpm:   club.baseSpin,
+                    spinAxisDeg:    azimDeg * 0.5, // Putts: subtle line bias only
+                    azimDeg:        azimDeg,
+                    isLiveData:     false,
+                };
+            }
+
+            // All other clubs — power scales ballSpeed and spin
+            const speedMph = club.maxSpeed * powerPct;
+            // Low power also reduces spin (thin contact at <50% power)
+            const spinMult = 0.7 + 0.3 * powerPct;
+            const spinRpm  = club.baseSpin * spinMult;
+
+            // Launch angle: slightly lower on fat/thin swings (extreme power = thin)
+            const vlaOffset = (Math.abs(powerPct - 0.85) > 0.2) ? -1.5 : 0;
+
+            return {
+                ballSpeedMph:   Math.max(speedMph, 10),
+                launchAngleDeg: club.baseLaunchAngle + vlaOffset,
+                totalSpinRpm:   spinRpm,
+                spinAxisDeg:    azimDeg * 0.8, // spin axis tied to miss direction
+                azimDeg:        azimDeg,
+                isLiveData:     false,
+            };
+        }
+
+        // -----------------------------------------------------------
+        // _getQuality — categorise result for flash feedback
+        // -----------------------------------------------------------
+        function _getQuality(powerPct, armDeg) {
+            let armOffset = armDeg; if (armOffset > 180) armOffset -= 360;
+            const normArm   = Math.abs(armOffset) / 180;
+            const normPower = Math.abs(powerPct - 0.90); // Perfect power ≈ 90%
+            const score     = (1 - normArm) * 0.6 + (1 - normPower * 5) * 0.4;
+            if (score > 0.80) return { label: '✨ PERFECT!',  color: '#4ade80' };
+            if (score > 0.55) return { label: '👍 GOOD',      color: '#fbbf24' };
+            if (score > 0.30) return { label: '😬 OK',        color: '#fb923c' };
+            return              { label: '❌ MISS',            color: '#f87171' };
+        }
+
+        // -----------------------------------------------------------
+        // _showFlash — result feedback animation
+        // -----------------------------------------------------------
+        function _showFlash(quality) {
+            const el = _el('swing-result-flash');
+            if (!el) return;
+            el.textContent  = quality.label;
+            el.style.color  = quality.color;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 900);
+        }
+
+        // -----------------------------------------------------------
+        // _updateRing — drives SVG power ring via stroke-dashoffset
+        // pct: 0.0–1.0, ring colour changes at thresholds
+        // -----------------------------------------------------------
+        function _updateRing(pct) {
+            const ring = _el('power-ring-fill');
+            if (!ring) return;
+            const offset = CIRC * (1 - pct);
+            ring.setAttribute('stroke-dashoffset', offset.toFixed(1));
+            // Colour: red < 50%, yellow 50–80%, green > 80%
+            ring.style.stroke = pct < 0.50 ? '#ef4444'
+                              : pct < 0.80 ? '#fbbf24'
+                              : '#4ade80';
+        }
+
+        // -----------------------------------------------------------
+        // _updateArm — rotates direction arm
+        // -----------------------------------------------------------
+        function _updateArm(deg) {
+            const arm = _el('dir-arm');
+            if (!arm) return;
+            // Rotate around centre (130,130) — set transform attribute directly
+            arm.setAttribute('transform', `rotate(${deg.toFixed(1)} 130 130)`);
+        }
+
+        // -----------------------------------------------------------
+        // _setPhaseLabel
+        // -----------------------------------------------------------
+        function _setPhaseLabel(txt) {
+            const el = _el('swing-phase-label');
+            if (el) el.textContent = txt;
+        }
+
+        // -----------------------------------------------------------
+        // _rafLoop — main animation loop (runs during swing)
+        // -----------------------------------------------------------
+        function _rafLoop(ts) {
+            if (_phase === 'idle' || _phase === 'fired') return;
+
+            if (_phase === 'power') {
+                // Oscillating power: 0→1→0 over POWER_CYCLE_MS
+                const elapsed = (ts - _phaseStart) % POWER_CYCLE_MS;
+                const raw     = elapsed / POWER_CYCLE_MS; // 0→1 linear
+                // Sinusoidal: 0→1→0 per cycle
+                const pct = Math.sin(raw * Math.PI);
+                _updateRing(pct);
+                _raf = requestAnimationFrame(_rafLoop);
+
+            } else if (_phase === 'direction') {
+                // Arm rotating at ARM_RPM degrees/second
+                const elapsed = (ts - _phaseStart) / 1000; // seconds
+                _armDeg = (elapsed * ARM_RPM) % 360;
+                _updateArm(_armDeg);
+                _raf = requestAnimationFrame(_rafLoop);
+            }
+        }
+
+        // -----------------------------------------------------------
+        // _haptic — cross-platform haptic feedback
+        // Android: navigator.vibrate() (standard Vibration API)
+        // iOS:     Silent AudioContext pulse — triggers Taptic Engine
+        //          via the Web Audio scheduling path.
+        //          Note: requires user gesture before first call
+        //          (satisfied by the tap itself).
+        // -----------------------------------------------------------
+        let _audioCtx = null;
+        function _haptic(pattern) {
+            // Android / Chrome (Vibration API)
+            if (navigator.vibrate) {
+                navigator.vibrate(pattern);
+                return;
+            }
+            // iOS Safari (AudioContext silent pulse)
+            try {
+                if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = _audioCtx.createOscillator();
+                const gain = _audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(_audioCtx.destination);
+                gain.gain.setValueAtTime(0.001, _audioCtx.currentTime); // Silent — haptic only
+                osc.start(_audioCtx.currentTime);
+                osc.stop(_audioCtx.currentTime + 0.010);                // 10ms pulse
+            } catch(e) { /* no haptics available */ }
+        }
+
+        // -----------------------------------------------------------
+        // onTap — primary user interaction (both phases)
+        // -----------------------------------------------------------
+        function onTap() {
+            if (!_enabled) return;
+
+            if (_phase === 'idle') {
+                // Show overlay and start power ring
+                _phase      = 'power';
+                _phaseStart = performance.now();
+                _el('swing-overlay').classList.add('active');
+                _setPhaseLabel('TAP TO SET POWER');
+                _raf = requestAnimationFrame(_rafLoop);
+
+            } else if (_phase === 'power') {
+                // Haptic: strong short pulse — power locked
+                _haptic(15);
+
+                // Capture current power from ring fill
+                const ringEl = _el('power-ring-fill');
+                const offset = parseFloat(ringEl.getAttribute('stroke-dashoffset')) || CIRC;
+                _powerPct = Math.max(0, Math.min(1, (CIRC - offset) / CIRC));
+
+                // Transition to direction phase
+                _phase      = 'direction';
+                _phaseStart = performance.now();
+                _armDeg     = 0;
+                const arm   = _el('dir-arm');
+                if (arm) arm.classList.add('active');
+                _setPhaseLabel('TAP TO AIM');
+
+                // Update ring to locked state (no more oscillation)
+                _updateRing(_powerPct);
+                cancelAnimationFrame(_raf);
+                _raf = requestAnimationFrame(_rafLoop);
+
+            } else if (_phase === 'direction') {
+                // Haptic: double-tap pattern — shot fired
+                _haptic([8, 50, 8]);
+
+                // Capture current arm angle
+                cancelAnimationFrame(_raf);
+                _phase = 'fired';
+
+                // Hide overlay
+                _el('swing-overlay').classList.remove('active');
+                const arm = _el('dir-arm');
+                if (arm) arm.classList.remove('active');
+
+                // Reset ring for next swing
+                _updateRing(0);
+                _updateArm(0);
+                _setPhaseLabel('TAP TO SET POWER');
+
+                // Build launchData and fire
+                let distToHoleM = 50; // fallback
+                if (window.ballMesh && window.courseHoles && typeof playingHoleIndex !== 'undefined') {
+                    const h = window.courseHoles[playingHoleIndex];
+                    if (h && h.flag) {
+                        distToHoleM = window.ballMesh.position.distanceTo(
+                            new THREE.Vector3(h.flag.x, h.flag.y, h.flag.z)
+                        );
+                    }
+                }
+
+                const launchData = mapCircleToPhysics(_powerPct, _armDeg, _clubKey, distToHoleM);
+                const quality    = _getQuality(_powerPct, _armDeg);
+                _showFlash(quality);
+
+                // Fire through existing pipeline — untouched
+                if (typeof triggerRealShot === 'function') {
+                    triggerRealShot(launchData);
+                }
+
+                // Ready for next shot
+                setTimeout(() => { _phase = 'idle'; }, 300);
+            }
+        }
+
+        // -----------------------------------------------------------
+        // selectClub — called by club-btn onclick
+        // -----------------------------------------------------------
+        function selectClub(key) {
+            if (!CLUB_PROFILES[key]) return;
+            _clubKey = key;
+            // Update selector highlight
+            document.querySelectorAll('.club-btn').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.club === key);
+            });
+            updateSwingInfoBar();
+        }
+
+        // -----------------------------------------------------------
+        // updateSwingInfoBar — shows club name + distance to pin
+        // Called on club change and on landing (ball position update)
+        // -----------------------------------------------------------
+        function updateSwingInfoBar() {
+            const club   = CLUB_PROFILES[_clubKey];
+            const nameEl = _el('si-club-name');
+            const distEl = _el('si-dist-label');
+            if (nameEl) nameEl.textContent = `${club.icon} ${club.name}`;
+
+            if (distEl && window.ballMesh && window.courseHoles && typeof playingHoleIndex !== 'undefined') {
+                const h = window.courseHoles[playingHoleIndex];
+                if (h && h.flag) {
+                    const distM   = window.ballMesh.position.distanceTo(
+                        new THREE.Vector3(h.flag.x, h.flag.y, h.flag.z)
+                    );
+                    const distYds = (distM * 1.09361).toFixed(0);
+                    distEl.textContent = `${distYds} yds  (${distM.toFixed(0)} m)`;
+
+                    // Auto-select club based on distance
+                    const suggested = autoSelectClub(distM);
+                    if (suggested !== _clubKey) selectClub(suggested);
+                }
+            }
+        }
+
+        // -----------------------------------------------------------
+        // enableSwingMode / disableSwingMode
+        // RAF guard: cancel any running loop before enabling to prevent
+        // multiple parallel _rafLoop chains if toggled on/off rapidly.
+        // -----------------------------------------------------------
+        function enableSwingMode() {
+            if (_raf) { cancelAnimationFrame(_raf); _raf = null; } // Kill any orphaned loop
+            _phase   = 'idle';
+            _enabled = true;
+            document.body.classList.add('swing-mode');
+            updateSwingInfoBar();
+            console.log('[SwingEngine] Swing mode enabled');
+        }
+
+        function disableSwingMode() {
+            _enabled = false;
+            if (_raf) { cancelAnimationFrame(_raf); _raf = null; } // Null after cancel
+            _phase = 'idle';
+            // Hide overlay if open mid-swing
+            const overlay = document.getElementById('swing-overlay');
+            if (overlay) overlay.classList.remove('active');
+            document.body.classList.remove('swing-mode');
+            console.log('[SwingEngine] Swing mode disabled');
+        }
+
+        // -----------------------------------------------------------
+        // Public API
+        // -----------------------------------------------------------
+        return { onTap, selectClub, enableSwingMode, disableSwingMode,
+                 updateSwingInfoBar, autoSelectClub, CLUB_PROFILES };
+    })();
+
+    // Expose for devtools access
+    window.SwingEngine = SwingEngine;
+
+    // ----------------------------------------------------------------
+    // MOBILE DETECTION — auto-enable swing mode on touch devices.
+    // Uses ontouchstart (best for tablets/hybrids), fallback to width.
+    // Match Settings "Force Mobile UI" toggle can override.
+    // ----------------------------------------------------------------
+    (function detectAndEnableMobile() {
+        const isTouch  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        const isNarrow = window.innerWidth < 768;
+        if (isTouch || isNarrow) {
+            SwingEngine.enableSwingMode();
+            console.log('[SwingEngine] Auto-enabled (touch/narrow:', isTouch, isNarrow, ')');
+        }
+    })();
+
+    // Expose toggle for Match Settings "Force Mobile UI" checkbox
+    window.toggleSwingMode = function(force) {
+        if (force || document.body.classList.contains('swing-mode')) {
+            if (!document.body.classList.contains('swing-mode')) SwingEngine.enableSwingMode();
+            else SwingEngine.disableSwingMode();
+        }
+    };
+    window.enableSwingMode  = () => SwingEngine.enableSwingMode();
+    window.disableSwingMode = () => SwingEngine.disableSwingMode();
+
+    // handleSwingTap — wrapper for ontouchstart on #swing-launch-btn.
+    // Calls e.preventDefault() to cancel the synthetic mousedown→click
+    // chain that touch browsers emit ~300ms after touchstart.
+    // Without this, onTap() fires twice per finger press:
+    //   touchstart (immediate) → mousedown/click (300ms later)
+    // resulting in idle→power→direction in one tap, skipping power phase.
+    window.handleSwingTap = function(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        SwingEngine.onTap();
+    };
+
     
     // Load custom world on boot!
     loadLevel();
