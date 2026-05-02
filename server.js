@@ -74,7 +74,52 @@ async function initDB() {
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT false;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_range BOOLEAN DEFAULT false;`);
         } catch(e) {}
-        console.log("✅ Database schema ready");
+
+        // --- Platform v2: Users & Ownership ---
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id VARCHAR(50) PRIMARY KEY,
+                display_name VARCHAR(255) DEFAULT 'Golfer',
+                email VARCHAR(255),
+                auth_provider VARCHAR(20) DEFAULT 'device',
+                is_premium BOOLEAN DEFAULT false,
+                premium_plan VARCHAR(20),
+                premium_until TIMESTAMP,
+                builder_score INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        try {
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS owner_id VARCHAR(50);`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS version INT DEFAULT 1;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS play_count INT DEFAULT 0;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS hole_count INT;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS total_par INT;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;`);
+        } catch(e) {}
+
+        // Leaderboard table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS course_records (
+                id SERIAL PRIMARY KEY,
+                course_code VARCHAR(20) NOT NULL,
+                course_version INT DEFAULT 1,
+                player_id VARCHAR(50),
+                player_name VARCHAR(255),
+                input_mode VARCHAR(20) NOT NULL DEFAULT 'SWING_METER',
+                lm_device VARCHAR(50),
+                total_score INT,
+                score_vs_par INT,
+                hole_scores JSONB,
+                stats JSONB,
+                flagged BOOLEAN DEFAULT false,
+                played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        console.log("✅ Database schema ready (v2 — users, ownership, leaderboard)");
     } catch(err) {
         console.error("❌ Database schema error:", err);
     }
@@ -113,12 +158,85 @@ function requireDB(req, res, next) {
     next();
 }
 
+// Auth middleware: extract user ID from header
+function authMiddleware(req, res, next) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+        return res.status(401).json({ error: 'Missing x-user-id header' });
+    }
+    req.userId = userId;
+    next();
+}
+
+// Optional auth: sets req.userId if present but doesn't block
+function optionalAuth(req, res, next) {
+    req.userId = req.headers['x-user-id'] || null;
+    next();
+}
+
+// --- AUTH ENDPOINTS ---
+
+// Register or fetch user by device ID
+app.post('/api/auth/register', requireDB, async (req, res) => {
+    try {
+        const { device_id, display_name } = req.body;
+        if (!device_id) return res.status(400).json({ error: 'Missing device_id' });
+
+        // Try to find existing user
+        let result = await pool.query('SELECT * FROM users WHERE id = $1', [device_id]);
+        
+        if (result.rows.length > 0) {
+            // Existing user — return profile
+            return res.json(result.rows[0]);
+        }
+
+        // New user — create
+        result = await pool.query(
+            `INSERT INTO users (id, display_name, auth_provider) VALUES ($1, $2, 'device') RETURNING *`,
+            [device_id, display_name || 'Golfer']
+        );
+        console.log('👤 New user registered:', device_id.substring(0, 8) + '...');
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Auth register error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Get user profile
+app.get('/api/users/:id', requireDB, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, display_name, is_premium, builder_score, created_at FROM users WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Update display name
+app.put('/api/users/:id', requireDB, authMiddleware, async (req, res) => {
+    try {
+        if (req.userId !== req.params.id) return res.status(403).json({ error: 'Forbidden' });
+        const { display_name } = req.body;
+        if (!display_name) return res.status(400).json({ error: 'Missing display_name' });
+        
+        const name = display_name.trim().substring(0, 30);
+        await pool.query('UPDATE users SET display_name = $1 WHERE id = $2', [name, req.params.id]);
+        res.json({ success: true, display_name: name });
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 app.get('/api/courses', requireDB, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT share_code, name, author, likes, created_at 
+            SELECT share_code, name, author, likes, hole_count, total_par, play_count, owner_id, version, created_at 
             FROM courses 
-            WHERE (is_draft = false OR is_draft IS NULL) AND (is_range = false OR is_range IS NULL)
+            WHERE (is_draft = false OR is_draft IS NULL) 
+              AND (is_range = false OR is_range IS NULL)
+              AND (is_hidden = false OR is_hidden IS NULL)
             ORDER BY created_at DESC 
             LIMIT 50
         `);
@@ -150,9 +268,9 @@ function generateShareCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-app.post('/api/courses', requireDB, async (req, res) => {
+app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
     try {
-        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, is_range, edit_code, theme_data } = req.body;
+        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, terrain_watermask, is_draft, is_range, edit_code, theme_data, hole_count, total_par, new_version } = req.body;
         
         // Validering
         if (!holes) return res.status(400).json({ error: 'Missing holes data' });
@@ -162,38 +280,56 @@ app.post('/api/courses', requireDB, async (req, res) => {
         const c_name = name || 'My Golf Course';
         const c_author = author || 'Anonymous';
         const c_theme_data = theme_data || {};
+        const c_hole_count = hole_count || null;
+        const c_total_par = total_par || null;
 
         if (edit_code) {
-            // Överskriv en existerande bana om koden matchar!
+            // Check ownership before allowing edit
+            const ownerCheck = await pool.query('SELECT owner_id FROM courses WHERE share_code = $1', [edit_code.toUpperCase()]);
+            if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id) {
+                if (req.userId && ownerCheck.rows[0].owner_id !== req.userId) {
+                    return res.status(403).json({ error: 'You are not the owner of this course' });
+                }
+            }
+
+            // Version bump if re-publishing a published course
+            let versionBump = '';
+            if (new_version && !draftStatus) {
+                versionBump = ', version = version + 1, play_count = 0';
+            }
+
             const updateResult = await pool.query(
                 `UPDATE courses 
-                 SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, is_draft=$8, theme_data=$10, is_range=$11
+                 SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, 
+                     is_draft=$8, theme_data=$10, is_range=$11, hole_count=$12, total_par=$13,
+                     updated_at=CURRENT_TIMESTAMP ${versionBump}
                  WHERE share_code=$9 
-                 RETURNING share_code`,
+                 RETURNING share_code, version`,
                 [
                     c_name, c_author, 
                     JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
                     terrain_heightmap, terrain_biomemap, draftStatus, 
-                    edit_code.toUpperCase(), JSON.stringify(c_theme_data), rangeStatus
+                    edit_code.toUpperCase(), JSON.stringify(c_theme_data), rangeStatus,
+                    c_hole_count, c_total_par
                 ]
             );
             
             if (updateResult.rows.length > 0) {
-                return res.json({ success: true, share_code: updateResult.rows[0].share_code });
+                return res.json({ success: true, share_code: updateResult.rows[0].share_code, version: updateResult.rows[0].version });
             }
-            // Finns den inte? Fallback till INSERT!
         }
 
         const share_code = generateShareCode();
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
-                terrain_heightmap, terrain_biomemap, draftStatus, JSON.stringify(c_theme_data), rangeStatus
+                terrain_heightmap, terrain_biomemap, draftStatus, JSON.stringify(c_theme_data), rangeStatus,
+                req.userId || null, c_hole_count, c_total_par
             ]
         );
 
@@ -203,7 +339,6 @@ app.post('/api/courses', requireDB, async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
-
 app.get('/api/courses/:share_code', requireDB, async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM courses WHERE share_code = $1", [req.params.share_code.toUpperCase()]);

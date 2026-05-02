@@ -169,6 +169,8 @@ body {
 .course-card-diff { color: #fbbf24; font-size: 13px; margin-top: 5px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
 .course-card-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; color: #fff; border: 1px solid rgba(255,255,255,0.2); z-index: 2; }
 </style>
+<script src="arcade-auth.js"></script>
+<script src="arcade-feature-flags.js"></script>
 </head>
 <body>
 
@@ -178,11 +180,11 @@ body {
         <a href="hub.html" class="back-btn">← GOLF OS</a>
         <h1 class="header-title">Select Activity</h1>
     </div>
-    <div class="profile-chip">
-      <div class="profile-avatar">ST</div>
+    <div class="profile-chip" onclick="promptDisplayName()" style="cursor:pointer;" title="Klicka för att ändra namn">
+      <div class="profile-avatar" id="hub-avatar">?</div>
       <div>
-        <div style="font-weight: 800; font-size: 14px; color:#fff;">Stellan</div>
-        <div style="font-size: 11px; color:#94a3b8;">Arcade Player</div>
+        <div style="font-weight: 800; font-size: 14px; color:#fff;" id="hub-display-name">Loading...</div>
+        <div style="font-size: 11px; color:#94a3b8;" id="hub-user-tier">Free Player</div>
       </div>
     </div>
   </header>
@@ -261,6 +263,12 @@ body {
       <button class="tm-close" onclick="closeModal('modal-courses')">&times;</button>
       <h2 style="font-size:32px; font-weight:900; margin-top:0;">COURSES</h2>
       
+      <div id="course-filters" style="display:flex; gap:8px; margin-bottom:15px;">
+          <button class="btn-play" style="padding:8px 16px; font-size:12px; background:#eab308;" onclick="filterCourses('all')" data-filter="all">ALL</button>
+          <button class="btn-play" style="padding:8px 16px; font-size:12px; background:#475569;" onclick="filterCourses(9)" data-filter="9">9 HOLES</button>
+          <button class="btn-play" style="padding:8px 16px; font-size:12px; background:#475569;" onclick="filterCourses(18)" data-filter="18">18 HOLES</button>
+      </div>
+
       <div id="ugc-container" class="course-grid">
          <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar moln-banor...</div>
       </div>
@@ -342,51 +350,89 @@ function loadDrafts() {
     if (container) container.innerHTML = html;
 }
 
+let _allCourses = [];
+
 async function loadUGC() {
     try {
         let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses');
-        let courses = await res.json();
-        let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
-        let html = '';
-        let placeholders = [
-            'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80',
-            'https://images.unsplash.com/photo-1535136104956-6134eb9bdc22?w=800&q=80',
-            'https://images.unsplash.com/photo-1593118247619-e2d6f056869e?w=800&q=80',
-            'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=800&q=80'
-        ];
-        
-        courses.forEach((c, i) => {
-            let isLiked = likedLocal.includes(c.share_code);
-            let heartColor = isLiked ? '#ef4444' : '#fff';
-            let bgImg = placeholders[i % placeholders.length];
-            
-            // Random difficulty 1-5 dots for demo
-            let diffRating = (c.name.length % 5) + 1; 
-            let diffDots = '●'.repeat(diffRating) + '○'.repeat(5 - diffRating);
-            
-            html += `
-            <div class="course-card" onclick="playCourse('${c.share_code}')">
-               <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
-               <div class="course-card-overlay">
-                  <div class="course-card-badge">VIRTUAL GOLF OS</div>
-                  <h4 class="course-card-title">${c.name}</h4>
-                  <div class="course-card-meta">${c.author}</div>
-                  <div class="course-card-meta">PAR 72 - 6800 YDS</div>
-                  <div class="course-card-diff">Difficulty: ${diffDots}</div>
-                  <div style="position:absolute; bottom:15px; right:15px; text-align:center; cursor:pointer; z-index:10;" onclick="${isLiked ? 'event.stopPropagation()' : `likeCourse(event, '${c.share_code}')`}">
-                       <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:16px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">❤️ ${c.likes || 0}</div>
-                  </div>
-               </div>
-            </div>`;
-        });
-        
-        if (courses.length === 0) {
-           html = "<div style='color:#94a3b8; padding:20px; text-align:center;'>Inga publicerade banor hittades.</div>";
-        }
-        document.getElementById('ugc-container').innerHTML = html;
+        _allCourses = await res.json();
+        renderCourseCards(_allCourses);
     } catch(e) {
         document.getElementById('ugc-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">Kunde inte ladda banor från nätverket. Servern kan vara nere.</div>`;
     }
+}
+
+function filterCourses(filter) {
+    // Update button styles
+    document.querySelectorAll('#course-filters button').forEach(b => {
+        b.style.background = b.getAttribute('data-filter') == filter ? '#eab308' : '#475569';
+    });
+    if (filter === 'all') {
+        renderCourseCards(_allCourses);
+    } else {
+        let filtered = _allCourses.filter(c => {
+            let hc = c.hole_count || countHolesFromData(c);
+            if (filter === 9) return hc <= 9;
+            if (filter === 18) return hc > 9;
+            return true;
+        });
+        renderCourseCards(filtered);
+    }
+}
+
+function countHolesFromData(c) {
+    // Fallback: count holes with flag from raw data
+    if (c.holes && Array.isArray(c.holes)) {
+        return c.holes.filter(h => h && h.flag).length;
+    }
+    return 18; // Legacy default
+}
+
+function renderCourseCards(courses) {
+    let likedLocal = JSON.parse(localStorage.getItem('golf_os_likes') || "[]");
+    let html = '';
+    let placeholders = [
+        'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80',
+        'https://images.unsplash.com/photo-1535136104956-6134eb9bdc22?w=800&q=80',
+        'https://images.unsplash.com/photo-1593118247619-e2d6f056869e?w=800&q=80',
+        'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=800&q=80'
+    ];
+    
+    courses.forEach((c, i) => {
+        let isLiked = likedLocal.includes(c.share_code);
+        let heartColor = isLiked ? '#ef4444' : '#fff';
+        let bgImg = placeholders[i % placeholders.length];
+        
+        // Dynamic hole count & par
+        let holeCount = c.hole_count || countHolesFromData(c);
+        let totalPar = c.total_par || (holeCount * 4); // Fallback: par 4 avg
+        let holeLabel = holeCount + ' HOLES';
+        let holeBadgeColor = holeCount <= 9 ? 'rgba(56,189,248,0.8)' : 'rgba(16,185,129,0.8)';
+        
+        // Difficulty dots
+        let diffRating = (c.name.length % 5) + 1; 
+        let diffDots = '●'.repeat(diffRating) + '○'.repeat(5 - diffRating);
+        
+        html += `
+        <div class="course-card" onclick="playCourse('${c.share_code}')">
+           <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
+           <div class="course-card-overlay">
+              <div class="course-card-badge" style="background:${holeBadgeColor};">${holeLabel}</div>
+              <h4 class="course-card-title">${c.name}</h4>
+              <div class="course-card-meta">${c.author}</div>
+              <div class="course-card-meta">PAR ${totalPar}</div>
+              <div class="course-card-diff">Difficulty: ${diffDots}</div>
+              <div style="position:absolute; bottom:15px; right:15px; text-align:center; cursor:pointer; z-index:10;" onclick="${isLiked ? 'event.stopPropagation()' : `likeCourse(event, '${c.share_code}')`}">
+                   <div id="heart-${c.share_code}" style="color:${heartColor}; font-size:16px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">❤️ ${c.likes || 0}</div>
+              </div>
+           </div>
+        </div>`;
+    });
+    
+    if (courses.length === 0) {
+       html = "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Inga banor matchar filtret.</div>";
+    }
+    document.getElementById('ugc-container').innerHTML = html;
 }
 
 async function likeCourse(event, code) {
@@ -439,10 +485,43 @@ function initLaunchMonitorBridge() {
 }
 
 // Boot
-loadDrafts();
-loadUGC();
-loadRanges();
-initLaunchMonitorBridge();
+// --- AUTH INIT ---
+async function initHub() {
+    if (window.GolfAuth) {
+        await window.GolfAuth.init();
+        updateProfileChip();
+    }
+    loadDrafts();
+    loadUGC();
+    loadRanges();
+    initLaunchMonitorBridge();
+}
+
+function updateProfileChip() {
+    let user = window.GolfAuth?.user;
+    if (!user) return;
+    let name = user.display_name || 'Golfer';
+    let initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    
+    let el = document.getElementById('hub-display-name');
+    if (el) el.textContent = name;
+    let av = document.getElementById('hub-avatar');
+    if (av) av.textContent = initials;
+    let tier = document.getElementById('hub-user-tier');
+    if (tier) tier.textContent = user.is_premium ? '⭐ Premium' : 'Free Player';
+    if (tier && user.is_premium) tier.style.color = '#fde047';
+}
+
+function promptDisplayName() {
+    let current = window.GolfAuth?.user?.display_name || '';
+    let name = prompt('Ange ditt spelarnamn:', current);
+    if (name && name.trim().length > 0) {
+        window.GolfAuth.setDisplayName(name.trim());
+        updateProfileChip();
+    }
+}
+
+initHub();
 
 async function loadRanges() {
     try {

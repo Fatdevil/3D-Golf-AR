@@ -4,415 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Golf Arcade Mode 👾</title>
-<style>
-  body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Inter', sans-serif; }
-  canvas { display: block; }
-  
-  /* Sleek Scrollbar for ribbons */
-  ::-webkit-scrollbar { height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-  
-  #ui-layer {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      pointer-events: none;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-  }
-  
-
-  
-  #score-popup {
-      position: absolute;
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 80px;
-      font-weight: 900;
-      color: #fcd34d;
-      text-shadow: 0px 5px 20px rgba(251, 191, 36, 0.8), 0 0 5px #000;
-      opacity: 0;
-      transition: 0.2s;
-      pointer-events: none;
-      z-index: 999;
-  }
-  
-  /* HAMBURGER MENU */
-  #hamburger-btn {
-      position: absolute; top: 20px; right: 20px; background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; cursor: pointer; z-index: 1000; backdrop-filter: blur(10px); transition: background 0.2s; pointer-events: auto;
-  }
-  #hamburger-btn:hover { background: rgba(255,255,255,0.1); }
-  #hamburger-btn svg { width: 24px; height: 24px; stroke: #fff; display: block; }
-
-  #hamburger-menu {
-      position: absolute; top: 0; right: -350px; width: 320px; height: 100%; background: rgba(11, 15, 25, 0.95); backdrop-filter: blur(15px); border-left: 1px solid rgba(255,255,255,0.1); z-index: 9999; transition: right 0.3s cubic-bezier(0.175, 0.885, 0.32, 1); padding: 20px; box-shadow: -10px 0 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; overflow-y: auto; pointer-events: auto;
-  }
-  #hamburger-menu.open { right: 0; }
-  .hb-title { color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 1px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-  .hb-btn { background: #1e293b; color: #fff; border: 1px solid #334155; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; text-align: left; transition: all 0.2s; }
-  .hb-btn:hover { background: #38bdf8; color: #0f172a; }
-  .hb-section-title { color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-top: 15px; border-bottom: 1px solid #334155; padding-bottom: 5px; }
-  .hb-toggle { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; color: #e2e8f0; font-size: 14px; font-weight: 600; cursor: pointer; }
-  .hb-toggle input { accent-color: #38bdf8; width: 18px; height: 18px; cursor: pointer; }
-
-  /* DYNAMIC HUD (Top Left) */
-  #dynamic-hud {
-      position: absolute; top: 110px; left: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; pointer-events: none;
-  }
-  .dh-tile { background: rgba(15,23,42,0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; min-width: 190px; gap: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-  .dh-label { color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-  .dh-val { color: #fff; font-size: 16px; font-weight: 900; }
-  .dh-val.highlight { color: #38bdf8; }
-  
-  .controls {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      align-items: center;
-      pointer-events: none;
-      z-index: 50;
-  }
-  
-  .controls > *, .controls input, .controls button {
-      pointer-events: auto;
-  }
-  
-  .controls input {
-      padding: 10px;
-      font-size: 16px;
-      border-radius: 8px;
-      border: 1px solid #475569;
-      width: 80px;
-      background: #1e293b;
-      color: white;
-  }
-  
-  .controls button {
-      background: linear-gradient(135deg, #ef4444, #b91c1c);
-      color: white;
-      border: none;
-      padding: 12px 30px;
-      font-size: 18px;
-      font-weight: 800;
-      border-radius: 8px;
-      cursor: pointer;
-      text-transform: uppercase;
-      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
-      transition: transform 0.1s;
-  }
-  .controls button:active { transform: scale(0.95); }
-  /* .btn-home removed — consolidated into #top-bar */
-  .palette-btn { width:100%; height:auto; padding:8px 4px; border-radius:8px; cursor:pointer; border:3px solid transparent; transition:transform 0.1s; font-size:10px; font-weight:800; color:#fff; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:0.5px; }
-  .palette-btn.active { border-color:white; transform:scale(1.05); }
-  
-  /* NEW PRO UI LAYOUT */
-  #left-toolbar {
-      position: absolute;
-      top: 50%; left: 10px;
-      transform: translateY(-50%);
-      background: rgba(15,23,42,0.9);
-      padding: 10px;
-      border-radius: 12px;
-      border: 1px solid #475569;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 5px;
-      pointer-events: auto;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      z-index: 100;
-  }
-  
-  #left-toolbar button {
-      background: transparent; color: #94a3b8; border: none; padding: 10px;
-      border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-size: 10px; min-width: 65px; height: 50px; gap: 4px;
-  }
-  #left-toolbar button:hover { background: rgba(255,255,255,0.1); color: #fff; }
-  #left-toolbar button.active { background: #38bdf8; color: #0f172a; }
-  #left-toolbar button.active-green { background: #4ade80; color: #0f172a; }
-  #left-toolbar button.active-yellow { background: #fbbf24; color: #0f172a; }
-  #left-toolbar button.active-red { background: #ef4444; color: #fff; }
-  #left-toolbar:not(.pro-mode) .pro-tool { display: none !important; }
-  #left-toolbar:not(.pro-mode) .pro-divider { display: none !important; }
-  #btn-pro-toggle {
-      grid-column: 1 / -1; margin-top: 4px;
-      background: rgba(56, 189, 248, 0.1) !important;
-      border: 1px dashed #475569 !important;
-      color: #94a3b8 !important;
-      font-size: 9px !important; height: 32px !important;
-      letter-spacing: 1px;
-  }
-  #btn-pro-toggle:hover { background: rgba(56, 189, 248, 0.2) !important; color: #38bdf8 !important; }
-  #left-toolbar.pro-mode #btn-pro-toggle { border-color: #38bdf8 !important; color: #38bdf8 !important; }
-  
-  #right-toolbar {
-      position: absolute;
-      top: 50%; right: 10px;
-      transform: translateY(-50%);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      pointer-events: none;
-      z-index: 100;
-      max-height: 85vh;
-      overflow-y: auto;
-      overflow-x: hidden;
-      scrollbar-width: thin;
-      scrollbar-color: #475569 transparent;
-  }
-  
-  .prop-panel {
-      background: rgba(15,23,42,0.9); padding: 15px; border-radius: 12px;
-      border: 1px solid #475569; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      pointer-events: auto; display: none; flex-direction: column; gap: 10px;
-  }
-  
-  #top-bar {
-      position: absolute; top: 10px; left: 10px; right: 10px;
-      display: flex; justify-content: space-between; align-items: center;
-      pointer-events: none; z-index: 101;
-  }
-  #top-bar .top-left, #top-bar .top-center, #top-bar .top-right {
-      display: flex; gap: 8px; align-items: center;
-  }
-  #top-bar .top-center {
-      position: absolute; left: 50%; transform: translateX(-50%);
-  }
-  
-  .sys-btn {
-      background: rgba(15,23,42,0.9); color: #fff; border: 1px solid #475569;
-      padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer;
-      pointer-events: auto; display: flex; align-items: center; gap: 8px; font-size: 14px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: all 0.2s;
-  }
-  .sys-btn:hover { background: #334155; transform: scale(1.05); }
-  
-  #dropdown-menu {
-      position: absolute; top: 60px; left: 15px; background: rgba(15,23,42,0.95);
-      border: 1px solid #475569; border-radius: 12px; padding: 10px;
-      display: none; flex-direction: column; gap: 5px; pointer-events: auto;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 102; min-width: 180px;
-  }
-  #dropdown-menu button {
-      background: transparent; border: none; color: #e2e8f0; text-align: left;
-      padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer;
-  }
-  #dropdown-menu button:hover { background: rgba(255,255,255,0.1); }
-  
-  #tool-hints {
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: rgba(15,23,42,0.8); padding: 8px 15px; border-radius: 8px;
-      color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
-  }
-  #elevation-hud {
-      position: absolute; bottom: 55px; left: 50%; transform: translateX(-50%);
-      background: rgba(15,23,42,0.92); padding: 8px 18px; border-radius: 10px;
-      pointer-events: none; border: 1px solid #475569; z-index: 100;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-  }
-  
-  #global-loader {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: #0f172a;
-      z-index: 999999;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
-  }
-  #global-loader.hidden {
-      opacity: 0;
-      pointer-events: none;
-      transform: scale(1.05);
-  }
-  .loader-spinner {
-      width: 50px; height: 50px;
-      border: 4px solid rgba(255,255,255,0.1);
-      border-top-color: #38bdf8;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
-  }
-  @keyframes spin { 100% { transform: rotate(360deg); } }
-
-  /* ============================================================
-   * MOBILE SWING UI — responsive breakpoint + swing components
-   * ============================================================ */
-
-  /* Hide desktop number-input tools on touch/mobile devices */
-  body.swing-mode #manual-tools { display: none !important; }
-
-  /* --- Swing Overlay --- */
-  #swing-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 5000;
-      pointer-events: auto;
-      touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
-  }
-  #swing-overlay.active { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-
-  /* --- Club selector bar --- */
-  #club-selector {
-      display: none;
-      position: fixed;
-      bottom: 100px;
-      left: 0; right: 0;
-      z-index: 4999;
-      justify-content: center;
-      gap: 0;
-      overflow-x: auto;
-      padding: 0 10px;
-      scrollbar-width: none;
-      pointer-events: auto;
-  }
-  #club-selector::-webkit-scrollbar { display: none; }
-  body.swing-mode #club-selector { display: flex; }
-
-  .club-btn {
-      flex: 0 0 auto;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-width: 58px; padding: 8px 6px;
-      background: rgba(15,23,42,0.85);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-right: none;
-      color: #94a3b8;
-      font-family: 'Inter', sans-serif;
-      font-size: 10px; font-weight: 700;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      -webkit-tap-highlight-color: transparent;
-  }
-  .club-btn:first-child { border-radius: 12px 0 0 12px; }
-  .club-btn:last-child  { border-radius: 0 12px 12px 0; border-right: 1px solid rgba(255,255,255,0.12); }
-  .club-btn .club-icon  { font-size: 18px; margin-bottom: 2px; }
-  .club-btn .club-dist  { font-size: 9px; color: #64748b; margin-top: 1px; }
-  .club-btn.selected    { background: rgba(56,189,248,0.25); border-color: #38bdf8; color: #fff; }
-  .club-btn.selected .club-dist { color: #7dd3fc; }
-
-  /* --- Swing launch button --- */
-  #swing-launch-btn {
-      display: none;
-      position: fixed;
-      bottom: 28px;
-      left: 50%; transform: translateX(-50%);
-      z-index: 4999;
-      background: linear-gradient(135deg, #38bdf8, #0284c7);
-      color: #fff;
-      border: none;
-      border-radius: 50px;
-      padding: 16px 48px;
-      font-family: 'Inter', sans-serif;
-      font-size: 17px; font-weight: 900;
-      letter-spacing: 1px;
-      cursor: pointer;
-      box-shadow: 0 6px 24px rgba(56,189,248,0.4);
-      pointer-events: auto;
-      -webkit-tap-highlight-color: transparent;
-      transition: transform 0.1s;
-  }
-  #swing-launch-btn:active { transform: translateX(-50%) scale(0.96); }
-  body.swing-mode #swing-launch-btn { display: block; }
-
-  /* --- Swing Circle Container --- */
-  #swing-circle-container {
-      position: relative;
-      width: 260px; height: 260px;
-      margin-bottom: 20px;
-  }
-  #swing-svg {
-      width: 100%; height: 100%;
-      filter: drop-shadow(0 0 18px rgba(56,189,248,0.35));
-  }
-
-  /* Precision zones on the ring (background arc colours) */
-  .zone-miss    { stroke: rgba(239,68,68,0.35); }
-  .zone-ok      { stroke: rgba(251,191,36,0.45); }
-  .zone-perfect { stroke: rgba(74,222,128,0.60); }
-
-  /* Power ring — animated via stroke-dasharray driven by JS */
-  #power-ring-track { stroke: rgba(255,255,255,0.08); fill: none; }
-  #power-ring-fill  {
-      fill: none;
-      stroke: #38bdf8;
-      stroke-linecap: round;
-      transition: stroke-dashoffset 0.03s linear, stroke 0.2s;
-  }
-
-  /* Direction arm */
-  #dir-arm {
-      stroke: #fff;
-      stroke-width: 3;
-      stroke-linecap: round;
-      transform-origin: 130px 130px;
-      transition: opacity 0.2s;
-      opacity: 0;
-  }
-  #dir-arm.active { opacity: 1; }
-
-  /* Centre dot */
-  #centre-dot { fill: #38bdf8; }
-
-  /* --- Result flash --- */
-  #swing-result-flash {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -60%) scale(0.8);
-      font-family: 'Inter', sans-serif;
-      font-size: 28px; font-weight: 900;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.15s, transform 0.15s;
-      z-index: 5001;
-      text-shadow: 0 2px 12px rgba(0,0,0,0.6);
-  }
-  #swing-result-flash.show {
-      opacity: 1;
-      transform: translate(-50%, -60%) scale(1.1);
-  }
-
-  /* --- Swing info bar (club name + distance) --- */
-  #swing-info {
-      display: none;
-      position: fixed;
-      top: 80px;
-      left: 50%; transform: translateX(-50%);
-      background: rgba(15,23,42,0.88);
-      border: 1px solid rgba(56,189,248,0.3);
-      border-radius: 20px;
-      padding: 8px 22px;
-      color: #fff;
-      font-family: 'Inter', sans-serif;
-      font-size: 14px; font-weight: 700;
-      z-index: 4998;
-      pointer-events: none;
-      backdrop-filter: blur(8px);
-      white-space: nowrap;
-  }
-  body.swing-mode #swing-info { display: block; }
-  #swing-info .si-club  { color: #38bdf8; }
-  #swing-info .si-dist  { color: #fbbf24; margin-left: 12px; }
-
-  /* Auto-hide desktop penalty/flyover buttons in swing mode on small screens */
-  @media (max-width: 768px) {
-      body.swing-mode #btn-flyover,
-      body.swing-mode #btn-cam-mode { display: none !important; }
-  }
-  </style>
+<link rel="stylesheet" href="arcade.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -421,6 +13,15 @@
 
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="physics.js?v=4"></script>
+<script src="arcade-auth.js"></script>
+<script src="arcade-feature-flags.js"></script>
+<script src="arcade-api-service.js"></script>
+<script src="arcade-storage-service.js"></script>
+<script src="arcade-swing-engine.js"></script>
+<script src="arcade-perlin.js"></script>
+<script src="arcade-terrain-overlays.js"></script>
+<script src="arcade-scene-engine.js"></script>
+<script src="arcade-tracer-engine.js"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -686,7 +287,7 @@
             let btn = document.getElementById('btn-pro-toggle');
             let isPro = tb.classList.toggle('pro-mode');
             btn.textContent = isPro ? '⚡ PRO MODE' : '🔧 BASIC MODE';
-            localStorage.setItem('arcade_pro_mode', isPro ? '1' : '0');
+            ArcadeStorage.setProMode(isPro);
             // If switching to BASIC and current tool is a pro-tool, fallback to INSPECT
             if (!isPro && typeof currentTool !== 'undefined') {
                 let proTools = ['FLATTEN','RAMP','NOISE','WATER','SPLINE','SMART_GREEN','RIDGE','FOREST','ERASER','COLORIZE'];
@@ -697,7 +298,7 @@
         };
         // Restore PRO mode from localStorage on boot
         document.addEventListener('DOMContentLoaded', function() {
-            if (localStorage.getItem('arcade_pro_mode') === '1') {
+            if (ArcadeStorage.getProMode()) {
                 let tb = document.getElementById('left-toolbar');
                 let btn = document.getElementById('btn-pro-toggle');
                 if (tb) { tb.classList.add('pro-mode'); }
@@ -1513,7 +1114,7 @@
         let container = document.getElementById('dynamic-hud');
         if (!container) return;
         
-        let prefs = JSON.parse(localStorage.getItem('golf_os_hud_prefs') || '["TOTAL_LENGTH", "CARRY", "BALL_SPEED", "CLUB_SPEED"]');
+        let prefs = ArcadeStorage.getHudPrefs();
         let html = '';
         
         let labels = {
@@ -1569,7 +1170,7 @@
                 document.querySelectorAll('.hb-toggle input').forEach(c => {
                     if (c.checked) prefs.push(c.getAttribute('data-tile'));
                 });
-                localStorage.setItem('golf_os_hud_prefs', JSON.stringify(prefs));
+                ArcadeStorage.setHudPrefs(prefs);
                 
                 // Rädda tidigare värden ifall HUD:en är aktiv
                 let oldVals = {};
@@ -1732,411 +1333,17 @@
     scene.background = new THREE.Color(0x87CEEB); // Sky (overridden by TimeOfDay engine)
     scene.fog = new THREE.Fog(0x87CEEB, 200, 1800); // Fog (blends terrain edges, overridden by TimeOfDay engine)
 
-    // ============================================================
-    // DYNAMIC TIME OF DAY ENGINE (Fas 1+2)
-    // ============================================================
-    window.currentTimeOfDay = 12;
-    window.currentWeather = 'CLEAR';
-
-    const TIME_KEYS = [0, 5, 7, 12, 17, 19, 24];
-    const TIME_PRESETS = {
-        0:  { skyTop:[10,10,26],    skyBot:[26,26,46],    sunColor:null,           sunY:-50,  ambient:0.05, ambColor:[68,102,170],  dirInt:0.05, dirColor:[68,102,170],  fogNear:30,  fogFar:200,  fogColor:[10,10,26],    glowBoost:3.0 },
-        5:  { skyTop:[26,26,46],    skyBot:[233,69,96],   sunColor:[255,107,53],   sunY:20,   ambient:0.15, ambColor:[255,170,130], dirInt:0.3,  dirColor:[255,136,85],  fogNear:80,  fogFar:600,  fogColor:[233,69,96],   glowBoost:1.5 },
-        7:  { skyTop:[255,154,86],  skyBot:[255,215,0],   sunColor:[255,170,0],    sunY:40,   ambient:0.3,  ambColor:[255,220,170], dirInt:0.5,  dirColor:[255,204,119], fogNear:150, fogFar:1200, fogColor:[255,215,0],   glowBoost:0.5 },
-        12: { skyTop:[74,144,217],  skyBot:[135,206,235],  sunColor:[255,255,255], sunY:150,  ambient:0.4,  ambColor:[255,255,255], dirInt:0.8,  dirColor:[255,255,255], fogNear:300, fogFar:2500, fogColor:[135,206,235], glowBoost:0.0 },
-        17: { skyTop:[255,107,53],  skyBot:[255,217,61],  sunColor:[255,140,0],    sunY:35,   ambient:0.35, ambColor:[255,200,150], dirInt:0.6,  dirColor:[255,170,68],  fogNear:120, fogFar:900,  fogColor:[255,217,61],  glowBoost:0.3 },
-        19: { skyTop:[45,27,105],   skyBot:[233,69,96],   sunColor:[255,69,0],     sunY:10,   ambient:0.2,  ambColor:[200,130,170], dirInt:0.3,  dirColor:[255,102,68],  fogNear:80,  fogFar:500,  fogColor:[233,69,96],   glowBoost:1.0 },
-        24: { skyTop:[10,10,26],    skyBot:[26,26,46],    sunColor:null,           sunY:-50,  ambient:0.05, ambColor:[68,102,170],  dirInt:0.05, dirColor:[68,102,170],  fogNear:30,  fogFar:200,  fogColor:[10,10,26],    glowBoost:3.0 }
-    };
-
-    // Sky gradient canvas (2x256 vertical gradient)
-    const skyCanvas = document.createElement('canvas');
-    skyCanvas.width = 2; skyCanvas.height = 256;
-    const skyCtx = skyCanvas.getContext('2d');
-    const skyTexture = new THREE.CanvasTexture(skyCanvas);
-
-    function lerpVal(a, b, t) { return a + (b - a) * t; }
-    function lerpArr(a, b, t) { return a.map((v, i) => lerpVal(v, b[i], t)); }
-
-    function getInterpolatedPreset(hour) {
-        let h = ((hour % 24) + 24) % 24;
-        let lo = 0, hi = 24;
-        for (let i = 0; i < TIME_KEYS.length - 1; i++) {
-            if (h >= TIME_KEYS[i] && h <= TIME_KEYS[i + 1]) {
-                lo = TIME_KEYS[i]; hi = TIME_KEYS[i + 1]; break;
-            }
-        }
-        let t = hi === lo ? 0 : (h - lo) / (hi - lo);
-        let A = TIME_PRESETS[lo], B = TIME_PRESETS[hi];
-        return {
-            skyTop: lerpArr(A.skyTop, B.skyTop, t),
-            skyBot: lerpArr(A.skyBot, B.skyBot, t),
-            sunColor: (A.sunColor && B.sunColor) ? lerpArr(A.sunColor, B.sunColor, t) : (A.sunColor && !B.sunColor) ? A.sunColor.map(v => v * (1 - t)) : (!A.sunColor && B.sunColor) ? B.sunColor.map(v => v * t) : null,
-            sunY: lerpVal(A.sunY, B.sunY, t),
-            ambient: lerpVal(A.ambient, B.ambient, t),
-            ambColor: lerpArr(A.ambColor, B.ambColor, t),
-            dirInt: lerpVal(A.dirInt, B.dirInt, t),
-            dirColor: lerpArr(A.dirColor, B.dirColor, t),
-            fogNear: lerpVal(A.fogNear, B.fogNear, t),
-            fogFar: lerpVal(A.fogFar, B.fogFar, t),
-            fogColor: lerpArr(A.fogColor, B.fogColor, t),
-            glowBoost: lerpVal(A.glowBoost, B.glowBoost, t)
-        };
-    }
-
-    window.updateFogDensity = function(val) {
-        let mult = parseFloat(val);
-        if(!window.CURRENT_BIOME_CONFIG) window.CURRENT_BIOME_CONFIG = {};
-        window.CURRENT_BIOME_CONFIG.fogDensity = mult;
-        if(window.setTimeOfDay) window.setTimeOfDay(window.currentTimeOfDay);
-        // Force rendering update if needed
-    };
-
-    window.setTimeOfDay = function(hour) {
-        window.currentTimeOfDay = hour;
-        let p = getInterpolatedPreset(hour);
-
-        // 1. Sky gradient
-        let grad = skyCtx.createLinearGradient(0, 0, 0, 256);
-        grad.addColorStop(0, `rgb(${p.skyTop[0]|0},${p.skyTop[1]|0},${p.skyTop[2]|0})`);
-        // Push the bottom color up to the horizon (approx 0.5 to 0.6) so it perfectly matches the fog
-        grad.addColorStop(0.55, `rgb(${p.skyBot[0]|0},${p.skyBot[1]|0},${p.skyBot[2]|0})`);
-        grad.addColorStop(1, `rgb(${p.skyBot[0]|0},${p.skyBot[1]|0},${p.skyBot[2]|0})`);
-        skyCtx.fillStyle = grad;
-        skyCtx.fillRect(0, 0, 2, 256);
-        skyTexture.needsUpdate = true;
-        scene.background = skyTexture;
-
-        // 2. Fog
-        let fogMult = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.fogDensity) ? window.CURRENT_BIOME_CONFIG.fogDensity : 1.0;
-        scene.fog.color.setRGB(p.fogColor[0]/255, p.fogColor[1]/255, p.fogColor[2]/255);
-        scene.fog.near = p.fogNear / fogMult;
-        // Extend fog.far to cover scenery distance (so mountains aren't hidden)
-        let baseFogFar = p.fogFar / fogMult;
-        let sceneryMaxDist = window._sceneryMaxRadius || 0;
-        scene.fog.far = Math.max(baseFogFar, sceneryMaxDist * 1.3);
-        
-        // Surround plane color is now handled by the Surrounding system (Grass/Ocean/etc)
-        // and natural THREE.Fog handles the horizon blending automatically.
-
-        // 3. Ambient light
-        if (typeof ambientLight !== 'undefined') {
-            ambientLight.intensity = p.ambient;
-            ambientLight.color.setRGB(p.ambColor[0]/255, p.ambColor[1]/255, p.ambColor[2]/255);
-        }
-
-        // 4. Directional light (sun)
-        if (typeof dirLight !== 'undefined') {
-            dirLight.intensity = p.dirInt;
-            dirLight.color.setRGB(p.dirColor[0]/255, p.dirColor[1]/255, p.dirColor[2]/255);
-            // Sun orbit
-            let angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
-            dirLight.position.set(Math.cos(angle) * 100, Math.max(10, p.sunY), Math.sin(angle) * 100);
-        }
-
-        // 5. Sun mesh visual (cinematic: orbits behind mountains)
-        if (typeof sunMesh !== 'undefined') {
-            let angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
-            let sunOrbitR = 13000; // Behind scenery mountains
-            let sunHeight = p.sunY * 32.5; // Scale height proportionally (was 150 at 400m → 4875 at 13000m)
-            sunMesh.position.set(Math.cos(angle) * sunOrbitR, sunHeight, Math.sin(angle) * sunOrbitR);
-            if (p.sunColor) {
-                sunMesh.material.color.setRGB(p.sunColor[0]/255, p.sunColor[1]/255, p.sunColor[2]/255);
-                let sunBrightness = (p.sunColor[0] + p.sunColor[1] + p.sunColor[2]) / 765;
-                sunMesh.visible = sunBrightness > 0.01;
-                // Sync glow sprite
-                if (window.sunGlow) {
-                    window.sunGlow.position.copy(sunMesh.position);
-                    window.sunGlow.material.color.copy(sunMesh.material.color);
-                    window.sunGlow.material.opacity = 0.15 * sunBrightness;
-                    window.sunGlow.visible = sunMesh.visible;
-                }
-            } else {
-                sunMesh.visible = false;
-                if (window.sunGlow) window.sunGlow.visible = false;
-            }
-        }
-
-        // 6. Glow assets (Fas 2)
-        updateGlowAssets(p.glowBoost);
-
-        // 6b. Tracer glow sync with time
-        updateTracerForTimeOfDay(hour);
-
-        // 6c. Stars fade in/out with time
-        updateStarsForTimeOfDay(hour);
-
-        // 7. Update UI label
-        let lbl = document.getElementById('time-label');
-        if (lbl) {
-            let hh = Math.floor(hour); let mm = Math.round((hour - hh) * 60);
-            let names = {0:'Midnight',5:'Dawn',7:'Sunrise',12:'Midday',17:'Golden Hour',19:'Sunset',24:'Midnight'};
-            let closest = TIME_KEYS.reduce((a,b) => Math.abs(b-hour) < Math.abs(a-hour) ? b : a);
-            lbl.innerText = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0') + ' \u2014 ' + (names[closest] || '');
-        }
-        let slider = document.getElementById('set-time');
-        if (slider && parseFloat(slider.value) !== hour) slider.value = hour;
-    };
-
-    // === ENVIRONMENT PREVIEW CONTROLS ===
-    window.updateSunPreview = function(val) {
-        let h = parseFloat(val);
-        window.setTimeOfDay(h);
-        let hh = Math.floor(h); let mm = Math.round((h - hh) * 60);
-        let lbl = document.getElementById('sun-label');
-        if (lbl) lbl.innerText = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
-    };
-    
-    window.updateWindPreview = function(val) {
-        window.currentWindMph = parseFloat(val);
-        let lbl = document.getElementById('wind-label');
-        if (lbl) lbl.innerText = val + ' mph';
-    };
-    
-    window.updateWindDirPreview = function(val) {
-        window.currentWindDir = parseFloat(val);
-        let dirs = ['N','NE','E','SE','S','SW','W','NW'];
-        let idx = Math.round(parseFloat(val) / 45) % 8;
-        let lbl = document.getElementById('winddir-label');
-        if (lbl) lbl.innerText = dirs[idx] + ' (' + val + '°)';
-    };
+    // === GAME CONTEXT — shared with external modules via window.G ===
+    window.G = { scene, inputMode: 'SWING_METER' };
 
     // ============================================================
-    // STAR FIELD — Night Sky
+    // SCENE ENGINE extracted to arcade-scene-engine.js
+    // Exposes: window.setTimeOfDay, window.animateStars, window.updateFogDensity,
+    //          window.updateSunPreview, window.updateWindPreview, window.updateWindDirPreview
     // ============================================================
-    const STAR_COUNT = 600;
-    const starPositions = new Float32Array(STAR_COUNT * 3);
-    const starSizes = new Float32Array(STAR_COUNT);
-    const starPhases = new Float32Array(STAR_COUNT); // Random phase for twinkle
-    const starBaseSizes = new Float32Array(STAR_COUNT);
 
-    for (let i = 0; i < STAR_COUNT; i++) {
-        // Distribute on upper hemisphere (y > 0)
-        let theta = Math.random() * Math.PI * 2;
-        let phi = Math.acos(Math.random() * 0.85 + 0.15); // 0.15-1.0 = above horizon
-        let r = 14000; // Behind mountains (max ~9750m) and sun (13000m), within camera.far (15000m)
-        starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        starPositions[i * 3 + 1] = r * Math.cos(phi); // Always positive (upper hemisphere)
-        starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-        starBaseSizes[i] = 1.0 + Math.random() * 2.5; // 1.0 - 3.5
-        starSizes[i] = starBaseSizes[i];
-        starPhases[i] = Math.random() * Math.PI * 2;
-    }
-
-    const starGeo = new THREE.BufferGeometry();
-    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-
-    const starMat = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 2.5,
-        sizeAttenuation: false,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-    });
-    const starField = new THREE.Points(starGeo, starMat);
-    scene.add(starField);
-
-    window._starOpacity = 0;
-
-    function updateStarsForTimeOfDay(hour) {
-        let opacity = 0;
-        if (hour < 5 || hour > 21) { opacity = 1.0; }
-        else if (hour >= 5 && hour < 7) { opacity = 1.0 - (hour - 5) / 2; } // Dawn fade
-        else if (hour >= 18 && hour <= 21) { opacity = (hour - 18) / 3; }  // Dusk emerge
-        else { opacity = 0; }
-        window._starOpacity = opacity;
-        starMat.opacity = opacity;
-        starField.visible = opacity > 0.01;
-    }
-
-    // Twinkle animation (called from render loop)
-    function animateStars() {
-        if (window._starOpacity < 0.01) return;
-        let t = performance.now() * 0.001;
-        for (let i = 0; i < STAR_COUNT; i++) {
-            let twinkle = 0.7 + 0.3 * Math.sin(t * (1.5 + (starPhases[i] % 1.0) * 2.0) + starPhases[i]);
-            starSizes[i] = starBaseSizes[i] * twinkle;
-        }
-        starGeo.attributes.size.needsUpdate = true;
-    }
-
-    // FAS 2: Glow-tree night mode
-    const MAX_GLOW_LIGHTS = 20;
-    let activeGlowLights = [];
-
-    function updateGlowAssets(glowBoost) {
-        if (!window.placedTrees) return;
-        let glowTrees = window.placedTrees.filter(obj => obj.type === 'R_GLOW');
-
-        // Sort by distance to camera, closest first
-        if (typeof camera !== 'undefined') {
-            glowTrees.sort((a, b) => {
-                let dA = (a.x - camera.position.x) ** 2 + (a.z - camera.position.z) ** 2;
-                let dB = (b.x - camera.position.x) ** 2 + (b.z - camera.position.z) ** 2;
-                return dA - dB;
-            });
-        }
-
-        // Remove all existing glow lights
-        activeGlowLights.forEach(l => scene.remove(l));
-        activeGlowLights = [];
-
-        glowTrees.forEach((obj, idx) => {
-            // Update emissive via instance pool materials (shared = all glow trees update at once)
-            let pool = window.instancePools && window.instancePools['R_GLOW'];
-            if (pool && idx === 0) { // Only update materials once (shared across all instances)
-                pool.meshes.forEach(iMesh => {
-                    if (iMesh.material) {
-                        iMesh.material.emissiveIntensity = 0.1 + glowBoost * 0.9;
-                        if (glowBoost > 0.5) {
-                            iMesh.material.emissive = new THREE.Color(0.2 * glowBoost, 0.8 * glowBoost, 0.3 * glowBoost);
-                        }
-                        iMesh.material.needsUpdate = true;
-                    }
-                });
-            }
-
-            // Add PointLight for nearby glow trees (max 20)
-            if (glowBoost > 0.3 && idx < MAX_GLOW_LIGHTS) {
-                let light = new THREE.PointLight(
-                    new THREE.Color(0.3, 1.0, 0.5), // Green-ish glow
-                    glowBoost * 2.5,
-                    30, // distance
-                    2   // decay
-                );
-                light.position.set(obj.x, 8, obj.z);
-                scene.add(light);
-                activeGlowLights.push(light);
-            }
-        });
-    }
-
-    // ============================================================
-    // TRACER STYLES & GLOW BALL ENGINE
-    // ============================================================
-    window.currentTracerStyle = 'CLASSIC';
-
-    const TRACER_STYLES = {
-        'CLASSIC':    { core: '#ffffff', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: null,      dashed: false, label: '⚪ Classic' },
-        'NEON_GREEN': { core: '#00ff88', glow: '#00ff44', glowInt: 1.5, ballEmissive: '#00ff88', ballLight: true,  vertexFn: null,      dashed: false, label: '💚 Neon' },
-        'NEON_PINK':  { core: '#ff00ff', glow: '#ff44ff', glowInt: 1.5, ballEmissive: '#ff44ff', ballLight: true,  vertexFn: null,      dashed: false, label: '💜 Pink' },
-        'FIRE':       { core: '#ff8800', glow: '#ff4400', glowInt: 1.2, ballEmissive: '#ff6600', ballLight: true,  vertexFn: 'fire',    dashed: false, label: '🔥 Fire' },
-        'ICE':        { core: '#44aaff', glow: '#2266ff', glowInt: 1.0, ballEmissive: '#4488ff', ballLight: true,  vertexFn: 'ice',     dashed: false, label: '❄️ Ice' },
-        'RAINBOW':    { core: '#ffffff', glow: '#ffffff', glowInt: 0.8, ballEmissive: '#ffffff', ballLight: true,  vertexFn: 'rainbow', dashed: false, label: '🌈 Rainbow' },
-        'PHANTOM':    { core: '#8888cc', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: 'fade',    dashed: false, label: '👻 Phantom' },
-        'PRO_DOT':    { core: '#fbbf24', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: null,      dashed: true,  label: '📍 Pro Dot' }
-    };
-
-    function hslToRgb(h, s, l) {
-        let r, g, b;
-        if (s === 0) { r = g = b = l; } else {
-            let hue2rgb = (p, q, t) => { if(t<0)t+=1; if(t>1)t-=1; if(t<1/6) return p+(q-p)*6*t; if(t<1/2) return q; if(t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
-            let q = l < 0.5 ? l*(1+s) : l+s-l*s; let p = 2*l-q;
-            r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
-        }
-        return [r, g, b];
-    }
-
-    function getTracerVertexColor(vertexFn, index, total) {
-        let t = index / Math.max(total, 1);
-        switch(vertexFn) {
-            case 'fire': return [1.0, Math.max(0, 1.0 - t * 1.5), 0];
-            case 'ice':  return [0.2 + t * 0.8, 0.5 + t * 0.5, 1.0];
-            case 'rainbow': {
-                let hue = ((t * 360 + performance.now() * 0.05) % 360) / 360;
-                return hslToRgb(hue, 1.0, 0.5);
-            }
-            case 'fade': return [0.53, 0.53, 0.8];
-            default: return null;
-        }
-    }
-
-    window.setTracerStyle = function(styleName) {
-        let style = TRACER_STYLES[styleName];
-        if (!style) return;
-        window.currentTracerStyle = styleName;
-
-        // Core line
-        if (typeof tracerMat !== 'undefined') {
-            tracerMat.color.set(style.core);
-            tracerMat.vertexColors = !!style.vertexFn;
-            tracerMat.needsUpdate = true;
-        }
-
-        // Glow overlay
-        if (typeof glowTracer !== 'undefined') {
-            if (style.glow) {
-                glowTracerMat.color.set(style.glow);
-                glowTracer.visible = true;
-                glowTracerMat.opacity = 0.3;
-            } else {
-                glowTracer.visible = false;
-            }
-            glowTracerMat.needsUpdate = true;
-        }
-
-        // PRO_DOT dashed
-        if (typeof tracerMat !== 'undefined') {
-            if (style.dashed && !(tracerMat instanceof THREE.LineDashedMaterial)) {
-                tracerMat.color.set(style.core);
-            }
-        }
-
-        // Ball skin
-        applyBallSkin(style);
-
-        // Update UI buttons
-        document.querySelectorAll('.tracer-btn').forEach(b => b.style.outline = 'none');
-        let activeBtn = document.getElementById('tracer-btn-' + styleName);
-        if (activeBtn) activeBtn.style.outline = '2px solid #fff';
-
-        // Sync with current TimeOfDay
-        updateTracerForTimeOfDay(window.currentTimeOfDay || 12);
-    };
-
-    function applyBallSkin(style) {
-        if (!window.ballMesh || !window.ballMesh.material) return;
-        let mat = window.ballMesh.material;
-        if (style.ballEmissive) {
-            mat.emissive = new THREE.Color(style.ballEmissive);
-            let nightFactor = (window.currentTimeOfDay < 6 || window.currentTimeOfDay > 19) ? 1.5 : 0.2;
-            mat.emissiveIntensity = nightFactor;
-        } else {
-            mat.emissive = new THREE.Color(0x000000);
-            mat.emissiveIntensity = 0;
-        }
-        mat.needsUpdate = true;
-    }
-
-    function updateTracerForTimeOfDay(hour) {
-        let nightFactor = 0;
-        if (hour < 5 || hour > 20) nightFactor = 1.0;
-        else if (hour < 7) nightFactor = 1.0 - (hour - 5) / 2;
-        else if (hour > 18) nightFactor = (hour - 18) / 2;
-
-        let style = TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
-
-        // Glow overlay
-        if (typeof glowTracer !== 'undefined' && typeof glowTracerMat !== 'undefined' && style.glow) {
-            glowTracerMat.opacity = 0.15 + nightFactor * 0.5;
-            glowTracerMat.needsUpdate = true;
-        }
-
-        // Ball glow light
-        if (window.ballGlowLight) {
-            window.ballGlowLight.intensity = nightFactor * (style.glowInt || 0) * 2.0;
-            if (style.ballEmissive) window.ballGlowLight.color.set(style.ballEmissive);
-        }
-
-        // Ball emissive
-        if (window.ballMesh && window.ballMesh.material && style.ballEmissive) {
-            window.ballMesh.material.emissiveIntensity = 0.1 + nightFactor * 1.5;
-            window.ballMesh.material.needsUpdate = true;
-        }
-    }
+    // Tracer Styles & Glow Ball Engine extracted to arcade-tracer-engine.js
+    // Exposes: window.setTracerStyle, window.updateTracerForTimeOfDay, window.getTracerVertexColor
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 15000); // Extended for distant scenery (mountains etc)00m
     // Camera just behind and above ball
@@ -2397,8 +1604,7 @@
     
     window.fetchCloudAssets = async function() {
         try {
-            let res = await fetch('/api/assets');
-            let assets = await res.json();
+            let assets = await ArcadeAPI.getAssets();
             assets.forEach(a => {
                 let conf = a.config || {};
                 window.ASSET_REGISTRY[a.id] = {
@@ -2429,14 +1635,13 @@
 
     window.fetchCloudBiomes = async function() {
         try {
-            let res = await fetch('/api/biomes');
-            if(res.ok) {
-                let data = await res.json();
+            let res = await ArcadeAPI.getBiomes();
+            if(res) {
                 let select = document.getElementById('biome-select');
                 if(select) {
                     select.innerHTML = '<option value="ALL">All Assets (Global)</option>';
                 }
-                data.forEach(t => {
+                res.forEach(t => {
                     window.CLOUD_BIOMES[t.id] = t.config;
                     if(t.id !== 'GLOBAL' && select) {
                         select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
@@ -2687,6 +1892,8 @@
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     sunMesh.position.set(200, 4875, -13000); 
     scene.add(sunMesh);
+    // Expose lights on Game Context for scene engine
+    Object.assign(window.G, { ambientLight, dirLight, sunMesh });
     
     // Atmospheric glow halo around the sun
     const glowGeo = new THREE.SphereGeometry(1800, 32, 32);
@@ -2772,6 +1979,8 @@
     plane.rotation.x = -Math.PI / 2;
     plane.receiveShadow = true;
     scene.add(plane);
+    // Extend Game Context with terrain objects
+    Object.assign(window.G, { camera, renderer, plane, planeGeo, TERRAIN_SIZE, TERRAIN_SEGS });
     
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
     let surroundSize = 20000;
@@ -3359,345 +2568,11 @@
     window.minimapMat.extensions = { derivatives: true };
     window.heatmapShaderRef = null;
     
-    // === PERLIN NOISE ENGINE (Unity-grade procedural terrain) ===
-    // Classic 2D Perlin noise implementation
-    const _perm = new Uint8Array(512);
-    const _grad = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
-    (function initPerlin() {
-        let p = [];
-        for(let i = 0; i < 256; i++) p[i] = i;
-        for(let i = 255; i > 0; i--) { let j = Math.floor(Math.random() * (i+1)); [p[i], p[j]] = [p[j], p[i]]; }
-        for(let i = 0; i < 512; i++) _perm[i] = p[i & 255];
-    })();
+    // Perlin Noise Engine extracted to arcade-perlin.js
+    // Exposes: window.perlin2D, window.fbm, window.noisePatterns, window.currentNoisePattern, window.noiseScale
     
-    function perlin2D(x, y) {
-        let xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
-        let xf = x - Math.floor(x), yf = y - Math.floor(y);
-        let u = xf * xf * xf * (xf * (xf * 6 - 15) + 10);
-        let v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
-        
-        let aa = _perm[_perm[xi] + yi], ab = _perm[_perm[xi] + yi + 1];
-        let ba = _perm[_perm[xi + 1] + yi], bb = _perm[_perm[xi + 1] + yi + 1];
-        
-        let g = _grad[aa & 7], x1 = g[0]*xf + g[1]*yf;
-        g = _grad[ba & 7]; let x2 = g[0]*(xf-1) + g[1]*yf;
-        let l1 = x1 + u * (x2 - x1);
-        
-        g = _grad[ab & 7]; x1 = g[0]*xf + g[1]*(yf-1);
-        g = _grad[bb & 7]; x2 = g[0]*(xf-1) + g[1]*(yf-1);
-        let l2 = x1 + u * (x2 - x1);
-        
-        return l1 + v * (l2 - l1); // Returns -1 to 1
-    }
-    
-    // fBM — fractal Brownian Motion (layered octaves)
-    function fbm(x, y, octaves, lacunarity, persistence) {
-        let val = 0, amp = 1, freq = 1, max = 0;
-        for(let i = 0; i < octaves; i++) {
-            val += perlin2D(x * freq, y * freq) * amp;
-            max += amp;
-            amp *= persistence;
-            freq *= lacunarity;
-        }
-        return val / max;
-    }
-    
-    // Noise pattern generators
-    window.noisePatterns = {
-        PERLIN:  (x, z) => fbm(x, z, 4, 2.0, 0.5),
-        RIDGED:  (x, z) => { let n = fbm(x, z, 4, 2.0, 0.5); return 1 - Math.abs(n) * 2; },
-        DUNES:   (x, z) => fbm(x * 0.5, z * 1.5, 3, 2.2, 0.45),
-        MOGULS:  (x, z) => { let n = fbm(x, z, 2, 3.0, 0.6); return Math.abs(n); },
-        ERODED:  (x, z) => { let p = fbm(x, z, 5, 2.1, 0.45); let r = 1 - Math.abs(fbm(x+50, z+50, 3, 2.0, 0.5)) * 2; return p * 0.6 + r * 0.4; }
-    };
-    window.currentNoisePattern = 'PERLIN';
-    window.noiseScale = 0.15; // Controls frequency/zoom of noise
-    
-    // === SLOPE OVERLAY SYSTEM ===
-    let slopeOverlayGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
-    slopeOverlayGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    // Add vertex colors
-    let slopeColors = new Float32Array((TERRAIN_SEGS+1)*(TERRAIN_SEGS+1)*3);
-    slopeOverlayGeo.setAttribute('color', new THREE.BufferAttribute(slopeColors, 3));
-    let slopeOverlayMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
-    let slopeOverlayMesh = new THREE.Mesh(slopeOverlayGeo, slopeOverlayMat);
-    slopeOverlayMesh.rotation.x = -Math.PI / 2;
-    slopeOverlayMesh.renderOrder = 1;
-    slopeOverlayMesh.visible = false;
-    scene.add(slopeOverlayMesh);
-    
-    // Contour line overlay — uses terrain-following geometry with canvas texture
-    let contourCanvas = document.createElement('canvas');
-    contourCanvas.width = 2048; contourCanvas.height = 2048;
-    let contourCtx = contourCanvas.getContext('2d');
-    let contourTex = new THREE.CanvasTexture(contourCanvas);
-    contourTex.minFilter = THREE.LinearFilter;
-    let contourGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
-    contourGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    let contourMat = new THREE.MeshBasicMaterial({ map: contourTex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 });
-    let contourMesh = new THREE.Mesh(contourGeo, contourMat);
-    contourMesh.rotation.x = -Math.PI / 2;
-    contourMesh.renderOrder = 2;
-    contourMesh.visible = false;
-    scene.add(contourMesh);
-    
-    window.slopeOverlayActive = false;
-    window.contourLinesActive = false;
-    
-    window.updateSlopeOverlay = function() {
-        let pos = planeGeo.attributes.position.array;
-        let sPos = slopeOverlayGeo.attributes.position.array;
-        let cols = slopeOverlayGeo.attributes.color.array;
-        let segs = TERRAIN_SEGS;
-        let step = TERRAIN_SIZE / segs;
-        
-        // Copy positions from terrain
-        for(let i = 0; i < sPos.length; i++) sPos[i] = pos[i];
-        // Lift slightly
-        for(let i = 2; i < sPos.length; i += 3) sPos[i] = pos[i] + 0.1;
-        
-        for(let z = 0; z <= segs; z++) {
-            for(let x = 0; x <= segs; x++) {
-                let idx = z * (segs+1) + x;
-                let h = pos[idx*3+2];
-                
-                // Calculate slope from neighbors
-                let hR = (x < segs) ? pos[(z*(segs+1)+(x+1))*3+2] : h;
-                let hL = (x > 0)    ? pos[(z*(segs+1)+(x-1))*3+2] : h;
-                let hU = (z > 0)    ? pos[((z-1)*(segs+1)+x)*3+2] : h;
-                let hD = (z < segs) ? pos[((z+1)*(segs+1)+x)*3+2] : h;
-                
-                let dx = (hR - hL) / (2 * step);
-                let dz = (hD - hU) / (2 * step);
-                let slopePct = Math.sqrt(dx*dx + dz*dz) * 100;
-                
-                // Color: green (0-3%) → yellow (3-8%) → red (8%+)
-                let r, g, b;
-                if(slopePct < 3) {
-                    let t = slopePct / 3;
-                    r = t * 1.0;       g = 0.85; b = 0.1 * t;
-                } else if(slopePct < 8) {
-                    let t = (slopePct - 3) / 5;
-                    r = 1.0;           g = 0.85 * (1-t); b = 0;
-                } else {
-                    r = 1.0;           g = 0; b = 0;
-                }
-                cols[idx*3]   = r;
-                cols[idx*3+1] = g;
-                cols[idx*3+2] = b;
-            }
-        }
-        slopeOverlayGeo.attributes.position.needsUpdate = true;
-        slopeOverlayGeo.attributes.color.needsUpdate = true;
-    };
-    
-    window.updateContourLines = function() {
-        let ctx = contourCtx;
-        ctx.clearRect(0, 0, 2048, 2048);
-        
-        let pos = planeGeo.attributes.position.array;
-        let cPos = contourGeo.attributes.position.array;
-        let segs = TERRAIN_SEGS;
-        let res = 2048;
-        let ratio = res / (segs + 1);
-        
-        // Copy terrain positions so contour mesh follows terrain
-        for(let i = 0; i < pos.length; i++) cPos[i] = pos[i];
-        // Lift Z slightly to avoid z-fighting (handled by polygonOffset, but belt-and-suspenders)
-        for(let i = 2; i < cPos.length; i += 3) cPos[i] = pos[i] + 0.05;
-        contourGeo.attributes.position.needsUpdate = true;
-        
-        // Find height range
-        let hMin = Infinity, hMax = -Infinity;
-        for(let i = 2; i < pos.length; i += 3) {
-            if(pos[i] < hMin) hMin = pos[i];
-            if(pos[i] > hMax) hMax = pos[i];
-        }
-        
-        // Skip if terrain is completely flat
-        if(hMax - hMin < 0.1) {
-            contourTex.needsUpdate = true;
-            return;
-        }
-        
-        let interval = 0.5; // 0.5 meter contour lines
-        if(hMax - hMin > 20) interval = 1.0;
-        if(hMax - hMin > 40) interval = 2.0;
-        if(hMax - hMin > 80) interval = 5.0;
-        
-        // Major lines every 5x interval
-        let majorInterval = interval * 5;
-        
-        // Marching squares per contour level
-        for(let level = Math.ceil(hMin / interval) * interval; level <= hMax; level += interval) {
-            let isMajor = Math.abs(level % majorInterval) < 0.01;
-            ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.4)';
-            ctx.lineWidth = isMajor ? 3.0 : 1.5;
-            ctx.beginPath();
-            let hasSegment = false;
-            
-            for(let z = 0; z < segs; z++) {
-                for(let x = 0; x < segs; x++) {
-                    let idx00 = z * (segs+1) + x;
-                    let idx10 = z * (segs+1) + (x+1);
-                    let idx01 = (z+1) * (segs+1) + x;
-                    let idx11 = (z+1) * (segs+1) + (x+1);
-                    
-                    let h00 = pos[idx00*3+2], h10 = pos[idx10*3+2];
-                    let h01 = pos[idx01*3+2], h11 = pos[idx11*3+2];
-                    
-                    let pts = [];
-                    if((h00 - level) * (h10 - level) < 0) {
-                        let t = (level - h00) / (h10 - h00);
-                        pts.push([(x + t) * ratio, z * ratio]);
-                    }
-                    if((h01 - level) * (h11 - level) < 0) {
-                        let t = (level - h01) / (h11 - h01);
-                        pts.push([(x + t) * ratio, (z+1) * ratio]);
-                    }
-                    if((h00 - level) * (h01 - level) < 0) {
-                        let t = (level - h00) / (h01 - h00);
-                        pts.push([x * ratio, (z + t) * ratio]);
-                    }
-                    if((h10 - level) * (h11 - level) < 0) {
-                        let t = (level - h10) / (h11 - h10);
-                        pts.push([(x+1) * ratio, (z + t) * ratio]);
-                    }
-                    
-                    if(pts.length >= 2) {
-                        ctx.moveTo(pts[0][0], pts[0][1]);
-                        ctx.lineTo(pts[1][0], pts[1][1]);
-                        hasSegment = true;
-                    }
-                }
-            }
-            if(hasSegment) ctx.stroke();
-            
-            // Draw height label on major lines
-            if(isMajor && hasSegment) {
-                // Find a point on this contour for the label
-                for(let z = Math.floor(segs/2); z < Math.floor(segs/2)+5; z++) {
-                    for(let x = 0; x < segs; x++) {
-                        let idx00 = z * (segs+1) + x;
-                        let idx10 = z * (segs+1) + (x+1);
-                        let h00 = pos[idx00*3+2], h10 = pos[idx10*3+2];
-                        if((h00 - level) * (h10 - level) < 0) {
-                            let t = (level - h00) / (h10 - h00);
-                            let lx = (x + t) * ratio;
-                            let ly = z * ratio;
-                            ctx.font = 'bold 18px Arial';
-                            ctx.fillStyle = 'rgba(255,255,255,0.9)';
-                            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-                            ctx.lineWidth = 3;
-                            let txt = level.toFixed(1) + 'm';
-                            ctx.strokeText(txt, lx + 5, ly - 5);
-                            ctx.fillText(txt, lx + 5, ly - 5);
-                            break;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        contourTex.needsUpdate = true;
-    };
-    
-    window.toggleSlopeOverlay = function() {
-        window.slopeOverlayActive = !window.slopeOverlayActive;
-        slopeOverlayMesh.visible = window.slopeOverlayActive;
-        // Sync both build and play buttons
-        ['btn-slope-overlay', 'gr-slope'].forEach(id => {
-            let btn = document.getElementById(id);
-            if(btn) { btn.style.borderColor = window.slopeOverlayActive ? '#4ade80' : '#475569'; btn.style.color = window.slopeOverlayActive ? '#4ade80' : '#94a3b8'; }
-        });
-        if(window.slopeOverlayActive) window.updateSlopeOverlay();
-    };
-    
-    window.toggleContourLines = function() {
-        window.contourLinesActive = !window.contourLinesActive;
-        contourMesh.visible = window.contourLinesActive;
-        ['btn-contour-lines', 'gr-contour'].forEach(id => {
-            let btn = document.getElementById(id);
-            if(btn) { btn.style.borderColor = window.contourLinesActive ? '#4ade80' : '#475569'; btn.style.color = window.contourLinesActive ? '#4ade80' : '#94a3b8'; }
-        });
-        if(window.contourLinesActive) window.updateContourLines();
-    };
-    
-    // === ELEVATION HEATMAP SYSTEM ===
-    let elevHeatGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
-    elevHeatGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    let elevHeatColors = new Float32Array((TERRAIN_SEGS+1)*(TERRAIN_SEGS+1)*3);
-    elevHeatGeo.setAttribute('color', new THREE.BufferAttribute(elevHeatColors, 3));
-    let elevHeatMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1.5, polygonOffsetUnits: -6 });
-    let elevHeatMesh = new THREE.Mesh(elevHeatGeo, elevHeatMat);
-    elevHeatMesh.rotation.x = -Math.PI / 2;
-    elevHeatMesh.renderOrder = 1;
-    elevHeatMesh.visible = false;
-    scene.add(elevHeatMesh);
-    
-    window.elevationHeatmapActive = false;
-    
-    window.updateElevationHeatmap = function() {
-        let pos = planeGeo.attributes.position.array;
-        let ePos = elevHeatGeo.attributes.position.array;
-        let cols = elevHeatGeo.attributes.color.array;
-        let total = (TERRAIN_SEGS+1)*(TERRAIN_SEGS+1);
-        
-        // Copy terrain positions
-        for(let i = 0; i < pos.length; i++) ePos[i] = pos[i];
-        for(let i = 2; i < ePos.length; i += 3) ePos[i] = pos[i] + 0.08;
-        elevHeatGeo.attributes.position.needsUpdate = true;
-        
-        // Find median height for LOCAL normalization (makes small green undulations pop)
-        let heights = [];
-        for(let i = 2; i < pos.length; i += 3) heights.push(pos[i]);
-        heights.sort((a,b) => a - b);
-        let median = heights[Math.floor(heights.length / 2)];
-        
-        // Map ±1.5m from median to full color range — ultra sensitive for green design
-        let sensitivity = 1.5; // meters — ±1.5m = full blue→red
-        let rangeMin = median - sensitivity;
-        let rangeMax = median + sensitivity;
-        let range = rangeMax - rangeMin;
-        if(range < 0.01) range = 1;
-        
-        // Color: Blue (low) → Green (mid) → Red (high)
-        for(let idx = 0; idx < total; idx++) {
-            let h = pos[idx*3+2];
-            let t = Math.max(0, Math.min(1, (h - rangeMin) / range)); // 0 = lowest, 1 = highest, clamped
-            
-            let r, g, b;
-            if(t < 0.5) {
-                // Blue → Green
-                let s = t * 2; // 0..1
-                r = 0;
-                g = s * 0.9;
-                b = (1 - s) * 0.9;
-            } else {
-                // Green → Red
-                let s = (t - 0.5) * 2; // 0..1
-                r = s * 1.0;
-                g = (1 - s) * 0.9;
-                b = 0;
-            }
-            
-            cols[idx*3]   = r;
-            cols[idx*3+1] = g;
-            cols[idx*3+2] = b;
-        }
-        
-        elevHeatGeo.attributes.color.needsUpdate = true;
-    };
-    
-    window.toggleElevationHeatmap = function() {
-        window.elevationHeatmapActive = !window.elevationHeatmapActive;
-        elevHeatMesh.visible = window.elevationHeatmapActive;
-        ['btn-elevation-heatmap', 'gr-elev'].forEach(id => {
-            let btn = document.getElementById(id);
-            if(btn) { btn.style.borderColor = window.elevationHeatmapActive ? '#38bdf8' : '#475569'; btn.style.color = window.elevationHeatmapActive ? '#38bdf8' : '#94a3b8'; }
-        });
-        if(window.elevationHeatmapActive) window.updateElevationHeatmap();
-    };
+    // Terrain Overlays (Slope, Contour, Elevation) extracted to arcade-terrain-overlays.js
+    // Uses window.G for scene/terrain access. Deferred init.
     
     // Update elevation HUD — called from onMouseMove
     window.updateElevationHUD = function(hitPoint) {
@@ -4603,12 +3478,15 @@
     tracerGeo.setAttribute('color', new THREE.BufferAttribute(tracerColors, 3));
     tracerGeo.setDrawRange(0, 0);
     const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3, vertexColors: false });
+    window.tracerMat = tracerMat; // Expose for tracer engine
     const flightTracer = new THREE.Line(tracerGeo, tracerMat);
     scene.add(flightTracer);
 
     // Glow overlay (same geometry, additive blending)
     const glowTracerMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    window.glowTracerMat = glowTracerMat; // Expose for tracer engine
     const glowTracer = new THREE.Line(tracerGeo, glowTracerMat);
+    window.glowTracer = glowTracer; // Expose for tracer engine
     glowTracer.visible = false;
     scene.add(glowTracer);
 
@@ -4643,8 +3521,12 @@
 
     const targets = [];
     
+    // Max number of holes supported — change to 9 for 9-hole courses
+    const MAX_HOLES = 18;
+    window.MAX_HOLES = MAX_HOLES;
+
     let courseHoles = [];
-    for(let i=0; i<18; i++) {
+    for(let i=0; i<MAX_HOLES; i++) {
         courseHoles.push({ 
             par: 4, 
             tees: { red: null, yellow: null, white: null, black: null, range: null },
@@ -4714,7 +3596,7 @@
         let btn = document.getElementById('btn-toggle-unit');
         if(btn) btn.textContent = '📐 Enhet: ' + (window.rangeUseMeters ? 'Meter' : 'Yards');
         // Rebuild all range tees with new unit
-        for(let i=0; i<18; i++) {
+        for(let i=0; i<MAX_HOLES; i++) {
             let h = courseHoles[i];
             if(h.tees.range && h.teeMeshes.range) {
                 let oldRot = h.teeMeshes.range.rotation.y;
@@ -4977,7 +3859,7 @@
             surrounding: h.surrounding || null
         }));
         
-        localStorage.setItem('arcade_custom_level', JSON.stringify({ targets: dumpTargets, holes: dumpHoles }));
+        ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles });
         if (appMode === 'BUILD') window.hasUnsavedChanges = true;
     }
     
@@ -5019,10 +3901,17 @@
         let w_mask = (typeof wCtx !== 'undefined') ? wCtx.canvas.toDataURL('image/jpeg', 0.8) : null;
 
         try {
+            // Count playable holes (have at least one tee + flag)
+            let playableHoles = dumpHoles.filter(h => h.flag && h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black));
+            let holeCount = playableHoles.length;
+            let totalPar = playableHoles.reduce((sum, h) => sum + (h.par || 4), 0);
+
             let payload = {
                 name: name || "Draft",
                 author: author || "Builder",
                 holes: dumpHoles,
+                hole_count: holeCount,
+                total_par: totalPar,
                 targets: dumpTargets,
                 trees: dumpTrees,
                 terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
@@ -5030,33 +3919,25 @@
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
                 is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
-                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG }
+                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG },
+                owner_id: window.GolfAuth?.userId || null
             };
             
             if (options.overwrite && currentEditCode) {
                 payload.edit_code = currentEditCode;
+                // If re-publishing (not draft), trigger version bump
+                if (!options.isDraft) {
+                    payload.new_version = true;
+                }
             }
             
-            let res = await fetch('/api/courses', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            let data = await res.json();
+            let data = await ArcadeAPI.saveCourse(payload);
             if(data.success) {
                 currentEditCode = data.share_code;
                 window.hasUnsavedChanges = false;
                 
                 if (options.isDraft) {
-                    let drafts = JSON.parse(localStorage.getItem('golf_os_my_drafts') || "[]");
-                    let draftObj = drafts.find(d => d.code === data.share_code);
-                    if (!draftObj) {
-                        drafts.push({ code: data.share_code, name: payload.name, date: new Date().toISOString() });
-                    } else {
-                        draftObj.name = payload.name;
-                        draftObj.date = new Date().toISOString();
-                    }
-                    localStorage.setItem('golf_os_my_drafts', JSON.stringify(drafts));
+                    ArcadeStorage.addOrUpdateDraft(data.share_code, payload.name);
                 }
                 
                 let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
@@ -5220,7 +4101,7 @@
         
         if (autoRun === 'new_build') {
             if (typeof executeClear === 'function') executeClear();
-            else localStorage.removeItem('arcade_custom_level');
+            else ArcadeStorage.removeCustomLevel();
             
             // Range mode: hide standard tee buttons, show only Range Tee + Flag
             if (params.get('mode') === 'range') {
@@ -5255,8 +4136,7 @@
 
         if (targetCode) {
             try {
-                let res = await fetch('/api/courses/' + targetCode);
-                let data = await res.json();
+                let data = await ArcadeAPI.loadCourse(targetCode);
                 if(data.share_code) {
                     savedStr = data;
                     isCloud = true;
@@ -5278,31 +4158,20 @@
         // === LOCAL BRIDGE: Builder saved full course to localStorage ===
         let localSource = params.get('source');
         if (localSource === 'local' && !savedStr) {
-            // Try compressed format first (pako)
-            let lsZ = localStorage.getItem('arcade_custom_level_z');
-            if (lsZ && typeof pako !== 'undefined') {
-                try {
-                    let binaryStr = atob(lsZ);
-                    let bytes = new Uint8Array(binaryStr.length);
-                    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-                    let jsonStr = pako.inflate(bytes, { to: 'string' });
-                    let parsed = JSON.parse(jsonStr);
-                    if (parsed._fullSave) {
-                        savedStr = parsed;
-                        isCloud = true; // So terrain heightmap gets loaded
-                        console.log('✅ Loaded COMPRESSED course from builder (' + (lsZ.length / 1024).toFixed(1) + 'KB)');
-                    } else {
-                        savedStr = parsed;
-                    }
-                } catch(e) {
-                    console.error('Decompression failed:', e);
+            // Try compressed format first (pako — handled by ArcadeStorage)
+            let compressed = ArcadeStorage.loadCompressedLevel();
+            if (compressed) {
+                if (compressed._fullSave) {
+                    savedStr = compressed;
+                    isCloud = true; // So terrain heightmap gets loaded
+                } else {
+                    savedStr = compressed;
                 }
             }
             // Fallback: uncompressed key
             if (!savedStr) {
-                let ls = localStorage.getItem('arcade_custom_level');
-                if (ls) {
-                    let parsed = JSON.parse(ls);
+                let parsed = ArcadeStorage.loadCustomLevel();
+                if (parsed) {
                     if (parsed._fullSave) {
                         savedStr = parsed;
                         isCloud = true;
@@ -5315,15 +4184,15 @@
         }
         
         if (!isCloud && !savedStr) {
-            let ls = localStorage.getItem('arcade_custom_level');
-            if(ls) savedStr = JSON.parse(ls);
+            let ls = ArcadeStorage.loadCustomLevel();
+            if(ls) savedStr = ls;
         }
 
         if(savedStr) {
             targets.forEach(t => scene.remove(t.mesh));
             targets.length = 0;
             
-            for(let i=0; i<18; i++) {
+            for(let i=0; i<MAX_HOLES; i++) {
                 let h = courseHoles[i];
                 for(let key in h.tees) {
                     if(h.teeMeshes[key]) { scene.remove(h.teeMeshes[key]); h.teeMeshes[key]=null; }
@@ -5391,7 +4260,7 @@
                 }
                 
                 if (arr.holes && Array.isArray(arr.holes)) {
-                    for(let i=0; i<18 && i<arr.holes.length; i++) {
+                    for(let i=0; i<MAX_HOLES && i<arr.holes.length; i++) {
                         let hSync = arr.holes[i];
                         let h = courseHoles[i];
                         h.par = hSync.par || 4;
@@ -5529,13 +4398,14 @@
     
     let playState = 'IDLE'; 
     let playingHoleIndex = 0;
+    window.playingHoleIndex = playingHoleIndex; // Exposed for arcade-swing-engine.js
     
     // BUG-07 FIX: Initialize wind variables at boot to prevent NaN
     window.currentWindMph = 0;
     window.currentWindDir = 0;
     window.currentWindVec = [0, 0, 0];
     
-    window.playerScores = Array(18).fill(null);
+    window.playerScores = Array(MAX_HOLES).fill(null);
     window.matchSettings = {
         tournamentMode: false,
         gimmeDist: 10,
@@ -5621,7 +4491,7 @@
         list.innerHTML = '';
         
         let firstPlayableHole = 0;
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < MAX_HOLES; i++) {
             let hole = courseHoles[i];
             if (hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black) && hole.flag) {
                 firstPlayableHole = i;
@@ -5698,7 +4568,7 @@
         if(appMode !== 'PLAY') return;
 
         let firstPlayableHole = -1;
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < MAX_HOLES; i++) {
             let hole = courseHoles[i];
             let hasTee = hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black);
             if (hole && hasTee && hole.flag) {
@@ -5928,7 +4798,7 @@
 
         playState = 'ROUND_IDLE';
         let firstPlayableHole = 0;
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < MAX_HOLES; i++) {
             let hole = courseHoles[i];
             let hasTee = hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black);
             if (hole && hasTee && hole.flag) {
@@ -5937,6 +4807,7 @@
             }
         }
         playingHoleIndex = firstPlayableHole;
+        window.playingHoleIndex = playingHoleIndex;
         
         window.players = window.setupPlayers.map(sp => ({
             id: sp.name + "_" + Math.random().toString(36).substring(7),
@@ -5944,8 +4815,8 @@
             tee: sp.tee,
             strokes: 0,
             penaltyStrokes: 0,
-            scores: Array(18).fill(null),
-            scoreVsPar: Array(18).fill(null),
+            scores: Array(MAX_HOLES).fill(null),
+            scoreVsPar: Array(MAX_HOLES).fill(null),
             lie: null,
             teePosition: null,
             holedOut: false,
@@ -6006,7 +4877,7 @@
     
     function startNextHole() {
         let nextPlayableHole = -1;
-        for (let i = playingHoleIndex + 1; i < 18; i++) {
+        for (let i = playingHoleIndex + 1; i < MAX_HOLES; i++) {
             let hole = courseHoles[i];
             let hasTee = hole && hole.tees && (hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black);
             if (hole && hasTee && hole.flag) {
@@ -6043,13 +4914,14 @@
         }
         
         playingHoleIndex = nextPlayableHole;
+        window.playingHoleIndex = playingHoleIndex;
         teleportToHole(playingHoleIndex);
     }
     function renderScorecard() {
         let tbody = document.getElementById('scorecard-tbody');
         if(!tbody) return;
         
-        let maxHoles = 18; 
+        let maxHoles = MAX_HOLES; 
         if (!courseHoles[9] || !courseHoles[9].flag) maxHoles = 9; 
         
         let htmlMode = '';
@@ -6207,6 +5079,8 @@
 
         executeArcadeShot(data);
     }
+    // Exposed on window for arcade-swing-engine.js (external module)
+    window.triggerRealShot = triggerRealShot;
 
     window.shotStartPos = null;
 
@@ -6502,7 +5376,7 @@
         tracerPointsCount = 0;
         flightTracer.geometry.setDrawRange(0, 0);
         // Glow tracer shares geometry - ensure visibility matches style
-        let tStyle = TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
+        let tStyle = window.TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
         if (typeof glowTracer !== 'undefined') glowTracer.visible = !!(tStyle && tStyle.glow);
         isFlying = true;
     }
@@ -6518,6 +5392,8 @@
     
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
+    // Extend Game Context with controls + interaction
+    Object.assign(window.G, { controls, raycaster, mouse, CAM });
     let currentBuildColor = 0xef4444; 
     
     const ghostGeo = new THREE.BoxGeometry(3, 4, 3);
@@ -7054,7 +5930,7 @@
             playState = 'ROUND_IDLE';
             window.activePlayerId = 'tester';
             window.activePlayerIndex = 0; // BUG-08 FIX: Set activePlayerIndex
-            window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true, scores: Array(18).fill(null), scoreVsPar: Array(18).fill(null), holedOut: false, prevPos: null } ];
+            window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true, scores: Array(MAX_HOLES).fill(null), scoreVsPar: Array(MAX_HOLES).fill(null), holedOut: false, prevPos: null } ];
             
             // BUG-06 FIX: Set pinMesh from current hole's flag
             let testHole = courseHoles[currentHoleIndex] || courseHoles[0];
@@ -7064,6 +5940,7 @@
             
             // Set playingHoleIndex so minimap/green-read work
             playingHoleIndex = currentHoleIndex;
+            window.playingHoleIndex = playingHoleIndex;
             
             // Show the SHOOT controls (play-tools) so user can fire shots
             let ptTools = document.getElementById('play-tools');
@@ -7342,7 +6219,7 @@
         }
         
         // BUG-05 FIX: Use modern teeMeshes/tees structure
-        for(let i=0; i<18; i++) {
+        for(let i=0; i<MAX_HOLES; i++) {
             let h = courseHoles[i];
             for(let key in h.teeMeshes) {
                 if(h.teeMeshes[key]) { scene.remove(h.teeMeshes[key]); h.teeMeshes[key] = null; }
@@ -8189,7 +7066,7 @@
     // --- ANIMATION LOOP ---
     function animate() {
         requestAnimationFrame(animate);
-        animateStars(); // Star twinkle
+        if (window.animateStars) window.animateStars(); // Star twinkle (external module)
         
         // Panning movement (WASD)
         if(moveDir) {
@@ -8570,9 +7447,9 @@
                     tracerPositions[tracerPointsCount * 3 + 2] = -p.y;
                     
                     // Per-vertex color for gradient tracers
-                    let style = TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
+                    let style = window.TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
                     if (style && style.vertexFn) {
-                        let vc = getTracerVertexColor(style.vertexFn, tracerPointsCount, flightData.path.length);
+                        let vc = window.getTracerVertexColor(style.vertexFn, tracerPointsCount, flightData.path.length);
                         if (vc) {
                             tracerColors[tracerPointsCount * 3] = vc[0];
                             tracerColors[tracerPointsCount * 3 + 1] = vc[1];
@@ -9196,476 +8073,21 @@
         }
     }
     
-    // --- LM BRIDGE STATUS ---
-    function initLaunchMonitorBridge() {
-        var ws = new WebSocket('ws://localhost:8081');
-        var dot = document.getElementById('lm-status-dot');
-        var txt = document.getElementById('lm-status-text');
+    // LM Bridge extracted to arcade-lm-bridge.js (self-booting IIFE)
 
-        ws.onopen = function() {
-            if(txt) txt.textContent = "LM Brygga Redo";
-            if(dot) dot.style.background = "#eab308";
-        };
-        ws.onmessage = function(event) {
-            try {
-                var msg = JSON.parse(event.data);
-                if (msg.type === 'status') {
-                    if(txt) txt.textContent = msg.data.message;
-                    if(dot) dot.style.background = msg.data.color;
-                } else if (msg.type === 'shot') {
-                    if(dot) {
-                        dot.style.background = "#38bdf8";
-                        setTimeout(() => dot.style.background = "#4ade80", 500);
-                    }
-                    msg.data.isLiveData = true; // Markera som LM-data så physics.js skippar virtuella lie-straff!
-                    triggerRealShot(msg.data);
-                }
-            } catch(e) {}
-        };
-        ws.onclose = function() {
-            if(txt) txt.textContent = "LM Brygga Nere";
-            if(dot) dot.style.background = "#ef4444";
-            setTimeout(initLaunchMonitorBridge, 5000);
-        };
+    
+    // Initialize auth (Device ID) before loading level
+    if (window.GolfAuth) {
+        window.GolfAuth.init().then(() => {
+            console.log('🔑 Auth initialized, loading level...');
+            loadLevel();
+        }).catch(() => {
+            console.warn('Auth init failed, loading level anyway...');
+            loadLevel();
+        });
+    } else {
+        loadLevel();
     }
-    
-    // Boot:
-    initLaunchMonitorBridge();
-
-    // ================================================================
-    //  SWING ENGINE — 2-tap Golf Clash style swing mechanic
-    //  Works with touch (mobile) and pointer/click (desktop).
-    //  All physics parameters calibrated against Trackman PGA Tour data.
-    // ================================================================
-    const SwingEngine = (function() {
-
-        // -----------------------------------------------------------
-        // CLUB_PROFILES — Trackman PGA Tour averages (verified)
-        // Fields: maxSpeed (mph), baseLaunchAngle (°), baseSpin (rpm),
-        //         maxSpread (°): max azimuth deviation on full miss
-        // -----------------------------------------------------------
-        const CLUB_PROFILES = {
-            DRIVER: { maxSpeed: 167, baseLaunchAngle: 10.5, baseSpin:  2500, maxSpread: 12, name: 'Driver',  icon: '🏌️' },
-            W3:     { maxSpeed: 155, baseLaunchAngle: 12.0, baseSpin:  3500, maxSpread: 10, name: '3 Wood',  icon: '🪵' },
-            I5:     { maxSpeed: 140, baseLaunchAngle: 16.0, baseSpin:  5300, maxSpread:  8, name: '5 Iron',  icon: '⛳' },
-            I7:     { maxSpeed: 128, baseLaunchAngle: 18.5, baseSpin:  7100, maxSpread:  7, name: '7 Iron',  icon: '⛳' },
-            I9:     { maxSpeed: 115, baseLaunchAngle: 22.0, baseSpin:  8700, maxSpread:  6, name: '9 Iron',  icon: '⛳' },
-            PW:     { maxSpeed: 103, baseLaunchAngle: 26.0, baseSpin:  9300, maxSpread:  5, name: 'Pitching', icon: '🏌️' },
-            SW:     { maxSpeed:  85, baseLaunchAngle: 32.0, baseSpin: 10200, maxSpread:  5, name: 'Sand',    icon: '🏖️' },
-            LW:     { maxSpeed:  72, baseLaunchAngle: 36.0, baseSpin: 10800, maxSpread:  4, name: 'Lob',     icon: '🎯' },
-            PUTT:   { maxSpeed:  12, baseLaunchAngle:  1.5, baseSpin:   300, maxSpread:  3, name: 'Putter',  icon: '🥅' },
-        };
-
-        // SVG constants — circumference of r=100 ring
-        const CIRC = 2 * Math.PI * 100; // 628.32
-
-        // Timing constants
-        const POWER_CYCLE_MS  = 1600; // Full 0→100→0 power cycle duration
-        const ARM_RPM         = 90;   // Direction arm: degrees per second (1 full rev = 4s)
-
-        // State
-        let _enabled    = false;
-        let _clubKey    = 'DRIVER';
-        let _phase      = 'idle';   // 'idle' | 'power' | 'direction' | 'fired'
-        let _powerPct   = 0;        // 0.0–1.0, captured on tap 1
-        let _armDeg     = 0;        // 0–360, captured on tap 2
-        let _raf        = null;
-        let _phaseStart = 0;
-
-        // DOM refs (lazy — elements exist after HTML parse)
-        function _el(id) { return document.getElementById(id); }
-
-        // -----------------------------------------------------------
-        // autoSelectClub — distance in THREE.js world units (metres)
-        // GREEN surface always forces PUTT regardless of distance.
-        // window.currentBallSurface is populated by the animate-loop
-        // terrain detector (localGetTerrainAt on every frame).
-        // -----------------------------------------------------------
-        function autoSelectClub(distMeters) {
-            // Green override: ball on putting surface → Putter always
-            if (window.currentBallSurface === 'GREEN') return 'PUTT';
-            if (distMeters > 201) return 'DRIVER';
-            if (distMeters > 174) return 'W3';
-            if (distMeters > 151) return 'I5';
-            if (distMeters > 133) return 'I7';
-            if (distMeters > 114) return 'I9';
-            if (distMeters >  91) return 'PW';
-            if (distMeters >  55) return 'SW';
-            if (distMeters >   9) return 'LW';
-            return 'PUTT';
-        }
-
-        // -----------------------------------------------------------
-        // puttForceToSpeed — Werner-Greig µ (must match physics.js)
-        // µ = 1.83 / (stimp × 0.3048 × 9.81) = 0.612 / stimp
-        // -----------------------------------------------------------
-        function puttForceToSpeed(targetDistMeters, stimp) {
-            const mu   = 0.612 / stimp;                       // Verified against physics.js
-            const v0ms = Math.sqrt(2 * mu * 9.81 * targetDistMeters);
-            return v0ms / 0.44704;                            // m/s → mph
-        }
-
-        // -----------------------------------------------------------
-        // mapCircleToPhysics — converts tap results to launchData
-        // powerPct:  0.0 (empty) → 1.0 (perfect full power)
-        // armDeg:    0–360, 0 = top (perfect direction)
-        //            offset from top: positive = right, negative = left
-        // -----------------------------------------------------------
-        function mapCircleToPhysics(powerPct, armDeg, clubKey, distToHoleM) {
-            const club  = CLUB_PROFILES[clubKey];
-            const stimp = window.GREEN_STIMP || 10.0;
-
-            // Arm offset from top: map 0–360 → −180 to +180
-            // Arm top (0°) = perfect shot. 180° = worst possible miss.
-            let armOffset = armDeg;
-            if (armOffset > 180) armOffset -= 360; // −180…+180
-
-            // normalised miss: −1 (full left) → 0 (perfect) → +1 (full right)
-            const normMiss = armOffset / 180.0;
-
-            // Deterministic component of azimuth error (85%)
-            const deterministicMiss = normMiss * club.maxSpread;
-
-            // Random noise (15%) — D5: 85% deterministic + 15% luck
-            // randomNoise spans full maxSpread range (×2 for ±1 range)
-            const randomNoise = (Math.random() - 0.5) * 2 * club.maxSpread;
-            const azimDeg     = deterministicMiss * 0.85 + randomNoise * 0.15;
-
-            // PUTT special case — map power × distToHole → ballSpeedMph via Werner-Greig
-            if (clubKey === 'PUTT') {
-                const targetDist  = Math.max(0.5, distToHoleM) * powerPct;
-                const puttSpeedMph = puttForceToSpeed(targetDist, stimp);
-                return {
-                    ballSpeedMph:   Math.min(puttSpeedMph, club.maxSpeed),
-                    launchAngleDeg: club.baseLaunchAngle,
-                    totalSpinRpm:   club.baseSpin,
-                    spinAxisDeg:    azimDeg * 0.5, // Putts: subtle line bias only
-                    azimDeg:        azimDeg,
-                    isLiveData:     false,
-                };
-            }
-
-            // All other clubs — power scales ballSpeed and spin
-            const speedMph = club.maxSpeed * powerPct;
-            // Low power also reduces spin (thin contact at <50% power)
-            const spinMult = 0.7 + 0.3 * powerPct;
-            const spinRpm  = club.baseSpin * spinMult;
-
-            // Launch angle: slightly lower on fat/thin swings (extreme power = thin)
-            const vlaOffset = (Math.abs(powerPct - 0.85) > 0.2) ? -1.5 : 0;
-
-            return {
-                ballSpeedMph:   Math.max(speedMph, 10),
-                launchAngleDeg: club.baseLaunchAngle + vlaOffset,
-                totalSpinRpm:   spinRpm,
-                spinAxisDeg:    azimDeg * 0.8, // spin axis tied to miss direction
-                azimDeg:        azimDeg,
-                isLiveData:     false,
-            };
-        }
-
-        // -----------------------------------------------------------
-        // _getQuality — categorise result for flash feedback
-        // -----------------------------------------------------------
-        function _getQuality(powerPct, armDeg) {
-            let armOffset = armDeg; if (armOffset > 180) armOffset -= 360;
-            const normArm   = Math.abs(armOffset) / 180;
-            const normPower = Math.abs(powerPct - 0.90); // Perfect power ≈ 90%
-            const score     = (1 - normArm) * 0.6 + (1 - normPower * 5) * 0.4;
-            if (score > 0.80) return { label: '✨ PERFECT!',  color: '#4ade80' };
-            if (score > 0.55) return { label: '👍 GOOD',      color: '#fbbf24' };
-            if (score > 0.30) return { label: '😬 OK',        color: '#fb923c' };
-            return              { label: '❌ MISS',            color: '#f87171' };
-        }
-
-        // -----------------------------------------------------------
-        // _showFlash — result feedback animation
-        // -----------------------------------------------------------
-        function _showFlash(quality) {
-            const el = _el('swing-result-flash');
-            if (!el) return;
-            el.textContent  = quality.label;
-            el.style.color  = quality.color;
-            el.classList.add('show');
-            setTimeout(() => el.classList.remove('show'), 900);
-        }
-
-        // -----------------------------------------------------------
-        // _updateRing — drives SVG power ring via stroke-dashoffset
-        // pct: 0.0–1.0, ring colour changes at thresholds
-        // -----------------------------------------------------------
-        function _updateRing(pct) {
-            const ring = _el('power-ring-fill');
-            if (!ring) return;
-            const offset = CIRC * (1 - pct);
-            ring.setAttribute('stroke-dashoffset', offset.toFixed(1));
-            // Colour: red < 50%, yellow 50–80%, green > 80%
-            ring.style.stroke = pct < 0.50 ? '#ef4444'
-                              : pct < 0.80 ? '#fbbf24'
-                              : '#4ade80';
-        }
-
-        // -----------------------------------------------------------
-        // _updateArm — rotates direction arm
-        // -----------------------------------------------------------
-        function _updateArm(deg) {
-            const arm = _el('dir-arm');
-            if (!arm) return;
-            // Rotate around centre (130,130) — set transform attribute directly
-            arm.setAttribute('transform', `rotate(${deg.toFixed(1)} 130 130)`);
-        }
-
-        // -----------------------------------------------------------
-        // _setPhaseLabel
-        // -----------------------------------------------------------
-        function _setPhaseLabel(txt) {
-            const el = _el('swing-phase-label');
-            if (el) el.textContent = txt;
-        }
-
-        // -----------------------------------------------------------
-        // _rafLoop — main animation loop (runs during swing)
-        // -----------------------------------------------------------
-        function _rafLoop(ts) {
-            if (_phase === 'idle' || _phase === 'fired') return;
-
-            if (_phase === 'power') {
-                // Oscillating power: 0→1→0 over POWER_CYCLE_MS
-                const elapsed = (ts - _phaseStart) % POWER_CYCLE_MS;
-                const raw     = elapsed / POWER_CYCLE_MS; // 0→1 linear
-                // Sinusoidal: 0→1→0 per cycle
-                const pct = Math.sin(raw * Math.PI);
-                _updateRing(pct);
-                _raf = requestAnimationFrame(_rafLoop);
-
-            } else if (_phase === 'direction') {
-                // Arm rotating at ARM_RPM degrees/second
-                const elapsed = (ts - _phaseStart) / 1000; // seconds
-                _armDeg = (elapsed * ARM_RPM) % 360;
-                _updateArm(_armDeg);
-                _raf = requestAnimationFrame(_rafLoop);
-            }
-        }
-
-        // -----------------------------------------------------------
-        // _haptic — cross-platform haptic feedback
-        // Android: navigator.vibrate() (standard Vibration API)
-        // iOS:     Silent AudioContext pulse — triggers Taptic Engine
-        //          via the Web Audio scheduling path.
-        //          Note: requires user gesture before first call
-        //          (satisfied by the tap itself).
-        // -----------------------------------------------------------
-        let _audioCtx = null;
-        function _haptic(pattern) {
-            // Android / Chrome (Vibration API)
-            if (navigator.vibrate) {
-                navigator.vibrate(pattern);
-                return;
-            }
-            // iOS Safari (AudioContext silent pulse)
-            try {
-                if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = _audioCtx.createOscillator();
-                const gain = _audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(_audioCtx.destination);
-                gain.gain.setValueAtTime(0.001, _audioCtx.currentTime); // Silent — haptic only
-                osc.start(_audioCtx.currentTime);
-                osc.stop(_audioCtx.currentTime + 0.010);                // 10ms pulse
-            } catch(e) { /* no haptics available */ }
-        }
-
-        // -----------------------------------------------------------
-        // onTap — primary user interaction (both phases)
-        // -----------------------------------------------------------
-        function onTap() {
-            if (!_enabled) return;
-
-            if (_phase === 'idle') {
-                // Show overlay and start power ring
-                _phase      = 'power';
-                _phaseStart = performance.now();
-                _el('swing-overlay').classList.add('active');
-                _setPhaseLabel('TAP TO SET POWER');
-                _raf = requestAnimationFrame(_rafLoop);
-
-            } else if (_phase === 'power') {
-                // Haptic: strong short pulse — power locked
-                _haptic(15);
-
-                // Capture current power from ring fill
-                const ringEl = _el('power-ring-fill');
-                const offset = parseFloat(ringEl.getAttribute('stroke-dashoffset')) || CIRC;
-                _powerPct = Math.max(0, Math.min(1, (CIRC - offset) / CIRC));
-
-                // Transition to direction phase
-                _phase      = 'direction';
-                _phaseStart = performance.now();
-                _armDeg     = 0;
-                const arm   = _el('dir-arm');
-                if (arm) arm.classList.add('active');
-                _setPhaseLabel('TAP TO AIM');
-
-                // Update ring to locked state (no more oscillation)
-                _updateRing(_powerPct);
-                cancelAnimationFrame(_raf);
-                _raf = requestAnimationFrame(_rafLoop);
-
-            } else if (_phase === 'direction') {
-                // Haptic: double-tap pattern — shot fired
-                _haptic([8, 50, 8]);
-
-                // Capture current arm angle
-                cancelAnimationFrame(_raf);
-                _phase = 'fired';
-
-                // Hide overlay
-                _el('swing-overlay').classList.remove('active');
-                const arm = _el('dir-arm');
-                if (arm) arm.classList.remove('active');
-
-                // Reset ring for next swing
-                _updateRing(0);
-                _updateArm(0);
-                _setPhaseLabel('TAP TO SET POWER');
-
-                // Build launchData and fire
-                let distToHoleM = 50; // fallback
-                if (window.ballMesh && window.courseHoles && typeof playingHoleIndex !== 'undefined') {
-                    const h = window.courseHoles[playingHoleIndex];
-                    if (h && h.flag) {
-                        distToHoleM = window.ballMesh.position.distanceTo(
-                            new THREE.Vector3(h.flag.x, h.flag.y, h.flag.z)
-                        );
-                    }
-                }
-
-                const launchData = mapCircleToPhysics(_powerPct, _armDeg, _clubKey, distToHoleM);
-                const quality    = _getQuality(_powerPct, _armDeg);
-                _showFlash(quality);
-
-                // Fire through existing pipeline — untouched
-                if (typeof triggerRealShot === 'function') {
-                    triggerRealShot(launchData);
-                }
-
-                // Ready for next shot
-                setTimeout(() => { _phase = 'idle'; }, 300);
-            }
-        }
-
-        // -----------------------------------------------------------
-        // selectClub — called by club-btn onclick
-        // -----------------------------------------------------------
-        function selectClub(key) {
-            if (!CLUB_PROFILES[key]) return;
-            _clubKey = key;
-            // Update selector highlight
-            document.querySelectorAll('.club-btn').forEach(btn => {
-                btn.classList.toggle('selected', btn.dataset.club === key);
-            });
-            updateSwingInfoBar();
-        }
-
-        // -----------------------------------------------------------
-        // updateSwingInfoBar — shows club name + distance to pin
-        // Called on club change and on landing (ball position update)
-        // -----------------------------------------------------------
-        function updateSwingInfoBar() {
-            const club   = CLUB_PROFILES[_clubKey];
-            const nameEl = _el('si-club-name');
-            const distEl = _el('si-dist-label');
-            if (nameEl) nameEl.textContent = `${club.icon} ${club.name}`;
-
-            if (distEl && window.ballMesh && window.courseHoles && typeof playingHoleIndex !== 'undefined') {
-                const h = window.courseHoles[playingHoleIndex];
-                if (h && h.flag) {
-                    const distM   = window.ballMesh.position.distanceTo(
-                        new THREE.Vector3(h.flag.x, h.flag.y, h.flag.z)
-                    );
-                    const distYds = (distM * 1.09361).toFixed(0);
-                    distEl.textContent = `${distYds} yds  (${distM.toFixed(0)} m)`;
-
-                    // Auto-select club based on distance
-                    const suggested = autoSelectClub(distM);
-                    if (suggested !== _clubKey) selectClub(suggested);
-                }
-            }
-        }
-
-        // -----------------------------------------------------------
-        // enableSwingMode / disableSwingMode
-        // RAF guard: cancel any running loop before enabling to prevent
-        // multiple parallel _rafLoop chains if toggled on/off rapidly.
-        // -----------------------------------------------------------
-        function enableSwingMode() {
-            if (_raf) { cancelAnimationFrame(_raf); _raf = null; } // Kill any orphaned loop
-            _phase   = 'idle';
-            _enabled = true;
-            document.body.classList.add('swing-mode');
-            updateSwingInfoBar();
-            console.log('[SwingEngine] Swing mode enabled');
-        }
-
-        function disableSwingMode() {
-            _enabled = false;
-            if (_raf) { cancelAnimationFrame(_raf); _raf = null; } // Null after cancel
-            _phase = 'idle';
-            // Hide overlay if open mid-swing
-            const overlay = document.getElementById('swing-overlay');
-            if (overlay) overlay.classList.remove('active');
-            document.body.classList.remove('swing-mode');
-            console.log('[SwingEngine] Swing mode disabled');
-        }
-
-        // -----------------------------------------------------------
-        // Public API
-        // -----------------------------------------------------------
-        return { onTap, selectClub, enableSwingMode, disableSwingMode,
-                 updateSwingInfoBar, autoSelectClub, CLUB_PROFILES };
-    })();
-
-    // Expose for devtools access
-    window.SwingEngine = SwingEngine;
-
-    // ----------------------------------------------------------------
-    // MOBILE DETECTION — auto-enable swing mode on touch devices.
-    // Uses ontouchstart (best for tablets/hybrids), fallback to width.
-    // Match Settings "Force Mobile UI" toggle can override.
-    // ----------------------------------------------------------------
-    (function detectAndEnableMobile() {
-        const isTouch  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        const isNarrow = window.innerWidth < 768;
-        if (isTouch || isNarrow) {
-            SwingEngine.enableSwingMode();
-            console.log('[SwingEngine] Auto-enabled (touch/narrow:', isTouch, isNarrow, ')');
-        }
-    })();
-
-    // Expose toggle for Match Settings "Force Mobile UI" checkbox
-    window.toggleSwingMode = function(force) {
-        if (force || document.body.classList.contains('swing-mode')) {
-            if (!document.body.classList.contains('swing-mode')) SwingEngine.enableSwingMode();
-            else SwingEngine.disableSwingMode();
-        }
-    };
-    window.enableSwingMode  = () => SwingEngine.enableSwingMode();
-    window.disableSwingMode = () => SwingEngine.disableSwingMode();
-
-    // handleSwingTap — wrapper for ontouchstart on #swing-launch-btn.
-    // Calls e.preventDefault() to cancel the synthetic mousedown→click
-    // chain that touch browsers emit ~300ms after touchstart.
-    // Without this, onTap() fires twice per finger press:
-    //   touchstart (immediate) → mousedown/click (300ms later)
-    // resulting in idle→power→direction in one tap, skipping power phase.
-    window.handleSwingTap = function(e) {
-        if (e && e.preventDefault) e.preventDefault();
-        SwingEngine.onTap();
-    };
-
-    
-    // Load custom world on boot!
-    loadLevel();
     
     
     // Resize resulterar..
@@ -9750,5 +8172,6 @@
     <div style="color:#64748b; font-size:9px; margin-top:8px;">🌿 Fairway Corridor = Sculpt + Paint along path. Width slider controls corridor size.</div>
 </div>
 
+<script src="arcade-lm-bridge.js"></script>
 </body>
 </html>
