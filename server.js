@@ -263,6 +263,137 @@ app.post('/api/courses/:share_code/like', requireDB, async (req, res) => {
     }
 });
 
+// --- LEADERBOARD API ---
+
+// Submit round result
+app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase();
+        const { total_score, score_vs_par, hole_scores, input_mode, lm_device, stats, player_name } = req.body;
+        
+        if (!total_score && total_score !== 0) return res.status(400).json({ error: 'Missing total_score' });
+        
+        // Get current course version + hole_count for sanity check
+        const courseResult = await pool.query(
+            'SELECT version, hole_count, owner_id FROM courses WHERE share_code = $1', [code]
+        );
+        if (courseResult.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+        
+        const course = courseResult.rows[0];
+        const courseVersion = course.version || 1;
+        const holeCount = course.hole_count || 18;
+        
+        // Sanity check: flag suspicious scores
+        let flagged = false;
+        if (total_score < holeCount) flagged = true;          // Under 1 per hole = suspicious
+        if (total_score > holeCount * 10) flagged = true;     // Over 10 per hole = suspicious
+        
+        // Save result
+        const result = await pool.query(
+            `INSERT INTO course_records 
+            (course_code, course_version, player_id, player_name, input_mode, lm_device, total_score, score_vs_par, hole_scores, stats, flagged)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            RETURNING id`,
+            [
+                code, courseVersion,
+                req.userId || 'anonymous',
+                player_name || req.body.player_name || 'Anonymous',
+                input_mode || 'SWING_METER',
+                lm_device || null,
+                total_score,
+                score_vs_par || 0,
+                JSON.stringify(hole_scores || []),
+                JSON.stringify(stats || {}),
+                flagged
+            ]
+        );
+        
+        // Increment play_count on course
+        await pool.query(
+            'UPDATE courses SET play_count = COALESCE(play_count, 0) + 1 WHERE share_code = $1', [code]
+        );
+        
+        // Increment builder_score for course owner
+        if (course.owner_id) {
+            await pool.query(
+                'UPDATE users SET builder_score = builder_score + 1 WHERE id = $1', [course.owner_id]
+            );
+        }
+        
+        // Return leaderboard position
+        const posResult = await pool.query(
+            `SELECT COUNT(*) + 1 as position FROM course_records 
+             WHERE course_code = $1 AND course_version = $2 AND total_score < $3 AND flagged = false`,
+            [code, courseVersion, total_score]
+        );
+        
+        res.json({ 
+            success: true, 
+            record_id: result.rows[0].id,
+            position: parseInt(posResult.rows[0].position),
+            flagged: flagged
+        });
+    } catch(err) {
+        console.error('Error saving result:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Get leaderboard for a course
+app.get('/api/courses/:code/leaderboard', requireDB, async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase();
+        const mode = req.query.mode;      // 'LAUNCH_MONITOR' | 'SWING_METER' | undefined (all)
+        const period = req.query.period;  // 'month' | 'all' | undefined (all)
+        
+        let filters = ['course_code = $1', 'flagged = false'];
+        let params = [code];
+        let paramIdx = 2;
+        
+        // Filter by current version
+        const vResult = await pool.query('SELECT version FROM courses WHERE share_code = $1', [code]);
+        if (vResult.rows.length > 0) {
+            filters.push(`course_version = $${paramIdx}`);
+            params.push(vResult.rows[0].version || 1);
+            paramIdx++;
+        }
+        
+        // Filter by input mode
+        if (mode && (mode === 'LAUNCH_MONITOR' || mode === 'SWING_METER')) {
+            filters.push(`input_mode = $${paramIdx}`);
+            params.push(mode);
+            paramIdx++;
+        }
+        
+        // Filter by time period
+        if (period === 'month') {
+            filters.push(`played_at > NOW() - INTERVAL '30 days'`);
+        }
+        
+        const result = await pool.query(`
+            SELECT player_name, total_score, score_vs_par, input_mode, lm_device, 
+                   hole_scores, played_at, player_id
+            FROM course_records 
+            WHERE ${filters.join(' AND ')}
+            ORDER BY total_score ASC
+            LIMIT 50
+        `, params);
+        
+        // Get total count of rounds played
+        const countResult = await pool.query(
+            'SELECT COUNT(*) as total FROM course_records WHERE course_code = $1 AND flagged = false', [code]
+        );
+        
+        res.json({
+            leaderboard: result.rows,
+            total_rounds: parseInt(countResult.rows[0].total)
+        });
+    } catch(err) {
+        console.error('Leaderboard error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // Generera en slumpmässig share_code
 function generateShareCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();

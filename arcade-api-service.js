@@ -74,5 +74,35 @@ window.ArcadeAPI = {
             headers: this._headers()
         });
         return res.json();
+    },
+
+    /**
+     * Submit round result for leaderboard.
+     * @param {string} courseCode
+     * @param {Object} result — { total_score, score_vs_par, hole_scores, input_mode, lm_device, stats, player_name }
+     */
+    async submitResult(courseCode, result) {
+        const res = await fetch('/api/courses/' + courseCode + '/results', {
+            method: 'POST',
+            headers: this._headers(),
+            body: JSON.stringify(result)
+        });
+        return res.json();
+    },
+
+    /**
+     * Get leaderboard for a course.
+     * @param {string} courseCode
+     * @param {string} mode — 'LAUNCH_MONITOR' | 'SWING_METER' | null
+     * @param {string} period — 'month' | 'all' | null
+     */
+    async getLeaderboard(courseCode, mode, period) {
+        let params = new URLSearchParams();
+        if (mode) params.set('mode', mode);
+        if (period) params.set('period', period);
+        const res = await fetch('/api/courses/' + courseCode + '/leaderboard?' + params.toString(), {
+            headers: this._headers()
+        });
+        return res.json();
     }
 };
