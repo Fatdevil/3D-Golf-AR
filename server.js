@@ -115,11 +115,34 @@ async function initDB() {
                 hole_scores JSONB,
                 stats JSONB,
                 flagged BOOLEAN DEFAULT false,
+                tournament_id VARCHAR(20),
                 played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
-        console.log("✅ Database schema ready (v2 — users, ownership, leaderboard)");
+        // Tournaments table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS tournaments (
+                id VARCHAR(20) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                course_code VARCHAR(20) NOT NULL,
+                created_by VARCHAR(50),
+                input_mode VARCHAR(20) DEFAULT 'ANY',
+                starts_at TIMESTAMP NOT NULL,
+                ends_at TIMESTAMP NOT NULL,
+                max_players INT DEFAULT 0,
+                is_public BOOLEAN DEFAULT true,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Migration for existing course_records without tournament_id
+        try {
+            await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS tournament_id VARCHAR(20);`);
+        } catch(e) {}
+
+        console.log("✅ Database schema ready (v2 — users, ownership, leaderboard, tournaments)");
     } catch(err) {
         console.error("❌ Database schema error:", err);
     }
