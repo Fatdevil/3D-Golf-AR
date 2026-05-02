@@ -629,6 +629,18 @@
                     </div>
                     <input type="range" id="set-fog-env" min="0.1" max="4.0" step="0.1" value="1.0" oninput="window.updateFogDensity(this.value); document.getElementById('fog-val').textContent=parseFloat(this.value).toFixed(1)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
                 </div>
+                
+                <!-- SURROUND BLEND SHARPNESS -->
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="color:#94a3b8; font-size:10px; font-weight:bold;">🔀 SURROUND BLEND</label>
+                        <span id="blend-val" style="color:#38bdf8; font-size:10px;">1.5</span>
+                    </div>
+                    <input type="range" id="set-surround-blend" min="1.0" max="6.0" step="0.5" value="1.5" oninput="window.updateSurroundBlend(parseFloat(this.value)); document.getElementById('blend-val').textContent=parseFloat(this.value).toFixed(1)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                    <div style="display:flex; justify-content:space-between; color:#475569; font-size:9px; margin-top:2px;">
+                        <span>Mjuk</span><span>Skarp</span>
+                    </div>
+                </div>
             </div>
         </div>
         </div> <!-- End of tab-content-ENV -->
@@ -2008,7 +2020,8 @@
         colorN: { value: new THREE.Color(0x2d4c1a) },
         colorE: { value: new THREE.Color(0x2d4c1a) },
         colorS: { value: new THREE.Color(0x2d4c1a) },
-        colorW: { value: new THREE.Color(0x2d4c1a) }
+        colorW: { value: new THREE.Color(0x2d4c1a) },
+        blendPower: { value: 1.5 }
     };
     
     window.surroundMat.onBeforeCompile = (shader) => {
@@ -2016,6 +2029,7 @@
         shader.uniforms.colorE = window.surroundMat.userData.colorE;
         shader.uniforms.colorS = window.surroundMat.userData.colorS;
         shader.uniforms.colorW = window.surroundMat.userData.colorW;
+        shader.uniforms.blendPower = window.surroundMat.userData.blendPower;
         
         shader.vertexShader = `
             varying vec3 vSurroundWorldPos;
@@ -2033,6 +2047,7 @@
             uniform vec3 colorE;
             uniform vec3 colorS;
             uniform vec3 colorW;
+            uniform float blendPower;
             varying vec3 vSurroundWorldPos;
         ` + shader.fragmentShader;
         
@@ -2049,11 +2064,11 @@
              float wW = max(0.0, -cos(angle));
              float wN = max(0.0, -sin(angle));
              
-             // Sharpen the blend slightly so corners aren't too muddy
-             wE = pow(wE, 1.5);
-             wS = pow(wS, 1.5);
-             wW = pow(wW, 1.5);
-             wN = pow(wN, 1.5);
+             // Blend sharpness controlled by uniform
+             wE = pow(wE, blendPower);
+             wS = pow(wS, blendPower);
+             wW = pow(wW, blendPower);
+             wN = pow(wN, blendPower);
              
              float sum = wE + wS + wW + wN;
              vec3 finalColor = (colorE * wE + colorS * wS + colorW * wW + colorN * wN) / sum;
@@ -2061,6 +2076,10 @@
              diffuseColor.rgb = finalColor;
             `
         );
+    };
+    
+    window.updateSurroundBlend = function(val) {
+        window.surroundMat.userData.blendPower.value = val;
     };
 
     let surroundPlane = new THREE.Mesh(surroundGeo, window.surroundMat);
