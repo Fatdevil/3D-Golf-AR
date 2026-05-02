@@ -4924,8 +4924,15 @@
         let tbody = document.getElementById('scorecard-tbody');
         if(!tbody) return;
         
-        let maxHoles = MAX_HOLES; 
-        if (!courseHoles[9] || !courseHoles[9].flag) maxHoles = 9; 
+        // Count actual playable holes (with tee + flag)
+        let maxHoles = 0;
+        for (let i = 0; i < MAX_HOLES; i++) {
+            let h = courseHoles[i];
+            if (h && h.flag && h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black)) {
+                maxHoles = i + 1; // Track highest hole index that's playable
+            }
+        }
+        if (maxHoles === 0) maxHoles = MAX_HOLES; // Fallback
         
         let htmlMode = '';
         
