@@ -234,8 +234,10 @@
         </div>
     </div>
     
-    <div id="measure-hud" style="display:none; font-family:'Inter', sans-serif; position:fixed; top:90px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.9); color:#fbbf24; border:2px solid #fbbf24; padding:12px 24px; border-radius:15px; font-weight:900; font-size:20px; pointer-events:none; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-        0.0m x 0.0m
+    <div id="measure-hud" style="display:none; font-family:'Inter', sans-serif; position:fixed; top:90px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.9); color:#fbbf24; border:2px solid #fbbf24; padding:12px 24px; border-radius:15px; font-weight:900; font-size:20px; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+        <span id="measure-hud-text">0.0m x 0.0m</span>
+        <span id="measure-hud-count" style="font-size:13px; color:#94a3b8; margin-left:12px;"></span>
+        <button onclick="clearAllMeasures()" style="margin-left:12px; background:#ef4444; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; pointer-events:auto;">RENSA ALLA</button>
     </div>
     
     <!-- UNIFIED TOP BAR: 3 zones (left / center / right) -->
@@ -3235,15 +3237,109 @@
     sculptBrushCursor.visible = false;
     scene.add(sculptBrushCursor);
 
-    const measureGeo = new THREE.BufferGeometry();
-    const measurePos = new Float32Array(5 * 3); 
-    measureGeo.setAttribute('position', new THREE.BufferAttribute(measurePos, 3));
-    const measureMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, depthTest: false, linewidth: 3 });
-    const measureLines = new THREE.Line(measureGeo, measureMat);
-    measureLines.renderOrder = 999; 
-    measureLines.visible = false;
-    scene.add(measureLines);
+    // === PERSISTENT MULTI-MEASURE SYSTEM (up to 9) ===
+    const MEASURE_COLORS = [0xfbbf24, 0x38bdf8, 0x4ade80, 0xf472b6, 0xa78bfa, 0xfb923c, 0x22d3ee, 0xe879f9, 0xfde047];
+    let persistentMeasures = []; // Array of { line, label, p1, p2, w, l }
     let measureStartPoint = null;
+    
+    // Active (being drawn) measure line
+    const activeMeasureGeo = new THREE.BufferGeometry();
+    const activeMeasurePos = new Float32Array(5 * 3);
+    activeMeasureGeo.setAttribute('position', new THREE.BufferAttribute(activeMeasurePos, 3));
+    const activeMeasureMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, depthTest: false, linewidth: 3 });
+    const activeMeasureLines = new THREE.Line(activeMeasureGeo, activeMeasureMat);
+    activeMeasureLines.renderOrder = 999;
+    activeMeasureLines.visible = false;
+    scene.add(activeMeasureLines);
+    
+    // Compat alias
+    const measureLines = activeMeasureLines;
+    
+    function createPersistentMeasure(p1, p2) {
+        if (persistentMeasures.length >= 9) {
+            alert('Max 9 mätningar! Högerklicka för att ta bort en.');
+            return;
+        }
+        let idx = persistentMeasures.length;
+        let color = MEASURE_COLORS[idx % MEASURE_COLORS.length];
+        
+        // Line geometry
+        let geo = new THREE.BufferGeometry();
+        let pos = new Float32Array(5 * 3);
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        let mat = new THREE.LineBasicMaterial({ color: color, depthTest: false, linewidth: 3, transparent: true, opacity: 0.85 });
+        let line = new THREE.Line(geo, mat);
+        line.renderOrder = 998;
+        
+        let y = Math.max(p1.y, p2.y) + 1.0;
+        pos[0] = p1.x; pos[1] = y; pos[2] = p1.z;
+        pos[3] = p2.x; pos[4] = y; pos[5] = p1.z;
+        pos[6] = p2.x; pos[7] = y; pos[8] = p2.z;
+        pos[9] = p1.x; pos[10]= y; pos[11]= p2.z;
+        pos[12]= p1.x; pos[13]= y; pos[14]= p1.z;
+        geo.attributes.position.needsUpdate = true;
+        scene.add(line);
+        
+        // 3D label
+        let w = Math.abs(p2.x - p1.x);
+        let l = Math.abs(p2.z - p1.z);
+        let canvas = document.createElement('canvas');
+        canvas.width = 256; canvas.height = 64;
+        let ctx2 = canvas.getContext('2d');
+        ctx2.fillStyle = 'rgba(15,23,42,0.85)';
+        ctx2.roundRect(0, 0, 256, 64, 12); ctx2.fill();
+        ctx2.strokeStyle = '#' + color.toString(16).padStart(6, '0');
+        ctx2.lineWidth = 3;
+        ctx2.roundRect(0, 0, 256, 64, 12); ctx2.stroke();
+        ctx2.fillStyle = '#' + color.toString(16).padStart(6, '0');
+        ctx2.font = 'bold 28px Inter, sans-serif';
+        ctx2.textAlign = 'center';
+        ctx2.fillText((idx + 1) + ': ' + w.toFixed(0) + 'm × ' + l.toFixed(0) + 'm', 128, 42);
+        
+        let tex = new THREE.CanvasTexture(canvas);
+        let spriteMat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+        let sprite = new THREE.Sprite(spriteMat);
+        sprite.position.set((p1.x + p2.x) / 2, y + 8, (p1.z + p2.z) / 2);
+        sprite.scale.set(30, 7.5, 1);
+        sprite.renderOrder = 1000;
+        scene.add(sprite);
+        
+        persistentMeasures.push({ line, label: sprite, p1: p1.clone(), p2: p2.clone(), w, l });
+        updateMeasureHudCount();
+    }
+    
+    function removeMeasureAt(hitPoint) {
+        let closest = -1;
+        let minDist = 30;
+        for (let i = 0; i < persistentMeasures.length; i++) {
+            let m = persistentMeasures[i];
+            let cx = (m.p1.x + m.p2.x) / 2;
+            let cz = (m.p1.z + m.p2.z) / 2;
+            let dist = Math.sqrt((hitPoint.x - cx) ** 2 + (hitPoint.z - cz) ** 2);
+            if (dist < minDist) { minDist = dist; closest = i; }
+        }
+        if (closest >= 0) {
+            let m = persistentMeasures[closest];
+            scene.remove(m.line); m.line.geometry.dispose(); m.line.material.dispose();
+            scene.remove(m.label); m.label.material.map.dispose(); m.label.material.dispose();
+            persistentMeasures.splice(closest, 1);
+            updateMeasureHudCount();
+        }
+    }
+    
+    window.clearAllMeasures = function() {
+        for (let m of persistentMeasures) {
+            scene.remove(m.line); m.line.geometry.dispose(); m.line.material.dispose();
+            scene.remove(m.label); m.label.material.map.dispose(); m.label.material.dispose();
+        }
+        persistentMeasures = [];
+        updateMeasureHudCount();
+    };
+    
+    function updateMeasureHudCount() {
+        let el = document.getElementById('measure-hud-count');
+        if (el) el.textContent = persistentMeasures.length > 0 ? '(' + persistentMeasures.length + '/9 placerade)' : '';
+    }
 
     const treeTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
     const treeLeavesMat = new THREE.MeshLambertMaterial({ color: 0x2d5a27 }); 
@@ -5926,14 +6022,13 @@
         if(currentTool === 'MEASURE') {
             if(e.button === 0 && lastHitPoint) {
                 measureStartPoint = lastHitPoint.clone();
-                measureLines.visible = false; 
+                activeMeasureLines.visible = false; 
                 document.getElementById('measure-hud').style.display = 'block';
                 controls.enabled = false;
                 isMeasuring = true;
-            } else if (e.button === 2) {
-                measureLines.visible = false;
-                document.getElementById('measure-hud').style.display = 'none';
-                measureStartPoint = null;
+            } else if (e.button === 2 && lastHitPoint) {
+                // Right-click: remove nearest measure
+                removeMeasureAt(lastHitPoint);
             }
         } else if(currentTool === 'SPLINE') {
             if(e.button === 0 && lastHitPoint) {
@@ -6001,7 +6096,17 @@
             }
         } else if(currentTool === 'MEASURE' && isMeasuring) {
             isMeasuring = false;
-            controls.enabled = true; 
+            controls.enabled = true;
+            // Convert active measure to persistent
+            if (measureStartPoint && lastHitPoint) {
+                let w = Math.abs(lastHitPoint.x - measureStartPoint.x);
+                let l = Math.abs(lastHitPoint.z - measureStartPoint.z);
+                if (w > 2 || l > 2) { // Min 2m to avoid accidental clicks
+                    createPersistentMeasure(measureStartPoint, lastHitPoint);
+                }
+            }
+            activeMeasureLines.visible = false;
+            measureStartPoint = null;
         }
     }, false);
     
@@ -6317,7 +6422,7 @@
         else if (toolName === 'SMART_GREEN') hintHtml = "Hold Mouse: <b>Paint Green & Flatten to safe plateau</b>";
         else if (toolName === 'TEST_PUTT') hintHtml = "Left Click: <b>Drop Ball & Test Putt</b>";
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
-        else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Measure Box</b><br>Right Click: <b>Clear Box</b>";
+        else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Placera Mätning</b> (max 9)<br>Right Click: <b>Ta Bort Närmaste</b>";
         else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
         else if (toolName === 'COLORIZE') hintHtml = "Left Click/Drag: <b>Paint object with selected color</b>";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
@@ -6557,19 +6662,20 @@
                         let w = Math.abs(p2.x - p1.x);
                         let l = Math.abs(p2.z - p1.z);
                         
-                        document.getElementById('measure-hud').innerText = w.toFixed(1) + "m x " + l.toFixed(1) + "m";
+                        let hudText = document.getElementById('measure-hud-text');
+                        if (hudText) hudText.textContent = w.toFixed(1) + 'm × ' + l.toFixed(1) + 'm';
                         
-                        // Uppdatera mesh
-                        let mPos = measureLines.geometry.attributes.position.array;
-                        let y = Math.max(p1.y, p2.y) + 1.0; // Flyt lite ovanför
+                        // Update active measure preview
+                        let mPos = activeMeasureLines.geometry.attributes.position.array;
+                        let y = Math.max(p1.y, p2.y) + 1.0;
                         mPos[0] = p1.x; mPos[1] = y; mPos[2] = p1.z;
                         mPos[3] = p2.x; mPos[4] = y; mPos[5] = p1.z;
                         mPos[6] = p2.x; mPos[7] = y; mPos[8] = p2.z;
                         mPos[9] = p1.x; mPos[10]= y; mPos[11]= p2.z;
                         mPos[12]= p1.x; mPos[13]= y; mPos[14]= p1.z;
                         
-                        measureLines.geometry.attributes.position.needsUpdate = true;
-                        measureLines.visible = true;
+                        activeMeasureLines.geometry.attributes.position.needsUpdate = true;
+                        activeMeasureLines.visible = true;
                     }
                 }
             } else {
