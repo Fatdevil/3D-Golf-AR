@@ -3697,11 +3697,22 @@
     function createFlagObject(x, y, z) {
         let group = new THREE.Group();
         
-        let holeGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.05, 16);
-        let holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        // Cup — USGA standard 108mm diameter (0.054m radius)
+        // Flat dark circle flush with green surface + slight inner rim
+        let holeGeo = new THREE.CircleGeometry(0.054, 24);
+        let holeMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide });
         let phole = new THREE.Mesh(holeGeo, holeMat);
-        phole.position.set(0, 0.03, 0); 
+        phole.rotation.x = -Math.PI / 2; // Lay flat
+        phole.position.set(0, 0.005, 0);  // Just barely above ground to avoid z-fighting
         group.add(phole);
+        
+        // White cup rim (plastic liner visible edge)
+        let rimGeo = new THREE.RingGeometry(0.050, 0.058, 24);
+        let rimMat = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+        let rim = new THREE.Mesh(rimGeo, rimMat);
+        rim.rotation.x = -Math.PI / 2;
+        rim.position.set(0, 0.006, 0);
+        group.add(rim);
         
         let pole = new THREE.Mesh(flagPoleGeo, flagPoleMat);
         pole.position.set(0, 3.0, 0);
