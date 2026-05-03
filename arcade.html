@@ -4809,6 +4809,18 @@
         window.ballMesh.visible = true;
         window.ballMesh.position.set(p.lie.x, p.lie.y, p.lie.z);
         
+        // Visual rough sink: lower ball mesh in rough without affecting physics
+        let lieSurfForSink = localGetTerrainAt(p.lie.x, -p.lie.z);
+        if(lieSurfForSink) {
+            let lieType = lieSurfForSink.type;
+            if(lieType === 'ROUGH' || lieType === 'DEEP_ROUGH' || lieType === 'SEMI-ROUGH') {
+                // Sink ball: ROUGH = 60% buried, SEMI-ROUGH = 30% buried
+                let sinkFactor = (lieType === 'SEMI-ROUGH') ? 0.3 : 0.6;
+                let ballRadius = 0.0213;
+                window.ballMesh.position.y -= ballRadius * sinkFactor;
+            }
+        }
+        
         // Uppdatera banner EFTER bollen flyttats!
         updatePlayerBanner();
         
