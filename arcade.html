@@ -369,6 +369,11 @@
             </div>
             <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="background:#4ade80; color:#0f172a; border:none; padding:8px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; width:100%;">⬆️ RAISE</button>
             
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Sculpt Strength</label>
+            <input type="range" id="strength-slider" min="1" max="10" value="2" oninput="window.sculptStrength = parseInt(this.value) * 0.01; document.getElementById('strength-val').textContent = this.value + 'x'" style="width:140px; accent-color:#f59e0b; cursor:pointer;" title="Change strength">
+            <span id="strength-val" style="color:#f59e0b; font-size:10px; font-weight:bold;">2x</span>
+            <div id="flatten-hud" style="display:none; color:#38bdf8; font-size:11px; font-weight:bold; margin-top:6px; padding:6px 10px; background:#1e293b; border-radius:6px;">Flatten Target: 0.0m</div>
+            
             <label id="hardness-label" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Brush Hardness</label>
             <input type="range" id="hardness-slider" min="0" max="100" value="100" oninput="updateBrushHardness()" style="width:140px; accent-color:#f43f5e; cursor:pointer;" title="Change hardness">
             
@@ -382,14 +387,7 @@
                 🔒 Lock Terrain Edges
             </label>
             
-            <div id="green-diff-group" style="display:none; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid #475569;">
-                <label style="color:#fbbf24; font-size:10px; font-weight:bold; text-transform:uppercase;">Green Diff</label>
-                <div style="display:flex; justify-content:space-between; width:100%; gap:4px;">
-                    <button id="green-btn-flat" onclick="setGreenDiff('FLAT')" style="background:#fbbf24; color:#0f172a; border:none; padding:6px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
-                    <button id="green-btn-easy" onclick="setGreenDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">EASY</button>
-                    <button id="green-btn-med" onclick="setGreenDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">MED</button>
-                </div>
-            </div>
+
         </div>
 
         <!-- Noise Pattern Selector (visible when NOISE tool active) -->
@@ -446,6 +444,10 @@
             <div id="nature-assets-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
                 <!-- Populated dynamically -->
             </div>
+            <label style="color:#4ade80; font-size:10px; font-weight:bold; display:flex; align-items:center; gap:5px; margin-top:8px; cursor:pointer;" title="Forest tool skips fairway, green, tee and bunker areas">
+                <input type="checkbox" id="forest-respect-cb" checked onchange="window.forestRespectBiomes = this.checked" style="accent-color:#4ade80; cursor:pointer;">
+                🌿 Respect Biomes (skip fairway/green)
+            </label>
         </div>
 
         <!-- Färg för Objekt (COLORIZE) -->
@@ -2942,6 +2944,12 @@
         
         mapTex.needsUpdate = true;
         window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        
+        // Opt-in: Auto-generate rough gradient around fairway
+        let arCb = document.getElementById('spline-auto-rough-cb');
+        if(arCb && arCb.checked && typeof window.executeAutoRough === 'function') {
+            window.executeAutoRough();
+        }
         
         // Refresh overlays
         if(window.slopeOverlayActive) window.updateSlopeOverlay();
@@ -5761,6 +5769,8 @@
     };
     
     window.lockEdges = true;
+    window.forestRespectBiomes = true;
+    window.sculptStrength = 0.02;
 
     window.currentBrushHardness = 1.0;
     window.updateBrushHardness = function() {
@@ -5987,13 +5997,13 @@
                 return;
             }
             
-            // 2. Try removing an envObject (spline ROAD/TUBE)
-            let envObjs = courseHoles[currentHoleIndex].envObjects;
-            if(envObjs && envObjs.length > 0) {
-                let hit3D = getIntersect();
-                if(hit3D) {
+            // 2. Try removing an envObject or block (single raycast)
+            let hit = getIntersect();
+            if(hit) {
+                let envObjs = courseHoles[currentHoleIndex].envObjects;
+                if(envObjs && envObjs.length > 0) {
                     for(let i = envObjs.length - 1; i >= 0; i--) {
-                        if(envObjs[i].mesh === hit3D.object) {
+                        if(envObjs[i].mesh === hit.object) {
                             scene.remove(envObjs[i].mesh);
                             envObjs[i].mesh.geometry.dispose();
                             envObjs[i].mesh.material.dispose();
@@ -6003,23 +6013,21 @@
                         }
                     }
                 }
-            }
-            
-            // 3. Try removing a block
-            let hit = getIntersect();
-            if (hit && hit.object !== plane) {
-                scene.remove(hit.object);
-                let idx = targets.findIndex(t => t.mesh === hit.object);
-                if (idx !== -1) targets.splice(idx, 1);
-                saveLevel();
-                return;
+                // 3. Try removing a block
+                if (hit.object !== plane) {
+                    scene.remove(hit.object);
+                    let idx = targets.findIndex(t => t.mesh === hit.object);
+                    if (idx !== -1) targets.splice(idx, 1);
+                    saveLevel();
+                    return;
+                }
             }
             return;
         }
 
-        // === COLORIZE TOOL ===
+        // === COLORIZE TOOL (debounced undo — only save once per session) ===
         if (currentTool === 'COLORIZE' && e.button === 0 && lastHitPoint) {
-            saveUndoState();
+            if(!window._colorizeUndoSaved) { saveUndoState(); window._colorizeUndoSaved = true; }
             let closest = null; let minDist = 10;
             for (let i = 0; i < window.placedTrees.length; i++) {
                 let t = window.placedTrees[i];
@@ -6040,7 +6048,7 @@
         
         let isModifyingClick = e.button === 0 || e.button === 2;
         if(currentTool !== 'PAINT' && currentTool !== 'MEASURE' || isModifyingClick) { 
-             if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE' && currentTool !== 'SMART_GREEN') saveUndoState(); 
+             if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE' && currentTool !== 'SMART_GREEN' && currentTool !== 'COLORIZE') saveUndoState(); 
         }
 
         if(currentTool === 'MEASURE') {
@@ -6116,7 +6124,8 @@
         }
         if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'SMART_GREEN') {
             isSculpting = false;
-            controls.enabled = true; 
+            controls.enabled = true;
+            window._colorizeUndoSaved = false; // Reset colorize undo debounce
             if(currentTool !== 'PAINT') {
                 planeGeo.computeVertexNormals(); 
                 planeGeo.computeBoundingBox();
@@ -6408,7 +6417,6 @@
         document.getElementById('colorize-picker-group').style.display = (toolName === 'COLORIZE') ? 'flex' : 'none';
         document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
         document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'PAINT' || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE') ? 'flex' : 'none';
-        document.getElementById('green-diff-group').style.display = 'none';
         document.getElementById('noise-pattern-group').style.display = (toolName === 'NOISE') ? 'flex' : 'none';
         
         let ipadBtn = document.getElementById('ipad-sculpt-btn');
@@ -6451,7 +6459,7 @@
         else if (toolName === 'SMOOTH') hintHtml = "Hold Mouse: <b>Smooth Terrain</b>";
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
-        else if (toolName === 'WATER') hintHtml = "Hold Mouse: <b>Dig Water</b>";
+        else if (toolName === 'WATER') hintHtml = "Hold Left: <b>Dig Water</b><br>Hold Right: <b>Drain Water</b>";
         else if (toolName === 'SMART_GREEN') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define green boundary, then Build";
         else if (toolName === 'TEST_PUTT') hintHtml = "Left Click: <b>Drop Ball & Test Putt</b>";
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
@@ -6461,7 +6469,7 @@
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
         else if (toolName === 'RAMP') hintHtml = "Left Drag: <b>Draw ramp</b> from start to cursor — creates linear slope";
         else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b>";
-        else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter random trees</b> within brush area";
+        else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter trees</b> (respects biome toggle)";
         else if (toolName === 'NOISE') hintHtml = "Hold Left: <b>Add organic bumps</b><br>Hold Right: <b>Erode terrain</b>";
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
@@ -6699,9 +6707,12 @@
                         let p2 = lastHitPoint;
                         let w = Math.abs(p2.x - p1.x);
                         let l = Math.abs(p2.z - p1.z);
+                        let elev = (p2.y - p1.y);
+                        let dist2D = Math.sqrt(w*w + l*l);
+                        let slopePct = dist2D > 0.5 ? ((elev / dist2D) * 100).toFixed(1) : '0.0';
                         
                         let hudText = document.getElementById('measure-hud-text');
-                        if (hudText) hudText.textContent = w.toFixed(1) + 'm × ' + l.toFixed(1) + 'm';
+                        if (hudText) hudText.textContent = w.toFixed(1) + 'm x ' + l.toFixed(1) + 'm | Elev: ' + (elev >= 0 ? '+' : '') + elev.toFixed(1) + 'm | Slope: ' + slopePct + '%';
                         
                         // Update active measure preview
                         let mPos = activeMeasureLines.geometry.attributes.position.array;
@@ -6931,7 +6942,8 @@
 
         if(splinePoints.length > 1) {
             let pts = [...splinePoints];
-            // Stänger INTE loopen grafiskt längre, så att öppna vägar ser korrekta ut i previewn!
+            // Close the loop visually if we have 3+ points (boundary actions need closed polygon)
+            if(splinePoints.length > 2) pts.push(splinePoints[0].clone());
             
             let curve = new THREE.CatmullRomCurve3(pts);
             let curvePts = curve.getPoints(50 * pts.length);
@@ -7272,6 +7284,16 @@
         
         if (!previousFrameHitPoint) {
             window.sculptAnchorY = p2.y;
+            // QoL-2: Show flatten target height
+            let fHud = document.getElementById('flatten-hud');
+            if(fHud) {
+                if(currentTool === 'FLATTEN') {
+                    fHud.style.display = 'block';
+                    fHud.textContent = 'Flatten Target: ' + p2.y.toFixed(1) + 'm';
+                } else {
+                    fHud.style.display = 'none';
+                }
+            }
         }
         previousFrameHitPoint = lastHitPoint.clone();
 
@@ -7301,18 +7323,8 @@
             for (let z = gzMin; z <= gzMax; z++) {
                 for (let x = gxMin; x <= gxMax; x++) {
                     let idx = z * (TERRAIN_SEGS+1) + x;
-                    
-                    let vx = positions[idx*3];
-                    let vz = -positions[idx*3+2]; // VIKTIGT: Z är negativ i position array jämfört med world.
-                    // Wait, in previous code: vz = -positions[i*3 + 1] ? NO.
-                    // Let's look at smooth tool: let vz = -positions[i*3 + 1]; BUT IT IS A ROTATED PLANE.
-                    // Actually, let's use the local plane coordinates.
-                    // Local plane X maps to world X. Local plane Y maps to world Z (because it's rotated -90 on X).
-                    let lx = positions[idx*3];
-                    let ly = positions[idx*3+1]; // Local Y is World Z length-wise. But it's negative? 
-                    // Let's use the standard distance calculation matched by other tools
-                    let wX = lx;
-                    let wZ = -ly; // Because rotation.x = -PI/2
+                    let wX = positions[idx*3];
+                    let wZ = -positions[idx*3+1]; // Local Y → World Z (plane rotated -PI/2 on X)
                     
                     let t = 0;
                     if (l2 !== 0) {
@@ -7340,13 +7352,16 @@
                     }
                 }
             }
-            if (updatePos) planeGeo.attributes.position.needsUpdate = true;
+            if (updatePos) {
+                planeGeo.attributes.position.needsUpdate = true;
+                planeGeo.computeVertexNormals();
+            }
             return; // RAMP gör allt den behöver här, skippa vanliga borr-loopen.
         }
         // -------------------------------------------------------------
 
         let radius = currentTool === 'FLATTEN' ? currentBrushSize * 1.5 : currentBrushSize;
-        let strength = 0.02 * sculptDirection; 
+        let strength = (window.sculptStrength || 0.02) * sculptDirection; 
         
         let updatePos = false;
         
@@ -7430,7 +7445,7 @@
                 let vz = -positions[i*3 + 1]; 
                 
                 // Edge lock - don't include extreme edges in smooth calculation
-                if (window.lockEdges && (Math.abs(vx) > (TERRAIN_SIZE/2) - 2 || Math.abs(vz) > (TERRAIN_SIZE/2) - 2)) continue;
+                if (window.lockEdges && (Math.abs(vx) > (TERRAIN_SIZE/2) - 4 || Math.abs(vz) > (TERRAIN_SIZE/2) - 4)) continue;
                 
                 let d = 0;
                 if (l2 === 0) {
@@ -7502,7 +7517,6 @@
                 } else if (currentTool === 'FOREST') {
                     if (!window.lastForestDropTime) window.lastForestDropTime = 0;
                     let now = performance.now();
-                    // Släpp var X millisekund baserat på hur liten brushen är
                     let dropRate = 80; 
                     if (now - window.lastForestDropTime > dropRate) {
                         window.lastForestDropTime = now;
@@ -7510,6 +7524,20 @@
                         let rad = Math.random() * radius * 0.8;
                         let randX = p2.x + Math.cos(angle) * rad;
                         let randZ = p2.z + Math.sin(angle) * rad;
+                        
+                        // QoL-8: Respect biomes - skip green/fairway/bunker/tee areas
+                        if(window.forestRespectBiomes && window.terrainBiomeData) {
+                            let pxX = Math.floor(((randX + TERRAIN_SIZE/2) / TERRAIN_SIZE) * 4096);
+                            let pxZ = Math.floor(((randZ + TERRAIN_SIZE/2) / TERRAIN_SIZE) * 4096);
+                            pxX = Math.max(0, Math.min(4095, pxX));
+                            pxZ = Math.max(0, Math.min(4095, pxZ));
+                            let idx4 = (pxZ * 4096 + pxX) * 4;
+                            let r = window.terrainBiomeData[idx4];
+                            let g = window.terrainBiomeData[idx4+1];
+                            // Skip if too bright green (fairway/green/tee ~100-160,180-210) or sandy (bunker ~200+,200+)
+                            if(g > 150 && r < 180) continue; // Green/Fairway/Tee biomes
+                            if(r > 190 && g > 180) continue; // Bunker/Sand biomes
+                        }
                         
                         let types = ['TREE', 'PINE', 'OAK', 'OAK2', 'BUSH', 'ROCK'];
                         let type = types[Math.floor(Math.random() * types.length)];
@@ -7549,11 +7577,32 @@
                         updatePos = true;
                     }
                 } else if (currentTool === 'WATER') {
-                    // Botten faller successivt men vattnet står spikrakt!
-                    let bottomTarget = waterLevelTarget - 0.7; // Gräv en grop 0.7 under vattenytan
-                    
-                    // Skulptera terrängen (Mjuka slänter in i sjön)
-                    positions[i*3 + 2] += (bottomTarget - positions[i*3 + 2]) * 0.2 * falloff;
+                    if(sculptDirection === -1) {
+                        // QoL-4: Drain mode (right-click) — raise terrain back up and clear water mask
+                        let origH = 0; // Raise toward sea level
+                        positions[i*3 + 2] += (origH - positions[i*3 + 2]) * 0.15 * falloff;
+                        if(wPosArray) {
+                            wPosArray[i*3 + 2] = -99;
+                            window.waterBaseZ[i] = -99;
+                            waterGeo.attributes.position.needsUpdate = true;
+                        }
+                        // Clear water alpha mask at this point
+                        if(typeof wCtx !== 'undefined') {
+                            let clearX = ((vx + TERRAIN_SIZE/2) / TERRAIN_SIZE) * 4096;
+                            let clearZ = ((vz + TERRAIN_SIZE/2) / TERRAIN_SIZE) * 4096;
+                            let clearR = (radius / TERRAIN_SIZE) * 4096;
+                            wCtx.globalCompositeOperation = 'destination-out';
+                            wCtx.beginPath();
+                            wCtx.arc(clearX, clearZ, clearR * falloff, 0, Math.PI*2);
+                            wCtx.fill();
+                            wCtx.globalCompositeOperation = 'source-over';
+                            if(waterTex) waterTex.needsUpdate = true;
+                        }
+                    } else {
+                        // Normal mode: dig water
+                        let bottomTarget = waterLevelTarget - 0.7;
+                        positions[i*3 + 2] += (bottomTarget - positions[i*3 + 2]) * 0.2 * falloff;
+                    }
                     updatePos = true;
                 }
             }
@@ -8668,6 +8717,11 @@
     </div>
     
     <div style="color:#64748b; font-size:9px; margin-top:8px;">🌿 Fairway Corridor = Sculpt + Paint along path. Width slider controls corridor size.</div>
+    
+    <label style="color:#94a3b8; font-size:10px; font-weight:bold; display:flex; align-items:center; gap:5px; margin-top:6px; cursor:pointer;">
+        <input type="checkbox" id="spline-auto-rough-cb" style="accent-color:#4ade80; cursor:pointer;">
+        🌿 Auto-Rough after Fairway
+    </label>
 </div>
 
 <!-- Smart Green Action Panel -->
