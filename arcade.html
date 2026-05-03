@@ -7379,12 +7379,12 @@
             if(pt.z < pathMinZ) pathMinZ = pt.z;
             if(pt.z > pathMaxZ) pathMaxZ = pt.z;
         }
-        let margin = 6; // Blend margin
+        let margin = 0; // Bunker: NO outside influence
 
-        let gxStart = Math.max(0, Math.floor((pathMinX - margin + TERRAIN_SIZE/2) / step));
-        let gxEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxX + margin + TERRAIN_SIZE/2) / step));
-        let gzStart = Math.max(0, Math.floor((pathMinZ - margin + TERRAIN_SIZE/2) / step));
-        let gzEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + TERRAIN_SIZE/2) / step));
+        let gxStart = Math.max(0, Math.floor((pathMinX - 1 + TERRAIN_SIZE/2) / step));
+        let gxEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxX + 1 + TERRAIN_SIZE/2) / step));
+        let gzStart = Math.max(0, Math.floor((pathMinZ - 1 + TERRAIN_SIZE/2) / step));
+        let gzEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxZ + 1 + TERRAIN_SIZE/2) / step));
 
         // Average height as reference
         let baseH = 0;
@@ -7447,52 +7447,44 @@
                     let vz = -positions[idx*3+1];
 
                     let isInside = pointInPolygon(vx, vz, densePts);
-                    let distEdge = distToPolygon(vx, vz, densePts);
+                    if(!isInside) continue; // ONLY affect terrain inside polygon
 
-                    if(!isInside && distEdge > margin) continue;
+                    let distEdge = distToPolygon(vx, vz, densePts);
 
                     let targetHeight = baseH;
 
-                    if(isInside) {
-                        // Dig down
-                        targetHeight = baseH - depth;
+                    // Dig down
+                    targetHeight = baseH - depth;
 
-                        // Bowl shape: deeper in center
-                        if(shape === 'BOWL') {
-                            let distCenter = Math.sqrt((vx - cx)**2 + (vz - cz)**2);
-                            let normalizedDist = distCenter / (maxDist + 0.001); // 0=center, 1=edge
-                            // Bowl: deeper in center, shallower at edges
-                            let bowlFactor = 1.0 - normalizedDist * normalizedDist; // quadratic
-                            targetHeight = baseH - depth * (0.4 + 0.6 * bowlFactor);
-                        }
+                    // Bowl shape: deeper in center
+                    if(shape === 'BOWL') {
+                        let distCenter = Math.sqrt((vx - cx)**2 + (vz - cz)**2);
+                        let normalizedDist = distCenter / (maxDist + 0.001);
+                        let bowlFactor = 1.0 - normalizedDist * normalizedDist;
+                        targetHeight = baseH - depth * (0.4 + 0.6 * bowlFactor);
+                    }
 
-                        // Lip: raise edge on face side
-                        if(lipHeight > 0) {
-                            let relX = vx - cx;
-                            let relZ = vz - cz;
-                            let dot = relX * faceDx + relZ * faceDz; // positive = face side
-                            let normalized = dot / (faceLen + 0.001);
-                            
-                            // Only apply lip near the edge on face side
-                            let edgeProximity = 1.0 - Math.min(1.0, distEdge / 2.0); // 1 at edge, 0 at 2m in
-                            if(normalized > 0 && edgeProximity > 0) {
-                                let lipInfluence = edgeProximity * Math.min(1.0, normalized);
-                                targetHeight += (lipHeight + depth) * lipInfluence; // Raise from dug level
-                            }
+                    // Smooth edge blend INSIDE polygon (last 1.5m near edge ramps up to surface)
+                    let edgeBlend = Math.min(1.0, distEdge / 1.5);
+
+                    // Lip: raise edge on face side
+                    if(lipHeight > 0) {
+                        let relX = vx - cx;
+                        let relZ = vz - cz;
+                        let dot = relX * faceDx + relZ * faceDz;
+                        let normalized = dot / (faceLen + 0.001);
+                        
+                        let edgeProximity = 1.0 - Math.min(1.0, distEdge / 2.0);
+                        if(normalized > 0 && edgeProximity > 0) {
+                            let lipInfluence = edgeProximity * Math.min(1.0, normalized);
+                            targetHeight += (lipHeight + depth) * lipInfluence;
                         }
                     }
 
                     let currentH = positions[idx*3+2];
-                    let influence;
-
-                    if(isInside) {
-                        influence = 1.0;
-                    } else {
-                        influence = 1.0 - (distEdge / margin);
-                        influence = Math.max(0, influence * influence * (3 - 2 * influence));
-                    }
-
-                    positions[idx*3+2] = currentH + (targetHeight - currentH) * influence * 0.5;
+                    // Blend: full effect in center, ramp to original at edges
+                    let blendedTarget = currentH + (targetHeight - currentH) * edgeBlend;
+                    positions[idx*3+2] = currentH + (blendedTarget - currentH) * 0.5;
                 }
             }
         }
