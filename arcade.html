@@ -6076,12 +6076,8 @@
             }
         } else if(currentTool === 'SPLINE') {
             if(e.button === 0 && lastHitPoint) {
-                // Minimum distance between points (3m) to prevent clustering
-                let tooClose = splinePoints.length > 0 && lastHitPoint.distanceTo(splinePoints[splinePoints.length - 1]) < 3.0;
-                if(!tooClose) {
-                    splinePoints.push(lastHitPoint.clone());
-                    updateSplinePreview();
-                }
+                splinePoints.push(lastHitPoint.clone());
+                updateSplinePreview();
             } else if (e.button === 2 && splinePoints.length > 0) {
                 splinePoints.pop();
                 updateSplinePreview();
@@ -6089,11 +6085,8 @@
             controls.enabled = false;
         } else if(currentTool === 'SMART_GREEN') {
             if(e.button === 0 && lastHitPoint) {
-                let tooClose = smartGreenPoints.length > 0 && lastHitPoint.distanceTo(smartGreenPoints[smartGreenPoints.length - 1]) < 2.0;
-                if(!tooClose) {
-                    smartGreenPoints.push(lastHitPoint.clone());
-                    updateSmartGreenPreview();
-                }
+                smartGreenPoints.push(lastHitPoint.clone());
+                updateSmartGreenPreview();
             } else if (e.button === 2 && smartGreenPoints.length > 0) {
                 smartGreenPoints.pop();
                 updateSmartGreenPreview();
