@@ -292,7 +292,7 @@
             ArcadeStorage.setProMode(isPro);
             // If switching to BASIC and current tool is a pro-tool, fallback to INSPECT
             if (!isPro && typeof currentTool !== 'undefined') {
-                let proTools = ['FLATTEN','RAMP','NOISE','WATER','SPLINE','SMART_GREEN','RIDGE','FOREST','ERASER','COLORIZE'];
+                let proTools = ['FLATTEN','RAMP','NOISE','WATER','SPLINE','SMART_BUILDER','RIDGE','FOREST','ERASER','COLORIZE'];
                 if (proTools.includes(currentTool)) {
                     if (typeof setTool === 'function') setTool('INSPECT');
                 }
@@ -321,7 +321,7 @@
         <button id="tool-spline" onclick="setTool('SPLINE')" class="pro-tool"><span style="font-size:16px;">〰️</span> SPLINE</button>
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         <button id="tool-paint" onclick="setTool('PAINT')"><span style="font-size:16px;">🖌️</span> PAINT</button>
-        <button id="tool-smartgreen" onclick="setTool('SMART_GREEN')" class="pro-tool"><span style="font-size:16px;">⛳</span> SMART GREEN</button>
+        <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')" class="pro-tool"><span style="font-size:16px;">🏗️</span> SMART</button>
         <button id="tool-ridge" onclick="setTool('RIDGE')" class="pro-tool"><span style="font-size:16px;">📊</span> RIDGE</button>
         <button id="tool-nature" onclick="setTool('NATURE')"><span style="font-size:16px;">🌴</span> NATURE</button>
         <button id="tool-forest" onclick="setTool('FOREST')" class="pro-tool"><span style="font-size:16px;">🌲</span> FOREST</button>
@@ -6060,7 +6060,7 @@
         
         let isModifyingClick = e.button === 0 || e.button === 2;
         if(currentTool !== 'PAINT' && currentTool !== 'MEASURE' || isModifyingClick) { 
-             if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE' && currentTool !== 'SMART_GREEN' && currentTool !== 'COLORIZE') saveUndoState(); 
+             if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE' && currentTool !== 'SMART_BUILDER' && currentTool !== 'COLORIZE') saveUndoState(); 
         }
 
         if(currentTool === 'MEASURE') {
@@ -6083,7 +6083,7 @@
                 updateSplinePreview();
             }
             controls.enabled = false;
-        } else if(currentTool === 'SMART_GREEN') {
+        } else if(currentTool === 'SMART_BUILDER') {
             if(e.button === 0 && lastHitPoint) {
                 smartGreenPoints.push(lastHitPoint.clone());
                 updateSmartGreenPreview();
@@ -6134,7 +6134,7 @@
             saveLevel();
             return;
         }
-        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'SMART_GREEN') {
+        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'SMART_BUILDER') {
             isSculpting = false;
             controls.enabled = true;
             window._colorizeUndoSaved = false; // Reset colorize undo debounce
@@ -6406,7 +6406,7 @@
         
         currentTool = toolName;
         
-        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure', 'eraser', 'colorize'];
+        let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure', 'eraser', 'colorize'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
@@ -6421,7 +6421,7 @@
         if (activeBtn) {
             let isPro = activeBtn.classList.contains('pro-tool');
             let base = isPro ? 'pro-tool ' : '';
-            if (toolName === 'SMART_GREEN') activeBtn.className = base + 'active-green';
+            if (toolName === 'SMART_BUILDER') activeBtn.className = base + 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = base + 'active-yellow';
             else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
             else if (toolName === 'ERASER') activeBtn.className = base + 'active-red';
@@ -6451,7 +6451,7 @@
             sculptBrushCursor.material.color.setHex(0xffffff); // Vit
         } else if(toolName === 'SCULPT') {
             sculptBrushCursor.material.color.setHex(0x38bdf8); // Blå
-        } else if(toolName === 'SMART_GREEN') {
+        } else if(toolName === 'SMART_BUILDER') {
             sculptBrushCursor.material.color.setHex(0xffffff); // Stark Vit för max kontrast på grönt gräs
         } else if(toolName === 'RIDGE') {
             sculptBrushCursor.material.color.setHex(0xfbbf24); // Guld
@@ -6477,7 +6477,7 @@
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
         else if (toolName === 'WATER') hintHtml = "Hold Left: <b>Dig Water</b><br>Hold Right: <b>Drain Water</b>";
-        else if (toolName === 'SMART_GREEN') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define green boundary, then Build";
+        else if (toolName === 'SMART_BUILDER') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build";
         else if (toolName === 'TEST_PUTT') hintHtml = "Left Click: <b>Drop Ball & Test Putt</b>";
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
         else if (toolName === 'MEASURE') hintHtml = "Left Drag: <b>Placera Mätning</b> (max 9)<br>Right Click: <b>Ta Bort Närmaste</b>";
@@ -6503,7 +6503,7 @@
             if(pnl) pnl.style.display = 'none';
             if(typeof window.clearSpline === 'function') window.clearSpline();
         }
-        if(toolName !== 'SMART_GREEN') {
+        if(toolName !== 'SMART_BUILDER') {
             let sgPnl = document.getElementById('smart-green-action-panel');
             if(sgPnl) sgPnl.style.display = 'none';
             if(typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
@@ -6685,7 +6685,7 @@
                 ghostTree.visible = false;
                 lastHitPoint = null;
             }
-        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_GREEN') {
+        } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
             raycaster.setFromCamera(mouse, camera);
@@ -6712,7 +6712,7 @@
                     }
                 }
                 
-                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'SMART_GREEN') {
+                if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'FOREST' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'SMART_BUILDER') {
                     sculptBrushCursor.visible = true;
                     sculptBrushCursor.position.copy(lastHitPoint);
                     sculptBrushCursor.position.y += 0.5;
@@ -7214,6 +7214,195 @@
         snapObjectsToGround();
 
         // Refresh overlays
+        if(window.slopeOverlayActive) window.updateSlopeOverlay();
+        if(window.contourLinesActive) window.updateContourLines();
+        if(window.elevationHeatmapActive) window.updateElevationHeatmap();
+
+        clearSmartGreen();
+    };
+
+    // === SMART BUNKER: Sand Fill + Dig Down + Lip ===
+    window.executeSmartBunker = function() {
+        if(smartGreenPoints.length < 3) return;
+        saveUndoState();
+
+        let cfg = window.CURRENT_BIOME_CONFIG;
+        let sandColor = cfg.bunkerColor || '#e0d8a4';
+        
+        // Read sliders
+        let depthSlider = document.getElementById('sb-bunker-depth');
+        let lipSlider = document.getElementById('sb-bunker-lip');
+        let depth = depthSlider ? parseFloat(depthSlider.value) : 0.8;
+        let lipHeight = lipSlider ? parseFloat(lipSlider.value) : 0.3;
+        let shape = window._smartBunkerShape || 'BOWL';
+
+        // Build closed curve
+        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
+        let numSamples = Math.max(200, smartGreenPoints.length * 40);
+        let densePts = curve.getPoints(numSamples);
+
+        // === 1. PAINT: Sand fill ===
+        pCtx.save();
+        
+        // Edge sharpness
+        let sharpSlider = document.getElementById('sg-edge-sharpness');
+        let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
+        if(sharpness < 100) {
+            let blurPx = Math.round((100 - sharpness) * 0.06);
+            if(blurPx > 0) pCtx.filter = 'blur(' + blurPx + 'px)';
+        }
+
+        pCtx.beginPath();
+        densePts.forEach((pt, i) => {
+            let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pxY = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            if(i === 0) pCtx.moveTo(pxX, pxY);
+            else pCtx.lineTo(pxX, pxY);
+        });
+        pCtx.closePath();
+        pCtx.fillStyle = sandColor;
+        pCtx.fill();
+        pCtx.filter = 'none';
+        pCtx.restore();
+        mapTex.needsUpdate = true;
+        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+
+        // === 2. TERRAIN SCULPTING: Dig + Bowl + Lip ===
+        let positions = planeGeo.attributes.position.array;
+        let step = TERRAIN_SIZE / TERRAIN_SEGS;
+
+        // Bounding box
+        let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
+        for(let pt of densePts) {
+            if(pt.x < pathMinX) pathMinX = pt.x;
+            if(pt.x > pathMaxX) pathMaxX = pt.x;
+            if(pt.z < pathMinZ) pathMinZ = pt.z;
+            if(pt.z > pathMaxZ) pathMaxZ = pt.z;
+        }
+        let margin = 6; // Blend margin
+
+        let gxStart = Math.max(0, Math.floor((pathMinX - margin + TERRAIN_SIZE/2) / step));
+        let gxEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxX + margin + TERRAIN_SIZE/2) / step));
+        let gzStart = Math.max(0, Math.floor((pathMinZ - margin + TERRAIN_SIZE/2) / step));
+        let gzEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + TERRAIN_SIZE/2) / step));
+
+        // Average height as reference
+        let baseH = 0;
+        for(let pt of smartGreenPoints) {
+            let surf = localGetTerrainAt(pt.x, -pt.z);
+            baseH += surf ? surf.z : 0;
+        }
+        baseH /= smartGreenPoints.length;
+
+        // Face direction: first point = face (lip side)
+        let facePt = smartGreenPoints[0];
+        let cx = 0, cz = 0;
+        for(let pt of smartGreenPoints) { cx += pt.x; cz += pt.z; }
+        cx /= smartGreenPoints.length;
+        cz /= smartGreenPoints.length;
+        let faceDx = facePt.x - cx;
+        let faceDz = facePt.z - cz;
+        let faceLen = Math.sqrt(faceDx*faceDx + faceDz*faceDz) + 0.001;
+        faceDx /= faceLen; faceDz /= faceLen;
+
+        // Reuse helpers from Smart Green
+        function pointInPolygon(px, pz, polyPts) {
+            let inside = false;
+            for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+                let xi = polyPts[i].x, zi = polyPts[i].z;
+                let xj = polyPts[j].x, zj = polyPts[j].z;
+                if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+        function distToPolygon(px, pz, polyPts) {
+            let minDist = Infinity;
+            for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+                let ax = polyPts[j].x, az = polyPts[j].z;
+                let bx = polyPts[i].x, bz = polyPts[i].z;
+                let dx = bx - ax, dz = bz - az;
+                let len2 = dx*dx + dz*dz;
+                let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
+                let projX = ax + t*dx, projZ = az + t*dz;
+                let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
+                if(d < minDist) minDist = d;
+            }
+            return minDist;
+        }
+
+        // Max distance from center to edge (for bowl normalization)
+        let maxDist = 0;
+        for(let pt of densePts) {
+            let d = Math.sqrt((pt.x - cx)**2 + (pt.z - cz)**2);
+            if(d > maxDist) maxDist = d;
+        }
+
+        for(let pass = 0; pass < 4; pass++) {
+            for(let gz = gzStart; gz <= gzEnd; gz++) {
+                for(let gx = gxStart; gx <= gxEnd; gx++) {
+                    let idx = gz * (TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+
+                    let isInside = pointInPolygon(vx, vz, densePts);
+                    let distEdge = distToPolygon(vx, vz, densePts);
+
+                    if(!isInside && distEdge > margin) continue;
+
+                    let targetHeight = baseH;
+
+                    if(isInside) {
+                        // Dig down
+                        targetHeight = baseH - depth;
+
+                        // Bowl shape: deeper in center
+                        if(shape === 'BOWL') {
+                            let distCenter = Math.sqrt((vx - cx)**2 + (vz - cz)**2);
+                            let normalizedDist = distCenter / (maxDist + 0.001); // 0=center, 1=edge
+                            // Bowl: deeper in center, shallower at edges
+                            let bowlFactor = 1.0 - normalizedDist * normalizedDist; // quadratic
+                            targetHeight = baseH - depth * (0.4 + 0.6 * bowlFactor);
+                        }
+
+                        // Lip: raise edge on face side
+                        if(lipHeight > 0) {
+                            let relX = vx - cx;
+                            let relZ = vz - cz;
+                            let dot = relX * faceDx + relZ * faceDz; // positive = face side
+                            let normalized = dot / (faceLen + 0.001);
+                            
+                            // Only apply lip near the edge on face side
+                            let edgeProximity = 1.0 - Math.min(1.0, distEdge / 2.0); // 1 at edge, 0 at 2m in
+                            if(normalized > 0 && edgeProximity > 0) {
+                                let lipInfluence = edgeProximity * Math.min(1.0, normalized);
+                                targetHeight += (lipHeight + depth) * lipInfluence; // Raise from dug level
+                            }
+                        }
+                    }
+
+                    let currentH = positions[idx*3+2];
+                    let influence;
+
+                    if(isInside) {
+                        influence = 1.0;
+                    } else {
+                        influence = 1.0 - (distEdge / margin);
+                        influence = Math.max(0, influence * influence * (3 - 2 * influence));
+                    }
+
+                    positions[idx*3+2] = currentH + (targetHeight - currentH) * influence * 0.5;
+                }
+            }
+        }
+
+        planeGeo.attributes.position.needsUpdate = true;
+        planeGeo.computeVertexNormals();
+        planeGeo.computeBoundingBox();
+        planeGeo.computeBoundingSphere();
+        snapObjectsToGround();
+
         if(window.slopeOverlayActive) window.updateSlopeOverlay();
         if(window.contourLinesActive) window.updateContourLines();
         if(window.elevationHeatmapActive) window.updateElevationHeatmap();
@@ -8765,40 +8954,117 @@
     </label>
 </div>
 
-<!-- Smart Green Action Panel -->
+<!-- Smart Builder Action Panel -->
 <div id="smart-green-action-panel" style="display:none; position:absolute; bottom:120px; right:20px; background:#0f172a; border:2px solid #4ade80; border-radius:12px; padding:15px 20px; z-index:400; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center; min-width:340px;">
-    <h3 style="margin:0 0 10px 0; color:#fff; font-size:14px; text-transform:uppercase; letter-spacing:1px;">⛳ Smart Green Ready</h3>
+    <h3 style="margin:0 0 10px 0; color:#fff; font-size:14px; text-transform:uppercase; letter-spacing:1px;">🏗️ Smart Builder</h3>
     
-    <!-- Difficulty Selector -->
-    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; background:#1e293b; padding:8px 12px; border-radius:8px;">
-        <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Contour</span>
-        <button id="sg-diff-flat" onclick="setSGDiff('FLAT')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
-        <button id="sg-diff-easy" onclick="setSGDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">EASY</button>
-        <button id="sg-diff-med" onclick="setSGDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">MED</button>
-        <button id="sg-diff-hard" onclick="setSGDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">HARD</button>
+    <!-- Type Selector -->
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+        <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Type</span>
+        <button id="sb-type-green" onclick="setSmartBuilderType('GREEN')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">⛳ GREEN</button>
+        <button id="sb-type-bunker" onclick="setSmartBuilderType('BUNKER')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">🏖️ BUNKER</button>
     </div>
 
-    
-    <!-- Foregreen Width Slider -->
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
-        <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Foregreen</span>
-        <input type="range" id="sg-foregreen-width" min="0" max="3" value="1.0" step="0.25" style="flex:1; accent-color:#4ade80; cursor:pointer;">
-        <span id="sg-foregreen-val" style="color:#4ade80; font-weight:bold; font-size:13px; min-width:35px;">1.0m</span>
+    <!-- GREEN controls -->
+    <div id="sb-green-controls">
+        <!-- Difficulty Selector -->
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+            <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Contour</span>
+            <button id="sg-diff-flat" onclick="setSGDiff('FLAT')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
+            <button id="sg-diff-easy" onclick="setSGDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">EASY</button>
+            <button id="sg-diff-med" onclick="setSGDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">MED</button>
+            <button id="sg-diff-hard" onclick="setSGDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">HARD</button>
+        </div>
+        <!-- Foregreen Width Slider -->
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+            <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Foregreen</span>
+            <input type="range" id="sg-foregreen-width" min="0" max="3" value="1.0" step="0.25" style="flex:1; accent-color:#4ade80; cursor:pointer;">
+            <span id="sg-foregreen-val" style="color:#4ade80; font-weight:bold; font-size:13px; min-width:35px;">1.0m</span>
+        </div>
     </div>
-    
-    <!-- Edge Sharpness Slider -->
+
+    <!-- BUNKER controls -->
+    <div id="sb-bunker-controls" style="display:none;">
+        <!-- Depth Slider -->
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+            <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Depth</span>
+            <input type="range" id="sb-bunker-depth" min="0.2" max="2.0" value="0.8" step="0.1" style="flex:1; accent-color:#f59e0b; cursor:pointer;">
+            <span id="sb-bunker-depth-val" style="color:#f59e0b; font-weight:bold; font-size:13px; min-width:35px;">0.8m</span>
+        </div>
+        <!-- Lip Height Slider -->
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+            <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Lip</span>
+            <input type="range" id="sb-bunker-lip" min="0" max="1.0" value="0.3" step="0.05" style="flex:1; accent-color:#f59e0b; cursor:pointer;">
+            <span id="sb-bunker-lip-val" style="color:#f59e0b; font-weight:bold; font-size:13px; min-width:35px;">0.3m</span>
+        </div>
+        <!-- Shape -->
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+            <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Shape</span>
+            <button id="sb-shape-bowl" onclick="setSmartBunkerShape('BOWL')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">BOWL</button>
+            <button id="sb-shape-flat" onclick="setSmartBunkerShape('FLAT')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
+        </div>
+        <div style="color:#64748b; font-size:9px; margin-bottom:8px;">First point = face side (lip). Place it toward the green.</div>
+    </div>
+
+    <!-- Edge Sharpness Slider (shared) -->
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
         <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Edge</span>
         <input type="range" id="sg-edge-sharpness" min="0" max="100" value="100" step="5" style="flex:1; accent-color:#f59e0b; cursor:pointer;">
         <span id="sg-edge-val" style="color:#f59e0b; font-weight:bold; font-size:13px; min-width:40px;">Sharp</span>
     </div>
     <script>
+        window._smartBuilderType = 'GREEN';
+        window._smartBunkerShape = 'BOWL';
+        
+        function setSmartBuilderType(type) {
+            window._smartBuilderType = type;
+            ['GREEN','BUNKER'].forEach(t => {
+                let btn = document.getElementById('sb-type-' + t.toLowerCase());
+                if(btn) {
+                    btn.style.background = (t === type) ? '#4ade80' : '#334155';
+                    btn.style.color = (t === type) ? '#0f172a' : '#94a3b8';
+                }
+            });
+            document.getElementById('sb-green-controls').style.display = (type === 'GREEN') ? 'block' : 'none';
+            document.getElementById('sb-bunker-controls').style.display = (type === 'BUNKER') ? 'block' : 'none';
+            // Update panel border color
+            let panel = document.getElementById('smart-green-action-panel');
+            panel.style.borderColor = (type === 'BUNKER') ? '#f59e0b' : '#4ade80';
+            // Update build button
+            let buildBtn = document.getElementById('sb-build-btn');
+            if(buildBtn) {
+                if(type === 'BUNKER') {
+                    buildBtn.textContent = '🏖️ Build Bunker';
+                    buildBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                } else {
+                    buildBtn.textContent = '⛳ Build Green';
+                    buildBtn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
+                }
+            }
+        }
+        function setSmartBunkerShape(shape) {
+            window._smartBunkerShape = shape;
+            ['BOWL','FLAT'].forEach(s => {
+                let btn = document.getElementById('sb-shape-' + s.toLowerCase());
+                if(btn) {
+                    btn.style.background = (s === shape) ? '#4ade80' : '#334155';
+                    btn.style.color = (s === shape) ? '#0f172a' : '#94a3b8';
+                }
+            });
+        }
+        
         document.getElementById('sg-foregreen-width').addEventListener('input', function() {
             document.getElementById('sg-foregreen-val').textContent = parseFloat(this.value).toFixed(1) + 'm';
         });
         document.getElementById('sg-edge-sharpness').addEventListener('input', function() {
             let v = parseInt(this.value);
             document.getElementById('sg-edge-val').textContent = v === 0 ? 'Soft' : v === 100 ? 'Sharp' : v + '%';
+        });
+        document.getElementById('sb-bunker-depth').addEventListener('input', function() {
+            document.getElementById('sb-bunker-depth-val').textContent = parseFloat(this.value).toFixed(1) + 'm';
+        });
+        document.getElementById('sb-bunker-lip').addEventListener('input', function() {
+            document.getElementById('sb-bunker-lip-val').textContent = parseFloat(this.value).toFixed(2) + 'm';
         });
         function setSGDiff(diff) {
             window.greenDifficulty = diff;
@@ -8810,15 +9076,23 @@
                 }
             });
         }
+        
+        function executeSmartBuilder() {
+            if(window._smartBuilderType === 'BUNKER') {
+                executeSmartBunker();
+            } else {
+                executeSplineSmartGreen();
+            }
+        }
     </script>
     
     <!-- Build + Clear -->
     <div style="display:flex; gap:8px;">
-        <button onclick="executeSplineSmartGreen()" style="flex:2; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; font-weight:bold; padding:12px 15px; border-radius:8px; border:none; cursor:pointer; font-size:13px; letter-spacing:0.5px;">⛳ Build Green</button>
+        <button onclick="executeSmartBuilder()" id="sb-build-btn" style="flex:2; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; font-weight:bold; padding:12px 15px; border-radius:8px; border:none; cursor:pointer; font-size:13px; letter-spacing:0.5px;">⛳ Build Green</button>
         <button onclick="clearSmartGreen()" style="flex:1; background:#ef4444; color:#fff; font-weight:bold; padding:12px 15px; border-radius:8px; border:none; cursor:pointer; font-size:12px;">❌ Clear</button>
     </div>
     
-    <div style="color:#64748b; font-size:9px; margin-top:8px;">Place points to define green shape. Foregreen ring is painted automatically around the edge.</div>
+    <div id="sb-hint-text" style="color:#64748b; font-size:9px; margin-top:8px;">Place points to define shape. Loop closes automatically.</div>
 </div>
 
 <script src="arcade-lm-bridge.js"></script>
