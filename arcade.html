@@ -887,6 +887,13 @@
                         <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">ELEVATION (FT)</label>
                         <input type="number" id="set-altitude" value="0" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
                     </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                            <span>🌡️ TEMPERATURE</span>
+                            <span id="temp-val" style="color:#fff;">15°C</span>
+                        </label>
+                        <input type="range" id="set-temperature" min="-5" max="40" step="1" value="15" oninput="document.getElementById('temp-val').innerText = this.value + '°C';" style="width:100%; accent-color:#ef4444;">
+                    </div>
                     
                     <!-- TIME OF DAY (Fas 4: UI) -->
                     <div style="margin-top:15px; border-top:1px solid #334155; padding-top:12px;">
@@ -981,6 +988,13 @@
                         <option value="NORMAL" selected>Normal</option>
                         <option value="FIRM">Firm (More Bounce)</option>
                     </select>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                        <span>🌡️ TEMPERATURE</span>
+                        <span id="ir-temp-val" style="color:#fff;">15°C</span>
+                    </label>
+                    <input type="range" id="ir-temperature" min="-5" max="40" step="1" value="15" oninput="document.getElementById('ir-temp-val').innerText = this.value + '°C'; if(window.matchSettings) window.matchSettings.temperatureC = parseInt(this.value);" style="width:100%; accent-color:#ef4444;">
                 </div>
             </div>
 
@@ -4780,6 +4794,7 @@
         window.matchSettings.greenStimp = parseFloat(document.getElementById('set-green-stimp').value);
         window.matchSettings.greenFirmness = document.getElementById('set-green-firmness').value;
         window.matchSettings.altitude = parseInt(document.getElementById('set-altitude').value);
+        window.matchSettings.temperatureC = parseInt(document.getElementById('set-temperature').value);
         
         window.GREEN_STIMP = window.matchSettings.greenStimp; 
         
