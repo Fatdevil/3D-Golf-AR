@@ -7890,6 +7890,15 @@
         saveUndoState();
         
         pCtx.save();
+        
+        // Edge sharpness (shared slider with Smart Builder)
+        let sharpSlider = document.getElementById('sg-edge-sharpness');
+        let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
+        if(sharpness < 100) {
+            let blurPx = Math.round((100 - sharpness) * 0.06);
+            if(blurPx > 0) pCtx.filter = 'blur(' + blurPx + 'px)';
+        }
+        
         pCtx.beginPath();
         
         let curve = new THREE.CatmullRomCurve3([...splinePoints, splinePoints[0].clone()]);
@@ -7909,6 +7918,7 @@
         else if(layerType === 'BUNKER') pCtx.fillStyle = window.CURRENT_BIOME_CONFIG.bunkerColor;
         
         pCtx.fill();
+        pCtx.filter = 'none';
         pCtx.restore();
         
         mapTex.needsUpdate = true;
