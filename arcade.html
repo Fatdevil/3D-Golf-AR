@@ -1639,6 +1639,26 @@
     window.fetchCloudAssets = async function() {
         try {
             let assets = await ArcadeAPI.getAssets();
+            let cloudIds = new Set(assets.map(a => a.id));
+            
+            // Clean up deleted cloud assets from local cache
+            Object.keys(window.ASSET_REGISTRY).forEach(key => {
+                if (window.ASSET_REGISTRY[key].isCloud && !cloudIds.has(key)) {
+                    console.log('🗑️ Removing deleted cloud asset from cache:', key);
+                    delete window.ASSET_REGISTRY[key];
+                    delete window.customModels[key];
+                    
+                    // Clear any surroundConfig references
+                    if (window.surroundConfig) {
+                        ['sceneryN','sceneryE','sceneryS','sceneryW'].forEach(dir => {
+                            if (window.surroundConfig[dir] === key) {
+                                window.surroundConfig[dir] = 'NONE';
+                            }
+                        });
+                    }
+                }
+            });
+            
             assets.forEach(a => {
                 let conf = a.config || {};
                 window.ASSET_REGISTRY[a.id] = {
