@@ -336,6 +336,53 @@ window.GolfPhysics = (function() {
         let launchRads = vla * Math.PI / 180;
         let azimRads = azimDegIn * Math.PI / 180;
         
+        // === SLOPE LAUNCH CORRECTION (Trackman/GSPro parity) ===
+        // Live LM data (isLiveData) already includes real-world slope effects
+        // from the actual launch — do NOT double-correct.
+        // Simulated shots (Arcade mode) need correction.
+        let terrainNormal = [0, 0, 1]; // Default: flat
+        if (envCtx && envCtx.getTerrainAt) {
+            let tStart = envCtx.getTerrainAt(startPosXZY[0], startPosXZY[1], startPosXZY[2]);
+            if (tStart && tStart.normal) terrainNormal = tStart.normal;
+        }
+        
+        let slopeForwardDeg = 0;
+        let slopeSideDeg = 0;
+        
+        if (!input.isLiveData && (terrainNormal[0] !== 0 || terrainNormal[1] !== 0)) {
+            // Shot direction in XY plane (normalized)
+            let shotDirX = Math.sin(azimRads);
+            let shotDirY = Math.cos(azimRads);
+            
+            // EFFECT 1: Forward/backward slope → launch angle correction
+            // Project terrain normal onto shot direction
+            // Positive = uphill, negative = downhill
+            let slopeForward = terrainNormal[0] * shotDirX + terrainNormal[1] * shotDirY;
+            slopeForwardDeg = Math.asin(Math.max(-0.99, Math.min(0.99, -slopeForward))) * 180 / Math.PI;
+            // Trackman data: 10% slope (~5.7°) → ~5.9° LA change ≈ 1:1 ratio
+            let correctedLaunchDeg = (launchRads * 180 / Math.PI) + slopeForwardDeg;
+            correctedLaunchDeg = Math.max(0.5, correctedLaunchDeg); // Floor at 0.5° (can't launch underground)
+            launchRads = correctedLaunchDeg * Math.PI / 180;
+            
+            // EFFECT 2: Side slope → sidespin bias (D-plane lie angle geometry)
+            // Perpendicular to shot direction
+            let slopeSideX = -shotDirY;
+            let slopeSideY =  shotDirX;
+            let slopeSide = terrainNormal[0] * slopeSideX + terrainNormal[1] * slopeSideY;
+            slopeSideDeg = Math.asin(Math.max(-0.99, Math.min(0.99, slopeSide))) * 180 / Math.PI;
+            // Positive slopeSideDeg = ball above feet (RH: draw tendency → negative spinAxis)
+            // Negative slopeSideDeg = ball below feet (RH: fade tendency → positive spinAxis)
+            // Coefficient 0.65 from D-plane geometry: lie angle tilt × sin(loft)
+            spinAxisIn += (-slopeSideDeg * 0.65);
+            
+            // EFFECT 3: Speed factor from gravity component (marginal)
+            // Downhill: +1% per 5° (gravity assist). Uphill: -1% per 5°. Max ±3%.
+            let slopeSpeedFactor = 1.0 + Math.max(-0.03, Math.min(0.03, slopeForwardDeg * 0.002));
+            speedMS *= slopeSpeedFactor;
+            
+            console.log(`⛰️ SLOPE LAUNCH: forward=${slopeForwardDeg.toFixed(1)}° side=${slopeSideDeg.toFixed(1)}° | LA: ${vla.toFixed(1)}°→${(launchRads*180/Math.PI).toFixed(1)}° | spinAxis: ${(spinAxisIn - (-slopeSideDeg*0.65)).toFixed(1)}°→${spinAxisIn.toFixed(1)}° | speed×${slopeSpeedFactor.toFixed(3)}`);
+        }
+        
         // Start hastighetsvektor
         // Y: framåt, X: höger, Z: upp
         let vX = speedMS * Math.cos(launchRads) * Math.sin(azimRads);
