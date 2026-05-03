@@ -685,7 +685,7 @@
         <div style="display:flex; gap:15px; align-items:center;">
             <div><span style="color:#94a3b8; font-size:9px; text-transform:uppercase; display:block;">Elevation</span><span id="elev-height" style="color:#4ade80; font-size:16px; font-weight:900;">0.0m</span></div>
             <div style="width:1px; height:25px; background:#475569;"></div>
-            <div><span style="color:#94a3b8; font-size:9px; text-transform:uppercase; display:block;">Slope</span><span id="elev-slope" style="color:#fbbf24; font-size:16px; font-weight:900;">0.0%</span></div>
+            <div><span style="color:#94a3b8; font-size:9px; text-transform:uppercase; display:block;">Slope</span><span id="elev-slope" style="color:#fbbf24; font-size:16px; font-weight:900;">0.0°</span></div>
             <div style="width:1px; height:25px; background:#475569;"></div>
             <div><span style="color:#94a3b8; font-size:9px; text-transform:uppercase; display:block;">Surface</span><span id="elev-biome" style="color:#38bdf8; font-size:11px; font-weight:700;">ROUGH</span></div>
         </div>
@@ -2650,10 +2650,12 @@
         let elB = document.getElementById('elev-biome');
         if(elH) elH.textContent = h.toFixed(1) + 'm';
         if(elS) {
-            elS.textContent = slopePct.toFixed(1) + '%';
-            // Color the slope: green < 3%, yellow 3-8%, red > 8%
-            if(slopePct < 3) elS.style.color = '#4ade80';
-            else if(slopePct < 8) elS.style.color = '#fbbf24';
+            // Convert gradient to degrees: atan(gradient) × 180/π
+            let slopeDeg = Math.atan(slopePct / 100) * (180 / Math.PI);
+            elS.textContent = slopeDeg.toFixed(1) + '°';
+            // Color: green <2°, yellow 2-5°, red >5°
+            if(slopeDeg < 2) elS.style.color = '#4ade80';
+            else if(slopeDeg < 5) elS.style.color = '#fbbf24';
             else elS.style.color = '#ef4444';
         }
         if(elB) elB.textContent = biome;
