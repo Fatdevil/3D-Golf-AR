@@ -337,9 +337,10 @@ window.GolfPhysics = (function() {
         let azimRads = azimDegIn * Math.PI / 180;
         
         // === SLOPE LAUNCH CORRECTION (Trackman/GSPro parity) ===
-        // Live LM data (isLiveData) already includes real-world slope effects
-        // from the actual launch — do NOT double-correct.
-        // Simulated shots (Arcade mode) need correction.
+        // ALL launch monitors (SkyTrak, Trackman, Mevo, etc.) measure the ball
+        // on a FLAT mat — they cannot detect virtual terrain slope.
+        // Slope correction must ALWAYS apply to simulate the effect of the
+        // virtual lie on the launch conditions.
         let terrainNormal = [0, 0, 1]; // Default: flat
         if (envCtx && envCtx.getTerrainAt) {
             let tStart = envCtx.getTerrainAt(startPosXZY[0], startPosXZY[1], startPosXZY[2]);
@@ -349,7 +350,7 @@ window.GolfPhysics = (function() {
         let slopeForwardDeg = 0;
         let slopeSideDeg = 0;
         
-        if (!input.isLiveData && (terrainNormal[0] !== 0 || terrainNormal[1] !== 0)) {
+        if (terrainNormal[0] !== 0 || terrainNormal[1] !== 0) {
             // Shot direction in XY plane (normalized)
             let shotDirX = Math.sin(azimRads);
             let shotDirY = Math.cos(azimRads);
