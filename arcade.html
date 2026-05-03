@@ -2411,9 +2411,11 @@
                 return x - Math.floor(x);
             };
             
-            // Matrix to center the model at origin (loadAsset already grounds at y=0)
+            // Matrix to center model at XZ origin AND ground it at y=0
+            // worldBox.min.y should be 0 if loadAsset grounded correctly,
+            // but for safety we explicitly force grounding here too.
             let toOrigin = new THREE.Matrix4().makeTranslation(
-                -worldCenter.x, 0, -worldCenter.z
+                -worldCenter.x, -worldBox.min.y, -worldCenter.z
             );
             
             meshes.forEach((m, meshIndex) => {
