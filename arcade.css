@@ -1,4 +1,4 @@
-﻿  body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Inter', sans-serif; }
+  body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Inter', sans-serif; }
   canvas { display: block; }
   
   /* Sleek Scrollbar for ribbons */
@@ -152,14 +152,23 @@
       transform: translateY(-50%);
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 0px;
       pointer-events: none;
       z-index: 100;
       max-height: 85vh;
+      overflow: hidden;
+  }
+  
+  #right-tabs {
+      flex-shrink: 0;
+  }
+  
+  #right-toolbar > div[id^="tab-content-"] {
       overflow-y: auto;
       overflow-x: hidden;
       scrollbar-width: thin;
       scrollbar-color: #475569 transparent;
+      gap: 10px;
   }
   
   .prop-panel {
