@@ -6986,10 +6986,9 @@
         });
 
         if(smartGreenPoints.length > 1) {
-            // Closed loop preview for green boundary
-            let pts = [...smartGreenPoints, smartGreenPoints[0].clone()];
-            let curve = new THREE.CatmullRomCurve3(pts);
-            let curvePts = curve.getPoints(50 * pts.length);
+            // Closed loop preview for green boundary — use closed=true for smooth first point
+            let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
+            let curvePts = curve.getPoints(50 * smartGreenPoints.length);
             let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
             let lineMat = new THREE.LineBasicMaterial({ color: 0x4ade80, linewidth: 3 });
             smartGreenLineMesh = new THREE.Line(lineGeo, lineMat);
@@ -7016,14 +7015,17 @@
         let greenColor = cfg.greenColor || '#98ce68';
         let foregreenColor = cfg.foregreenColor || '#8bc45d';
         let difficulty = window.greenDifficulty || 'FLAT';
+        
+        // Random seed offset for unique contours per green build
+        window._sgSeedOffsetX = (Math.random() - 0.5) * 200;
+        window._sgSeedOffsetZ = (Math.random() - 0.5) * 200;
 
         // Get foregreen width from slider (default 1.0m)
         let fgSlider = document.getElementById('sg-foregreen-width');
         let foregreenWidth = fgSlider ? parseFloat(fgSlider.value) : 1.0;
 
-        // Build closed curve from points
-        let closedPts = [...smartGreenPoints, smartGreenPoints[0].clone()];
-        let curve = new THREE.CatmullRomCurve3(closedPts);
+        // Build closed curve from points using closed=true for smooth loop at first point
+        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
         let numSamples = Math.max(200, smartGreenPoints.length * 40);
         let densePts = curve.getPoints(numSamples);
 
@@ -7036,11 +7038,20 @@
         cx /= densePts.length;
         cz /= densePts.length;
 
+        // Edge sharpness: 0 = soft gaussian blur, 100 = pixel-perfect sharp
+        let sharpSlider = document.getElementById('sg-edge-sharpness');
+        let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 0;
+        
+        if(sharpness < 100) {
+            // Soft edge: apply blur to canvas painting
+            let blurPx = Math.round((100 - sharpness) * 0.5); // 0-50px blur range
+            pCtx.filter = 'blur(' + blurPx + 'px)';
+        }
+
         // Draw foregreen ring: expanded polygon
         if(foregreenWidth > 0) {
             pCtx.beginPath();
             densePts.forEach((pt, i) => {
-                // Push each point outward from center by foregreenWidth
                 let dx = pt.x - cx;
                 let dz = pt.z - cz;
                 let len = Math.sqrt(dx*dx + dz*dz) + 0.001;
@@ -7068,6 +7079,8 @@
         pCtx.closePath();
         pCtx.fillStyle = greenColor;
         pCtx.fill();
+        
+        pCtx.filter = 'none'; // Reset filter
 
         pCtx.restore();
         mapTex.needsUpdate = true;
@@ -7142,16 +7155,19 @@
 
                     if(!isInside && distEdge > margin) continue;
 
-                    // Target height with difficulty contours
+                    // Target height with difficulty contours (randomized per build)
                     let targetHeight = baseH;
+                    let seedX = vx + window._sgSeedOffsetX;
+                    let seedZ = vz + window._sgSeedOffsetZ;
                     if(difficulty === 'EASY') {
-                        targetHeight += Math.sin(vx * 0.1) * Math.cos(vz * 0.1) * 0.15;
+                        targetHeight += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.15;
                     } else if(difficulty === 'MED') {
-                        targetHeight += Math.sin(vx * 0.15) * Math.cos(vz * 0.15) * 0.3;
-                        targetHeight += (vx * 0.015);
+                        targetHeight += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.15) * 0.3;
+                        targetHeight += Math.sin(seedX * 0.08 + seedZ * 0.05) * 0.15;
                     } else if(difficulty === 'HARD') {
-                        targetHeight += Math.sin(vx * 0.2) * Math.cos(vz * 0.15) * 0.45
-                                      + Math.sin(vz * 0.4) * 0.15;
+                        targetHeight += Math.sin(seedX * 0.2) * Math.cos(seedZ * 0.15) * 0.45
+                                      + Math.sin(seedZ * 0.4 + seedX * 0.1) * 0.15
+                                      + Math.cos(seedX * 0.35) * Math.sin(seedZ * 0.25) * 0.2;
                     }
 
                     let currentH = positions[idx*3+2];
@@ -8748,9 +8764,20 @@
         <input type="range" id="sg-foregreen-width" min="0" max="3" value="1.0" step="0.25" style="flex:1; accent-color:#4ade80; cursor:pointer;">
         <span id="sg-foregreen-val" style="color:#4ade80; font-weight:bold; font-size:13px; min-width:35px;">1.0m</span>
     </div>
+    
+    <!-- Edge Sharpness Slider -->
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+        <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Edge</span>
+        <input type="range" id="sg-edge-sharpness" min="0" max="100" value="0" step="5" style="flex:1; accent-color:#f59e0b; cursor:pointer;">
+        <span id="sg-edge-val" style="color:#f59e0b; font-weight:bold; font-size:13px; min-width:40px;">Soft</span>
+    </div>
     <script>
         document.getElementById('sg-foregreen-width').addEventListener('input', function() {
             document.getElementById('sg-foregreen-val').textContent = parseFloat(this.value).toFixed(1) + 'm';
+        });
+        document.getElementById('sg-edge-sharpness').addEventListener('input', function() {
+            let v = parseInt(this.value);
+            document.getElementById('sg-edge-val').textContent = v === 0 ? 'Soft' : v === 100 ? 'Sharp' : v + '%';
         });
         function setSGDiff(diff) {
             window.greenDifficulty = diff;
