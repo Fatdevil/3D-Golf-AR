@@ -7648,6 +7648,183 @@
         clearSmartGreen();
     };
 
+    // === SMART TEE: Flat Tee Box + Auto-Place Markers ===
+    window.executeSmartTee = function() {
+        if(smartGreenPoints.length < 3) return;
+        saveUndoState();
+
+        let cfg = window.CURRENT_BIOME_CONFIG;
+        let teeColor = cfg.teeColor || '#7cb54c';
+
+        // Build closed curve
+        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
+        let numSamples = Math.max(200, smartGreenPoints.length * 40);
+        let densePts = curve.getPoints(numSamples);
+
+        // === 1. PAINT: Tee box color ===
+        pCtx.save();
+        let sharpSlider = document.getElementById('sg-edge-sharpness');
+        let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
+        if(sharpness < 100) {
+            let blurPx = Math.round((100 - sharpness) * 0.06);
+            if(blurPx > 0) pCtx.filter = 'blur(' + blurPx + 'px)';
+        }
+
+        pCtx.beginPath();
+        densePts.forEach((pt, i) => {
+            let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pxY = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            if(i === 0) pCtx.moveTo(pxX, pxY);
+            else pCtx.lineTo(pxX, pxY);
+        });
+        pCtx.closePath();
+        pCtx.fillStyle = teeColor;
+        pCtx.fill();
+        pCtx.filter = 'none';
+        pCtx.restore();
+        mapTex.needsUpdate = true;
+        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+
+        // === 2. TERRAIN: Completely flat ===
+        let positions = planeGeo.attributes.position.array;
+        let step = TERRAIN_SIZE / TERRAIN_SEGS;
+
+        let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
+        for(let pt of densePts) {
+            if(pt.x < pathMinX) pathMinX = pt.x;
+            if(pt.x > pathMaxX) pathMaxX = pt.x;
+            if(pt.z < pathMinZ) pathMinZ = pt.z;
+            if(pt.z > pathMaxZ) pathMaxZ = pt.z;
+        }
+        let margin = 6;
+
+        let gxStart = Math.max(0, Math.floor((pathMinX - margin + TERRAIN_SIZE/2) / step));
+        let gxEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxX + margin + TERRAIN_SIZE/2) / step));
+        let gzStart = Math.max(0, Math.floor((pathMinZ - margin + TERRAIN_SIZE/2) / step));
+        let gzEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + TERRAIN_SIZE/2) / step));
+
+        let baseH = 0;
+        for(let pt of smartGreenPoints) {
+            let surf = localGetTerrainAt(pt.x, -pt.z);
+            baseH += surf ? surf.z : 0;
+        }
+        baseH /= smartGreenPoints.length;
+
+        function pointInPolygon(px, pz, polyPts) {
+            let inside = false;
+            for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+                let xi = polyPts[i].x, zi = polyPts[i].z;
+                let xj = polyPts[j].x, zj = polyPts[j].z;
+                if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+        function distToPolygon(px, pz, polyPts) {
+            let minDist = Infinity;
+            for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+                let ax = polyPts[j].x, az = polyPts[j].z;
+                let bx = polyPts[i].x, bz = polyPts[i].z;
+                let dx = bx - ax, dz = bz - az;
+                let len2 = dx*dx + dz*dz;
+                let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
+                let projX = ax + t*dx, projZ = az + t*dz;
+                let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
+                if(d < minDist) minDist = d;
+            }
+            return minDist;
+        }
+
+        for(let pass = 0; pass < 4; pass++) {
+            for(let gz = gzStart; gz <= gzEnd; gz++) {
+                for(let gx = gxStart; gx <= gxEnd; gx++) {
+                    let idx = gz * (TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+                    let isInside = pointInPolygon(vx, vz, densePts);
+                    let distEdge = distToPolygon(vx, vz, densePts);
+                    if(!isInside && distEdge > margin) continue;
+                    let currentH = positions[idx*3+2];
+                    let influence;
+                    if(isInside) {
+                        influence = 1.0;
+                    } else {
+                        influence = 1.0 - (distEdge / margin);
+                        influence = Math.max(0, influence * influence * (3 - 2 * influence));
+                    }
+                    // Always flat — target = baseH
+                    positions[idx*3+2] = currentH + (baseH - currentH) * influence * 0.5;
+                }
+            }
+        }
+
+        planeGeo.attributes.position.needsUpdate = true;
+        planeGeo.computeVertexNormals();
+        planeGeo.computeBoundingBox();
+        planeGeo.computeBoundingSphere();
+        snapObjectsToGround();
+
+        // === 3. AUTO-PLACE TEE MARKERS ===
+        // Determine which tees to place
+        let teesToPlace = [];
+        // Order: back to front = black, white, yellow, red
+        if(document.getElementById('st-tee-black') && document.getElementById('st-tee-black').checked) teesToPlace.push({type: 'black', color: 0x111111});
+        if(document.getElementById('st-tee-white') && document.getElementById('st-tee-white').checked) teesToPlace.push({type: 'white', color: 0xffffff});
+        if(document.getElementById('st-tee-yellow') && document.getElementById('st-tee-yellow').checked) teesToPlace.push({type: 'yellow', color: 0xfacc15});
+        if(document.getElementById('st-tee-red') && document.getElementById('st-tee-red').checked) teesToPlace.push({type: 'red', color: 0xef4444});
+
+        if(teesToPlace.length > 0) {
+            // Centerline: from first point (back) toward polygon center
+            let cx = 0, cz = 0;
+            for(let pt of smartGreenPoints) { cx += pt.x; cz += pt.z; }
+            cx /= smartGreenPoints.length;
+            cz /= smartGreenPoints.length;
+
+            let backPt = smartGreenPoints[0]; // First point = back of tee
+            // Direction from back toward center (and beyond)
+            let dirX = cx - backPt.x;
+            let dirZ = cz - backPt.z;
+            let dirLen = Math.sqrt(dirX*dirX + dirZ*dirZ) + 0.001;
+            dirX /= dirLen; dirZ /= dirLen;
+
+            // Total tee box length along this direction
+            let totalLen = dirLen * 2; // From back point through center to far side
+
+            // Space tees evenly along centerline
+            let hole = courseHoles[currentHoleIndex];
+            let spacing = totalLen / (teesToPlace.length + 1);
+
+            // Calculate rotation: tee markers should face perpendicular to centerline direction
+            let teeRot = Math.atan2(dirX, dirZ);
+
+            for(let i = 0; i < teesToPlace.length; i++) {
+                let t = teesToPlace[i];
+                let dist = spacing * (i + 1);
+                let tx = backPt.x + dirX * dist;
+                let tz = backPt.z + dirZ * dist;
+
+                // Get terrain height at this position
+                let surf = localGetTerrainAt(tx, -tz);
+                let ty = surf ? surf.z : baseH;
+
+                // Remove old tee mesh if exists
+                if(hole.teeMeshes[t.type]) scene.remove(hole.teeMeshes[t.type]);
+
+                // Create new tee
+                hole.tees[t.type] = { x: tx, y: ty, z: tz, rot: teeRot };
+                hole.teeMeshes[t.type] = createTeeObject(tx, ty, tz, t.color);
+                hole.teeMeshes[t.type].rotation.y = teeRot;
+            }
+        }
+
+        if(window.slopeOverlayActive) window.updateSlopeOverlay();
+        if(window.contourLinesActive) window.updateContourLines();
+        if(window.elevationHeatmapActive) window.updateElevationHeatmap();
+
+        clearSmartGreen();
+    };
+
     window.executeSplineBoundary = function(layerType) {
         if(splinePoints.length < 3) return;
         saveUndoState();
@@ -9202,6 +9379,7 @@
         <button id="sb-type-green" onclick="setSmartBuilderType('GREEN')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">⛳ GREEN</button>
         <button id="sb-type-bunker" onclick="setSmartBuilderType('BUNKER')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">🏖️ BUNKER</button>
         <button id="sb-type-fairway" onclick="setSmartBuilderType('FAIRWAY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">🏌️ FAIRWAY</button>
+        <button id="sb-type-tee" onclick="setSmartBuilderType('TEE')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">🟦 TEE</button>
     </div>
 
     <!-- GREEN controls -->
@@ -9263,6 +9441,21 @@
         </div>
     </div>
 
+    <!-- TEE controls -->
+    <div id="sb-tee-controls" style="display:none;">
+        <!-- Auto-place tee markers -->
+        <div style="background:#1e293b; padding:8px 12px; border-radius:8px; margin-bottom:8px;">
+            <div style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:6px;">Auto-Place Tees</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+                <label style="display:flex; align-items:center; gap:4px; color:#ef4444; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-red" checked style="accent-color:#ef4444;"> 🔴 Red</label>
+                <label style="display:flex; align-items:center; gap:4px; color:#facc15; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-yellow" checked style="accent-color:#facc15;"> 🟡 Yellow</label>
+                <label style="display:flex; align-items:center; gap:4px; color:#fff; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-white" checked style="accent-color:#fff;"> ⚪ White</label>
+                <label style="display:flex; align-items:center; gap:4px; color:#94a3b8; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-black" checked style="accent-color:#666;"> ⚫ Black</label>
+            </div>
+        </div>
+        <div style="color:#64748b; font-size:9px; margin-bottom:8px;">First point = back (Black tee). Last = front (Red). Markers auto-placed along centerline.</div>
+    </div>
+
     <!-- Edge Sharpness Slider (shared) -->
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
         <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Edge</span>
@@ -9276,7 +9469,7 @@
         
         function setSmartBuilderType(type) {
             window._smartBuilderType = type;
-            ['GREEN','BUNKER','FAIRWAY'].forEach(t => {
+            ['GREEN','BUNKER','FAIRWAY','TEE'].forEach(t => {
                 let btn = document.getElementById('sb-type-' + t.toLowerCase());
                 if(btn) {
                     btn.style.background = (t === type) ? '#4ade80' : '#334155';
@@ -9286,9 +9479,10 @@
             document.getElementById('sb-green-controls').style.display = (type === 'GREEN') ? 'block' : 'none';
             document.getElementById('sb-bunker-controls').style.display = (type === 'BUNKER') ? 'block' : 'none';
             document.getElementById('sb-fairway-controls').style.display = (type === 'FAIRWAY') ? 'block' : 'none';
+            document.getElementById('sb-tee-controls').style.display = (type === 'TEE') ? 'block' : 'none';
             // Update panel border color
             let panel = document.getElementById('smart-green-action-panel');
-            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952'};
+            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952', TEE: '#38bdf8'};
             panel.style.borderColor = colors[type] || '#4ade80';
             // Update build button
             let buildBtn = document.getElementById('sb-build-btn');
@@ -9299,6 +9493,9 @@
                 } else if(type === 'FAIRWAY') {
                     buildBtn.textContent = '🏌️ Build Fairway';
                     buildBtn.style.background = 'linear-gradient(135deg, #7db952, #6b9e3d)';
+                } else if(type === 'TEE') {
+                    buildBtn.textContent = '🟦 Build Tee Box';
+                    buildBtn.style.background = 'linear-gradient(135deg, #38bdf8, #0ea5e9)';
                 } else {
                     buildBtn.textContent = '⛳ Build Green';
                     buildBtn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
@@ -9358,6 +9555,8 @@
                 executeSmartBunker();
             } else if(window._smartBuilderType === 'FAIRWAY') {
                 executeSmartFairway();
+            } else if(window._smartBuilderType === 'TEE') {
+                executeSmartTee();
             } else {
                 executeSplineSmartGreen();
             }
