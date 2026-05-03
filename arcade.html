@@ -7901,8 +7901,8 @@
         
         pCtx.beginPath();
         
-        let curve = new THREE.CatmullRomCurve3([...splinePoints, splinePoints[0].clone()]);
-        let densePts = curve.getPoints(splinePoints.length * 10);
+        let curve = new THREE.CatmullRomCurve3(splinePoints, true);
+        let densePts = curve.getPoints(Math.max(200, splinePoints.length * 40));
         
         densePts.forEach((pt, i) => {
             let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
