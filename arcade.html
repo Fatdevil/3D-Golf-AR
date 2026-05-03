@@ -7353,7 +7353,6 @@
         if (currentTool === 'PAINT') targetPaintColor.setHex(currentBuildColor);
         
         // Omdirigera ritandet direkt till Canvas för skarp grafik
-        // Omdirigera ritandet direkt till Canvas för skarp grafik (TILLÄGG: Water ritar inte längre på pCtx)
         if (currentTool === 'PAINT') {
             let pCtx1X = ((p1.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
             let pCtx1Z = ((p1.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
@@ -7365,32 +7364,30 @@
             pCtx.lineCap = 'round';
             pCtx.lineJoin = 'round';
             
+            let brushColor = '#' + targetPaintColor.getHexString();
+            let hardness = window.currentBrushHardness !== undefined ? window.currentBrushHardness : 1.0;
+            
+            if (hardness < 1.0) {
+                pCtx.shadowBlur = cRad * (1.0 - hardness) * 2;
+                pCtx.shadowColor = brushColor;
             } else {
-                let brushColor = '#' + targetPaintColor.getHexString();
-                let hardness = window.currentBrushHardness !== undefined ? window.currentBrushHardness : 1.0;
-                
-                if (hardness < 1.0) {
-                    pCtx.shadowBlur = cRad * (1.0 - hardness) * 2;
-                    pCtx.shadowColor = brushColor;
-                } else {
-                    pCtx.shadowBlur = 0;
-                }
-                
-                pCtx.strokeStyle = brushColor;
-                pCtx.fillStyle = brushColor;
-                pCtx.lineWidth = cRad * 2;
-                
-                pCtx.beginPath();
-                if (p1.distanceTo(p2) < 0.1) {
-                    pCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
-                    pCtx.fill();
-                } else {
-                    pCtx.moveTo(pCtx1X, pCtx1Z);
-                    pCtx.lineTo(pCtx2X, pCtx2Z);
-                    pCtx.stroke();
-                }
-                pCtx.shadowBlur = 0; // Reset
+                pCtx.shadowBlur = 0;
             }
+            
+            pCtx.strokeStyle = brushColor;
+            pCtx.fillStyle = brushColor;
+            pCtx.lineWidth = cRad * 2;
+            
+            pCtx.beginPath();
+            if (p1.distanceTo(p2) < 0.1) {
+                pCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
+                pCtx.fill();
+            } else {
+                pCtx.moveTo(pCtx1X, pCtx1Z);
+                pCtx.lineTo(pCtx2X, pCtx2Z);
+                pCtx.stroke();
+            }
+            pCtx.shadowBlur = 0; // Reset
             if(mapTex) mapTex.needsUpdate = true;
         }
         // ALPHA MASK FOR WATER 
