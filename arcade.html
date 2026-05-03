@@ -7775,27 +7775,31 @@
         if(document.getElementById('st-tee-red') && document.getElementById('st-tee-red').checked) teesToPlace.push({type: 'red', color: 0xef4444});
 
         if(teesToPlace.length > 0) {
-            // Centerline: from first point (back) toward polygon center
-            let cx = 0, cz = 0;
-            for(let pt of smartGreenPoints) { cx += pt.x; cz += pt.z; }
-            cx /= smartGreenPoints.length;
-            cz /= smartGreenPoints.length;
-
+            // Centerline: point 1 (back) → point 2 (aim direction toward fairway)
             let backPt = smartGreenPoints[0]; // First point = back of tee
-            // Direction from back toward center (and beyond)
-            let dirX = cx - backPt.x;
-            let dirZ = cz - backPt.z;
+            let aimPt = smartGreenPoints.length > 1 ? smartGreenPoints[1] : smartGreenPoints[0];
+            
+            // Direction from back toward aim point
+            let dirX = aimPt.x - backPt.x;
+            let dirZ = aimPt.z - backPt.z;
             let dirLen = Math.sqrt(dirX*dirX + dirZ*dirZ) + 0.001;
             dirX /= dirLen; dirZ /= dirLen;
 
-            // Total tee box length along this direction
-            let totalLen = dirLen * 2; // From back point through center to far side
+            // Total tee box length: use max extent of polygon along this direction
+            let maxProj = 0;
+            for(let pt of smartGreenPoints) {
+                let dx = pt.x - backPt.x;
+                let dz = pt.z - backPt.z;
+                let proj = dx * dirX + dz * dirZ;
+                if(proj > maxProj) maxProj = proj;
+            }
+            let totalLen = maxProj > 1 ? maxProj : dirLen * 2;
 
             // Space tees evenly along centerline
             let hole = courseHoles[currentHoleIndex];
             let spacing = totalLen / (teesToPlace.length + 1);
 
-            // Calculate rotation: tee markers should face perpendicular to centerline direction
+            // Calculate rotation: tee markers face perpendicular to aim direction
             let teeRot = Math.atan2(dirX, dirZ);
 
             for(let i = 0; i < teesToPlace.length; i++) {
@@ -9453,7 +9457,7 @@
                 <label style="display:flex; align-items:center; gap:4px; color:#94a3b8; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-black" checked style="accent-color:#666;"> ⚫ Black</label>
             </div>
         </div>
-        <div style="color:#64748b; font-size:9px; margin-bottom:8px;">First point = back (Black tee). Last = front (Red). Markers auto-placed along centerline.</div>
+        <div style="color:#64748b; font-size:9px; margin-bottom:8px;">Pt 1 = back (Black). Pt 2 = aim direction (toward fairway). Rest = outline.</div>
     </div>
 
     <!-- Edge Sharpness Slider (shared) -->
