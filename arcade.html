@@ -7156,18 +7156,23 @@
                     if(!isInside && distEdge > margin) continue;
 
                     // Target height with difficulty contours (randomized per build)
+                    // Slope targets: EASY 0-2%, MED 2-4%, HARD 4-6% (PGA-realistic)
+                    // slope% ≈ amplitude × frequency × 100
                     let targetHeight = baseH;
                     let seedX = vx + window._sgSeedOffsetX;
                     let seedZ = vz + window._sgSeedOffsetZ;
                     if(difficulty === 'EASY') {
-                        targetHeight += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.15;
+                        // Peak ~1.4%, typical ~1%
+                        targetHeight += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.10;
                     } else if(difficulty === 'MED') {
-                        targetHeight += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.15) * 0.3;
-                        targetHeight += Math.sin(seedX * 0.08 + seedZ * 0.05) * 0.15;
+                        // Peak ~3.5%, typical ~2.5%
+                        targetHeight += Math.sin(seedX * 0.12) * Math.cos(seedZ * 0.12) * 0.18;
+                        targetHeight += Math.sin(seedX * 0.07 + seedZ * 0.05) * 0.08;
                     } else if(difficulty === 'HARD') {
-                        targetHeight += Math.sin(seedX * 0.2) * Math.cos(seedZ * 0.15) * 0.45
-                                      + Math.sin(seedZ * 0.4 + seedX * 0.1) * 0.15
-                                      + Math.cos(seedX * 0.35) * Math.sin(seedZ * 0.25) * 0.2;
+                        // Peak ~5.5%, typical ~4.5% (Augusta-level)
+                        targetHeight += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.12) * 0.22
+                                      + Math.sin(seedZ * 0.25 + seedX * 0.08) * 0.06
+                                      + Math.cos(seedX * 0.20) * Math.sin(seedZ * 0.18) * 0.05;
                     }
 
                     let currentH = positions[idx*3+2];
