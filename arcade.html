@@ -6387,6 +6387,11 @@
     }
 
     function setTool(toolName) {
+        // Reset active sculpting state to prevent phantom painting/sculpting
+        isSculpting = false;
+        controls.enabled = true;
+        previousFrameHitPoint = null;
+        
         currentTool = toolName;
         
         let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartgreen', 'testputt', 'ridge', 'nature', 'forest', 'block', 'hole', 'measure', 'eraser', 'colorize'];
