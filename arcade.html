@@ -7112,6 +7112,27 @@
             baseH += surf ? surf.z : 0;
         }
         baseH /= smartGreenPoints.length;
+        
+        // PLATEAU: compute front direction (point 0 = front, centroid→back)
+        let frontPt = smartGreenPoints[0];
+        let cx2 = 0, cz2 = 0;
+        for(let pt of smartGreenPoints) { cx2 += pt.x; cz2 += pt.z; }
+        cx2 /= smartGreenPoints.length;
+        cz2 /= smartGreenPoints.length;
+        // Front direction: from centroid toward first point
+        let frontDx = frontPt.x - cx2;
+        let frontDz = frontPt.z - cz2;
+        let frontLen = Math.sqrt(frontDx*frontDx + frontDz*frontDz) + 0.001;
+        frontDx /= frontLen; frontDz /= frontLen;
+        // Back direction is opposite: -frontDx, -frontDz
+        
+        // Get plateau height from slider (default 1.2m)
+        let platSlider = document.getElementById('sg-plateau-height');
+        let plateauRaise = platSlider ? parseFloat(platSlider.value) : 1.2;
+        
+        if(difficulty === 'PLATEAU') {
+            baseH += plateauRaise;
+        }
 
         // Point-in-polygon test (ray casting)
         function pointInPolygon(px, pz, polyPts) {
@@ -7173,18 +7194,31 @@
                         targetHeight += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.12) * 0.22
                                       + Math.sin(seedZ * 0.25 + seedX * 0.08) * 0.06
                                       + Math.cos(seedX * 0.20) * Math.sin(seedZ * 0.18) * 0.05;
+                    } else if(difficulty === 'PLATEAU') {
+                        // Back-to-front slope: project vertex onto front direction
+                        // dot > 0 = front side (lower), dot < 0 = back side (higher)
+                        let relX = vx - cx2;
+                        let relZ = vz - cz2;
+                        let dot = relX * frontDx + relZ * frontDz; // positive = front
+                        // Normalize dot by green radius for consistent slope
+                        let greenRadius = frontLen;
+                        let normalized = dot / (greenRadius + 0.001); // -1 (back) to +1 (front)
+                        // Back is higher: slope = -normalized * plateauRaise * 0.3
+                        targetHeight += -normalized * plateauRaise * 0.25;
+                        // Add subtle undulation
+                        targetHeight += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.06;
                     }
 
                     let currentH = positions[idx*3+2];
                     let influence;
 
                     if(isInside) {
-                        // Inside green: full influence
                         influence = 1.0;
                     } else {
-                        // Outside: smooth blend falloff over 'margin' meters
-                        influence = 1.0 - (distEdge / margin);
-                        influence = Math.max(0, influence * influence * (3 - 2 * influence)); // Smoothstep
+                        // PLATEAU gets steeper falloff edges (4m instead of full margin)
+                        let edgeMargin = (difficulty === 'PLATEAU') ? Math.min(margin, 4) : margin;
+                        influence = 1.0 - (distEdge / edgeMargin);
+                        influence = Math.max(0, influence * influence * (3 - 2 * influence));
                     }
 
                     positions[idx*3+2] = currentH + (targetHeight - currentH) * influence * 0.5;
@@ -8755,12 +8789,23 @@
     <h3 style="margin:0 0 10px 0; color:#fff; font-size:14px; text-transform:uppercase; letter-spacing:1px;">⛳ Smart Green Ready</h3>
     
     <!-- Difficulty Selector -->
-    <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; background:#1e293b; padding:8px 12px; border-radius:8px;">
         <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Contour</span>
         <button id="sg-diff-flat" onclick="setSGDiff('FLAT')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
         <button id="sg-diff-easy" onclick="setSGDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">EASY</button>
         <button id="sg-diff-med" onclick="setSGDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">MED</button>
         <button id="sg-diff-hard" onclick="setSGDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">HARD</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+        <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Shape</span>
+        <button id="sg-diff-plateau" onclick="setSGDiff('PLATEAU')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">PLATEAU</button>
+    </div>
+    
+    <!-- Plateau Height Slider (visible only when PLATEAU selected) -->
+    <div id="sg-plateau-group" style="display:none; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+        <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Height</span>
+        <input type="range" id="sg-plateau-height" min="0.5" max="3.0" value="1.2" step="0.1" style="flex:1; accent-color:#f59e0b; cursor:pointer;">
+        <span id="sg-plateau-val" style="color:#f59e0b; font-weight:bold; font-size:13px; min-width:35px;">1.2m</span>
     </div>
     
     <!-- Foregreen Width Slider -->
@@ -8786,14 +8831,20 @@
         });
         function setSGDiff(diff) {
             window.greenDifficulty = diff;
-            ['FLAT','EASY','MED','HARD'].forEach(d => {
+            ['FLAT','EASY','MED','HARD','PLATEAU'].forEach(d => {
                 let btn = document.getElementById('sg-diff-' + d.toLowerCase());
                 if(btn) {
                     btn.style.background = (d === diff) ? '#4ade80' : '#334155';
                     btn.style.color = (d === diff) ? '#0f172a' : '#94a3b8';
                 }
             });
+            // Show/hide plateau height slider
+            let pg = document.getElementById('sg-plateau-group');
+            if(pg) pg.style.display = (diff === 'PLATEAU') ? 'flex' : 'none';
         }
+        document.getElementById('sg-plateau-height').addEventListener('input', function() {
+            document.getElementById('sg-plateau-val').textContent = parseFloat(this.value).toFixed(1) + 'm';
+        });
     </script>
     
     <!-- Build + Clear -->
