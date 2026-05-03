@@ -4197,6 +4197,21 @@
                 planeGeo.computeVertexNormals();
             }
 
+            // RESET water mesh to -99 BEFORE loading — prevents ghost water
+            if (typeof waterGeo !== 'undefined' && waterGeo) {
+                let wPos = waterGeo.attributes.position.array;
+                for (let i = 2; i < wPos.length; i += 3) {
+                    wPos[i] = -99;
+                    window.waterBaseZ[(i-2)/3] = -99;
+                }
+                waterGeo.attributes.position.needsUpdate = true;
+                if (typeof wCtx !== 'undefined') {
+                    wCtx.fillStyle = '#000000';
+                    wCtx.fillRect(0, 0, 4096, 4096);
+                    if (typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
+                }
+            }
+
             // Restore water heightmap
             if (data.w && data.w.length > 0 && typeof waterGeo !== 'undefined' && waterGeo) {
                 let wPos = waterGeo.attributes.position.array;
@@ -4419,6 +4434,21 @@
                     let mapData = (typeof arr.terrain_heightmap === 'string') ? JSON.parse(arr.terrain_heightmap) : arr.terrain_heightmap;
                     let pos = planeGeo.attributes.position;
                     let wPos = typeof waterGeo !== 'undefined' ? waterGeo.attributes.position : null;
+                    
+                    // RESET water mesh to -99 BEFORE loading — prevents ghost water in bunkers
+                    if (wPos) {
+                        for(let i=0; i < wPos.count; i++) {
+                            wPos.setZ(i, -99);
+                            window.waterBaseZ[i] = -99;
+                        }
+                        wPos.needsUpdate = true;
+                    }
+                    // Clear water mask to black (no water visible)
+                    if (typeof wCtx !== 'undefined') {
+                        wCtx.fillStyle = '#000000';
+                        wCtx.fillRect(0, 0, 4096, 4096);
+                        if (typeof waterTex !== 'undefined') waterTex.needsUpdate = true;
+                    }
                     
                     let groundArr = Array.isArray(mapData) ? mapData : mapData.ground;
                     let waterArr = Array.isArray(mapData) ? null : mapData.water;
