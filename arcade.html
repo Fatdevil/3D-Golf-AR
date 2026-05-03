@@ -6485,7 +6485,7 @@
         else if (toolName === 'COLORIZE') hintHtml = "Left Click/Drag: <b>Paint object with selected color</b>";
         else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
         else if (toolName === 'RAMP') hintHtml = "Left Drag: <b>Draw ramp</b> from start to cursor — creates linear slope";
-        else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b>";
+        else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Loop closes automatically at 3+ points";
         else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter trees</b> (respects biome toggle)";
         else if (toolName === 'NOISE') hintHtml = "Hold Left: <b>Add organic bumps</b><br>Hold Right: <b>Erode terrain</b>";
         
@@ -6948,9 +6948,11 @@
         if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
 
         let sMat = new THREE.MeshBasicMaterial({ color: 0xec4899 });
-        let sGeo = new THREE.SphereGeometry(1.0, 8, 8);
-        splinePoints.forEach(pt => {
-            let s = new THREE.Mesh(sGeo, sMat);
+        let sMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8 }); // Blue = start/close point
+        let sGeo = new THREE.SphereGeometry(0.4, 8, 8);
+        let sGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
+        splinePoints.forEach((pt, idx) => {
+            let s = new THREE.Mesh(idx === 0 ? sGeoFirst : sGeo, idx === 0 ? sMatFirst : sMat);
             s.position.copy(pt);
             s.position.y += 0.5;
             scene.add(s);
@@ -6988,9 +6990,11 @@
         if(smartGreenLineMesh) { scene.remove(smartGreenLineMesh); smartGreenLineMesh = null; }
 
         let sMat = new THREE.MeshBasicMaterial({ color: 0x4ade80 });
-        let sGeo = new THREE.SphereGeometry(1.0, 8, 8);
-        smartGreenPoints.forEach(pt => {
-            let s = new THREE.Mesh(sGeo, sMat);
+        let sMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8 }); // Blue = start point
+        let sGeo = new THREE.SphereGeometry(0.4, 8, 8);
+        let sGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
+        smartGreenPoints.forEach((pt, idx) => {
+            let s = new THREE.Mesh(idx === 0 ? sGeoFirst : sGeo, idx === 0 ? sMatFirst : sMat);
             s.position.copy(pt);
             s.position.y += 0.5;
             scene.add(s);
