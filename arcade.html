@@ -7022,6 +7022,67 @@
         updateSmartGreenPreview();
     };
 
+    // === SHARED: Uniform polygon offset using edge normals ===
+    // Produces a polygon expanded by 'dist' meters with uniform border width
+    function offsetPolygon(densePts, dist) {
+        let n = densePts.length;
+        let result = [];
+        for(let i = 0; i < n; i++) {
+            // Adjacent edges
+            let prev = (i - 1 + n) % n;
+            let next = (i + 1) % n;
+            // Edge vectors
+            let e1x = densePts[i].x - densePts[prev].x;
+            let e1z = densePts[i].z - densePts[prev].z;
+            let e2x = densePts[next].x - densePts[i].x;
+            let e2z = densePts[next].z - densePts[i].z;
+            // Outward normals (perpendicular, pointing outward for CW winding)
+            let len1 = Math.sqrt(e1x*e1x + e1z*e1z) + 0.0001;
+            let n1x = -e1z / len1, n1z = e1x / len1;
+            let len2 = Math.sqrt(e2x*e2x + e2z*e2z) + 0.0001;
+            let n2x = -e2z / len2, n2z = e2x / len2;
+            // Average normal at vertex
+            let nx = n1x + n2x, nz = n1z + n2z;
+            let nLen = Math.sqrt(nx*nx + nz*nz) + 0.0001;
+            nx /= nLen; nz /= nLen;
+            // Miter length to maintain uniform width at corners
+            let dot = nx * n1x + nz * n1z;
+            let miter = dot > 0.25 ? dist / dot : dist * 2; // Clamp at sharp corners
+            result.push({ x: densePts[i].x + nx * miter, z: densePts[i].z + nz * miter });
+        }
+        // Check winding: if the offset went INWARD instead of outward, flip
+        // Simple test: compare area of original vs offset
+        let areaOrig = 0, areaOff = 0;
+        for(let i = 0; i < n; i++) {
+            let j = (i + 1) % n;
+            areaOrig += densePts[i].x * densePts[j].z - densePts[j].x * densePts[i].z;
+            areaOff += result[i].x * result[j].z - result[j].x * result[i].z;
+        }
+        if(Math.abs(areaOff) < Math.abs(areaOrig)) {
+            // Offset went inward — flip direction
+            result = [];
+            for(let i = 0; i < n; i++) {
+                let prev = (i - 1 + n) % n;
+                let next = (i + 1) % n;
+                let e1x = densePts[i].x - densePts[prev].x;
+                let e1z = densePts[i].z - densePts[prev].z;
+                let e2x = densePts[next].x - densePts[i].x;
+                let e2z = densePts[next].z - densePts[i].z;
+                let len1 = Math.sqrt(e1x*e1x + e1z*e1z) + 0.0001;
+                let n1x = e1z / len1, n1z = -e1x / len1;
+                let len2 = Math.sqrt(e2x*e2x + e2z*e2z) + 0.0001;
+                let n2x = e2z / len2, n2z = -e2x / len2;
+                let nx = n1x + n2x, nz = n1z + n2z;
+                let nLen = Math.sqrt(nx*nx + nz*nz) + 0.0001;
+                nx /= nLen; nz /= nLen;
+                let dot = nx * n1x + nz * n1z;
+                let miter = dot > 0.25 ? dist / dot : dist * 2;
+                result.push({ x: densePts[i].x + nx * miter, z: densePts[i].z + nz * miter });
+            }
+        }
+        return result;
+    }
+
     // === SPLINE-BASED SMART GREEN: Foregreen Ring + Green Fill + Terrain Sculpting ===
     window.executeSplineSmartGreen = function() {
         if(smartGreenPoints.length < 3) return;
@@ -7048,12 +7109,6 @@
         // === 1. PAINT: Foregreen ring (expanded polygon) + Green fill ===
         pCtx.save();
 
-        // Calculate polygon center for outward expansion
-        let cx = 0, cz = 0;
-        for(let pt of densePts) { cx += pt.x; cz += pt.z; }
-        cx /= densePts.length;
-        cz /= densePts.length;
-
         // Edge sharpness: 100 = pixel-perfect sharp (default), 0 = soft feathered edge
         let sharpSlider = document.getElementById('sg-edge-sharpness');
         let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
@@ -7064,18 +7119,13 @@
             if(blurPx > 0) pCtx.filter = 'blur(' + blurPx + 'px)';
         }
 
-        // Draw foregreen ring: expanded polygon
+        // Draw foregreen ring: uniform-width offset polygon
         if(foregreenWidth > 0) {
+            let expandedPts = offsetPolygon(densePts, foregreenWidth);
             pCtx.beginPath();
-            densePts.forEach((pt, i) => {
-                let dx = pt.x - cx;
-                let dz = pt.z - cz;
-                let len = Math.sqrt(dx*dx + dz*dz) + 0.001;
-                let expandedX = pt.x + (dx/len) * foregreenWidth;
-                let expandedZ = pt.z + (dz/len) * foregreenWidth;
-
-                let pxX = ((expandedX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
-                let pxY = ((expandedZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            expandedPts.forEach((pt, i) => {
+                let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
                 if(i === 0) pCtx.moveTo(pxX, pxY);
                 else pCtx.lineTo(pxX, pxY);
             });
@@ -7444,24 +7494,19 @@
             if(blurPx > 0) pCtx.filter = 'blur(' + blurPx + 'px)';
         }
 
-        // Polygon center for outward expansion
+        // Polygon center (still needed for Smart Green center ref)
         let cx = 0, cz = 0;
         for(let pt of densePts) { cx += pt.x; cz += pt.z; }
         cx /= densePts.length;
         cz /= densePts.length;
 
-        // Draw semi-rough ring (expanded polygon)
+        // Draw semi-rough ring: uniform-width offset polygon
         if(semiRoughWidth > 0) {
+            let expandedPts = offsetPolygon(densePts, semiRoughWidth);
             pCtx.beginPath();
-            densePts.forEach((pt, i) => {
-                let dx = pt.x - cx;
-                let dz = pt.z - cz;
-                let len = Math.sqrt(dx*dx + dz*dz) + 0.001;
-                let expandedX = pt.x + (dx/len) * semiRoughWidth;
-                let expandedZ = pt.z + (dz/len) * semiRoughWidth;
-
-                let pxX = ((expandedX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
-                let pxY = ((expandedZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            expandedPts.forEach((pt, i) => {
+                let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
                 if(i === 0) pCtx.moveTo(pxX, pxY);
                 else pCtx.lineTo(pxX, pxY);
             });
