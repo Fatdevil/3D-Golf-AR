@@ -7047,7 +7047,7 @@
             nx /= nLen; nz /= nLen;
             // Miter length to maintain uniform width at corners
             let dot = nx * n1x + nz * n1z;
-            let miter = dot > 0.25 ? dist / dot : dist * 2; // Clamp at sharp corners
+            let miter = dot > 0.25 ? dist / dot : dist * 1.2; // Tight clamp at sharp corners
             result.push({ x: densePts[i].x + nx * miter, z: densePts[i].z + nz * miter });
         }
         // Check winding: if the offset went INWARD instead of outward, flip
@@ -7076,7 +7076,7 @@
                 let nLen = Math.sqrt(nx*nx + nz*nz) + 0.0001;
                 nx /= nLen; nz /= nLen;
                 let dot = nx * n1x + nz * n1z;
-                let miter = dot > 0.25 ? dist / dot : dist * 2;
+                let miter = dot > 0.25 ? dist / dot : dist * 1.2;
                 result.push({ x: densePts[i].x + nx * miter, z: densePts[i].z + nz * miter });
             }
         }
