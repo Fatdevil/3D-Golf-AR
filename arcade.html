@@ -8994,7 +8994,7 @@
                         if (shouldConcede) {
                             // Auto-concede handled by evaluateNextTurn
                             evaluateNextTurn();
-                        } else if (!shouldConcede && distFt <= gimmeMax) {
+                        } else if (!shouldConcede && isGreen && distFt <= gimmeMax) {
                             p.strokes += 1;
                             p.holedOut = true;
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
