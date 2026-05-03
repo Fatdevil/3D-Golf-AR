@@ -831,7 +831,7 @@
                             <span>GIMME DISTANCE</span>
                             <span id="gimme-val" style="color:#fff;">10 ft</span>
                         </label>
-                        <input type="range" id="set-gimme-dist" min="4" max="20" value="10" oninput="document.getElementById('gimme-val').innerText = this.value + ' ft'" style="width:100%; accent-color:#fbbf24;">
+                        <input type="range" id="set-gimme-dist" min="4" max="20" value="10" oninput="document.getElementById('gimme-val').innerText = this.value + ' ft'; if(window.matchSettings) window.matchSettings.gimmeDist = parseInt(this.value); if(window.updateGimmeCircle) window.updateGimmeCircle();" style="width:100%; accent-color:#fbbf24;">
                     </div>
                     <div style="margin-bottom:15px;">
                         <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">AUTO-PUTT SYSTEM</label>
@@ -3712,10 +3712,63 @@
         group.add(pole);
         group.add(pflag);
         
+        // Gimme circle — visual ring showing gimme distance
+        let gimmeRadiusM = ((window.matchSettings ? window.matchSettings.gimmeDist : 10) / 3.28084);
+        let circlePoints = [];
+        let segments = 64;
+        for (let i = 0; i <= segments; i++) {
+            let angle = (i / segments) * Math.PI * 2;
+            circlePoints.push(new THREE.Vector3(
+                Math.cos(angle) * gimmeRadiusM,
+                0.08,  // Slightly above ground
+                Math.sin(angle) * gimmeRadiusM
+            ));
+        }
+        let circleGeo = new THREE.BufferGeometry().setFromPoints(circlePoints);
+        let circleMat = new THREE.LineDashedMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.35,
+            dashSize: 0.3,
+            gapSize: 0.15,
+            depthTest: true
+        });
+        let gimmeCircle = new THREE.Line(circleGeo, circleMat);
+        gimmeCircle.computeLineDistances(); // Required for dashed lines
+        gimmeCircle.name = 'gimmeCircle';
+        group.add(gimmeCircle);
+        
         group.position.set(x, y, z);
         scene.add(group);
         return group;
     }
+    
+    // Update gimme circle radius (call when gimmeDist slider changes)
+    window.updateGimmeCircle = function() {
+        let gimmeRadiusM = (window.matchSettings.gimmeDist / 3.28084);
+        let segments = 64;
+        // Update on ALL hole flags
+        for (let i = 0; i < MAX_HOLES; i++) {
+            let h = courseHoles[i];
+            if (h.flagMesh) {
+                let circle = h.flagMesh.getObjectByName('gimmeCircle');
+                if (circle) {
+                    let pts = [];
+                    for (let j = 0; j <= segments; j++) {
+                        let angle = (j / segments) * Math.PI * 2;
+                        pts.push(new THREE.Vector3(
+                            Math.cos(angle) * gimmeRadiusM,
+                            0.08,
+                            Math.sin(angle) * gimmeRadiusM
+                        ));
+                    }
+                    circle.geometry.dispose();
+                    circle.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+                    circle.computeLineDistances();
+                }
+            }
+        }
+    };
 
     // === RANGE TEE SYSTEM ===
     window.rangeUseMeters = true;
