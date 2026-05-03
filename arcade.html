@@ -7410,6 +7410,199 @@
         clearSmartGreen();
     };
 
+    // === SMART FAIRWAY: Fairway Fill + Semi-Rough Ring + Rolling Terrain ===
+    window.executeSmartFairway = function() {
+        if(smartGreenPoints.length < 3) return;
+        saveUndoState();
+
+        let cfg = window.CURRENT_BIOME_CONFIG;
+        let fairwayColor = cfg.fairwayColor || '#7db952';
+        let semiRoughColor = cfg.semiColor || '#6b9e3d';
+        let difficulty = window._fairwayDifficulty || 'FLAT';
+
+        // Random seed for unique terrain per build
+        let seedX = (Math.random() - 0.5) * 200;
+        let seedZ = (Math.random() - 0.5) * 200;
+
+        // Semi-rough width from slider
+        let srSlider = document.getElementById('sf-semirough-width');
+        let semiRoughWidth = srSlider ? parseFloat(srSlider.value) : 2.0;
+
+        // Build closed curve
+        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
+        let numSamples = Math.max(200, smartGreenPoints.length * 40);
+        let densePts = curve.getPoints(numSamples);
+
+        // === 1. PAINT: Semi-rough ring + Fairway fill ===
+        pCtx.save();
+
+        // Edge sharpness
+        let sharpSlider = document.getElementById('sg-edge-sharpness');
+        let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
+        if(sharpness < 100) {
+            let blurPx = Math.round((100 - sharpness) * 0.06);
+            if(blurPx > 0) pCtx.filter = 'blur(' + blurPx + 'px)';
+        }
+
+        // Polygon center for outward expansion
+        let cx = 0, cz = 0;
+        for(let pt of densePts) { cx += pt.x; cz += pt.z; }
+        cx /= densePts.length;
+        cz /= densePts.length;
+
+        // Draw semi-rough ring (expanded polygon)
+        if(semiRoughWidth > 0) {
+            pCtx.beginPath();
+            densePts.forEach((pt, i) => {
+                let dx = pt.x - cx;
+                let dz = pt.z - cz;
+                let len = Math.sqrt(dx*dx + dz*dz) + 0.001;
+                let expandedX = pt.x + (dx/len) * semiRoughWidth;
+                let expandedZ = pt.z + (dz/len) * semiRoughWidth;
+
+                let pxX = ((expandedX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+                let pxY = ((expandedZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+                if(i === 0) pCtx.moveTo(pxX, pxY);
+                else pCtx.lineTo(pxX, pxY);
+            });
+            pCtx.closePath();
+            pCtx.fillStyle = semiRoughColor;
+            pCtx.fill();
+        }
+
+        // Draw fairway fill (inner polygon, on top)
+        pCtx.beginPath();
+        densePts.forEach((pt, i) => {
+            let pxX = ((pt.x + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            let pxY = ((pt.z + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096;
+            if(i === 0) pCtx.moveTo(pxX, pxY);
+            else pCtx.lineTo(pxX, pxY);
+        });
+        pCtx.closePath();
+        pCtx.fillStyle = fairwayColor;
+        pCtx.fill();
+
+        pCtx.filter = 'none';
+        pCtx.restore();
+        mapTex.needsUpdate = true;
+        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+
+        // === 2. TERRAIN SCULPTING: Rolling undulations ===
+        let positions = planeGeo.attributes.position.array;
+        let step = TERRAIN_SIZE / TERRAIN_SEGS;
+
+        // Bounding box
+        let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
+        for(let pt of densePts) {
+            if(pt.x < pathMinX) pathMinX = pt.x;
+            if(pt.x > pathMaxX) pathMaxX = pt.x;
+            if(pt.z < pathMinZ) pathMinZ = pt.z;
+            if(pt.z > pathMaxZ) pathMaxZ = pt.z;
+        }
+        let margin = semiRoughWidth + 8;
+
+        let gxStart = Math.max(0, Math.floor((pathMinX - margin + TERRAIN_SIZE/2) / step));
+        let gxEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxX + margin + TERRAIN_SIZE/2) / step));
+        let gzStart = Math.max(0, Math.floor((pathMinZ - margin + TERRAIN_SIZE/2) / step));
+        let gzEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + TERRAIN_SIZE/2) / step));
+
+        // Average height as base
+        let baseH = 0;
+        for(let pt of smartGreenPoints) {
+            let surf = localGetTerrainAt(pt.x, -pt.z);
+            baseH += surf ? surf.z : 0;
+        }
+        baseH /= smartGreenPoints.length;
+
+        // Point-in-polygon
+        function pointInPolygon(px, pz, polyPts) {
+            let inside = false;
+            for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+                let xi = polyPts[i].x, zi = polyPts[i].z;
+                let xj = polyPts[j].x, zj = polyPts[j].z;
+                if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+        function distToPolygon(px, pz, polyPts) {
+            let minDist = Infinity;
+            for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+                let ax = polyPts[j].x, az = polyPts[j].z;
+                let bx = polyPts[i].x, bz = polyPts[i].z;
+                let dx = bx - ax, dz = bz - az;
+                let len2 = dx*dx + dz*dz;
+                let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
+                let projX = ax + t*dx, projZ = az + t*dz;
+                let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
+                if(d < minDist) minDist = d;
+            }
+            return minDist;
+        }
+
+        // Multiple passes for convergence
+        for(let pass = 0; pass < 4; pass++) {
+            for(let gz = gzStart; gz <= gzEnd; gz++) {
+                for(let gx = gxStart; gx <= gxEnd; gx++) {
+                    let idx = gz * (TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+
+                    let isInside = pointInPolygon(vx, vz, densePts);
+                    let distEdge = distToPolygon(vx, vz, densePts);
+
+                    if(!isInside && distEdge > margin) continue;
+
+                    // Fairway rolling terrain: large-scale, soft, natural mounds
+                    // Low-frequency sin waves = long rolling hills
+                    let sx = vx + seedX;
+                    let sz = vz + seedZ;
+                    let targetHeight = baseH;
+
+                    if(difficulty === 'EASY') {
+                        // Gentle rolls ~0.3m amplitude, very long wavelength
+                        targetHeight += Math.sin(sx * 0.025) * Math.cos(sz * 0.03) * 0.30;
+                    } else if(difficulty === 'MED') {
+                        // Medium rolls ~0.6m, two overlapping waves
+                        targetHeight += Math.sin(sx * 0.03) * Math.cos(sz * 0.025) * 0.45;
+                        targetHeight += Math.sin(sx * 0.015 + sz * 0.02) * 0.20;
+                    } else if(difficulty === 'HARD') {
+                        // Strong undulations ~1.0m, multi-frequency
+                        targetHeight += Math.sin(sx * 0.035) * Math.cos(sz * 0.03) * 0.55;
+                        targetHeight += Math.sin(sx * 0.02 + sz * 0.025) * 0.30;
+                        targetHeight += Math.cos(sx * 0.05) * Math.sin(sz * 0.04) * 0.15;
+                    }
+                    // FLAT = no undulation, just flatten to baseH
+
+                    let currentH = positions[idx*3+2];
+                    let influence;
+
+                    if(isInside) {
+                        influence = 1.0;
+                    } else {
+                        influence = 1.0 - (distEdge / margin);
+                        influence = Math.max(0, influence * influence * (3 - 2 * influence));
+                    }
+
+                    positions[idx*3+2] = currentH + (targetHeight - currentH) * influence * 0.5;
+                }
+            }
+        }
+
+        planeGeo.attributes.position.needsUpdate = true;
+        planeGeo.computeVertexNormals();
+        planeGeo.computeBoundingBox();
+        planeGeo.computeBoundingSphere();
+        snapObjectsToGround();
+
+        if(window.slopeOverlayActive) window.updateSlopeOverlay();
+        if(window.contourLinesActive) window.updateContourLines();
+        if(window.elevationHeatmapActive) window.updateElevationHeatmap();
+
+        clearSmartGreen();
+    };
+
     window.executeSplineBoundary = function(layerType) {
         if(splinePoints.length < 3) return;
         saveUndoState();
@@ -8963,6 +9156,7 @@
         <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Type</span>
         <button id="sb-type-green" onclick="setSmartBuilderType('GREEN')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">⛳ GREEN</button>
         <button id="sb-type-bunker" onclick="setSmartBuilderType('BUNKER')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">🏖️ BUNKER</button>
+        <button id="sb-type-fairway" onclick="setSmartBuilderType('FAIRWAY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">🏌️ FAIRWAY</button>
     </div>
 
     <!-- GREEN controls -->
@@ -9006,6 +9200,24 @@
         <div style="color:#64748b; font-size:9px; margin-bottom:8px;">First point = face side (lip). Place it toward the green.</div>
     </div>
 
+    <!-- FAIRWAY controls -->
+    <div id="sb-fairway-controls" style="display:none;">
+        <!-- Terrain Contour -->
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+            <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Terrain</span>
+            <button id="sf-diff-flat" onclick="setSFDiff('FLAT')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">FLAT</button>
+            <button id="sf-diff-easy" onclick="setSFDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">EASY</button>
+            <button id="sf-diff-med" onclick="setSFDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">MED</button>
+            <button id="sf-diff-hard" onclick="setSFDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:6px 10px; font-size:10px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;">HARD</button>
+        </div>
+        <!-- Semi-Rough Ring Width -->
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
+            <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Semi-Rough</span>
+            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" style="flex:1; accent-color:#6b9e3d; cursor:pointer;">
+            <span id="sf-semirough-val" style="color:#6b9e3d; font-weight:bold; font-size:13px; min-width:35px;">2.0m</span>
+        </div>
+    </div>
+
     <!-- Edge Sharpness Slider (shared) -->
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; background:#1e293b; padding:8px 12px; border-radius:8px;">
         <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Edge</span>
@@ -9015,10 +9227,11 @@
     <script>
         window._smartBuilderType = 'GREEN';
         window._smartBunkerShape = 'BOWL';
+        window._fairwayDifficulty = 'FLAT';
         
         function setSmartBuilderType(type) {
             window._smartBuilderType = type;
-            ['GREEN','BUNKER'].forEach(t => {
+            ['GREEN','BUNKER','FAIRWAY'].forEach(t => {
                 let btn = document.getElementById('sb-type-' + t.toLowerCase());
                 if(btn) {
                     btn.style.background = (t === type) ? '#4ade80' : '#334155';
@@ -9027,15 +9240,20 @@
             });
             document.getElementById('sb-green-controls').style.display = (type === 'GREEN') ? 'block' : 'none';
             document.getElementById('sb-bunker-controls').style.display = (type === 'BUNKER') ? 'block' : 'none';
+            document.getElementById('sb-fairway-controls').style.display = (type === 'FAIRWAY') ? 'block' : 'none';
             // Update panel border color
             let panel = document.getElementById('smart-green-action-panel');
-            panel.style.borderColor = (type === 'BUNKER') ? '#f59e0b' : '#4ade80';
+            let colors = {GREEN: '#4ade80', BUNKER: '#f59e0b', FAIRWAY: '#7db952'};
+            panel.style.borderColor = colors[type] || '#4ade80';
             // Update build button
             let buildBtn = document.getElementById('sb-build-btn');
             if(buildBtn) {
                 if(type === 'BUNKER') {
                     buildBtn.textContent = '🏖️ Build Bunker';
                     buildBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                } else if(type === 'FAIRWAY') {
+                    buildBtn.textContent = '🏌️ Build Fairway';
+                    buildBtn.style.background = 'linear-gradient(135deg, #7db952, #6b9e3d)';
                 } else {
                     buildBtn.textContent = '⛳ Build Green';
                     buildBtn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
@@ -9066,6 +9284,9 @@
         document.getElementById('sb-bunker-lip').addEventListener('input', function() {
             document.getElementById('sb-bunker-lip-val').textContent = parseFloat(this.value).toFixed(2) + 'm';
         });
+        document.getElementById('sf-semirough-width').addEventListener('input', function() {
+            document.getElementById('sf-semirough-val').textContent = parseFloat(this.value).toFixed(1) + 'm';
+        });
         function setSGDiff(diff) {
             window.greenDifficulty = diff;
             ['FLAT','EASY','MED','HARD'].forEach(d => {
@@ -9076,10 +9297,22 @@
                 }
             });
         }
+        function setSFDiff(diff) {
+            window._fairwayDifficulty = diff;
+            ['FLAT','EASY','MED','HARD'].forEach(d => {
+                let btn = document.getElementById('sf-diff-' + d.toLowerCase());
+                if(btn) {
+                    btn.style.background = (d === diff) ? '#4ade80' : '#334155';
+                    btn.style.color = (d === diff) ? '#0f172a' : '#94a3b8';
+                }
+            });
+        }
         
         function executeSmartBuilder() {
             if(window._smartBuilderType === 'BUNKER') {
                 executeSmartBunker();
+            } else if(window._smartBuilderType === 'FAIRWAY') {
+                executeSmartFairway();
             } else {
                 executeSplineSmartGreen();
             }
