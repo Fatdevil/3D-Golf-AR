@@ -7775,47 +7775,53 @@
         if(document.getElementById('st-tee-red') && document.getElementById('st-tee-red').checked) teesToPlace.push({type: 'red', color: 0xef4444});
 
         if(teesToPlace.length > 0) {
-            // Centerline: point 1 (back) → point 2 (aim direction toward fairway)
-            let backPt = smartGreenPoints[0]; // First point = back of tee
+            // Direction: point 1 → point 2 (aim toward fairway)
+            let backPt = smartGreenPoints[0];
             let aimPt = smartGreenPoints.length > 1 ? smartGreenPoints[1] : smartGreenPoints[0];
             
-            // Direction from back toward aim point
             let dirX = aimPt.x - backPt.x;
             let dirZ = aimPt.z - backPt.z;
             let dirLen = Math.sqrt(dirX*dirX + dirZ*dirZ) + 0.001;
             dirX /= dirLen; dirZ /= dirLen;
 
-            // Total tee box length: use max extent of polygon along this direction
-            let maxProj = 0;
+            // Polygon centroid
+            let cx = 0, cz = 0;
+            for(let pt of smartGreenPoints) { cx += pt.x; cz += pt.z; }
+            cx /= smartGreenPoints.length;
+            cz /= smartGreenPoints.length;
+
+            // Project all points onto aim direction to find extent
+            let minProj = Infinity, maxProj = -Infinity;
             for(let pt of smartGreenPoints) {
-                let dx = pt.x - backPt.x;
-                let dz = pt.z - backPt.z;
+                let dx = pt.x - cx;
+                let dz = pt.z - cz;
                 let proj = dx * dirX + dz * dirZ;
+                if(proj < minProj) minProj = proj;
                 if(proj > maxProj) maxProj = proj;
             }
-            let totalLen = maxProj > 1 ? maxProj : dirLen * 2;
+            let totalLen = maxProj - minProj;
+            if(totalLen < 2) totalLen = dirLen * 2;
 
-            // Space tees evenly along centerline
+            // Place markers along centerline through centroid
             let hole = courseHoles[currentHoleIndex];
             let spacing = totalLen / (teesToPlace.length + 1);
+            // Start from back edge of tee box (centroid + minProj along dir)
+            let startX = cx + dirX * minProj;
+            let startZ = cz + dirZ * minProj;
 
-            // Calculate rotation: tee markers face perpendicular to aim direction
             let teeRot = Math.atan2(dirX, dirZ);
 
             for(let i = 0; i < teesToPlace.length; i++) {
                 let t = teesToPlace[i];
                 let dist = spacing * (i + 1);
-                let tx = backPt.x + dirX * dist;
-                let tz = backPt.z + dirZ * dist;
+                let tx = startX + dirX * dist;
+                let tz = startZ + dirZ * dist;
 
-                // Get terrain height at this position
                 let surf = localGetTerrainAt(tx, -tz);
                 let ty = surf ? surf.z : baseH;
 
-                // Remove old tee mesh if exists
                 if(hole.teeMeshes[t.type]) scene.remove(hole.teeMeshes[t.type]);
 
-                // Create new tee
                 hole.tees[t.type] = { x: tx, y: ty, z: tz, rot: teeRot };
                 hole.teeMeshes[t.type] = createTeeObject(tx, ty, tz, t.color);
                 hole.teeMeshes[t.type].rotation.y = teeRot;
