@@ -658,6 +658,18 @@
                     </div>
                 </div>
 
+                <!-- PARTICLE SIZE (inside ENV panel) -->
+                <div style="margin-top:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="color:#94a3b8; font-size:10px; font-weight:bold;">📐 SIZE</label>
+                        <span id="particle-size-label" style="color:#4ade80; font-size:10px;">1.0×</span>
+                    </div>
+                    <input type="range" id="set-particle-size" min="0.2" max="4.0" step="0.1" value="1.0" oninput="if(window.ParticleEngine) { window.ParticleEngine.setSize(this.value); document.getElementById('particle-size-label').textContent=parseFloat(this.value).toFixed(1)+'×'; }" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                    <div style="display:flex; justify-content:space-between; color:#475569; font-size:9px; margin-top:2px;">
+                        <span>Tiny</span><span>Huge</span>
+                    </div>
+                </div>
+
                 <!-- WEATHER (inside ENV panel) -->
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -1084,6 +1096,13 @@
                     <input type="range" id="ir-particle-intensity" min="0" max="1" step="0.05" value="0.6" oninput="if(window.ParticleEngine) window.ParticleEngine.setIntensity(this.value);" style="width:100%; accent-color:#4ade80;">
                 </div>
                 <div style="margin-top:10px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                        <span>SIZE</span>
+                        <span id="ir-particle-size-label" style="color:#fff;">1.0×</span>
+                    </label>
+                    <input type="range" id="ir-particle-size" min="0.2" max="4.0" step="0.1" value="1.0" oninput="if(window.ParticleEngine) window.ParticleEngine.setSize(this.value);" style="width:100%; accent-color:#4ade80;">
+                </div>
+                <div style="margin-top:10px;">
                     <label style="color:#94a3b8; font-size:12px; font-weight:bold;">WEATHER</label>
                     <select id="ir-weather" onchange="if(window.ParticleEngine) window.ParticleEngine.setWeather(this.value);" style="width:100%; background:#0f172a; color:#38bdf8; border:1px solid #334155; border-radius:6px; padding:6px 8px; font-size:12px; font-weight:bold; cursor:pointer; margin-top:4px;">
                         <option value="CLEAR">☀️ Clear</option>
@@ -1343,6 +1362,16 @@
             ['particle-int-label', 'ir-particle-int-label'].forEach(id => {
                 let el = document.getElementById(id);
                 if (el) el.innerText = Math.round(partIntensity * 100) + '%';
+            });
+            // Size slider sync
+            let partSize = window.ParticleEngine.getSize();
+            ['set-particle-size', 'ir-particle-size'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.value = partSize;
+            });
+            ['particle-size-label', 'ir-particle-size-label'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.innerText = partSize.toFixed(1) + '×';
             });
             // Weather dropdown sync
             let currentWeather = window.ParticleEngine.getWeather();
@@ -4307,7 +4336,7 @@
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
                 is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
-                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR' },
+                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR' },
                 owner_id: window.GolfAuth?.userId || null
             };
             
@@ -4658,6 +4687,9 @@
                 if (arr.theme_data && window.ParticleEngine) {
                     if (typeof arr.theme_data.particleIntensity === 'number') {
                         window.ParticleEngine.setIntensity(arr.theme_data.particleIntensity);
+                    }
+                    if (typeof arr.theme_data.particleSize === 'number') {
+                        window.ParticleEngine.setSize(arr.theme_data.particleSize);
                     }
                     if (arr.theme_data.biomeId) {
                         window.ParticleEngine.activateBiome(arr.theme_data.biomeId);

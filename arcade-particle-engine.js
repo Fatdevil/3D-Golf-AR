@@ -27,6 +27,7 @@
     let _camera      = null;
     let _enabled     = true;
     let _intensity   = 0.6;
+    let _sizeMultiplier = 1.0;  // 0.3 = tiny, 1.0 = normal, 3.0 = huge
     let _clock       = 0;
     let _initialized = false;
 
@@ -190,12 +191,13 @@
             let data = JSON.parse(saved);
             if (typeof data.enabled === 'boolean') _enabled = data.enabled;
             if (typeof data.intensity === 'number') _intensity = data.intensity;
+            if (typeof data.sizeMultiplier === 'number') _sizeMultiplier = data.sizeMultiplier;
         }
     } catch(e) {}
 
     function _save() {
         try {
-            localStorage.setItem('golfos_particles', JSON.stringify({ enabled: _enabled, intensity: _intensity }));
+            localStorage.setItem('golfos_particles', JSON.stringify({ enabled: _enabled, intensity: _intensity, sizeMultiplier: _sizeMultiplier }));
         } catch(e) {}
     }
 
@@ -233,7 +235,7 @@
         geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
         let material = new THREE.PointsMaterial({
-            size: preset.type === 'streak' ? 1.0 : 2.0,
+            size: (preset.type === 'streak' ? 1.0 : 2.0) * _sizeMultiplier,
             vertexColors: true,
             transparent: true,
             opacity: preset.type === 'streak' ? 0.5 : 0.8,
@@ -514,6 +516,32 @@
 
     function isEnabled() { return _enabled; }
     function getIntensity() { return _intensity; }
+    function getSize() { return _sizeMultiplier; }
+
+    function setSize(val) {
+        _sizeMultiplier = Math.max(0.2, Math.min(4.0, parseFloat(val) || 1.0));
+        _save();
+
+        // Update material size on both layers
+        if (_biomeLayer && _biomeLayer.mesh) {
+            let baseSize = _biomeLayer.preset.type === 'streak' ? 1.0 : 2.0;
+            _biomeLayer.mesh.material.size = baseSize * _sizeMultiplier;
+        }
+        if (_weatherLayer && _weatherLayer.mesh) {
+            let baseSize = _weatherLayer.preset.type === 'streak' ? 1.0 : 2.0;
+            _weatherLayer.mesh.material.size = baseSize * _sizeMultiplier;
+        }
+
+        // Sync UI
+        ['set-particle-size', 'ir-particle-size'].forEach(id => {
+            let el = document.getElementById(id);
+            if (el) el.value = _sizeMultiplier;
+        });
+        ['particle-size-label', 'ir-particle-size-label'].forEach(id => {
+            let el = document.getElementById(id);
+            if (el) el.innerText = _sizeMultiplier.toFixed(1) + '×';
+        });
+    }
 
     function dispose() {
         _disposeLayer(_biomeLayer);
@@ -532,6 +560,8 @@
         isEnabled,
         setIntensity,
         getIntensity,
+        setSize,
+        getSize,
         activateBiome,
         setWeather,
         getWeather,
