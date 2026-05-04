@@ -24,6 +24,7 @@
 <script src="arcade-tracer-engine.js"></script>
 <script src="arcade-audio-engine.js"></script>
 <script src="arcade-particle-engine.js"></script>
+<script src="arcade-wind-sway.js"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -77,6 +78,7 @@
         <div class="hb-section-title">Audio</div>
         <label class="hb-toggle"><span>🔊 Game Sound</span><input type="checkbox" id="hb-toggle-sound" checked onchange="if(window.AudioEngine) { window.AudioEngine.init(); window.AudioEngine.setEnabled(this.checked); }"></label>
         <label class="hb-toggle"><span>🌿 Particles</span><input type="checkbox" id="hb-toggle-particles" checked onchange="if(window.ParticleEngine) window.ParticleEngine.setEnabled(this.checked);"></label>
+        <label class="hb-toggle"><span>🍃 Wind Sway</span><input type="checkbox" id="hb-toggle-windsway" checked onchange="if(window.WindSway) window.WindSway.setEnabled(this.checked);"></label>
         
         <div class="hb-section-title">Range Tools</div>
         <label class="hb-toggle"><span>🎯 Show All Traces</span><input type="checkbox" id="hb-toggle-traces" onchange="window.keepAllTraces=this.checked;"></label>
@@ -1104,6 +1106,15 @@
                 </div>
             </div>
             
+            <div style="background:#1e293b; padding:15px; border-radius:12px; border:1px solid #334155; margin-bottom:15px;">
+                <h3 style="color:#4ade80; margin:0 0 12px 0; font-size:14px;">🍃 WIND SWAY</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold;">TREE SWAY</label>
+                    <input type="checkbox" id="ir-windsway-enabled" checked style="width:20px; height:20px; accent-color:#4ade80;" onchange="if(window.WindSway) window.WindSway.setEnabled(this.checked);">
+                </div>
+                <div style="color:#64748b; font-size:10px; margin-top:6px;">Driven by physics wind — same wind that affects ball flight.</div>
+            </div>
+
             <div style="background:rgba(239,68,68,0.1); padding:12px; border-radius:10px; border:1px solid rgba(239,68,68,0.3);">
                 <div style="color:#f87171; font-size:12px; font-weight:bold; margin-bottom:4px;">🔒 LÅST UNDER MATCH</div>
                 <div style="color:#94a3b8; font-size:11px;">Gimme Distance, Auto-Putt, Mulligans, Auto Concede och Player Roster kan bara ändras innan matchen startas.</div>
@@ -1348,6 +1359,15 @@
             ['set-weather', 'ir-weather'].forEach(id => {
                 let el = document.getElementById(id);
                 if (el) el.value = currentWeather;
+            });
+        }
+
+        // === WIND SWAY: Sync UI from saved state ===
+        if (window.WindSway) {
+            let swayEnabled = window.WindSway.isEnabled();
+            ['hb-toggle-windsway', 'ir-windsway-enabled'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.checked = swayEnabled;
             });
         }
     });
@@ -1993,6 +2013,8 @@
                 if (window.placedTrees && window.placedTrees.some(t => t.type === type)) {
                     buildInstancePool(type);
                     rebuildInstancePool(type);
+                    // Wind sway: re-patch new materials
+                    if (window.WindSway) window.WindSway.repatch();
                 }
                 if(callback) callback(true);
             } catch(err) {
@@ -3758,6 +3780,9 @@
     function destroyAllPools() {
         Object.keys(window.instancePools).forEach(type => destroyInstancePool(type));
     }
+
+    // === WIND SWAY ENGINE INIT ===
+    if (window.WindSway) window.WindSway.init(scene);
 
     function createTree(type, x, z, scale, rot, color) {
         // Raycast for ground Y
@@ -8654,6 +8679,7 @@
         requestAnimationFrame(animate);
         if (window.animateStars) window.animateStars(); // Star twinkle (external module)
         if (window.ParticleEngine) window.ParticleEngine.update(0.016); // Particle animation (external module)
+        if (window.WindSway) window.WindSway.update(performance.now() * 0.001); // Wind sway (external module)
         
         // Panning movement (WASD)
         if(moveDir) {
