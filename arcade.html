@@ -3895,8 +3895,9 @@
     const teeMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8 });
     const flagPoleGeo = new THREE.CylinderGeometry(0.05, 0.05, 6, 8);
     const flagPoleMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const flagClothGeo = new THREE.PlaneGeometry(1.5, 1.0);
+    const flagClothGeo = new THREE.PlaneGeometry(1.5, 1.0, 12, 8);  // 12×8 segments for wave deformation
     const flagClothMat = new THREE.MeshLambertMaterial({ color: 0xef4444, side: THREE.DoubleSide });
+    window._allFlagCloths = [];  // Track all flag cloth meshes for animation
 
     function createTeeObject(x, y, z, colorHex=0xfacc15) {
         let group = new THREE.Group();
@@ -3941,9 +3942,11 @@
         let pole = new THREE.Mesh(flagPoleGeo, flagPoleMat);
         pole.position.set(0, 3.0, 0);
         pole.castShadow = true;
-        let pflag = new THREE.Mesh(flagClothGeo, flagClothMat);
+        let pflag = new THREE.Mesh(flagClothGeo.clone(), flagClothMat);
         pflag.position.set(0.75, 5.5, 0); 
         pflag.castShadow = true;
+        pflag.name = 'flagCloth';
+        window._allFlagCloths.push(pflag);
         group.add(pole);
         group.add(pflag);
         
@@ -4632,6 +4635,7 @@
                 if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
                 h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null;
             }
+            window._allFlagCloths = [];  // Clear wave animation references
             
             try {
                 var arr = savedStr;
@@ -8702,6 +8706,32 @@
         if (window.animateStars) window.animateStars(); // Star twinkle (external module)
         if (window.ParticleEngine) window.ParticleEngine.update(0.016); // Particle animation (external module)
         if (window.WindSway) window.WindSway.update(performance.now() * 0.001); // Wind sway (external module)
+
+        // === FLAG CLOTH WAVE ===
+        if (window._allFlagCloths && window._allFlagCloths.length > 0) {
+            let t = performance.now() * 0.001;
+            let windMph = window.currentWindMph || 0;
+            let windStrength = Math.min(1.0, windMph / 25.0);
+            // Base flutter even with no wind (flag always moves a little)
+            let baseFlutter = 0.08;
+            let totalStr = baseFlutter + windStrength * 0.6;
+            
+            for (let fi = 0; fi < window._allFlagCloths.length; fi++) {
+                let cloth = window._allFlagCloths[fi];
+                if (!cloth || !cloth.geometry) continue;
+                let pos = cloth.geometry.attributes.position;
+                let w = 1.5;  // cloth width
+                for (let i = 0; i < pos.count; i++) {
+                    let x = pos.getX(i);  // 0 = pole side, 1.5 = free edge
+                    let xNorm = (x + w/2) / w;  // 0..1 from pole to tip
+                    // Wave: more displacement at the free edge
+                    let wave = Math.sin(t * 8.0 + xNorm * 4.0 + fi) * xNorm * xNorm * totalStr;
+                    let wave2 = Math.sin(t * 12.5 + xNorm * 6.0 + fi * 2.3) * xNorm * xNorm * totalStr * 0.3;
+                    pos.setZ(i, wave + wave2);
+                }
+                pos.needsUpdate = true;
+            }
+        }
         
         // Panning movement (WASD)
         if(moveDir) {
