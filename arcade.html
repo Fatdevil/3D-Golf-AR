@@ -3349,21 +3349,44 @@
         let biomeType = 'ROUGH'; 
         function cDist(r1, g1, b1, r2, g2, b2) { return (r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2; }
         
-        let dOB = cDist(r,g,b, 239,68,68);
-        let dSand = cDist(r,g,b, 224,216,164);
-        let dWaste = cDist(r,g,b, 194,175,124);
-        let dFairway = cDist(r,g,b, 125,185,82);
-        let dSemiRough = cDist(r,g,b, 107,158,61);
-        let dRough = cDist(r,g,b, 74,120,43);
-        let dDeepRough = cDist(r,g,b, 45,76,26);
-        let dGreen = cDist(r,g,b, 152,206,104);
-        let dWater = cDist(r,g,b, 56,189,248);
+        // Dynamic surface detection — read from active biome config for correct matching
+        function hexToRgbArr(hex) {
+            if (!hex) return null;
+            hex = hex.replace('#', '');
+            return [parseInt(hex.substring(0,2),16), parseInt(hex.substring(2,4),16), parseInt(hex.substring(4,6),16)];
+        }
+        let cfg = window.CURRENT_BIOME_CONFIG || {};
+        let _ob = hexToRgbArr(cfg.obColor) || [239,68,68];
+        let _sand = hexToRgbArr(cfg.bunkerColor) || [224,216,164];
+        let _waste = hexToRgbArr(cfg.wasteColor) || [194,175,124];
+        let _tee = hexToRgbArr(cfg.teeColor) || [124,181,76];
+        let _green = hexToRgbArr(cfg.greenColor) || [152,206,104];
+        let _foregreen = hexToRgbArr(cfg.foregreenColor) || [139,196,93];
+        let _fairway = hexToRgbArr(cfg.fairwayColor) || [125,185,82];
+        let _semi = hexToRgbArr(cfg.semiColor) || [107,158,61];
+        let _rough = hexToRgbArr(cfg.roughColor) || [74,120,43];
+        let _fescue = hexToRgbArr(cfg.fescueColor) || [45,76,26];
+        let _water = hexToRgbArr(cfg.waterColor) || [56,189,248];
+
+        let dOB = cDist(r,g,b, _ob[0],_ob[1],_ob[2]);
+        let dSand = cDist(r,g,b, _sand[0],_sand[1],_sand[2]);
+        let dWaste = cDist(r,g,b, _waste[0],_waste[1],_waste[2]);
+        let dTee = cDist(r,g,b, _tee[0],_tee[1],_tee[2]);
+        let dGreen = cDist(r,g,b, _green[0],_green[1],_green[2]);
+        let dForegreen = cDist(r,g,b, _foregreen[0],_foregreen[1],_foregreen[2]);
+        let dFairway = cDist(r,g,b, _fairway[0],_fairway[1],_fairway[2]);
+        let dSemiRough = cDist(r,g,b, _semi[0],_semi[1],_semi[2]);
+        let dRough = cDist(r,g,b, _rough[0],_rough[1],_rough[2]);
+        let dDeepRough = cDist(r,g,b, _fescue[0],_fescue[1],_fescue[2]);
+        let dWater = cDist(r,g,b, _water[0],_water[1],_water[2]);
         
-        let minD = Math.min(dOB, dSand, dWaste, dFairway, dSemiRough, dRough, dDeepRough, dGreen, dWater);
+        let minD = Math.min(dOB, dSand, dWaste, dTee, dGreen, dForegreen, dFairway, dSemiRough, dRough, dDeepRough, dWater);
         
         if (minD === dSand) biomeType = 'SAND';
         else if (minD === dWaste) biomeType = 'WASTE';
         else if (minD === dGreen) biomeType = 'GREEN';
+        else if (minD === dTee) biomeType = 'TEE';
+        else if (minD === dForegreen) biomeType = 'FOREGREEN';
         else if (minD === dOB) biomeType = 'OB';
         else if (minD === dWater) biomeType = 'WATER';
         else if (minD === dFairway) biomeType = 'FAIRWAY';
@@ -7175,12 +7198,41 @@
         }
     }
     
+    // Build mode toast notification
+    function showBuildToast(msg, color) {
+        let existing = document.getElementById('build-toast');
+        if (existing) existing.remove();
+        let toast = document.createElement('div');
+        toast.id = 'build-toast';
+        toast.textContent = msg;
+        toast.style.cssText = `position:fixed; top:80px; left:50%; transform:translateX(-50%); 
+            background:${color || '#ef4444'}; color:#fff; padding:12px 28px; border-radius:12px; 
+            font-size:15px; font-weight:600; z-index:99999; pointer-events:none; 
+            box-shadow:0 4px 20px rgba(0,0,0,0.4); opacity:0; transition:opacity 0.3s;`;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => { toast.style.opacity = '1'; });
+        setTimeout(() => { 
+            toast.style.opacity = '0'; 
+            setTimeout(() => toast.remove(), 300); 
+        }, 2500);
+    }
+    
     function onMouseClick(event) {
         if(appMode !== 'BUILD') return;
         
         if (currentTool === 'HOLE' && lastHitPoint) {
             let hole = courseHoles[currentHoleIndex];
+            
+            // Surface validation — check what we're clicking on
+            let surf = localGetTerrainAt(lastHitPoint.x, -lastHitPoint.z);
+            let surfType = surf ? surf.type : 'UNKNOWN';
+            
             if (currentHoleAction.startsWith('TEE_')) {
+                // Tees can only be placed on TEE surface
+                if (surfType !== 'TEE') {
+                    showBuildToast('⛳ Tee markers can only be placed on TEE BOX surface!', '#ef4444');
+                    return;
+                }
                 let teeType = currentHoleAction.replace('TEE_', '').toLowerCase();
                 if (hole.teeMeshes[teeType]) scene.remove(hole.teeMeshes[teeType]);
                 hole.tees[teeType] = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z, rot: 0 };
@@ -7202,7 +7254,17 @@
                 controls.enabled = false;
                 return;
             } else if (currentHoleAction === 'FLAG') {
-                if (hole.flagMesh) scene.remove(hole.flagMesh);
+                // Flag can only be placed on GREEN surface
+                if (surfType !== 'GREEN') {
+                    showBuildToast('🚩 Flag can only be placed on the GREEN!', '#ef4444');
+                    return;
+                }
+                if (hole.flagMesh) {
+                    // Remove from wave animation tracking
+                    let clothIdx = window._allFlagCloths.indexOf(hole.flagMesh.getObjectByName('flagCloth'));
+                    if (clothIdx > -1) window._allFlagCloths.splice(clothIdx, 1);
+                    scene.remove(hole.flagMesh);
+                }
                 hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
                 hole.flagMesh = createFlagObject(hole.flag.x, hole.flag.y, hole.flag.z);
             }
