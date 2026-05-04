@@ -881,6 +881,15 @@ window.GolfPhysics = (function() {
                 }
 
                 if (!overCup) {
+                    // WATER HAZARD CHECK: Ball rolling/skidding into water = splash!
+                    if (freshT.type === 'WATER') {
+                        state.phase = "stopped";
+                        state.vel = [0, 0, 0];
+                        metrics.finalTerrainType = 'WATER';
+                        console.log(`💦 WATER HAZARD! Ball rolled into water at [${state.pos[0].toFixed(1)}, ${state.pos[1].toFixed(1)}]`);
+                        continue;
+                    }
+                    
                     state.pos[2] = freshT.z; // Fix: Clamp to ground
                     
                     // Projicera hastigheten längs markens lutning

@@ -9402,13 +9402,63 @@
                         
                         // --- BUG-04 FIX: Build green grid ONCE on landing, not in animate loop ---
                         let landSurf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
+                        
+                        // === WATER HAZARD & OB AUTO-DETECTION ===
+                        let finalTerrain = flightData && flightData.metrics ? flightData.metrics.finalTerrainType : (landSurf ? landSurf.type : 'FAIRWAY');
+                        if (finalTerrain === 'WATER' || (landSurf && landSurf.type === 'WATER')) {
+                            let p = window.players[window.activePlayerIndex];
+                            p.penaltyStrokes++;
+                            
+                            // Move ball back to previous lie (before shot)
+                            let prevLie = p.teePosition || p.lie;
+                            window.ballMesh.position.set(prevLie.x, prevLie.y, prevLie.z);
+                            window.ballPos.x = prevLie.x;
+                            window.ballPos.y = prevLie.y;
+                            window.ballPos.z = prevLie.z;
+                            
+                            let pop = document.getElementById('score-popup');
+                            pop.innerText = '💦 WATER HAZARD! +1 Penalty Stroke';
+                            pop.style.color = '#38bdf8';
+                            pop.style.opacity = '1';
+                            pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
+                            
+                            // === AUDIO: Splash sound ===
+                            if (window.AudioEngine && window.AudioEngine.playSplash) window.AudioEngine.playSplash();
+                            
+                            document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2500);
+                            isFlying = false;
+                            return;
+                        }
+                        
+                        if (finalTerrain === 'OB' || (landSurf && landSurf.type === 'OB')) {
+                            let p = window.players[window.activePlayerIndex];
+                            p.penaltyStrokes++;
+                            
+                            // Move ball back to previous lie
+                            let prevLie = p.teePosition || p.lie;
+                            window.ballMesh.position.set(prevLie.x, prevLie.y, prevLie.z);
+                            window.ballPos.x = prevLie.x;
+                            window.ballPos.y = prevLie.y;
+                            window.ballPos.z = prevLie.z;
+                            
+                            let pop = document.getElementById('score-popup');
+                            pop.innerText = '🔴 OUT OF BOUNDS! +1 Penalty Stroke';
+                            pop.style.color = '#ef4444';
+                            pop.style.opacity = '1';
+                            pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
+                            
+                            document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
+                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2500);
+                            isFlying = false;
+                            return;
+                        }
+                        
                         if (landSurf && landSurf.type === 'GREEN') {
                             window.buildGreenGrid(hole, playingHoleIndex);
                         }
                         
                         // --- BUG-02 DIAGNOSTIC: Log normal direction on green for N-S slope verification ---
-                        // Expected: normal.y POSITIVE when north end is higher (ball should roll south).
-                        // If normal.y is NEGATIVE on a known downhill-north green → swap gz-1 to gz+1 in localGetTerrainAt (~line 3918).
                         if (landSurf && landSurf.type === 'GREEN') {
                             console.log('[BUG-02 DIAG] Ball landed on GREEN. Terrain normal:',
                                 JSON.stringify({ nx: landSurf.normal[0].toFixed(4), ny: landSurf.normal[1].toFixed(4), nz: landSurf.normal[2].toFixed(4) }),
