@@ -411,14 +411,23 @@
         let pos = layer.positions;
         let vel = layer.velocities;
 
+        // === WIND INFLUENCE — same data as ball physics ===
+        let windMph = window.currentWindMph || 0;
+        let windDirDeg = window.currentWindDir || 0;
+        let windDirRad = windDirDeg * Math.PI / 180;
+        // Convert mph to a per-frame push (meters/sec, scaled for visual feel)
+        let windForce = windMph * 0.015;  // 30 mph → 0.45 units/sec push
+        let windPushX = Math.sin(windDirRad) * windForce * dt;
+        let windPushZ = -Math.cos(windDirRad) * windForce * dt;
+
         for (let i = 0; i < layer.count; i++) {
             let ix = i * 3;
             let iy = i * 3 + 1;
             let iz = i * 3 + 2;
 
-            pos[ix] += vel[ix] * dt;
+            pos[ix] += vel[ix] * dt + windPushX;
             pos[iy] += vel[iy] * dt;
-            pos[iz] += vel[iz] * dt;
+            pos[iz] += vel[iz] * dt + windPushZ;
 
             if (preset.spin) {
                 pos[ix] += Math.sin(_clock * 2.0 + i * 0.7) * 0.02;
