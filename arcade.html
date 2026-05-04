@@ -537,17 +537,7 @@
                 </div>
                 <input type="range" id="winddir-slider" min="0" max="359" value="0" step="1" oninput="updateWindDirPreview(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
                 
-                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
-                    <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🖼️ Panorama Background</label>
-                    <div id="panorama-name" style="color:#64748b; font-size:9px; margin:4px 0;">No panorama loaded</div>
-                    <div style="display:flex; gap:4px;">
-                        <label style="flex:1; background:#1e293b; color:#38bdf8; border:1px solid #334155; padding:6px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:center;">
-                            📂 Upload
-                            <input type="file" id="panorama-upload" accept="image/*" onchange="window.loadPanorama(this)" style="display:none;">
-                        </label>
-                        <button onclick="window.removePanorama()" style="background:#1e293b; color:#ef4444; border:1px solid #334155; padding:6px 10px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px;">✕</button>
-                    </div>
-                </div>
+                <!-- PANORAMA BACKGROUND removed — 3D scenery preferred -->
                 
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
                     <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🌍 Surrounding Horizon</label>
