@@ -2734,7 +2734,13 @@
             
             window.surroundConfig = { N: mapKey, E: mapKey, S: mapKey, W: mapKey, sceneryN: 'NONE', sceneryE: 'NONE', sceneryS: 'NONE', sceneryW: 'NONE' };
         } else {
-            window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor', sceneryN: 'NONE', sceneryE: 'NONE', sceneryS: 'NONE', sceneryW: 'NONE' };
+            // No saved config — inherit from previous hole or use default
+            let prevIdx = currentHoleIndex - 1;
+            if (prevIdx >= 0 && courseHoles[prevIdx] && courseHoles[prevIdx].surroundConfig) {
+                window.surroundConfig = Object.assign({}, courseHoles[prevIdx].surroundConfig);
+            } else {
+                window.surroundConfig = { N: 'roughColor', E: 'roughColor', S: 'roughColor', W: 'roughColor', sceneryN: 'NONE', sceneryE: 'NONE', sceneryS: 'NONE', sceneryW: 'NONE' };
+            }
         }
         
         // Ensure scenery properties exist
@@ -7754,11 +7760,15 @@
         let gzStart = Math.max(0, Math.floor((pathMinZ - 1 + TERRAIN_SIZE/2) / step));
         let gzEnd = Math.min(TERRAIN_SEGS, Math.ceil((pathMaxZ + 1 + TERRAIN_SIZE/2) / step));
 
-        // Average height as reference
+        // Read actual terrain height at each control point from vertex buffer directly
         let baseH = 0;
         for(let pt of smartGreenPoints) {
-            let surf = localGetTerrainAt(pt.x, -pt.z);
-            baseH += surf ? surf.z : 0;
+            let gxi = Math.round((pt.x + TERRAIN_SIZE/2) / step);
+            let gzi = Math.round((pt.z + TERRAIN_SIZE/2) / step);
+            gxi = Math.max(0, Math.min(TERRAIN_SEGS, gxi));
+            gzi = Math.max(0, Math.min(TERRAIN_SEGS, gzi));
+            let vidx = gzi * (TERRAIN_SEGS+1) + gxi;
+            baseH += positions[vidx * 3 + 2];
         }
         baseH /= smartGreenPoints.length;
 
@@ -7852,7 +7862,7 @@
                     let currentH = positions[idx*3+2];
                     // Blend: full effect in center, ramp to original at edges
                     let blendedTarget = currentH + (targetHeight - currentH) * edgeBlend;
-                    positions[idx*3+2] = currentH + (blendedTarget - currentH) * 0.5;
+                    positions[idx*3+2] = currentH + (blendedTarget - currentH) * 0.7;  // More aggressive convergence
                 }
             }
         }
