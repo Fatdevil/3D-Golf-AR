@@ -22,6 +22,8 @@
 <script src="arcade-terrain-overlays.js"></script>
 <script src="arcade-scene-engine.js"></script>
 <script src="arcade-tracer-engine.js"></script>
+<script src="arcade-audio-engine.js"></script>
+<script src="arcade-particle-engine.js"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -71,6 +73,10 @@
         <div class="hb-section-title">Green Visualization</div>
         <label class="hb-toggle"><span>🔮 Putt-Read Beads</span><input type="checkbox" id="hb-toggle-beads" checked onchange="window.greenBeadsEnabled=this.checked;"></label>
         <label class="hb-toggle"><span>📐 Green Grid</span><input type="checkbox" id="hb-toggle-grid" checked onchange="window.greenGridEnabled=this.checked; if(window.greenGridMesh) window.greenGridMesh.visible=this.checked;"></label>
+        
+        <div class="hb-section-title">Audio</div>
+        <label class="hb-toggle"><span>🔊 Game Sound</span><input type="checkbox" id="hb-toggle-sound" checked onchange="if(window.AudioEngine) { window.AudioEngine.init(); window.AudioEngine.setEnabled(this.checked); }"></label>
+        <label class="hb-toggle"><span>🌿 Particles</span><input type="checkbox" id="hb-toggle-particles" checked onchange="if(window.ParticleEngine) window.ParticleEngine.setEnabled(this.checked);"></label>
         
         <div class="hb-section-title">Range Tools</div>
         <label class="hb-toggle"><span>🎯 Show All Traces</span><input type="checkbox" id="hb-toggle-traces" onchange="window.keepAllTraces=this.checked;"></label>
@@ -647,6 +653,33 @@
                         <span>Mjuk</span><span>Skarp</span>
                     </div>
                 </div>
+
+                <!-- PARTICLE INTENSITY (inside ENV panel) -->
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="color:#94a3b8; font-size:10px; font-weight:bold;">🌿 PARTICLES</label>
+                        <span id="particle-int-label" style="color:#4ade80; font-size:10px;">60%</span>
+                    </div>
+                    <input type="range" id="set-particle-intensity" min="0" max="1" step="0.05" value="0.6" oninput="if(window.ParticleEngine) { window.ParticleEngine.setIntensity(this.value); document.getElementById('particle-int-label').textContent=Math.round(this.value*100)+'%'; }" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                    <div style="display:flex; justify-content:space-between; color:#475569; font-size:9px; margin-top:2px;">
+                        <span>Ingen</span><span>Maximal</span>
+                    </div>
+                </div>
+
+                <!-- WEATHER (inside ENV panel) -->
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="color:#94a3b8; font-size:10px; font-weight:bold;">🌦️ WEATHER</label>
+                    </div>
+                    <select id="set-weather" onchange="if(window.ParticleEngine) window.ParticleEngine.setWeather(this.value);" style="width:100%; background:#0f172a; color:#38bdf8; border:1px solid #334155; border-radius:6px; padding:6px 8px; font-size:11px; font-weight:bold; cursor:pointer;">
+                        <option value="CLEAR">☀️ Clear</option>
+                        <option value="OVERCAST">☁️ Overcast</option>
+                        <option value="DRIZZLE">🌦️ Drizzle</option>
+                        <option value="RAIN">🌧️ Rain</option>
+                        <option value="STORM">⛈️ Storm</option>
+                        <option value="FOG">🌫️ Dense Fog</option>
+                    </select>
+                </div>
             </div>
         </div>
         </div> <!-- End of tab-content-ENV -->
@@ -930,6 +963,21 @@
                             <button id="tracer-btn-PRO_DOT" class="tracer-btn" onclick="if(window.setTracerStyle) window.setTracerStyle('PRO_DOT');" style="background:#1c1917; color:#fbbf24; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">📍 Pro Dot</button>
                         </div>
                     </div>
+
+                    <!-- SOUND -->
+                    <div style="margin-top:12px; border-top:1px solid #334155; padding-top:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <label style="color:#94a3b8; font-size:12px; font-weight:bold;">🔊 GAME SOUND</label>
+                            <input type="checkbox" id="set-sound-enabled" checked style="width:20px; height:20px; accent-color:#4ade80;" onchange="if(window.AudioEngine) { window.AudioEngine.init(); window.AudioEngine.setEnabled(this.checked); }">
+                        </div>
+                        <div>
+                            <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                                <span>VOLUME</span>
+                                <span id="sound-vol-label" style="color:#fff;">60%</span>
+                            </label>
+                            <input type="range" id="set-sound-volume" min="0" max="1" step="0.05" value="0.6" oninput="if(window.AudioEngine) { window.AudioEngine.init(); window.AudioEngine.setVolume(this.value); }" style="width:100%; accent-color:#4ade80;">
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1012,6 +1060,47 @@
                         <button onclick="if(window.setTracerStyle) window.setTracerStyle('FIRE');" style="background:#451a03; color:#ff8800; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">🔥 Fire</button>
                         <button onclick="if(window.setTracerStyle) window.setTracerStyle('ICE');" style="background:#0c2d48; color:#44aaff; border:none; padding:6px 4px; border-radius:6px; cursor:pointer; font-size:10px; font-weight:bold;">❄️ Ice</button>
                     </div>
+                </div>
+            </div>
+
+            <div style="background:#1e293b; padding:15px; border-radius:12px; border:1px solid #334155; margin-bottom:15px;">
+                <h3 style="color:#4ade80; margin:0 0 12px 0; font-size:14px;">🔊 SOUND</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold;">GAME SOUND</label>
+                    <input type="checkbox" id="ir-sound-enabled" checked style="width:20px; height:20px; accent-color:#4ade80;" onchange="if(window.AudioEngine) { window.AudioEngine.init(); window.AudioEngine.setEnabled(this.checked); }">
+                </div>
+                <div>
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                        <span>VOLUME</span>
+                        <span id="ir-sound-vol-label" style="color:#fff;">60%</span>
+                    </label>
+                    <input type="range" id="ir-sound-volume" min="0" max="1" step="0.05" value="0.6" oninput="if(window.AudioEngine) { window.AudioEngine.init(); window.AudioEngine.setVolume(this.value); }" style="width:100%; accent-color:#4ade80;">
+                </div>
+            </div>
+
+            <div style="background:#1e293b; padding:15px; border-radius:12px; border:1px solid #334155; margin-bottom:15px;">
+                <h3 style="color:#4ade80; margin:0 0 12px 0; font-size:14px;">🌿 PARTICLES</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold;">PARTICLES</label>
+                    <input type="checkbox" id="ir-particles-enabled" checked style="width:20px; height:20px; accent-color:#4ade80;" onchange="if(window.ParticleEngine) window.ParticleEngine.setEnabled(this.checked);">
+                </div>
+                <div>
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                        <span>INTENSITY</span>
+                        <span id="ir-particle-int-label" style="color:#fff;">60%</span>
+                    </label>
+                    <input type="range" id="ir-particle-intensity" min="0" max="1" step="0.05" value="0.6" oninput="if(window.ParticleEngine) window.ParticleEngine.setIntensity(this.value);" style="width:100%; accent-color:#4ade80;">
+                </div>
+                <div style="margin-top:10px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold;">WEATHER</label>
+                    <select id="ir-weather" onchange="if(window.ParticleEngine) window.ParticleEngine.setWeather(this.value);" style="width:100%; background:#0f172a; color:#38bdf8; border:1px solid #334155; border-radius:6px; padding:6px 8px; font-size:12px; font-weight:bold; cursor:pointer; margin-top:4px;">
+                        <option value="CLEAR">☀️ Clear</option>
+                        <option value="OVERCAST">☁️ Overcast</option>
+                        <option value="DRIZZLE">🌦️ Drizzle</option>
+                        <option value="RAIN">🌧️ Rain</option>
+                        <option value="STORM">⛈️ Storm</option>
+                        <option value="FOG">🌫️ Dense Fog</option>
+                    </select>
                 </div>
             </div>
             
@@ -1219,6 +1308,48 @@
                 });
             });
         });
+
+        // === AUDIO: Sync UI from saved state ===
+        if (window.AudioEngine) {
+            let audioEnabled = window.AudioEngine.isEnabled();
+            let audioVol = window.AudioEngine.getVolume();
+            ['set-sound-enabled', 'ir-sound-enabled', 'hb-toggle-sound'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.checked = audioEnabled;
+            });
+            ['set-sound-volume', 'ir-sound-volume'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.value = audioVol;
+            });
+            ['sound-vol-label', 'ir-sound-vol-label'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.innerText = Math.round(audioVol * 100) + '%';
+            });
+        }
+
+        // === PARTICLES: Sync UI from saved state ===
+        if (window.ParticleEngine) {
+            let partEnabled = window.ParticleEngine.isEnabled();
+            let partIntensity = window.ParticleEngine.getIntensity();
+            ['hb-toggle-particles', 'ir-particles-enabled'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.checked = partEnabled;
+            });
+            ['set-particle-intensity', 'ir-particle-intensity'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.value = partIntensity;
+            });
+            ['particle-int-label', 'ir-particle-int-label'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.innerText = Math.round(partIntensity * 100) + '%';
+            });
+            // Weather dropdown sync
+            let currentWeather = window.ParticleEngine.getWeather();
+            ['set-weather', 'ir-weather'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.value = currentWeather;
+            });
+        }
     });
 
     // 1. THREE.JS INITIALIZATION
@@ -1379,9 +1510,15 @@
     // Tracer Styles & Glow Ball Engine extracted to arcade-tracer-engine.js
     // Exposes: window.setTracerStyle, window.updateTracerForTimeOfDay, window.getTracerVertexColor
 
+    // Particle Engine extracted to arcade-particle-engine.js
+    // Exposes: window.ParticleEngine.init, activateBiome, update, setEnabled, setIntensity
+
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 15000); // Extended for distant scenery (mountains etc)00m
     // Camera just behind and above ball
     camera.position.set(0, 2, 5); 
+
+    // === PARTICLE ENGINE INIT ===
+    if (window.ParticleEngine) window.ParticleEngine.init(scene, camera);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1543,6 +1680,9 @@
     window.changeBiome = function(val) {
         window.ACTIVE_BIOME = val;
         window.buildNatureUI();
+
+        // === PARTICLE ENGINE: Auto-activate for biome ===
+        if (window.ParticleEngine) window.ParticleEngine.activateBiome(val);
         
         // Applicera färgerna från valt tema, eller Global som fallback
         let targetBiome = (val === 'ALL') ? 'GLOBAL' : val;
@@ -4152,7 +4292,7 @@
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
                 is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
-                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG },
+                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR' },
                 owner_id: window.GolfAuth?.userId || null
             };
             
@@ -4496,6 +4636,19 @@
                         if (window.updateSurroundColors) {
                             window.updateSurroundColors();
                         }
+                    }
+                }
+
+                // === PARTICLE ENGINE: Restore intensity & activate biome ===
+                if (arr.theme_data && window.ParticleEngine) {
+                    if (typeof arr.theme_data.particleIntensity === 'number') {
+                        window.ParticleEngine.setIntensity(arr.theme_data.particleIntensity);
+                    }
+                    if (arr.theme_data.biomeId) {
+                        window.ParticleEngine.activateBiome(arr.theme_data.biomeId);
+                    }
+                    if (arr.theme_data.weatherMode) {
+                        window.ParticleEngine.setWeather(arr.theme_data.weatherMode);
                     }
                 }
 
@@ -5108,6 +5261,18 @@
         document.getElementById('player-banner').querySelector('#pb-name').style.display = 'inline-block'; 
         
         teleportToHole(playingHoleIndex);
+
+        // === AUDIO: Start ambient environment sounds ===
+        if (window.AudioEngine) {
+            window.AudioEngine.init();
+            window.AudioEngine.startAmbient(window.ACTIVE_BIOME || 'DEFAULT');
+        }
+
+        // === PARTICLES: Activate for current biome + weather ===
+        if (window.ParticleEngine) {
+            window.ParticleEngine.activateBiome(window.ACTIVE_BIOME || 'DEFAULT');
+            if (window.ACTIVE_WEATHER) window.ParticleEngine.setWeather(window.ACTIVE_WEATHER);
+        }
     };
 
     window.updatePlayerBanner = function() {
@@ -5534,6 +5699,20 @@
         if(document.getElementById('in-la')) document.getElementById('in-la').value = (data.launchAngleDeg || 0).toFixed(1);
         if(document.getElementById('in-hla')) document.getElementById('in-hla').value = (data.azimDeg || 0).toFixed(1);
 
+        // === AUDIO: Swing whoosh + impact ===
+        if (window.AudioEngine) {
+            window.AudioEngine.init(); // Ensure context is ready (user gesture)
+            let clubGuess = 'I7'; // Default
+            if (window.SwingEngine && window.SwingEngine.CLUB_PROFILES) {
+                // Use the currently selected club from SwingEngine
+                clubGuess = document.querySelector('.club-btn.selected')?.dataset?.club || 'I7';
+            }
+            if (data.ballSpeedMph < 15) clubGuess = 'PUTT';
+            else if (data.ballSpeedMph > 150) clubGuess = 'DRIVER';
+            window.AudioEngine.playSwing(clubGuess);
+            setTimeout(() => window.AudioEngine.playImpact(clubGuess), 180);
+        }
+
         executeArcadeShot(data);
     }
     // Exposed on window for arcade-swing-engine.js (external module)
@@ -5836,6 +6015,7 @@
         let tStyle = window.TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
         if (typeof glowTracer !== 'undefined') glowTracer.visible = !!(tStyle && tStyle.glow);
         isFlying = true;
+        window._lastFlightPhase = 'flight'; // Reset for bounce detection audio
     }
 
     let appMode = 'PLAY'; 
@@ -8473,6 +8653,7 @@
     function animate() {
         requestAnimationFrame(animate);
         if (window.animateStars) window.animateStars(); // Star twinkle (external module)
+        if (window.ParticleEngine) window.ParticleEngine.update(0.016); // Particle animation (external module)
         
         // Panning movement (WASD)
         if(moveDir) {
@@ -8866,6 +9047,16 @@
                 }
             }
             window._lastProcessedTick = newTick + 1;
+
+            // === AUDIO: Bounce sound on phase transition ===
+            if (window.AudioEngine && flightData.path[newTick]) {
+                let curPhase = flightData.path[newTick].phase;
+                if (!window._lastFlightPhase) window._lastFlightPhase = 'flight';
+                if (curPhase === 'bounce' && window._lastFlightPhase !== 'bounce') {
+                    window.AudioEngine.playBounce();
+                }
+                window._lastFlightPhase = curPhase;
+            }
             
             flightTracer.geometry.attributes.position.needsUpdate = true;
             if (flightTracer.geometry.attributes.color) flightTracer.geometry.attributes.color.needsUpdate = true;
@@ -9053,6 +9244,12 @@
                         let p = window.players[window.activePlayerIndex];
                         if (p && !p.holedOut) {
                             p.holedOut = true;
+                            // === AUDIO: Holed celebration! ===
+                            if (window.AudioEngine) {
+                                let audioScoreText = logHoleScoreText(p.strokes + p.penaltyStrokes, hole ? (hole.par || 4) : 4);
+                                window.AudioEngine.playHoled(audioScoreText);
+                                setTimeout(() => window.AudioEngine.playApplause(), 400);
+                            }
                             let pop = document.getElementById('score-popup');
                             let total = p.strokes + p.penaltyStrokes;
                             let par = hole ? (hole.par || 4) : 4;
@@ -9102,6 +9299,8 @@
                         } else if (!shouldConcede && isGreen && distFt <= gimmeMax) {
                             p.strokes += 1;
                             p.holedOut = true;
+                            // === AUDIO: Gimme sound ===
+                            if (window.AudioEngine) window.AudioEngine.playClick();
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
                             window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
@@ -9125,6 +9324,8 @@
                             
                             p.strokes += putts;
                             p.holedOut = true;
+                            // === AUDIO: Auto-putt sound ===
+                            if (window.AudioEngine) window.AudioEngine.playClick();
                             pop.innerText = `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
                             pop.style.opacity = '1';
                             window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
