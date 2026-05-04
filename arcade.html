@@ -4305,7 +4305,8 @@
             tees: h.tees,
             flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
             panorama: h.panorama || null,
-            surrounding: h.surrounding || null
+            surrounding: h.surrounding || null,
+            surroundConfig: h.surroundConfig || null
         }));
         
         ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles });
@@ -4335,12 +4336,63 @@
                 }
             }
         }
+
+        // === HOLE INTEGRITY VALIDATION ===
+        if (!options.isDraft) {
+            for (let i = 0; i < MAX_HOLES; i++) {
+                let h = courseHoles[i];
+                let hasTee = h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black);
+                let hasFlag = !!h.flag;
+                
+                // Skip empty holes
+                if (!hasTee && !hasFlag) continue;
+                
+                // Incomplete hole: has tee but no flag, or vice versa
+                if (hasTee && !hasFlag) {
+                    showError('Hole ' + (i+1) + ' has Tee markers but no Flag! Each hole needs both.');
+                    return;
+                }
+                if (!hasTee && hasFlag) {
+                    showError('Hole ' + (i+1) + ' has a Flag but no Tee markers!');
+                    return;
+                }
+                
+                // Tee distance validation: Red < Yellow < White < Black from flag
+                if (hasFlag && hasTee) {
+                    let fx = h.flag.x, fz = h.flag.z;
+                    let teeDists = {};
+                    let teeOrder = ['red', 'yellow', 'white', 'black'];
+                    teeOrder.forEach(t => {
+                        if (h.tees[t]) {
+                            let dx = h.tees[t].x - fx;
+                            let dz = h.tees[t].z - fz;
+                            teeDists[t] = Math.sqrt(dx*dx + dz*dz);
+                        }
+                    });
+                    
+                    // Check ordering: Red should be closest, Black furthest
+                    let keys = Object.keys(teeDists);
+                    if (keys.length >= 2) {
+                        let orderIdx = t => teeOrder.indexOf(t);
+                        for (let a = 0; a < keys.length; a++) {
+                            for (let b = a+1; b < keys.length; b++) {
+                                if (orderIdx(keys[a]) < orderIdx(keys[b]) && teeDists[keys[a]] > teeDists[keys[b]]) {
+                                    showError('Hole ' + (i+1) + ': ' + keys[a].toUpperCase() + ' tee (' + Math.round(teeDists[keys[a]]) + 'm) is further than ' + keys[b].toUpperCase() + ' tee (' + Math.round(teeDists[keys[b]]) + 'm)! Red should be closest, Black furthest.');
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
             panorama: h.panorama || null,
-            surrounding: h.surrounding || null
+            surrounding: h.surrounding || null,
+            surroundConfig: h.surroundConfig || null
         }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, c: t.color, tc: t.trunkColor})) : [];
         
