@@ -7340,6 +7340,7 @@
         raycaster.setFromCamera(mouse, camera);
         // Filtrera ut eventuella trasiga meshes
         let interactables = [plane];
+        if (window.surroundPlane) interactables.push(window.surroundPlane);
         for(let i=0; i<targets.length; i++) {
             if(targets[i].mesh && targets[i].mesh.geometry) {
                 interactables.push(targets[i].mesh);
@@ -7412,7 +7413,10 @@
             ghostBlock.visible = false;
             sculptBrushCursor.visible = false;
             raycaster.setFromCamera(mouse, camera);
-            let intersects = raycaster.intersectObject(plane);
+            // NATURE can place trees on terrain AND surrounding ground
+            let natureSurfaces = [plane];
+            if (window.surroundPlane) natureSurfaces.push(window.surroundPlane);
+            let intersects = raycaster.intersectObjects(natureSurfaces);
             if (intersects.length > 0) {
                 ghostTree.visible = true;
                 ghostTree.position.copy(intersects[0].point);
