@@ -89,11 +89,15 @@
             
             float totalSway = (sway1 + sway2 + flutter) * heightFactor * uWindStrength;
             
-            // Displace along wind direction
-            transformed.x += uWindDirX * totalSway;
-            transformed.z += uWindDirZ * totalSway;
-            // Slight vertical compression when swaying (natural bend)
-            transformed.y -= abs(totalSway) * 0.05;
+            // Scale displacement relative to model size.
+            // A 1-unit-tall model scaled 12× would amplify sway 12×.
+            // Normalize so visual sway is consistent regardless of model compression.
+            // Reference: a "6-unit" model gets 1:1 sway, smaller models get scaled down.
+            float swayScale = 6.0 / max(treeWorldHeight, 0.1);
+            
+            transformed.x += uWindDirX * totalSway * swayScale;
+            transformed.z += uWindDirZ * totalSway * swayScale;
+            transformed.y -= abs(totalSway * swayScale) * 0.05;
         }
     `;
 
