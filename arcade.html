@@ -1742,15 +1742,16 @@
                 let oldRgb = hexToRgb(oldHex);
                 let newRgb = hexToRgb(newHex);
                 if (oldRgb && newRgb) {
-                    colorMap.push({ old: oldRgb, new: newRgb });
+                    colorMap.push({ old: oldRgb, new: newRgb, key: k });
                 }
             }
         });
         
         if (colorMap.length === 0) return;
         
-        // Max distance to consider a pixel "terrain" (ignore pure black, white, etc.)
-        let maxDist = 120;
+        // Squared-distance cutoff: any pixel within this of ANY biome color gets mapped
+        // 200² = 40000 — catches even heavily blended brush edges
+        let maxDistSq = 40000;
         
         for (let i = 0; i < data.length; i += 4) {
             let r = data[i], g = data[i+1], b = data[i+2];
@@ -1772,29 +1773,22 @@
                 }
             }
             
-            if (best1 < 0 || best1Dist > maxDist * maxDist) continue;
+            if (best1 < 0 || best1Dist > maxDistSq) continue;
             
-            // Exact match or close enough — direct replacement
-            if (best1Dist < 30) {
-                data[i] = colorMap[best1].new.r;
+            if (best2 < 0 || best2Dist > maxDistSq || best1Dist < 10) {
+                // Single closest color (exact or near-exact match)
+                data[i]   = colorMap[best1].new.r;
                 data[i+1] = colorMap[best1].new.g;
                 data[i+2] = colorMap[best1].new.b;
-            } else if (best2 >= 0 && best2Dist < maxDist * maxDist) {
-                // Blended pixel between two terrain types — interpolate
+            } else {
+                // Blended pixel — interpolate based on distance ratio
                 let d1 = Math.sqrt(best1Dist);
                 let d2 = Math.sqrt(best2Dist);
-                let total = d1 + d2;
-                let w1 = 1.0 - (d1 / total); // Closer = higher weight
+                let w1 = d2 / (d1 + d2); // Closer → higher weight
                 let w2 = 1.0 - w1;
                 data[i]   = Math.round(colorMap[best1].new.r * w1 + colorMap[best2].new.r * w2);
                 data[i+1] = Math.round(colorMap[best1].new.g * w1 + colorMap[best2].new.g * w2);
                 data[i+2] = Math.round(colorMap[best1].new.b * w1 + colorMap[best2].new.b * w2);
-            } else {
-                // Only one close color — blend toward it
-                let t = Math.min(1.0, Math.sqrt(best1Dist) / maxDist);
-                data[i]   = Math.round(colorMap[best1].new.r * (1 - t) + r * t);
-                data[i+1] = Math.round(colorMap[best1].new.g * (1 - t) + g * t);
-                data[i+2] = Math.round(colorMap[best1].new.b * (1 - t) + b * t);
             }
         }
         window.pCtx.putImageData(imgData, 0, 0);
