@@ -2360,7 +2360,7 @@
         
         // Convert world position to grid coordinates
         let gx = (worldX + half) / step;
-        let gz = (-worldZ + half) / step; // Negate Z due to plane rotation
+        let gz = (worldZ + half) / step; // PlaneGeo rotated -90°X: localY = -worldZ, row0 = +half
         
         // Clamp to grid bounds
         gx = Math.max(0, Math.min(segs - 1, gx));
