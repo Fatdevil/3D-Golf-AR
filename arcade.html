@@ -1793,6 +1793,16 @@
                 let type = activePal.id.split('-')[1];
                 setPaletteColor(type, activePal);
             }
+            
+            // Uppdatera surrounding horizon färger (matchar nya biom-paletten)
+            if (typeof window.updateSurroundColors === 'function') {
+                window.updateSurroundColors();
+            }
+            
+            // Rebuild 3D scenery med nya färger
+            if (typeof window.rebuildScenery === 'function') {
+                window.rebuildScenery();
+            }
         }
     };
 
