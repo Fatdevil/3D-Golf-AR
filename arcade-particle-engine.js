@@ -278,18 +278,23 @@
             : yMax + Math.random() * 5;
 
         let speed = preset.speedMin + Math.random() * (preset.speedMax - preset.speedMin);
+        // Wind bias: particles spawn already drifting with the wind
+        let windMph = window.currentWindMph || 0;
+        let windDirRad = (window.currentWindDir || 0) * Math.PI / 180;
+        let windBias = windMph * 0.04;  // Lateral speed from wind
+        
         if (preset.type === 'falling' || preset.type === 'streak') {
-            velocities[i*3]     = (Math.random() - 0.5) * preset.drift;
+            velocities[i*3]     = (Math.random() - 0.5) * preset.drift + Math.sin(windDirRad) * windBias;
             velocities[i*3 + 1] = -speed;
-            velocities[i*3 + 2] = (Math.random() - 0.5) * preset.drift;
+            velocities[i*3 + 2] = (Math.random() - 0.5) * preset.drift - Math.cos(windDirRad) * windBias;
         } else if (preset.type === 'rising') {
-            velocities[i*3]     = (Math.random() - 0.5) * preset.drift;
+            velocities[i*3]     = (Math.random() - 0.5) * preset.drift + Math.sin(windDirRad) * windBias;
             velocities[i*3 + 1] = speed;
-            velocities[i*3 + 2] = (Math.random() - 0.5) * preset.drift;
+            velocities[i*3 + 2] = (Math.random() - 0.5) * preset.drift - Math.cos(windDirRad) * windBias;
         } else {
-            velocities[i*3]     = (Math.random() - 0.5) * preset.drift * 0.5;
+            velocities[i*3]     = (Math.random() - 0.5) * preset.drift * 0.5 + Math.sin(windDirRad) * windBias;
             velocities[i*3 + 1] = (Math.random() - 0.5) * speed * 0.5;
-            velocities[i*3 + 2] = (Math.random() - 0.5) * preset.drift * 0.5;
+            velocities[i*3 + 2] = (Math.random() - 0.5) * preset.drift * 0.5 - Math.cos(windDirRad) * windBias;
         }
 
         let col = preset.colors[Math.floor(Math.random() * preset.colors.length)];
@@ -416,7 +421,8 @@
         let windDirDeg = window.currentWindDir || 0;
         let windDirRad = windDirDeg * Math.PI / 180;
         // Convert mph to a per-frame push (meters/sec, scaled for visual feel)
-        let windForce = windMph * 0.015;  // 30 mph → 0.45 units/sec push
+        // 30 mph → 1.8 units/sec push (clearly visible lateral drift)
+        let windForce = windMph * 0.06;
         let windPushX = Math.sin(windDirRad) * windForce * dt;
         let windPushZ = -Math.cos(windDirRad) * windForce * dt;
 
