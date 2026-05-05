@@ -2346,6 +2346,54 @@
     // Extend Game Context with terrain objects
     Object.assign(window.G, { camera, renderer, plane, planeGeo, TERRAIN_SIZE, TERRAIN_SEGS });
     
+    // Fast terrain height lookup (reads vertex array directly, no raycasting)
+    // PlaneGeometry is rotated -90° on X, so vertex layout:
+    //   vertex[i*3]   = local X (= world X)
+    //   vertex[i*3+1] = local Y (= world -Z, but after rotation = world Z)  
+    //   vertex[i*3+2] = local Z (= height / world Y)
+    // Grid: (TERRAIN_SEGS+1) x (TERRAIN_SEGS+1), spanning -TERRAIN_SIZE/2 to +TERRAIN_SIZE/2
+    window.getTerrainHeight = function(worldX, worldZ) {
+        let positions = planeGeo.attributes.position.array;
+        let segs = TERRAIN_SEGS;
+        let half = TERRAIN_SIZE / 2;
+        let step = TERRAIN_SIZE / segs;
+        
+        // Convert world position to grid coordinates
+        let gx = (worldX + half) / step;
+        let gz = (-worldZ + half) / step; // Negate Z due to plane rotation
+        
+        // Clamp to grid bounds
+        gx = Math.max(0, Math.min(segs - 1, gx));
+        gz = Math.max(0, Math.min(segs - 1, gz));
+        
+        // Grid cell indices
+        let ix = Math.floor(gx);
+        let iz = Math.floor(gz);
+        let fx = gx - ix; // Fractional part for interpolation
+        let fz = gz - iz;
+        
+        // Vertex indices (row-major, (segs+1) vertices per row)
+        let stride = segs + 1;
+        let i00 = (iz * stride + ix) * 3 + 2;       // height = Z component
+        let i10 = (iz * stride + (ix + 1)) * 3 + 2;
+        let i01 = ((iz + 1) * stride + ix) * 3 + 2;
+        let i11 = ((iz + 1) * stride + (ix + 1)) * 3 + 2;
+        
+        // Bilinear interpolation
+        let h00 = positions[i00] || 0;
+        let h10 = positions[i10] || 0;
+        let h01 = positions[i01] || 0;
+        let h11 = positions[i11] || 0;
+        
+        let h = h00 * (1 - fx) * (1 - fz)
+              + h10 * fx * (1 - fz)
+              + h01 * (1 - fx) * fz
+              + h11 * fx * fz;
+        
+        return h;
+    };
+    window.TERRAIN_SIZE = TERRAIN_SIZE;
+    
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
     let surroundSize = 20000;
     let sShape = new THREE.Shape();
