@@ -7263,6 +7263,80 @@
     }
     
     // Build mode toast notification
+    // Auto-sort tees: reassign colors so Red=closest to flag, Black=furthest
+    function autoSortTees(hole) {
+        if (!hole.flag) return;
+        
+        let colorOrder = ['red', 'yellow', 'white', 'black'];
+        let colorHex = { red: 0xef4444, yellow: 0xfacc15, white: 0xffffff, black: 0x111111 };
+        let colorEmoji = { red: '🔴', yellow: '🟡', white: '⚪', black: '⬛' };
+        
+        // Collect all placed tees (not range) with their positions + distances
+        let placedTees = [];
+        colorOrder.forEach(c => {
+            if (hole.tees[c]) {
+                let dx = hole.tees[c].x - hole.flag.x;
+                let dz = hole.tees[c].z - hole.flag.z;
+                let dist = Math.sqrt(dx*dx + dz*dz);
+                placedTees.push({ 
+                    pos: { ...hole.tees[c] },  // Clone position
+                    dist: dist
+                });
+            }
+        });
+        
+        if (placedTees.length < 2) return; // Nothing to sort with 0-1 tees
+        
+        // Sort by distance: closest first
+        placedTees.sort((a, b) => a.dist - b.dist);
+        
+        // Check if already in correct order
+        let alreadyCorrect = true;
+        let existingColors = colorOrder.filter(c => hole.tees[c]);
+        for (let i = 0; i < placedTees.length; i++) {
+            let expectedColor = existingColors[i];
+            if (!hole.tees[expectedColor]) continue;
+            let dx = hole.tees[expectedColor].x - placedTees[i].pos.x;
+            let dz = hole.tees[expectedColor].z - placedTees[i].pos.z;
+            if (Math.sqrt(dx*dx + dz*dz) > 0.1) { alreadyCorrect = false; break; }
+        }
+        
+        if (alreadyCorrect) {
+            // Show distances anyway
+            let distText = placedTees.map((t, i) => colorEmoji[existingColors[i]] + ' ' + Math.round(t.dist) + 'm').join('  ');
+            showBuildToast('✅ Tees OK: ' + distText, '#22c55e');
+            return;
+        }
+        
+        // Reassign: closest position → first available color, etc.
+        let assignedColors = colorOrder.filter(c => hole.tees[c]); // Only colors that were placed
+        
+        // Remove all existing tee meshes
+        assignedColors.forEach(c => {
+            if (hole.teeMeshes[c]) scene.remove(hole.teeMeshes[c]);
+            hole.tees[c] = null;
+            hole.teeMeshes[c] = null;
+        });
+        
+        // Reassign positions to colors in order (closest = first color in order)
+        for (let i = 0; i < placedTees.length; i++) {
+            let color = assignedColors[i];
+            hole.tees[color] = placedTees[i].pos;
+            hole.teeMeshes[color] = createTeeObject(
+                placedTees[i].pos.x, placedTees[i].pos.y, placedTees[i].pos.z, 
+                colorHex[color]
+            );
+            // Restore rotation if it was saved
+            if (placedTees[i].pos.rot) {
+                hole.teeMeshes[color].rotation.y = placedTees[i].pos.rot;
+            }
+        }
+        
+        // Show result
+        let distText = placedTees.map((t, i) => colorEmoji[assignedColors[i]] + ' ' + Math.round(t.dist) + 'm').join('  ');
+        showBuildToast('🔄 Tees auto-sorted! ' + distText, '#a855f7');
+    }
+    
     function showBuildToast(msg, color) {
         let existing = document.getElementById('build-toast');
         if (existing) existing.remove();
@@ -7314,6 +7388,15 @@
                     hole.teeMeshes[teeType] = createTeeObject(hole.tees[teeType].x, hole.tees[teeType].y, hole.tees[teeType].z, col);
                 }
                 
+                // Show distance to flag if flag exists
+                if (hole.flag && teeType !== 'range') {
+                    let dx = lastHitPoint.x - hole.flag.x;
+                    let dz = lastHitPoint.z - hole.flag.z;
+                    let dist = Math.sqrt(dx*dx + dz*dz);
+                    let teeLabel = teeType.toUpperCase();
+                    showBuildToast('⛳ ' + teeLabel + ' TEE → ' + Math.round(dist) + 'm to flag', '#38bdf8');
+                }
+                
                 activeRotatingTee = teeType;
                 controls.enabled = false;
                 return;
@@ -7331,6 +7414,9 @@
                 }
                 hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
                 hole.flagMesh = createFlagObject(hole.flag.x, hole.flag.y, hole.flag.z);
+                
+                // Auto-sort tees by distance to the new flag position
+                autoSortTees(hole);
             }
             saveLevel();
             return;
