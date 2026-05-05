@@ -3979,17 +3979,24 @@
         group.add(pole);
         group.add(pflag);
         
-        // Gimme circle — visual ring showing gimme distance
+        // Gimme circle — visual ring showing gimme distance, terrain-hugging
         let gimmeRadiusM = ((window.matchSettings ? window.matchSettings.gimmeDist : 10) / 3.28084);
         let circlePoints = [];
         let segments = 64;
         for (let i = 0; i <= segments; i++) {
             let angle = (i / segments) * Math.PI * 2;
-            circlePoints.push(new THREE.Vector3(
-                Math.cos(angle) * gimmeRadiusM,
-                0.08,  // Slightly above ground
-                Math.sin(angle) * gimmeRadiusM
-            ));
+            let lx = Math.cos(angle) * gimmeRadiusM;
+            let lz = Math.sin(angle) * gimmeRadiusM;
+            // Sample terrain at world position (group will be at x, y, z)
+            let worldX = x + lx;
+            let worldZ = z + lz;
+            let terrainY = y; // Fallback to flag height
+            if (typeof localGetTerrainAt === 'function') {
+                let surf = localGetTerrainAt(worldX, -worldZ);
+                if (surf && surf.z !== undefined) terrainY = surf.z;
+            }
+            // Y in local space = terrain height - group Y + small offset
+            circlePoints.push(new THREE.Vector3(lx, (terrainY - y) + 0.06, lz));
         }
         let circleGeo = new THREE.BufferGeometry().setFromPoints(circlePoints);
         let circleMat = new THREE.LineDashedMaterial({
@@ -3998,11 +4005,12 @@
             opacity: 0.35,
             dashSize: 0.3,
             gapSize: 0.15,
-            depthTest: true
+            depthTest: false  // Always visible on top of terrain
         });
         let gimmeCircle = new THREE.Line(circleGeo, circleMat);
         gimmeCircle.computeLineDistances(); // Required for dashed lines
         gimmeCircle.name = 'gimmeCircle';
+        gimmeCircle.renderOrder = 1;  // Render after terrain
         group.add(gimmeCircle);
         
         group.position.set(x, y, z);
@@ -4017,17 +4025,21 @@
         // Update on ALL hole flags
         for (let i = 0; i < MAX_HOLES; i++) {
             let h = courseHoles[i];
-            if (h.flagMesh) {
+            if (h.flagMesh && h.flag) {
                 let circle = h.flagMesh.getObjectByName('gimmeCircle');
                 if (circle) {
+                    let fx = h.flag.x, fy = h.flag.y, fz = h.flag.z;
                     let pts = [];
                     for (let j = 0; j <= segments; j++) {
                         let angle = (j / segments) * Math.PI * 2;
-                        pts.push(new THREE.Vector3(
-                            Math.cos(angle) * gimmeRadiusM,
-                            0.08,
-                            Math.sin(angle) * gimmeRadiusM
-                        ));
+                        let lx = Math.cos(angle) * gimmeRadiusM;
+                        let lz = Math.sin(angle) * gimmeRadiusM;
+                        let terrainY = fy;
+                        if (typeof localGetTerrainAt === 'function') {
+                            let surf = localGetTerrainAt(fx + lx, -(fz + lz));
+                            if (surf && surf.z !== undefined) terrainY = surf.z;
+                        }
+                        pts.push(new THREE.Vector3(lx, (terrainY - fy) + 0.06, lz));
                     }
                     circle.geometry.dispose();
                     circle.geometry = new THREE.BufferGeometry().setFromPoints(pts);
