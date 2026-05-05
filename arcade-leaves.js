@@ -21,7 +21,8 @@
 
     // --- CONFIG ---
     const MAX_FALLING   = 80;      // Active falling leaves
-    const MAX_GROUND    = 400;     // Landed leaves on ground
+    const MAX_GROUND    = 500;     // Landed leaves on ground
+    const PRE_SPAWN     = 350;     // Pre-placed on activation
     const SPAWN_RADIUS  = 100;     // Spawn radius around camera
     const SPAWN_HEIGHT  = [25, 50]; // Y range for spawning
     const FALL_SPEED    = [0.8, 2.0]; // m/s fall speed range
@@ -151,7 +152,120 @@
             _fallingData.push(_spawnFallingLeaf(true));
         }
 
-        console.log('[AutumnLeaves] Activated 🍂 | Falling:', MAX_FALLING, '| Ground max:', MAX_GROUND);
+        // Pre-spawn ground leaves for instant carpet effect
+        _preSpawnGroundLeaves();
+
+        console.log('[AutumnLeaves] Activated 🍂 | Falling:', MAX_FALLING, '| Ground pre-spawned:', _groundIdx, '/', MAX_GROUND);
+    }
+
+    // ---------------------------------------------------------------
+    // PRE-SPAWN ground leaves — instant carpet at activation
+    // Only on rough, semi-rough, fescue (not fairway/green/bunker/water)
+    // ---------------------------------------------------------------
+    function _preSpawnGroundLeaves() {
+        if (!_groundMesh || !_camera) return;
+
+        // Get terrain data to check surface type
+        let terrainData = window.terrainBiomeData; // RGBA pixel data of 4096x4096 canvas
+        let TERRAIN_SIZE = window.TERRAIN_SIZE || 200;
+        let biomeConfig = window.CURRENT_BIOME_CONFIG;
+
+        // Build list of "leafy" surface colors (rough, semi, fescue, OB)
+        let leafySurfaces = [];
+        if (biomeConfig) {
+            ['rough', 'semi', 'fescue', 'ob'].forEach(k => {
+                let hex = biomeConfig[k + 'Color'];
+                if (hex) {
+                    let rgb = _hexToRgb(hex);
+                    if (rgb) leafySurfaces.push(rgb);
+                }
+            });
+        }
+
+        let cx = _camera.position.x;
+        let cz = _camera.position.z;
+        let placed = 0;
+        let attempts = 0;
+        let maxAttempts = PRE_SPAWN * 4; // Allow some failures
+
+        while (placed < PRE_SPAWN && attempts < maxAttempts) {
+            attempts++;
+
+            // Random position across the whole terrain (not just camera radius)
+            let x = (Math.random() - 0.5) * TERRAIN_SIZE * 0.9;
+            let z = (Math.random() - 0.5) * TERRAIN_SIZE * 0.9;
+
+            // Check terrain type at this position
+            if (terrainData && leafySurfaces.length > 0) {
+                let px = Math.floor(((x + TERRAIN_SIZE / 2) / TERRAIN_SIZE) * 4096);
+                let pz = Math.floor(((z + TERRAIN_SIZE / 2) / TERRAIN_SIZE) * 4096);
+                px = Math.max(0, Math.min(4095, px));
+                pz = Math.max(0, Math.min(4095, pz));
+
+                let idx = (pz * 4096 + px) * 4;
+                let pr = terrainData[idx];
+                let pg = terrainData[idx + 1];
+                let pb = terrainData[idx + 2];
+
+                // Check if this pixel is close to a "leafy" surface
+                let isLeafy = false;
+                for (let s = 0; s < leafySurfaces.length; s++) {
+                    let dr = pr - leafySurfaces[s].r;
+                    let dg = pg - leafySurfaces[s].g;
+                    let db = pb - leafySurfaces[s].b;
+                    if (dr * dr + dg * dg + db * db < 3000) {
+                        isLeafy = true;
+                        break;
+                    }
+                }
+
+                if (!isLeafy) continue; // Skip fairway/green/bunker/water
+            }
+
+            // Get terrain height
+            let groundY = GROUND_Y;
+            if (window.getTerrainHeight) {
+                let h = window.getTerrainHeight(x, z);
+                if (h !== undefined && h !== null) groundY = h + 0.08;
+            }
+
+            let scale = LEAF_SCALE[0] + Math.random() * (LEAF_SCALE[1] - LEAF_SCALE[0]);
+            let colorIdx = Math.floor(Math.random() * LEAF_COLORS.length);
+
+            let slotIdx = _groundIdx % MAX_GROUND;
+            _groundIdx++;
+
+            // Flat on ground with random rotation
+            _euler.set(Math.PI / 2 + (Math.random() - 0.5) * 0.3, Math.random() * Math.PI * 2, 0);
+            _quat.setFromEuler(_euler);
+            _pos.set(x, groundY, z);
+            _scl.set(scale, scale, scale);
+
+            _dummy.position.copy(_pos);
+            _dummy.quaternion.copy(_quat);
+            _dummy.scale.copy(_scl);
+            _dummy.updateMatrix();
+            _groundMesh.setMatrixAt(slotIdx, _dummy.matrix);
+
+            let col = LEAF_COLORS[colorIdx];
+            _color.setRGB(col[0], col[1], col[2]);
+            _groundMesh.setColorAt(slotIdx, _color);
+
+            placed++;
+        }
+
+        _groundMesh.instanceMatrix.needsUpdate = true;
+        _groundMesh.instanceColor.needsUpdate = true;
+    }
+
+    function _hexToRgb(hex) {
+        hex = hex.replace('#', '');
+        if (hex.length !== 6) return null;
+        return {
+            r: parseInt(hex.substr(0, 2), 16),
+            g: parseInt(hex.substr(2, 2), 16),
+            b: parseInt(hex.substr(4, 2), 16)
+        };
     }
 
     // ---------------------------------------------------------------
