@@ -1719,19 +1719,20 @@
     
     // Biome-driven tree color tints (applied at runtime, never saved to placedTrees)
     // canopy = leaf/foliage tint, trunk = bark tint. '#ffffff' = original model color.
+    // Trunk stays natural (#ffffff) — the 3D models already have proper bark textures.
     window.BIOME_TREE_TINTS = {
         'ALL':      { canopy: '#ffffff', trunk: '#ffffff' },
         'GLOBAL':   { canopy: '#ffffff', trunk: '#ffffff' },
         'CUSTOM':   { canopy: '#ffffff', trunk: '#ffffff' },
-        'AUTUMN':   { canopy: '#dd7722', trunk: '#8b6944' },
-        'WINTER':   { canopy: '#c8dce8', trunk: '#9eaab5' },
-        'SNOW':     { canopy: '#e8f0f8', trunk: '#b0b8c0' },
-        'TROPICAL': { canopy: '#33aa44', trunk: '#7a5c3a' },
-        'ISLAND':   { canopy: '#44bb55', trunk: '#8a6a42' },
-        'DESERT':   { canopy: '#88a855', trunk: '#9e8860' },
-        'MOON':     { canopy: '#667788', trunk: '#555566' },
+        'AUTUMN':   { canopy: '#dd7722', trunk: '#ffffff' },
+        'WINTER':   { canopy: '#c8dce8', trunk: '#ffffff' },
+        'SNOW':     { canopy: '#e8f0f8', trunk: '#ffffff' },
+        'TROPICAL': { canopy: '#33aa44', trunk: '#ffffff' },
+        'ISLAND':   { canopy: '#44bb55', trunk: '#ffffff' },
+        'DESERT':   { canopy: '#88a855', trunk: '#ffffff' },
+        'MOON':     { canopy: '#667788', trunk: '#888899' },
         'CANDY':    { canopy: '#ff88cc', trunk: '#cc88ff' },
-        'VOLCANO':  { canopy: '#886633', trunk: '#554422' },
+        'VOLCANO':  { canopy: '#886633', trunk: '#444444' },
     };
     window._currentBiomeTint = { canopy: '#ffffff', trunk: '#ffffff' };
     
