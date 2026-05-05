@@ -1718,21 +1718,21 @@
     window.ACTIVE_BIOME = 'ALL';
     
     // Biome-driven tree color tints (applied at runtime, never saved to placedTrees)
-    // canopy = leaf/foliage tint, trunk = bark tint. '#ffffff' = original model color.
+    // canopy = array of colors for natural variety. Each tree picks one based on position hash.
     // Trunk stays natural (#ffffff) — the 3D models already have proper bark textures.
     window.BIOME_TREE_TINTS = {
-        'ALL':      { canopy: '#ffffff', trunk: '#ffffff' },
-        'GLOBAL':   { canopy: '#ffffff', trunk: '#ffffff' },
-        'CUSTOM':   { canopy: '#ffffff', trunk: '#ffffff' },
-        'AUTUMN':   { canopy: '#ff9933', trunk: '#ffffff' },
-        'WINTER':   { canopy: '#aaccdd', trunk: '#ffffff' },
-        'SNOW':     { canopy: '#ddeeff', trunk: '#ffffff' },
-        'TROPICAL': { canopy: '#33aa44', trunk: '#ffffff' },
-        'ISLAND':   { canopy: '#44bb55', trunk: '#ffffff' },
-        'DESERT':   { canopy: '#88a855', trunk: '#ffffff' },
-        'MOON':     { canopy: '#667788', trunk: '#888899' },
-        'CANDY':    { canopy: '#ff88cc', trunk: '#cc88ff' },
-        'VOLCANO':  { canopy: '#886633', trunk: '#444444' },
+        'ALL':      { canopy: ['#ffffff'], trunk: '#ffffff' },
+        'GLOBAL':   { canopy: ['#ffffff'], trunk: '#ffffff' },
+        'CUSTOM':   { canopy: ['#ffffff'], trunk: '#ffffff' },
+        'AUTUMN':   { canopy: ['#dd3322', '#ee6622', '#ff9933', '#ffcc22', '#cc8833', '#dd5544'], trunk: '#ffffff' },
+        'WINTER':   { canopy: ['#aaccdd', '#99bbcc', '#bbddee'], trunk: '#ffffff' },
+        'SNOW':     { canopy: ['#ddeeff', '#cce0f0', '#eef4ff'], trunk: '#ffffff' },
+        'TROPICAL': { canopy: ['#22aa33', '#33bb44', '#44cc55'], trunk: '#ffffff' },
+        'ISLAND':   { canopy: ['#33aa44', '#44bb55', '#55cc66'], trunk: '#ffffff' },
+        'DESERT':   { canopy: ['#88a855', '#99aa55', '#778844'], trunk: '#ffffff' },
+        'MOON':     { canopy: ['#556677', '#667788', '#778899'], trunk: '#888899' },
+        'CANDY':    { canopy: ['#ff88cc', '#88ccff', '#ffdd44', '#88ff88', '#cc88ff'], trunk: '#cc88ff' },
+        'VOLCANO':  { canopy: ['#886633', '#775522', '#996644'], trunk: '#444444' },
     };
     window._currentBiomeTint = { canopy: '#ffffff', trunk: '#ffffff' };
     
@@ -3837,9 +3837,13 @@
                 if (t.color && t.color !== '#ffffff' && off.isColorable) {
                     // Manual color set by user — use it directly
                     iMesh.setColorAt(i, new THREE.Color(t.color));
-                } else if (off.isColorable && window._currentBiomeTint && window._currentBiomeTint.canopy !== '#ffffff') {
-                    // Biome auto-tint (runtime only, not saved)
-                    iMesh.setColorAt(i, new THREE.Color(window._currentBiomeTint.canopy));
+                } else if (off.isColorable && window._currentBiomeTint && window._currentBiomeTint.canopy[0] !== '#ffffff') {
+                    // Biome auto-tint with per-tree variety (runtime only, not saved)
+                    let palette = window._currentBiomeTint.canopy;
+                    // Deterministic hash from tree position for consistent color
+                    let hash = Math.abs(Math.sin(t.x * 12.9898 + t.z * 78.233) * 43758.5453) % 1;
+                    let colorIdx = Math.floor(hash * palette.length);
+                    iMesh.setColorAt(i, new THREE.Color(palette[colorIdx]));
                 } else {
                     iMesh.setColorAt(i, new THREE.Color(0xffffff));
                 }
