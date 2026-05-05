@@ -1716,8 +1716,31 @@
     };
 
     window.ACTIVE_BIOME = 'ALL';
+    
+    // Biome-driven tree color tints (applied at runtime, never saved to placedTrees)
+    // canopy = leaf/foliage tint, trunk = bark tint. '#ffffff' = original model color.
+    window.BIOME_TREE_TINTS = {
+        'ALL':      { canopy: '#ffffff', trunk: '#ffffff' },
+        'GLOBAL':   { canopy: '#ffffff', trunk: '#ffffff' },
+        'CUSTOM':   { canopy: '#ffffff', trunk: '#ffffff' },
+        'AUTUMN':   { canopy: '#dd7722', trunk: '#8b6944' },
+        'WINTER':   { canopy: '#c8dce8', trunk: '#9eaab5' },
+        'SNOW':     { canopy: '#e8f0f8', trunk: '#b0b8c0' },
+        'TROPICAL': { canopy: '#33aa44', trunk: '#7a5c3a' },
+        'ISLAND':   { canopy: '#44bb55', trunk: '#8a6a42' },
+        'DESERT':   { canopy: '#88a855', trunk: '#9e8860' },
+        'MOON':     { canopy: '#667788', trunk: '#555566' },
+        'CANDY':    { canopy: '#ff88cc', trunk: '#cc88ff' },
+        'VOLCANO':  { canopy: '#886633', trunk: '#554422' },
+    };
+    window._currentBiomeTint = { canopy: '#ffffff', trunk: '#ffffff' };
+    
     window.changeBiome = function(val) {
         window.ACTIVE_BIOME = val;
+        
+        // Update tree tint for this biome
+        let tint = window.BIOME_TREE_TINTS[val] || window.BIOME_TREE_TINTS['GLOBAL'];
+        window._currentBiomeTint = tint;
         window.buildNatureUI();
 
         // === PARTICLE ENGINE: Auto-activate for biome ===
@@ -1802,6 +1825,11 @@
             // Rebuild 3D scenery med nya färger
             if (typeof window.rebuildScenery === 'function') {
                 window.rebuildScenery();
+            }
+            
+            // Rebuild all tree instance pools with new biome tints
+            if (typeof rebuildAllPools === 'function') {
+                rebuildAllPools();
             }
         }
     };
@@ -3796,12 +3824,23 @@
                 _iMatrix.compose(_iPos, _iQuat, _iScale);
                 iMesh.setMatrixAt(i, _iMatrix);
                 
-                if (t.color && off.isColorable) {
+                if (t.color && t.color !== '#ffffff' && off.isColorable) {
+                    // Manual color set by user — use it directly
                     iMesh.setColorAt(i, new THREE.Color(t.color));
+                } else if (off.isColorable && window._currentBiomeTint && window._currentBiomeTint.canopy !== '#ffffff') {
+                    // Biome auto-tint (runtime only, not saved)
+                    iMesh.setColorAt(i, new THREE.Color(window._currentBiomeTint.canopy));
                 } else {
                     iMesh.setColorAt(i, new THREE.Color(0xffffff));
                 }
-                let tCol = t.trunkColor ? new THREE.Color(t.trunkColor) : new THREE.Color(0xffffff);
+                let tCol;
+                if (t.trunkColor && t.trunkColor !== '#ffffff') {
+                    tCol = new THREE.Color(t.trunkColor);
+                } else if (window._currentBiomeTint && window._currentBiomeTint.trunk !== '#ffffff') {
+                    tCol = new THREE.Color(window._currentBiomeTint.trunk);
+                } else {
+                    tCol = new THREE.Color(0xffffff);
+                }
                 iMesh.geometry.attributes.instanceTrunkColor.setXYZ(i, tCol.r, tCol.g, tCol.b);
             });
         });
