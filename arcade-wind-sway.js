@@ -71,10 +71,10 @@
             float modelScaleY = length(vec3(instanceMatrix[1][0], instanceMatrix[1][1], instanceMatrix[1][2]));
             
             // Normalized height (0=root, 1=top) using raw model position
-            // Works for ANY model size since we normalize by the model's own bbox
-            float rawMaxY = 1.0; // Most compressed models use 0-1 range
+            float rawMaxY = 1.0;
             float normalizedHeight = clamp(position.y / rawMaxY, 0.0, 1.5);
-            float heightFactor = smoothstep(0.15, 0.5, normalizedHeight);
+            // Root anchored, trunk bends gradually, canopy full sway
+            float heightFactor = smoothstep(0.0, 0.8, normalizedHeight);
             
             // Per-instance variation
             float instanceHash = fract(sin(rootPos4.x * 12.9898 + rootPos4.z * 78.233) * 43758.5453);
