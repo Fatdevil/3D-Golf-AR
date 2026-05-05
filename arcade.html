@@ -8854,14 +8854,38 @@
                 
                 let pos = cloth.geometry.attributes.position;
                 let w = 1.5;  // cloth width
+                
+                // Cache original Y positions ONCE (from unmodified PlaneGeometry)
+                if (!cloth.geometry._origY) {
+                    cloth.geometry._origY = new Float32Array(pos.count);
+                    for (let oi = 0; oi < pos.count; oi++) {
+                        cloth.geometry._origY[oi] = pos.getY(oi);
+                    }
+                }
+                
+                // Gravity droop: flag hangs down when wind is calm
+                // windLift: 0 = full droop (windstill), 1 = fully horizontal (strong wind)
+                let windLift = Math.min(1.0, windMph / 12.0);  // Full horizontal at 12+ mph
+                let maxDroop = -1.2;  // Max vertical droop at the tip (meters)
+                
                 for (let i = 0; i < pos.count; i++) {
                     let x = pos.getX(i);  // 0 = pole side, 1.5 = free edge
                     let xNorm = (x + w/2) / w;  // 0..1 from pole to tip
-                    // Wave: more displacement at the free edge
+                    
+                    // Wave flutter: more displacement at the free edge
                     let wave = Math.sin(t * 8.0 + xNorm * 4.0 + fi) * xNorm * xNorm * totalStr;
                     let wave2 = Math.sin(t * 12.5 + xNorm * 6.0 + fi * 2.3) * xNorm * xNorm * totalStr * 0.3;
                     pos.setZ(i, wave + wave2);
+                    
+                    // Gravity droop on Y-axis: quadratic curve from pole to tip
+                    // At windstill: tip droops maxDroop, pole-side stays fixed
+                    // At full wind: no droop (flag flies horizontal)
+                    let droop = maxDroop * xNorm * xNorm * (1.0 - windLift);
+                    // Add tiny idle sway even when drooping
+                    droop += Math.sin(t * 2.0 + xNorm * 3.0) * xNorm * 0.03;
+                    pos.setY(i, cloth.geometry._origY[i] + droop);
                 }
+                
                 pos.needsUpdate = true;
             }
         }
