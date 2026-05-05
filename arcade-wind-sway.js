@@ -63,11 +63,21 @@
     // position.y = height above root. Higher = more sway.
     const WIND_VERTEX_CODE = `
         if (uSwayEnabled > 0.5 && uWindStrength > 0.001) {
-            // Height factor: vertices below 1.0 don't move (trunk/roots)
-            float heightFactor = smoothstep(1.0, 6.0, position.y);
+            // Get world-space position (accounts for instanceMatrix scale)
+            vec4 worldPos4 = instanceMatrix * vec4(position, 1.0);
+            
+            // Height factor using WORLD height, not raw model position
+            // Models from 3D AI Studio may be normalized to 0-1 range,
+            // but instanceMatrix scales them to full size (e.g., 12m).
+            // Use fraction of total height: bottom 20% = trunk, above = sway
+            vec4 rootPos4 = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+            vec4 topPos4 = instanceMatrix * vec4(0.0, 1.0, 0.0, 1.0);
+            float treeWorldHeight = max(length(topPos4.xyz - rootPos4.xyz), 0.1);
+            float localHeight = length(worldPos4.xyz - rootPos4.xyz);
+            float normalizedHeight = localHeight / treeWorldHeight;
+            float heightFactor = smoothstep(0.15, 0.5, normalizedHeight);
             
             // Per-instance variation using world position
-            vec4 worldPos4 = instanceMatrix * vec4(position, 1.0);
             float instanceHash = fract(sin(worldPos4.x * 12.9898 + worldPos4.z * 78.233) * 43758.5453);
             
             // Primary sway: slow, large movement
