@@ -2030,8 +2030,9 @@
                                                 `
 #if defined( USE_COLOR_ALPHA )
     vec3 texC = diffuseColor.rgb;
-    bool isBrown = (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
-    bool isGrey = abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
+    bool isGreenish = texC.g > texC.r + 0.01;
+    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
+    bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
     vec3 targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
     float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
     if (tintStr > 0.02) {
@@ -2042,8 +2043,9 @@
     diffuseColor.a *= vColor.a;
 #elif defined( USE_COLOR )
     vec3 texC = diffuseColor.rgb;
-    bool isBrown = (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
-    bool isGrey = abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
+    bool isGreenish = texC.g > texC.r + 0.01;
+    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
+    bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
     vec3 targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
     float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
     if (tintStr > 0.02) {
@@ -3749,12 +3751,19 @@
                         isColorable = false;
                     }
                     
-                    if (isColorable && child.material && child.material.color) {
+                    if (child.material && child.material.color) {
                         let c = child.material.color;
-                        let isBrown = (c.r > c.g) && (c.g >= c.b) && (c.r < 0.7);
-                        let isGrey = Math.abs(c.r - c.g) < 0.05 && Math.abs(c.g - c.b) < 0.05 && c.r < 0.6;
-                        if (isBrown || isGrey) {
-                            isColorable = false;
+                        // If material is GREEN (G > R), it's foliage — always colorable
+                        // (overrides name-based detection for "branch" meshes with leaves)
+                        let isGreen = c.g > c.r + 0.02;
+                        if (isGreen) {
+                            isColorable = true;
+                        } else {
+                            let isBrown = (c.r > c.g) && (c.g >= c.b) && (c.r < 0.7);
+                            let isGrey = Math.abs(c.r - c.g) < 0.05 && Math.abs(c.g - c.b) < 0.05 && c.r < 0.6;
+                            if (isBrown || isGrey) {
+                                isColorable = false;
+                            }
                         }
                     }
                 }
