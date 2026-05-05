@@ -189,8 +189,17 @@ window.GolfPhysics = (function() {
             
             return { dp: currentV, dv: totalAccel };
         }
-
-        let vRel = vecSub(currentV, state.wind); // Relativ hastighet mot luften
+        // Wind gradient: logarithmic boundary layer profile
+        // Higher altitude = stronger wind. Reference height = 10m.
+        // At 30m apex: ~27% more wind. At 5m punch: ~20% less wind.
+        let heightM = Math.max(0.03, state.pos[2]); // Current ball height
+        let z0 = 0.03;   // Surface roughness (grass = 0.03m)
+        let refH = 10.0; // Reference measurement height
+        let windScale = Math.log(heightM / z0) / Math.log(refH / z0);
+        windScale = Math.max(0.0, Math.min(2.0, windScale)); // Clamp 0–2×
+        let heightWind = [state.wind[0] * windScale, state.wind[1] * windScale, 0];
+        
+        let vRel = vecSub(currentV, heightWind); // Relativ hastighet mot luften
         let vRelMag = vecMag(vRel);
 
         // Vid stillastående verkar bara gravitationen
