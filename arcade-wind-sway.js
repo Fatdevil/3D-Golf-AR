@@ -88,7 +88,7 @@
             
             // Target: max 1.5 meters world-space sway at peak wind.
             // Convert to model-space by dividing by scale.
-            float maxSwayWorld = 1.5;
+            float maxSwayWorld = 3.0;
             float swayModelSpace = oscillation * maxSwayWorld / max(modelScaleY, 0.1);
             
             transformed.x += uWindDirX * swayModelSpace;
