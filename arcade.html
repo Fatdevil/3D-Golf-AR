@@ -8826,6 +8826,8 @@
             let t = performance.now() * 0.001;
             let windMph = window.currentWindMph || 0;
             let windStrength = Math.min(1.0, windMph / 25.0);
+            // Wind direction → radians (flag blows AWAY from wind source)
+            let windDirRad = ((window.currentWindDir || 0) + 180) * Math.PI / 180;
             // Base flutter even with no wind (flag always moves a little)
             let baseFlutter = 0.08;
             let totalStr = baseFlutter + windStrength * 0.6;
@@ -8833,6 +8835,23 @@
             for (let fi = 0; fi < window._allFlagCloths.length; fi++) {
                 let cloth = window._allFlagCloths[fi];
                 if (!cloth || !cloth.geometry) continue;
+                
+                // Rotate flag cloth around the pole to face wind direction
+                // The cloth is positioned at (0.75, 5.5, 0) relative to group
+                // We pivot the cloth around the pole (X=0) by adjusting parent rotation
+                if (cloth.parent) {
+                    // Smoothly interpolate rotation towards wind direction
+                    let targetRot = windDirRad;
+                    let currentRot = cloth.parent._flagWindRot || 0;
+                    let diff = targetRot - currentRot;
+                    // Normalize angle diff to [-PI, PI]
+                    while (diff > Math.PI) diff -= 2 * Math.PI;
+                    while (diff < -Math.PI) diff += 2 * Math.PI;
+                    currentRot += diff * 0.02;  // Smooth lag
+                    cloth.parent._flagWindRot = currentRot;
+                    cloth.parent.rotation.y = currentRot;
+                }
+                
                 let pos = cloth.geometry.attributes.position;
                 let w = 1.5;  // cloth width
                 for (let i = 0; i < pos.count; i++) {
