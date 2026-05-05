@@ -1736,7 +1736,7 @@
         keys.forEach(k => {
             let oldHex = oldConfig[k + 'Color'];
             let newHex = newConfig[k + 'Color'];
-            if (oldHex && newHex && oldHex !== newHex) {
+            if (oldHex && newHex) {
                 let oldRgb = hexToRgb(oldHex);
                 let newRgb = hexToRgb(newHex);
                 if (oldRgb && newRgb) {
@@ -1745,17 +1745,54 @@
             }
         });
         
-        if (colorMap.length === 0) return; // Inget att byta ut
+        if (colorMap.length === 0) return;
+        
+        // Max distance to consider a pixel "terrain" (ignore pure black, white, etc.)
+        let maxDist = 120;
         
         for (let i = 0; i < data.length; i += 4) {
             let r = data[i], g = data[i+1], b = data[i+2];
+            
+            // Find the TWO closest old biome colors
+            let best1 = -1, best1Dist = 999999;
+            let best2 = -1, best2Dist = 999999;
+            
             for (let j = 0; j < colorMap.length; j++) {
-                if (colorMatch(r, g, b, colorMap[j].old.r, colorMap[j].old.g, colorMap[j].old.b)) {
-                    data[i] = colorMap[j].new.r;
-                    data[i+1] = colorMap[j].new.g;
-                    data[i+2] = colorMap[j].new.b;
-                    break;
+                let dr = r - colorMap[j].old.r;
+                let dg = g - colorMap[j].old.g;
+                let db = b - colorMap[j].old.b;
+                let dist = dr*dr + dg*dg + db*db;
+                if (dist < best1Dist) {
+                    best2 = best1; best2Dist = best1Dist;
+                    best1 = j; best1Dist = dist;
+                } else if (dist < best2Dist) {
+                    best2 = j; best2Dist = dist;
                 }
+            }
+            
+            if (best1 < 0 || best1Dist > maxDist * maxDist) continue;
+            
+            // Exact match or close enough — direct replacement
+            if (best1Dist < 30) {
+                data[i] = colorMap[best1].new.r;
+                data[i+1] = colorMap[best1].new.g;
+                data[i+2] = colorMap[best1].new.b;
+            } else if (best2 >= 0 && best2Dist < maxDist * maxDist) {
+                // Blended pixel between two terrain types — interpolate
+                let d1 = Math.sqrt(best1Dist);
+                let d2 = Math.sqrt(best2Dist);
+                let total = d1 + d2;
+                let w1 = 1.0 - (d1 / total); // Closer = higher weight
+                let w2 = 1.0 - w1;
+                data[i]   = Math.round(colorMap[best1].new.r * w1 + colorMap[best2].new.r * w2);
+                data[i+1] = Math.round(colorMap[best1].new.g * w1 + colorMap[best2].new.g * w2);
+                data[i+2] = Math.round(colorMap[best1].new.b * w1 + colorMap[best2].new.b * w2);
+            } else {
+                // Only one close color — blend toward it
+                let t = Math.min(1.0, Math.sqrt(best1Dist) / maxDist);
+                data[i]   = Math.round(colorMap[best1].new.r * (1 - t) + r * t);
+                data[i+1] = Math.round(colorMap[best1].new.g * (1 - t) + g * t);
+                data[i+2] = Math.round(colorMap[best1].new.b * (1 - t) + b * t);
             }
         }
         window.pCtx.putImageData(imgData, 0, 0);
