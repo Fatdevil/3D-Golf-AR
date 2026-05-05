@@ -6703,7 +6703,8 @@
 
     let isMeasuring = false;
 
-    renderer.domElement.addEventListener('pointerup', e => {
+    // pointerup on WINDOW — catches releases outside canvas (e.g. on UI panels)
+    window.addEventListener('pointerup', e => {
         if(typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
             activeRotatingTee = null;
             controls.enabled = true;
@@ -6741,6 +6742,28 @@
     }, false);
     
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault(), false);
+    
+    // Safety: release sculpting if pointer leaves canvas or window loses focus
+    renderer.domElement.addEventListener('pointerleave', () => {
+        if (isSculpting) {
+            isSculpting = false;
+            controls.enabled = true;
+            previousFrameHitPoint = null;
+        }
+    }, false);
+    
+    renderer.domElement.addEventListener('pointercancel', () => {
+        isSculpting = false;
+        controls.enabled = true;
+        previousFrameHitPoint = null;
+    }, false);
+    
+    window.addEventListener('blur', () => {
+        isSculpting = false;
+        isMeasuring = false;
+        controls.enabled = true;
+        previousFrameHitPoint = null;
+    }, false);
     
     function setMode(mode) {
         if ((appMode === 'BUILD' || appMode === 'ARCHITECT') && (mode === 'PLAY' || mode === 'TEST')) {
