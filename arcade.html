@@ -1607,6 +1607,57 @@
     };
 
     window.CLOUD_BIOMES = {};
+    
+    // Built-in biome configs (fallback if not in database)
+    window.CLOUD_BIOMES['GLOBAL'] = {
+        skyColor: '#87ceeb',
+        obColor: '#ef4444',
+        bunkerColor: '#e0d8a4',
+        wasteColor: '#c2af7c',
+        teeColor: '#7cb54c',
+        greenColor: '#98ce68',
+        foregreenColor: '#8bc45d',
+        fairwayColor: '#7db952',
+        semiColor: '#6b9e3d',
+        roughColor: '#4a782b',
+        fescueColor: '#2d4c1a',
+        waterColor: '#38bdf8',
+        oceanColor: '#1e3a5f',
+        horizonColor: '#ffffff'
+    };
+    window.CLOUD_BIOMES['AUTUMN'] = {
+        skyColor: '#c4a882',         // Warm hazy sky
+        obColor: '#cc3333',
+        bunkerColor: '#d4c090',      // Sandy warm
+        wasteColor: '#b89860',       // Earthy
+        teeColor: '#8a9a4a',         // Olive-green tee
+        greenColor: '#7a9945',       // Warm green (still playable!)
+        foregreenColor: '#8a8a3a',   // Yellow-green fringe
+        fairwayColor: '#9a9040',     // Golden fairway
+        semiColor: '#8b7535',        // Amber semi-rough
+        roughColor: '#7a6530',       // Warm brown rough
+        fescueColor: '#5a4020',      // Dark burnt sienna
+        waterColor: '#4a8aaa',       // Cooler, moodier water
+        oceanColor: '#2a4a5f',
+        horizonColor: '#c4a070'      // Warm amber horizon
+    };
+    window.CLOUD_BIOMES['WINTER'] = {
+        skyColor: '#b0c4d4',         // Cold pale sky
+        obColor: '#cc4444',
+        bunkerColor: '#d0ccc0',      // Pale sand
+        wasteColor: '#b0a890',       // Frost-touched
+        teeColor: '#6a8855',         // Cold green
+        greenColor: '#6a9060',       // Desaturated green
+        foregreenColor: '#708855',   // Muted fringe
+        fairwayColor: '#688050',     // Dull green fairway
+        semiColor: '#5a6a40',        // Faded semi
+        roughColor: '#4a5a35',       // Dark cold rough
+        fescueColor: '#3a4425',      // Dead grass
+        waterColor: '#5a9ab8',       // Cold blue
+        oceanColor: '#1a3050',
+        horizonColor: '#9ab0c0'      // Cold grey-blue horizon
+    };
+    
     window.CURRENT_BIOME_CONFIG = {
         skyColor: '#87ceeb',
         obColor: '#ef4444',
@@ -1907,17 +1958,14 @@
         try {
             let res = await ArcadeAPI.getBiomes();
             if(res) {
-                let select = document.getElementById('biome-select');
-                if(select) {
-                    select.innerHTML = '<option value="ALL">All Assets (Global)</option>';
-                }
+                // DB biomes override built-in fallbacks
                 res.forEach(t => {
                     window.CLOUD_BIOMES[t.id] = t.config;
-                    if(t.id !== 'GLOBAL' && select) {
-                        select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
-                    }
                 });
-                if(select) {
+                
+                // Add CUSTOM option if not already present
+                let select = document.getElementById('biome-select');
+                if(select && !select.querySelector('option[value="CUSTOM"]')) {
                     select.innerHTML += '<option value="CUSTOM">⚙️ CUSTOM COLORS</option>';
                 }
                 
