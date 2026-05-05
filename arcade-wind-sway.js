@@ -125,8 +125,8 @@
 
         for (let type in window.instancePools) {
             let reg = window.ASSET_REGISTRY ? window.ASSET_REGISTRY[type] : null;
-            // Only patch trees and bushes (not rocks, flags, etc.)
-            let isVegetation = reg && (reg.subcat === 'TREES' || reg.subcat === 'BUSHES' || type === 'BUSH');
+            // Only patch trees, bushes, plants (not rocks, flags, etc.)
+            let isVegetation = reg && (reg.subcat === 'TREES' || reg.subcat === 'BUSHES' || reg.subcat === 'PLANTS');
             if (!isVegetation && type !== 'TREE' && type !== 'PINE' && type !== 'BUSH') continue;
 
             let pool = window.instancePools[type];
