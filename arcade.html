@@ -25,6 +25,7 @@
 <script src="arcade-audio-engine.js"></script>
 <script src="arcade-particle-engine.js"></script>
 <script src="arcade-wind-sway.js"></script>
+<script src="arcade-leaves.js"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -1556,6 +1557,7 @@
 
     // === PARTICLE ENGINE INIT ===
     if (window.ParticleEngine) window.ParticleEngine.init(scene, camera);
+    if (window.AutumnLeaves) window.AutumnLeaves.init(scene, camera);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1832,6 +1834,15 @@
 
         // === PARTICLE ENGINE: Auto-activate for biome ===
         if (window.ParticleEngine) window.ParticleEngine.activateBiome(val);
+        
+        // === AUTUMN LEAVES: 3D falling + ground carpet ===
+        if (window.AutumnLeaves) {
+            if (val === 'AUTUMN') {
+                window.AutumnLeaves.activate();
+            } else {
+                window.AutumnLeaves.deactivate();
+            }
+        }
         
         // Applicera färgerna från valt tema, eller Global som fallback
         let targetBiome = (val === 'ALL') ? 'GLOBAL' : val;
@@ -9090,7 +9101,8 @@
         requestAnimationFrame(animate);
         if (window.animateStars) window.animateStars(); // Star twinkle (external module)
         if (window.ParticleEngine) window.ParticleEngine.update(0.016); // Particle animation (external module)
-        if (window.WindSway) window.WindSway.update(performance.now() * 0.001); // Wind sway (external module)
+        if (window.WindSway) window.WindSway.update(performance.now() * 0.001); // Wind sway
+        if (window.AutumnLeaves) window.AutumnLeaves.update(0.016); // 3D falling leaves
 
         // === FLAG CLOTH WAVE ===
         if (window._allFlagCloths && window._allFlagCloths.length > 0) {
