@@ -63,41 +63,37 @@
     // position.y = height above root. Higher = more sway.
     const WIND_VERTEX_CODE = `
         if (uSwayEnabled > 0.5 && uWindStrength > 0.001) {
-            // Get world-space position (accounts for instanceMatrix scale)
+            // Get world-space info from instanceMatrix
             vec4 worldPos4 = instanceMatrix * vec4(position, 1.0);
-            
-            // Height factor using WORLD height, not raw model position
-            // Models from 3D AI Studio may be normalized to 0-1 range,
-            // but instanceMatrix scales them to full size (e.g., 12m).
-            // Use fraction of total height: bottom 20% = trunk, above = sway
             vec4 rootPos4 = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-            vec4 topPos4 = instanceMatrix * vec4(0.0, 1.0, 0.0, 1.0);
-            float treeWorldHeight = max(length(topPos4.xyz - rootPos4.xyz), 0.1);
-            float localHeight = length(worldPos4.xyz - rootPos4.xyz);
-            float normalizedHeight = localHeight / treeWorldHeight;
+            
+            // Calculate model scale from instanceMatrix (how many world-units per model-unit)
+            float modelScaleY = length(vec3(instanceMatrix[1][0], instanceMatrix[1][1], instanceMatrix[1][2]));
+            
+            // Normalized height (0=root, 1=top) using raw model position
+            // Works for ANY model size since we normalize by the model's own bbox
+            float rawMaxY = 1.0; // Most compressed models use 0-1 range
+            float normalizedHeight = clamp(position.y / rawMaxY, 0.0, 1.5);
             float heightFactor = smoothstep(0.15, 0.5, normalizedHeight);
             
-            // Per-instance variation using world position
-            float instanceHash = fract(sin(worldPos4.x * 12.9898 + worldPos4.z * 78.233) * 43758.5453);
+            // Per-instance variation
+            float instanceHash = fract(sin(rootPos4.x * 12.9898 + rootPos4.z * 78.233) * 43758.5453);
             
-            // Primary sway: slow, large movement
+            // Oscillation (same as before)
             float sway1 = sin(uWindTime * 1.2 + instanceHash * 6.28) * 0.7;
-            // Secondary sway: faster, smaller (gust simulation)
             float sway2 = sin(uWindTime * 3.1 + instanceHash * 12.56 + position.x * 0.5) * 0.3;
-            // Tertiary: tiny flutter for leaves
-            float flutter = sin(uWindTime * 7.0 + position.y * 2.0 + instanceHash * 20.0) * 0.1;
+            float flutter = sin(uWindTime * 7.0 + normalizedHeight * 2.0 + instanceHash * 20.0) * 0.1;
             
-            float totalSway = (sway1 + sway2 + flutter) * heightFactor * uWindStrength;
+            float oscillation = (sway1 + sway2 + flutter) * heightFactor * uWindStrength;
             
-            // Scale displacement relative to model size.
-            // A 1-unit-tall model scaled 12× would amplify sway 12×.
-            // Normalize so visual sway is consistent regardless of model compression.
-            // Reference: a "6-unit" model gets 1:1 sway, smaller models get scaled down.
-            float swayScale = 6.0 / max(treeWorldHeight, 0.1);
+            // Target: max 1.5 meters world-space sway at peak wind.
+            // Convert to model-space by dividing by scale.
+            float maxSwayWorld = 1.5;
+            float swayModelSpace = oscillation * maxSwayWorld / max(modelScaleY, 0.1);
             
-            transformed.x += uWindDirX * totalSway * swayScale;
-            transformed.z += uWindDirZ * totalSway * swayScale;
-            transformed.y -= abs(totalSway * swayScale) * 0.05;
+            transformed.x += uWindDirX * swayModelSpace;
+            transformed.z += uWindDirZ * swayModelSpace;
+            transformed.y -= abs(swayModelSpace) * 0.03;
         }
     `;
 
