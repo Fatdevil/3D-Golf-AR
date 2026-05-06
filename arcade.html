@@ -4111,16 +4111,18 @@
     tracerGeo.setAttribute('position', new THREE.BufferAttribute(tracerPositions, 3));
     tracerGeo.setAttribute('color', new THREE.BufferAttribute(tracerColors, 3));
     tracerGeo.setDrawRange(0, 0);
-    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3, vertexColors: false });
+    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3, vertexColors: false, depthTest: false, depthWrite: false });
     window.tracerMat = tracerMat; // Expose for tracer engine
     const flightTracer = new THREE.Line(tracerGeo, tracerMat);
+    flightTracer.renderOrder = 100; // Always on top
     scene.add(flightTracer);
 
     // Glow overlay (same geometry, additive blending)
-    const glowTracerMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const glowTracerMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, fog: false });
     window.glowTracerMat = glowTracerMat; // Expose for tracer engine
     const glowTracer = new THREE.Line(tracerGeo, glowTracerMat);
     window.glowTracer = glowTracer; // Expose for tracer engine
+    glowTracer.renderOrder = 101; // Above core tracer
     glowTracer.visible = false;
     scene.add(glowTracer);
 
