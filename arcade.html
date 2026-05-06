@@ -6022,37 +6022,53 @@
         let distMeters = Math.hypot(flagPos.x - ballPos.x, flagPos.z - ballPos.z);
         let yards = Math.round(distMeters * 1.0936);
         
-        // Build terrain-following waypoints (sample every 20m along the path)
-        let numSamples = Math.max(8, Math.ceil(distMeters / 20));
+        // Build terrain-following waypoints (sample every 10m for smoothness)
+        let numSamples = Math.max(12, Math.ceil(distMeters / 10));
         window._flyoverPath = [];
         let flyHeight = Math.max(12, Math.min(25, distMeters * 0.06)); // 12-25m above terrain
         
+        // Step 1: Sample raw terrain heights
+        let rawHeights = [];
         for (let i = 0; i <= numSamples; i++) {
             let t = i / numSamples;
             let wx = ballPos.x + (flagPos.x - ballPos.x) * t;
             let wz = ballPos.z + (flagPos.z - ballPos.z) * t;
-            
-            // Get terrain height at this point
             let terrainY = 0;
-            if (window.getTerrainHeight) {
-                terrainY = window.getTerrainHeight(wx, wz) || 0;
+            if (window.getTerrainHeight) terrainY = window.getTerrainHeight(wx, wz) || 0;
+            rawHeights.push({ t, wx, wz, terrainY });
+        }
+        
+        // Step 2: Smooth heights (3-pass moving average to eliminate terrain spikes)
+        let smoothY = rawHeights.map(h => h.terrainY);
+        for (let pass = 0; pass < 3; pass++) {
+            let next = [...smoothY];
+            for (let i = 1; i < smoothY.length - 1; i++) {
+                next[i] = (smoothY[i-1] + smoothY[i] * 2 + smoothY[i+1]) / 4;
             }
+            smoothY = next;
+        }
+        
+        // Step 3: Build final waypoints with smoothed heights
+        for (let i = 0; i <= numSamples; i++) {
+            let t = i / numSamples;
+            let h = rawHeights[i];
             
-            // Add slight arc: higher in the middle of the path
             let arcBoost = Math.sin(t * Math.PI) * flyHeight * 0.4;
-            let camY = terrainY + flyHeight + arcBoost;
+            let camY = smoothY[i] + flyHeight + arcBoost;
             
-            // Slight lateral offset for cinematic feel (curve, not straight line)
-            let perpX = -(flagPos.z - ballPos.z) / distMeters; // Perpendicular
+            let perpX = -(flagPos.z - ballPos.z) / distMeters;
             let perpZ = (flagPos.x - ballPos.x) / distMeters;
-            let lateralOffset = Math.sin(t * Math.PI) * distMeters * 0.08; // 8% of distance
+            let lateralOffset = Math.sin(t * Math.PI) * distMeters * 0.08;
             
             window._flyoverPath.push(new THREE.Vector3(
-                wx + perpX * lateralOffset,
+                h.wx + perpX * lateralOffset,
                 camY,
-                wz + perpZ * lateralOffset
+                h.wz + perpZ * lateralOffset
             ));
         }
+        
+        // Initialize smooth look target
+        window._flyoverSmoothLook = window._flyoverPath[Math.min(3, window._flyoverPath.length - 1)].clone();
         
         flyoverProgress = 0;
         // Duration: longer holes get longer flyovers (2-5 seconds)
@@ -10124,19 +10140,24 @@
                 // Smooth sub-segment interpolation
                 camera.position.lerpVectors(path[idx], path[idx + 1], frac);
                 
-                // Look AHEAD along path (not always at flag — more cinematic)
-                let lookIdx = Math.min(idx + 3, path.length - 1);
-                let lookTarget = path[lookIdx].clone();
+                // Smooth look target: interpolate where we're looking (no jumps)
+                let lookIdx = Math.min(idx + 4, path.length - 1);
+                let rawLookTarget = path[lookIdx].clone();
+                
                 // In last 20% of flyover, transition look target to flag
                 if (t > 0.8) {
                     let hole = courseHoles[playingHoleIndex];
                     if (hole && hole.flag) {
                         let flagTarget = new THREE.Vector3(hole.flag.x, hole.flag.y || 0, hole.flag.z);
-                        let blendToFlag = (t - 0.8) / 0.2; // 0→1 over last 20%
-                        lookTarget.lerp(flagTarget, blendToFlag);
+                        let blendToFlag = (t - 0.8) / 0.2;
+                        rawLookTarget.lerp(flagTarget, blendToFlag);
                     }
                 }
-                camera.lookAt(lookTarget);
+                
+                // Smoothly lerp the look target (eliminates rotation jitter)
+                if (!window._flyoverSmoothLook) window._flyoverSmoothLook = rawLookTarget.clone();
+                window._flyoverSmoothLook.lerp(rawLookTarget, 0.06); // 6% per frame = butter smooth
+                camera.lookAt(window._flyoverSmoothLook);
             }
             
             // Done? Settle camera behind ball in aim position
