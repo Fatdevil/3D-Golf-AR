@@ -4752,12 +4752,13 @@
             }
 
             let payload = {
-                v: 1, // Version for future compat
+                v: 2, // Version 2: includes terrain_segs
                 h: dumpHoles,
                 t: dumpTargets,
                 r: dumpTrees,
                 m: heights,
-                w: waterHeights.length > 0 ? waterHeights : undefined
+                w: waterHeights.length > 0 ? waterHeights : undefined,
+                segs: TERRAIN_SEGS // Save current resolution for load-time validation
             };
 
             let json = JSON.stringify(payload);
@@ -4824,12 +4825,43 @@
                 trees: (data.r || []).map(t => ({type: t.t, x: t.x, z: t.z, s: t.s, r: t.r}))
             };
             
+            // Resample heightmap if saved with different TERRAIN_SEGS
+            window._resampleHeightmap = function(srcArr, srcSegs, dstSegs) {
+                let srcStride = srcSegs + 1;
+                let dstStride = dstSegs + 1;
+                let result = new Array(dstStride * dstStride);
+                for (let dz = 0; dz < dstStride; dz++) {
+                    for (let dx = 0; dx < dstStride; dx++) {
+                        // Map dst grid position to src grid position
+                        let sx = (dx / dstSegs) * srcSegs;
+                        let sz = (dz / dstSegs) * srcSegs;
+                        let x0 = Math.floor(sx), x1 = Math.min(x0 + 1, srcSegs);
+                        let z0 = Math.floor(sz), z1 = Math.min(z0 + 1, srcSegs);
+                        let fx = sx - x0, fz = sz - z0;
+                        // Bilinear interpolation
+                        let h00 = srcArr[z0 * srcStride + x0] || 0;
+                        let h10 = srcArr[z0 * srcStride + x1] || 0;
+                        let h01 = srcArr[z1 * srcStride + x0] || 0;
+                        let h11 = srcArr[z1 * srcStride + x1] || 0;
+                        result[dz * dstStride + dx] = (h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz);
+                    }
+                }
+                return result;
+            }
+
             // Restore terrain heightmap
             if (data.m && data.m.length > 0) {
+                let heightData = data.m;
+                let savedSegs = data.segs || Math.round(Math.sqrt(data.m.length) - 1);
+                // Resample if segment count doesn't match
+                if (savedSegs !== TERRAIN_SEGS) {
+                    console.warn('[TERRAIN] Resampling heightmap:', savedSegs, '→', TERRAIN_SEGS);
+                    heightData = _resampleHeightmap(heightData, savedSegs, TERRAIN_SEGS);
+                }
                 let pos = planeGeo.attributes.position.array;
-                let idx = 0;
-                for (let i = 2; i < pos.length && idx < data.m.length; i += 3) {
-                    pos[i] = Math.max(-60, Math.min(60, data.m[idx++])); // Clamp to ±60m
+                let vertCount = (TERRAIN_SEGS + 1) * (TERRAIN_SEGS + 1);
+                for (let i = 0; i < vertCount && i < heightData.length; i++) {
+                    pos[i * 3 + 2] = Math.max(-60, Math.min(60, heightData[i])); // Clamp to ±60m
                 }
                 // Edge-clamp: force border vertices to 0 (prevent spikes)
                 let _segs = TERRAIN_SEGS + 1;
@@ -5122,7 +5154,15 @@
                     let waterArr = Array.isArray(mapData) ? null : mapData.water;
 
                     if(groundArr) {
-                        for(let i=0; i<groundArr.length; i++) pos.setZ(i, Math.max(-60, Math.min(60, groundArr[i]))); // Clamp to ±60m
+                        // Detect saved segment count and resample if needed
+                        let savedSegs = Math.round(Math.sqrt(groundArr.length) - 1);
+                        let heightData = groundArr;
+                        if (savedSegs !== TERRAIN_SEGS && savedSegs > 0) {
+                            console.warn('[TERRAIN] Cloud resample:', savedSegs, '→', TERRAIN_SEGS);
+                            heightData = _resampleHeightmap(groundArr, savedSegs, TERRAIN_SEGS);
+                        }
+                        let vertCount = (TERRAIN_SEGS + 1) * (TERRAIN_SEGS + 1);
+                        for(let i=0; i<vertCount && i<heightData.length; i++) pos.setZ(i, Math.max(-60, Math.min(60, heightData[i])));
                         // Edge-clamp: force border vertices to 0 (prevent spikes)
                         let _segs = TERRAIN_SEGS + 1;
                         let _half = TERRAIN_SIZE / 2;
