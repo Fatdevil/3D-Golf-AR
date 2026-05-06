@@ -768,6 +768,7 @@
             <input type="hidden" id="in-stimp" value="10.0">
             <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Camera Mode">🎥 AUTO</button>
             <button id="btn-flyover" onclick="startFlyover()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Hole Flyover">🚁 FLYOVER</button>
+            <button id="btn-tracer-fade" onclick="(function(){let m=window.tracerFadeMode;let next=m==='FADE'?'SOLID':m==='SOLID'?'OFF':'FADE';window.setTracerFadeMode(next)})()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Trail Mode: Fade/Solid/Off">╌ FADE</button>
             <button id="btn-penalty" onclick="takePenaltyDrop()" style="background:#ef4444; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Add Penalty Stroke">🛑 PENALTY</button>
         </div>
     </div>
@@ -6456,6 +6457,10 @@
         if (window.keepAllTraces && tracerPointsCount > 1) saveCurrentTrace();
         tracerPointsCount = 0;
         flightTracer.geometry.setDrawRange(0, 0);
+        // Reset tracer opacity for new shot (undo any previous fade)
+        window._tracerFadeTimer = -1;
+        if (window.tracerMat && window.currentTracerStyle !== 'OFF') window.tracerMat.opacity = 0.9;
+        if (window.glowTracerMat) window.glowTracerMat.opacity = 0.3;
         // Glow tracer shares geometry - ensure visibility matches style
         let tStyle = window.TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
         if (typeof glowTracer !== 'undefined') glowTracer.visible = !!(tStyle && tStyle.glow);
@@ -9247,6 +9252,7 @@
         if (window.ParticleEngine) window.ParticleEngine.update(0.016); // Particle animation (external module)
         if (window.WindSway) window.WindSway.update(performance.now() * 0.001); // Wind sway
         if (window.AutumnLeaves) window.AutumnLeaves.update(0.016); // 3D falling leaves
+        if (window.updateTracerFade) window.updateTracerFade(); // Tracer fade-out after landing
 
         // === FLAG CLOTH WAVE ===
         if (window._allFlagCloths && window._allFlagCloths.length > 0) {
@@ -9797,6 +9803,8 @@
             
             if (flightTick === flightData.path.length - 1) {
                 isFlying = false; // Bollen har stannat
+                // Start tracer fade-out (if FADE mode enabled)
+                if (window.startTracerFade) window.startTracerFade();
                 
                 // --- UPPDATERA CARRY/TOTAL I HUD ---
                 if (window.shotStartPos) {

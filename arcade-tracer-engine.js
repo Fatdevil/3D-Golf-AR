@@ -21,7 +21,8 @@
         'ICE':        { core: '#44aaff', glow: '#2266ff', glowInt: 1.0, ballEmissive: '#4488ff', ballLight: true,  vertexFn: 'ice',     dashed: false, label: '❄️ Ice' },
         'RAINBOW':    { core: '#ffffff', glow: '#ffffff', glowInt: 0.8, ballEmissive: '#ffffff', ballLight: true,  vertexFn: 'rainbow', dashed: false, label: '🌈 Rainbow' },
         'PHANTOM':    { core: '#8888cc', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: 'fade',    dashed: false, label: '👻 Phantom' },
-        'PRO_DOT':    { core: '#fbbf24', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: null,      dashed: true,  label: '📍 Pro Dot' }
+        'PRO_DOT':    { core: '#fbbf24', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: null,      dashed: true,  label: '📍 Pro Dot' },
+        'OFF':        { core: '#000000', glow: null,      glowInt: 0,   ballEmissive: null,      ballLight: false, vertexFn: null,      dashed: false, label: '🚫 Off', hidden: true }
     };
     window.TRACER_STYLES = TRACER_STYLES;
 
@@ -90,6 +91,50 @@
 
         // Sync with current TimeOfDay
         window.updateTracerForTimeOfDay(window.currentTimeOfDay || 12);
+    };
+
+    // ── Tracer fade-out after ball lands ──
+    // tracerFadeMode: 'SOLID' = stays until next shot, 'FADE' = fades out after landing, 'OFF' = no tracer
+    window.tracerFadeMode = 'FADE'; // Default: fade out
+    window._tracerFadeTimer = -1; // -1 = not fading, 0+ = fading progress
+    window._tracerBaseOpacity = 0.9;
+    const FADE_DURATION = 180; // frames (~3 sec at 60fps)
+
+    window.setTracerFadeMode = function(mode) {
+        window.tracerFadeMode = mode;
+        if (mode === 'OFF') {
+            window.setTracerStyle('OFF');
+        } else if (window.currentTracerStyle === 'OFF') {
+            window.setTracerStyle('CLASSIC');
+        }
+        // Update toggle button text
+        let btn = document.getElementById('btn-tracer-fade');
+        if (btn) {
+            if (mode === 'SOLID') { btn.innerText = '━ SOLID'; btn.style.background = '#4f46e5'; }
+            else if (mode === 'FADE') { btn.innerText = '╌ FADE'; btn.style.background = '#0d9488'; }
+            else { btn.innerText = '🚫 OFF'; btn.style.background = '#64748b'; }
+        }
+    };
+
+    window.startTracerFade = function() {
+        if (window.tracerFadeMode === 'FADE') {
+            window._tracerFadeTimer = 0;
+            window._tracerBaseOpacity = window.tracerMat ? window.tracerMat.opacity : 0.9;
+        }
+    };
+
+    window.updateTracerFade = function() {
+        if (window._tracerFadeTimer < 0) return;
+        window._tracerFadeTimer++;
+        let t = Math.min(window._tracerFadeTimer / FADE_DURATION, 1.0);
+        let opacity = window._tracerBaseOpacity * (1.0 - t);
+        if (window.tracerMat) window.tracerMat.opacity = opacity;
+        if (window.glowTracerMat) window.glowTracerMat.opacity = opacity * 0.3;
+        if (t >= 1.0) {
+            window._tracerFadeTimer = -1;
+            // Fully transparent — hide draw range
+            if (window.tracerMat) window.tracerMat.opacity = 0;
+        }
     };
 
     function applyBallSkin(style) {
