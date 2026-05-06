@@ -4953,6 +4953,9 @@
                     window._loadedCourseAuthor = data.author || null;
                     window._loadedCourseHoles = data.hole_count || null;
                     window._loadedCoursePar = data.total_par || null;
+                    window._loadedCourseStrokeIndex = data.stroke_index || null;
+                    window._loadedCourseCR = data.course_rating || null;
+                    window._loadedCourseSR = data.slope_rating || null;
                     if (editCode) {
                         currentEditCode = data.share_code; 
                         if(document.getElementById('course-name-input')) document.getElementById('course-name-input').value = data.name;
@@ -5888,6 +5891,50 @@
             htmlMode += trScore;
         }
         
+        // STROKE INDEX ROW
+        let courseStrokeIndex = window._loadedCourseStrokeIndex || null;
+        if (courseStrokeIndex) {
+            let trSI = '<tr style="color:#64748b; font-size:10px; border-bottom:1px solid #1e293b;"><td>SI</td>';
+            for(let i=0; i<maxHoles; i++) trSI += '<td>' + (courseStrokeIndex[i] || '-') + '</td>';
+            if(maxHoles >= 9) trSI += '<td></td>';
+            if(maxHoles > 9) trSI += '<td></td><td></td>';
+            trSI += '</tr>';
+            htmlMode += trSI;
+        }
+        
+        // NET SCORE ROWS (if any player has HCP)
+        for(let pi=0; pi<players.length; pi++) {
+            let pl = players[pi];
+            if (pl.hcp === null || pl.hcp === undefined) continue;
+            
+            let playingHcp = Math.round(pl.hcp); // Simplified playing HCP
+            let trNet = '<tr style="color:#a78bfa; font-size:11px; border-bottom:1px solid #1e293b;"><td style="color:#a78bfa">' + (pl.name || 'P'+(pi+1)) + ' NET</td>';
+            let netOut = 0, netIn = 0, hasNetOut = false, hasNetIn = false;
+            
+            for(let i=0; i<maxHoles; i++) {
+                let gross = (pl.scores && pl.scores[i] !== null && pl.scores[i] !== undefined) ? pl.scores[i] : null;
+                if (gross !== null) {
+                    // Give 1 stroke on holes where SI <= playing HCP
+                    let si = courseStrokeIndex ? (courseStrokeIndex[i] || 99) : (i+1);
+                    let strokes = si <= playingHcp ? 1 : 0;
+                    // Second round of strokes if HCP > num holes
+                    if (playingHcp > maxHoles && si <= (playingHcp - maxHoles)) strokes++;
+                    let net = gross - strokes;
+                    let par = courseHoles[i] ? (courseHoles[i].par || 4) : 4;
+                    let netColor = net < par ? '#a78bfa' : (net > par ? '#f472b6' : '#e2e8f0');
+                    trNet += '<td style="color:' + netColor + '">' + net + '</td>';
+                    if(i < 9) { netOut += net; hasNetOut = true; }
+                    else { netIn += net; hasNetIn = true; }
+                } else {
+                    trNet += '<td>-</td>';
+                }
+            }
+            if(maxHoles >= 9) trNet += '<td style="color:#a78bfa">' + (hasNetOut ? netOut : '-') + '</td>';
+            if(maxHoles > 9) trNet += '<td style="color:#a78bfa">' + (hasNetIn ? netIn : '-') + '</td><td style="color:#a78bfa; font-weight:900">' + ((hasNetOut||hasNetIn) ? (netOut+netIn) : '-') + '</td>';
+            trNet += '</tr>';
+            htmlMode += trNet;
+        }
+        
         tbody.innerHTML = htmlMode;
     }
     
@@ -5939,6 +5986,20 @@
                     let badge = document.createElement('div');
                     badge.style.cssText = 'color:#fde047; font-size:18px; font-weight:900; margin-bottom:10px; text-align:center; width:100%;';
                     badge.innerHTML = `🏆 Leaderboard Position: ${posText} <button onclick="showLeaderboard('${courseCode}')" style="background:#38bdf8; color:#0f172a; border:none; padding:8px 16px; border-radius:8px; font-weight:bold; cursor:pointer; margin-left:10px;">Se Leaderboard</button>`;
+                    
+                    // Show HCP change if available
+                    if (result.handicap && result.handicap.new !== null) {
+                        let hcpBadge = document.createElement('div');
+                        hcpBadge.style.cssText = 'color:#a78bfa; font-size:15px; font-weight:700; margin-bottom:8px; text-align:center; width:100%;';
+                        let prev = result.handicap.previous !== null ? result.handicap.previous : '—';
+                        let curr = result.handicap.new;
+                        let diff = result.handicap.previous !== null ? (curr - result.handicap.previous) : 0;
+                        let arrow = diff < 0 ? '▼' : (diff > 0 ? '▲' : '—');
+                        let diffColor = diff < 0 ? '#4ade80' : (diff > 0 ? '#f87171' : '#94a3b8');
+                        let diffText = diff !== 0 ? (' <span style="color:' + diffColor + '">' + arrow + ' ' + Math.abs(diff).toFixed(1) + '</span>') : '';
+                        hcpBadge.innerHTML = '🏌️ Handicap: ' + prev + ' → ' + curr.toFixed(1) + diffText;
+                        endBtns.parentNode.insertBefore(hcpBadge, endBtns);
+                    }
                     endBtns.parentNode.insertBefore(badge, endBtns);
                 }
             }
