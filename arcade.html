@@ -415,12 +415,7 @@
                 <input type="checkbox" id="retro-filter-cb" onchange="toggleRetroFilter()" style="accent-color:#38bdf8; cursor:pointer;">
                 Sharp Edges (Retro)
             </label>
-            
-            <label style="color:#4ade80; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:5px; display:flex; align-items:center; gap:5px; cursor:pointer;" title="Prevents sculpting on the outermost edges to blend with surrounding">
-                <input type="checkbox" id="lock-edge-cb" checked onchange="window.lockEdges = this.checked" style="accent-color:#4ade80; cursor:pointer;">
-                🔒 Lock Terrain Edges
-            </label>
-            
+
 
         </div>
 
@@ -4681,7 +4676,7 @@
                 total_par: totalPar,
                 targets: dumpTargets,
                 trees: dumpTrees,
-                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm}),
+                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm, segs: TERRAIN_SEGS}),
                 terrain_biomemap: biome,
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
@@ -4799,6 +4794,29 @@
         }
     };
 
+    // === HEIGHTMAP RESAMPLE UTILITY (top-level — used by ALL load paths) ===
+    // Bilinear interpolation to convert heightmap between different TERRAIN_SEGS
+    window._resampleHeightmap = function(srcArr, srcSegs, dstSegs) {
+        let srcStride = srcSegs + 1;
+        let dstStride = dstSegs + 1;
+        let result = new Array(dstStride * dstStride);
+        for (let dz = 0; dz < dstStride; dz++) {
+            for (let dx = 0; dx < dstStride; dx++) {
+                let sx = (dx / dstSegs) * srcSegs;
+                let sz = (dz / dstSegs) * srcSegs;
+                let x0 = Math.floor(sx), x1 = Math.min(x0 + 1, srcSegs);
+                let z0 = Math.floor(sz), z1 = Math.min(z0 + 1, srcSegs);
+                let fx = sx - x0, fz = sz - z0;
+                let h00 = srcArr[z0 * srcStride + x0] || 0;
+                let h10 = srcArr[z0 * srcStride + x1] || 0;
+                let h01 = srcArr[z1 * srcStride + x0] || 0;
+                let h11 = srcArr[z1 * srcStride + x1] || 0;
+                result[dz * dstStride + dx] = (h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz);
+            }
+        }
+        return result;
+    };
+
     function importCourseHash() {
         try {
             let hash = window.location.hash;
@@ -4825,29 +4843,7 @@
                 trees: (data.r || []).map(t => ({type: t.t, x: t.x, z: t.z, s: t.s, r: t.r}))
             };
             
-            // Resample heightmap if saved with different TERRAIN_SEGS
-            window._resampleHeightmap = function(srcArr, srcSegs, dstSegs) {
-                let srcStride = srcSegs + 1;
-                let dstStride = dstSegs + 1;
-                let result = new Array(dstStride * dstStride);
-                for (let dz = 0; dz < dstStride; dz++) {
-                    for (let dx = 0; dx < dstStride; dx++) {
-                        // Map dst grid position to src grid position
-                        let sx = (dx / dstSegs) * srcSegs;
-                        let sz = (dz / dstSegs) * srcSegs;
-                        let x0 = Math.floor(sx), x1 = Math.min(x0 + 1, srcSegs);
-                        let z0 = Math.floor(sz), z1 = Math.min(z0 + 1, srcSegs);
-                        let fx = sx - x0, fz = sz - z0;
-                        // Bilinear interpolation
-                        let h00 = srcArr[z0 * srcStride + x0] || 0;
-                        let h10 = srcArr[z0 * srcStride + x1] || 0;
-                        let h01 = srcArr[z1 * srcStride + x0] || 0;
-                        let h11 = srcArr[z1 * srcStride + x1] || 0;
-                        result[dz * dstStride + dx] = (h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz);
-                    }
-                }
-                return result;
-            }
+            // _resampleHeightmap is now defined at top-level scope (always available)
 
             // Restore terrain heightmap
             if (data.m && data.m.length > 0) {
@@ -4861,21 +4857,9 @@
                 let pos = planeGeo.attributes.position.array;
                 let vertCount = (TERRAIN_SEGS + 1) * (TERRAIN_SEGS + 1);
                 for (let i = 0; i < vertCount && i < heightData.length; i++) {
-                    pos[i * 3 + 2] = Math.max(-60, Math.min(60, heightData[i])); // Clamp to ±60m
+                    pos[i * 3 + 2] = heightData[i];
                 }
-                // Edge-clamp: force border vertices to 0 (prevent spikes)
-                let _segs = TERRAIN_SEGS + 1;
-                let _half = TERRAIN_SIZE / 2;
-                let _step = TERRAIN_SIZE / TERRAIN_SEGS;
-                for (let i = 0; i < _segs * _segs; i++) {
-                    let gx = i % _segs;
-                    let gz = Math.floor(i / _segs);
-                    let vx = gx * _step - _half;
-                    let vz = gz * _step - _half;
-                    if (Math.abs(vx) > _half - 4 || Math.abs(vz) > _half - 4) {
-                        pos[i * 3 + 2] = 0;
-                    }
-                }
+
                 planeGeo.attributes.position.needsUpdate = true;
                 planeGeo.computeVertexNormals();
             }
@@ -5154,28 +5138,16 @@
                     let waterArr = Array.isArray(mapData) ? null : mapData.water;
 
                     if(groundArr) {
-                        // Detect saved segment count and resample if needed
-                        let savedSegs = Math.round(Math.sqrt(groundArr.length) - 1);
+                        // Detect saved segment count: use explicit segs if available, fallback to √(length)-1
+                        let savedSegs = mapData.segs || Math.round(Math.sqrt(groundArr.length) - 1);
                         let heightData = groundArr;
                         if (savedSegs !== TERRAIN_SEGS && savedSegs > 0) {
                             console.warn('[TERRAIN] Cloud resample:', savedSegs, '→', TERRAIN_SEGS);
                             heightData = _resampleHeightmap(groundArr, savedSegs, TERRAIN_SEGS);
                         }
                         let vertCount = (TERRAIN_SEGS + 1) * (TERRAIN_SEGS + 1);
-                        for(let i=0; i<vertCount && i<heightData.length; i++) pos.setZ(i, Math.max(-60, Math.min(60, heightData[i])));
-                        // Edge-clamp: force border vertices to 0 (prevent spikes)
-                        let _segs = TERRAIN_SEGS + 1;
-                        let _half = TERRAIN_SIZE / 2;
-                        let _step = TERRAIN_SIZE / TERRAIN_SEGS;
-                        for (let i = 0; i < _segs * _segs; i++) {
-                            let gx = i % _segs;
-                            let gz = Math.floor(i / _segs);
-                            let vx = gx * _step - _half;
-                            let vz = gz * _step - _half;
-                            if (Math.abs(vx) > _half - 4 || Math.abs(vz) > _half - 4) {
-                                pos.setZ(i, 0);
-                            }
-                        }
+                        for(let i=0; i<vertCount && i<heightData.length; i++) pos.setZ(i, heightData[i]);
+
                     }
                     if(waterArr && wPos) {
                         for(let i=0; i<waterArr.length; i++) {
@@ -6681,7 +6653,7 @@
         if(btn) { btn.style.background = '#38bdf8'; btn.style.color = '#0f172a'; }
     };
     
-    window.lockEdges = true;
+
     window.forestRespectBiomes = true;
     window.sculptStrength = 0.02;
 
@@ -9192,21 +9164,13 @@
                 }
             }
 
-            // Lås yttersta kanterna (4 meter) så de alltid är 0 - eliminerar spikar mot omgivningen
-            if (window.lockEdges && (Math.abs(vx) > (TERRAIN_SIZE/2) - 4 || Math.abs(vz) > (TERRAIN_SIZE/2) - 4)) {
-                // Tvinga till 0 om det råkat bli spikar tidigare (auto-läkning av kanter)
-                positions[i*3 + 2] = 0;
-                updatePos = true;
-                continue;
-            }
+
             
             if (dist < radius) {
                 let falloff = Math.cos((dist/radius) * (Math.PI/2));
                 
                 if (currentTool === 'SCULPT') {
                     positions[i*3 + 2] += strength * falloff;
-                    // Clamp to max terrain height (prevents extreme corruption)
-                    positions[i*3 + 2] = Math.max(-60, Math.min(60, positions[i*3 + 2]));
                     updatePos = true;
                 } else if (currentTool === 'SMOOTH') {
                     // Laplacian smoothing: average of 4 direct neighbors (N/S/E/W)
