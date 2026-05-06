@@ -196,7 +196,8 @@
                 <span style="color:#fff;"><span id="hud-play-dist">385</span><span style="font-size:14px; color:#94a3b8;"> yds</span></span>
             </div>
             <div style="width:2px; height:30px; background:#475569;"></div>
-            <button id="btn-mulligan" onclick="takeMulligan()" style="background:#ef4444; color:#fff; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer; display:none; margin: 0 5px;" title="TAKE MULLIGAN">MULLIGAN ↺</button>
+            <button id="btn-mulligan" onclick="takeMulligan()" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; border-radius:8px; font-weight:bold; cursor:pointer; display:none; margin: 0 3px; font-size:11px;" title="Free replay (casual)">MULLIGAN ↺</button>
+            <button id="btn-rehit" onclick="takeRehit()" style="background:#f59e0b; color:#0f172a; border:none; padding:6px 10px; border-radius:8px; font-weight:bold; cursor:pointer; display:none; margin: 0 3px; font-size:11px;" title="Replay with +1 penalty stroke">↩️ REHIT (+1)</button>
             <div style="display:flex; flex-direction:column; align-items:center;">
                 <span style="font-size:12px; color:#94a3b8; text-transform:uppercase;">Strokes</span>
                 <span id="hud-play-strokes" style="color:#f87171;">0</span>
@@ -1198,6 +1199,20 @@
         </div>
     </div>
 
+    
+    <!-- PENALTY DECISION MODAL -->
+    <div id="penalty-decision-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; font-family:'Inter',sans-serif;">
+        <div style="background:#1e293b; border:2px solid #475569; border-radius:16px; padding:30px; max-width:400px; width:90%; text-align:center;">
+            <div id="penalty-title" style="font-size:22px; font-weight:900; margin-bottom:8px; color:#fff;">💦 WATER HAZARD</div>
+            <div id="penalty-subtitle" style="color:#94a3b8; font-size:13px; margin-bottom:20px;">+1 Penalty Stroke</div>
+            <div id="penalty-buttons" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+                <button id="penalty-btn-rehit" onclick="penaltyDecisionRehit()" style="flex:1; min-width:140px; padding:14px; background:#f59e0b; color:#0f172a; border:none; border-radius:10px; font-weight:800; font-size:14px; cursor:pointer;">🔄 REHIT</button>
+                <button id="penalty-btn-drop" onclick="penaltyDecisionDrop()" style="flex:1; min-width:140px; padding:14px; background:#3b82f6; color:#fff; border:none; border-radius:10px; font-weight:800; font-size:14px; cursor:pointer;">📍 LATERAL DROP</button>
+            </div>
+            <div id="penalty-info" style="color:#64748b; font-size:11px; margin-top:14px;">Rehit: Play from previous position | Drop: Within 2 club lengths of water entry</div>
+        </div>
+    </div>
+
     <!-- SCORECARD MODAL -->
     <div id="scorecard-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.9); z-index:9999; align-items:center; justify-content:center; pointer-events:auto; backdrop-filter:blur(10px);">
         <div style="background:#0f172a; border:2px solid #38bdf8; padding:30px; border-radius:20px; width:700px; box-shadow:0 20px 60px rgba(56,189,248,0.15);">
@@ -1512,6 +1527,20 @@
                         let surf = localGetTerrainAt(dropX, -dropZ);
                         if(surf) h = surf.h + 0.1;
                     }
+                    // Validate: not closer to hole
+                    let hole = courseHoles[playingHoleIndex];
+                    let flag = hole ? hole.flag : null;
+                    if (flag) {
+                        let dropToFlag = Math.hypot(dropX - flag.x, dropZ - flag.z);
+                        let prevToFlag = Math.hypot(p.lie.x - flag.x, p.lie.z - flag.z);
+                        if (dropToFlag < prevToFlag - 0.5) {
+                            let vPop = document.getElementById('score-popup');
+                            vPop.innerText = '❌ Cannot drop closer to the hole!';
+                            vPop.style.color = '#ef4444'; vPop.style.opacity = '1';
+                            setTimeout(() => { vPop.style.opacity = '0'; }, 2000);
+                            return;
+                        }
+                    }
                     window.ballMesh.position.set(dropX, h, dropZ);
                     window.ballMesh.velocity.set(0,0,0);
                     window.ballMesh.angularVelocity.set(0,0,0);
@@ -1536,19 +1565,237 @@
             }
         }
     };
+
+    // === RULES ENGINE ===
     
+    window.showPenaltyDecision = function(type) {
+        let modal = document.getElementById('penalty-decision-modal');
+        let title = document.getElementById('penalty-title');
+        let subtitle = document.getElementById('penalty-subtitle');
+        let dropBtn = document.getElementById('penalty-btn-drop');
+        let info = document.getElementById('penalty-info');
+        
+        if (type === 'WATER') {
+            title.innerHTML = '💦 WATER HAZARD';
+            title.style.color = '#38bdf8';
+            subtitle.textContent = '+1 Penalty Stroke (Lateral Relief)';
+            dropBtn.style.display = '';
+            info.textContent = 'Rehit: Play from previous position | Drop: Within 2 club lengths of water entry, not closer to hole';
+        } else if (type === 'OB') {
+            title.innerHTML = '🔴 OUT OF BOUNDS';
+            title.style.color = '#ef4444';
+            subtitle.textContent = 'Stroke & Distance (+1)';
+            dropBtn.style.display = 'none';
+            info.textContent = 'Ball returns to previous position with +1 penalty stroke';
+        }
+        
+        modal.style.display = 'flex';
+    };
+    
+    window.penaltyDecisionRehit = function() {
+        document.getElementById('penalty-decision-modal').style.display = 'none';
+        let p = window.players[window.activePlayerIndex];
+        let prevLie = window._penaltyPrevLie || p.teePosition || p.lie;
+        
+        window.ballMesh.position.set(prevLie.x, prevLie.y, prevLie.z);
+        window.ballPos.x = prevLie.x;
+        window.ballPos.y = prevLie.y;
+        window.ballPos.z = prevLie.z;
+        
+        let pop = document.getElementById('score-popup');
+        pop.innerText = '🔄 REHIT from previous (+1)';
+        pop.style.color = '#f59e0b';
+        pop.style.opacity = '1';
+        pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
+        
+        window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2000);
+    };
+    
+    window.penaltyDecisionDrop = function() {
+        document.getElementById('penalty-decision-modal').style.display = 'none';
+        let p = window.players[window.activePlayerIndex];
+        let entry = window._penaltyEntryPoint;
+        let hole = courseHoles[playingHoleIndex];
+        let flag = hole ? hole.flag : null;
+        
+        if (!entry) {
+            // Fallback to rehit
+            window.penaltyDecisionRehit();
+            return;
+        }
+        
+        // Move camera to entry point area
+        let h = 0.3;
+        if (typeof localGetTerrainAt === 'function') {
+            let surf = localGetTerrainAt(entry.x, -entry.z);
+            if (surf) h = surf.h + 0.1;
+        }
+        window.ballMesh.position.set(entry.x, h, entry.z);
+        
+        // Switch to FREE CAM for drop placement
+        window.camFollowMode = 'FREE';
+        let btnCam = document.getElementById('btn-cam-mode');
+        if (btnCam) { btnCam.innerText = '🎥 DROP MODE'; btnCam.style.background = '#3b82f6'; }
+        camera.position.set(entry.x, h + 8, entry.z + 12);
+        controls.target.set(entry.x, h, entry.z);
+        controls.enabled = true;
+        controls.update();
+        
+        // Show lateral drop zone circle (2 club lengths = ~2.5m)
+        if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); }
+        let dropRadius = 2.5;
+        let circGeo = new THREE.BufferGeometry();
+        let pts = [];
+        for (let a = 0; a <= 64; a++) {
+            let angle = (a / 64) * Math.PI * 2;
+            let cx = entry.x + Math.cos(angle) * dropRadius;
+            let cz = entry.z + Math.sin(angle) * dropRadius;
+            let ch = 0.3;
+            if (typeof localGetTerrainAt === 'function') {
+                let cs = localGetTerrainAt(cx, -cz);
+                if (cs) ch = cs.h + 0.15;
+            }
+            pts.push(cx, ch, cz);
+        }
+        circGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        let circMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 });
+        window._dropZoneCircle = new THREE.Line(circGeo, circMat);
+        window._dropZoneCircle.name = 'dropZoneCircle';
+        scene.add(window._dropZoneCircle);
+        
+        // Show confirm button with validation
+        let tools = document.getElementById('play-tools');
+        let existingConfirm = document.getElementById('btn-confirm-drop');
+        if (existingConfirm) existingConfirm.remove();
+        
+        let confirmBtn = document.createElement('button');
+        confirmBtn.id = 'btn-confirm-drop';
+        confirmBtn.innerText = '✅ CONFIRM DROP';
+        confirmBtn.style.cssText = 'background:#10b981; color:#fff; padding:10px 20px; font-weight:900; border:none; border-radius:8px; cursor:pointer; font-size:13px;';
+        confirmBtn.onclick = function() {
+            let dropX = controls.target.x;
+            let dropZ = controls.target.z;
+            
+            // Validate: within 2 club lengths of entry
+            let distFromEntry = Math.hypot(dropX - entry.x, dropZ - entry.z);
+            if (distFromEntry > 3.0) {
+                let pop = document.getElementById('score-popup');
+                pop.innerText = '❌ Too far from water entry! Max 2 club lengths.';
+                pop.style.color = '#ef4444';
+                pop.style.opacity = '1';
+                setTimeout(() => { pop.style.opacity = '0'; }, 2000);
+                return;
+            }
+            
+            // Validate: not closer to hole
+            if (flag) {
+                let dropToFlag = Math.hypot(dropX - flag.x, dropZ - flag.z);
+                let entryToFlag = Math.hypot(entry.x - flag.x, entry.z - flag.z);
+                if (dropToFlag < entryToFlag - 0.5) {
+                    let pop = document.getElementById('score-popup');
+                    pop.innerText = '❌ Cannot drop closer to the hole!';
+                    pop.style.color = '#ef4444';
+                    pop.style.opacity = '1';
+                    setTimeout(() => { pop.style.opacity = '0'; }, 2000);
+                    return;
+                }
+            }
+            
+            // Validate: not in water/OB
+            let dropSurf = null;
+            if (typeof localGetTerrainAt === 'function') dropSurf = localGetTerrainAt(dropX, -dropZ);
+            if (dropSurf && (dropSurf.type === 'WATER' || dropSurf.type === 'OB')) {
+                let pop = document.getElementById('score-popup');
+                pop.innerText = '❌ Cannot drop in ' + dropSurf.type + '!';
+                pop.style.color = '#ef4444';
+                pop.style.opacity = '1';
+                setTimeout(() => { pop.style.opacity = '0'; }, 2000);
+                return;
+            }
+            
+            // Valid drop!
+            let dh = 0.3;
+            if (dropSurf) dh = dropSurf.h + 0.1;
+            window.ballMesh.position.set(dropX, dh, dropZ);
+            window.ballMesh.velocity.set(0, 0, 0);
+            window.ballMesh.angularVelocity.set(0, 0, 0);
+            window.ballPos.x = dropX;
+            window.ballPos.y = dh;
+            window.ballPos.z = dropZ;
+            
+            p.lie = {x: dropX, y: dh, z: dropZ};
+            p.prevPos = {x: dropX, y: dh, z: dropZ};
+            
+            if (window.resetAimTarget) window.resetAimTarget();
+            
+            // Cleanup
+            if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); window._dropZoneCircle = null; }
+            window.camFollowMode = 'BROADCAST';
+            if (btnCam) { btnCam.innerText = '🎥 BROADCAST'; btnCam.style.background = '#4f46e5'; }
+            camera.position.set(dropX, dh + 4, dropZ + 10);
+            controls.target.copy(window.ballMesh.position);
+            controls.update();
+            
+            this.remove();
+            
+            let pop = document.getElementById('score-popup');
+            pop.innerText = '📍 Lateral Drop — Play On';
+            pop.style.color = '#3b82f6';
+            pop.style.opacity = '1';
+            setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
+        };
+        if (tools) tools.insertBefore(confirmBtn, tools.firstChild);
+        
+        let pop = document.getElementById('score-popup');
+        pop.innerText = '📍 Place drop within blue circle, not closer to hole';
+        pop.style.color = '#3b82f6';
+        pop.style.opacity = '1';
+    };
+    
+    // Rehit button (+1 penalty, back to previous)
+    window.takeRehit = function() {
+        if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
+        if (playState !== 'ROUND_IDLE') return;
+        
+        let p = window.players[window.activePlayerIndex];
+        if (!p || !p.prevPos) return;
+        
+        if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
+        
+        p.penaltyStrokes++;
+        window.ballMesh.position.set(p.prevPos.x, p.prevPos.y, p.prevPos.z);
+        p.prevPos = null;
+        window.lastShotPlayerIndex = undefined;
+        
+        document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
+        if (typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+        
+        camera.position.set(window.ballMesh.position.x, window.ballMesh.position.y + 4, window.ballMesh.position.z + 10);
+        controls.target.copy(window.ballMesh.position);
+        controls.update();
+        
+        let pop = document.getElementById('score-popup');
+        pop.innerText = '↩️ REHIT (+1 Penalty)';
+        pop.style.color = '#f59e0b';
+        pop.style.opacity = '1';
+        setTimeout(() => { pop.style.opacity = '0'; }, 2500);
+    };
+
     setInterval(() => {
         let mBtn = document.getElementById('btn-mulligan');
+        let rBtn = document.getElementById('btn-rehit');
         if (mBtn) {
-            if (typeof appMode !== 'undefined' && appMode === 'PLAY' && typeof playState !== 'undefined' && playState === 'ROUND_IDLE' && window.matchSettings && window.matchSettings.mulligans) {
+            if (typeof appMode !== 'undefined' && appMode === 'PLAY' && typeof playState !== 'undefined' && playState === 'ROUND_IDLE') {
                 let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
                 let p = window.players ? window.players[lastIdx] : null;
                 if (p && p.prevPos) {
-                    mBtn.style.display = 'block';
+                    if (window.matchSettings && window.matchSettings.mulligans) mBtn.style.display = 'block';
+                    if (rBtn) rBtn.style.display = 'block';
                     return;
                 }
             }
             mBtn.style.display = 'none';
+            if (rBtn) rBtn.style.display = 'none';
         }
     }, 500);
 
@@ -10027,24 +10274,26 @@
                             let p = window.players[window.activePlayerIndex];
                             p.penaltyStrokes++;
                             
-                            // Move ball back to previous lie (before shot)
-                            let prevLie = p.teePosition || p.lie;
-                            window.ballMesh.position.set(prevLie.x, prevLie.y, prevLie.z);
-                            window.ballPos.x = prevLie.x;
-                            window.ballPos.y = prevLie.y;
-                            window.ballPos.z = prevLie.z;
-                            
-                            let pop = document.getElementById('score-popup');
-                            pop.innerText = '💦 WATER HAZARD! +1 Penalty Stroke';
-                            pop.style.color = '#38bdf8';
-                            pop.style.opacity = '1';
-                            pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
-                            
                             // === AUDIO: Splash sound ===
                             if (window.AudioEngine && window.AudioEngine.playSplash) window.AudioEngine.playSplash();
                             
                             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
-                            window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 2500);
+                            
+                            // Find water entry point (last dry position in flight)
+                            let entryPoint = null;
+                            if (flightData && flightData.positions) {
+                                for (let fi = flightData.positions.length - 1; fi >= 0; fi--) {
+                                    let fp = flightData.positions[fi];
+                                    let fSurf = localGetTerrainAt(fp.x, -fp.z);
+                                    if (fSurf && fSurf.type !== 'WATER') { entryPoint = {x: fp.x, y: fp.y, z: fp.z}; break; }
+                                }
+                            }
+                            if (!entryPoint) entryPoint = p.teePosition || p.lie;
+                            window._penaltyEntryPoint = entryPoint;
+                            window._penaltyPrevLie = p.teePosition || p.lie;
+                            
+                            // Show penalty decision UI
+                            window.showPenaltyDecision('WATER');
                             isFlying = false;
                             return;
                         }
@@ -10053,7 +10302,7 @@
                             let p = window.players[window.activePlayerIndex];
                             p.penaltyStrokes++;
                             
-                            // Move ball back to previous lie
+                            // OB = Stroke & Distance — always rehit from previous
                             let prevLie = p.teePosition || p.lie;
                             window.ballMesh.position.set(prevLie.x, prevLie.y, prevLie.z);
                             window.ballPos.x = prevLie.x;
@@ -10061,7 +10310,7 @@
                             window.ballPos.z = prevLie.z;
                             
                             let pop = document.getElementById('score-popup');
-                            pop.innerText = '🔴 OUT OF BOUNDS! +1 Penalty Stroke';
+                            pop.innerText = '🔴 OUT OF BOUNDS — Stroke & Distance (+1)';
                             pop.style.color = '#ef4444';
                             pop.style.opacity = '1';
                             pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
