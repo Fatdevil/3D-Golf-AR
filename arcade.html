@@ -5444,6 +5444,23 @@
             if (!holeStart.tees[p.tee]) p.tee = firstAvailableTee;
         });
         
+        // Auto-fetch system HCP for primary player (non-blocking)
+        if (window.GolfAuth && window.GolfAuth.userId && window.setupPlayers[0] && window.setupPlayers[0].hcp === null) {
+            fetch('/api/users/' + window.GolfAuth.userId + '/handicap')
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data && data.handicap_index !== null && data.handicap_index !== undefined) {
+                        // Only set if player hasn't manually entered a value
+                        if (window.setupPlayers[0] && window.setupPlayers[0].hcp === null) {
+                            window.setupPlayers[0].hcp = parseFloat(data.handicap_index);
+                            window.renderPlayerRoster(); // Re-render to show fetched HCP
+                            console.log('🏌️ System HCP loaded:', window.setupPlayers[0].hcp);
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+        
         window.renderPlayerRoster();
         // Populate course info header
         let _ci = document.getElementById('setup-course-info');
