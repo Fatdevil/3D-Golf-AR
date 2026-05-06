@@ -3977,6 +3977,109 @@
         window.greenGridForHoleIndex = -1; // Force rebuild on next green landing
     };
     
+    // === PUTT BREAK LINE ===
+    // Simulates a simplified putt path from ball to hole using terrain slope
+    // Shows as a curved dashed line on the green surface
+    window.buildBreakLine = function() {
+        // Dispose previous
+        if (window.breakLineMesh) {
+            scene.remove(window.breakLineMesh);
+            if (window.breakLineMesh.geometry) window.breakLineMesh.geometry.dispose();
+            if (window.breakLineMesh.material) window.breakLineMesh.material.dispose();
+            window.breakLineMesh = null;
+        }
+        
+        let hole = courseHoles[playingHoleIndex];
+        if (!hole || !hole.flag) return;
+        
+        let ballX = window.ballMesh.position.x;
+        let ballZ = window.ballMesh.position.z;
+        let flagX = hole.flag.x;
+        let flagZ = hole.flag.z;
+        
+        // Only show on green within reasonable distance
+        let distToFlag = Math.hypot(ballX - flagX, ballZ - flagZ);
+        if (distToFlag > 25 || distToFlag < 0.5) return;
+        
+        let ballSurf = localGetTerrainAt(ballX, -ballZ);
+        if (!ballSurf || ballSurf.type !== 'GREEN') return;
+        
+        // Simulate putt path using terrain slope
+        // Start from ball, aim at flag, but let slope deflect the "ideal" line
+        // This shows WHERE to aim (the adjusted line accounting for break)
+        let steps = 60;
+        let pts = [];
+        
+        // Method: trace from flag BACK to ball, applying reverse slope
+        // This gives the "true line" — where the ball would travel
+        // We do forward simulation from ball toward flag with slope influence
+        let dx = flagX - ballX;
+        let dz = flagZ - ballZ;
+        let dist = Math.hypot(dx, dz);
+        let dirX = dx / dist;
+        let dirZ = dz / dist;
+        
+        // Simulate forward path with slope deflection
+        let simX = ballX;
+        let simZ = ballZ;
+        let stepSize = dist / steps;
+        let slopeInfluence = 0.35; // How much slope affects the line (tunable)
+        
+        for (let i = 0; i <= steps; i++) {
+            let surf = localGetTerrainAt(simX, -simZ);
+            let h = surf ? surf.z + 0.04 : 0.04;
+            pts.push(simX, h, simZ);
+            
+            if (i < steps) {
+                // Get slope at this point from terrain normal
+                let nx = surf ? surf.normal[0] : 0; // X-component of normal (slope in X)
+                let nz = surf ? surf.normal[1] : 0; // Z-component of normal (slope in Z)
+                
+                // Recalculate direction toward flag from current sim position
+                let toFlagX = flagX - simX;
+                let toFlagZ = flagZ - simZ;
+                let toFlagDist = Math.hypot(toFlagX, toFlagZ);
+                if (toFlagDist > 0.01) {
+                    dirX = toFlagX / toFlagDist;
+                    dirZ = toFlagZ / toFlagDist;
+                }
+                
+                // Apply slope deflection (perpendicular to direction of travel)
+                // Slope pushes the ball sideways based on terrain normal
+                simX += (dirX + nx * slopeInfluence) * stepSize;
+                simZ += (dirZ + nz * slopeInfluence) * stepSize;
+            }
+        }
+        
+        // Build THREE.js line
+        let geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        
+        let mat = new THREE.LineDashedMaterial({
+            color: 0xfbbf24, // Amber/gold
+            transparent: true,
+            opacity: 0.7,
+            dashSize: 0.15,
+            gapSize: 0.08,
+            depthTest: false
+        });
+        
+        window.breakLineMesh = new THREE.Line(geo, mat);
+        window.breakLineMesh.computeLineDistances();
+        window.breakLineMesh.name = 'breakLine';
+        window.breakLineMesh.renderOrder = 2;
+        scene.add(window.breakLineMesh);
+    };
+    
+    window.clearBreakLine = function() {
+        if (window.breakLineMesh) {
+            scene.remove(window.breakLineMesh);
+            if (window.breakLineMesh.geometry) window.breakLineMesh.geometry.dispose();
+            if (window.breakLineMesh.material) window.breakLineMesh.material.dispose();
+            window.breakLineMesh = null;
+        }
+    };
+    
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
     const brushMat = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
     const sculptBrushCursor = new THREE.Mesh(brushGeo, brushMat);
@@ -5775,6 +5878,7 @@
         // Destroy previous hole's green grid — frees GPU geometry + material.
         // buildGreenGrid() will rebuild it fresh when ball lands on the new green.
         if (typeof window.resetGreenGrid === 'function') window.resetGreenGrid();
+            window.clearBreakLine();
         
         // BUG-06 FIX: Set pinMesh when teleporting to a new hole
         if (hole.flagMesh) {
@@ -5889,6 +5993,11 @@
         let maxScore = hole ? (hole.par || 4) + maxConcede : 99;
         
         p.lie = {x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z};
+        
+        // Rebuild break line if on green
+        let _lieSurf = localGetTerrainAt(p.lie.x, -p.lie.z);
+        if (_lieSurf && _lieSurf.type === 'GREEN') { window.buildBreakLine(); }
+        else { window.clearBreakLine(); }
 
         if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
         // Sync swing club selector with new ball position after landing
@@ -9832,6 +9941,7 @@
             } else if (window.greenGridEnabled) {
                 // Fallback: build if somehow missing (e.g. first load with grid ON)
                 window.buildGreenGrid(hole, playingHoleIndex);
+                            window.buildBreakLine(); // Show putt break line
             }
 
             // --- GSPro Break Line Indicator (only in putting mode) ---
