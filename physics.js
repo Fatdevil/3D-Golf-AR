@@ -674,7 +674,7 @@ window.GolfPhysics = (function() {
                 }
                 
                 // Bestäm markens fysikegenskaper
-                let impactTerrainType = 'FAIRWAY';
+                let impactTerrainType = tInfo.type || 'FAIRWAY';
                 if (envCtx && envCtx.checkCollisionCallback) {
                     // BUG-03 FIX: Pass actual impact height (was hardcoded 0) so
                     // cylinder/sphere/tree physics use correct height for collision.
