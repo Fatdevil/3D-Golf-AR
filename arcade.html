@@ -4829,7 +4829,7 @@
                 let pos = planeGeo.attributes.position.array;
                 let idx = 0;
                 for (let i = 2; i < pos.length && idx < data.m.length; i += 3) {
-                    pos[i] = data.m[idx++];
+                    pos[i] = Math.max(-60, Math.min(60, data.m[idx++])); // Clamp to ±60m
                 }
                 // Edge-clamp: force border vertices to 0 (prevent spikes)
                 let _segs = TERRAIN_SEGS + 1;
@@ -5122,7 +5122,7 @@
                     let waterArr = Array.isArray(mapData) ? null : mapData.water;
 
                     if(groundArr) {
-                        for(let i=0; i<groundArr.length; i++) pos.setZ(i, groundArr[i]);
+                        for(let i=0; i<groundArr.length; i++) pos.setZ(i, Math.max(-60, Math.min(60, groundArr[i]))); // Clamp to ±60m
                         // Edge-clamp: force border vertices to 0 (prevent spikes)
                         let _segs = TERRAIN_SEGS + 1;
                         let _half = TERRAIN_SIZE / 2;
@@ -9165,6 +9165,8 @@
                 
                 if (currentTool === 'SCULPT') {
                     positions[i*3 + 2] += strength * falloff;
+                    // Clamp to max terrain height (prevents extreme corruption)
+                    positions[i*3 + 2] = Math.max(-60, Math.min(60, positions[i*3 + 2]));
                     updatePos = true;
                 } else if (currentTool === 'SMOOTH') {
                     // Laplacian smoothing: average of 4 direct neighbors (N/S/E/W)
