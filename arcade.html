@@ -224,15 +224,9 @@
         <canvas id="elevation-canvas" width="220" height="80" style="width:100%; height:100%;"></canvas>
     </div>
 
-    <!-- GREEN READ PANEL (visible in PLAY/TEST mode) -->
-    <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:10px 12px; z-index:11; backdrop-filter:blur(8px); min-width:140px; pointer-events:auto;">
-        <div style="color:#94a3b8; font-size:9px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; text-align:center;">📖 Green Read</div>
-        <div style="display:flex; flex-direction:column; gap:5px;">
-            <button id="gr-slope" onclick="window.toggleSlopeOverlay()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:left; transition:all 0.2s;">📊 Slope</button>
-            <button id="gr-contour" onclick="window.toggleContourLines()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:left; transition:all 0.2s;">🏔️ Contour</button>
-            <button id="gr-elev" onclick="window.toggleElevationHeatmap()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 8px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:10px; text-align:left; transition:all 0.2s;">🌡️ Elevation</button>
-        </div>
-        <div style="color:#475569; font-size:8px; margin-top:6px; text-align:center;">G · C · H to toggle</div>
+    <!-- FLYOVER PANEL (replaces Green Read — above minimap) -->
+    <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:8px 12px; z-index:11; backdrop-filter:blur(8px); min-width:140px; pointer-events:auto;">
+        <button onclick="startFlyover()" style="width:100%; background:linear-gradient(135deg, #0d9488, #0891b2); color:#fff; border:none; padding:10px 14px; border-radius:8px; font-weight:800; cursor:pointer; font-size:12px; letter-spacing:0.5px; transition:all 0.2s; text-align:center;">🚁 FLYOVER</button>
     </div>
 
     <!-- MINIMAP CONTAINER (UI wrapper för kameran) -->
@@ -764,7 +758,7 @@
             </div>
             <input type="hidden" id="in-stimp" value="10.0">
             <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer; display:none;" title="Camera Mode">🎥 AUTO</button>
-            <button id="btn-flyover" onclick="startFlyover()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Hole Flyover">🚁 FLYOVER</button>
+            <button id="btn-flyover" onclick="startFlyover()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer; display:none;" title="Hole Flyover">🚁 FLYOVER</button>
             <button id="btn-tracer-fade" onclick="(function(){let m=window.tracerFadeMode;let next=m==='FADE'?'SOLID':m==='SOLID'?'OFF':'FADE';window.setTracerFadeMode(next)})()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer; display:none;" title="Trail Mode: Fade/Solid/Off">╌ FADE</button>
             <button id="btn-penalty" onclick="takePenaltyDrop()" style="background:#ef4444; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer; display:none;" title="Add Penalty Stroke">🛑 PENALTY</button>
         </div>
