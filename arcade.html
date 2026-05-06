@@ -2337,7 +2337,8 @@
     waterTex.magFilter = THREE.LinearFilter;
     
     const TERRAIN_SIZE = 900; 
-    const TERRAIN_SEGS = 600; 
+    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+    const TERRAIN_SEGS = _isMobile ? 400 : 600; 
     const planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
     planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
     
