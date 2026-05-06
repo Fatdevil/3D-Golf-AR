@@ -5337,7 +5337,7 @@
         }
     };
 
-    window.setupPlayers = [{ name: 'Player 1', tee: 'yellow' }];
+    window.setupPlayers = [{ name: 'Player 1', tee: 'yellow', hcp: null }];
     
     window.renderPlayerRoster = function() {
         const list = document.getElementById('roster-list');
@@ -5367,7 +5367,8 @@
             row.style.cssText = 'display:flex; gap:10px; align-items:center; background:#0f172a; padding:10px; border-radius:8px; border:1px solid #475569;';
             
             row.innerHTML = `
-                <input type="text" value="${p.name}" onchange="window.setupPlayers[${idx}].name=this.value" placeholder="Player Name" style="flex:1; padding:8px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
+                <input type="text" value="${p.name}" onchange="window.setupPlayers[${idx}].name=this.value" placeholder="Name" style="flex:1; min-width:0; padding:6px 8px; background:#1e293b; color:#fff; border:1px solid #334155; border-radius:6px; font-weight:600; font-size:12px;">
+                <input type="number" value="${p.hcp !== null ? p.hcp : ''}" onchange="window.setupPlayers[${idx}].hcp=this.value?parseFloat(this.value):null" placeholder="HCP" min="0" max="54" step="0.1" style="width:52px; padding:6px 4px; background:#1e293b; color:#fbbf24; border:1px solid #334155; border-radius:6px; font-weight:700; font-size:11px; text-align:center;" title="Handicap (0-54)">
                 <select onchange="window.setupPlayers[${idx}].tee=this.value" style="padding:8px; background:#1e293b; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
                     ${tOpts.join('')}
                 </select>
@@ -5385,7 +5386,7 @@
             return;
         }
         let tee = window.setupPlayers.length > 0 ? window.setupPlayers[0].tee : 'yellow';
-        window.setupPlayers.push({ name: `Player ${window.setupPlayers.length + 1}`, tee: tee });
+        window.setupPlayers.push({ name: `Player ${window.setupPlayers.length + 1}`, tee: tee, hcp: null });
         window.renderPlayerRoster();
     };
     
@@ -5687,7 +5688,7 @@
         
         window.players = window.setupPlayers.map(sp => ({
             id: sp.name + "_" + Math.random().toString(36).substring(7),
-            name: sp.name,
+            name: sp.name, hcp: sp.hcp,
             tee: sp.tee,
             strokes: 0,
             penaltyStrokes: 0,
