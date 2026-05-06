@@ -142,7 +142,22 @@ async function initDB() {
             await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS tournament_id VARCHAR(20);`);
         } catch(e) {}
 
-        console.log("✅ Database schema ready (v2 — users, ownership, leaderboard, tournaments)");
+        // --- HCP System migrations ---
+        try {
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS handicap_index DECIMAL(4,1);`);
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS handicap_rounds INT DEFAULT 0;`);
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS handicap_history JSONB DEFAULT '[]';`);
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS handicap_updated TIMESTAMP;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS course_rating DECIMAL(4,1);`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS slope_rating INT DEFAULT 113;`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS stroke_index JSONB;`);
+            await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS handicap_at_play DECIMAL(4,1);`);
+            await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS score_differential DECIMAL(5,1);`);
+            await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS net_score INT;`);
+            await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS stableford_points INT;`);
+        } catch(e) { console.log('HCP migration note:', e.message); }
+
+        console.log("✅ Database schema ready (v3 — HCP system)");
     } catch(err) {
         console.error("❌ Database schema error:", err);
     }
@@ -252,6 +267,19 @@ app.put('/api/users/:id', requireDB, authMiddleware, async (req, res) => {
     }
 });
 
+// --- HCP API ---
+app.get('/api/users/:id/handicap', requireDB, async (req, res) => {
+    try {
+        const user = await pool.query('SELECT handicap_index, handicap_rounds, handicap_updated FROM users WHERE id = $1', [req.params.id]);
+        if (user.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+        const rounds = await pool.query(
+            `SELECT score_differential, total_score, score_vs_par, course_code, played_at FROM course_records WHERE player_id = $1 AND flagged = false AND score_differential IS NOT NULL ORDER BY played_at DESC LIMIT 20`,
+            [req.params.id]
+        );
+        res.json({ handicap_index: user.rows[0].handicap_index, rounds_counted: user.rows[0].handicap_rounds, last_updated: user.rows[0].handicap_updated, recent_rounds: rounds.rows });
+    } catch(err) { console.error('HCP fetch error:', err); res.status(500).json({ error: 'Server error' }); }
+});
+
 app.get('/api/courses', requireDB, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -311,11 +339,24 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         if (total_score < holeCount) flagged = true;          // Under 1 per hole = suspicious
         if (total_score > holeCount * 10) flagged = true;     // Over 10 per hole = suspicious
         
+        // === HCP: Calculate differential ===
+        let scoreDifferential = null, playerHcpAtPlay = null, netScore = null;
+        if (req.userId && req.userId !== 'anonymous') {
+            const hcpRes = await pool.query('SELECT handicap_index FROM users WHERE id = $1', [req.userId]);
+            if (hcpRes.rows.length > 0) playerHcpAtPlay = hcpRes.rows[0].handicap_index;
+            const ratRes = await pool.query('SELECT course_rating, slope_rating FROM courses WHERE share_code = $1', [code]);
+            if (ratRes.rows.length > 0 && ratRes.rows[0].course_rating) {
+                const cr = parseFloat(ratRes.rows[0].course_rating), sr = parseInt(ratRes.rows[0].slope_rating) || 113;
+                scoreDifferential = calculateScoreDifferential(total_score, cr, sr);
+                if (playerHcpAtPlay !== null) netScore = total_score - Math.round(playerHcpAtPlay * (sr / 113));
+            }
+        }
+        
         // Save result
         const result = await pool.query(
             `INSERT INTO course_records 
-            (course_code, course_version, player_id, player_name, input_mode, lm_device, total_score, score_vs_par, hole_scores, stats, flagged)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            (course_code, course_version, player_id, player_name, input_mode, lm_device, total_score, score_vs_par, hole_scores, stats, flagged, handicap_at_play, score_differential, net_score)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING id`,
             [
                 code, courseVersion,
@@ -327,9 +368,16 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                 score_vs_par || 0,
                 JSON.stringify(hole_scores || []),
                 JSON.stringify(stats || {}),
-                flagged
+                flagged,
+                playerHcpAtPlay, scoreDifferential, netScore
             ]
         );
+        
+        // Update HCP
+        let newHcp = null;
+        if (req.userId && req.userId !== 'anonymous' && !flagged) {
+            newHcp = await updateHandicapIndex(req.userId, pool);
+        }
         
         // Increment play_count on course
         await pool.query(
@@ -354,7 +402,8 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             success: true, 
             record_id: result.rows[0].id,
             position: parseInt(posResult.rows[0].position),
-            flagged: flagged
+            flagged: flagged,
+            handicap: { previous: playerHcpAtPlay, new: newHcp, differential: scoreDifferential }
         });
     } catch(err) {
         console.error('Error saving result:', err);
@@ -422,6 +471,108 @@ function generateShareCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// === HCP SYSTEM: Helper Functions ===
+
+function calculateCourseRating(holes, totalPar) {
+    let totalLength = 0;
+    let playableHoles = 0;
+    const holesArr = typeof holes === 'string' ? JSON.parse(holes) : holes;
+    holesArr.forEach(h => {
+        if (h.flag && h.tees) {
+            let tee = h.tees.yellow || h.tees.white || h.tees.red || h.tees.black;
+            if (tee) {
+                totalLength += Math.hypot(h.flag.x - tee.x, h.flag.z - tee.z);
+                playableHoles++;
+            }
+        }
+    });
+    if (playableHoles === 0) return totalPar || 36;
+    let expectedLength = playableHoles * 300;
+    let lengthDiff = (totalLength - expectedLength) / 400;
+    let cr = (totalPar || playableHoles * 4) + Math.max(-2, Math.min(4, lengthDiff));
+    return Math.round(cr * 10) / 10;
+}
+
+function calculateSlopeRating(holes) {
+    const holesArr = typeof holes === 'string' ? JSON.parse(holes) : holes;
+    let totalLength = 0;
+    let par5Count = 0;
+    let playable = 0;
+    holesArr.forEach(h => {
+        if (h.flag && h.tees) {
+            let tee = h.tees.yellow || h.tees.white || h.tees.red || h.tees.black;
+            if (tee) {
+                totalLength += Math.hypot(h.flag.x - tee.x, h.flag.z - tee.z);
+                playable++;
+                if (h.par >= 5) par5Count++;
+            }
+        }
+    });
+    if (playable === 0) return 113;
+    let avgLength = totalLength / playable;
+    let slope = 113 + Math.round((avgLength - 300) / 50 * 8) + (par5Count * 3);
+    return Math.max(55, Math.min(155, slope));
+}
+
+function calculateStrokeIndex(holes) {
+    const holesArr = typeof holes === 'string' ? JSON.parse(holes) : holes;
+    let lengths = [];
+    holesArr.forEach((h, i) => {
+        let len = 0;
+        if (h.flag && h.tees) {
+            let tee = h.tees.yellow || h.tees.white || h.tees.red || h.tees.black;
+            if (tee) len = Math.hypot(h.flag.x - tee.x, h.flag.z - tee.z);
+        }
+        lengths.push({ index: i, length: len });
+    });
+    lengths.sort((a, b) => b.length - a.length);
+    let si = new Array(holesArr.length).fill(0);
+    lengths.forEach((item, rank) => { si[item.index] = rank + 1; });
+    return si;
+}
+
+function calculateScoreDifferential(adjustedScore, courseRating, slopeRating) {
+    if (!courseRating || !slopeRating || slopeRating === 0) return null;
+    return Math.round(((113 / slopeRating) * (adjustedScore - courseRating)) * 10) / 10;
+}
+
+async function updateHandicapIndex(playerId, dbPool) {
+    try {
+        const result = await dbPool.query(
+            `SELECT score_differential FROM course_records 
+             WHERE player_id = $1 AND flagged = false AND score_differential IS NOT NULL
+             ORDER BY played_at DESC LIMIT 20`,
+            [playerId]
+        );
+        const rounds = result.rows.map(r => parseFloat(r.score_differential));
+        if (rounds.length < 3) return null;
+        
+        let useCount;
+        if (rounds.length <= 5) useCount = 1;
+        else if (rounds.length <= 8) useCount = 2;
+        else if (rounds.length <= 11) useCount = 3;
+        else if (rounds.length <= 14) useCount = 5;
+        else if (rounds.length <= 16) useCount = 6;
+        else if (rounds.length <= 18) useCount = 7;
+        else useCount = 8;
+        
+        rounds.sort((a, b) => a - b);
+        const best = rounds.slice(0, useCount);
+        const avg = best.reduce((s, v) => s + v, 0) / best.length;
+        const handicapIndex = Math.round(avg * 0.96 * 10) / 10;
+        const clampedHI = Math.max(0, Math.min(54.0, handicapIndex));
+        
+        await dbPool.query(
+            `UPDATE users SET handicap_index = $1, handicap_rounds = $2, handicap_updated = NOW() WHERE id = $3`,
+            [clampedHI, rounds.length, playerId]
+        );
+        return clampedHI;
+    } catch(e) {
+        console.error('HCP update error:', e.message);
+        return null;
+    }
+}
+
 app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
     try {
         const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, terrain_watermask, is_draft, is_range, edit_code, theme_data, hole_count, total_par, new_version } = req.body;
@@ -481,13 +632,14 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
                 terrain_heightmap, terrain_biomemap, draftStatus, JSON.stringify(c_theme_data), rangeStatus,
-                req.userId || null, c_hole_count, c_total_par
+                req.userId || null, c_hole_count, c_total_par,
+                calculateCourseRating(holes, c_total_par), calculateSlopeRating(holes), JSON.stringify(calculateStrokeIndex(holes))
             ]
         );
 
