@@ -4831,6 +4831,19 @@
                 for (let i = 2; i < pos.length && idx < data.m.length; i += 3) {
                     pos[i] = data.m[idx++];
                 }
+                // Edge-clamp: force border vertices to 0 (prevent spikes)
+                let _segs = TERRAIN_SEGS + 1;
+                let _half = TERRAIN_SIZE / 2;
+                let _step = TERRAIN_SIZE / TERRAIN_SEGS;
+                for (let i = 0; i < _segs * _segs; i++) {
+                    let gx = i % _segs;
+                    let gz = Math.floor(i / _segs);
+                    let vx = gx * _step - _half;
+                    let vz = gz * _step - _half;
+                    if (Math.abs(vx) > _half - 4 || Math.abs(vz) > _half - 4) {
+                        pos[i * 3 + 2] = 0;
+                    }
+                }
                 planeGeo.attributes.position.needsUpdate = true;
                 planeGeo.computeVertexNormals();
             }
@@ -5110,6 +5123,19 @@
 
                     if(groundArr) {
                         for(let i=0; i<groundArr.length; i++) pos.setZ(i, groundArr[i]);
+                        // Edge-clamp: force border vertices to 0 (prevent spikes)
+                        let _segs = TERRAIN_SEGS + 1;
+                        let _half = TERRAIN_SIZE / 2;
+                        let _step = TERRAIN_SIZE / TERRAIN_SEGS;
+                        for (let i = 0; i < _segs * _segs; i++) {
+                            let gx = i % _segs;
+                            let gz = Math.floor(i / _segs);
+                            let vx = gx * _step - _half;
+                            let vz = gz * _step - _half;
+                            if (Math.abs(vx) > _half - 4 || Math.abs(vz) > _half - 4) {
+                                pos.setZ(i, 0);
+                            }
+                        }
                     }
                     if(waterArr && wPos) {
                         for(let i=0; i<waterArr.length; i++) {
