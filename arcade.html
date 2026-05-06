@@ -198,6 +198,7 @@
             <div style="width:2px; height:30px; background:#475569;"></div>
             <button id="btn-mulligan" onclick="takeMulligan()" style="background:#ef4444; color:#fff; border:none; padding:6px 10px; border-radius:8px; font-weight:bold; cursor:pointer; display:none; margin: 0 3px; font-size:11px;" title="Free replay (casual)">MULLIGAN ↺</button>
             <button id="btn-rehit" onclick="takeRehit()" style="background:#f59e0b; color:#0f172a; border:none; padding:6px 10px; border-radius:8px; font-weight:bold; cursor:pointer; display:none; margin: 0 3px; font-size:11px;" title="Replay with +1 penalty stroke">↩️ REHIT (+1)</button>
+            <button id="btn-drop" onclick="takePenaltyDrop()" style="background:#3b82f6; color:#fff; border:none; padding:6px 10px; border-radius:8px; font-weight:bold; cursor:pointer; display:none; margin: 0 3px; font-size:11px;" title="Drop ball at new position (+1 penalty)">📍 DROP (+1)</button>
             <div style="display:flex; flex-direction:column; align-items:center;">
                 <span style="font-size:12px; color:#94a3b8; text-transform:uppercase;">Strokes</span>
                 <span id="hud-play-strokes" style="color:#f87171;">0</span>
@@ -762,10 +763,10 @@
                 <button onclick="fireShot()">🔥 SHOOT</button>
             </div>
             <input type="hidden" id="in-stimp" value="10.0">
-            <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Camera Mode">🎥 AUTO</button>
+            <button id="btn-cam-mode" onclick="toggleCamMode()" style="background:#4f46e5; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer; display:none;" title="Camera Mode">🎥 AUTO</button>
             <button id="btn-flyover" onclick="startFlyover()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Hole Flyover">🚁 FLYOVER</button>
-            <button id="btn-tracer-fade" onclick="(function(){let m=window.tracerFadeMode;let next=m==='FADE'?'SOLID':m==='SOLID'?'OFF':'FADE';window.setTracerFadeMode(next)})()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Trail Mode: Fade/Solid/Off">╌ FADE</button>
-            <button id="btn-penalty" onclick="takePenaltyDrop()" style="background:#ef4444; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer;" title="Add Penalty Stroke">🛑 PENALTY</button>
+            <button id="btn-tracer-fade" onclick="(function(){let m=window.tracerFadeMode;let next=m==='FADE'?'SOLID':m==='SOLID'?'OFF':'FADE';window.setTracerFadeMode(next)})()" style="background:#0d9488; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer; display:none;" title="Trail Mode: Fade/Solid/Off">╌ FADE</button>
+            <button id="btn-penalty" onclick="takePenaltyDrop()" style="background:#ef4444; color:#fff; padding:8px 15px; font-weight:bold; border:none; border-radius:6px; cursor:pointer; display:none;" title="Add Penalty Stroke">🛑 PENALTY</button>
         </div>
     </div>
 
@@ -1791,11 +1792,15 @@
                 if (p && p.prevPos) {
                     if (window.matchSettings && window.matchSettings.mulligans) mBtn.style.display = 'block';
                     if (rBtn) rBtn.style.display = 'block';
+                    let dBtn = document.getElementById('btn-drop');
+                    if (dBtn) dBtn.style.display = 'block';
                     return;
                 }
             }
             mBtn.style.display = 'none';
             if (rBtn) rBtn.style.display = 'none';
+            let dBtn = document.getElementById('btn-drop');
+            if (dBtn) dBtn.style.display = 'none';
         }
     }, 500);
 
