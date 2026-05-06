@@ -7448,8 +7448,8 @@
         
         // Range mode: hide course-only buttons
         let isRangeHide = !!window._isRangeMode;
-        let flyBtn = document.getElementById('btn-flyover'); if(flyBtn) flyBtn.style.display = isRangeHide ? 'none' : '';
-        let penBtn = document.getElementById('btn-penalty'); if(penBtn) penBtn.style.display = isRangeHide ? 'none' : '';
+        let flyBtn = document.getElementById('btn-flyover'); if(flyBtn) flyBtn.style.display = 'none'; // Moved to panel above minimap
+        let penBtn = document.getElementById('btn-penalty'); if(penBtn) penBtn.style.display = 'none'; // Moved to HUD DROP button
 
 
         let dataBtn = document.getElementById('btn-toggle-data');
