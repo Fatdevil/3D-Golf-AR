@@ -1315,7 +1315,7 @@
             'HLA': 'hud-hla'
         };
         
-        prefs.forEach(tileKey => {
+        prefs.filter(k => labels[k]).forEach(tileKey => {
             let isHighlight = (tileKey === 'TOTAL_LENGTH' || tileKey === 'CARRY');
             html += `<div class="dh-tile">
                 <span class="dh-label">${labels[tileKey]}</span>
