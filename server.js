@@ -441,7 +441,11 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
             // Check ownership before allowing edit
             const ownerCheck = await pool.query('SELECT owner_id FROM courses WHERE share_code = $1', [edit_code.toUpperCase()]);
             if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id) {
-                if (req.userId && ownerCheck.rows[0].owner_id !== req.userId) {
+                // Course has an owner — require matching auth
+                if (!req.userId) {
+                    return res.status(401).json({ error: 'Authentication required to edit this course' });
+                }
+                if (ownerCheck.rows[0].owner_id !== req.userId) {
                     return res.status(403).json({ error: 'You are not the owner of this course' });
                 }
             }
@@ -503,6 +507,34 @@ app.get('/api/courses/:share_code', requireDB, async (req, res) => {
     } catch(err) {
         console.error("Error fetching course:", err);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Delete a course (owner only)
+app.delete('/api/courses/:code', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase();
+        
+        // Check ownership
+        const course = await pool.query('SELECT owner_id FROM courses WHERE share_code = $1', [code]);
+        if (course.rows.length === 0) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+        if (course.rows[0].owner_id && course.rows[0].owner_id !== req.userId) {
+            return res.status(403).json({ error: 'You are not the owner of this course' });
+        }
+        
+        // Delete leaderboard records first (foreign key integrity)
+        await pool.query('DELETE FROM course_records WHERE course_code = $1', [code]);
+        
+        // Delete the course
+        await pool.query('DELETE FROM courses WHERE share_code = $1', [code]);
+        
+        console.log('🗑️ Course deleted:', code, 'by user:', req.userId.substring(0, 8) + '...');
+        res.json({ success: true, deleted: code });
+    } catch(err) {
+        console.error('Error deleting course:', err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
