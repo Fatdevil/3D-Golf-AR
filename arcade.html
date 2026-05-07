@@ -6609,6 +6609,7 @@
     
     function triggerRealShot(data) {
         if(isFlying) return;
+        if (window.clearBreakLine) window.clearBreakLine();
         
         // RISK-02 FIX: Normalize BackSpin/SideSpin → TotalSpin/SpinAxis if bridge sends
         // component form instead of polar form. Handles both casing variants:
