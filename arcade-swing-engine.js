@@ -91,51 +91,69 @@ const SwingEngine = (function() {
         const stimp = window.GREEN_STIMP || 10.0;
 
         // Arm offset from top: map 0–360 → −180 to +180
-        // Arm top (0°) = perfect shot. 180° = worst possible miss.
         let armOffset = armDeg;
         if (armOffset > 180) armOffset -= 360; // −180…+180
 
-        // normalised miss: −1 (full left) → 0 (perfect) → +1 (full right)
-        const normMiss = armOffset / 180.0;
+        // API Contract variables
+        const impactDirection = armOffset < 0 ? -1 : 1; // -1 = left, +1 = right
+        const impactOffset    = Math.abs(armOffset) / 90.0; // 0.0 (perfect) to 1.0 (extreme edge)
+        
+        // Distance Loss Logic (Shot Deviation Model)
+        let effectivePower = powerPct;
+        if (impactOffset > 0.9) {
+            // Skull: Extreme miss, halve the power
+            effectivePower *= 0.5;
+        } else if (impactOffset > 0.6) {
+            // Miss (Red zone): Lose up to 30% distance
+            const penalty = 0.10 + 0.20 * ((impactOffset - 0.6) / 0.3); // 10% to 30%
+            effectivePower *= (1 - penalty);
+        } else if (impactOffset > 0.2) {
+            // Good (Yellow zone): Lose up to 10% distance
+            const penalty = 0.10 * ((impactOffset - 0.2) / 0.4); // 0% to 10%
+            effectivePower *= (1 - penalty);
+        }
+
+        // Normalised miss for sideways curve: −1 (full left) → 0 (perfect) → +1 (full right)
+        // We use the raw impactOffset to calculate curve, maintaining direction
+        const normMiss = (impactOffset * impactDirection);
 
         // Deterministic component of azimuth error (85%)
         const deterministicMiss = normMiss * club.maxSpread;
 
-        // Random noise (15%) — D5: 85% deterministic + 15% luck
-        // randomNoise spans full maxSpread range (×2 for ±1 range)
+        // Random noise (15%)
         const randomNoise = (Math.random() - 0.5) * 2 * club.maxSpread;
         const azimDeg     = deterministicMiss * 0.85 + randomNoise * 0.15;
 
-        // PUTT special case — map power × distToHole → ballSpeedMph via Werner-Greig
+        // PUTT special case
         if (clubKey === 'PUTT') {
-            const targetDist  = Math.max(0.5, distToHoleM) * powerPct;
+            const targetDist  = Math.max(0.5, distToHoleM) * effectivePower;
             const puttSpeedMph = puttForceToSpeed(targetDist, stimp);
             return {
                 ballSpeedMph:   Math.min(puttSpeedMph, club.maxSpeed),
                 launchAngleDeg: club.baseLaunchAngle,
                 totalSpinRpm:   club.baseSpin,
-                spinAxisDeg:    azimDeg * 0.5, // Putts: subtle line bias only
+                spinAxisDeg:    azimDeg * 0.5, 
                 azimDeg:        azimDeg,
                 isLiveData:     false,
+                impactData:     { offset: impactOffset, direction: impactDirection }
             };
         }
 
-        // All other clubs — power scales ballSpeed and spin
-        const speedMph = club.maxSpeed * powerPct;
-        // Low power also reduces spin (thin contact at <50% power)
-        const spinMult = 0.7 + 0.3 * powerPct;
+        // All other clubs
+        const speedMph = club.maxSpeed * effectivePower;
+        const spinMult = 0.7 + 0.3 * effectivePower;
         const spinRpm  = club.baseSpin * spinMult;
 
-        // Launch angle: slightly lower on fat/thin swings (extreme power = thin)
-        const vlaOffset = (Math.abs(powerPct - 0.85) > 0.2) ? -1.5 : 0;
+        const vlaOffset = (Math.abs(effectivePower - 0.85) > 0.2) ? -1.5 : 0;
 
         return {
             ballSpeedMph:   Math.max(speedMph, 10),
             launchAngleDeg: club.baseLaunchAngle + vlaOffset,
             totalSpinRpm:   spinRpm,
-            spinAxisDeg:    azimDeg * 0.8, // spin axis tied to miss direction
+            spinAxisDeg:    azimDeg * 0.8, 
             azimDeg:        azimDeg,
             isLiveData:     false,
+            impactData:     { offset: impactOffset, direction: impactDirection }
         };
     }
 
@@ -186,8 +204,13 @@ const SwingEngine = (function() {
     function _updateArm(deg) {
         const arm = _el('dir-arm');
         if (!arm) return;
-        // Rotate around centre (130,130) — set transform attribute directly
-        arm.setAttribute('transform', `rotate(${deg.toFixed(1)} 130 130)`);
+        // If arm is an SVG element, use setAttribute. If it is an HTML div, use style.transform.
+        if (arm.tagName.toLowerCase() === 'div') {
+            // A div pointing down needs +180 to point up at deg=0. CSS rotation is clockwise.
+            arm.style.transform = `rotate(${deg + 180}deg)`;
+        } else {
+            arm.setAttribute('transform', `rotate(${deg.toFixed(1)} 130 130)`);
+        }
     }
 
     // -----------------------------------------------------------
@@ -214,9 +237,22 @@ const SwingEngine = (function() {
             _raf = requestAnimationFrame(_rafLoop);
 
         } else if (_phase === 'direction') {
-            // Arm rotating at ARM_RPM degrees/second
-            const elapsed = (ts - _phaseStart) / 1000; // seconds
-            _armDeg = (elapsed * ARM_RPM) % 360;
+            // Pendulum swing (Golf Clash style)
+            // Swings from Left (-90°) to Right (+90°) and back.
+            // Base time is 1800ms. If power > 95%, speed up to 1000ms max.
+            let cycleTime = 1800;
+            if (_powerPct > 0.95) {
+                // Scale from 1800ms (at 95%) to 1000ms (at 100%)
+                const overload = (_powerPct - 0.95) / 0.05; // 0.0 to 1.0
+                cycleTime = 1800 - (800 * overload);
+            }
+            
+            const elapsed = (ts - _phaseStart) % cycleTime; 
+            const raw = elapsed / cycleTime; // 0.0 -> 1.0
+            
+            // -Math.cos starts at -1 (left edge), goes to 0 (top/perfect), +1 (right edge), back to 0.
+            _armDeg = -Math.cos(raw * Math.PI * 2) * 90;
+            
             _updateArm(_armDeg);
             _raf = requestAnimationFrame(_rafLoop);
         }
@@ -257,6 +293,12 @@ const SwingEngine = (function() {
         if (!_enabled) return;
 
         if (_phase === 'idle') {
+            // Hide LM data panel and distance panel if visible from previous shot
+            const lmPanel = document.getElementById('lm-data-panel');
+            if (lmPanel) lmPanel.classList.remove('active');
+            const distPanel = document.getElementById('distance-panel');
+            if (distPanel) distPanel.classList.remove('active');
+
             // Show overlay and start power ring
             _phase      = 'power';
             _phaseStart = performance.now();

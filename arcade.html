@@ -8913,6 +8913,47 @@
                 }
             }
         }
+        // === AUTO-SMOOTH PASS ===
+        // To remove jagged edges (hackiga kanter) automatically after digging the bunker
+        let _smoothStride = TERRAIN_SEGS + 1;
+        let smGxStart = Math.max(0, gxStart - 3);
+        let smGxEnd = Math.min(TERRAIN_SEGS, gxEnd + 3);
+        let smGzStart = Math.max(0, gzStart - 3);
+        let smGzEnd = Math.min(TERRAIN_SEGS, gzEnd + 3);
+
+        for(let smPass = 0; smPass < 6; smPass++) {
+            for(let gz = smGzStart; gz <= smGzEnd; gz++) {
+                for(let gx = smGxStart; gx <= smGxEnd; gx++) {
+                    let idx = gz * _smoothStride + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+
+                    let isInside = pointInPolygon(vx, vz, densePts);
+                    let distEdge = distToPolygon(vx, vz, densePts);
+                    
+                    // Smooth inside the bunker, and a margin outside to blend the lip
+                    if(isInside || distEdge < 2.5) {
+                        let nCount = 0;
+                        let nSum = 0;
+                        if (gz > 0) { nSum += positions[((gz-1)*_smoothStride + gx)*3 + 2]; nCount++; }
+                        if (gz < TERRAIN_SEGS) { nSum += positions[((gz+1)*_smoothStride + gx)*3 + 2]; nCount++; }
+                        if (gx > 0) { nSum += positions[(gz*_smoothStride + gx-1)*3 + 2]; nCount++; }
+                        if (gx < TERRAIN_SEGS) { nSum += positions[(gz*_smoothStride + gx+1)*3 + 2]; nCount++; }
+                        
+                        if (nCount > 0) {
+                            let localAvg = nSum / nCount;
+                            // Strength: very strong at the edge to remove jaggedness, milder further away
+                            let smoothStrength = 0.7; 
+                            if(isInside && distEdge > 1.5) smoothStrength = 0.2; // Keep center bowl shape intact
+                            if(!isInside && distEdge > 1.5) smoothStrength = 0.3; // Fade out smoothing outside
+                            
+                            positions[idx*3 + 2] += (localAvg - positions[idx*3 + 2]) * smoothStrength;
+                        }
+                    }
+                }
+            }
+        }
+
 
         planeGeo.attributes.position.needsUpdate = true;
         planeGeo.computeVertexNormals();
@@ -11082,7 +11123,7 @@
         <!-- Depth Slider -->
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; background:#1e293b; padding:8px 12px; border-radius:8px;">
             <span style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">Depth</span>
-            <input type="range" id="sb-bunker-depth" min="0.2" max="2.0" value="0.8" step="0.1" style="flex:1; accent-color:#f59e0b; cursor:pointer;">
+            <input type="range" id="sb-bunker-depth" min="0.0" max="3.0" value="0.8" step="0.1" style="flex:1; accent-color:#f59e0b; cursor:pointer;">
             <span id="sb-bunker-depth-val" style="color:#f59e0b; font-weight:bold; font-size:13px; min-width:35px;">0.8m</span>
         </div>
         <!-- Lip Height Slider -->
