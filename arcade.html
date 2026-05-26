@@ -4398,7 +4398,7 @@
 #if defined( USE_COLOR_ALPHA )
     vec3 texC = diffuseColor.rgb;
     bool isGreenish = texC.g > texC.r + 0.01;
-    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.6);
+    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
     bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
     bool isSnow = (texC.r > 0.85 && texC.g > 0.85 && texC.b > 0.85) && abs(texC.r - texC.g) < 0.04 && abs(texC.g - texC.b) < 0.04;
     vec3 targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
@@ -4416,7 +4416,7 @@
 #elif defined( USE_COLOR )
     vec3 texC = diffuseColor.rgb;
     bool isGreenish = texC.g > texC.r + 0.01;
-    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.6);
+    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
     bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
     bool isSnow = (texC.r > 0.85 && texC.g > 0.85 && texC.b > 0.85) && abs(texC.r - texC.g) < 0.04 && abs(texC.g - texC.b) < 0.04;
     vec3 targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
