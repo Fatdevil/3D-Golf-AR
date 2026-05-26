@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Golf OS | Mobile</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-panel: rgba(30, 41, 59, 0.7);
+            --primary: #10b981;
+            --primary-glow: rgba(16, 185, 129, 0.4);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-glass: rgba(255, 255, 255, 0.1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(16, 185, 129, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.1), transparent 25%);
+        }
+
+        /* --- HEADER --- */
+        header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-glass);
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span { color: var(--primary); }
+
+        .profile-btn {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-glass);
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* --- VIEWS --- */
+        .view-container {
+            flex: 1;
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        }
+
+        .view {
+            display: none;
+            flex-direction: column;
+            gap: 24px;
+            animation: fadeInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .view.active { display: flex; }
+
+        @keyframes fadeInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* --- TYPOGRAPHY --- */
+        h1 { font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 800; line-height: 1.1; }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 600; color: var(--text-main); margin-bottom: 12px; }
+        p.subtitle { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+
+        /* --- CARDS & BUTTONS --- */
+        .mode-card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        
+        .mode-card:active { transform: scale(0.98); }
+        .mode-card.primary { border-color: rgba(16, 185, 129, 0.5); }
+        .mode-card.primary::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 100%;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%);
+            z-index: 0; pointer-events: none;
+        }
+
+        .mode-icon {
+            width: 48px; height: 48px;
+            border-radius: 14px;
+            display: flex; justify-content: center; align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--primary);
+            margin-bottom: 8px;
+            z-index: 1;
+        }
+
+        .mode-content { z-index: 1; }
+        .mode-title { font-size: 20px; font-weight: 700; font-family: 'Outfit', sans-serif; }
+        .mode-desc { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+
+        /* --- COURSE LIST --- */
+        .course-list { display: flex; flex-direction: column; gap: 16px; }
+        .course-card {
+            display: flex;
+            align-items: center;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 12px;
+            gap: 16px;
+            transition: all 0.2s;
+        }
+        .course-card.selected {
+            border-color: var(--primary);
+            background: rgba(16, 185, 129, 0.05);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+        }
+        .course-img {
+            width: 70px; height: 70px;
+            border-radius: 12px;
+            background: #1e293b;
+            object-fit: cover;
+        }
+        .course-info { flex: 1; }
+        .course-name { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+        .course-meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 12px; }
+        .course-meta span { display: flex; align-items: center; gap: 4px; }
+
+        /* --- SETTINGS --- */
+        .setting-group {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .setting-label { font-size: 15px; font-weight: 500; }
+        
+        .segmented-control {
+            display: flex;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 4px;
+            gap: 4px;
+        }
+        .segment-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .segment-btn.active {
+            background: var(--primary);
+            color: #0f172a;
+        }
+
+        /* --- BOTTOM BAR --- */
+        .bottom-bar {
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border-glass);
+            z-index: 10;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 16px;
+            border-radius: 14px;
+            border: none;
+            background: var(--primary);
+            color: #0f172a;
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 20px var(--primary-glow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-action:active { transform: scale(0.97); }
+        .btn-action:disabled { background: #334155; color: #94a3b8; box-shadow: none; }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border-glass);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 12px;
+            display: none; /* Only show when going back */
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <i data-lucide="target" style="color:var(--primary)"></i> Golf <span>OS</span>
+        </div>
+        <div class="profile-btn">
+            <i data-lucide="user" size="20" color="#94a3b8"></i>
+        </div>
+    </header>
+
+    <div class="view-container">
+        <!-- VIEW: LOBBY -->
+        <div id="view-lobby" class="view active">
+            <div>
+                <h1>Play Now</h1>
+                <p class="subtitle">Select a game mode to continue</p>
+            </div>
+
+            <div class="mode-card primary" onclick="navTo('view-courses', 'SOLO')">
+                <div class="mode-icon"><i data-lucide="flag"></i></div>
+                <div class="mode-content">
+                    <div class="mode-title">Solo Round</div>
+                    <div class="mode-desc">Play 9 holes against the course record or practice your swing.</div>
+                </div>
+            </div>
+
+            <div class="mode-card" onclick="alert('Tournaments coming soon!')">
+                <div class="mode-icon" style="color: #38bdf8;"><i data-lucide="trophy"></i></div>
+                <div class="mode-content">
+                    <div class="mode-title">Tournaments</div>
+                    <div class="mode-desc">Compete asynchronously in weekly global events.</div>
+                </div>
+            </div>
+
+            <div class="mode-card" onclick="alert('Online multiplayer coming soon!')">
+                <div class="mode-icon" style="color: #fbbf24;"><i data-lucide="users"></i></div>
+                <div class="mode-content">
+                    <div class="mode-title">Play with Friends</div>
+                    <div class="mode-desc">Invite a friend via link for a 1v1 match.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: COURSES -->
+        <div id="view-courses" class="view">
+            <div>
+                <h1>Select Course</h1>
+                <p class="subtitle">Choose where you want to play</p>
+            </div>
+
+            <div class="course-list" id="course-list-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <!-- VIEW: SETTINGS -->
+        <div id="view-settings" class="view">
+            <div>
+                <h1>Match Settings</h1>
+                <p class="subtitle">Configure your rules before teeing off</p>
+            </div>
+
+            <div class="setting-group">
+                <h2>Rules</h2>
+                <div class="setting-row">
+                    <span class="setting-label">Gimme Distance</span>
+                    <div class="segmented-control" id="gimme-ctrl">
+                        <button class="segment-btn" onclick="setGimme(5)">5 ft</button>
+                        <button class="segment-btn active" onclick="setGimme(10)">10 ft</button>
+                        <button class="segment-btn" onclick="setGimme(20)">20 ft</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">Auto Putt</span>
+                    <div class="segmented-control" id="autoputt-ctrl">
+                        <button class="segment-btn" onclick="setAutoPutt('OFF')">Off</button>
+                        <button class="segment-btn active" onclick="setAutoPutt('TOUR_PRO')">Pro</button>
+                        <button class="segment-btn" onclick="setAutoPutt('FIXED')">Fixed</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <h2>Players</h2>
+                <div class="setting-row">
+                    <span class="setting-label" style="display:flex; align-items:center; gap:8px;">
+                        <div style="width:16px; height:16px; border-radius:50%; background:#ef4444;"></div>
+                        Player 1
+                    </span>
+                    <span style="color:var(--text-muted); font-size:14px;">You</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="bottom-bar" id="bottom-bar" style="display: none;">
+        <button class="btn-action" id="main-action-btn" onclick="handleMainAction()">
+            Continue <i data-lucide="arrow-right"></i>
+        </button>
+        <button class="btn-secondary" id="back-btn" onclick="navBack()">
+            Go Back
+        </button>
+    </div>
+
+    <script>
+        // Init icons
+        lucide.createIcons();
+
+        // State
+        let currentView = 'view-lobby';
+        let matchState = {
+            mode: null,
+            courseCode: null,
+            settings: { gimmeDist: 10, autoPutt: 'TOUR_PRO', autoConcede: 99 },
+            players: [{ name: 'Player 1', color: '#ef4444' }]
+        };
+
+        // Navigation
+        function navTo(viewId, mode = null) {
+            if (mode) matchState.mode = mode;
+            
+            document.getElementById(currentView).classList.remove('active');
+            document.getElementById(viewId).classList.add('active');
+            currentView = viewId;
+            
+            updateBottomBar();
+            
+            if (viewId === 'view-courses') loadMockCourses();
+        }
+
+        function navBack() {
+            if (currentView === 'view-settings') navTo('view-courses');
+            else if (currentView === 'view-courses') {
+                document.getElementById(currentView).classList.remove('active');
+                currentView = 'view-lobby';
+                document.getElementById('view-lobby').classList.add('active');
+                updateBottomBar();
+            }
+        }
+
+        function updateBottomBar() {
+            const bar = document.getElementById('bottom-bar');
+            const mainBtn = document.getElementById('main-action-btn');
+            const backBtn = document.getElementById('back-btn');
+
+            if (currentView === 'view-lobby') {
+                bar.style.display = 'none';
+            } else {
+                bar.style.display = 'block';
+                backBtn.style.display = 'block';
+                
+                if (currentView === 'view-courses') {
+                    mainBtn.innerHTML = 'Continue <i data-lucide="arrow-right"></i>';
+                    mainBtn.disabled = !matchState.courseCode;
+                    lucide.createIcons();
+                } else if (currentView === 'view-settings') {
+                    mainBtn.innerHTML = 'Tee Off <i data-lucide="flag"></i>';
+                    mainBtn.disabled = false;
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        function handleMainAction() {
+            if (currentView === 'view-courses') {
+                navTo('view-settings');
+            } else if (currentView === 'view-settings') {
+                launchGame();
+            }
+        }
+
+        // Course Selection
+        function loadMockCourses() {
+            const courses = [
+                { id: '1111', name: 'Pine Valley Reserve', holes: 9, par: 36, img: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&w=150&q=80' },
+                { id: '2222', name: 'Coastal Links', holes: 9, par: 35, img: 'https://images.unsplash.com/photo-1593111774240-d529f12cb416?auto=format&fit=crop&w=150&q=80' }
+            ];
+
+            const container = document.getElementById('course-list-container');
+            container.innerHTML = '';
+
+            courses.forEach(c => {
+                const isSelected = matchState.courseCode === c.id;
+                const card = document.createElement('div');
+                card.className = `course-card ${isSelected ? 'selected' : ''}`;
+                card.onclick = () => selectCourse(c.id);
+                card.innerHTML = `
+                    <img src="${c.img}" class="course-img">
+                    <div class="course-info">
+                        <div class="course-name">${c.name}</div>
+                        <div class="course-meta">
+                            <span><i data-lucide="map" size="14"></i> ${c.holes} Holes</span>
+                            <span><i data-lucide="target" size="14"></i> Par ${c.par}</span>
+                        </div>
+                    </div>
+                    ${isSelected ? '<i data-lucide="check-circle-2" style="color:var(--primary)"></i>' : ''}
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+            updateBottomBar();
+        }
+
+        function selectCourse(id) {
+            matchState.courseCode = id;
+            loadMockCourses(); // re-render
+        }
+
+        // Settings Toggles
+        function setGimme(dist) {
+            matchState.settings.gimmeDist = dist;
+            const btns = document.getElementById('gimme-ctrl').children;
+            Array.from(btns).forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function setAutoPutt(mode) {
+            matchState.settings.autoPutt = mode;
+            const btns = document.getElementById('autoputt-ctrl').children;
+            Array.from(btns).forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // Launch
+        function launchGame() {
+            // Save state
+            localStorage.setItem('golf_os_mobile_match', JSON.stringify(matchState));
+            
+            // Visual feedback
+            const btn = document.getElementById('main-action-btn');
+            btn.innerHTML = '<i data-lucide="loader" class="spin"></i> Preparing...';
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                window.location.href = `arcade_mobile.html?course=${matchState.courseCode}`;
+            }, 800);
+        }
+    </script>
+</body>
+</html>

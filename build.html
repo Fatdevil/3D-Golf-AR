@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf OS — Build</title>
+    <meta name="description" content="Skapa nya golfbanor, fortsätt på sparade utkast eller redigera dina publicerade banor i Golf OS.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0a0e1a;
+            color: #e2e8f0;
+            font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Ambient background glow */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(56, 189, 248, 0.07) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, rgba(234, 179, 8, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(99, 102, 241, 0.04) 0%, transparent 60%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 4% 80px;
+        }
+
+        /* Back Navigation */
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #94a3b8;
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+        }
+
+        .back-btn:hover {
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(30, 41, 59, 0.8);
+            transform: translateX(-3px);
+        }
+
+        .logo-text {
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: #38bdf8;
+            text-transform: uppercase;
+        }
+
+        /* Main Heading */
+        .main-title-block {
+            margin-bottom: 40px;
+        }
+
+        .main-title-block h1 {
+            font-size: clamp(32px, 5vw, 52px);
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: -1.5px;
+            line-height: 1.1;
+        }
+
+        .main-title-block p {
+            color: #64748b;
+            font-size: clamp(14px, 1.8vw, 16px);
+            margin-top: 8px;
+            max-width: 600px;
+        }
+
+        /* Create Buttons */
+        .create-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 48px;
+        }
+
+        .create-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px 36px;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .create-btn::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .create-btn-course {
+            background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+            color: #0f172a;
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3);
+        }
+        .create-btn-course:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(56, 189, 248, 0.5);
+        }
+
+        .create-btn-range {
+            background: linear-gradient(135deg, #eab308, #d97706);
+            color: #0f172a;
+            box-shadow: 0 4px 20px rgba(234, 179, 8, 0.3);
+        }
+        .create-btn-range:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(234, 179, 8, 0.5);
+        }
+
+        /* Collection Create Buttons */
+        .collection-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 48px;
+            flex-wrap: wrap;
+        }
+
+        .col-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.6);
+            color: #e2e8f0;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(10px);
+            text-decoration: none;
+        }
+        .col-btn:hover {
+            transform: translateY(-3px);
+            border-color: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.2);
+            color: #fff;
+        }
+        .col-btn .col-holes {
+            background: rgba(99, 102, 241, 0.3);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 900;
+            color: #a5b4fc;
+        }
+
+        /* Collection Card */
+        .col-card {
+            scroll-snap-align: start;
+            flex: 0 0 320px;
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+            border-radius: 16px;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s;
+        }
+        .col-card:hover {
+            transform: translateY(-6px);
+            border-color: rgba(99, 102, 241, 0.4);
+            box-shadow: 0 12px 24px -10px rgba(99, 102, 241, 0.3);
+        }
+        .col-header {
+            padding: 16px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .col-name {
+            font-size: 16px;
+            font-weight: 800;
+            color: #fff;
+        }
+        .col-type-badge {
+            font-size: 11px;
+            font-weight: 900;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            letter-spacing: 1px;
+        }
+        .col-plates {
+            padding: 12px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-grow: 1;
+        }
+        .col-plate-slot {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .col-plate-slot.filled {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+        }
+        .col-plate-slot.empty {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .col-plate-slot.empty:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            color: #94a3b8;
+        }
+        .col-actions {
+            padding: 14px 18px;
+            display: flex;
+            gap: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .col-play-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .col-play-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        .col-play-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            filter: none;
+        }
+        .col-del-btn {
+            padding: 12px 14px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            color: #f87171;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .col-del-btn:hover { background: rgba(239, 68, 68, 0.25); }
+
+        /* Plate picker modal */
+        .plate-picker-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(7, 10, 18, 0.85);
+            backdrop-filter: blur(15px);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .plate-picker-overlay.active { display: flex; }
+        .plate-picker {
+            background: #0d1324;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 500px;
+            border-radius: 20px;
+            padding: 30px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .plate-picker h3 {
+            font-size: 20px;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .plate-picker p {
+            color: #64748b;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .plate-pick-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .plate-pick-item:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(30, 41, 59, 0.9);
+        }
+        .plate-pick-name {
+            font-weight: 700;
+            color: #f1f5f9;
+            font-size: 14px;
+        }
+        .plate-pick-meta {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        .cat-badge-collection { color: #a5b4fc; background: rgba(99, 102, 241, 0.15); }
+
+        /* Netflix Rows Layout */
+        .category-row {
+            margin-bottom: 48px;
+            position: relative;
+        }
+
+        .category-title {
+            font-size: clamp(18px, 2.5vw, 22px);
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .category-title span {
+            font-size: 14px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 900;
+        }
+
+        .cat-badge-draft { color: #eab308; background: rgba(234, 179, 8, 0.1); }
+        .cat-badge-published { color: #10b981; background: rgba(16, 185, 129, 0.1); }
+
+        /* Scroll container with snap */
+        .build-carousel {
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            padding: 10px 0 25px;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .build-carousel::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Build Card */
+        .build-card {
+            scroll-snap-align: start;
+            flex: 0 0 300px;
+            background: rgba(15, 23, 42, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        @media (max-width: 480px) {
+            .build-card { flex: 0 0 260px; }
+            .create-row { flex-direction: column; }
+        }
+
+        .build-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(56, 189, 248, 0.4);
+            box-shadow: 0 12px 24px -10px rgba(56, 189, 248, 0.3);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        /* Snabbutkast special styling */
+        .build-card.quickdraft {
+            border-color: rgba(234, 179, 8, 0.3);
+        }
+        .build-card.quickdraft:hover {
+            border-color: rgba(234, 179, 8, 0.6);
+            box-shadow: 0 12px 24px -10px rgba(234, 179, 8, 0.3);
+        }
+
+        /* Card Image section */
+        .card-image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 160px;
+            background: #0f172a;
+            overflow: hidden;
+        }
+
+        .card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .build-card:hover .card-img {
+            transform: scale(1.08);
+        }
+
+        /* Fallback graphic */
+        .card-fallback {
+            width: 100%; height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .card-letters {
+            font-size: 38px;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.15);
+            letter-spacing: -2px;
+            font-style: italic;
+        }
+
+        /* Card Badges */
+        .card-badges {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            gap: 6px;
+            z-index: 2;
+        }
+
+        .badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-wip {
+            background: #eab308;
+            color: #0f172a;
+        }
+
+        .badge-draft {
+            background: rgba(56, 189, 248, 0.8);
+            color: #fff;
+        }
+
+        .badge-holes {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(56, 189, 248, 0.8);
+            color: #fff;
+            z-index: 2;
+        }
+
+        .badge-range {
+            background: rgba(234, 179, 8, 0.8);
+        }
+
+        /* Card Content */
+        .card-info {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f8fafc;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card-subtitle {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 3px;
+        }
+
+        .card-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Card action buttons */
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .card-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .card-btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+        .card-btn-edit {
+            background: rgba(56, 189, 248, 0.9);
+            color: #0f172a;
+        }
+
+        .card-btn-delete {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            flex: 0;
+            padding: 10px 14px;
+        }
+        .card-btn-delete:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.3);
+            border: 1px dashed rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            color: #64748b;
+            font-size: 14px;
+            width: 100%;
+            flex: 0 0 100%;
+        }
+
+        /* Footer */
+        .footer-logo {
+            text-align: center;
+            margin-top: 30px;
+            font-weight: 900;
+            font-size: 18px;
+            letter-spacing: 4px;
+            color: rgba(255, 255, 255, 0.08);
+        }
+    </style>
+    <script src="arcade-auth.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header class="nav-header">
+        <a href="arcade_hub.html" class="back-btn">← Hub</a>
+        <div class="logo-text">Golf OS</div>
+    </header>
+
+    <!-- Main Title -->
+    <div class="main-title-block">
+        <h1>Bygg bana</h1>
+        <p>Skapa en ny bana från grunden, fortsätt på ett sparat utkast eller redigera dina publicerade mästerverk.</p>
+    </div>
+
+    <!-- Create Buttons -->
+    <div class="create-row">
+        <a href="#" class="create-btn create-btn-course" id="btn-new-course" onclick="newBuild('course')">
+            ⛳ Ny platta (3 hål)
+        </a>
+        <a href="#" class="create-btn create-btn-range" id="btn-new-range" onclick="newBuild('range')">
+            🏌️ Ny range
+        </a>
+    </div>
+
+    <!-- Collection Create Row -->
+    <div class="collection-row">
+        <a href="#" class="col-btn" onclick="createCollection('6')">
+            📦 Ny bana <span class="col-holes">6H</span>
+        </a>
+        <a href="#" class="col-btn" onclick="createCollection('9')">
+            📦 Ny bana <span class="col-holes">9H</span>
+        </a>
+        <a href="#" class="col-btn" onclick="createCollection('18')">
+            📦 Ny bana <span class="col-holes">18H</span>
+        </a>
+    </div>
+
+    <!-- Category 0: Collections -->
+    <section class="category-row" id="collections-section" style="display:none;">
+        <h2 class="category-title">Mina Collections <span class="cat-badge-collection">MULTI-PLATE</span></h2>
+        <div class="build-carousel" id="collections-carousel"></div>
+    </section>
+
+    <!-- Category 1: Drafts -->
+    <section class="category-row" id="drafts-section">
+        <h2 class="category-title">Mina Utkast <span class="cat-badge-draft">DRAFT</span></h2>
+        <div class="build-carousel" id="drafts-carousel">
+            <div class="empty-state">Letar efter sparade utkast...</div>
+        </div>
+    </section>
+
+    <!-- Category 2: Published -->
+    <section class="category-row" id="published-section">
+        <h2 class="category-title">Mina Publicerade <span class="cat-badge-published">PUBLISHED</span></h2>
+        <div class="build-carousel" id="published-carousel">
+            <div class="empty-state">Laddar publicerade banor...</div>
+        </div>
+    </section>
+
+    <div class="footer-logo">GOLF OS ARCADE</div>
+</div>
+
+<script>
+    const API_BASE = 'https://3d-golf-ar-production.up.railway.app';
+
+    // ═══════════════════════════════════════════════════════════
+    //  Navigation
+    // ═══════════════════════════════════════════════════════════
+    function newBuild(type) {
+        let url = 'arcade.html?v=' + Date.now() + '&autorun=new_build';
+        if (type === 'range') url += '&mode=range';
+        window.location.href = url;
+    }
+
+    function editDraft(code) {
+        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + code;
+    }
+
+    function editQuickDraft() {
+        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=edit_build';
+    }
+
+    function playCourse(code) {
+        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&course=' + code;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Helpers
+    // ═══════════════════════════════════════════════════════════
+    function getFallbackGradient(str) {
+        let hash = 0;
+        str = str || 'draft';
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        let hue1 = Math.abs(hash % 360);
+        let hue2 = (hue1 + 120) % 360;
+        return `linear-gradient(135deg, hsl(${hue1}, 70%, 18%) 0%, hsl(${hue2}, 60%, 8%) 100%)`;
+    }
+
+    function formatDate(dateStr) {
+        try {
+            let d = new Date(dateStr);
+            return d.toLocaleDateString('sv-SE', { year: 'numeric', month: 'short', day: 'numeric' });
+        } catch(e) {
+            return dateStr;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Drafts
+    // ═══════════════════════════════════════════════════════════
+    function loadDrafts() {
+        let drafts = JSON.parse(localStorage.getItem('golf_os_my_drafts') || '[]');
+        let hasLocalCopy = localStorage.getItem('arcade_custom_level') !== null;
+        let carousel = document.getElementById('drafts-carousel');
+        let html = '';
+
+        // Snabbutkast — always first if exists
+        if (hasLocalCopy) {
+            html += `
+            <div class="build-card quickdraft" onclick="editQuickDraft()">
+                <div class="card-image-wrapper">
+                    <div class="card-fallback" style="background: linear-gradient(135deg, rgba(234,179,8,0.15), rgba(234,179,8,0.05));">
+                        <div class="card-letters">⚡</div>
+                    </div>
+                    <div class="card-badges"><span class="badge badge-wip">WIP</span></div>
+                </div>
+                <div class="card-info">
+                    <div class="card-title">Snabbutkast</div>
+                    <div class="card-subtitle">Din senaste session i editorn</div>
+                    <div class="card-stats">
+                        <span class="stat-item">⚡ Lokal backup</span>
+                        <span class="stat-item">EDIT →</span>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // Cloud drafts
+        if (drafts.length > 0) {
+            drafts.slice().reverse().forEach(d => {
+                let gradient = getFallbackGradient(d.code);
+                html += `
+                <div class="build-card" onclick="editDraft('${d.code}')">
+                    <div class="card-image-wrapper">
+                        <div class="card-fallback" style="background: ${gradient};">
+                            <div class="card-letters">${(d.name || 'Draft').substring(0, 3).toUpperCase()}</div>
+                        </div>
+                        <div class="card-badges"><span class="badge badge-draft">DRAFT</span></div>
+                    </div>
+                    <div class="card-info">
+                        <div class="card-title">${d.name || 'Unnamed Draft'}</div>
+                        <div class="card-subtitle">Sparat ${formatDate(d.date)}</div>
+                        <div class="card-stats">
+                            <span class="stat-item">☁️ Moln-draft</span>
+                            <span class="stat-item">EDIT →</span>
+                        </div>
+                    </div>
+                </div>`;
+            });
+        }
+
+        if (!hasLocalCopy && drafts.length === 0) {
+            html = '<div class="empty-state">Inga utkast hittade. Klicka "Ny bana" för att börja bygga!</div>';
+        }
+
+        carousel.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Published Courses
+    // ═══════════════════════════════════════════════════════════
+    let _allCourses = [];
+
+    async function loadPublished() {
+        try {
+            let res = await fetch(API_BASE + '/api/courses');
+            _allCourses = await res.json();
+            renderMyPublished();
+        } catch(e) {
+            document.getElementById('published-carousel').innerHTML = 
+                '<div class="empty-state" style="color: #f87171;">Kunde inte ladda banor från servern. Försök igen senare.</div>';
+        }
+    }
+
+    function renderMyPublished() {
+        let myDeviceId = localStorage.getItem('golf_os_device_id');
+        let carousel = document.getElementById('published-carousel');
+
+        if (!myDeviceId) {
+            carousel.innerHTML = '<div class="empty-state">Kunde inte verifiera ditt enhets-ID.</div>';
+            return;
+        }
+
+        let myCourses = _allCourses.filter(c => c.owner_id === myDeviceId);
+        let html = '';
+
+        myCourses.forEach(c => {
+            let bgImg = c.cover_image || null;
+            let holeCount = c.hole_count || 3;
+            let totalPar = c.total_par || (holeCount * 4);
+            let isRange = c.is_range;
+            let badgeClass = isRange ? 'badge-range' : '';
+
+            let imageHtml = '';
+            if (bgImg) {
+                let src = bgImg.startsWith('data:') ? bgImg : bgImg;
+                imageHtml = `<img class="card-img" src="${src}" alt="${c.name}">`;
+            } else {
+                let gradient = getFallbackGradient(c.share_code);
+                imageHtml = `<div class="card-fallback" style="background: ${gradient};"><div class="card-letters">${(c.name || '').substring(0, 3).toUpperCase()}</div></div>`;
+            }
+
+            html += `
+            <div class="build-card">
+                <div class="card-image-wrapper">
+                    ${imageHtml}
+                    <span class="badge-holes ${badgeClass}">${isRange ? 'RANGE' : holeCount + ' HÅL'}</span>
+                </div>
+                <div class="card-info">
+                    <div class="card-title">${c.name}</div>
+                    <div class="card-subtitle">${isRange ? 'Driving Range' : 'Par ' + totalPar}</div>
+                    <div class="card-stats">
+                        <span class="stat-item">🏌️ ${c.play_count || 0} spelad${(c.play_count || 0) !== 1 ? 'e' : ''}</span>
+                        <span class="stat-item">👍 ${c.likes || 0}</span>
+                    </div>
+                    <div class="card-actions">
+                        <button class="card-btn card-btn-edit" onclick="event.stopPropagation(); editDraft('${c.share_code}')">✏️ Redigera</button>
+                        <button class="card-btn card-btn-delete" onclick="event.stopPropagation(); deleteCourse('${c.share_code}')" title="Radera">🗑️</button>
+                    </div>
+                </div>
+            </div>`;
+        });
+
+        if (myCourses.length === 0) {
+            html = '<div class="empty-state">Du har inga publicerade banor än. Bygg din första bana och publicera den!</div>';
+        }
+
+        carousel.innerHTML = html;
+    }
+
+    async function deleteCourse(code) {
+        if (!confirm('Är du helt säker på att du vill radera denna bana?\nALLA leaderboard-resultat försvinner permanent.')) return;
+        try {
+            let deviceId = localStorage.getItem('golf_os_device_id');
+            let res = await fetch(API_BASE + '/api/courses/' + code, {
+                method: 'DELETE',
+                headers: { 'x-user-id': deviceId }
+            });
+            if (res.ok) {
+                loadPublished();
+            } else {
+                alert('Du saknar behörighet att radera denna bana.');
+            }
+        } catch(e) {
+            alert('Ett nätverksfel uppstod.');
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Collections
+    // ═══════════════════════════════════════════════════════════
+    let _myCollections = [];
+
+    async function createCollection(type) {
+        let name = prompt('Namnge din ' + type + '-hålsbana:', type + '-hålsbana');
+        if (!name || !name.trim()) return;
+        try {
+            let deviceId = localStorage.getItem('golf_os_device_id');
+            let res = await fetch(API_BASE + '/api/collections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-user-id': deviceId },
+                body: JSON.stringify({
+                    name: name.trim(),
+                    author: window.GolfAuth?.user?.display_name || 'Anonymous',
+                    type: type,
+                    plates: [],
+                    total_par: null
+                })
+            });
+            let data = await res.json();
+            if (data.success) {
+                loadCollections();
+            } else {
+                alert('Kunde inte skapa collection: ' + (data.error || 'Okänt fel'));
+            }
+        } catch(e) {
+            alert('Nätverksfel vid skapande av collection.');
+        }
+    }
+
+    async function loadCollections() {
+        try {
+            let res = await fetch(API_BASE + '/api/collections');
+            let allCols = await res.json();
+            let myDeviceId = localStorage.getItem('golf_os_device_id');
+            _myCollections = allCols.filter(c => c.owner_id === myDeviceId);
+            renderCollections();
+        } catch(e) {
+            console.warn('Collections load failed:', e);
+        }
+    }
+
+    function renderCollections() {
+        let section = document.getElementById('collections-section');
+        let carousel = document.getElementById('collections-carousel');
+        
+        if (_myCollections.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+        section.style.display = 'block';
+
+        let html = '';
+        _myCollections.forEach(col => {
+            let plates = col.plates || [];
+            if (typeof plates === 'string') plates = JSON.parse(plates);
+            let totalSlots = parseInt(col.type) / 3;
+            let filledCount = plates.length;
+            let isComplete = filledCount >= totalSlots;
+
+            let slotsHtml = '';
+            for (let i = 0; i < totalSlots; i++) {
+                if (i < plates.length) {
+                    let p = plates[i];
+                    let pName = typeof p === 'string' ? p : (p.plate_name || p.plate_code);
+                    slotsHtml += `<div class="col-plate-slot filled">✅ Platta ${i + 1}: ${pName}</div>`;
+                } else {
+                    slotsHtml += `<div class="col-plate-slot empty" onclick="openPlatePicker('${col.id}', ${i})">+ Lägg till platta ${i + 1}</div>`;
+                }
+            }
+
+            html += `
+            <div class="col-card">
+                <div class="col-header">
+                    <div class="col-name">${col.name}</div>
+                    <div class="col-type-badge">${col.type}H</div>
+                </div>
+                <div class="col-plates">${slotsHtml}</div>
+                <div class="col-actions">
+                    <button class="col-play-btn" ${!isComplete ? 'disabled title="Fyll alla plattor först"' : ''} onclick="playCollection('${col.id}')">▶ Spela</button>
+                    <button class="col-del-btn" onclick="deleteCollection('${col.id}')">🗑️</button>
+                </div>
+            </div>`;
+        });
+
+        carousel.innerHTML = html;
+    }
+
+    // Plate picker state
+    let _pickerCollectionId = null;
+    let _pickerSlotIndex = 0;
+
+    function openPlatePicker(collectionId, slotIndex) {
+        _pickerCollectionId = collectionId;
+        _pickerSlotIndex = slotIndex;
+        let overlay = document.getElementById('plate-picker-overlay');
+        let list = document.getElementById('plate-picker-list');
+        
+        // Show my published 3-hole plates
+        let myCourses = _allCourses.filter(c => {
+            let myDeviceId = localStorage.getItem('golf_os_device_id');
+            return c.owner_id === myDeviceId && !c.is_range;
+        });
+
+        let html = '';
+        if (myCourses.length === 0) {
+            html = '<div class="empty-state" style="margin:0;">Du har inga publicerade plattor. Bygg och publicera en 3-hålsplatta först!</div>';
+        } else {
+            myCourses.forEach(c => {
+                let hc = c.hole_count || 3;
+                let par = c.total_par || (hc * 4);
+                html += `
+                <div class="plate-pick-item" onclick="assignPlate('${c.share_code}', '${(c.name || '').replace(/'/g, '')}')">
+                    <div>
+                        <div class="plate-pick-name">${c.name}</div>
+                        <div class="plate-pick-meta">${hc} hål • Par ${par}</div>
+                    </div>
+                    <div style="font-size:18px;">→</div>
+                </div>`;
+            });
+        }
+        list.innerHTML = html;
+        overlay.classList.add('active');
+    }
+
+    function closePlatePicker() {
+        document.getElementById('plate-picker-overlay').classList.remove('active');
+    }
+
+    async function assignPlate(plateCode, plateName) {
+        closePlatePicker();
+        let col = _myCollections.find(c => c.id === _pickerCollectionId);
+        if (!col) return;
+        
+        let plates = col.plates || [];
+        if (typeof plates === 'string') plates = JSON.parse(plates);
+        plates.push({ plate_code: plateCode, plate_name: plateName });
+
+        // Calculate total par
+        let totalPar = 0;
+        for (let p of plates) {
+            let code = typeof p === 'string' ? p : p.plate_code;
+            let c = _allCourses.find(x => x.share_code === code);
+            if (c) totalPar += (c.total_par || 12);
+        }
+
+        try {
+            let deviceId = localStorage.getItem('golf_os_device_id');
+            await fetch(API_BASE + '/api/collections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-user-id': deviceId },
+                body: JSON.stringify({
+                    id: col.id,
+                    name: col.name,
+                    author: col.author,
+                    type: col.type,
+                    plates: plates,
+                    total_par: totalPar
+                })
+            });
+            loadCollections();
+        } catch(e) {
+            alert('Kunde inte spara plattan.');
+        }
+    }
+
+    function playCollection(collectionId) {
+        let col = _myCollections.find(c => c.id === collectionId);
+        if (!col) return;
+        let plates = col.plates || [];
+        if (typeof plates === 'string') plates = JSON.parse(plates);
+        if (plates.length === 0) return;
+        
+        // Clear any previous collection scores
+        sessionStorage.removeItem('collection_scores_' + collectionId);
+        
+        let firstPlate = plates[0];
+        let firstCode = typeof firstPlate === 'string' ? firstPlate : firstPlate.plate_code;
+        window.location.href = 'arcade.html?v=' + Date.now() + '&course=' + firstCode + '&collection=' + collectionId + '&plate=0&autorun=setup';
+    }
+
+    async function deleteCollection(collectionId) {
+        if (!confirm('Radera denna collection? Plattorna raderas INTE.')) return;
+        try {
+            let deviceId = localStorage.getItem('golf_os_device_id');
+            await fetch(API_BASE + '/api/collections/' + collectionId, {
+                method: 'DELETE',
+                headers: { 'x-user-id': deviceId }
+            });
+            loadCollections();
+        } catch(e) {
+            alert('Nätverksfel.');
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Boot
+    // ═══════════════════════════════════════════════════════════
+    async function initBuild() {
+        if (window.GolfAuth) {
+            await window.GolfAuth.init();
+        }
+        loadDrafts();
+        loadPublished();
+        loadCollections();
+    }
+
+    initBuild();
+</script>
+
+<!-- Plate Picker Modal -->
+<div class="plate-picker-overlay" id="plate-picker-overlay" onclick="if(event.target===this) closePlatePicker()">
+    <div class="plate-picker">
+        <h3>Välj platta</h3>
+        <p>Välj en av dina publicerade 3-hålsplattor att lägga till i denna collection.</p>
+        <div id="plate-picker-list"></div>
+        <div style="text-align:center; margin-top:16px;">
+            <button onclick="closePlatePicker()" style="background:rgba(100,116,139,0.3); color:#94a3b8; border:1px solid rgba(255,255,255,0.1); padding:10px 24px; border-radius:10px; font-weight:700; cursor:pointer;">Avbryt</button>
+        </div>
+    </div>
+</div>
+</script>
+</body>
+</html>
