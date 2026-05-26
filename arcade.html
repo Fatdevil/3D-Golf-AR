@@ -813,11 +813,11 @@
             <div id="props-preset-bar" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #334155;">
                 <div style="display:flex; gap:4px; align-items:center;">
                     <select id="props-preset-select" onchange="onPresetSelectChange(this.value)" style="flex:1; background:#1e293b; color:#e2e8f0; border:1px solid #475569; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;">
-                        <option value="_backpack">🎒 Ryggsäcken</option>
+                        <option value="_backpack">🎒 Backpack</option>
                     </select>
-                    <button onclick="promptNewPreset()" title="Skapa ny preset" style="background:#334155; color:#94a3b8; border:none; width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:14px; transition:all 0.2s;" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#94a3b8'">+</button>
+                    <button onclick="promptNewPreset()" title="New preset" style="background:#334155; color:#94a3b8; border:none; width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:14px; transition:all 0.2s;" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#94a3b8'">+</button>
                 </div>
-                <button onclick="openLibrary()" style="background:linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2)); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); padding:7px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='linear-gradient(135deg, rgba(56,189,248,0.3), rgba(129,140,248,0.3))'" onmouseout="this.style.background='linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2))'">📚 Öppna Library</button>
+                <button onclick="openLibrary()" style="background:linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2)); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); padding:7px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='linear-gradient(135deg, rgba(56,189,248,0.3), rgba(129,140,248,0.3))'" onmouseout="this.style.background='linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2))'">📚 Open Library</button>
             </div>
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Category</label>
             <div style="display:flex; gap:5px; margin-bottom:10px;">
@@ -1271,14 +1271,14 @@
             <!-- Header -->
             <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:4px; margin-right:40px;">
                 <h2 style="margin:0; font-size:22px; font-weight:900; background:linear-gradient(135deg, #38bdf8, #818cf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; display:flex; align-items:center; gap:8px;">📚 3D Library</h2>
-                <div style="color:#64748b; font-size:11px;">Hitta och hantera 3D-figurer för dina banor</div>
+                <div style="color:#64748b; font-size:11px;">Find and manage 3D assets for your courses</div>
             </div>
 
             <!-- Tabs -->
             <div id="library-tabs">
                 <button id="lib-tab-poly" class="active" onclick="switchLibraryTab('POLY')">🍕 Poly.Pizza</button>
                 <button id="lib-tab-cloud" onclick="switchLibraryTab('CLOUD')">☁️ Admin Assets</button>
-                <button id="lib-tab-mine" onclick="switchLibraryTab('MINE')" disabled title="Kommer snart">📦 Mina</button>
+                <button id="lib-tab-mine" onclick="switchLibraryTab('MINE')" disabled title="Coming soon">📦 Mine</button>
             </div>
             
             <div style="display:flex; flex:1; gap:20px; min-height:0;">
@@ -1288,28 +1288,28 @@
                     <!-- TAB: Poly.Pizza -->
                     <div id="lib-content-poly" style="display:flex; flex-direction:column; gap:12px; flex:1; min-height:0;">
                         <div style="display:flex; gap:8px;">
-                            <input type="text" id="poly-search-input" placeholder="Sök efter 3D-modeller (t.ex. träd, sten, hus)..." style="flex:1; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; padding:10px 14px; border-radius:10px; font-size:14px; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='rgba(74,222,128,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeydown="if(event.key==='Enter'){event.preventDefault(); polySearch(this.value.trim(), window._polyCategory, 0);}">
-                            <button onclick="polySearch(document.getElementById('poly-search-input').value.trim(), window._polyCategory, 0)" style="background:#4ade80; color:#0f172a; border:none; padding:10px 20px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:14px; display:flex; align-items:center; gap:6px; transition:transform 0.1s;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">🔍 Sök</button>
+                            <input type="text" id="poly-search-input" placeholder="Search for 3D models (e.g. tree, rock, house)..." style="flex:1; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; padding:10px 14px; border-radius:10px; font-size:14px; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='rgba(74,222,128,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeydown="if(event.key==='Enter'){event.preventDefault(); polySearch(this.value.trim(), window._polyCategory, 0);}">
+                            <button onclick="polySearch(document.getElementById('poly-search-input').value.trim(), window._polyCategory, 0)" style="background:#4ade80; color:#0f172a; border:none; padding:10px 20px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:14px; display:flex; align-items:center; gap:6px; transition:transform 0.1s;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">🔍 Search</button>
                         </div>
                         <div id="poly-cats-wrap" style="display:flex; flex-wrap:wrap; gap:4px; max-height:90px; overflow-y:auto; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05);"></div>
                         <div id="poly-results-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows:min-content; align-content:start; gap:12px; overflow-y:auto; flex:1; padding-right:5px;">
-                            <div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b; font-size:13px;">Sök efter 3D-modeller eller välj en kategori ovan 👆</div>
+                            <div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b; font-size:13px;">Search for 3D models or pick a category above 👆</div>
                         </div>
                         <div style="display:flex; align-items:center; justify-content:space-between; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
-                            <button id="poly-prev-btn" onclick="polyPrevPage()" disabled style="background:rgba(255,255,255,0.05); color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; transition:all 0.2s;">◄ Föregående</button>
-                            <span id="poly-page-info" style="color:#64748b; font-size:12px;">Sida 1</span>
-                            <button id="poly-next-btn" onclick="polyNextPage()" style="background:rgba(255,255,255,0.05); color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; transition:all 0.2s;">Nästa ►</button>
+                            <button id="poly-prev-btn" onclick="polyPrevPage()" disabled style="background:rgba(255,255,255,0.05); color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; transition:all 0.2s;">◄ Previous</button>
+                            <span id="poly-page-info" style="color:#64748b; font-size:12px;">Page 1</span>
+                            <button id="poly-next-btn" onclick="polyNextPage()" style="background:rgba(255,255,255,0.05); color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold; transition:all 0.2s;">Next ►</button>
                         </div>
                     </div>
 
                     <!-- TAB: Cloud / Admin Assets -->
                     <div id="lib-content-cloud" style="display:none; flex-direction:column; gap:12px; flex:1; min-height:0;">
                         <div style="display:flex; gap:8px;">
-                            <input type="text" id="cloud-search-input" placeholder="Sök bland admin-assets..." style="flex:1; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; padding:10px 14px; border-radius:10px; font-size:14px; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='rgba(56,189,248,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" oninput="renderCloudLibrary(this.value.trim())">
+                            <input type="text" id="cloud-search-input" placeholder="Search admin assets..." style="flex:1; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; padding:10px 14px; border-radius:10px; font-size:14px; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='rgba(56,189,248,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" oninput="renderCloudLibrary(this.value.trim())">
                         </div>
                         <div id="cloud-cats-wrap" style="display:flex; flex-wrap:wrap; gap:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05);"></div>
                         <div id="cloud-results-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows:min-content; align-content:start; gap:12px; overflow-y:auto; flex:1; padding-right:5px;">
-                            <div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b; font-size:13px;">Laddar admin-assets...</div>
+                            <div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b; font-size:13px;">Loading admin assets...</div>
                         </div>
                     </div>
 
@@ -1317,8 +1317,8 @@
                     <div id="lib-content-mine" style="display:none; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:16px;">
                         <span style="font-size:48px;">📦</span>
                         <div style="color:#64748b; font-size:14px; text-align:center; max-width:300px;">
-                            <strong style="color:#94a3b8;">Egna uppladdningar</strong><br>
-                            Kommer snart! Här kan du ladda upp och hantera dina egna 3D-modeller.
+                            <strong style="color:#94a3b8;">My Uploads</strong><br>
+                            Coming soon! Upload and manage your own 3D models here.
                         </div>
                     </div>
 
@@ -1328,7 +1328,7 @@
                 <div style="flex:1; display:flex; flex-direction:column; background:rgba(15,23,42,0.4); border-radius:16px; border:1px solid rgba(255,255,255,0.05); padding:16px; min-width:0; justify-content:space-between;">
                     <div id="poly-model-detail-placeholder" style="display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:#64748b; font-size:13px; text-align:center; gap:10px;">
                         <span style="font-size:32px;">📚</span>
-                        Välj en modell för att visa detaljer och lägga i din ryggsäck
+                        Select a model to view details and add to your backpack
                     </div>
                     
                     <div id="poly-model-detail" style="display:none; flex-direction:column; gap:12px; flex:1; min-height:0;">
@@ -1351,12 +1351,12 @@
 
                         <!-- Preset selector -->
                         <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.05);">
-                            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Lägg i preset:</label>
+                            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Add to preset:</label>
                             <div style="display:flex; gap:4px;">
                                 <select id="lib-preset-dropdown" style="flex:1; background:#1e293b; color:#e2e8f0; border:1px solid #475569; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
-                                    <option value="_backpack">🎒 Ryggsäcken (tillfällig)</option>
+                                    <option value="_backpack">🎒 Backpack (temporary)</option>
                                 </select>
-                                <button onclick="promptNewPresetFromLibrary()" title="Skapa ny preset" style="background:#334155; color:#94a3b8; border:none; width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:14px; transition:all 0.2s;" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#94a3b8'">+</button>
+                                <button onclick="promptNewPresetFromLibrary()" title="New preset" style="background:#334155; color:#94a3b8; border:none; width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:14px; transition:all 0.2s;" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#94a3b8'">+</button>
                             </div>
                         </div>
                         
@@ -1364,9 +1364,9 @@
                         
                         <div style="display:flex; flex-direction:column; gap:8px;">
                             <button id="poly-place-btn" onclick="libraryAddToPreset()" style="width:100%; padding:14px; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; border:none; border-radius:10px; font-weight:900; font-size:14px; cursor:pointer; box-shadow:0 4px 15px rgba(74,222,128,0.3); transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:8px;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-                                <span>📥 Lägg i ryggsäcken</span>
+                                <span>📥 Add to Backpack</span>
                             </button>
-                            <div style="color:#475569; font-size:10px; text-align:center;">Tillhandahålls med Creative Commons Attribution.<br>Poly.Pizza & Skapare krediteras automatiskt.</div>
+                            <div style="color:#475569; font-size:10px; text-align:center;">Provided under Creative Commons Attribution.<br>Poly.Pizza & creators credited automatically.</div>
                         </div>
                     </div>
                 </div>
@@ -3223,7 +3223,7 @@
             }
         }
         if (natureGroup.innerHTML === '') {
-            natureGroup.innerHTML = '<div style="color:#64748b; font-size:11px; grid-column:1/-1; text-align:center; padding:10px;">Inga assets uppladdade för denna kategori.<br>Använd Admin Asset Manager.</div>';
+            natureGroup.innerHTML = '<div style="color:#64748b; font-size:11px; grid-column:1/-1; text-align:center; padding:10px;">No assets uploaded for this category.<br>Use Admin Asset Manager.</div>';
         }
         
         // Ensure some selection exists
@@ -3284,11 +3284,11 @@
 
         // Fetch if not cached
         if (!window._cloudAssetsCache) {
-            grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b;"><div class="poly-spinner"></div>Laddar admin-assets...</div>';
+            grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b;"><div class="poly-spinner"></div>Loading admin assets...</div>';
             try {
                 window._cloudAssetsCache = await ArcadeAPI.getAssets();
             } catch(e) {
-                grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#ef4444;">❌ Kunde inte ansluta till servern</div>';
+                grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#ef4444;">❌ Could not connect to server</div>';
                 return;
             }
         }
@@ -3310,11 +3310,11 @@
         const catsWrap = document.getElementById('cloud-cats-wrap');
         if (catsWrap && !catsWrap.hasChildNodes()) {
             const cats = [
-                { id: 'ALL', icon: '🔍', label: 'Alla' },
-                { id: 'TREES', icon: '🌲', label: 'Träd' },
-                { id: 'ROCKS', icon: '🪨', label: 'Stenar' },
-                { id: 'PLANTS', icon: '🌿', label: 'Växter' },
-                { id: 'LANDSCAPE', icon: '⛰️', label: 'Landskap' }
+                { id: 'ALL', icon: '🔍', label: 'All' },
+                { id: 'TREES', icon: '🌲', label: 'Trees' },
+                { id: 'ROCKS', icon: '🪨', label: 'Rocks' },
+                { id: 'PLANTS', icon: '🌿', label: 'Plants' },
+                { id: 'LANDSCAPE', icon: '⛰️', label: 'Landscape' }
             ];
             cats.forEach(c => {
                 const chip = document.createElement('button');
@@ -3330,7 +3330,7 @@
         }
 
         if (assets.length === 0) {
-            grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b;">Inga admin-assets hittades.<br>Använd Admin Asset Manager för att ladda upp.</div>';
+            grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#64748b;">No admin assets found.<br>Use Admin Asset Manager to upload.</div>';
             return;
         }
 
@@ -3423,7 +3423,7 @@
             btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
             setTimeout(() => { updateLibraryButtonText(); btn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)'; }, 1500);
             
-            if (window.showBuildToast) window.showBuildToast(`☁️ ${asset.name} tillagd!`, '#38bdf8');
+            if (window.showBuildToast) window.showBuildToast(`☁️ ${asset.name} added!`, '#38bdf8');
         } else {
             // Poly.pizza asset: use existing polyPlaceModel flow
             await polyPlaceModel();
@@ -3453,10 +3453,10 @@
         if (!btn || !dropdown) return;
         const presetId = dropdown.value;
         if (presetId === '_backpack') {
-            btn.querySelector('span').textContent = '📥 Lägg i ryggsäcken';
+            btn.querySelector('span').textContent = '📥 Add to Backpack';
         } else {
             const preset = (window._userPresets || []).find(p => p.id === presetId);
-            btn.querySelector('span').textContent = '📥 Lägg i ' + (preset ? preset.name : 'preset');
+            btn.querySelector('span').textContent = '📥 Add to ' + (preset ? preset.name : 'preset');
         }
     }
 
@@ -3481,7 +3481,7 @@
         dropdowns.forEach(dd => {
             if (!dd) return;
             const currentVal = dd.value;
-            dd.innerHTML = '<option value="_backpack">🎒 Ryggsäcken (tillfällig)</option>';
+            dd.innerHTML = '<option value="_backpack">🎒 Backpack (temporary)</option>';
             (window._userPresets || []).forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.id;
@@ -3551,7 +3551,7 @@
         window.buildNatureUI();
         
         if (window.showBuildToast) {
-            window.showBuildToast(`📋 Preset "${preset.name}" laddad (${assets.length} figurer)`, '#38bdf8');
+            window.showBuildToast(`📋 Preset "${preset.name}" loaded (${assets.length} assets)`, '#38bdf8');
         }
     };
 
@@ -3574,7 +3574,7 @@
     }
 
     window.promptNewPreset = async function() {
-        const name = prompt('Namnge din nya preset:');
+        const name = prompt('Name your new preset:');
         if (!name || !name.trim()) return;
         try {
             const result = await ArcadeAPI.saveAssetPreset({ name: name.trim(), assets: [] });
@@ -3583,7 +3583,7 @@
                 window._activePresetId = result.id;
                 const dd = document.getElementById('props-preset-select');
                 if (dd) dd.value = result.id;
-                if (window.showBuildToast) window.showBuildToast(`📋 Preset "${name.trim()}" skapad!`, '#4ade80');
+                if (window.showBuildToast) window.showBuildToast(`📋 Preset "${name.trim()}" created!`, '#4ade80');
             }
         } catch(e) {
             console.error('Failed to create preset:', e);
@@ -3591,7 +3591,7 @@
     };
 
     window.promptNewPresetFromLibrary = async function() {
-        const name = prompt('Namnge din nya preset:');
+        const name = prompt('Name your new preset:');
         if (!name || !name.trim()) return;
         try {
             const result = await ArcadeAPI.saveAssetPreset({ name: name.trim(), assets: [] });
@@ -3600,7 +3600,7 @@
                 const dd = document.getElementById('lib-preset-dropdown');
                 if (dd) dd.value = result.id;
                 updateLibraryButtonText();
-                if (window.showBuildToast) window.showBuildToast(`📋 Preset "${name.trim()}" skapad!`, '#4ade80');
+                if (window.showBuildToast) window.showBuildToast(`📋 Preset "${name.trim()}" created!`, '#4ade80');
             }
         } catch(e) {
             console.error('Failed to create preset:', e);
@@ -3619,16 +3619,16 @@
     window._polyPlaceScale = 1.0;
 
     const POLY_CAT_LABELS = [
-        { id: 'all', icon: '🔍', label: 'Alla' },
-        { id: 6, icon: '🌲', label: 'Natur' },
-        { id: 8, icon: '🏛️', label: 'Byggnader' },
-        { id: 7, icon: '🐾', label: 'Djur' },
-        { id: 3, icon: '🚗', label: 'Fordon' },
-        { id: 5, icon: '📎', label: 'Föremål' },
-        { id: 0, icon: '🍔', label: 'Mat' },
-        { id: 1, icon: '📦', label: 'Bråte' },
-        { id: 4, icon: '🪑', label: 'Möbler' },
-        { id: 9, icon: '👤', label: 'Karaktärer' }
+        { id: 'all', icon: '🔍', label: 'All' },
+        { id: 6, icon: '🌲', label: 'Nature' },
+        { id: 8, icon: '🏛️', label: 'Buildings' },
+        { id: 7, icon: '🐾', label: 'Animals' },
+        { id: 3, icon: '🚗', label: 'Vehicles' },
+        { id: 5, icon: '📎', label: 'Objects' },
+        { id: 0, icon: '🍔', label: 'Food' },
+        { id: 1, icon: '📦', label: 'Props' },
+        { id: 4, icon: '🪑', label: 'Furniture' },
+        { id: 9, icon: '👤', label: 'Characters' }
     ];
 
     // Build category chips
@@ -3710,7 +3710,7 @@
             grid.appendChild(card);
         });
         const pageInfo = document.getElementById('poly-page-info');
-        if (pageInfo) pageInfo.textContent = `Sida ${window._polyCurrentPage + 1}`;
+        if (pageInfo) pageInfo.textContent = `Page ${window._polyCurrentPage + 1}`;
         const prevBtn = document.getElementById('poly-prev-btn');
         if (prevBtn) prevBtn.disabled = window._polyCurrentPage === 0;
     };
@@ -3766,10 +3766,10 @@
         const polyType = 'POLY_' + id;
 
         const btn = document.getElementById('poly-place-btn');
-        const origText = '📥 Lägg i ryggsäcken';
+        const origText = '📥 Add to Backpack';
         
         if (!window.customModels[polyType]) {
-            btn.innerHTML = '⏳ Laddar ner GLB...';
+            btn.innerHTML = '⏳ Downloading GLB...';
             btn.disabled = true;
             try {
                 await new Promise((resolve, reject) => {
@@ -3858,7 +3858,7 @@
                 });
             } catch(e) {
                 console.error('Failed to load Poly model:', e);
-                btn.innerHTML = '❌ Nedladdning misslyckades';
+                btn.innerHTML = '❌ Download failed';
                 btn.disabled = false;
                 setTimeout(() => { btn.innerHTML = origText; }, 2000);
                 return;
@@ -3893,7 +3893,7 @@
         btn.disabled = false;
         
         if (window.showBuildToast) {
-            window.showBuildToast(`📥 ${title} tillagd under fliken ${subcat}!`, '#10b981');
+            window.showBuildToast(`📥 ${title} added to tab ${subcat}!`, '#10b981');
         }
         
         setTimeout(() => {
@@ -8847,7 +8847,7 @@
             html += '</div>';
             body.innerHTML = html;
         } catch (e) {
-            body.innerHTML = '<div style="color:#ef4444;padding:20px;">Kunde inte ladda leaderboard.</div>';
+            body.innerHTML = '<div style="color:#ef4444;padding:20px;">Could not load leaderboard.</div>';
         }
     }
     
