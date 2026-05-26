@@ -3061,7 +3061,7 @@
         'CANDY':    { canopy: ['#ff88cc', '#88ccff', '#ffdd44', '#88ff88', '#cc88ff'], trunk: '#cc88ff' },
         'VOLCANO':  { canopy: ['#886633', '#775522', '#996644'], trunk: '#444444' },
     };
-    window._currentBiomeTint = { canopy: '#ffffff', trunk: '#ffffff' };
+    window._currentBiomeTint = { canopy: ['#ffffff'], trunk: '#ffffff' };
     
     window.changeBiome = function(val) {
         window.ACTIVE_BIOME = val;
@@ -4520,8 +4520,8 @@
                             let mats = Array.isArray(node.material) ? node.material : [node.material];
                             mats.forEach(mat => {
                                 // Fix "dark GLTF models" and make matte
-                                let isTree = window.ASSET_REGISTRY[type] && (window.ASSET_REGISTRY[type].subcat === 'TREES' || window.ASSET_REGISTRY[type].subcat === 'PLANTS');
-                                if (isTree) {
+                                let hasPropShader = window.ASSET_REGISTRY[type] && (window.ASSET_REGISTRY[type].subcat === 'TREES' || window.ASSET_REGISTRY[type].subcat === 'PLANTS' || window.ASSET_REGISTRY[type].subcat === 'ROCKS' || window.ASSET_REGISTRY[type].subcat === 'LANDSCAPE');
+                                if (hasPropShader) {
                                     mat.onBeforeCompile = (shader) => {
                                         shader.vertexShader = shader.vertexShader.replace(
                                             '#include <color_pars_vertex>',
@@ -6041,7 +6041,7 @@
         if (!model || model === 'LOADING') return null;
         model.updateWorldMatrix(true, true); // Force full hierarchy matrix update
         let subs = [];
-        let isTree = window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].subcat === 'TREES';
+        let isTree = window.ASSET_REGISTRY[type] && (window.ASSET_REGISTRY[type].subcat === 'TREES' || window.ASSET_REGISTRY[type].subcat === 'PLANTS');
 
         model.traverse(child => {
             if (child.isMesh) {
@@ -6866,8 +6866,9 @@
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null
         }));
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];
         
-        ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles });
+        ArcadeStorage.saveCustomLevel({ targets: dumpTargets, holes: dumpHoles, trees: dumpTrees });
         if (appMode === 'BUILD') window.hasUnsavedChanges = true;
     }
     
@@ -9862,7 +9863,7 @@
         if(typeof waterCanvas !== 'undefined') wCanvasCopy.getContext('2d', {willReadFrequently:true}).drawImage(waterCanvas, 0, 0);
         
         let blocksCopy = targets.map(b => ({x: b.mesh.position.x, y: b.mesh.position.y, z: b.mesh.position.z, color: b.defColor || 0xffffff}));
-        let treesCopy = window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, scale: t.scale, rot: t.rot, tilt: t.tilt, roll: t.roll, color: t.color, trunkColor: t.trunkColor, yOffset: t.yOffset, brightness: t.brightness}));
+        let treesCopy = window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, scale: t.scale, rot: t.rot, tilt: t.tiltX, roll: t.rollZ, color: t.color, trunkColor: t.trunkColor, yOffset: t.yOffset, brightness: t.brightness}));
         
         let holesCopy = courseHoles.map(h => ({
             tees: JSON.parse(JSON.stringify(h.tees)),
@@ -10688,7 +10689,7 @@
         if (toolName === 'PAINT' && typeof initPaintToolPanel === 'function') initPaintToolPanel();
         
         document.getElementById('putt-settings-group').style.display = (toolName === 'TEST_PUTT') ? 'flex' : 'none';
-        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || (toolName === 'PAINT' && window._paintToolMode !== 'POLYGON') || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE' || (toolName === 'PROPS' && window._propsToolMode === 'BRUSH') || toolName === 'RAMP') ? 'flex' : 'none';
+        document.getElementById('sculpt-settings-group').style.display = (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || (toolName === 'PAINT' && window._paintToolMode !== 'POLYGON') || toolName === 'WATER' || toolName === 'RIDGE' || toolName === 'NOISE' || (toolName === 'PROPS' && window._propsToolMode === 'BRUSH') || toolName === 'RAMP' || toolName === 'COLORIZE') ? 'flex' : 'none';
         
         let rampSettings = document.getElementById('ramp-settings');
         if (rampSettings) rampSettings.style.display = (toolName === 'RAMP') ? 'flex' : 'none';
@@ -11146,6 +11147,26 @@
                     let tCol = window.activeTrunkColor || '#ffffff';
                     let rad = currentBrushSize || 10;
                     let poolsToRebuild = new Set();
+                    
+                    // Direct-target raycast (same logic as mousedown)
+                    if (window._propMeshes && window._propMeshes.length > 0) {
+                        let propIntersects = raycaster.intersectObjects(window._propMeshes);
+                        if (propIntersects.length > 0 && propIntersects[0].instanceId !== undefined) {
+                            let hitMesh = propIntersects[0].object;
+                            let iid = propIntersects[0].instanceId;
+                            let globalIdx = window.getGlobalPropIndex(hitMesh.propType, iid);
+                            if (globalIdx >= 0) {
+                                let t = window.placedTrees[globalIdx];
+                                if (t.color !== col || t.trunkColor !== tCol) {
+                                    t.color = col;
+                                    t.trunkColor = tCol;
+                                    poolsToRebuild.add(t.type);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Brush-area painting
                     for (let i = 0; i < window.placedTrees.length; i++) {
                         let t = window.placedTrees[i];
                         let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
