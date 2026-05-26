@@ -4538,31 +4538,13 @@
                                         shader.fragmentShader = shader.fragmentShader.replace(
                                             '#include <color_fragment>',
                                             `
-#if defined( USE_COLOR_ALPHA )
+#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )
     vec3 texC = diffuseColor.rgb;
     bool isGreenish = texC.g > texC.r + 0.01;
     bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
     bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
     bool isSnow = (texC.r > 0.85 && texC.g > 0.85 && texC.b > 0.85) && abs(texC.r - texC.g) < 0.04 && abs(texC.g - texC.b) < 0.04;
     vec3 targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
-    if (isSnow) {
-        // Keep snow white/natural
-    } else {
-        float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
-        if (tintStr > 0.02) {
-            float lum = dot(texC, vec3(0.299, 0.587, 0.114));
-            vec3 tinted = targetColor * (lum * 1.8);
-            diffuseColor.rgb = mix(texC, tinted, 0.95);
-        }
-    }
-    diffuseColor.a *= vColor.a;
-#elif defined( USE_COLOR )
-    vec3 texC = diffuseColor.rgb;
-    bool isGreenish = texC.g > texC.r + 0.01;
-    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
-    bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
-    bool isSnow = (texC.r > 0.85 && texC.g > 0.85 && texC.b > 0.85) && abs(texC.r - texC.g) < 0.04 && abs(texC.g - texC.b) < 0.04;
-    vec3 targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
     if (isSnow) {
         // Keep snow white/natural
     } else {
@@ -6262,6 +6244,8 @@
             y: groundY, 
             scale: scale, 
             rot: rot, 
+            tiltX: tilt || 0,
+            rollZ: roll || 0,
             color: color || '#ffffff', 
             trunkColor: trunkColor || '#ffffff',
             yOffset: yOffset || 0,
@@ -6850,7 +6834,7 @@
         
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
         let dumpHoles = courseHoles.map(h => ({ par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z, isTarget: h.flag.isTarget} : null, aimPoint: h.aimPoint || null, rangeLinesEnabled: h.rangeLinesEnabled }));
-        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tilt, roll: t.roll, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
         let w_hm = window.waterData ? Array.from(window.waterData) : [];
         
@@ -7103,7 +7087,7 @@
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null
         }));
-        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tilt, roll: t.roll, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];
+        let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];
         
         let hm = Array.from(planeGeo.attributes.position.array).filter((v, i) => i % 3 === 2); 
         let w_hm = window.waterData ? Array.from(window.waterData) : [];
@@ -7177,7 +7161,7 @@
             let dumpHoles = courseHoles.map(h => ({
                 par: h.par, tees: h.tees, flag: h.flag ? {x:h.flag.x, y:h.flag.y, z:h.flag.z} : null
             }));
-            let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({t:t.type, x:Math.round(t.x*10)/10, z:Math.round(t.z*10)/10, s:Math.round(t.scale*100)/100, r:Math.round((t.rot||0)*100)/100, tilt:Math.round((t.tilt||0)*100)/100, roll:Math.round((t.roll||0)*100)/100, c:t.color, tc:t.trunkColor, yOffset:Math.round((t.yOffset||0)*100)/100, brightness:t.brightness !== undefined ? Math.round(t.brightness*100)/100 : 1.0})) : [];
+            let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({t:t.type, x:Math.round(t.x*10)/10, z:Math.round(t.z*10)/10, s:Math.round(t.scale*100)/100, r:Math.round((t.rot||0)*100)/100, tilt:Math.round((t.tiltX||0)*100)/100, roll:Math.round((t.rollZ||0)*100)/100, c:t.color, tc:t.trunkColor, yOffset:Math.round((t.yOffset||0)*100)/100, brightness:t.brightness !== undefined ? Math.round(t.brightness*100)/100 : 1.0})) : [];
 
             // Compact terrain heightmap (only Y values, rounded to 2 decimals)
             let heights = [];
