@@ -4552,7 +4552,7 @@
         if (tintStr > 0.02) {
             float lum = dot(texC, vec3(0.299, 0.587, 0.114));
             vec3 tinted = targetColor * (lum * 1.8);
-            diffuseColor.rgb = mix(texC, tinted, 0.95);
+            diffuseColor.rgb = mix(texC, tinted, 0.99);
         }
     }
 #endif
