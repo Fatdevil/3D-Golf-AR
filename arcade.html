@@ -808,6 +808,8 @@
                 <button onclick="if(window.executePropsPolygon) window.executePropsPolygon();" style="width:100%; background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:10px 0; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🌳 FILL WITH PROPS</button>
             </div>
             
+            <!-- Main PROPS content (hidden when Precision Editor is open) -->
+            <div id="props-main-content">
             <!-- Preset selector bar -->
             <div id="props-preset-bar" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #334155;">
                 <div style="display:flex; gap:4px; align-items:center;">
@@ -841,7 +843,7 @@
                 <span style="color:#38bdf8; font-size:11px; font-weight:bold;">💡 Tip:</span><br>
                 <span style="color:#cbd5e1; font-size:10px;">Click on a placed prop on the course to fine-tune it and save it as a default template for new placements.</span>
             </div>
-        </div>
+            </div><!-- /props-main-content -->
 
         <!-- Färg för Objekt (COLORIZE) -->
         <div id="colorize-picker-group" class="prop-panel" style="display:none; flex-direction:column; gap:10px;">
@@ -4132,8 +4134,10 @@
         selectRingMesh.visible = true;
         
         const panel = document.getElementById('prop-editor-panel');
+        const mainContent = document.getElementById('props-main-content');
         if (panel) {
             panel.style.display = 'flex';
+            if (mainContent) mainContent.style.display = 'none';
             let currentScale = prop.scale || 1.0;
             let physicalHeightStr = '';
             if (window.customModels[prop.type] && window.customModels[prop.type].isObject3D) {
@@ -4166,7 +4170,9 @@
         window.selectedPropIndex = null;
         if (selectRingMesh) selectRingMesh.visible = false;
         const panel = document.getElementById('prop-editor-panel');
+        const mainContent = document.getElementById('props-main-content');
         if (panel) panel.style.display = 'none';
+        if (mainContent) mainContent.style.display = 'block';
     };
 
     window.updateSelectedProp = function() {
