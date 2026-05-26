@@ -1116,7 +1116,12 @@ app.get('/api/poly/glb/:id', async (req, res) => {
 
         console.log(`🍕 Downloading GLB: ${data.Title || modelId} from ${glbUrl.substring(0, 80)}...`);
 
-        const glbResponse = await fetch(glbUrl);
+        const glbResponse = await fetch(glbUrl, {
+            headers: {
+                'x-auth-token': apiKey,
+                'User-Agent': '3D-Golf-AR/1.0'
+            }
+        });
         if (!glbResponse.ok) {
             console.error(`❌ GLB CDN download failed: ${glbResponse.status} ${glbResponse.statusText}`);
             return res.status(502).json({ error: 'Failed to download GLB from Poly.Pizza CDN' });
