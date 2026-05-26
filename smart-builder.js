@@ -2439,9 +2439,9 @@ window.executeRidgeMountain = function() {
         jaggedMultiplier = parseFloat(jaggedSlider.value) / 50.0;
     }
     
-    // Auto width based on height (slope ratio 1:2.5)
-    let ridgeWidth = Math.abs(targetHeight) * 2.5;
-    if (ridgeWidth < 12) ridgeWidth = 12;
+    // Auto width: slope ratio 1:1.2 for steep ridge profile
+    let ridgeWidth = Math.abs(targetHeight) * 1.2;
+    if (ridgeWidth < 8) ridgeWidth = 8;
     
     // Use correct terrain geometry reference
     const positions = window._arcadePlaneGeo.attributes.position.array;

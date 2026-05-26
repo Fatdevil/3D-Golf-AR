@@ -668,8 +668,12 @@
                     </button>
                 </div>
                 
-                <div style="color:#64748b; font-size:9px; line-height:1.3; margin-top:8px; padding:6px; background:#1e293b; border-radius:5px; border:1px dashed #334155;">
-                    💡 <b>How to:</b> Left-click on the ground to draw a closed shape (at least 3 points). The hill/mountain is built inside the shape and slopes smoothly down to the edges. Right-click to undo the last point.
+                
+                <div id="mtn-help-plateau" style="color:#64748b; font-size:9px; line-height:1.3; margin-top:8px; padding:6px; background:#1e293b; border-radius:5px; border:1px dashed #334155;">
+                    💡 <b>Plateau:</b> Left-click to draw a closed shape (at least 3 points). The hill is built inside the shape. Right-click to undo last point.
+                </div>
+                <div id="mtn-help-ridge" style="display:none; color:#64748b; font-size:9px; line-height:1.3; margin-top:8px; padding:6px; background:#1e293b; border-radius:5px; border:1px dashed #f59e0b44;">
+                    💡 <b>Ridge:</b> Left-click to draw an open path (at least 2 points). A mountain ridge rises along the line. Right-click to undo last point.
                 </div>
             </div>
             <script>
@@ -682,11 +686,13 @@
                     document.getElementById('mtn-mode-stamp').style.color = mode === 'STAMP' ? '#0f172a' : '#94a3b8';
                     document.getElementById('mtn-mode-spline').style.background = mode === 'SPLINE' ? '#38bdf8' : '#334155';
                     document.getElementById('mtn-mode-spline').style.color = mode === 'SPLINE' ? '#0f172a' : '#94a3b8';
-                    document.getElementById('mtn-mode-ridge').style.background = mode === 'RIDGE' ? '#38bdf8' : '#334155';
+                    document.getElementById('mtn-mode-ridge').style.background = mode === 'RIDGE' ? '#f59e0b' : '#334155';
                     document.getElementById('mtn-mode-ridge').style.color = mode === 'RIDGE' ? '#0f172a' : '#94a3b8';
                     document.getElementById('mtn-paint-content').style.display = mode === 'PAINT' ? 'block' : 'none';
                     document.getElementById('mtn-stamp-content').style.display = mode === 'STAMP' ? 'block' : 'none';
                     document.getElementById('mtn-spline-content').style.display = (mode === 'SPLINE' || mode === 'RIDGE') ? 'block' : 'none';
+                    document.getElementById('mtn-help-plateau').style.display = mode === 'SPLINE' ? 'block' : 'none';
+                    document.getElementById('mtn-help-ridge').style.display = mode === 'RIDGE' ? 'block' : 'none';
                     
                     if (typeof window.clearSpline === 'function') {
                         window.clearSpline();
@@ -11598,8 +11604,9 @@
         if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
 
         let isMtnSpline = (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'));
-        let dotColor = isMtnSpline ? 0x38bdf8 : 0xec4899;
-        let startColor = isMtnSpline ? 0x60a5fa : 0x38bdf8;
+        let isMtnRidge = (currentTool === 'MTN' && window._mtnToolMode === 'RIDGE');
+        let dotColor = isMtnRidge ? 0xf59e0b : (isMtnSpline ? 0x38bdf8 : 0xec4899);
+        let startColor = isMtnRidge ? 0xfbbf24 : (isMtnSpline ? 0x60a5fa : 0x38bdf8);
 
         let sMat = new THREE.MeshBasicMaterial({ color: dotColor });
         let sMatFirst = new THREE.MeshBasicMaterial({ color: startColor }); // Blue/light blue = start/close point
@@ -11616,7 +11623,9 @@
         if(splinePoints.length > 1) {
             let pts = [...splinePoints];
             
-            let curve = new THREE.CatmullRomCurve3(pts, isMtnSpline);
+            // Ridge = open path (closed=false), Plateau = closed polygon (closed=true)
+            let closedCurve = isMtnSpline && !isMtnRidge;
+            let curve = new THREE.CatmullRomCurve3(pts, closedCurve);
             let curvePts = curve.getPoints(50 * pts.length);
             let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
             let lineMat = new THREE.LineBasicMaterial({ color: dotColor, linewidth: 3 });
