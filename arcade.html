@@ -3335,15 +3335,16 @@
             const name = a.name || a.id;
             const subcat = a.subcategory || 'LANDSCAPE';
             const icon = subcat === 'TREES' ? '🌲' : subcat === 'ROCKS' ? '🪨' : subcat === 'PLANTS' ? '🌿' : '⛰️';
+            const targetHeight = conf.targetHeight || 10.0;
 
             const card = document.createElement('div');
             card.className = 'cloud-asset-card';
             card.onclick = () => cloudSelectModel(a, i);
             
             if (thumb) {
-                card.innerHTML = `<div style="width:100%; height:140px; border-radius:10px 10px 0 0; background:#0f172a; background-image:url('${thumb.replace(/'/g,"\\'")}'); background-size:contain; background-position:center; background-repeat:no-repeat;"></div><div style="padding:6px 8px;"><div style="color:#f8fafc; font-size:11px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name.substring(0,25)}</div><div style="color:#64748b; font-size:9px; margin-top:2px;">☁️ ${subcat}</div></div>`;
+                card.innerHTML = `<div style="width:100%; height:140px; border-radius:10px 10px 0 0; background:#0f172a; background-image:url('${thumb.replace(/'/g,"\\'")}'); background-size:contain; background-position:center; background-repeat:no-repeat;"></div><div style="padding:6px 8px;"><div style="color:#f8fafc; font-size:11px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name.substring(0,25)}</div><div style="color:#64748b; font-size:9px; margin-top:2px;">☁️ ${subcat} · ${targetHeight.toFixed(1)}m</div></div>`;
             } else {
-                card.innerHTML = `<div style="width:100%; height:140px; border-radius:10px 10px 0 0; background:#0f172a; display:flex; align-items:center; justify-content:center; font-size:40px;">${icon}</div><div style="padding:6px 8px;"><div style="color:#f8fafc; font-size:11px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name.substring(0,25)}</div><div style="color:#64748b; font-size:9px; margin-top:2px;">☁️ ${subcat}</div></div>`;
+                card.innerHTML = `<div style="width:100%; height:140px; border-radius:10px 10px 0 0; background:#0f172a; display:flex; align-items:center; justify-content:center; font-size:40px;">${icon}</div><div style="padding:6px 8px;"><div style="color:#f8fafc; font-size:11px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name.substring(0,25)}</div><div style="color:#64748b; font-size:9px; margin-top:2px;">☁️ ${subcat} · ${targetHeight.toFixed(1)}m</div></div>`;
             }
             grid.appendChild(card);
         });
@@ -3406,7 +3407,19 @@
             
             // Add to preset if not backpack
             if (presetId !== '_backpack') {
-                await addAssetToPreset(presetId, { key: key, source: 'cloud', cloudId: key, name: asset.name, subcat: subcat, thumbnail: conf.thumbnail });
+                await addAssetToPreset(presetId, { 
+                    key: key, 
+                    source: 'cloud', 
+                    cloudId: key, 
+                    name: asset.name, 
+                    subcat: subcat, 
+                    thumbnail: conf.thumbnail || null,
+                    targetHeight: conf.targetHeight || 10.0,
+                    yOffset: conf.yOffset !== undefined ? conf.yOffset : 0.0,
+                    brightness: conf.brightness !== undefined ? conf.brightness : 0.0,
+                    physics: conf.physics || { type: 'sphere', radius: 1.0 },
+                    biomes: conf.biomes || ['GLOBAL']
+                });
             }
             
             window.currentNatureCategory = subcat;
@@ -3434,7 +3447,11 @@
                         key: polyType, source: 'poly', polyId: String(id),
                         subcat: reg.subcat, thumbnail: reg.thumbnail || m.Thumbnail || m.thumbnail,
                         title: m.Title || m.title, creator: String(m.Creator?.Username || m.Creator || m.creator || ''),
-                        targetHeight: reg.targetHeight || 4.0
+                        targetHeight: reg.targetHeight || 4.0,
+                        yOffset: reg.yOffset !== undefined ? reg.yOffset : 0.0,
+                        brightness: reg.brightness !== undefined ? reg.brightness : 1.0,
+                        physics: reg.physics || { type: 'sphere', radius: 1.0 },
+                        biomes: reg.biomes || ['GLOBAL']
                     });
                 }
             }
@@ -3724,7 +3741,7 @@
             card.className = 'poly-model-card';
             card.onclick = () => polySelectModel(i);
             const safeThumb = thumb.replace(/'/g, "\\'");
-            card.innerHTML = `<div style="width:100%; height:140px; border-radius:10px 10px 0 0; background:#0f172a; background-image:url('${safeThumb}'); background-size:contain; background-position:center center; background-repeat:no-repeat;"></div><div style="padding:6px 8px;"><div style="color:#f8fafc; font-size:11px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title.substring(0,25)}</div><div style="color:#64748b; font-size:9px; margin-top:2px;">${triCount}△ · ${creator.substring(0,15)}</div></div>`;
+            card.innerHTML = `<div style="width:100%; height:140px; border-radius:10px 10px 0 0; background:#0f172a; background-image:url('${safeThumb}'); background-size:contain; background-position:center center; background-repeat:no-repeat;"></div><div style="padding:6px 8px;"><div style="color:#f8fafc; font-size:11px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title.substring(0,25)}</div><div style="color:#64748b; font-size:9px; margin-top:2px;">${triCount}△ · 4.0m · ${creator.substring(0,15)}</div></div>`;
             grid.appendChild(card);
         });
         const pageInfo = document.getElementById('poly-page-info');
@@ -3757,9 +3774,9 @@
         document.getElementById('poly-detail-creator').textContent = `av ${creator} (${licence})`;
         document.getElementById('poly-detail-tris').textContent = `${triCount} triat`;
         
-        // Reset scale slider
-        document.getElementById('poly-scale-value').textContent = '1.0x';
-        document.getElementById('poly-scale-slider').value = 1.0;
+        // Reset scale slider to normalized default height (4.0m)
+        document.getElementById('poly-scale-value').textContent = '4.0m';
+        document.getElementById('poly-scale-slider').value = 4.0;
         
         // Reset place button state
         const btn = document.getElementById('poly-place-btn');
@@ -3780,7 +3797,7 @@
         const creator = String(m.Creator?.Username || m.Creator || m.creator || 'Unknown');
         const licence = m.Licence || m.licence || 'CC';
         const targetHeightMeters = parseFloat(document.getElementById('poly-scale-slider').value) || 4.0;
-        const scale = targetHeightMeters / 4.0; // Base model is normalized to 4.0m
+        const scale = 1.0; // Base model is normalized directly to targetHeightMeters
         const polyType = 'POLY_' + id;
 
         const btn = document.getElementById('poly-place-btn');
@@ -3814,7 +3831,7 @@
                             const isPlantByTitle = /\b(plant|bush|flower|grass|fern|shrub|cactus|mushroom|hedge)\b/.test(titleLower);
                             if (isTreeByTitle) { hasCanopy = true; hasTrunk = true; }
                             
-                            const targetHeight = 4.0;
+                            const targetHeight = targetHeightMeters;
                             const scaleFactor = targetHeight / Math.max(h, 0.01);
                             
                             let physics;
