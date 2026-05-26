@@ -3495,6 +3495,15 @@
         const preset = (window._userPresets || []).find(p => p.id === presetId);
         if (!preset) return;
         
+        // Fetch cloud assets cache if it is null (e.g. after a page reload, before Library is opened)
+        if (!window._cloudAssetsCache) {
+            try {
+                window._cloudAssetsCache = await ArcadeAPI.getAssets();
+            } catch(e) {
+                console.error("Failed to prefetch cloud assets for preset:", e);
+            }
+        }
+        
         // Clear ASSET_REGISTRY (only poly/cloud, keep internal state)
         Object.keys(window.ASSET_REGISTRY).forEach(key => {
             delete window.ASSET_REGISTRY[key];
@@ -3509,11 +3518,13 @@
                     icon: '🍕', cat: 'nature',
                     subcat: a.subcat || 'LANDSCAPE',
                     isCloud: false, isPoly: true, polyId: a.polyId,
+                    file: `/api/poly/glb/${a.polyId}`, // Register GLB file path for placement loading!
                     thumbnail: a.thumbnail || null,
                     targetHeight: a.targetHeight || 4.0,
-                    yOffset: 0, brightness: 1.0,
-                    physics: { type: 'sphere', radius: 1.0 },
-                    biomes: ['GLOBAL']
+                    yOffset: a.yOffset !== undefined ? a.yOffset : 0,
+                    brightness: a.brightness !== undefined ? a.brightness : 1.0,
+                    physics: a.physics || { type: 'sphere', radius: 1.0 },
+                    biomes: a.biomes || ['GLOBAL']
                 };
             } else if (a.source === 'cloud') {
                 // Fetch cloud asset metadata
@@ -3524,12 +3535,25 @@
                         icon: cloudAsset.icon || '☁️', cat: 'nature',
                         subcat: cloudAsset.subcategory || a.subcat || 'TREES',
                         isCloud: true, cloudId: a.cloudId,
-                        thumbnail: conf.thumbnail || null,
-                        targetHeight: conf.targetHeight || 10.0,
-                        yOffset: conf.yOffset || 0.0,
-                        brightness: conf.brightness !== undefined ? conf.brightness : 0.0,
-                        physics: conf.physics || { type: 'sphere', radius: 1.0 },
-                        biomes: conf.biomes || ['GLOBAL']
+                        thumbnail: conf.thumbnail || a.thumbnail || null,
+                        targetHeight: conf.targetHeight || a.targetHeight || 10.0,
+                        yOffset: conf.yOffset !== undefined ? conf.yOffset : (a.yOffset !== undefined ? a.yOffset : 0.0),
+                        brightness: conf.brightness !== undefined ? conf.brightness : (a.brightness !== undefined ? a.brightness : 0.0),
+                        physics: conf.physics || a.physics || { type: 'sphere', radius: 1.0 },
+                        biomes: conf.biomes || a.biomes || ['GLOBAL']
+                    };
+                } else {
+                    // Robust fallback: Register using properties saved directly on the preset asset
+                    window.ASSET_REGISTRY[a.key] = {
+                        icon: '☁️', cat: 'nature',
+                        subcat: a.subcat || 'TREES',
+                        isCloud: true, cloudId: a.cloudId,
+                        thumbnail: a.thumbnail || null,
+                        targetHeight: a.targetHeight || 10.0,
+                        yOffset: a.yOffset !== undefined ? a.yOffset : 0.0,
+                        brightness: a.brightness !== undefined ? a.brightness : 0.0,
+                        physics: a.physics || { type: 'sphere', radius: 1.0 },
+                        biomes: a.biomes || ['GLOBAL']
                     };
                 }
             }
@@ -3831,6 +3855,7 @@
                                 icon: '🍕', cat: 'nature',
                                 subcat: subcat,
                                 isCloud: false, isPoly: true, polyId: id,
+                                file: `/api/poly/glb/${id}`, // Add the GLB file URL for lazy loading later!
                                 polyAttribution: { creator, title, licence },
                                 thumbnail: m.Thumbnail || m.thumbnail || null,
                                 targetHeight: targetHeight, yOffset: 0, brightness: 1.0,
@@ -4086,6 +4111,7 @@
                         icon: '🍕', cat: 'nature',
                         subcat: subcat,
                         isCloud: false, isPoly: true, polyId: id,
+                        file: `/api/poly/glb/${id}`, // Add the GLB file URL for lazy loading later!
                         polyAttribution: { creator, title, licence },
                         thumbnail: thumb,
                         targetHeight: targetHeight, yOffset: 0, brightness: 1.0,
