@@ -4162,6 +4162,12 @@
             document.getElementById('edit-prop-rot').value = Math.round((prop.rot || 0) * (180 / Math.PI));
             document.getElementById('edit-prop-rot-val').textContent = Math.round((prop.rot || 0) * (180 / Math.PI)) + '°';
             
+            document.getElementById('edit-prop-tilt').value = Math.round((prop.tiltX || 0) * (180 / Math.PI));
+            document.getElementById('edit-prop-tilt-val').textContent = Math.round((prop.tiltX || 0) * (180 / Math.PI)) + '°';
+            
+            document.getElementById('edit-prop-roll').value = Math.round((prop.rollZ || 0) * (180 / Math.PI));
+            document.getElementById('edit-prop-roll-val').textContent = Math.round((prop.rollZ || 0) * (180 / Math.PI)) + '°';
+            
             document.getElementById('edit-prop-brightness').value = prop.brightness !== undefined ? prop.brightness : 1.0;
             document.getElementById('edit-prop-brightness-val').textContent = (prop.brightness !== undefined ? prop.brightness : 1.0).toFixed(1) + 'x';
         }
@@ -4189,6 +4195,8 @@
         prop.scale = scale;
         prop.yOffset = yOffset;
         prop.rot = rotDeg * (Math.PI / 180);
+        prop.tiltX = tiltDeg * (Math.PI / 180);
+        prop.rollZ = rollDeg * (Math.PI / 180);
         prop.brightness = brightness;
         
         let physicalHeightStr = '';
@@ -4201,6 +4209,8 @@
         document.getElementById('edit-prop-scale-val').textContent = scale.toFixed(1) + 'x' + physicalHeightStr;
         document.getElementById('edit-prop-yoffset-val').textContent = yOffset.toFixed(1) + 'm';
         document.getElementById('edit-prop-rot-val').textContent = Math.round(rotDeg) + '°';
+        document.getElementById('edit-prop-tilt-val').textContent = Math.round(tiltDeg) + '°';
+        document.getElementById('edit-prop-roll-val').textContent = Math.round(rollDeg) + '°';
         document.getElementById('edit-prop-brightness-val').textContent = brightness.toFixed(1) + 'x';
         
         if (selectRingMesh) {
@@ -6008,7 +6018,7 @@
             pool.meshes.forEach((iMesh, mi) => {
                 let off = pool.subOffsets[mi];
                 _iPos.set(t.x + (off.x * t.scale), (t.y || 0) + (off.y * t.scale) + (t.yOffset || 0), t.z + (off.z * t.scale));
-                _iQuat.setFromAxisAngle(_yAxis, t.rot || 0);
+                _iQuat.setFromEuler(new THREE.Euler(t.tiltX || 0, t.rot || 0, t.rollZ || 0, 'YXZ'));
                 let sy = t.scale * (off.sy || 1.0);
                 if (off.cs) {
                     _iScale.set(t.scale * off.cs.x, sy * off.cs.y, t.scale * off.cs.z);
