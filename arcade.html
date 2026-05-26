@@ -819,15 +819,8 @@
                 </div>
                 <button onclick="openLibrary()" style="background:linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2)); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); padding:7px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='linear-gradient(135deg, rgba(56,189,248,0.3), rgba(129,140,248,0.3))'" onmouseout="this.style.background='linear-gradient(135deg, rgba(56,189,248,0.2), rgba(129,140,248,0.2))'">📚 Open Library</button>
             </div>
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Category</label>
-            <div style="display:flex; gap:5px; margin-bottom:10px;">
-                <button id="cat-btn-TREES" class="sys-btn active" onclick="setNatureCategory('TREES')" style="flex:1; padding:6px 0; font-size:12px;">🌲 Trees</button>
-                <button id="cat-btn-ROCKS" class="sys-btn" onclick="setNatureCategory('ROCKS')" style="flex:1; padding:6px 0; font-size:12px;">🪨 Rocks</button>
-                <button id="cat-btn-PLANTS" class="sys-btn" onclick="setNatureCategory('PLANTS')" style="flex:1; padding:6px 0; font-size:12px;">🪴 Plants</button>
-                <button id="cat-btn-LANDSCAPE" class="sys-btn" onclick="setNatureCategory('LANDSCAPE')" style="flex:1; padding:6px 0; font-size:12px;">⛰️ Landscape</button>
-            </div>
             <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Assets</label>
-            <div id="nature-assets-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+            <div id="nature-assets-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; max-height:320px; overflow-y:auto;">
                 <!-- Populated dynamically -->
             </div>
             <label style="color:#4ade80; font-size:10px; font-weight:bold; display:flex; align-items:center; gap:5px; margin-top:8px; cursor:pointer;" title="Forest tool skips fairway, green, tee and bunker areas">
@@ -2589,16 +2582,11 @@
     window.customModels = {};
     window.ASSET_REGISTRY = {}; // All assets loaded dynamically from cloud via fetchCloudAssets()
     
-    // -- DYNAMIC UI GENERATION --
-    window.currentNatureCategory = 'TREES';
     window.setNatureCategory = function(cat) {
+        // Category filtering removed — kept for backward compat
         window.currentNatureCategory = cat;
-        document.getElementById('cat-btn-TREES').className = cat === 'TREES' ? 'sys-btn active' : 'sys-btn';
-        document.getElementById('cat-btn-ROCKS').className = cat === 'ROCKS' ? 'sys-btn active' : 'sys-btn';
-        document.getElementById('cat-btn-PLANTS').className = cat === 'PLANTS' ? 'sys-btn active' : 'sys-btn';
-        if(document.getElementById('cat-btn-LANDSCAPE')) document.getElementById('cat-btn-LANDSCAPE').className = cat === 'LANDSCAPE' ? 'sys-btn active' : 'sys-btn';
-        window.buildNatureUI();
     };
+
 
     window.CLOUD_BIOMES = {};
     
@@ -3209,9 +3197,10 @@
         if (!natureGroup) return;
         natureGroup.innerHTML = '';
         let firstKey = null;
+        let count = 0;
         for (let key in window.ASSET_REGISTRY) {
             let asset = window.ASSET_REGISTRY[key];
-            if (asset.cat === 'nature' && asset.subcat === window.currentNatureCategory) {
+            if (asset.cat === 'nature') {
                 let biomes = asset.biomes || ['GLOBAL'];
                 if (window.ACTIVE_BIOME === 'ALL' || biomes.includes('GLOBAL') || biomes.includes(window.ACTIVE_BIOME)) {
                     if (!firstKey) firstKey = key;
@@ -3219,11 +3208,12 @@
                         ? `<img src="${asset.thumbnail}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" title="${key}">` 
                         : (asset.subcat === 'ROCKS' ? '🪨' : asset.subcat === 'LANDSCAPE' ? '⛰️' : asset.subcat === 'PLANTS' ? '🌿' : '🌲');
                     natureGroup.innerHTML += `<div class="palette-btn" style="background:#334155; display:flex; justify-content:center; align-items:center; font-size:18px; overflow:hidden;" onclick="setNatureType('${key}', this)" title="${key}">${thumbHtml}</div>`;
+                    count++;
                 }
             }
         }
-        if (natureGroup.innerHTML === '') {
-            natureGroup.innerHTML = '<div style="color:#64748b; font-size:11px; grid-column:1/-1; text-align:center; padding:10px;">No assets uploaded for this category.<br>Use Admin Asset Manager.</div>';
+        if (count === 0) {
+            natureGroup.innerHTML = '<div style="color:#64748b; font-size:11px; grid-column:1/-1; text-align:center; padding:10px;">No assets loaded.<br>Open the Library to add some! 📚</div>';
         }
         
         // Ensure some selection exists
