@@ -910,6 +910,11 @@
                 </div>
                 <input type="range" id="edit-prop-brightness" min="0.2" max="3.0" step="0.1" value="1.0" oninput="window.updateSelectedProp();" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
             </div>
+            <!-- Boost size & height checkbox -->
+            <div style="display:flex; align-items:center; gap:6px; margin-top:2px; margin-bottom:2px;">
+                <input type="checkbox" id="edit-prop-boost" onchange="window.togglePropBoost(this.checked);" style="accent-color:#38bdf8; cursor:pointer;">
+                <label for="edit-prop-boost" style="color:#38bdf8; font-size:10px; font-weight:bold; text-transform:uppercase; cursor:pointer;">🚀 Boost Size & Height (100x / 250m)</label>
+            </div>
             <div style="display:flex; gap:6px; margin-top:6px;">
                 <button onclick="window.savePropAsDefault();" style="flex:2; background:linear-gradient(135deg, #38bdf8, #0284c7); color:#fff; border:none; padding:8px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px; box-shadow:0 4px 10px rgba(2,132,199,0.3);">
                     💾 Save as Default
@@ -3535,12 +3540,12 @@
                         icon: cloudAsset.icon || '☁️', cat: 'nature',
                         subcat: cloudAsset.subcategory || a.subcat || 'TREES',
                         isCloud: true, cloudId: a.cloudId,
-                        thumbnail: conf.thumbnail || a.thumbnail || null,
-                        targetHeight: conf.targetHeight || a.targetHeight || 10.0,
-                        yOffset: conf.yOffset !== undefined ? conf.yOffset : (a.yOffset !== undefined ? a.yOffset : 0.0),
-                        brightness: conf.brightness !== undefined ? conf.brightness : (a.brightness !== undefined ? a.brightness : 0.0),
-                        physics: conf.physics || a.physics || { type: 'sphere', radius: 1.0 },
-                        biomes: conf.biomes || a.biomes || ['GLOBAL']
+                        thumbnail: a.thumbnail || conf.thumbnail || null,
+                        targetHeight: a.targetHeight || conf.targetHeight || 10.0,
+                        yOffset: a.yOffset !== undefined ? a.yOffset : (conf.yOffset !== undefined ? conf.yOffset : 0.0),
+                        brightness: a.brightness !== undefined ? a.brightness : (conf.brightness !== undefined ? conf.brightness : 0.0),
+                        physics: a.physics || conf.physics || { type: 'sphere', radius: 1.0 },
+                        biomes: a.biomes || conf.biomes || ['GLOBAL']
                     };
                 } else {
                     // Robust fallback: Register using properties saved directly on the preset asset
@@ -4161,6 +4166,7 @@
         if (panel) {
             panel.style.display = 'flex';
             let currentScale = prop.scale || 1.0;
+            let currentYOff = prop.yOffset || 0.0;
             let physicalHeightStr = '';
             if (window.customModels[prop.type] && window.customModels[prop.type].isObject3D) {
                 let box = new THREE.Box3().setFromObject(window.customModels[prop.type]);
@@ -4168,11 +4174,39 @@
                 if (h > 0) physicalHeightStr = ` (~${(h * currentScale).toFixed(1)}m)`;
             }
             
-            document.getElementById('edit-prop-scale').value = currentScale;
+            // Configure Boost ranges based on current values
+            const boostCB = document.getElementById('edit-prop-boost');
+            const scaleSlider = document.getElementById('edit-prop-scale');
+            const yOffSlider = document.getElementById('edit-prop-yoffset');
+            
+            const isBoosted = currentScale > 5.0 || currentYOff > 3.0 || currentYOff < -3.0;
+            if (boostCB) boostCB.checked = isBoosted;
+            
+            if (scaleSlider && yOffSlider) {
+                if (isBoosted) {
+                    scaleSlider.min = "0.2";
+                    scaleSlider.max = "100.0";
+                    scaleSlider.step = "0.5";
+                    
+                    yOffSlider.min = "-50.0";
+                    yOffSlider.max = "250.0";
+                    yOffSlider.step = "1.0";
+                } else {
+                    scaleSlider.min = "0.2";
+                    scaleSlider.max = "5.0";
+                    scaleSlider.step = "0.1";
+                    
+                    yOffSlider.min = "-3.0";
+                    yOffSlider.max = "3.0";
+                    yOffSlider.step = "0.1";
+                }
+            }
+            
+            if (scaleSlider) scaleSlider.value = currentScale;
             document.getElementById('edit-prop-scale-val').textContent = currentScale.toFixed(1) + 'x' + physicalHeightStr;
             
-            document.getElementById('edit-prop-yoffset').value = prop.yOffset || 0.0;
-            document.getElementById('edit-prop-yoffset-val').textContent = (prop.yOffset || 0.0).toFixed(1) + 'm';
+            if (yOffSlider) yOffSlider.value = currentYOff;
+            document.getElementById('edit-prop-yoffset-val').textContent = currentYOff.toFixed(1) + 'm';
             
             document.getElementById('edit-prop-rot').value = Math.round((prop.rot || 0) * (180 / Math.PI));
             document.getElementById('edit-prop-rot-val').textContent = Math.round((prop.rot || 0) * (180 / Math.PI)) + '°';
@@ -4186,6 +4220,37 @@
             document.getElementById('edit-prop-brightness').value = prop.brightness !== undefined ? prop.brightness : 1.0;
             document.getElementById('edit-prop-brightness-val').textContent = (prop.brightness !== undefined ? prop.brightness : 1.0).toFixed(1) + 'x';
         }
+    };
+    
+    window.togglePropBoost = function(enabled) {
+        const scaleSlider = document.getElementById('edit-prop-scale');
+        const yOffSlider = document.getElementById('edit-prop-yoffset');
+        if (!scaleSlider || !yOffSlider) return;
+        
+        if (enabled) {
+            scaleSlider.min = "0.2";
+            scaleSlider.max = "100.0";
+            scaleSlider.step = "0.5";
+            
+            yOffSlider.min = "-50.0";
+            yOffSlider.max = "250.0";
+            yOffSlider.step = "1.0";
+        } else {
+            scaleSlider.min = "0.2";
+            scaleSlider.max = "5.0";
+            scaleSlider.step = "0.1";
+            
+            yOffSlider.min = "-3.0";
+            yOffSlider.max = "3.0";
+            yOffSlider.step = "0.1";
+            
+            // Clamp values
+            if (parseFloat(scaleSlider.value) > 5.0) scaleSlider.value = 5.0;
+            if (parseFloat(yOffSlider.value) > 3.0) yOffSlider.value = 3.0;
+            if (parseFloat(yOffSlider.value) < -3.0) yOffSlider.value = -3.0;
+        }
+        
+        window.updateSelectedProp();
     };
 
     window.deselectProp = function() {
@@ -4250,7 +4315,7 @@
         window.deselectProp();
     };
 
-    window.savePropAsDefault = function() {
+    window.savePropAsDefault = async function() {
         if (window.selectedPropIndex === null) return;
         const prop = window.placedTrees[window.selectedPropIndex];
         if (!prop) return;
@@ -4261,9 +4326,43 @@
             let currentYOff = prop.yOffset || 0.0;
             let currentBright = prop.brightness !== undefined ? prop.brightness : 1.0;
             
-            // Save defaults for new props
+            // Save defaults for new props in registry
             window.ASSET_REGISTRY[type].yOffset = currentYOff;
             window.ASSET_REGISTRY[type].brightness = currentBright;
+            
+            const oldTargetHeight = window.ASSET_REGISTRY[type].targetHeight || (type.startsWith('POLY_') ? 4.0 : 10.0);
+            const newTargetHeight = oldTargetHeight * currentScale;
+            window.ASSET_REGISTRY[type].targetHeight = newTargetHeight;
+            
+            // Scale physics dimensions proportionally
+            if (window.ASSET_REGISTRY[type].physics) {
+                let phys = window.ASSET_REGISTRY[type].physics;
+                if (phys.radius !== undefined) phys.radius *= currentScale;
+                if (phys.trunkRadius !== undefined) phys.trunkRadius *= currentScale;
+                if (phys.canopyRadius !== undefined) phys.canopyRadius *= currentScale;
+                if (phys.height !== undefined) phys.height *= currentScale;
+            }
+
+            // Save back to active user preset in database
+            if (window._activePresetId && window._activePresetId !== '_backpack') {
+                const preset = (window._userPresets || []).find(p => p.id === window._activePresetId);
+                if (preset && preset.assets) {
+                    const assetData = preset.assets.find(a => a.key === type);
+                    if (assetData) {
+                        assetData.targetHeight = newTargetHeight;
+                        assetData.yOffset = currentYOff;
+                        assetData.brightness = currentBright;
+                        assetData.physics = JSON.parse(JSON.stringify(window.ASSET_REGISTRY[type].physics));
+                        
+                        try {
+                            await ArcadeAPI.saveAssetPreset({ id: preset.id, name: preset.name, assets: preset.assets });
+                            loadPresetDropdowns();
+                        } catch (e) {
+                            console.error('Failed to save updated preset settings:', e);
+                        }
+                    }
+                }
+            }
             
             if (window.customModels[type] && currentScale !== 1.0) {
                 // Physically scale the base model
@@ -4288,6 +4387,7 @@
             prop.brightness = currentBright;
             
             rebuildInstancePool(type);
+            saveLevel(); // Persist the adjusted scales in the level JSON!
             
             document.getElementById('edit-prop-scale').value = 1.0;
             document.getElementById('edit-prop-scale-val').textContent = '1.0x';
