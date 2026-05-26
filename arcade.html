@@ -4377,6 +4377,64 @@
                             let mats = Array.isArray(node.material) ? node.material : [node.material];
                             mats.forEach(mat => {
                                 // Fix "dark GLTF models" and make matte
+                                let isTree = window.ASSET_REGISTRY[type] && (window.ASSET_REGISTRY[type].subcat === 'TREES' || window.ASSET_REGISTRY[type].subcat === 'PLANTS');
+                                if (isTree) {
+                                    mat.onBeforeCompile = (shader) => {
+                                        shader.vertexShader = shader.vertexShader.replace(
+                                            '#include <color_pars_vertex>',
+                                            '#include <color_pars_vertex>\n#ifdef USE_INSTANCING\nattribute vec3 instanceTrunkColor;\n#endif\nvarying vec3 vInstanceTrunkColor;'
+                                        );
+                                        shader.vertexShader = shader.vertexShader.replace(
+                                            '#include <color_vertex>',
+                                            '#include <color_vertex>\n#ifdef USE_INSTANCING\nvInstanceTrunkColor = instanceTrunkColor;\n#else\nvInstanceTrunkColor = vec3(1.0);\n#endif'
+                                        );
+                                        shader.fragmentShader = shader.fragmentShader.replace(
+                                            '#include <color_pars_fragment>',
+                                            '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;'
+                                        );
+                                        shader.fragmentShader = shader.fragmentShader.replace(
+                                            '#include <color_fragment>',
+                                            `
+#if defined( USE_COLOR_ALPHA )
+    vec3 texC = diffuseColor.rgb;
+    bool isGreenish = texC.g > texC.r + 0.01;
+    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.6);
+    bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
+    bool isSnow = (texC.r > 0.85 && texC.g > 0.85 && texC.b > 0.85) && abs(texC.r - texC.g) < 0.04 && abs(texC.g - texC.b) < 0.04;
+    vec3 targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
+    if (isSnow) {
+        // Keep snow white/natural
+    } else {
+        float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
+        if (tintStr > 0.02) {
+            float lum = dot(texC, vec3(0.299, 0.587, 0.114));
+            vec3 tinted = targetColor * (lum * 1.8);
+            diffuseColor.rgb = mix(texC, tinted, 0.95);
+        }
+    }
+    diffuseColor.a *= vColor.a;
+#elif defined( USE_COLOR )
+    vec3 texC = diffuseColor.rgb;
+    bool isGreenish = texC.g > texC.r + 0.01;
+    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.6);
+    bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
+    bool isSnow = (texC.r > 0.85 && texC.g > 0.85 && texC.b > 0.85) && abs(texC.r - texC.g) < 0.04 && abs(texC.g - texC.b) < 0.04;
+    vec3 targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
+    if (isSnow) {
+        // Keep snow white/natural
+    } else {
+        float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
+        if (tintStr > 0.02) {
+            float lum = dot(texC, vec3(0.299, 0.587, 0.114));
+            vec3 tinted = targetColor * (lum * 1.8);
+            diffuseColor.rgb = mix(texC, tinted, 0.95);
+        }
+    }
+#endif
+                                            `
+                                        );
+                                    };
+                                }
                                 if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
                                     mat.metalness = 0.0; 
                                     mat.roughness = 1.0; // 1.0 = Fully matte surface
@@ -4398,54 +4456,6 @@
                                         }
                                     }
 
-                                    let isTree = window.ASSET_REGISTRY[type] && window.ASSET_REGISTRY[type].subcat === 'TREES';
-                                    if (isTree) {
-                                        mat.onBeforeCompile = (shader) => {
-                                            shader.vertexShader = shader.vertexShader.replace(
-                                                '#include <color_pars_vertex>',
-                                                '#include <color_pars_vertex>\n#ifdef USE_INSTANCING\nattribute vec3 instanceTrunkColor;\n#endif\nvarying vec3 vInstanceTrunkColor;'
-                                            );
-                                            shader.vertexShader = shader.vertexShader.replace(
-                                                '#include <color_vertex>',
-                                                '#include <color_vertex>\n#ifdef USE_INSTANCING\nvInstanceTrunkColor = instanceTrunkColor;\n#else\nvInstanceTrunkColor = vec3(1.0);\n#endif'
-                                            );
-                                            shader.fragmentShader = shader.fragmentShader.replace(
-                                                '#include <color_pars_fragment>',
-                                                '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;'
-                                            );
-                                            shader.fragmentShader = shader.fragmentShader.replace(
-                                                '#include <color_fragment>',
-                                                `
-#if defined( USE_COLOR_ALPHA )
-    vec3 texC = diffuseColor.rgb;
-    bool isGreenish = texC.g > texC.r + 0.01;
-    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
-    bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
-    vec3 targetColor = (!isBrown && !isGrey) ? vColor.rgb : vInstanceTrunkColor;
-    float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
-    if (tintStr > 0.02) {
-        float lum = dot(texC, vec3(0.299, 0.587, 0.114));
-        vec3 tinted = targetColor * (lum * 1.8);
-        diffuseColor.rgb = mix(texC, tinted, 0.95);
-    }
-    diffuseColor.a *= vColor.a;
-#elif defined( USE_COLOR )
-    vec3 texC = diffuseColor.rgb;
-    bool isGreenish = texC.g > texC.r + 0.01;
-    bool isBrown = !isGreenish && (texC.r > texC.g + 0.01) && (texC.g + 0.05 >= texC.b) && (texC.r < 0.8);
-    bool isGrey = !isGreenish && abs(texC.r - texC.g) < 0.1 && abs(texC.g - texC.b) < 0.1 && texC.r < 0.6;
-    vec3 targetColor = (!isBrown && !isGrey) ? vColor : vInstanceTrunkColor;
-    float tintStr = distance(targetColor, vec3(1.0, 1.0, 1.0));
-    if (tintStr > 0.02) {
-        float lum = dot(texC, vec3(0.299, 0.587, 0.114));
-        vec3 tinted = targetColor * (lum * 1.8);
-        diffuseColor.rgb = mix(texC, tinted, 0.95);
-    }
-#endif
-                                                `
-                                            );
-                                        };
-                                    }
                                     mat.needsUpdate = true;
                                 }
                             });
@@ -6063,11 +6073,12 @@
             if (window._propMeshes) {
                 window._propMeshes = window._propMeshes.filter(pm => pm !== iMesh);
             }
-            // Dispose instance-specific buffers (not shared geometry)
+            // Dispose cloned geometry to prevent GPU memory leaks
+            if (iMesh.geometry) {
+                iMesh.geometry.dispose();
+            }
             if (iMesh.instanceMatrix) iMesh.instanceMatrix.array = null;
             if (iMesh.instanceColor) iMesh.instanceColor.array = null;
-            let trunkAttr = iMesh.geometry.getAttribute('instanceTrunkColor');
-            if (trunkAttr) iMesh.geometry.deleteAttribute('instanceTrunkColor');
         });
         delete window.instancePools[type];
     }
@@ -9927,22 +9938,60 @@
         }
 
         // === COLORIZE TOOL (debounced undo — only save once per session) ===
-        if (currentTool === 'COLORIZE' && e.button === 0 && lastHitPoint) {
-            if(!window._colorizeUndoSaved) { saveUndoState(); window._colorizeUndoSaved = true; }
-            let closest = null; let minDist = currentBrushSize || 10;
-            for (let i = 0; i < window.placedTrees.length; i++) {
-                let t = window.placedTrees[i];
-                let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
-                if (d < minDist) { minDist = d; closest = i; }
+        if (currentTool === 'COLORIZE' && e.button === 0) {
+            raycaster.setFromCamera(mouse, camera);
+            let hitPoint = null;
+            let directTargetIdx = null;
+            
+            // Check direct click on prop meshes first
+            if (window._propMeshes && window._propMeshes.length > 0) {
+                let propIntersects = raycaster.intersectObjects(window._propMeshes);
+                if (propIntersects.length > 0 && propIntersects[0].instanceId !== undefined) {
+                    let hitMesh = propIntersects[0].object;
+                    let iid = propIntersects[0].instanceId;
+                    let globalIdx = window.getGlobalPropIndex(hitMesh.propType, iid);
+                    if (globalIdx >= 0) {
+                        directTargetIdx = globalIdx;
+                        let prop = window.placedTrees[globalIdx];
+                        hitPoint = new THREE.Vector3(prop.x, prop.y || 0, prop.z);
+                    }
+                }
             }
-            if (closest !== null) {
+            
+            if (hitPoint === null) {
+                let intersects = raycaster.intersectObject(plane);
+                if (intersects.length > 0) {
+                    hitPoint = intersects[0].point;
+                }
+            }
+            
+            if (hitPoint) {
+                lastHitPoint = hitPoint;
+                if(!window._colorizeUndoSaved) { saveUndoState(); window._colorizeUndoSaved = true; }
                 let col = window.activeColorizeColor || '#ffffff';
                 let tCol = window.activeTrunkColor || '#ffffff';
-                if (window.placedTrees[closest].color !== col || window.placedTrees[closest].trunkColor !== tCol) {
-                    window.placedTrees[closest].color = col;
-                    window.placedTrees[closest].trunkColor = tCol;
-                    rebuildInstancePool(window.placedTrees[closest].type);
+                let rad = currentBrushSize || 10;
+                let poolsToRebuild = new Set();
+                
+                if (directTargetIdx !== null) {
+                    let t = window.placedTrees[directTargetIdx];
+                    t.color = col;
+                    t.trunkColor = tCol;
+                    poolsToRebuild.add(t.type);
                 }
+                
+                for (let i = 0; i < window.placedTrees.length; i++) {
+                    let t = window.placedTrees[i];
+                    let d = Math.sqrt((t.x - hitPoint.x)**2 + (t.z - hitPoint.z)**2);
+                    if (d < rad) {
+                        if (t.color !== col || t.trunkColor !== tCol) {
+                            t.color = col;
+                            t.trunkColor = tCol;
+                            poolsToRebuild.add(t.type);
+                        }
+                    }
+                }
+                poolsToRebuild.forEach(type => rebuildInstancePool(type));
             }
             controls.enabled = false;
             return;
@@ -10919,33 +10968,74 @@
     } else if (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'MEASURE' || currentTool === 'HOLE' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'PROPS' || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE' || currentTool === 'ERASER' || currentTool === 'SMART_BUILDER' || currentTool === 'MTN') {
             ghostBlock.visible = false;
             ghostTree.visible = false;
+            
+            // Check for prop hover if COLORIZE is active
+            let propHovered = false;
+            if (currentTool === 'COLORIZE') {
+                raycaster.setFromCamera(mouse, camera);
+                if (window._propMeshes && window._propMeshes.length > 0) {
+                    let propIntersects = raycaster.intersectObjects(window._propMeshes);
+                    if (propIntersects.length > 0 && propIntersects[0].instanceId !== undefined) {
+                        let hitMesh = propIntersects[0].object;
+                        let iid = propIntersects[0].instanceId;
+                        let globalIdx = window.getGlobalPropIndex(hitMesh.propType, iid);
+                        if (globalIdx >= 0) {
+                            let prop = window.placedTrees[globalIdx];
+                            if (!window.hoverRingMesh) {
+                                const geom = new THREE.RingGeometry(1.5, 1.8, 32);
+                                geom.rotateX(-Math.PI / 2);
+                                const mat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+                                window.hoverRingMesh = new THREE.Mesh(geom, mat);
+                                scene.add(window.hoverRingMesh);
+                            }
+                            window.hoverRingMesh.position.set(prop.x, (prop.y || 0) + (prop.yOffset || 0) + 0.1, prop.z);
+                            let sc = prop.scale || 1.0;
+                            window.hoverRingMesh.scale.set(sc, sc, sc);
+                            window.hoverRingMesh.visible = true;
+                            
+                            window._hoveredPropIndex = globalIdx;
+                            propHovered = true;
+                            lastHitPoint = new THREE.Vector3(prop.x, prop.y || 0, prop.z); // use prop base as center
+                        }
+                    }
+                }
+            }
+            
+            if (!propHovered) {
+                if (window.hoverRingMesh) window.hoverRingMesh.visible = false;
+                window._hoveredPropIndex = null;
+            }
+            
             raycaster.setFromCamera(mouse, camera);
             let intersects = raycaster.intersectObject(plane);
             if(intersects.length > 0) {
-                lastHitPoint = intersects[0].point;
+                if (!propHovered) {
+                    lastHitPoint = intersects[0].point;
+                }
                 if(typeof window.updateElevationHUD === 'function') window.updateElevationHUD(lastHitPoint);
                 
                 if (currentTool === 'COLORIZE' && event.buttons === 1) {
-                    let closest = null; let minDist = currentBrushSize || 10;
+                    let col = window.activeColorizeColor || '#ffffff';
+                    let tCol = window.activeTrunkColor || '#ffffff';
+                    let rad = currentBrushSize || 10;
+                    let poolsToRebuild = new Set();
                     for (let i = 0; i < window.placedTrees.length; i++) {
                         let t = window.placedTrees[i];
                         let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
-                        if (d < minDist) { minDist = d; closest = i; }
-                    }
-                    if (closest !== null) {
-                        let col = window.activeColorizeColor || '#ffffff';
-                        let tCol = window.activeTrunkColor || '#ffffff';
-                        if (window.placedTrees[closest].color !== col || window.placedTrees[closest].trunkColor !== tCol) {
-                            window.placedTrees[closest].color = col;
-                            window.placedTrees[closest].trunkColor = tCol;
-                            rebuildInstancePool(window.placedTrees[closest].type);
+                        if (d < rad) {
+                            if (t.color !== col || t.trunkColor !== tCol) {
+                                t.color = col;
+                                t.trunkColor = tCol;
+                                poolsToRebuild.add(t.type);
+                            }
                         }
                     }
+                    poolsToRebuild.forEach(type => rebuildInstancePool(type));
                 }
                 
                 if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || (currentTool === 'PAINT' && window._paintToolMode !== 'POLYGON') || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'COLORIZE') {
                     sculptBrushCursor.visible = true;
-                    sculptBrushCursor.position.copy(lastHitPoint);
+                    sculptBrushCursor.position.copy(intersects[0].point);
                     sculptBrushCursor.position.y += 0.5;
                 } else if((currentTool === 'MTN' && window._mtnToolMode === 'STAMP') || (currentTool === 'PAINT' && window._paintToolMode === 'POLYGON') || (currentTool === 'PROPS' && window._propsToolMode === 'POLYGON')) {
                     // Show capture/place radius ring for STAMP mode, or brush cursor for POLYGON paint point-snapping
