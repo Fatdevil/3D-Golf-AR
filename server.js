@@ -3,6 +3,7 @@ const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -1081,25 +1082,27 @@ app.get('/api/poly/glb/:id', async (req, res) => {
         const cachePath = path.join(POLY_CACHE_PATH, `${modelId}.glb`);
 
         // Returnera cachad fil om den finns
-        const fs = require('fs');
         if (fs.existsSync(cachePath)) {
             res.set('Content-Type', 'model/gltf-binary');
-            res.set('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+            res.set('Cache-Control', 'public, max-age=31536000');
             return res.sendFile(path.resolve(cachePath));
         }
 
         // Annars: hämta metadata → ladda ned GLB → cacha → returnera
         const apiKey = process.env.POLY_PIZZA_API_KEY;
         if (!apiKey) {
+            console.error('❌ POLY_PIZZA_API_KEY not set');
             return res.status(503).json({ error: 'Poly.Pizza API key not configured' });
         }
 
+        console.log(`🍕 Fetching metadata for model: ${modelId}`);
         const meta = await fetch(
             `https://api.poly.pizza/v1.1/model/${modelId}`,
             { headers: { 'x-auth-token': apiKey } }
         );
 
         if (!meta.ok) {
+            console.error(`❌ Poly.Pizza metadata error: ${meta.status} ${meta.statusText}`);
             return res.status(meta.status).json({ error: 'Model not found on Poly.Pizza' });
         }
 
@@ -1107,13 +1110,15 @@ app.get('/api/poly/glb/:id', async (req, res) => {
         const glbUrl = data.Download;
 
         if (!glbUrl) {
+            console.error(`❌ No Download URL in model data:`, JSON.stringify(data).substring(0, 200));
             return res.status(404).json({ error: 'No GLB download URL found' });
         }
 
-        console.log(`🍕 Downloading Poly.Pizza model: ${data.Title || modelId} → cache`);
+        console.log(`🍕 Downloading GLB: ${data.Title || modelId} from ${glbUrl.substring(0, 80)}...`);
 
         const glbResponse = await fetch(glbUrl);
         if (!glbResponse.ok) {
+            console.error(`❌ GLB CDN download failed: ${glbResponse.status} ${glbResponse.statusText}`);
             return res.status(502).json({ error: 'Failed to download GLB from Poly.Pizza CDN' });
         }
 
@@ -1121,17 +1126,20 @@ app.get('/api/poly/glb/:id', async (req, res) => {
         const buffer = Buffer.from(arrayBuffer);
 
         // Skapa cache-mapp om den inte finns
-        fs.mkdirSync(POLY_CACHE_PATH, { recursive: true });
-        fs.writeFileSync(cachePath, buffer);
-
-        console.log(`✅ Cached: ${modelId}.glb (${(buffer.length / 1024).toFixed(1)} KB)`);
+        try {
+            fs.mkdirSync(POLY_CACHE_PATH, { recursive: true });
+            fs.writeFileSync(cachePath, buffer);
+            console.log(`✅ Cached: ${modelId}.glb (${(buffer.length / 1024).toFixed(1)} KB)`);
+        } catch(cacheErr) {
+            console.warn('⚠️ Cache write failed (non-fatal):', cacheErr.message);
+        }
 
         res.set('Content-Type', 'model/gltf-binary');
         res.set('Cache-Control', 'public, max-age=31536000');
         res.send(buffer);
     } catch (err) {
-        console.error('Poly GLB proxy error:', err);
-        res.status(500).json({ error: 'Proxy error' });
+        console.error('Poly GLB proxy error:', err.message, err.stack);
+        res.status(500).json({ error: 'Proxy error: ' + err.message });
     }
 });
 
