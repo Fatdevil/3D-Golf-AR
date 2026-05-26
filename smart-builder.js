@@ -2429,68 +2429,111 @@ window.executeRidgeMountain = function() {
     window.saveUndoState();
     if (window.showBuildToast) window.showBuildToast('Building mountain ridge...', '#38bdf8');
     
-    let targetHeight = parseFloat(document.getElementById('sculpt-strength').value) || 20.0;
+    // Read height from the MTN spline height slider (shared with Plateau mode)
+    let targetHeight = parseFloat(document.getElementById('mtn-spline-height').value) || 25.0;
+    
+    // Read jaggedness from the MTN jagged slider
+    let jaggedMultiplier = 1.0;
+    let jaggedSlider = document.getElementById('mtn-spline-jagged');
+    if (jaggedSlider) {
+        jaggedMultiplier = parseFloat(jaggedSlider.value) / 50.0;
+    }
     
     // Auto width based on height (slope ratio 1:2.5)
     let ridgeWidth = Math.abs(targetHeight) * 2.5;
     if (ridgeWidth < 12) ridgeWidth = 12;
     
-    const positions = window.terrainGeometry.attributes.position.array;
+    // Use correct terrain geometry reference
+    const positions = window._arcadePlaneGeo.attributes.position.array;
+    let segs = window.TERRAIN_SEGS;
+    let size = window.TERRAIN_SIZE;
+    let step = size / segs;
+    let stride = segs + 1;
     let modified = false;
     
-    function distToSegment(p, v, w) {
+    // FBM noise function (from arcade-perlin.js)
+    let fbm = window.fbm || function(x, y) { return 0; };
+    
+    function distToSegment(px, pz, v, w) {
         const l2 = (v.x - w.x)**2 + (v.z - w.z)**2;
-        if (l2 == 0) return Math.sqrt((p.x - v.x)**2 + (p.z - v.z)**2);
-        let t = ((p.x - v.x) * (w.x - v.x) + (p.z - v.z) * (w.z - v.z)) / l2;
+        if (l2 == 0) return Math.sqrt((px - v.x)**2 + (pz - v.z)**2);
+        let t = ((px - v.x) * (w.x - v.x) + (pz - v.z) * (w.z - v.z)) / l2;
         t = Math.max(0, Math.min(1, t));
-        const proj = { x: v.x + t * (w.x - v.x), z: v.z + t * (w.z - v.z) };
-        return Math.sqrt((p.x - proj.x)**2 + (p.z - proj.z)**2);
+        const projX = v.x + t * (w.x - v.x);
+        const projZ = v.z + t * (w.z - v.z);
+        return Math.sqrt((px - projX)**2 + (pz - projZ)**2);
     }
     
-    for (let i = 0; i < positions.length; i += 3) {
-        let vx = positions[i];
-        let vy = positions[i+1];
-        let vz = positions[i+2];
-        
-        let p = { x: vx, z: vz };
-        let minDist = Infinity;
-        
-        for (let j = 0; j < window.splinePoints.length - 1; j++) {
-            let v1 = window.splinePoints[j];
-            let v2 = window.splinePoints[j+1];
-            let d = distToSegment(p, v1, v2);
-            if (d < minDist) minDist = d;
-        }
-        
-        if (minDist < ridgeWidth) {
-            let nDist = minDist / ridgeWidth;
-            let baseFalloff = (Math.cos(nDist * Math.PI) + 1) * 0.5; // Cosine falloff 1 to 0
+    // Find bounding box of spline to limit vertex iteration
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    window.splinePoints.forEach(pt => {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.z < minZ) minZ = pt.z;
+        if (pt.z > maxZ) maxZ = pt.z;
+    });
+    // Expand by ridgeWidth + margin
+    let gxMin = Math.max(0, Math.floor((minX - ridgeWidth - 5 + size / 2) / step));
+    let gxMax = Math.min(segs, Math.ceil((maxX + ridgeWidth + 5 + size / 2) / step));
+    let gzMin = Math.max(0, Math.floor((minZ - ridgeWidth - 5 + size / 2) / step));
+    let gzMax = Math.min(segs, Math.ceil((maxZ + ridgeWidth + 5 + size / 2) / step));
+    
+    // Correct axis mapping: PlaneGeometry rotated -90° on X
+    // positions[idx*3]   = X (world X)
+    // positions[idx*3+1] = Y (world -Z)
+    // positions[idx*3+2] = Z (world Y = height!)
+    for (let gz = gzMin; gz <= gzMax; gz++) {
+        for (let gx = gxMin; gx <= gxMax; gx++) {
+            let idx = gz * stride + gx;
+            let vx = positions[idx * 3];       // world X
+            let vz = -positions[idx * 3 + 1];  // world Z = -localY
+            let origH = positions[idx * 3 + 2]; // height = localZ
             
-            // Add varied noise
-            let noiseVal = 0;
-            if (typeof noise2D !== 'undefined') {
-                noiseVal += noise2D(vx * 0.04, vz * 0.04) * 0.6;
-                noiseVal += noise2D(vx * 0.1, vz * 0.1) * 0.3;
-            } else {
-                noiseVal = (Math.random() - 0.5) * 0.4;
+            // Find minimum distance to any spline segment
+            let minDist = Infinity;
+            for (let j = 0; j < window.splinePoints.length - 1; j++) {
+                let d = distToSegment(vx, vz, window.splinePoints[j], window.splinePoints[j + 1]);
+                if (d < minDist) minDist = d;
             }
             
-            // Taper noise at edges
-            let noiseMod = noiseVal * targetHeight * 0.35 * baseFalloff;
-            let newY = vy + (targetHeight * baseFalloff) + noiseMod;
-            
-            positions[i+1] = newY;
-            modified = true;
+            if (minDist < ridgeWidth) {
+                let nDist = minDist / ridgeWidth;
+                let baseFalloff = (Math.cos(nDist * Math.PI) + 1) * 0.5; // Cosine falloff 1→0
+                
+                // FBM noise for natural variation, scaled by jaggedness
+                let noiseVal = fbm(vx * 0.08, vz * 0.08, 3, 2.0, 0.5) * 0.6;
+                noiseVal += fbm(vx * 0.2, vz * 0.2, 2, 2.0, 0.5) * 0.3;
+                
+                // Taper noise at edges, apply jagged multiplier
+                let noiseMod = noiseVal * targetHeight * 0.25 * baseFalloff * jaggedMultiplier;
+                let newH = origH + (targetHeight * baseFalloff) + noiseMod;
+                
+                positions[idx * 3 + 2] = newH; // Write to height (localZ)
+                modified = true;
+            }
         }
     }
     
     if (modified) {
-        window.terrainGeometry.attributes.position.needsUpdate = true;
-        window.terrainGeometry.computeVertexNormals();
-        if(window.updateTerrainCollider) window.updateTerrainCollider();
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+        if (typeof window.snapObjectsToGround === 'function') window.snapObjectsToGround();
+        if (typeof window.rebuildWaterMask === 'function') window.rebuildWaterMask(true);
+        if (window.syncWaterVisual) window.syncWaterVisual();
+        if (window.slopeOverlayActive) window.updateSlopeOverlay();
+        if (window.contourLinesActive) window.updateContourLines();
+        if (window.elevationHeatmapActive) window.updateElevationHeatmap();
     }
     
-    clearSmartGreen();
+    // Clear spline points (not smartGreen!)
+    if (typeof window.clearSpline === 'function') {
+        window.clearSpline();
+    }
+    
+    if (window.showBuildToast) window.showBuildToast('🏔️ Ridge built!', '#38bdf8');
+    if (typeof window.saveLevel === 'function') window.saveLevel();
 };
 
 window.executeSplineMountain = function() {
@@ -2634,5 +2677,6 @@ window.executeSplineMountain = function() {
         }
 
         if (window.showBuildToast) window.showBuildToast('⛰️ Mountain built!', '#38bdf8');
+        if (typeof window.saveLevel === 'function') window.saveLevel();
     };
 })();

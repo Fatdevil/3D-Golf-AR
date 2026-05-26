@@ -124,8 +124,8 @@
         }
 
         // ── Undo support ─────────────────────────────────────────────────────
-        if (typeof window.pushUndoState === 'function') {
-            window.pushUndoState();
+        if (typeof window.saveUndoState === 'function') {
+            window.saveUndoState();
         }
 
         const presetData = PRESETS[options.preset || 'NORDIC'] || PRESETS.NORDIC;
