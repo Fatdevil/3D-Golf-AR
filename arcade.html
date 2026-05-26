@@ -11880,8 +11880,9 @@
                     if (gx < TERRAIN_SEGS) { nSum += positions[(gz*_smoothStride + gx+1)*3 + 2]; nCount++; }
                     if (nCount > 0) {
                         let localAvg = nSum / nCount;
-                        // Clamp interpolation to prevent overshoot oscillation at high multipliers
-                        let smoothFactor = Math.min(0.3 * brushMultiplier * falloff, 0.95);
+                        // Smooth intensity scales with brush size: small brush = gentle, large = aggressive
+                        let sizeBoost = Math.max(1, currentBrushSize / 6);  // 6m = baseline (1x)
+                        let smoothFactor = Math.min(0.3 * sizeBoost * falloff, 0.95);
                         positions[i*3 + 2] += (localAvg - positions[i*3 + 2]) * smoothFactor;
                     }
                     updatePos = true;
