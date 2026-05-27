@@ -114,7 +114,10 @@
             float ao = mix(0.55, 1.0, eL);
             vec3 col = baseCol * ao;
             col += vec3(0.04, 0.05, 0.01) * eL;
-            col *= 0.88 + 0.24 * clump;
+
+            // Subtle color variation via UV (chunk-independent, no tile artifacts)
+            float colorVar = vnoise(vUv * 80.0 + 33.0);
+            col *= 0.95 + 0.10 * colorVar;
 
             gl_FragColor = vec4(col, 1.0);
         }
