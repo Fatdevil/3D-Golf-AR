@@ -333,6 +333,7 @@
     <div id="dropdown-menu">
         <button onclick="document.getElementById('publish-modal').style.display='flex'; if(window.updatePublishPreview) updatePublishPreview(); toggleMenu();">☁️ Spara / Publicera</button>
         <button id="btn-toggle-unit" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 Meter' : '📏 Yards'; toggleMenu();">📏 Yards</button>
+        <button id="btn-toggle-chunks" onclick="toggleChunkSystem()" style="color:#38bdf8;">🧩 Chunks: PÅ</button>
         <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Clear Course</button>
     </div>
     
@@ -350,6 +351,32 @@
         window.useMeters = false;
         window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
         window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
+
+        window._chunksEnabled = true;
+        window.toggleChunkSystem = function() {
+            window._chunksEnabled = !window._chunksEnabled;
+            let btn = document.getElementById('btn-toggle-chunks');
+            if (btn) {
+                btn.textContent = window._chunksEnabled ? '🧩 Chunks: PÅ' : '🧩 Chunks: AV';
+                btn.style.color = window._chunksEnabled ? '#38bdf8' : '#ef4444';
+            }
+            // Toggle chunk manager
+            if (window._terrainChunks) {
+                window._terrainChunks.setEnabled(window._chunksEnabled);
+            }
+            // Toggle shells: hide all when chunks off
+            if (window._terrainShells) {
+                if (!window._chunksEnabled) {
+                    // Hide all shell meshes
+                    for (let s of window._terrainShells.shells) {
+                        s.mesh.visible = false;
+                    }
+                }
+                // When re-enabling, shells will auto-show on next update cycle
+            }
+            console.log('[Admin] Chunks:', window._chunksEnabled ? 'ON' : 'OFF');
+            toggleMenu();
+        };
         
         window.toggleProMode = function() {
             let tb = document.getElementById('left-toolbar');
