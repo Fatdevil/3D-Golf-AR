@@ -1,10 +1,9 @@
 // ================================================================
-//  TERRAIN SHELL MANAGER v4 — Visible 3D grass via discard + FBM
+//  TERRAIN SHELL MANAGER v5 — 3D grass + distant tint layer
 //
-//  Key insight: the 3D effect comes from SILHOUETTES — grass blade
-//  tips visible against the terrain/sky. Alpha blending hides this.
-//  Instead: discard-based with smooth FBM noise (no blocks) and
-//  tall enough heights to be visible from camera distance.
+//  Near:  Full 3D shell layers with FBM silhouettes (discard-based)
+//  Far:   Single flat tint layer darkens rough areas (alpha blend)
+//  Result: Rough looks different at ALL distances, 3D up close
 // ================================================================
 (function() {
     'use strict';
@@ -16,7 +15,10 @@
         HIGH: { layers: 8, maxDist: 250 }
     };
 
-    // ─── GLSL ────────────────────────────────────────────────────
+    // Far tint extends 4× beyond shell range
+    const TINT_MULTIPLIER = 4.0;
+
+    // ─── GLSL: 3D Shell Shader ──────────────────────────────────
 
     const VERT = `
         uniform float uLayer;
@@ -34,10 +36,9 @@
             vUv = uv;
             vL  = uLayer / max(uLayers, 1.0);
 
-            // Displace along surface normal
             vec3 p = position + normal * vL * uMaxHeight;
 
-            // Wind sway — stronger at top, two wave frequencies
+            // Wind sway
             float sway = vL * vL * uWindStr * 0.6;
             float w1 = sin(uTime * 1.4 + p.x * 0.06 + p.y * 0.04);
             float w2 = sin(uTime * 2.1 + p.y * 0.09 + p.x * 0.03);
@@ -61,7 +62,6 @@
         varying float vL;
         varying vec3  vWorldPos;
 
-        // ── Smooth value noise (no cell boundaries) ──
         float hash(vec2 p) {
             return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
@@ -75,7 +75,6 @@
                 f.y
             );
         }
-        // Fractal Brownian Motion — organic, continuous noise
         float fbm(vec2 p) {
             return 0.45 * vnoise(p) +
                    0.30 * vnoise(p * 2.5) +
@@ -84,7 +83,6 @@
         }
 
         void main() {
-            // ── Biome detection ──
             vec3 bio = texture2D(uBiome, vUv).rgb;
             vec3 dR = abs(bio - uRoughCol);
             vec3 dD = abs(bio - uDeepCol);
@@ -96,53 +94,85 @@
             float roughness = max(isRough, isDeep);
             if (roughness < 0.1) discard;
 
-            // ── Layer height scaling ──
             float targetH = isDeep > 0.5 ? uDeepH : uRoughH;
             float eL = vL * (uMaxHeight / max(targetH, 0.001));
             if (eL > 1.0) discard;
 
-            // ── GRASS PATTERN via smooth FBM ──
             vec2 wXZ = vWorldPos.xz;
-
-            // Large-scale clumping (some areas thicker, some thinner)
             float clump = fbm(wXZ * 0.8);
-
-            // Medium detail (individual tuft shapes)
             float tuft = fbm(wXZ * 4.0 + 50.0);
-
-            // Fine blade detail (sharp tips)
             float blade = vnoise(wXZ * 15.0 + 100.0);
-
-            // Combined grass density
             float grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
 
-            // THRESHOLD: increases with layer height
-            // Bottom layers: low threshold → dense (most passes)
-            // Top layers:    high threshold → sparse (only peaks pass = blade tips)
             float threshold = eL * eL * 0.65;
-
-            // At very top layers, only the strongest noise peaks survive
-            // → creates jagged blade-tip silhouettes
             if (grass < threshold) discard;
 
-            // Edge fade: thin the grass at biome boundaries
             float edgeThreshold = threshold + (1.0 - roughness) * 0.3;
             if (grass < edgeThreshold) discard;
 
-            // ── COLOR ──
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
-
-            // Ambient occlusion: base is darker (shadowed by grass above)
             float ao = mix(0.55, 1.0, eL);
             vec3 col = baseCol * ao;
-
-            // Tip highlight: brighter, slightly warmer
             col += vec3(0.04, 0.05, 0.01) * eL;
-
-            // Per-area variation
             col *= 0.88 + 0.24 * clump;
 
             gl_FragColor = vec4(col, 1.0);
+        }
+    `;
+
+    // ─── GLSL: Distant Tint Shader (flat, transparent) ──────────
+
+    const TINT_VERT = `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+
+    const TINT_FRAG = `
+        uniform sampler2D uBiome;
+        uniform vec3  uRoughCol;
+        uniform vec3  uDeepCol;
+
+        varying vec2 vUv;
+
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float vnoise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            return mix(
+                mix(hash(i), hash(i + vec2(1,0)), f.x),
+                mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x),
+                f.y
+            );
+        }
+
+        void main() {
+            vec3 bio = texture2D(uBiome, vUv).rgb;
+            vec3 dR = abs(bio - uRoughCol);
+            vec3 dD = abs(bio - uDeepCol);
+            float distR = max(dR.r, max(dR.g, dR.b));
+            float distD = max(dD.r, max(dD.g, dD.b));
+
+            float isRough = 1.0 - smoothstep(0.02, 0.07, distR);
+            float isDeep  = 1.0 - smoothstep(0.02, 0.07, distD);
+            float roughness = max(isRough, isDeep);
+            if (roughness < 0.1) discard;
+
+            vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
+
+            // Subtle darkening + slight noise variation
+            float n = vnoise(vUv * 200.0);
+            vec3 col = baseCol * (0.60 + 0.15 * n);
+
+            // Deep rough even darker
+            if (isDeep > 0.5) col *= 0.85;
+
+            gl_FragColor = vec4(col, 0.35 * roughness);
         }
     `;
 
@@ -154,12 +184,11 @@
             this.scene = scene;
             this.biomeTex = biomeTex;
             this.quality = 'OFF';
-            this.shells = [];
+            this.shells = [];   // { chunkIdx, layer, mesh, mat, isTint }
             this._frame = 0;
 
-            // Tall enough to be VISIBLE from camera distance
-            this.roughHeight = 0.30;   // 30cm
-            this.deepHeight  = 0.60;   // 60cm
+            this.roughHeight = 0.30;
+            this.deepHeight  = 0.60;
 
             this._roughCol = new THREE.Vector3();
             this._deepCol  = new THREE.Vector3();
@@ -176,7 +205,11 @@
 
         update(time, camera) {
             if (this.shells.length === 0) return;
-            for (let s of this.shells) s.mat.uniforms.uTime.value = time;
+
+            // Animate wind (skip tint layers — no wind uniform)
+            for (let s of this.shells) {
+                if (!s.isTint) s.mat.uniforms.uTime.value = time;
+            }
 
             if (++this._frame % 20 !== 0) return;
             if (!camera) return;
@@ -187,23 +220,36 @@
             let size = window.TERRAIN_SIZE, segs = window.TERRAIN_SEGS;
             let half = size / 2, step = size / segs;
             let chunks = this.chunkMgr.chunks;
+            let tintMax = preset.maxDist * TINT_MULTIPLIER;
 
             for (let s of this.shells) {
                 let c = chunks[s.chunkIdx];
                 if (!c) { s.mesh.visible = false; continue; }
+
                 let cx = -half + ((c.gxStart + c.gxEnd) * 0.5) * step;
                 let cz = -half + ((c.gzStart + c.gzEnd) * 0.5) * step;
                 let dx = camera.position.x - cx, dz = camera.position.z - cz;
                 let dist = Math.sqrt(dx * dx + dz * dz);
-                s.mesh.visible = dist < preset.maxDist;
+
+                if (s.isTint) {
+                    // Tint: visible BEYOND shell range, up to tintMax
+                    s.mesh.visible = dist > preset.maxDist * 0.7 && dist < tintMax;
+                } else {
+                    // 3D shells: visible within shell range
+                    s.mesh.visible = dist < preset.maxDist;
+                }
+
                 if (s.mesh.geometry !== c.geo) s.mesh.geometry = c.geo;
             }
 
+            // Sync wind (3D shells only)
             let ws = (window.windSpeed || 0) / 30;
             let wa = (window.windAngle || 0) * Math.PI / 180;
             for (let s of this.shells) {
-                s.mat.uniforms.uWindStr.value = ws;
-                s.mat.uniforms.uWindDir.value.set(Math.cos(wa), Math.sin(wa));
+                if (!s.isTint) {
+                    s.mat.uniforms.uWindStr.value = ws;
+                    s.mat.uniforms.uWindDir.value.set(Math.cos(wa), Math.sin(wa));
+                }
             }
         }
 
@@ -223,6 +269,8 @@
             return { total, visible, extraTris: tris };
         }
 
+        // ── Internal ────────────────────────────────────────────
+
         _rebuild() {
             for (let s of this.shells) {
                 if (s.mesh.parent) this.scene.remove(s.mesh);
@@ -238,6 +286,17 @@
             let chunks = this.chunkMgr.chunks;
 
             for (let ci = 0; ci < chunks.length; ci++) {
+                // ── Tint layer (flat, transparent, far range) ──
+                let tintMat = this._makeTintMat();
+                let tintMesh = new THREE.Mesh(chunks[ci].geo, tintMat);
+                tintMesh.rotation.x = -Math.PI / 2;
+                tintMesh.frustumCulled = true;
+                tintMesh.visible = false;
+                tintMesh.renderOrder = 99;
+                this.scene.add(tintMesh);
+                this.shells.push({ chunkIdx: ci, layer: 0, mesh: tintMesh, mat: tintMat, isTint: true });
+
+                // ── 3D shell layers (opaque, discard, near range) ──
                 for (let layer = 1; layer <= preset.layers; layer++) {
                     let mat = this._makeMat(layer, preset.layers, maxH);
                     let mesh = new THREE.Mesh(chunks[ci].geo, mat);
@@ -246,10 +305,11 @@
                     mesh.visible = false;
                     mesh.renderOrder = 100 + layer;
                     this.scene.add(mesh);
-                    this.shells.push({ chunkIdx: ci, layer, mesh, mat });
+                    this.shells.push({ chunkIdx: ci, layer, mesh, mat, isTint: false });
                 }
             }
-            console.log('[Shells] Built', this.shells.length, 'shell meshes');
+            console.log('[Shells] Built', this.shells.length, 'meshes (' +
+                chunks.length + ' tint + ' + (this.shells.length - chunks.length) + ' 3D)');
         }
 
         _makeMat(layer, total, maxH) {
@@ -270,6 +330,22 @@
                 vertexShader: VERT,
                 fragmentShader: FRAG,
                 side: THREE.DoubleSide,
+                depthWrite: false,
+                depthTest: true
+            });
+        }
+
+        _makeTintMat() {
+            return new THREE.ShaderMaterial({
+                uniforms: {
+                    uBiome:    { value: this.biomeTex },
+                    uRoughCol: { value: this._roughCol.clone() },
+                    uDeepCol:  { value: this._deepCol.clone() }
+                },
+                vertexShader: TINT_VERT,
+                fragmentShader: TINT_FRAG,
+                side: THREE.FrontSide,
+                transparent: true,
                 depthWrite: false,
                 depthTest: true
             });
