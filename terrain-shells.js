@@ -135,62 +135,6 @@
         }
     `;
 
-    // ─── GLSL: Distant Tint Shader (flat, transparent) ──────────
-
-    const TINT_VERT = `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `;
-
-    const TINT_FRAG = `
-        uniform sampler2D uBiome;
-        uniform vec3  uRoughCol;
-        uniform vec3  uDeepCol;
-
-        varying vec2 vUv;
-
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-        }
-        float vnoise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            f = f * f * (3.0 - 2.0 * f);
-            return mix(
-                mix(hash(i), hash(i + vec2(1,0)), f.x),
-                mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x),
-                f.y
-            );
-        }
-
-        void main() {
-            vec3 bio = texture2D(uBiome, vUv).rgb;
-            vec3 dR = abs(bio - uRoughCol);
-            vec3 dD = abs(bio - uDeepCol);
-            float distR = max(dR.r, max(dR.g, dR.b));
-            float distD = max(dD.r, max(dD.g, dD.b));
-
-            float isRough = 1.0 - smoothstep(0.02, 0.07, distR);
-            float isDeep  = 1.0 - smoothstep(0.02, 0.07, distD);
-            float roughness = max(isRough, isDeep);
-            if (roughness < 0.1) discard;
-
-            vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
-
-            // Ground under grass — natural darkness
-            float n = vnoise(vUv * 200.0);
-            vec3 col = baseCol * (0.65 + 0.15 * n);
-
-            // Deep rough slightly darker
-            if (isDeep > 0.5) col *= 0.90;
-
-            gl_FragColor = vec4(col, 0.15 * roughness);
-        }
-    `;
-
     // ─── Manager ─────────────────────────────────────────────────
 
     class TerrainShellManager {
@@ -200,7 +144,7 @@
             this.scene = scene;
             this.biomeTex = biomeTex;
             this.quality = 'OFF';
-            this.shells = [];   // { layer, mesh, mat, isTint }
+            this.shells = [];   // { layer, mesh, mat }
             this._frame = 0;
 
             this.roughHeight = 0.30;
@@ -224,7 +168,7 @@
 
             // Animate wind
             for (let s of this.shells) {
-                if (!s.isTint) s.mat.uniforms.uTime.value = time;
+                s.mat.uniforms.uTime.value = time;
             }
         }
 
@@ -240,10 +184,8 @@
             let ws = (window.windSpeed || 0) / 30;
             let wa = (window.windAngle || 0) * Math.PI / 180;
             for (let s of this.shells) {
-                if (!s.isTint) {
-                    s.mat.uniforms.uWindStr.value = ws;
-                    s.mat.uniforms.uWindDir.value.set(Math.cos(wa), Math.sin(wa));
-                }
+                s.mat.uniforms.uWindStr.value = ws;
+                s.mat.uniforms.uWindDir.value.set(Math.cos(wa), Math.sin(wa));
             }
         }
 
@@ -287,16 +229,6 @@
             let maxH = Math.max(this.roughHeight, this.deepHeight);
             let geo = this.masterGeo;
 
-            // ── 1 Tint layer (flat, transparent) ──
-            let tintMat = this._makeTintMat();
-            let tintMesh = new THREE.Mesh(geo, tintMat);
-            tintMesh.rotation.x = -Math.PI / 2;
-            tintMesh.frustumCulled = true;
-            tintMesh.visible = true;
-            tintMesh.renderOrder = 99;
-            this.scene.add(tintMesh);
-            this.shells.push({ layer: 0, mesh: tintMesh, mat: tintMat, isTint: true });
-
             // ── N 3D shell layers (opaque, discard) ──
             for (let layer = 1; layer <= preset.layers; layer++) {
                 let mat = this._makeMat(layer, preset.layers, maxH);
@@ -306,10 +238,10 @@
                 mesh.visible = true;
                 mesh.renderOrder = 100 + layer;
                 this.scene.add(mesh);
-                this.shells.push({ layer, mesh, mat, isTint: false });
+                this.shells.push({ layer, mesh, mat });
             }
             console.log('[Shells] Built', this.shells.length,
-                'meshes (1 tint + ' + preset.layers + ' 3D) on master geo');
+                'meshes (' + preset.layers + ' 3D layers) on master geo');
         }
 
         _makeMat(layer, total, maxH) {
@@ -335,23 +267,6 @@
             });
         }
 
-        _makeTintMat() {
-            return new THREE.ShaderMaterial({
-                uniforms: {
-                    uBiome:    { value: this.biomeTex },
-                    uRoughCol: { value: this._roughCol.clone() },
-                    uDeepCol:  { value: this._deepCol.clone() }
-                },
-                vertexShader: TINT_VERT,
-                fragmentShader: TINT_FRAG,
-                side: THREE.FrontSide,
-                transparent: true,
-                depthWrite: false,
-                depthTest: true,
-                polygonOffset: true,
-                polygonOffsetFactor: -4,
-                polygonOffsetUnits: -4
-            });
         }
 
         _updateColors() {
