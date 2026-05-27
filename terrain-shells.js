@@ -214,6 +214,12 @@
         update(time, camera) {
             if (this.shells.length === 0) return;
 
+            // Don't show shells when chunks are disabled
+            if (!window._chunksEnabled) {
+                for (let s of this.shells) s.mesh.visible = false;
+                return;
+            }
+
             // Animate wind (skip tint layers — no wind uniform)
             for (let s of this.shells) {
                 if (!s.isTint) s.mat.uniforms.uTime.value = time;
