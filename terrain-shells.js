@@ -148,8 +148,8 @@
                 tipBright = 0.20;
             } else {
                 baseCol = uForeCol;
-                targetH = uRoughH * 0.35;
-                tipBright = 0.15;
+                targetH = uRoughH * 0.50;
+                tipBright = 0.05;
             }
 
             // Height-proportional layer culling with soft fade
