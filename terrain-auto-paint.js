@@ -266,9 +266,6 @@
                     const hmFz = v * (HM_SIZE - 1);
                     const hmX = Math.round(hmFx);
                     const hmZ = Math.round(hmFz);
-                    const hmIdx = hmZ * HM_SIZE + hmX;
-                    if (!mountainMask[hmIdx]) continue; // not on this mountain
-                    if (protectPixel) continue; // Protect bunker inside the mountain area!
                     
                     // Feather: check neighbors to detect edge pixels
                     let neighbors = 0;
@@ -283,6 +280,9 @@
                             }
                         }
                     }
+                    if (neighbors === 0) continue; // not on or near this mountain
+                    if (protectPixel) continue; // Protect bunker inside the mountain area!
+                    
                     maskBlend = neighbors / total; // 0.0–1.0, soft at edges
                 } else if (protectPixel) {
                     continue;
