@@ -14,8 +14,8 @@
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
         LOW:  { layers: 2, maxDist: 60 },
-        MED:  { layers: 3, maxDist: 120 },
-        HIGH: { layers: 5, maxDist: 250 }
+        MED:  { layers: 4, maxDist: 120 },
+        HIGH: { layers: 6, maxDist: 250 }
     };
 
     // ─── GLSL Shaders ───────────────────────────────────────────
@@ -30,21 +30,23 @@
 
         varying vec2 vUv;
         varying float vL; // layer ratio 0..1
+        varying vec3 vWorldPos;
 
         void main() {
             vUv = uv;
-            vL  = uLayer / max(uLayers - 1.0, 1.0);
+            vL  = uLayer / max(uLayers, 1.0);
 
             vec3 p = position + normal * vL * uMaxHeight;
 
             // Wind: quadratic with height, two overlapping waves
-            float w = vL * vL * uWindStr * 0.5;
+            float w = vL * vL * uWindStr * 0.4;
             float w1 = sin(uTime * 1.5 + p.x * 0.08 + p.y * 0.06);
             float w2 = sin(uTime * 2.3 + p.y * 0.10 + p.x * 0.04);
             float wave = w1 * 0.6 + w2 * 0.4;
             p.x += uWindDir.x * w * wave;
             p.y -= uWindDir.y * w * wave;
 
+            vWorldPos = (modelMatrix * vec4(p, 1.0)).xyz;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
     `;
@@ -59,52 +61,70 @@
 
         varying vec2  vUv;
         varying float vL;
+        varying vec3  vWorldPos;
 
+        // Two different hash functions for variety
         float hash(vec2 p) {
             return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float hash2(vec2 p) {
+            return fract(sin(dot(p, vec2(269.5, 183.3))) * 29758.1731);
         }
 
         void main() {
             // Sample biome color
             vec3 bio = texture2D(uBiome, vUv).rgb;
 
-            // Distance to rough / deep rough colors
-            float dR = distance(bio, uRoughCol);
-            float dD = distance(bio, uDeepCol);
+            // --- Biome detection (sRGB space in ShaderMaterial) ---
+            // Check distance to rough and deep rough colors
+            // Use per-channel comparison for robustness
+            vec3 diffR = abs(bio - uRoughCol);
+            vec3 diffD = abs(bio - uDeepCol);
+            float dR = max(diffR.r, max(diffR.g, diffR.b)); // max-channel distance
+            float dD = max(diffD.r, max(diffD.g, diffD.b));
 
-            float isRough = 1.0 - smoothstep(0.06, 0.16, dR);
-            float isDeep  = 1.0 - smoothstep(0.06, 0.16, dD);
+            float isRough = 1.0 - smoothstep(0.03, 0.08, dR);
+            float isDeep  = 1.0 - smoothstep(0.03, 0.08, dD);
             float any     = max(isRough, isDeep);
 
-            // Discard non-rough pixels
-            if (any < 0.25) discard;
+            // Hard discard for non-rough areas
+            if (any < 0.1) discard;
 
-            // Scale layer ratio by actual height ratio
-            // (deep rough shells extend higher than rough)
+            // Scale layer: deep rough grows taller than rough
             float targetH = isDeep > 0.5 ? uDeepH : uRoughH;
             float effectiveL = vL * (uMaxHeight / max(targetH, 0.01));
-            if (effectiveL > 1.0) discard; // Above this biome's grass height
+            if (effectiveL > 1.05) discard;
 
-            // Grass blade pattern — hash per cell
-            vec2 cell = floor(vUv * 500.0);
-            float h = hash(cell);
+            // --- Procedural grass pattern ---
+            // Use WORLD position for consistent scale regardless of UV mapping
+            // 1 cell ≈ 0.5m world space → realistic grass blade density
+            vec2 worldXZ = vWorldPos.xz;
+            float grassScale = 2.0; // cells per meter
+            vec2 cell = floor(worldXZ * grassScale);
+            float h1 = hash(cell);
+            float h2 = hash2(cell);
 
-            // Sparser at top layers (quadratic falloff)
-            float threshold = vL * vL;
-            if (h < threshold) discard;
+            // Multi-octave density: finer noise layered on top
+            vec2 fineCell = floor(worldXZ * grassScale * 3.0);
+            float h3 = hash(fineCell);
 
-            // Sub-cell shape: only center of cell is grass
-            vec2 inCell = fract(vUv * 500.0) - 0.5;
-            float r = length(inCell * vec2(1.0, 1.8)); // elongated blades
-            if (r > 0.38 - vL * 0.15) discard;
+            // Base density: 85% coverage at ground, thinning to ~5% at tips
+            float density = mix(0.85, 0.05, effectiveL * effectiveL);
+            float bladeRand = h1 * 0.6 + h3 * 0.4;
+            if (bladeRand > density) discard;
 
-            // Color: darker at base (AO), lighter tips
+            // --- Color ---
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
-            float brightness = mix(0.45, 1.25, vL);
+
+            // Height-based coloring: slightly darker base, brighter tips
+            float brightness = mix(0.7, 1.15, effectiveL);
             vec3 col = baseCol * brightness;
 
-            // Slight color variation per blade
-            col *= 0.9 + 0.2 * hash(cell + 99.0);
+            // Per-blade color variation (subtle)
+            col *= 0.88 + 0.24 * h2;
+
+            // Warm tip highlight on top layers
+            col += vec3(0.015, 0.02, 0.0) * effectiveL;
 
             gl_FragColor = vec4(col, 1.0);
         }
