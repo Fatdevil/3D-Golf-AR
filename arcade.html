@@ -5606,6 +5606,7 @@
     const gridGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 2, 2);
     const gridPlane = new THREE.Mesh(gridGeo, gridMat);
     gridPlane.rotation.x = -Math.PI / 2;
+    gridPlane.visible = !window._chunksEnabled;  // Hide when chunks active
     scene.add(gridPlane);
     window._gridPlane = gridPlane;
 
