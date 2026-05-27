@@ -118,9 +118,10 @@
             float edgeThreshold = threshold + (1.0 - roughness) * 0.15;
             if (grass < edgeThreshold) discard;
 
-            float ao = mix(0.55, 1.0, eL);
+            // Brighter AO: bottom layers not too dark, tops vivid
+            float ao = mix(0.75, 1.05, eL);
             vec3 col = baseCol * ao;
-            col += vec3(0.04, 0.05, 0.01) * eL;
+            col += vec3(0.06, 0.08, 0.02) * eL; // Green highlight at tips
 
             float colorVar = vnoise(vUv * 80.0 + 33.0);
             col *= 0.95 + 0.10 * colorVar;
@@ -174,14 +175,14 @@
 
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
 
-            // Dark ground under grass — catches see-through
+            // Ground under grass — moderately dark, not pitch black
             float n = vnoise(vUv * 200.0);
-            vec3 col = baseCol * (0.35 + 0.10 * n);
+            vec3 col = baseCol * (0.55 + 0.15 * n);
 
-            // Deep rough even darker
-            if (isDeep > 0.5) col *= 0.80;
+            // Deep rough slightly darker
+            if (isDeep > 0.5) col *= 0.90;
 
-            gl_FragColor = vec4(col, 0.85 * roughness);
+            gl_FragColor = vec4(col, 0.80 * roughness);
         }
     `;
 
