@@ -99,9 +99,9 @@
 
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
 
-            // Bottom 30%: solid fill — prevents see-through at boundaries
-            if (vL < 0.3) {
-                float ao = mix(0.45, 0.65, vL / 0.3);
+            // Bottom 55%: solid fill — prevents see-through from side angles
+            if (vL < 0.55) {
+                float ao = mix(0.40, 0.70, vL / 0.55);
                 vec3 col = baseCol * ao;
                 float colorVar = vnoise(vUv * 80.0 + 33.0);
                 col *= 0.95 + 0.10 * colorVar;
@@ -109,10 +109,13 @@
                 return;
             }
 
-            // Upper 70%: FBM grass silhouettes
+            // Upper 45%: FBM grass silhouettes (denser pattern)
             float targetH = isDeep > 0.5 ? uDeepH : uRoughH;
             float eL = vL * (uMaxHeight / max(targetH, 0.001));
             if (eL > 1.0) discard;
+
+            // Remap eL for the visible FBM range (0.55 → 1.0 becomes 0 → 1)
+            float topL = (vL - 0.55) / 0.45;
 
             vec2 wXZ = vWorldPos.xz;
             float clump = fbm(wXZ * 0.8);
@@ -120,10 +123,11 @@
             float blade = vnoise(wXZ * 15.0 + 100.0);
             float grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
 
-            float threshold = eL * eL * 0.65;
+            // Much lower threshold = denser grass, fewer holes
+            float threshold = topL * topL * 0.35;
             if (grass < threshold) discard;
 
-            float edgeThreshold = threshold + (1.0 - roughness) * 0.3;
+            float edgeThreshold = threshold + (1.0 - roughness) * 0.2;
             if (grass < edgeThreshold) discard;
 
             float ao = mix(0.55, 1.0, eL);
