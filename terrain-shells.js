@@ -1,21 +1,18 @@
 // ================================================================
-//  TERRAIN SHELL MANAGER — Volumetric grass for rough/deep rough
+//  TERRAIN SHELL MANAGER v3 — Volumetric grass for rough/deep rough
 //
-//  Renders terrain chunks multiple times at increasing heights
-//  with a procedural grass pattern. Biome texture determines where
-//  grass appears (rough/deep rough colors).
-//
-//  Quality presets control layer count and max distance.
-//  Wind animation syncs with game wind system.
+//  Uses alpha-blended shell layers instead of discard for smooth,
+//  natural-looking grass. World-space multi-octave noise creates
+//  organic density variation without blocky artifacts.
 // ================================================================
 (function() {
     'use strict';
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        LOW:  { layers: 2, maxDist: 60 },
-        MED:  { layers: 4, maxDist: 120 },
-        HIGH: { layers: 6, maxDist: 250 }
+        LOW:  { layers: 3, maxDist: 60 },
+        MED:  { layers: 5, maxDist: 120 },
+        HIGH: { layers: 8, maxDist: 250 }
     };
 
     // ─── GLSL Shaders ───────────────────────────────────────────
@@ -29,7 +26,7 @@
         uniform float uTime;
 
         varying vec2 vUv;
-        varying float vL; // layer ratio 0..1
+        varying float vL;
         varying vec3 vWorldPos;
 
         void main() {
@@ -38,11 +35,11 @@
 
             vec3 p = position + normal * vL * uMaxHeight;
 
-            // Wind: quadratic with height, two overlapping waves
-            float w = vL * vL * uWindStr * 0.4;
-            float w1 = sin(uTime * 1.5 + p.x * 0.08 + p.y * 0.06);
-            float w2 = sin(uTime * 2.3 + p.y * 0.10 + p.x * 0.04);
-            float wave = w1 * 0.6 + w2 * 0.4;
+            // Wind: quadratic sway, two overlapping sine waves
+            float w = vL * vL * uWindStr * 0.35;
+            float w1 = sin(uTime * 1.5 + p.x * 0.07 + p.y * 0.05);
+            float w2 = sin(uTime * 2.1 + p.y * 0.09 + p.x * 0.03);
+            float wave = w1 * 0.65 + w2 * 0.35;
             p.x += uWindDir.x * w * wave;
             p.y -= uWindDir.y * w * wave;
 
@@ -58,95 +55,118 @@
         uniform float uRoughH;
         uniform float uDeepH;
         uniform float uMaxHeight;
+        uniform float uLayer;
 
         varying vec2  vUv;
         varying float vL;
         varying vec3  vWorldPos;
 
-        // Two different hash functions for variety
+        // Smooth hash for organic noise
         float hash(vec2 p) {
             return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
-        float hash2(vec2 p) {
-            return fract(sin(dot(p, vec2(269.5, 183.3))) * 29758.1731);
+
+        // Smooth value noise (interpolated)
+        float vnoise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f); // smoothstep
+
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+
+        // Multi-octave smooth noise
+        float fbm(vec2 p) {
+            float v = 0.0;
+            v += 0.50 * vnoise(p * 1.0);
+            v += 0.25 * vnoise(p * 2.3);
+            v += 0.15 * vnoise(p * 5.7);
+            v += 0.10 * vnoise(p * 11.0);
+            return v;
         }
 
         void main() {
-            // Sample biome color
+            // --- Sample biome ---
             vec3 bio = texture2D(uBiome, vUv).rgb;
 
-            // --- Biome detection (sRGB space in ShaderMaterial) ---
-            // Check distance to rough and deep rough colors
-            // Use per-channel comparison for robustness
+            // Biome detection: max-channel distance
             vec3 diffR = abs(bio - uRoughCol);
             vec3 diffD = abs(bio - uDeepCol);
-            float dR = max(diffR.r, max(diffR.g, diffR.b)); // max-channel distance
+            float dR = max(diffR.r, max(diffR.g, diffR.b));
             float dD = max(diffD.r, max(diffD.g, diffD.b));
 
-            float isRough = 1.0 - smoothstep(0.03, 0.08, dR);
-            float isDeep  = 1.0 - smoothstep(0.03, 0.08, dD);
-            float any     = max(isRough, isDeep);
+            float isRough = 1.0 - smoothstep(0.02, 0.07, dR);
+            float isDeep  = 1.0 - smoothstep(0.02, 0.07, dD);
+            float roughness = max(isRough, isDeep);
 
-            // Hard discard for non-rough areas
-            if (any < 0.1) discard;
+            // Hard discard where definitely not rough
+            if (roughness < 0.01) discard;
 
-            // Scale layer: deep rough grows taller than rough
+            // Height scaling per biome type
             float targetH = isDeep > 0.5 ? uDeepH : uRoughH;
-            float effectiveL = vL * (uMaxHeight / max(targetH, 0.01));
-            if (effectiveL > 1.05) discard;
+            float eL = vL * (uMaxHeight / max(targetH, 0.001));
+            if (eL > 1.0) discard;
 
-            // --- Procedural grass pattern ---
-            // Use WORLD position for consistent scale regardless of UV mapping
-            // 1 cell ≈ 0.5m world space → realistic grass blade density
-            vec2 worldXZ = vWorldPos.xz;
-            float grassScale = 2.0; // cells per meter
-            vec2 cell = floor(worldXZ * grassScale);
-            float h1 = hash(cell);
-            float h2 = hash2(cell);
+            // --- Organic grass density via smooth noise ---
+            vec2 wXZ = vWorldPos.xz;
 
-            // Multi-octave density: finer noise layered on top
-            vec2 fineCell = floor(worldXZ * grassScale * 3.0);
-            float h3 = hash(fineCell);
+            // Multi-scale noise for natural clumping
+            float density = fbm(wXZ * 1.5);              // large clumps ~2m
+            float detail  = vnoise(wXZ * 8.0);            // fine variation ~12cm
+            float micro   = vnoise(wXZ * 25.0 + 73.0);   // micro texture ~4cm
 
-            // Base density: 85% coverage at ground, thinning to ~5% at tips
-            float density = mix(0.85, 0.05, effectiveL * effectiveL);
-            float bladeRand = h1 * 0.6 + h3 * 0.4;
-            if (bladeRand > density) discard;
+            float grassDensity = density * 0.5 + detail * 0.3 + micro * 0.2;
+
+            // Layer-based opacity: dense base → transparent tips
+            float layerFade = 1.0 - eL * eL;  // quadratic falloff
+
+            // Final alpha: smooth and organic
+            float alpha = layerFade * (0.3 + 0.7 * grassDensity) * roughness;
+
+            // Bottom layers more opaque for ground coverage
+            if (uLayer <= 1.0) alpha = roughness * 0.6;
 
             // --- Color ---
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
 
-            // Height-based coloring: slightly darker base, brighter tips
-            float brightness = mix(0.7, 1.15, effectiveL);
+            // Height gradient: slightly darker base (AO), warmer/brighter tips
+            float brightness = mix(0.80, 1.15, eL);
             vec3 col = baseCol * brightness;
 
-            // Per-blade color variation (subtle)
-            col *= 0.88 + 0.24 * h2;
+            // Subtle per-area color variation
+            float colorVar = vnoise(wXZ * 0.5 + 200.0);
+            col *= 0.90 + 0.20 * colorVar;
 
-            // Warm tip highlight on top layers
-            col += vec3(0.015, 0.02, 0.0) * effectiveL;
+            // Warm yellow-green tips in sunlight
+            col += vec3(0.015, 0.02, -0.005) * eL;
 
-            gl_FragColor = vec4(col, 1.0);
+            // Edge softening: fade near biome boundaries
+            float edgeFade = smoothstep(0.01, 0.06, roughness);
+            alpha *= edgeFade;
+
+            // Clamp
+            alpha = clamp(alpha, 0.0, 0.95);
+
+            gl_FragColor = vec4(col, alpha);
         }
     `;
 
     // ─── Manager Class ──────────────────────────────────────────
 
     class TerrainShellManager {
-        /**
-         * @param {TerrainChunkManager} chunkMgr
-         * @param {THREE.Scene} scene
-         * @param {THREE.Texture} biomeTex — canvas terrain texture
-         */
         constructor(chunkMgr, scene, biomeTex) {
             this.chunkMgr = chunkMgr;
             this.scene = scene;
             this.biomeTex = biomeTex;
             this.quality = 'OFF';
-            this.shells = [];       // { chunkIdx, layer, mesh, mat }
+            this.shells = [];
             this._frame = 0;
 
-            // Heights (meters)
             this.roughHeight = 0.08;   // 8cm
             this.deepHeight  = 0.22;   // 22cm
 
@@ -154,8 +174,6 @@
             this._deepCol  = new THREE.Vector3();
             this._updateColors();
         }
-
-        // ── Public API ──────────────────────────────────────────
 
         setQuality(q) {
             if (this.quality === q) return;
@@ -165,11 +183,10 @@
                 q !== 'OFF' ? '(' + QUALITY[q].layers + ' layers, ' + QUALITY[q].maxDist + 'm)' : '');
         }
 
-        /** Call every frame */
         update(time, camera) {
             if (this.shells.length === 0) return;
 
-            // Update time uniform (every frame for smooth wind)
+            // Animate wind every frame
             for (let s of this.shells) s.mat.uniforms.uTime.value = time;
 
             // Distance visibility (throttled)
@@ -187,7 +204,6 @@
                 let c = chunks[s.chunkIdx];
                 if (!c) { s.mesh.visible = false; continue; }
 
-                // Chunk center
                 let cx = -half + ((c.gxStart + c.gxEnd) * 0.5) * step;
                 let cz = -half + ((c.gzStart + c.gzEnd) * 0.5) * step;
                 let dx = camera.position.x - cx, dz = camera.position.z - cz;
@@ -195,34 +211,27 @@
 
                 s.mesh.visible = dist < preset.maxDist;
 
-                // Re-link geometry if chunk was rebuilt (LOD change)
                 if (s.mesh.geometry !== c.geo) s.mesh.geometry = c.geo;
             }
 
-            // Sync wind from game
-            let ws = (window.windSpeed || 0) / 30;   // normalize 0-1
+            // Sync wind
+            let ws = (window.windSpeed || 0) / 30;
             let wa = (window.windAngle || 0) * Math.PI / 180;
-            let wdx = Math.cos(wa), wdy = Math.sin(wa);
             for (let s of this.shells) {
                 s.mat.uniforms.uWindStr.value = ws;
-                s.mat.uniforms.uWindDir.value.set(wdx, wdy);
+                s.mat.uniforms.uWindDir.value.set(Math.cos(wa), Math.sin(wa));
             }
         }
 
-        /** Rebuild after biome paint changes */
         refresh() { this._rebuild(); }
 
-        /** Get current extra tris from shells */
         getStats() {
-            let visible = 0, total = 0;
+            let visible = 0, total = 0, tris = 0;
+            let chunks = this.chunkMgr.chunks;
             for (let s of this.shells) {
                 total++;
-                if (s.mesh.visible) visible++;
-            }
-            let chunks = this.chunkMgr.chunks;
-            let tris = 0;
-            for (let s of this.shells) {
                 if (s.mesh.visible) {
+                    visible++;
                     let c = chunks[s.chunkIdx];
                     if (c) tris += c.lodSegs * c.lodSegs * 2;
                 }
@@ -233,7 +242,6 @@
         // ── Internal ────────────────────────────────────────────
 
         _rebuild() {
-            // Remove old
             for (let s of this.shells) {
                 if (s.mesh.parent) this.scene.remove(s.mesh);
                 s.mat.dispose();
@@ -248,7 +256,7 @@
             let chunks = this.chunkMgr.chunks;
 
             for (let ci = 0; ci < chunks.length; ci++) {
-                for (let layer = 1; layer <= preset.layers; layer++) {
+                for (let layer = 0; layer < preset.layers; layer++) {
                     let mat = this._makeMat(layer, preset.layers, maxH);
                     let mesh = new THREE.Mesh(chunks[ci].geo, mat);
                     mesh.rotation.x = -Math.PI / 2;
@@ -281,20 +289,16 @@
                 vertexShader: VERT,
                 fragmentShader: FRAG,
                 side: THREE.FrontSide,
+                transparent: true,
                 depthWrite: false,
-                depthTest: true,
-                polygonOffset: true,
-                polygonOffsetFactor: -layer * 2,
-                polygonOffsetUnits: -layer * 2
+                depthTest: true
             });
         }
 
         _updateColors() {
             let cfg = window.CURRENT_BIOME_CONFIG || {};
-            let rh = cfg.roughColor || '#4a782b';
-            let dh = cfg.fescueColor || '#2d4c1a';
-            this._hexToVec(rh, this._roughCol);
-            this._hexToVec(dh, this._deepCol);
+            this._hexToVec(cfg.roughColor || '#4a782b', this._roughCol);
+            this._hexToVec(cfg.fescueColor || '#2d4c1a', this._deepCol);
         }
 
         _hexToVec(hex, v) {
