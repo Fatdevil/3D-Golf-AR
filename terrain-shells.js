@@ -284,13 +284,16 @@
                 s.mat.uniforms.uDirColor.value.set(dirR, dirG, dirB);
                 s.mat.uniforms.uAmbColor.value.set(ambR, ambG, ambB);
 
-                // Mobile play-mode optimization: reduce maxDist to save fillrate
-                if (_isMobile && window.terrainShaderUniforms && window.terrainShaderUniforms.uPlayMode.value > 0.5) {
-                    let preset = QUALITY[this.quality];
-                    s.mat.uniforms.uMaxDist.value = preset ? preset.maxDist * 0.6 : s.mat.uniforms.uMaxDist.value;
+                // Dynamic maxDist: desktop build=unlimited, mobile play=reduced
+                let isPlayMode = window.terrainShaderUniforms && window.terrainShaderUniforms.uPlayMode.value > 0.5;
+                let preset = QUALITY[this.quality];
+                if (!preset) continue;
+                if (_isMobile && isPlayMode) {
+                    s.mat.uniforms.uMaxDist.value = preset.maxDist * 0.6;
+                } else if (!_isMobile && !isPlayMode) {
+                    s.mat.uniforms.uMaxDist.value = 9999;  // Desktop build: no limit
                 } else {
-                    let preset = QUALITY[this.quality];
-                    if (preset) s.mat.uniforms.uMaxDist.value = preset.maxDist;
+                    s.mat.uniforms.uMaxDist.value = preset.maxDist;
                 }
             }
         }
