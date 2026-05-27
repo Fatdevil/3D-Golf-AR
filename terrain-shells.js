@@ -99,23 +99,10 @@
 
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
 
-            // Bottom 55%: solid fill — prevents see-through from side angles
-            if (vL < 0.55) {
-                float ao = mix(0.40, 0.70, vL / 0.55);
-                vec3 col = baseCol * ao;
-                float colorVar = vnoise(vUv * 80.0 + 33.0);
-                col *= 0.95 + 0.10 * colorVar;
-                gl_FragColor = vec4(col, 1.0);
-                return;
-            }
-
-            // Upper 45%: FBM grass silhouettes (denser pattern)
+            // All layers use FBM grass silhouettes (no solid fill)
             float targetH = isDeep > 0.5 ? uDeepH : uRoughH;
             float eL = vL * (uMaxHeight / max(targetH, 0.001));
             if (eL > 1.0) discard;
-
-            // Remap eL for the visible FBM range (0.55 → 1.0 becomes 0 → 1)
-            float topL = (vL - 0.55) / 0.45;
 
             vec2 wXZ = vWorldPos.xz;
             float clump = fbm(wXZ * 0.8);
@@ -123,11 +110,12 @@
             float blade = vnoise(wXZ * 15.0 + 100.0);
             float grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
 
-            // Much lower threshold = denser grass, fewer holes
-            float threshold = topL * topL * 0.35;
+            // Gentle threshold: bottom layers keep ~90% pixels, top ~60%
+            float threshold = eL * eL * 0.40;
             if (grass < threshold) discard;
 
-            float edgeThreshold = threshold + (1.0 - roughness) * 0.2;
+            // Softer edge fade at biome boundaries
+            float edgeThreshold = threshold + (1.0 - roughness) * 0.15;
             if (grass < edgeThreshold) discard;
 
             float ao = mix(0.55, 1.0, eL);
@@ -186,14 +174,14 @@
 
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
 
-            // Subtle darkening + slight noise variation
+            // Dark ground under grass — catches see-through
             float n = vnoise(vUv * 200.0);
-            vec3 col = baseCol * (0.60 + 0.15 * n);
+            vec3 col = baseCol * (0.35 + 0.10 * n);
 
             // Deep rough even darker
-            if (isDeep > 0.5) col *= 0.85;
+            if (isDeep > 0.5) col *= 0.80;
 
-            gl_FragColor = vec4(col, 0.35 * roughness);
+            gl_FragColor = vec4(col, 0.85 * roughness);
         }
     `;
 
