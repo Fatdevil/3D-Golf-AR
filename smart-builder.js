@@ -318,14 +318,15 @@ function updateSmartGreenPreview() {
     smartGreenSpheres = [];
     if(smartGreenLineMesh) { window._arcadeScene.remove(smartGreenLineMesh); smartGreenLineMesh = null; }
 
-    let sMat = new THREE.MeshBasicMaterial({ color: 0x4ade80 });
-    let sMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8 }); // Blue = start point
+    let sMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, depthTest: false });
+    let sMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8, depthTest: false }); // Blue = start point
     let sGeo = new THREE.SphereGeometry(0.4, 8, 8);
     let sGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
     smartGreenPoints.forEach((pt, idx) => {
         let s = new THREE.Mesh(idx === 0 ? sGeoFirst : sGeo, idx === 0 ? sMatFirst : sMat);
         s.position.copy(pt);
-        s.position.y += 0.5;
+        s.position.y += 1.5;
+        s.renderOrder = 999;
         window._arcadeScene.add(s);
         smartGreenSpheres.push(s);
     });
@@ -338,9 +339,10 @@ function updateSmartGreenPreview() {
         let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
         // Gold line when closed, green when open
         let lineColor = shouldClose ? 0xfbbf24 : 0x4ade80;
-        let lineMat = new THREE.LineBasicMaterial({ color: lineColor, linewidth: 3 });
+        let lineMat = new THREE.LineBasicMaterial({ color: lineColor, linewidth: 3, depthTest: false });
         smartGreenLineMesh = new THREE.Line(lineGeo, lineMat);
-        smartGreenLineMesh.position.y += 0.5;
+        smartGreenLineMesh.position.y += 1.5;
+        smartGreenLineMesh.renderOrder = 999;
         window._arcadeScene.add(smartGreenLineMesh);
     }
 
@@ -520,6 +522,7 @@ window.executeSmartBunker = function() {
     window._arcadePCtx.restore();
     window._arcadeMapTex.needsUpdate = true;
     window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
     // === 2. TERRAIN SCULPTING: Dig + Bowl + Lip ===
     let positions = window._arcadePlaneGeo.attributes.position.array;
@@ -829,6 +832,7 @@ window.executeSmartFairway = function() {
     window._arcadePCtx.restore();
     window._arcadeMapTex.needsUpdate = true;
     window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
     // === 2. TERRAIN SCULPTING: Rolling undulations ===
     // FLAT/NATURAL = paint only, preserve natural terrain contours
@@ -999,6 +1003,7 @@ window.executeSmartTee = function() {
     window._arcadePCtx.restore();
     window._arcadeMapTex.needsUpdate = true;
     window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
     // === 2. TERRAIN: Flat plateau (optionally raised) ===
     let positions = window._arcadePlaneGeo.attributes.position.array;
@@ -1525,6 +1530,7 @@ window.executeSplineSmartGreen = function() {
     window._arcadePCtx.restore();
     window._arcadeMapTex.needsUpdate = true;
     window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
     // === 2. TERRAIN SCULPTING: Flatten + Difficulty Contours ===
     let positions = window._arcadePlaneGeo.attributes.position.array;
@@ -2019,6 +2025,7 @@ window.executeSplineSmartGreen = function() {
         window._arcadePCtx.restore();
         window._arcadeMapTex.needsUpdate = true;
         window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
         // Show feedback toast
         let nameMap = {foregreen:'Foregreen', fairway:'Fairway', semi:'Semi-rough', rough:'Rough', fescue:'Deep Rough', green:'Green', bunker:'Sand', waste:'Waste', water:'Water', ob:'OB', custom:'Custom'};

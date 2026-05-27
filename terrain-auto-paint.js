@@ -92,12 +92,12 @@
 
     // ── Compute slope from heightmap at UV coordinate ────────────────────────
     function computeSlope(hm, hmSize, u, v, terrainSize) {
-        const step = 1.0 / hmSize;
+        const step = 3.0 / hmSize;
         const hL = sampleHM(hm, hmSize, Math.max(0, u - step), v);
         const hR = sampleHM(hm, hmSize, Math.min(1, u + step), v);
         const hU = sampleHM(hm, hmSize, u, Math.max(0, v - step));
         const hD = sampleHM(hm, hmSize, u, Math.min(1, v + step));
-        const worldStep = terrainSize / hmSize;
+        const worldStep = 3.0 * (terrainSize / hmSize);
         const dzdx = (hR - hL) / (2 * worldStep);
         const dzdy = (hD - hU) / (2 * worldStep);
         return Math.sqrt(dzdx * dzdx + dzdy * dzdy);
@@ -293,7 +293,7 @@
                 const slope  = computeSlope(hm, HM_SIZE, u, v, terrainSize);
 
                 // ── Noise-modulated thresholds (breaks up ring) ──────────────
-                const edgeNoise = fbm(cx * 0.2, cy * 0.2, 3, 2.0, 0.5);  // visible at mountain scale
+                const edgeNoise = fbm(cx * 0.02, cy * 0.02, 3, 2.0, 0.5);  // visible at mountain scale
                 const localDirt  = slopeDirt + edgeNoise * 0.22;  // ±0.22 = very ragged grass→rock edge
                 const localRock  = slopeRock + edgeNoise * 0.14;
                 const localCliff = slopeCliff + edgeNoise * 0.08;
@@ -384,6 +384,7 @@
                 window.terrainBiomeData = fresh;
             }
         }
+        if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
         // Update road base snapshot so roads survive after auto-paint
         if (window.roadSystem && typeof window.roadSystem.updateBaseAfterPaint === 'function') {
@@ -593,6 +594,7 @@
                 window.terrainBiomeData = fresh;
             }
         }
+        if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
         window._snowLayerActive = true;
         const ms = (performance.now() - t0).toFixed(0);
@@ -624,6 +626,7 @@
                 window.terrainBiomeData = fresh;
             }
         }
+        if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
         _preSnowSnapshot = null;
         window._snowLayerActive = false;

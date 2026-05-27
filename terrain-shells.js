@@ -1,21 +1,24 @@
 // ================================================================
-//  TERRAIN SHELL MANAGER v6 — Master-geometry based (no chunks)
+//  TERRAIN SHELL MANAGER v7 — Mask-texture based (no color matching)
 //
 //  Near:  Full 3D shell layers with FBM silhouettes (discard-based)
 //  Far:   Single flat tint layer darkens rough areas (alpha blend)
 //  Result: Rough looks different at ALL distances, 3D up close
 //
-//  v6: Shells render on the MASTER terrain mesh directly.
-//      No dependency on chunk system. Max 9 meshes total.
+//  v7: Uses separate rough mask texture instead of fragile color
+//      matching. Immune to noise, blending, and texture filtering.
+//      Shells render on the MASTER terrain mesh directly.
 // ================================================================
 (function() {
     'use strict';
 
+    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        LOW:  { layers: 3, maxDist: 60 },
-        MED:  { layers: 5, maxDist: 120 },
-        HIGH: { layers: 8, maxDist: 250 }
+        LOW:  { layers: 3, maxDist: _isMobile ? 40  : 60 },
+        MED:  { layers: 5, maxDist: _isMobile ? 80  : 120 },
+        HIGH: { layers: 8, maxDist: _isMobile ? 150 : 250 }
     };
 
     // ─── GLSL: 3D Shell Shader ──────────────────────────────────
@@ -31,44 +34,66 @@
         varying vec2 vUv;
         varying float vL;
         varying vec3 vWorldPos;
+        varying vec3 vWorldNormal;
+        varying float vSlope;
+        varying float vCamDist;
 
         void main() {
             vUv = uv;
             vL  = uLayer / max(uLayers, 1.0);
+            vSlope = 1.0 - abs(normal.z);
+            vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
 
             // Adaptive displacement:
             // Flat → world-up (clean from above)
             // Slopes → follow terrain normal (layers hidden from side)
             // Normal clamped to max ~60° to prevent spikes at bunker edges
             vec3 up = vec3(0.0, 0.0, 1.0);
-            vec3 clampedN = normalize(vec3(normal.xy * 0.5, max(normal.z, 0.5)));
+            vec3 clampedN = normalize(vec3(normal.xy * 0.7, max(normal.z, 0.4)));
             float slope = 1.0 - abs(normal.z); // 0=flat, 1=vertical
-            vec3 dir = mix(up, clampedN, smoothstep(0.05, 0.35, slope));
-            vec3 p = position + dir * vL * uMaxHeight;
+            vec3 dir = mix(up, clampedN, smoothstep(0.10, 0.50, slope));
+            // Minimum displacement bias on slopes: ensures even layer 0 sits above terrain
+            float slopeBias = smoothstep(0.10, 0.40, slope) * 0.015;
+            float layerDisp = max(vL * uMaxHeight, slopeBias);
+            vec3 p = position + dir * layerDisp;
 
-            // Wind sway (increases with height)
+            // Wind sway (disabled for visual stability and performance)
+            /*
             float sway = vL * vL * uWindStr * 0.6;
             float w1 = sin(uTime * 1.4 + p.x * 0.06 + p.y * 0.04);
             float w2 = sin(uTime * 2.1 + p.y * 0.09 + p.x * 0.03);
             p.x += uWindDir.x * sway * (w1 * 0.6 + w2 * 0.4);
             p.y -= uWindDir.y * sway * (w1 * 0.6 + w2 * 0.4);
+            */
 
             vWorldPos = (modelMatrix * vec4(p, 1.0)).xyz;
+            vCamDist = distance(vWorldPos, cameraPosition);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
     `;
 
     const FRAG = `
-        uniform sampler2D uBiome;
+        uniform sampler2D uRoughMask;
         uniform vec3  uRoughCol;
         uniform vec3  uDeepCol;
+        uniform vec3  uSemiCol;
+        uniform vec3  uForeCol;
         uniform float uRoughH;
         uniform float uDeepH;
         uniform float uMaxHeight;
+        uniform float uMaxDist;
+
+        // Dynamic light uniforms synced with scene
+        uniform vec3  uLightDir;
+        uniform vec3  uDirColor;
+        uniform vec3  uAmbColor;
 
         varying vec2  vUv;
         varying float vL;
         varying vec3  vWorldPos;
+        varying vec3  vWorldNormal;
+        varying float vSlope;
+        varying float vCamDist;
 
         float hash(vec2 p) {
             return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -91,23 +116,46 @@
         }
 
         void main() {
-            vec3 bio = texture2D(uBiome, vUv).rgb;
-            vec3 dR = abs(bio - uRoughCol);
-            vec3 dD = abs(bio - uDeepCol);
-            float distR = max(dR.r, max(dR.g, dR.b));
-            float distD = max(dD.r, max(dD.g, dD.b));
+            // Distance check & dither fade
+            if (vCamDist > uMaxDist) discard;
+            float distFade = 1.0 - smoothstep(uMaxDist * 0.75, uMaxDist, vCamDist);
+            if (hash(vWorldPos.xz * 37.0) > distFade) discard;
 
-            float isRough = 1.0 - smoothstep(0.02, 0.07, distR);
-            float isDeep  = 1.0 - smoothstep(0.02, 0.07, distD);
-            float roughness = max(isRough, isDeep);
+            // ── 4-biome mask: R=rough/fore, G=deep, B=semi ──
+            vec3 mask = texture2D(uRoughMask, vUv).rgb;
+            float isRough = step(0.75, mask.r);                    // R=1.0
+            float isFore  = step(0.3, mask.r) * (1.0 - isRough);  // R≈0.5
+            float isDeep  = step(0.5, mask.g);                     // G=1.0
+            float isSemi  = step(0.5, mask.b);                     // B=1.0
+            float roughness = max(max(isRough, isDeep), max(isSemi, isFore));
             if (roughness < 0.1) discard;
 
-            vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
+            // Pick color and height based on dominant biome channel
+            vec3 baseCol;
+            float targetH;
+            float tipBright;
+            if (isDeep > 0.5) {
+                baseCol = uDeepCol;
+                targetH = uDeepH;
+                tipBright = 0.05;
+            } else if (isRough > 0.5) {
+                baseCol = uRoughCol;
+                targetH = uRoughH;
+                tipBright = 0.25;
+            } else if (isSemi > 0.5) {
+                baseCol = uSemiCol;
+                targetH = uRoughH * 0.6;
+                tipBright = 0.20;
+            } else {
+                baseCol = uForeCol;
+                targetH = uRoughH * 0.35;
+                tipBright = 0.15;
+            }
 
-            // All layers use FBM grass silhouettes (no solid fill)
-            float targetH = isDeep > 0.5 ? uDeepH : uRoughH;
+            // Height-proportional layer culling with soft fade
             float eL = vL * (uMaxHeight / max(targetH, 0.001));
-            if (eL > 1.0) discard;
+            float heightFade = 1.0 - smoothstep(0.85, 1.05, eL);
+            if (heightFade < 0.05) discard;
 
             vec2 wXZ = vWorldPos.xz;
             float clump = fbm(wXZ * 0.8);
@@ -116,20 +164,31 @@
             float grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
 
             // Gentle threshold: bottom layers keep ~90% pixels, top ~60%
-            float threshold = eL * eL * 0.40;
+            // On slopes: bottom layers are fully solid to prevent terrain showing through
+            float slopeCompensation = smoothstep(0.10, 0.40, vSlope);
+            float baseThreshold = eL * eL * 0.40;
+            float threshold = baseThreshold * (1.0 - slopeCompensation * (1.0 - eL));
             if (grass < threshold) discard;
 
             // Softer edge fade at biome boundaries
             float edgeThreshold = threshold + (1.0 - roughness) * 0.15;
             if (grass < edgeThreshold) discard;
 
-            // Bright AO: warm bottom, vivid tops
-            float ao = mix(0.85, 1.10, eL);
+            // AO: warm bottom, tips highlighted per biome
+            float aoBase = mix(0.85, 0.95, slopeCompensation);
+            float ao = mix(aoBase, 1.10, eL);
             vec3 col = baseCol * ao;
-            col += vec3(0.07, 0.09, 0.02) * eL; // Vivid green tips
+            col += baseCol * tipBright * eL;
 
             float colorVar = vnoise(vUv * 80.0 + 33.0);
             col *= 0.95 + 0.10 * colorVar;
+
+            // Apply dynamic diffuse lighting matching the terrain
+            vec3 N = normalize(vWorldNormal);
+            vec3 L = uLightDir;
+            float dotNL = max(0.0, dot(N, L));
+            vec3 lightColor = uAmbColor + uDirColor * dotNL;
+            col *= lightColor;
 
             gl_FragColor = vec4(col, 1.0);
         }
@@ -138,11 +197,12 @@
     // ─── Manager ─────────────────────────────────────────────────
 
     class TerrainShellManager {
-        constructor(masterGeo, masterMesh, scene, biomeTex) {
+        constructor(masterGeo, masterMesh, scene, biomeTex, roughMaskTex) {
             this.masterGeo = masterGeo;
             this.masterMesh = masterMesh;
             this.scene = scene;
             this.biomeTex = biomeTex;
+            this.roughMaskTex = roughMaskTex || null;
             this.quality = 'OFF';
             this.shells = [];   // { layer, mesh, mat }
             this._frame = 0;
@@ -152,7 +212,16 @@
 
             this._roughCol = new THREE.Vector3();
             this._deepCol  = new THREE.Vector3();
+            this._semiCol  = new THREE.Vector3();
+            this._foreCol  = new THREE.Vector3();
             this._updateColors();
+
+            // Track hex colors to auto-update on biome change
+            let cfg = window.CURRENT_BIOME_CONFIG || {};
+            this._lastRoughHex = cfg.roughColor || '#4a782b';
+            this._lastDeepHex = cfg.fescueColor || '#2d4c1a';
+            this._lastSemiHex = cfg.semiColor || '#6b9e3d';
+            this._lastForeHex = cfg.foregreenColor || '#8bc45d';
         }
 
         setQuality(q) {
@@ -166,9 +235,54 @@
         update(time, camera) {
             if (this.shells.length === 0) return;
 
-            // Animate wind
+            // Track and update colors if CURRENT_BIOME_CONFIG changed (for Autumn, Winter, custom color picker)
+            let cfg = window.CURRENT_BIOME_CONFIG || {};
+            let rHex = cfg.roughColor || '#4a782b';
+            let dHex = cfg.fescueColor || '#2d4c1a';
+            let sHex = cfg.semiColor || '#6b9e3d';
+            let fHex = cfg.foregreenColor || '#8bc45d';
+            if (rHex !== this._lastRoughHex || dHex !== this._lastDeepHex || sHex !== this._lastSemiHex || fHex !== this._lastForeHex) {
+                this._lastRoughHex = rHex;
+                this._lastDeepHex = dHex;
+                this._lastSemiHex = sHex;
+                this._lastForeHex = fHex;
+                this.updateColors();
+            }
+
+            // Sync dynamic scene lighting
+            let G = window.G || {};
+            let al = G.ambientLight;
+            let dl = G.dirLight;
+
+            let ambR = 0.5, ambG = 0.5, ambB = 0.5;
+            if (al) {
+                let ai = al.intensity;
+                ambR = al.color.r * ai;
+                ambG = al.color.g * ai;
+                ambB = al.color.b * ai;
+            }
+
+            let dirR = 1.0, dirG = 1.0, dirB = 1.0;
+            let lx = 50.0, ly = 100.0, lz = 50.0;
+            if (dl) {
+                let di = dl.intensity;
+                dirR = dl.color.r * di;
+                dirG = dl.color.g * di;
+                dirB = dl.color.b * di;
+                lx = dl.position.x;
+                ly = dl.position.y;
+                lz = dl.position.z;
+            }
+
+            // Normalize light direction
+            let len = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1.0;
+            lx /= len; ly /= len; lz /= len;
+
             for (let s of this.shells) {
                 s.mat.uniforms.uTime.value = time;
+                s.mat.uniforms.uLightDir.value.set(lx, ly, lz);
+                s.mat.uniforms.uDirColor.value.set(dirR, dirG, dirB);
+                s.mat.uniforms.uAmbColor.value.set(ambR, ambG, ambB);
             }
         }
 
@@ -177,6 +291,8 @@
             for (let s of this.shells) {
                 s.mat.uniforms.uRoughCol.value.copy(this._roughCol);
                 s.mat.uniforms.uDeepCol.value.copy(this._deepCol);
+                s.mat.uniforms.uSemiCol.value.copy(this._semiCol);
+                s.mat.uniforms.uForeCol.value.copy(this._foreCol);
             }
         }
 
@@ -327,6 +443,8 @@
         }
 
         _makeMat(layer, total, maxH) {
+            let preset = QUALITY[this.quality] || { maxDist: 250 };
+            let maxDist = preset.maxDist || 250;
             return new THREE.ShaderMaterial({
                 uniforms: {
                     uLayer:    { value: layer },
@@ -337,15 +455,24 @@
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
                     uTime:     { value: 0 },
-                    uBiome:    { value: this.biomeTex },
+                    uRoughMask:{ value: this.roughMaskTex },
                     uRoughCol: { value: this._roughCol.clone() },
-                    uDeepCol:  { value: this._deepCol.clone() }
+                    uDeepCol:  { value: this._deepCol.clone() },
+                    uSemiCol:  { value: this._semiCol.clone() },
+                    uForeCol:  { value: this._foreCol.clone() },
+                    uMaxDist:  { value: maxDist },
+                    uLightDir: { value: new THREE.Vector3(0, 1, 0) },
+                    uDirColor: { value: new THREE.Vector3(1, 1, 1) },
+                    uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) }
                 },
                 vertexShader: VERT,
                 fragmentShader: FRAG,
                 side: THREE.DoubleSide,
                 depthWrite: false,
-                depthTest: true
+                depthTest: true,
+                polygonOffset: true,
+                polygonOffsetFactor: -(1 + layer * 0.5),
+                polygonOffsetUnits: -(4 + layer * 2)
             });
         }
 
@@ -353,6 +480,8 @@
             let cfg = window.CURRENT_BIOME_CONFIG || {};
             this._hexToVec(cfg.roughColor || '#4a782b', this._roughCol);
             this._hexToVec(cfg.fescueColor || '#2d4c1a', this._deepCol);
+            this._hexToVec(cfg.semiColor || '#6b9e3d', this._semiCol);
+            this._hexToVec(cfg.foregreenColor || '#8bc45d', this._foreCol);
         }
 
         _hexToVec(hex, v) {
