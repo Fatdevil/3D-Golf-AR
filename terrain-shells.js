@@ -36,10 +36,15 @@
             vUv = uv;
             vL  = uLayer / max(uLayers, 1.0);
 
-            // World-up displacement: always push straight up (local Z)
-            // Avoids spikes at steep edges and slope discoloration
+            // Adaptive displacement:
+            // Flat → world-up (clean from above)
+            // Slopes → follow terrain normal (layers hidden from side)
+            // Normal clamped to max ~60° to prevent spikes at bunker edges
             vec3 up = vec3(0.0, 0.0, 1.0);
-            vec3 p = position + up * vL * uMaxHeight;
+            vec3 clampedN = normalize(vec3(normal.xy * 0.5, max(normal.z, 0.5)));
+            float slope = 1.0 - abs(normal.z); // 0=flat, 1=vertical
+            vec3 dir = mix(up, clampedN, smoothstep(0.05, 0.35, slope));
+            vec3 p = position + dir * vL * uMaxHeight;
 
             // Wind sway (increases with height)
             float sway = vL * vL * uWindStr * 0.6;
