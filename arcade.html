@@ -364,16 +364,6 @@
             if (window._terrainChunks) {
                 window._terrainChunks.setEnabled(window._chunksEnabled);
             }
-            // Toggle shells: hide all when chunks off
-            if (window._terrainShells) {
-                if (!window._chunksEnabled) {
-                    // Hide all shell meshes
-                    for (let s of window._terrainShells.shells) {
-                        s.mesh.visible = false;
-                    }
-                }
-                // When re-enabling, shells will auto-show on next update cycle
-            }
             console.log('[Admin] Chunks:', window._chunksEnabled ? 'ON' : 'OFF');
             toggleMenu();
         };
@@ -1245,10 +1235,6 @@
         <script>
         window.setGrassQuality = function(q) {
             if (!window._terrainShells) return;
-            // Shells require chunks — auto-enable if turning grass on
-            if (q !== 'OFF' && !window._chunksEnabled) {
-                window.toggleChunkSystem();
-            }
             window._terrainShells.setQuality(q);
             // Update button states
             ['off','low','med','high'].forEach(function(k) {
@@ -4948,15 +4934,17 @@
     window._arcadePCtx = pCtx;
     window._arcadeMapTex = mapTex;
 
+    // === SHELL TEXTURING: Volumetric 3D grass for rough/deep rough ===
+    // v6: Shells render directly on master geometry — no chunk dependency
+    if (window.TerrainShellManager) {
+        window._terrainShells = new TerrainShellManager(planeGeo, plane, scene, mapTex);
+    }
+
     // === TERRAIN CHUNKING: Split into 8x8 frustum-culled chunks with distance LOD ===
     if (window.TerrainChunkManager) {
         let tGrid = window._terrainGridSegs || TERRAIN_SEGS;
         window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 8, { terrainGrid: tGrid });
         window._terrainChunks.setEnabled(window._chunksEnabled);
-    }
-    // === SHELL TEXTURING: Volumetric 3D grass for rough/deep rough ===
-    if (window.TerrainShellManager && window._terrainChunks) {
-        window._terrainShells = new TerrainShellManager(window._terrainChunks, scene, mapTex);
     }
     
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
@@ -8924,9 +8912,9 @@
             // Rebuild terrain chunks for new geometry
             if (window._terrainChunks) window._terrainChunks.rebuild(newGeo, plane);
             
-            // Rebuild shells for new chunk geometries
-            if (window._terrainShells && window._terrainShells.quality !== 'OFF') {
-                window._terrainShells.refresh();
+            // Update shell geometries to new terrain mesh
+            if (window._terrainShells) {
+                window._terrainShells.updateGeometry(newGeo);
             }
             
             // Sync visual water mesh

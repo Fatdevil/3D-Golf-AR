@@ -1,9 +1,12 @@
 // ================================================================
-//  TERRAIN SHELL MANAGER v5 — 3D grass + distant tint layer
+//  TERRAIN SHELL MANAGER v6 — Master-geometry based (no chunks)
 //
 //  Near:  Full 3D shell layers with FBM silhouettes (discard-based)
 //  Far:   Single flat tint layer darkens rough areas (alpha blend)
 //  Result: Rough looks different at ALL distances, 3D up close
+//
+//  v6: Shells render on the MASTER terrain mesh directly.
+//      No dependency on chunk system. Max 9 meshes total.
 // ================================================================
 (function() {
     'use strict';
@@ -14,9 +17,6 @@
         MED:  { layers: 5, maxDist: 120 },
         HIGH: { layers: 8, maxDist: 250 }
     };
-
-    // Far tint extends 4× beyond shell range
-    const TINT_MULTIPLIER = 4.0;
 
     // ─── GLSL: 3D Shell Shader ──────────────────────────────────
 
@@ -120,7 +120,7 @@
             vec3 col = baseCol * ao;
             col += vec3(0.04, 0.05, 0.01) * eL;
 
-            // Subtle color variation via UV (chunk-independent, no tile artifacts)
+            // Subtle color variation via UV (no tile artifacts)
             float colorVar = vnoise(vUv * 80.0 + 33.0);
             col *= 0.95 + 0.10 * colorVar;
 
@@ -187,12 +187,13 @@
     // ─── Manager ─────────────────────────────────────────────────
 
     class TerrainShellManager {
-        constructor(chunkMgr, scene, biomeTex) {
-            this.chunkMgr = chunkMgr;
+        constructor(masterGeo, masterMesh, scene, biomeTex) {
+            this.masterGeo = masterGeo;
+            this.masterMesh = masterMesh;
             this.scene = scene;
             this.biomeTex = biomeTex;
             this.quality = 'OFF';
-            this.shells = [];   // { chunkIdx, layer, mesh, mat, isTint }
+            this.shells = [];   // { layer, mesh, mat, isTint }
             this._frame = 0;
 
             this.roughHeight = 0.30;
@@ -208,55 +209,27 @@
             this.quality = q;
             this._rebuild();
             console.log('[Shells] Quality:', q,
-                q !== 'OFF' ? '(' + QUALITY[q].layers + ' layers, ' + QUALITY[q].maxDist + 'm)' : '');
+                q !== 'OFF' ? '(' + QUALITY[q].layers + ' layers)' : '');
         }
 
         update(time, camera) {
             if (this.shells.length === 0) return;
 
-            // Don't show shells when chunks are disabled
-            if (!window._chunksEnabled) {
-                for (let s of this.shells) s.mesh.visible = false;
-                return;
-            }
-
-            // Animate wind (skip tint layers — no wind uniform)
+            // Animate wind
             for (let s of this.shells) {
                 if (!s.isTint) s.mat.uniforms.uTime.value = time;
             }
+        }
 
-            if (++this._frame % 20 !== 0) return;
-            if (!camera) return;
-
-            let preset = QUALITY[this.quality];
-            if (!preset || preset.layers === 0) return;
-
-            let size = window.TERRAIN_SIZE, segs = window.TERRAIN_SEGS;
-            let half = size / 2, step = size / segs;
-            let chunks = this.chunkMgr.chunks;
-            let tintMax = preset.maxDist * TINT_MULTIPLIER;
-
+        updateColors() {
+            this._updateColors();
             for (let s of this.shells) {
-                let c = chunks[s.chunkIdx];
-                if (!c) { s.mesh.visible = false; continue; }
-
-                let cx = -half + ((c.gxStart + c.gxEnd) * 0.5) * step;
-                let cz = -half + ((c.gzStart + c.gzEnd) * 0.5) * step;
-                let dx = camera.position.x - cx, dz = camera.position.z - cz;
-                let dist = Math.sqrt(dx * dx + dz * dz);
-
-                if (s.isTint) {
-                    // Tint: visible BEYOND shell range, up to tintMax
-                    s.mesh.visible = dist > preset.maxDist * 0.7 && dist < tintMax;
-                } else {
-                    // 3D shells: visible within shell range
-                    s.mesh.visible = dist < preset.maxDist;
-                }
-
-                if (s.mesh.geometry !== c.geo) s.mesh.geometry = c.geo;
+                s.mat.uniforms.uRoughCol.value.copy(this._roughCol);
+                s.mat.uniforms.uDeepCol.value.copy(this._deepCol);
             }
+        }
 
-            // Sync wind (3D shells only)
+        updateWind() {
             let ws = (window.windSpeed || 0) / 30;
             let wa = (window.windAngle || 0) * Math.PI / 180;
             for (let s of this.shells) {
@@ -267,25 +240,33 @@
             }
         }
 
+        /** Call after updateTerrainResolution to swap in new geometry */
+        updateGeometry(newGeo) {
+            this.masterGeo = newGeo;
+            for (let s of this.shells) {
+                s.mesh.geometry = newGeo;
+            }
+            console.log('[Shells] Geometry updated to', newGeo.parameters?.widthSegments || '?', 'segs');
+        }
+
         refresh() { this._rebuild(); }
 
         getStats() {
-            let visible = 0, total = 0, tris = 0;
-            let chunks = this.chunkMgr.chunks;
+            let visible = 0, tris = 0;
+            let segs = window.TERRAIN_SEGS || 100;
             for (let s of this.shells) {
-                total++;
                 if (s.mesh.visible) {
                     visible++;
-                    let c = chunks[s.chunkIdx];
-                    if (c) tris += c.lodSegs * c.lodSegs * 2;
+                    tris += segs * segs * 2;
                 }
             }
-            return { total, visible, extraTris: tris };
+            return { total: this.shells.length, visible, extraTris: tris };
         }
 
         // ── Internal ────────────────────────────────────────────
 
         _rebuild() {
+            // Dispose old shells
             for (let s of this.shells) {
                 if (s.mesh.parent) this.scene.remove(s.mesh);
                 s.mat.dispose();
@@ -297,33 +278,31 @@
 
             this._updateColors();
             let maxH = Math.max(this.roughHeight, this.deepHeight);
-            let chunks = this.chunkMgr.chunks;
+            let geo = this.masterGeo;
 
-            for (let ci = 0; ci < chunks.length; ci++) {
-                // ── Tint layer (flat, transparent, far range) ──
-                let tintMat = this._makeTintMat();
-                let tintMesh = new THREE.Mesh(chunks[ci].geo, tintMat);
-                tintMesh.rotation.x = -Math.PI / 2;
-                tintMesh.frustumCulled = true;
-                tintMesh.visible = false;
-                tintMesh.renderOrder = 99;
-                this.scene.add(tintMesh);
-                this.shells.push({ chunkIdx: ci, layer: 0, mesh: tintMesh, mat: tintMat, isTint: true });
+            // ── 1 Tint layer (flat, transparent) ──
+            let tintMat = this._makeTintMat();
+            let tintMesh = new THREE.Mesh(geo, tintMat);
+            tintMesh.rotation.x = -Math.PI / 2;
+            tintMesh.frustumCulled = true;
+            tintMesh.visible = true;
+            tintMesh.renderOrder = 99;
+            this.scene.add(tintMesh);
+            this.shells.push({ layer: 0, mesh: tintMesh, mat: tintMat, isTint: true });
 
-                // ── 3D shell layers (opaque, discard, near range) ──
-                for (let layer = 1; layer <= preset.layers; layer++) {
-                    let mat = this._makeMat(layer, preset.layers, maxH);
-                    let mesh = new THREE.Mesh(chunks[ci].geo, mat);
-                    mesh.rotation.x = -Math.PI / 2;
-                    mesh.frustumCulled = true;
-                    mesh.visible = false;
-                    mesh.renderOrder = 100 + layer;
-                    this.scene.add(mesh);
-                    this.shells.push({ chunkIdx: ci, layer, mesh, mat, isTint: false });
-                }
+            // ── N 3D shell layers (opaque, discard) ──
+            for (let layer = 1; layer <= preset.layers; layer++) {
+                let mat = this._makeMat(layer, preset.layers, maxH);
+                let mesh = new THREE.Mesh(geo, mat);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.frustumCulled = true;
+                mesh.visible = true;
+                mesh.renderOrder = 100 + layer;
+                this.scene.add(mesh);
+                this.shells.push({ layer, mesh, mat, isTint: false });
             }
-            console.log('[Shells] Built', this.shells.length, 'meshes (' +
-                chunks.length + ' tint + ' + (this.shells.length - chunks.length) + ' 3D)');
+            console.log('[Shells] Built', this.shells.length,
+                'meshes (1 tint + ' + preset.layers + ' 3D) on master geo');
         }
 
         _makeMat(layer, total, maxH) {
