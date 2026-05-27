@@ -4878,10 +4878,10 @@
     window._arcadePCtx = pCtx;
     window._arcadeMapTex = mapTex;
 
-    // === TERRAIN CHUNKING: Split into 4x4 frustum-culled chunks ===
+    // === TERRAIN CHUNKING: Split into 8x8 frustum-culled chunks with distance LOD ===
     if (window.TerrainChunkManager) {
         let tGrid = window._terrainGridSegs || TERRAIN_SEGS;
-        window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 4, { terrainGrid: tGrid });
+        window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 8, { terrainGrid: tGrid });
         window._terrainChunks.setEnabled(true);
     }
     
@@ -13169,6 +13169,9 @@ window.triggerExplosion = function(x, y, z) {
         // Use CSS pixel dimensions – setViewport() internally multiplies by devicePixelRatio.
         // Using canvas.width (= CSS × DPR) would double-scale on Retina/HiDPI displays.
         renderer.setViewport(0, 0, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
+        // Distance-based LOD: auto-downsize far chunks (throttled internally)
+        if (window._terrainChunks) window._terrainChunks.updateDistanceLOD(camera);
+
         renderer.render(scene, camera);
         
         // --- GSPRO AIM BILLBOARD PROJECTION ---
