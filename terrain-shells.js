@@ -16,9 +16,9 @@
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        LOW:  { layers: 3, maxDist: _isMobile ? 40  : 60 },
-        MED:  { layers: 5, maxDist: _isMobile ? 80  : 120 },
-        HIGH: { layers: 8, maxDist: _isMobile ? 150 : 250 }
+        LOW:  { layers: 3, maxDist: 60 },
+        MED:  { layers: 5, maxDist: 120 },
+        HIGH: { layers: 8, maxDist: 250 }
     };
 
     // ─── GLSL: 3D Shell Shader ──────────────────────────────────
@@ -283,6 +283,15 @@
                 s.mat.uniforms.uLightDir.value.set(lx, ly, lz);
                 s.mat.uniforms.uDirColor.value.set(dirR, dirG, dirB);
                 s.mat.uniforms.uAmbColor.value.set(ambR, ambG, ambB);
+
+                // Mobile play-mode optimization: reduce maxDist to save fillrate
+                if (_isMobile && window.terrainShaderUniforms && window.terrainShaderUniforms.uPlayMode.value > 0.5) {
+                    let preset = QUALITY[this.quality];
+                    s.mat.uniforms.uMaxDist.value = preset ? preset.maxDist * 0.6 : s.mat.uniforms.uMaxDist.value;
+                } else {
+                    let preset = QUALITY[this.quality];
+                    if (preset) s.mat.uniforms.uMaxDist.value = preset.maxDist;
+                }
             }
         }
 
