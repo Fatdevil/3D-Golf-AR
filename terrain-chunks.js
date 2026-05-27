@@ -60,6 +60,9 @@
                 this._syncFull(c, mP, mN, s);
                 c.dirty = false;
             }
+            if (window._terrainShells && window._terrainShells.quality !== 'OFF') {
+                window._terrainShells.syncHeights();
+            }
         }
 
         syncDirty() {
@@ -73,12 +76,18 @@
             for (let c of this.chunks) {
                 if (c.dirty) { this._syncFull(c, mP, mN, s); c.dirty = false; }
             }
+            if (window._terrainShells && window._terrainShells.quality !== 'OFF') {
+                window._terrainShells.syncHeights();
+            }
         }
 
         syncDirtyPositions() {
             let mP = this.masterGeo.attributes.position.array;
             for (let c of this.chunks) {
                 if (c.dirty) this._syncPos(c, mP);
+            }
+            if (window._terrainShells && window._terrainShells.quality !== 'OFF') {
+                window._terrainShells.syncHeights();
             }
         }
 
@@ -404,8 +413,8 @@
                 for (let px = pxS; px < pxE; px += step) {
                     let idx = (pz * 4096 + px) * 4;
                     let r = biome[idx], g = biome[idx+1], b = biome[idx+2];
-                    if ((r-gR)*(r-gR)+(g-gG)*(g-gG)+(b-gB)*(b-gB) < 2000) return true;
-                    if ((r-fR)*(r-fR)+(g-fG)*(g-fG)+(b-fB)*(b-fB) < 2000) return true;
+                    if ((r-gR)*(r-gR)+(g-gG)*(g-gG)+(b-gB)*(b-gB) < 500) return true;
+                    if ((r-fR)*(r-fR)+(g-fG)*(g-fG)+(b-fB)*(b-fB) < 500) return true;
                 }
             }
             return false;

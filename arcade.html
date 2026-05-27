@@ -1306,7 +1306,7 @@
                     <div id="terrain-lod-container" style="display:flex; flex-direction:column; margin-top:6px; padding-top:6px; border-top:1px solid #334155;">
                         <label style="color:#eab308; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">🌍 Terrain Grid</label>
                         <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Visual quality for non-green areas.<br>Lower = better mobile performance.</div>
-                        <input type="range" id="terrain-res-slider" min="100" max="800" step="50" value="600" onchange="let v = parseInt(this.value); document.getElementById('terrain-res-val').textContent = v + 'x' + v; window._terrainGridSegs = v; if(window._terrainChunks) window._terrainChunks.updateLOD(v);" oninput="document.getElementById('terrain-res-val').textContent = this.value + 'x' + this.value;" style="width:100%; accent-color:#eab308; cursor:pointer;">
+                        <input type="range" id="terrain-res-slider" min="100" max="800" step="50" value="600" oninput="let v = parseInt(this.value); document.getElementById('terrain-res-val').textContent = v + 'x' + v; window._terrainGridSegs = v; if(window._terrainChunks) window._terrainChunks.updateLOD(v); if(window._terrainShells) window._terrainShells.refresh();" style="width:100%; accent-color:#eab308; cursor:pointer;">
                         <div style="display:flex; justify-content:space-between; width:100%;">
                             <span style="color:#64748b; font-size:9px;">100</span>
                             <span id="terrain-res-val" style="color:#eab308; font-size:10px; font-weight:bold;">600x600</span>
@@ -4941,7 +4941,8 @@
 
     // === TERRAIN CHUNKING: Split into 8x8 frustum-culled chunks with distance LOD ===
     if (window.TerrainChunkManager) {
-        let tGrid = window._terrainGridSegs || TERRAIN_SEGS;
+        window._terrainGridSegs = window._terrainGridSegs || TERRAIN_SEGS;
+        let tGrid = window._terrainGridSegs;
         window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 8, { terrainGrid: tGrid });
         window._terrainChunks.setEnabled(window._chunksEnabled);
     }
@@ -11020,9 +11021,7 @@
         pCtx.fillRect(0,0,4096,4096);
         mapTex.needsUpdate = true;
         
-        if (typeof window.terrainBiomeData !== 'undefined') {
-            window.terrainBiomeData = pCtx.getImageData(0,0,4096,4096).data;
-        }
+        window.terrainBiomeData = pCtx.getImageData(0,0,4096,4096).data;
         
         wCtx.fillStyle = '#000000';
         wCtx.fillRect(0,0,4096,4096);

@@ -192,10 +192,85 @@
         /** Call after updateTerrainResolution to swap in new geometry */
         updateGeometry(newGeo) {
             this.masterGeo = newGeo;
-            for (let s of this.shells) {
-                s.mesh.geometry = newGeo;
+            // Geometry is now decoupled from masterGeo. Rebuild to pick up any slider changes.
+            this._rebuild();
+        }
+
+        syncHeights() {
+            if (this.shells.length === 0) return;
+            this._resampleFromMaster();
+        }
+
+        _resampleFromMaster() {
+            if (!this.masterGeo || !this.customGeo) return;
+
+            let mPos = this.masterGeo.attributes.position.array;
+            let mNorm = this.masterGeo.attributes.normal.array;
+            let mSegs = window.TERRAIN_SEGS || 600;
+            let mStride = mSegs + 1;
+
+            let cPos = this.customGeo.attributes.position.array;
+            let cNorm = this.customGeo.attributes.normal.array;
+
+            let size = window.TERRAIN_SIZE || 600;
+            let half = size / 2;
+
+            let shellSegs = this.customGeo.parameters.widthSegments;
+            let cStride = shellSegs + 1;
+            let step = size / shellSegs;
+
+            function sampleAttribs(worldX, worldZ) {
+                let oldStep = size / mSegs;
+                let gx = (worldX + half) / oldStep;
+                let gz = (worldZ + half) / oldStep;
+                gx = Math.max(0, Math.min(mSegs - 1, gx));
+                gz = Math.max(0, Math.min(mSegs - 1, gz));
+                let ix = Math.floor(gx), iz = Math.floor(gz);
+                let fx = gx - ix, fz = gz - iz;
+
+                let i00 = (iz * mStride + ix) * 3;
+                let i10 = (iz * mStride + (ix + 1)) * 3;
+                let i01 = ((iz + 1) * mStride + ix) * 3;
+                let i11 = ((iz + 1) * mStride + (ix + 1)) * 3;
+
+                let h00 = mPos[i00 + 2] || 0, h10 = mPos[i10 + 2] || 0;
+                let h01 = mPos[i01 + 2] || 0, h11 = mPos[i11 + 2] || 0;
+                let z = h00 * (1 - fx) * (1 - fz) + h10 * fx * (1 - fz) + h01 * (1 - fx) * fz + h11 * fx * fz;
+
+                let n00x = mNorm[i00] || 0, n00y = mNorm[i00 + 1] || 0, n00z = mNorm[i00 + 2] || 1;
+                let n10x = mNorm[i10] || 0, n10y = mNorm[i10 + 1] || 0, n10z = mNorm[i10 + 2] || 1;
+                let n01x = mNorm[i01] || 0, n01y = mNorm[i01 + 1] || 0, n01z = mNorm[i01 + 2] || 1;
+                let n11x = mNorm[i11] || 0, n11y = mNorm[i11 + 1] || 0, n11z = mNorm[i11 + 2] || 1;
+
+                let nx = n00x * (1 - fx) * (1 - fz) + n10x * fx * (1 - fz) + n01x * (1 - fx) * fz + n11x * fx * fz;
+                let ny = n00y * (1 - fx) * (1 - fz) + n10y * fx * (1 - fz) + n01y * (1 - fx) * fz + n11y * fx * fz;
+                let nz = n00z * (1 - fx) * (1 - fz) + n10z * fx * (1 - fz) + n01z * (1 - fx) * fz + n11z * fx * fz;
+
+                let len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+                return { z, nx: nx / len, ny: ny / len, nz: nz / len };
             }
-            console.log('[Shells] Geometry updated to', newGeo.parameters?.widthSegments || '?', 'segs');
+
+            for (let i = 0; i <= shellSegs; i++) {
+                for (let j = 0; j <= shellSegs; j++) {
+                    let localX = -half + j * step;
+                    let localY = half - i * step;
+                    let worldX = localX;
+                    let worldZ = -localY;
+
+                    let idx = (i * cStride + j) * 3;
+                    let sample = sampleAttribs(worldX, worldZ);
+
+                    cPos[idx + 2] = sample.z;
+                    cNorm[idx] = sample.nx;
+                    cNorm[idx + 1] = sample.ny;
+                    cNorm[idx + 2] = sample.nz;
+                }
+            }
+
+            this.customGeo.attributes.position.needsUpdate = true;
+            this.customGeo.attributes.normal.needsUpdate = true;
+            this.customGeo.computeBoundingBox();
+            this.customGeo.computeBoundingSphere();
         }
 
         refresh() { this._rebuild(); }
@@ -227,7 +302,14 @@
 
             this._updateColors();
             let maxH = Math.max(this.roughHeight, this.deepHeight);
-            let geo = this.masterGeo;
+            
+            // Decouple from Green Grid! Use Terrain Grid for 3D grass.
+            let shellSegs = window._terrainGridSegs || (window.TERRAIN_SEGS ? Math.min(window.TERRAIN_SEGS, 200) : 200);
+            if (this.customGeo) this.customGeo.dispose();
+            this.customGeo = new THREE.PlaneGeometry(window.TERRAIN_SIZE || 400, window.TERRAIN_SIZE || 400, shellSegs, shellSegs);
+            this.customGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+            this._resampleFromMaster();
+            let geo = this.customGeo;
 
             // ── N 3D shell layers (opaque, discard) ──
             for (let layer = 1; layer <= preset.layers; layer++) {
