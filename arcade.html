@@ -1245,6 +1245,10 @@
         <script>
         window.setGrassQuality = function(q) {
             if (!window._terrainShells) return;
+            // Shells require chunks — auto-enable if turning grass on
+            if (q !== 'OFF' && !window._chunksEnabled) {
+                window.toggleChunkSystem();
+            }
             window._terrainShells.setQuality(q);
             // Update button states
             ['off','low','med','high'].forEach(function(k) {
@@ -1317,7 +1321,7 @@
                     <div id="terrain-lod-container" style="display:flex; flex-direction:column; margin-top:6px; padding-top:6px; border-top:1px solid #334155;">
                         <label style="color:#eab308; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">🌍 Terrain Grid</label>
                         <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Visual quality for non-green areas.<br>Lower = better mobile performance.</div>
-                        <input type="range" id="terrain-res-slider" min="100" max="800" step="50" value="600" onchange="let v = Math.min(parseInt(this.value), parseInt(document.getElementById('green-res-slider').value)); this.value = v; document.getElementById('terrain-res-val').textContent = v + 'x' + v; window._terrainGridSegs = v; if(window._terrainChunks) window._terrainChunks.updateLOD(v);" oninput="let v = Math.min(parseInt(this.value), parseInt(document.getElementById('green-res-slider').value)); document.getElementById('terrain-res-val').textContent = v + 'x' + v;" style="width:100%; accent-color:#eab308; cursor:pointer;">
+                        <input type="range" id="terrain-res-slider" min="100" max="800" step="50" value="600" onchange="let v = Math.min(parseInt(this.value), parseInt(document.getElementById('green-res-slider').value)); this.value = v; document.getElementById('terrain-res-val').textContent = v + 'x' + v; if(window.updateTerrainResolution) window.updateTerrainResolution(v);" oninput="let v = Math.min(parseInt(this.value), parseInt(document.getElementById('green-res-slider').value)); document.getElementById('terrain-res-val').textContent = v + 'x' + v;" style="width:100%; accent-color:#eab308; cursor:pointer;">
                         <div style="display:flex; justify-content:space-between; width:100%;">
                             <span style="color:#64748b; font-size:9px;">100</span>
                             <span id="terrain-res-val" style="color:#eab308; font-size:10px; font-weight:bold;">600x600</span>
