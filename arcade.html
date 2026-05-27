@@ -950,6 +950,12 @@
         .poly-spinner { width:28px; height:28px; border:3px solid rgba(255,255,255,0.1); border-top:3px solid #4ade80; border-radius:50%; animation:polySpin 0.8s linear infinite; margin:0 auto 12px; }
         @keyframes polySpin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
 
+        /* Smart Builder panel scrollbar (Safari/iPad) */
+        #smart-green-action-panel::-webkit-scrollbar { width: 4px; }
+        #smart-green-action-panel::-webkit-scrollbar-track { background: transparent; }
+        #smart-green-action-panel::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        #smart-green-action-panel::-webkit-scrollbar-thumb:hover { background: #475569; }
+
         /* Fix stretched sidebar bug for props */
         #nature-assets-grid .palette-btn {
             width: 60px !important;
@@ -13487,7 +13493,7 @@ window.triggerExplosion = function(x, y, z) {
 </div>
 
 <!-- Smart Builder Action Panel -->
-<div id="smart-green-action-panel" style="display:none; position:absolute; bottom:60px; right:10px; background:#0f172a; border:2px solid #4ade80; border-radius:12px; padding:12px 14px; z-index:500; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center; width:210px;">
+<div id="smart-green-action-panel" style="display:none; position:absolute; bottom:60px; right:10px; background:#0f172a; border:2px solid #4ade80; border-radius:12px; padding:10px 12px; z-index:500; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align:center; width:210px; max-height:calc(100vh - 120px); overflow-y:auto; scrollbar-width:thin; scrollbar-color:#334155 transparent;">
     <h3 style="margin:0 0 8px 0; color:#fff; font-size:12px; text-transform:uppercase; letter-spacing:1px;">🏗️ Smart Builder</h3>
     
     <!-- Hole Selector -->
