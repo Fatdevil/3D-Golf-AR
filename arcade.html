@@ -333,7 +333,6 @@
     <div id="dropdown-menu">
         <button onclick="document.getElementById('publish-modal').style.display='flex'; if(window.updatePublishPreview) updatePublishPreview(); toggleMenu();">☁️ Spara / Publicera</button>
         <button id="btn-toggle-unit" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 Meter' : '📏 Yards'; toggleMenu();">📏 Yards</button>
-        <button id="btn-toggle-chunks" onclick="toggleChunkSystem()" style="color:#ef4444;">🧩 Chunks: AV</button>
         <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ Clear Course</button>
     </div>
     
@@ -352,7 +351,7 @@
         window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
         window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
 
-        window._chunksEnabled = false;
+        window._chunksEnabled = true;
         window.toggleChunkSystem = function() {
             window._chunksEnabled = !window._chunksEnabled;
             let btn = document.getElementById('btn-toggle-chunks');
