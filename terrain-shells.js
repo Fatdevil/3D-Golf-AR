@@ -36,15 +36,13 @@
             vUv = uv;
             vL  = uLayer / max(uLayers, 1.0);
 
-            // Detect skirt vertices: their normals point downward/sideways
-            // (terrain surface normals point up: z > 0.5 in local space)
-            float isSkirt = step(normal.z, 0.3);
-            float effectiveLayer = vL * (1.0 - isSkirt);
+            // World-up displacement: always push straight up (local Z)
+            // Avoids spikes at steep edges and slope discoloration
+            vec3 up = vec3(0.0, 0.0, 1.0);
+            vec3 p = position + up * vL * uMaxHeight;
 
-            vec3 p = position + normal * effectiveLayer * uMaxHeight;
-
-            // Wind sway (skip for skirt)
-            float sway = effectiveLayer * effectiveLayer * uWindStr * 0.6;
+            // Wind sway (increases with height)
+            float sway = vL * vL * uWindStr * 0.6;
             float w1 = sin(uTime * 1.4 + p.x * 0.06 + p.y * 0.04);
             float w2 = sin(uTime * 2.1 + p.y * 0.09 + p.x * 0.03);
             p.x += uWindDir.x * sway * (w1 * 0.6 + w2 * 0.4);
@@ -99,6 +97,19 @@
             float roughness = max(isRough, isDeep);
             if (roughness < 0.1) discard;
 
+            vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
+
+            // Bottom 30%: solid fill — prevents see-through at boundaries
+            if (vL < 0.3) {
+                float ao = mix(0.45, 0.65, vL / 0.3);
+                vec3 col = baseCol * ao;
+                float colorVar = vnoise(vUv * 80.0 + 33.0);
+                col *= 0.95 + 0.10 * colorVar;
+                gl_FragColor = vec4(col, 1.0);
+                return;
+            }
+
+            // Upper 70%: FBM grass silhouettes
             float targetH = isDeep > 0.5 ? uDeepH : uRoughH;
             float eL = vL * (uMaxHeight / max(targetH, 0.001));
             if (eL > 1.0) discard;
@@ -115,12 +126,10 @@
             float edgeThreshold = threshold + (1.0 - roughness) * 0.3;
             if (grass < edgeThreshold) discard;
 
-            vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
             float ao = mix(0.55, 1.0, eL);
             vec3 col = baseCol * ao;
             col += vec3(0.04, 0.05, 0.01) * eL;
 
-            // Subtle color variation via UV (no tile artifacts)
             float colorVar = vnoise(vUv * 80.0 + 33.0);
             col *= 0.95 + 0.10 * colorVar;
 
