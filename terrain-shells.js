@@ -267,8 +267,6 @@
             });
         }
 
-        }
-
         _updateColors() {
             let cfg = window.CURRENT_BIOME_CONFIG || {};
             this._hexToVec(cfg.roughColor || '#4a782b', this._roughCol);
