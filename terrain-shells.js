@@ -36,10 +36,15 @@
             vUv = uv;
             vL  = uLayer / max(uLayers, 1.0);
 
-            vec3 p = position + normal * vL * uMaxHeight;
+            // Detect skirt vertices: their normals point downward/sideways
+            // (terrain surface normals point up: z > 0.5 in local space)
+            float isSkirt = step(normal.z, 0.3);
+            float effectiveLayer = vL * (1.0 - isSkirt);
 
-            // Wind sway
-            float sway = vL * vL * uWindStr * 0.6;
+            vec3 p = position + normal * effectiveLayer * uMaxHeight;
+
+            // Wind sway (skip for skirt)
+            float sway = effectiveLayer * effectiveLayer * uWindStr * 0.6;
             float w1 = sin(uTime * 1.4 + p.x * 0.06 + p.y * 0.04);
             float w2 = sin(uTime * 2.1 + p.y * 0.09 + p.x * 0.03);
             p.x += uWindDir.x * sway * (w1 * 0.6 + w2 * 0.4);
