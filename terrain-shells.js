@@ -118,10 +118,10 @@
             float edgeThreshold = threshold + (1.0 - roughness) * 0.15;
             if (grass < edgeThreshold) discard;
 
-            // Brighter AO: bottom layers not too dark, tops vivid
-            float ao = mix(0.75, 1.05, eL);
+            // Bright AO: warm bottom, vivid tops
+            float ao = mix(0.85, 1.10, eL);
             vec3 col = baseCol * ao;
-            col += vec3(0.06, 0.08, 0.02) * eL; // Green highlight at tips
+            col += vec3(0.07, 0.09, 0.02) * eL; // Vivid green tips
 
             float colorVar = vnoise(vUv * 80.0 + 33.0);
             col *= 0.95 + 0.10 * colorVar;
@@ -175,9 +175,9 @@
 
             vec3 baseCol = isDeep > 0.5 ? uDeepCol : uRoughCol;
 
-            // Ground under grass — moderately dark, not pitch black
+            // Ground under grass — natural darkness
             float n = vnoise(vUv * 200.0);
-            vec3 col = baseCol * (0.55 + 0.15 * n);
+            vec3 col = baseCol * (0.65 + 0.15 * n);
 
             // Deep rough slightly darker
             if (isDeep > 0.5) col *= 0.90;
