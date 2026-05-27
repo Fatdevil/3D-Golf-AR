@@ -720,6 +720,7 @@ window.executeSmartBunker = function() {
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
     window.snapObjectsToGround();
 
     if(window.slopeOverlayActive) window.updateSlopeOverlay();
@@ -936,6 +937,7 @@ window.executeSmartFairway = function() {
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
     window.snapObjectsToGround();
 
     if(window.slopeOverlayActive) window.updateSlopeOverlay();
@@ -1091,6 +1093,7 @@ window.executeSmartTee = function() {
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
     window.snapObjectsToGround();
 
     // === 3. AUTO-PLACE TEE MARKERS ===
@@ -1747,6 +1750,7 @@ window.executeSplineSmartGreen = function() {
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
     window.snapObjectsToGround();
 
     // Refresh overlays
@@ -2360,6 +2364,7 @@ window.executeSplineSmartGreen = function() {
         window._arcadePlaneGeo.computeVertexNormals();
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
         if (window.snapObjectsToGround) window.snapObjectsToGround();
         if (window.slopeOverlayActive) window.updateSlopeOverlay();
         if (window.contourLinesActive) window.updateContourLines();
@@ -2519,6 +2524,7 @@ window.executeRidgeMountain = function() {
         window._arcadePlaneGeo.computeVertexNormals();
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
         if (typeof window.snapObjectsToGround === 'function') window.snapObjectsToGround();
         if (typeof window.rebuildWaterMask === 'function') window.rebuildWaterMask(true);
         if (window.syncWaterVisual) window.syncWaterVisual();
@@ -2666,6 +2672,7 @@ window.executeSplineMountain = function() {
         window._arcadePlaneGeo.computeVertexNormals();
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
+    if (window._terrainChunks) window._terrainChunks.syncAll();
 
         // Uppdatera skuggor/snäppning/vatten
         if (typeof window.snapObjectsToGround === 'function') window.snapObjectsToGround();

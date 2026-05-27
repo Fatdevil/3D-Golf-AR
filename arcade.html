@@ -20,6 +20,7 @@
 <script src="arcade-swing-engine.js"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js"></script>
+<script src="terrain-chunks.js"></script>
 <script src="arcade-terrain-overlays.js"></script>
 <script src="arcade-scene-engine.js"></script>
 <script src="arcade-tracer-engine.js"></script>
@@ -4866,6 +4867,13 @@
     window._arcadePlaneGeo = planeGeo;
     window._arcadePCtx = pCtx;
     window._arcadeMapTex = mapTex;
+
+    // === TERRAIN CHUNKING: Split into 4x4 frustum-culled chunks ===
+    if (window.TerrainChunkManager) {
+        window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 4);
+        window._terrainChunks.setEnabled(true);
+        console.log('[TerrainChunks] 4x4 grid enabled, master mesh hidden for raycasting');
+    }
     
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
     let surroundSize = 20000;
@@ -7299,6 +7307,7 @@
 
                 planeGeo.attributes.position.needsUpdate = true;
                 planeGeo.computeVertexNormals();
+                if (window._terrainChunks) window._terrainChunks.syncAll();
             }
 
             // RESET water mesh to -99 BEFORE loading — prevents ghost water
@@ -7622,6 +7631,7 @@
                     pos.needsUpdate = true;
                     if (window.syncWaterVisual) window.syncWaterVisual();
                     planeGeo.computeVertexNormals();
+                    if (window._terrainChunks) window._terrainChunks.syncAll();
 
                     // Rebuild water alpha mask from loaded heightmap
                     if (waterArr && waterArr.some(v => v > -90)) {
@@ -8811,6 +8821,8 @@
             planeGeo = newGeo;
             
             oldGeo.dispose();
+            // Rebuild terrain chunks for new geometry
+            if (window._terrainChunks) window._terrainChunks.rebuild(newGeo, plane);
             
             // Sync visual water mesh
             if (window.syncWaterVisual) window.syncWaterVisual();
@@ -9768,6 +9780,7 @@
         for(let i=0; i<posArr.length; i++) posArr[i] = state.heights[i];
         planeGeo.attributes.position.needsUpdate = true;
         planeGeo.computeVertexNormals();
+        if (window._terrainChunks) window._terrainChunks.syncAll();
         
         if (state.wHeights && window.waterData) {
             window.waterData.set(state.wHeights);
@@ -10286,6 +10299,7 @@
                 planeGeo.computeVertexNormals(); 
                 planeGeo.computeBoundingBox();
                 planeGeo.computeBoundingSphere();
+                if (window._terrainChunks) window._terrainChunks.syncDirty();
                 snapObjectsToGround();
                 // Rebuild water mask (visual-only to preserve the flat water mesh and smooth edges)
                 rebuildWaterMask(true);
@@ -10902,6 +10916,7 @@
         for(let i=0; i<pos.count; i++) { pos.setZ(i, 0); }
         pos.needsUpdate = true;
         planeGeo.computeVertexNormals();
+        if (window._terrainChunks) window._terrainChunks.syncAll();
         
         if (window.waterData) window.waterData.fill(-99);
         if (window.waterBaseZ) window.waterBaseZ.fill(-99);
@@ -11756,6 +11771,10 @@
                 planeGeo.attributes.position.needsUpdate = true;
                 // computeVertexNormals is intentionally omitted here to prevent severe lag.
                 // It is handled in the pointerup event listener instead.
+                if (window._terrainChunks) {
+                    window._terrainChunks.markAllDirty(); // Ramp modifies large area from snapshot
+                    window._terrainChunks.syncDirtyPositions();
+                }
             }
             return; // RAMP gör allt den behöver här, skippa vanliga borr-loopen.
         }
@@ -12007,7 +12026,14 @@
                 }
             }
         }
-        if (updatePos) planeGeo.attributes.position.needsUpdate = true;
+        if (updatePos) {
+            planeGeo.attributes.position.needsUpdate = true;
+            // Sync chunk positions (fast, normals deferred to mouseup)
+            if (window._terrainChunks) {
+                window._terrainChunks.markDirty(p2.x, p2.z, radius);
+                window._terrainChunks.syncDirtyPositions();
+            }
+        }
         
         // Real-time water mask rebuild (visual only — don't reset vertices during sculpting)
         // This ensures water ONLY appears where the terrain has been dug below the water table
