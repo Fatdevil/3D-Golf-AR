@@ -347,7 +347,10 @@
                 side: THREE.FrontSide,
                 transparent: true,
                 depthWrite: false,
-                depthTest: true
+                depthTest: true,
+                polygonOffset: true,
+                polygonOffsetFactor: -4,
+                polygonOffsetUnits: -4
             });
         }
 
