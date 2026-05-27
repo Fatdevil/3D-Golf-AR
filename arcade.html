@@ -5974,10 +5974,11 @@
     };
     
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
-    const brushMat = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
+    const brushMat = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, depthTest: false });
     const sculptBrushCursor = new THREE.Mesh(brushGeo, brushMat);
     sculptBrushCursor.rotation.x = -Math.PI / 2;
     sculptBrushCursor.visible = false;
+    sculptBrushCursor.renderOrder = 200;
     scene.add(sculptBrushCursor);
 
     // === FREE-LINE MEASURE SYSTEM (up to 20) ===
