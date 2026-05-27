@@ -5612,7 +5612,8 @@
         polygonOffsetFactor: -1, 
         polygonOffsetUnits: -1 
     });
-    const gridPlane = new THREE.Mesh(planeGeo, gridMat);
+    const gridGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 2, 2);
+    const gridPlane = new THREE.Mesh(gridGeo, gridMat);
     gridPlane.rotation.x = -Math.PI / 2;
     scene.add(gridPlane);
     window._gridPlane = gridPlane;
@@ -8918,10 +8919,15 @@
             // Rebuild terrain chunks for new geometry
             if (window._terrainChunks) window._terrainChunks.rebuild(newGeo, plane);
             
+            // Rebuild shells for new chunk geometries
+            if (window._terrainShells && window._terrainShells.quality !== 'OFF') {
+                window._terrainShells.refresh();
+            }
+            
             // Sync visual water mesh
             if (window.syncWaterVisual) window.syncWaterVisual();
             
-            console.log('Terrain resampled to', newSegs, 'segments');
+            console.log('Terrain resampled to', newSegs, 'segments, TERRAIN_SEGS =', window.TERRAIN_SEGS);
         }, 50);
     };
 
@@ -14144,8 +14150,11 @@ setInterval(() => {
     }
 
     // 3. Update UI
+    let segsInfo = window.TERRAIN_SEGS || '?';
     document.getElementById('perf-tris').innerText = tris.toLocaleString();
     document.getElementById('perf-mem').innerText = memMB.toFixed(1) + ' MB';
+    // Log actual TERRAIN_SEGS every 10 seconds for debugging
+    if (Math.random() < 0.03) console.log('[Perf] Tris:', tris, 'TERRAIN_SEGS:', segsInfo);
 
     // Tris Limits: 50k (Green), 150k (Yellow), 150k+ (Red)
     let trisPct = Math.min((tris / 150000) * 100, 100);
