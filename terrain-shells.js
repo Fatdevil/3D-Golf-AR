@@ -182,7 +182,7 @@
             // Deep rough slightly darker
             if (isDeep > 0.5) col *= 0.90;
 
-            gl_FragColor = vec4(col, 0.80 * roughness);
+            gl_FragColor = vec4(col, 0.15 * roughness);
         }
     `;
 
