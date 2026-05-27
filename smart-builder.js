@@ -1911,6 +1911,8 @@ window.executeSplineSmartGreen = function() {
         if(holeNum) holeNum.innerText = 'Hole ' + (window.currentHoleIndex + 1);
         let holePar = document.getElementById('hole-ui-par');
         if(holePar) holePar.innerText = 'Par ' + hole.par;
+        let sbPar = document.getElementById('sb-par-display');
+        if(sbPar) sbPar.innerText = 'Par ' + hole.par;
     };
 
     // Auto-advance to next incomplete hole
