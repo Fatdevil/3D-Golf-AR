@@ -1751,6 +1751,8 @@ window.executeSplineSmartGreen = function() {
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
+    // Green was painted — refresh chunk LOD detection
+    setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 200);
     window.snapObjectsToGround();
 
     // Refresh overlays

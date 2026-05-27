@@ -1239,11 +1239,21 @@
                 </label>
                 <div id="terrain-settings-content" style="display:flex; flex-direction:column; gap:5px; margin-top:8px;">
                     <div id="terrain-res-container" style="display:flex; flex-direction:column;">
-                        <label style="color:#eab308; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Terrain Grid</label>
-                        <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Lower = better performance.<br>Updates when you release mouse.</div>
-                        <input type="range" id="terrain-res-slider" min="150" max="800" step="50" value="600" onchange="if(window.updateTerrainResolution) window.updateTerrainResolution(parseInt(this.value));" oninput="document.getElementById('terrain-res-val').textContent = this.value + 'x' + this.value;" style="width:100%; accent-color:#eab308; cursor:pointer;">
+                        <label style="color:#22c55e; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">🟢 Green Grid</label>
+                        <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Master resolution. Greens render at this quality.<br>Higher = smoother greens but more memory.</div>
+                        <input type="range" id="green-res-slider" min="150" max="800" step="50" value="600" onchange="if(window.updateTerrainResolution) { window.updateTerrainResolution(parseInt(this.value)); let ts = document.getElementById('terrain-res-slider'); if(ts && parseInt(ts.value) > parseInt(this.value)) { ts.value = this.value; document.getElementById('terrain-res-val').textContent = this.value + 'x' + this.value; if(window._terrainChunks) window._terrainChunks.updateLOD(parseInt(this.value)); } }" oninput="document.getElementById('green-res-val').textContent = this.value + 'x' + this.value;" style="width:100%; accent-color:#22c55e; cursor:pointer;">
                         <div style="display:flex; justify-content:space-between; width:100%;">
                             <span style="color:#64748b; font-size:9px;">150</span>
+                            <span id="green-res-val" style="color:#22c55e; font-size:10px; font-weight:bold;">600x600</span>
+                            <span style="color:#64748b; font-size:9px;">800</span>
+                        </div>
+                    </div>
+                    <div id="terrain-lod-container" style="display:flex; flex-direction:column; margin-top:6px; padding-top:6px; border-top:1px solid #334155;">
+                        <label style="color:#eab308; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">🌍 Terrain Grid</label>
+                        <div style="font-size:8px; color:#94a3b8; margin-bottom:6px; line-height:1.2;">Visual quality for non-green areas.<br>Lower = better mobile performance.</div>
+                        <input type="range" id="terrain-res-slider" min="100" max="800" step="50" value="600" onchange="let v = Math.min(parseInt(this.value), parseInt(document.getElementById('green-res-slider').value)); this.value = v; document.getElementById('terrain-res-val').textContent = v + 'x' + v; window._terrainGridSegs = v; if(window._terrainChunks) window._terrainChunks.updateLOD(v);" oninput="let v = Math.min(parseInt(this.value), parseInt(document.getElementById('green-res-slider').value)); document.getElementById('terrain-res-val').textContent = v + 'x' + v;" style="width:100%; accent-color:#eab308; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; width:100%;">
+                            <span style="color:#64748b; font-size:9px;">100</span>
                             <span id="terrain-res-val" style="color:#eab308; font-size:10px; font-weight:bold;">600x600</span>
                             <span style="color:#64748b; font-size:9px;">800</span>
                         </div>
@@ -4870,9 +4880,9 @@
 
     // === TERRAIN CHUNKING: Split into 4x4 frustum-culled chunks ===
     if (window.TerrainChunkManager) {
-        window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 4);
+        let tGrid = window._terrainGridSegs || TERRAIN_SEGS;
+        window._terrainChunks = new TerrainChunkManager(planeGeo, plane, scene, planeMat, 4, { terrainGrid: tGrid });
         window._terrainChunks.setEnabled(true);
-        console.log('[TerrainChunks] 4x4 grid enabled, master mesh hidden for raycasting');
     }
     
     // === SURROUNDING GROUND PLANE (eliminates edge-of-world void) ===
@@ -5535,6 +5545,7 @@
     const gridPlane = new THREE.Mesh(planeGeo, gridMat);
     gridPlane.rotation.x = -Math.PI / 2;
     scene.add(gridPlane);
+    window._gridPlane = gridPlane;
 
     window.resetAimTarget = function() {
         let hole = courseHoles[playingHoleIndex];
@@ -7121,7 +7132,7 @@
                 total_par: totalPar,
                 targets: dumpTargets,
                 trees: dumpTrees,
-                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm, segs: TERRAIN_SEGS, waterTableLevel: window.waterTableLevel, waterType: window.currentWaterType}),
+                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm, segs: TERRAIN_SEGS, terrainGrid: window._terrainGridSegs || TERRAIN_SEGS, waterTableLevel: window.waterTableLevel, waterType: window.currentWaterType}),
                 terrain_biomemap: biome,
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
@@ -7648,6 +7659,16 @@
                     }
                     if (mapData.waterType) {
                         setTimeout(() => { if (window.setWaterType) window.setWaterType(mapData.waterType); }, 100);
+                    }
+
+                    // Restore terrain grid LOD setting
+                    if (mapData.terrainGrid && window._terrainChunks) {
+                        window._terrainGridSegs = mapData.terrainGrid;
+                        window._terrainChunks.updateLOD(mapData.terrainGrid);
+                        let tSlider = document.getElementById('terrain-res-slider');
+                        let tVal = document.getElementById('terrain-res-val');
+                        if (tSlider) tSlider.value = mapData.terrainGrid;
+                        if (tVal) tVal.textContent = mapData.terrainGrid + 'x' + mapData.terrainGrid;
                     }
 
                     if(arr.terrain_biomemap) {
