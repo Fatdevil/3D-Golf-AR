@@ -4833,6 +4833,7 @@
     window.roughMaskCtx.fillRect(0, 0, 4096, 4096);
     window.roughMaskTex = new THREE.CanvasTexture(window.roughMaskCanvas);
     window.roughMaskTex.magFilter = THREE.NearestFilter;
+    window.roughMaskTex.minFilter = THREE.NearestFilter;
     window.roughMaskTex.premultiplyAlpha = false;
 
     window.rebuildRoughMask = function() {

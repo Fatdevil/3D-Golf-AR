@@ -139,7 +139,7 @@
             float sandFlag = 0.0;
             if (isSand > 0.5) {
                 baseCol = uSandCol;
-                targetH = 0.025;    // 2.5cm sand ripples
+                targetH = 0.15;     // 15cm sand ripples (prevents culling by low shell layers)
                 tipBright = 0.08;
                 sandFlag = 1.0;
             } else if (isDeep > 0.5) {
