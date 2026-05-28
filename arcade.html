@@ -7845,6 +7845,10 @@
                         img.onload = () => {
                             pCtx.drawImage(img, 0, 0);
                             if(typeof mapTex !== 'undefined') mapTex.needsUpdate = true;
+                            // Fix loading race condition: update biome data and rebuild rough mask once loaded
+                            window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+                            if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+                            if (window._terrainShells) window._terrainShells.refresh();
                         };
                         img.src = arr.terrain_biomemap;
                     }
@@ -10496,7 +10500,13 @@
 
             if(currentTool === 'COLORIZE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH')) {
                 saveLevel();
-            } else if(currentTool !== 'PAINT') {
+            } else if(currentTool === 'PAINT') {
+                if (typeof pCtx !== 'undefined') window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+                if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+                if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+                if (window._terrainShells) window._terrainShells.refresh();
+                window.hasUnsavedChanges = true;
+            } else {
                 planeGeo.computeVertexNormals(); 
                 planeGeo.computeBoundingBox();
                 planeGeo.computeBoundingSphere();
