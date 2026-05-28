@@ -133,9 +133,6 @@
             float roughness = max(max(isRough, isDeep), max(max(isSemi, isFore), isSand));
             if (roughness < 0.1) discard;
 
-            // Disable 3D grass on steep slopes (cliffs/mountains)
-            if (vSlope > 0.30) discard;
-
             // Pick color and height based on dominant biome channel
             vec3 baseCol;
             float targetH;
