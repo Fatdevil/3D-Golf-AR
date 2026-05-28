@@ -128,7 +128,7 @@
             float isRough = step(0.75, mask.r);                    // R=1.0
             float isFore  = step(0.3, mask.r) * (1.0 - isRough);  // R≈0.5
             float isDeep  = step(0.75, mask.g);                    // G=1.0
-            float isSand  = step(0.3, mask.g) * (1.0 - isDeep);   // G≈0.5
+            float isSand  = 0.0;                                   // Disabled: flat sand looks cleaner and avoids staircase artifacts on slopes
             float isSemi  = step(0.5, mask.b);                     // B=1.0
             float roughness = max(max(isRough, isDeep), max(max(isSemi, isFore), isSand));
             if (roughness < 0.1) discard;
