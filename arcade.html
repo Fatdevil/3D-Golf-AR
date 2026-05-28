@@ -11672,15 +11672,25 @@
         }
     }
     
-    // --- PREVENT BROWSER ZOOM (pinch-to-zoom on trackpad + Cmd+Plus/Minus) ---
+    // --- PREVENT BROWSER ZOOM (pinch-to-zoom on trackpad + Cmd+Plus) ---
     window.addEventListener('wheel', function(e) {
         if (e.ctrlKey || e.metaKey) {
             e.preventDefault();  // Block pinch-zoom and Cmd+scroll
         }
     }, { passive: false });
+
+    // Block macOS trackpad gesture-based pinch-to-zoom completely
+    document.addEventListener('gesturestart', function(e) {
+        e.preventDefault();
+    });
+    document.addEventListener('gesturechange', function(e) {
+        e.preventDefault();
+    });
+
     document.addEventListener('keydown', function(e) {
-        if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
-            e.preventDefault();  // Block Cmd+Plus, Cmd+Minus, Cmd+0
+        // Block only zoom-in (+ and =), allow zoom-out (-) and reset (0) to prevent lockouts
+        if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+            e.preventDefault();  // Block Cmd+Plus, Cmd+Equals
         }
     });
 
