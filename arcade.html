@@ -954,6 +954,8 @@
 
         <!-- POLY.PIZZA LIBRARY MODAL -->
         <style>
+        /* Prevent browser pinch-zoom on trackpad/touch — only 3D camera should zoom */
+        html, body { touch-action: none; }
         .poly-model-card { background:rgba(30,41,59,0.7); border-radius:10px; cursor:pointer; overflow:hidden; border: 1px solid rgba(255,255,255,0.05); transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
         .poly-model-card:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(0,0,0,0.5); border-color: rgba(74,222,128,0.4); }
         .poly-thumb-wrap { width:100%; height:140px; overflow:hidden; background:#0f172a; }
@@ -11650,6 +11652,18 @@
         }
     }
     
+    // --- PREVENT BROWSER ZOOM (pinch-to-zoom on trackpad + Cmd+Plus/Minus) ---
+    window.addEventListener('wheel', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();  // Block pinch-zoom and Cmd+scroll
+        }
+    }, { passive: false });
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+            e.preventDefault();  // Block Cmd+Plus, Cmd+Minus, Cmd+0
+        }
+    });
+
     // --- NATURE ROTATION TOOL (scroll wheel) ---
     // Scroll near a placed nature object to rotate it by 15° per scroll step
     renderer.domElement.addEventListener('wheel', function(e) {
