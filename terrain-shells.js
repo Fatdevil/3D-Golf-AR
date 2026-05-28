@@ -83,6 +83,7 @@
         uniform float uDeepH;
         uniform float uMaxHeight;
         uniform float uMaxDist;
+        uniform vec2  uWindDir;
 
         // Dynamic light uniforms synced with scene
         uniform vec3  uLightDir;
@@ -221,21 +222,6 @@
             float dotNL = max(0.0, dot(N, L));
             vec3 lightColor = uAmbColor + uDirColor * dotNL;
             col *= lightColor;
-
-            // Debug colors based on mask (placed at end to avoid GLSL return statement issues)
-            if (isSand > 0.5) {
-                col = vec3(1.0, 1.0, 0.0); // Yellow
-            } else if (isDeep > 0.5) {
-                col = vec3(1.0, 0.0, 0.0); // Red
-            } else if (isRough > 0.5) {
-                col = vec3(0.0, 1.0, 0.0); // Green
-            } else if (isFore > 0.5) {
-                col = vec3(0.0, 1.0, 1.0); // Cyan
-            } else if (isSemi > 0.5) {
-                col = vec3(0.0, 0.0, 1.0); // Blue
-            } else {
-                col = vec3(1.0, 0.0, 1.0); // Magenta
-            }
 
             gl_FragColor = vec4(col, 1.0);
         }
