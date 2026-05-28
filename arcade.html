@@ -4864,6 +4864,8 @@
         let threshSF = 2500;   // semi-rough & foregreen (cleaner)
         let threshBK = 3000;   // bunker sand
 
+        console.log('🏖️ Sand reference color:', bHex, '→ RGB(', bR, bG, bB, ') thresh:', threshBK);
+
         for (let i = 0; i < tData.length; i += 4) {
             let r = tData[i], g = tData[i+1], b = tData[i+2];
 
