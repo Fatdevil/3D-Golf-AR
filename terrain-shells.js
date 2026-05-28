@@ -78,6 +78,7 @@
         uniform vec3  uDeepCol;
         uniform vec3  uSemiCol;
         uniform vec3  uForeCol;
+        uniform vec3  uSandCol;
         uniform float uRoughH;
         uniform float uDeepH;
         uniform float uMaxHeight;
@@ -121,20 +122,27 @@
             float distFade = 1.0 - smoothstep(uMaxDist * 0.75, uMaxDist, vCamDist);
             if (hash(vWorldPos.xz * 37.0) > distFade) discard;
 
-            // ── 4-biome mask: R=rough/fore, G=deep, B=semi ──
+            // ── 5-biome mask: R=rough/fore, G=deep/sand, B=semi ──
             vec3 mask = texture2D(uRoughMask, vUv).rgb;
             float isRough = step(0.75, mask.r);                    // R=1.0
             float isFore  = step(0.3, mask.r) * (1.0 - isRough);  // R≈0.5
-            float isDeep  = step(0.5, mask.g);                     // G=1.0
+            float isDeep  = step(0.75, mask.g);                    // G=1.0
+            float isSand  = step(0.3, mask.g) * (1.0 - isDeep);   // G≈0.5
             float isSemi  = step(0.5, mask.b);                     // B=1.0
-            float roughness = max(max(isRough, isDeep), max(isSemi, isFore));
+            float roughness = max(max(isRough, isDeep), max(max(isSemi, isFore), isSand));
             if (roughness < 0.1) discard;
 
             // Pick color and height based on dominant biome channel
             vec3 baseCol;
             float targetH;
             float tipBright;
-            if (isDeep > 0.5) {
+            bool sandMode = false;
+            if (isSand > 0.5) {
+                baseCol = uSandCol;
+                targetH = 0.025;    // 2.5cm sand ripples
+                tipBright = 0.08;
+                sandMode = true;
+            } else if (isDeep > 0.5) {
                 baseCol = uDeepCol;
                 targetH = uDeepH;
                 tipBright = 0.05;
@@ -158,10 +166,26 @@
             if (heightFade < 0.05) discard;
 
             vec2 wXZ = vWorldPos.xz;
-            float clump = fbm(wXZ * 0.8);
-            float tuft = fbm(wXZ * 4.0 + 50.0);
-            float blade = vnoise(wXZ * 15.0 + 100.0);
-            float grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
+
+            float grass;
+            if (sandMode) {
+                // Sand: directional wind ripples — stretch noise perpendicular to wind
+                vec2 windPerp = vec2(-uWindDir.y, uWindDir.x);
+                vec2 sandUV = vec2(
+                    dot(wXZ, uWindDir) * 0.4,
+                    dot(wXZ, windPerp) * 2.5
+                );
+                float ripple = vnoise(sandUV * 3.0) * 0.5 +
+                               vnoise(sandUV * 7.0 + 20.0) * 0.3 +
+                               vnoise(sandUV * 14.0 + 40.0) * 0.2;
+                grass = ripple;
+            } else {
+                // Grass: standard FBM tufts
+                float clump = fbm(wXZ * 0.8);
+                float tuft = fbm(wXZ * 4.0 + 50.0);
+                float blade = vnoise(wXZ * 15.0 + 100.0);
+                grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
+            }
 
             // Gentle threshold: bottom layers keep ~90% pixels, top ~60%
             // On slopes: bottom layers are fully solid to prevent terrain showing through
@@ -179,6 +203,12 @@
             float ao = mix(aoBase, 1.10, eL);
             vec3 col = baseCol * ao;
             col += baseCol * tipBright * eL;
+
+            // Sand: subtle grain variation
+            if (sandMode) {
+                float grain = vnoise(wXZ * 40.0) * 0.08;
+                col += vec3(grain, grain * 0.8, grain * 0.5);
+            }
 
             float colorVar = vnoise(vUv * 80.0 + 33.0);
             col *= 0.95 + 0.10 * colorVar;
@@ -214,6 +244,7 @@
             this._deepCol  = new THREE.Vector3();
             this._semiCol  = new THREE.Vector3();
             this._foreCol  = new THREE.Vector3();
+            this._sandCol  = new THREE.Vector3();
             this._updateColors();
 
             // Track hex colors to auto-update on biome change
@@ -222,6 +253,7 @@
             this._lastDeepHex = cfg.fescueColor || '#2d4c1a';
             this._lastSemiHex = cfg.semiColor || '#6b9e3d';
             this._lastForeHex = cfg.foregreenColor || '#8bc45d';
+            this._lastSandHex = cfg.bunkerColor || '#e0d8a4';
         }
 
         setQuality(q) {
@@ -241,11 +273,13 @@
             let dHex = cfg.fescueColor || '#2d4c1a';
             let sHex = cfg.semiColor || '#6b9e3d';
             let fHex = cfg.foregreenColor || '#8bc45d';
-            if (rHex !== this._lastRoughHex || dHex !== this._lastDeepHex || sHex !== this._lastSemiHex || fHex !== this._lastForeHex) {
+            let bHex = cfg.bunkerColor || '#e0d8a4';
+            if (rHex !== this._lastRoughHex || dHex !== this._lastDeepHex || sHex !== this._lastSemiHex || fHex !== this._lastForeHex || bHex !== this._lastSandHex) {
                 this._lastRoughHex = rHex;
                 this._lastDeepHex = dHex;
                 this._lastSemiHex = sHex;
                 this._lastForeHex = fHex;
+                this._lastSandHex = bHex;
                 this.updateColors();
             }
 
@@ -305,6 +339,7 @@
                 s.mat.uniforms.uDeepCol.value.copy(this._deepCol);
                 s.mat.uniforms.uSemiCol.value.copy(this._semiCol);
                 s.mat.uniforms.uForeCol.value.copy(this._foreCol);
+                s.mat.uniforms.uSandCol.value.copy(this._sandCol);
             }
         }
 
@@ -472,6 +507,7 @@
                     uDeepCol:  { value: this._deepCol.clone() },
                     uSemiCol:  { value: this._semiCol.clone() },
                     uForeCol:  { value: this._foreCol.clone() },
+                    uSandCol:  { value: this._sandCol.clone() },
                     uMaxDist:  { value: maxDist },
                     uLightDir: { value: new THREE.Vector3(0, 1, 0) },
                     uDirColor: { value: new THREE.Vector3(1, 1, 1) },
@@ -494,6 +530,7 @@
             this._hexToVec(cfg.fescueColor || '#2d4c1a', this._deepCol);
             this._hexToVec(cfg.semiColor || '#6b9e3d', this._semiCol);
             this._hexToVec(cfg.foregreenColor || '#8bc45d', this._foreCol);
+            this._hexToVec(cfg.bunkerColor || '#e0d8a4', this._sandCol);
         }
 
         _hexToVec(hex, v) {
