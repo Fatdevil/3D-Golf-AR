@@ -136,12 +136,12 @@
             vec3 baseCol;
             float targetH;
             float tipBright;
-            bool sandMode = false;
+            float sandFlag = 0.0;
             if (isSand > 0.5) {
                 baseCol = uSandCol;
                 targetH = 0.025;    // 2.5cm sand ripples
                 tipBright = 0.08;
-                sandMode = true;
+                sandFlag = 1.0;
             } else if (isDeep > 0.5) {
                 baseCol = uDeepCol;
                 targetH = uDeepH;
@@ -168,11 +168,13 @@
             vec2 wXZ = vWorldPos.xz;
 
             float grass;
-            if (sandMode) {
+            if (sandFlag > 0.5) {
                 // Sand: directional wind ripples — stretch noise perpendicular to wind
-                vec2 windPerp = vec2(-uWindDir.y, uWindDir.x);
+                // Safe fallback if wind direction is zero
+                vec2 wDir = length(uWindDir) > 0.01 ? normalize(uWindDir) : vec2(1.0, 0.0);
+                vec2 windPerp = vec2(-wDir.y, wDir.x);
                 vec2 sandUV = vec2(
-                    dot(wXZ, uWindDir) * 0.4,
+                    dot(wXZ, wDir) * 0.4,
                     dot(wXZ, windPerp) * 2.5
                 );
                 float ripple = vnoise(sandUV * 3.0) * 0.5 +
@@ -205,7 +207,7 @@
             col += baseCol * tipBright * eL;
 
             // Sand: subtle grain variation
-            if (sandMode) {
+            if (sandFlag > 0.5) {
                 float grain = vnoise(wXZ * 40.0) * 0.08;
                 col += vec3(grain, grain * 0.8, grain * 0.5);
             }
