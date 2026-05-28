@@ -132,6 +132,27 @@
             float roughness = max(max(isRough, isDeep), max(max(isSemi, isFore), isSand));
             if (roughness < 0.1) discard;
 
+            // Debug colors based on mask
+            if (isSand > 0.5) {
+                gl_FragColor = vec4(1.0, 1.0, 0.0, 1.0); // Yellow
+                return;
+            } else if (isDeep > 0.5) {
+                gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); // Red
+                return;
+            } else if (isRough > 0.5) {
+                gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0); // Green
+                return;
+            } else if (isFore > 0.5) {
+                gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0); // Cyan
+                return;
+            } else if (isSemi > 0.5) {
+                gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0); // Blue
+                return;
+            } else {
+                gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0); // Magenta
+                return;
+            }
+
             // Pick color and height based on dominant biome channel
             vec3 baseCol;
             float targetH;
