@@ -123,42 +123,25 @@
             float distFade = 1.0 - smoothstep(uMaxDist * 0.75, uMaxDist, vCamDist);
             if (hash(vWorldPos.xz * 37.0) > distFade) discard;
 
-            // ── 5-biome mask: R=rough/fore, G=deep/sand, B=semi ──
+            // ── Biome mask: R=rough, G=deep ──
             vec3 mask = texture2D(uRoughMask, vUv).rgb;
             float isRough = step(0.75, mask.r);                    // R=1.0
-            float isFore  = step(0.3, mask.r) * (1.0 - isRough);  // R≈0.5
             float isDeep  = step(0.75, mask.g);                    // G=1.0
-            float isSand  = 0.0;                                   // Disabled: flat sand looks cleaner and avoids staircase artifacts on slopes
-            float isSemi  = step(0.5, mask.b);                     // B=1.0
-            float roughness = max(max(isRough, isDeep), max(max(isSemi, isFore), isSand));
+            float roughness = max(isRough, isDeep);
             if (roughness < 0.1) discard;
 
             // Pick color and height based on dominant biome channel
             vec3 baseCol;
             float targetH;
             float tipBright;
-            float sandFlag = 0.0;
-            if (isSand > 0.5) {
-                baseCol = uSandCol;
-                targetH = 0.15;     // 15cm sand ripples (prevents culling by low shell layers)
-                tipBright = 0.08;
-                sandFlag = 1.0;
-            } else if (isDeep > 0.5) {
+            if (isDeep > 0.5) {
                 baseCol = uDeepCol;
                 targetH = uDeepH;
                 tipBright = 0.05;
-            } else if (isRough > 0.5) {
+            } else {
                 baseCol = uRoughCol;
                 targetH = uRoughH;
                 tipBright = 0.25;
-            } else if (isSemi > 0.5) {
-                baseCol = uSemiCol;
-                targetH = uRoughH * 0.6;
-                tipBright = 0.20;
-            } else {
-                baseCol = uForeCol;
-                targetH = uRoughH * 0.50;
-                tipBright = 0.05;
             }
 
             // Height-proportional layer culling with soft fade
@@ -168,27 +151,11 @@
 
             vec2 wXZ = vWorldPos.xz;
 
-            float grass;
-            if (sandFlag > 0.5) {
-                // Sand: directional wind ripples — stretch noise perpendicular to wind
-                // Safe fallback if wind direction is zero
-                vec2 wDir = length(uWindDir) > 0.01 ? normalize(uWindDir) : vec2(1.0, 0.0);
-                vec2 windPerp = vec2(-wDir.y, wDir.x);
-                vec2 sandUV = vec2(
-                    dot(wXZ, wDir) * 0.4,
-                    dot(wXZ, windPerp) * 2.5
-                );
-                float ripple = vnoise(sandUV * 3.0) * 0.5 +
-                               vnoise(sandUV * 7.0 + 20.0) * 0.3 +
-                               vnoise(sandUV * 14.0 + 40.0) * 0.2;
-                grass = ripple;
-            } else {
-                // Grass: standard FBM tufts
-                float clump = fbm(wXZ * 0.8);
-                float tuft = fbm(wXZ * 4.0 + 50.0);
-                float blade = vnoise(wXZ * 15.0 + 100.0);
-                grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
-            }
+            // Grass: standard FBM tufts
+            float clump = fbm(wXZ * 0.8);
+            float tuft = fbm(wXZ * 4.0 + 50.0);
+            float blade = vnoise(wXZ * 15.0 + 100.0);
+            float grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
 
             // Gentle threshold: bottom layers keep ~90% pixels, top ~60%
             // On slopes: bottom layers are fully solid to prevent terrain showing through
@@ -206,12 +173,6 @@
             float ao = mix(aoBase, 1.10, eL);
             vec3 col = baseCol * ao;
             col += baseCol * tipBright * eL;
-
-            // Sand: subtle grain variation
-            if (sandFlag > 0.5) {
-                float grain = vnoise(wXZ * 40.0) * 0.08;
-                col += vec3(grain, grain * 0.8, grain * 0.5);
-            }
 
             float colorVar = vnoise(vUv * 80.0 + 33.0);
             col *= 0.95 + 0.10 * colorVar;
@@ -469,8 +430,8 @@
             this._updateColors();
             let maxH = Math.max(this.roughHeight, this.deepHeight);
             
-            // Decouple from Green Grid! Use Terrain Grid for 3D grass.
-            let shellSegs = window._terrainGridSegs || (window.TERRAIN_SEGS ? Math.min(window.TERRAIN_SEGS, 200) : 200);
+            // Decouple from Green Grid! Cap 3D grass resolution at max 200.
+            let shellSegs = Math.min(window._terrainGridSegs || 200, 200);
             if (this.customGeo) this.customGeo.dispose();
             this.customGeo = new THREE.PlaneGeometry(window.TERRAIN_SIZE || 400, window.TERRAIN_SIZE || 400, shellSegs, shellSegs);
             this.customGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);

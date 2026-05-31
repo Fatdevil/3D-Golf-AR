@@ -420,6 +420,7 @@
         <button id="tool-water" onclick="setTool('WATER')" class="pro-tool"><span style="font-size:16px;">💧</span> WATER</button>
         <button id="tool-spline" onclick="setTool('SPLINE')" class="pro-tool"><span style="font-size:16px;">〰️</span> PATH</button>
         <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')" class="pro-tool"><span style="font-size:16px;">🏗️</span> COURSE</button>
+        <button id="tool-hole" onclick="setTool('HOLE')" class="pro-tool"><span style="font-size:16px;">🎯</span> RANGE</button>
         
         <div style="height:1px; background:#475569; width:100%; margin:4px 0; grid-column:1 / -1;"></div>
         
@@ -1056,8 +1057,30 @@
             <div style="color:#94a3b8; font-size:10px;">Higher stimp makes the ball roll faster and break more.</div>
         </div>
 
-        <!-- Hole picker removed — par now in Smart Builder panel -->
-        <div id="hole-picker-group" class="prop-panel" style="display:none;"></div>
+        <!-- Hole Setup Panel -->
+        <div id="hole-picker-group" class="prop-panel" style="display:none; flex-direction:column; gap:6px;">
+            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🎯 Range & Hole Setup</label>
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px;">
+                <button onclick="changeHole(-1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&lt;</button>
+                <div id="hole-ui-num" style="color:#fff; font-weight:bold; font-size:11px;">Hole 1</div>
+                <button onclick="changeHole(1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">&gt;</button>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:6px; padding:4px;">
+                <button onclick="changeHolePar(-1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">-</button>
+                <div id="hole-ui-par" style="color:#fbbf24; font-weight:bold; font-size:11px;">Par 4</div>
+                <button onclick="changeHolePar(1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:5px 10px;">+</button>
+            </div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:5px;">
+                <button id="btn-set-tee-red" onclick="setHoleItem('TEE_RED')" class="hole-item-btn" style="background:#1e293b; color:#ef4444; border:none; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer;">🔴 Red Tee</button>
+                <button id="btn-set-tee-yellow" onclick="setHoleItem('TEE_YELLOW')" class="hole-item-btn active" style="background:#facc15; color:#0f172a; border:none; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer;">🟡 Yellow Tee</button>
+                <button id="btn-set-tee-white" onclick="setHoleItem('TEE_WHITE')" class="hole-item-btn" style="background:#1e293b; color:#fff; border:none; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer;">⚪ White Tee</button>
+                <button id="btn-set-tee-black" onclick="setHoleItem('TEE_BLACK')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer;">⚫ Black Tee</button>
+                <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer; grid-column:1 / 2;">⛳ Flag</button>
+                <button id="btn-set-range-tee" onclick="setHoleItem('TEE_RANGE')" class="hole-item-btn" style="background:#1e293b; color:#eab308; border:1px solid #eab308; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer; grid-column:2 / 3;">🎯 Range Tee</button>
+                <button id="btn-toggle-unit" onclick="toggleRangeUnit()" style="background:#1e293b; color:#eab308; border:1px solid #475569; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer; grid-column:1 / -1; margin-top:5px;">📐 Enhet: Meter</button>
+            </div>
+        </div>
         </div> <!-- End of tab-content-TOOLS -->
 
         <div id="tab-content-ENV" style="display:none; flex-direction:column; gap:10px;">
@@ -2710,7 +2733,7 @@
         fairwayColor: '#688050',     // Dull green fairway
         semiColor: '#5a6a40',        // Faded semi
         roughColor: '#4a5a35',       // Dark cold rough
-        fescueColor: '#2a3418',      // Dead grass (darkened for better rough/fescue separation)
+        fescueColor: '#fafcff',      // Snow-white deep rough (serves as volumetric snow clumps)
         waterColor: '#5a9ab8',       // Cold blue
         oceanColor: '#1a3050',
         horizonColor: '#9ab0c0'      // Cold grey-blue horizon
@@ -7541,15 +7564,14 @@
             if (typeof executeClear === 'function') executeClear();
             else ArcadeStorage.removeCustomLevel();
             
-            // Range mode: hide standard tee buttons, show only Range Tee + Flag
+            // Range mode initialization (keep standard tools active)
             if (params.get('mode') === 'range') {
                 window._isRangeMode = true;
-                ['btn-set-tee-red','btn-set-tee-yellow','btn-set-tee-white','btn-set-tee-black'].forEach(id => {
-                    let btn = document.getElementById(id);
-                    if (btn) btn.style.display = 'none';
-                });
                 // Auto-select Range Tee as default tool
-                setTimeout(() => { if (typeof setHoleItem === 'function') setHoleItem('TEE_RANGE'); }, 500);
+                setTimeout(() => {
+                    if (typeof setTool === 'function') setTool('HOLE');
+                    if (typeof setHoleItem === 'function') setHoleItem('TEE_RANGE');
+                }, 500);
             }
             
             setMode('BUILD');
@@ -9515,7 +9537,19 @@
             spinAxisDeg: data.spinAxisDeg || 0,
             azimDeg: (data.azimDeg || 0) + aimOffsetDeg, 
             isLiveData: data.isLiveData || false,
-            isTeeShot: !!window._isRangeMode || (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1) // Range mode = always fairway lie (hitting off mat)
+            isTeeShot: (window._isRangeMode) ? (function() {
+                // In range mode, check the surface under the Range Tee.
+                // If it is on rough, deep rough, or sand, treat it as turf lie (no tee-shot)
+                // so the physics engine applies the lie penalty!
+                if (typeof window.localGetTerrainAt === 'function') {
+                    let surf = window.localGetTerrainAt(startPos[0], startPos[1]);
+                    let type = surf ? surf.type : 'FAIRWAY';
+                    if (type === 'ROUGH' || type === 'DEEP ROUGH' || type === 'SAND' || type === 'FESCUE') {
+                        return false; // Not a tee shot (forces lie penalty!)
+                    }
+                }
+                return true; // Default to tee shot (fairway mat) for other surfaces
+            })() : (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1)
         };
         // BUG-06 FIX: Use actual flag data from courseHoles instead of dead window.pinMesh
         var cupPosLocal = null;
@@ -10572,9 +10606,9 @@
         let btnPlay = document.getElementById('btn-mode-play');
 
         if(btnBuild) {
-            // Hide BUILD button in Range TEST mode (no builder to go back to)
             let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
-            btnBuild.style.display = (mode === 'TEST' && !isRange) ? 'block' : 'none';
+            let isEditing = (new URLSearchParams(window.location.search)).has('edit') || (new URLSearchParams(window.location.search)).get('autorun') === 'new_build';
+            btnBuild.style.display = (mode === 'TEST' && (!isRange || isEditing)) ? 'block' : 'none';
             btnBuild.style.background = '#0f172a';
             btnBuild.style.color = '#38bdf8';
         }
@@ -10647,6 +10681,7 @@
             camera.position.set(0, 15, 10);
             controls.target.set(0, 0, -30);
             controls.update();
+
         } else if (mode === 'TEST') {
             // === COURSE VALIDATION GATE (supports ranges) ===
             let validHole = courseHoles.find(h => h && (
@@ -10856,11 +10891,12 @@
             }
         });
         
-        let activeBtn = document.getElementById('tool-' + toolName.toLowerCase().replace('_',''));
+        let tId = toolName.toLowerCase().replace('_','');
+        let activeBtn = document.getElementById('tool-' + tId);
         if (activeBtn) {
             let isPro = activeBtn.classList.contains('pro-tool');
             let base = isPro ? 'pro-tool ' : '';
-            if (toolName === 'SMART_BUILDER') activeBtn.className = base + 'active-green';
+            if (toolName === 'SMART_BUILDER' || toolName === 'HOLE') activeBtn.className = base + 'active-green';
             else if (toolName === 'MEASURE') activeBtn.className = base + 'active-yellow';
             else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
             else if (toolName === 'ERASER') activeBtn.className = base + 'active-red';
@@ -13430,6 +13466,12 @@ window.triggerExplosion = function(x, y, z) {
                 if (typeof localGetTerrainAt === 'function') {
                     let surf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
                     let isTee = (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 0);
+                    if (window._isRangeMode && isTee && surf) {
+                        let type = surf.type || 'FAIRWAY';
+                        if (type === 'ROUGH' || type === 'DEEP ROUGH' || type === 'SAND' || type === 'FESCUE') {
+                            isTee = false;
+                        }
+                    }
                     
                     let lType = isTee ? 'FAIRWAY' : (surf ? (surf.type || 'FAIRWAY') : 'FAIRWAY');
                     
