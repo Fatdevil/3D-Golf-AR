@@ -1847,6 +1847,7 @@
                     <!-- Actions for Active Bunker -->
                     <div id="sbk-active-actions" style="display:none; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px; margin-bottom:4px;">
                         <button type="button" onclick="window.centerCameraOnBunker()" style="background:#1e293b; color:#fbbf24; border:1px solid #fbbf24; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_find_bunker">🔍 Hitta på kartan</button>
+                        <button type="button" id="sbk-toggle-outline-btn" onclick="window.toggleBunkerOutline()" style="background:#1e293b; color:#fbbf24; border:1px solid rgba(251,191,36,0.5); padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_bunker_outline_visible">👁️ Gul kontur: Synlig</button>
                         <button type="button" onclick="window.activateMoveBunkerMode()" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_move_bunker">✥ Flytta bunker</button>
                         <button type="button" onclick="window.redrawSmartBunker()" style="background:#1e293b; color:#a855f7; border:1px solid #a855f7; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_redraw_bunker">🔄 Ändra form</button>
                         <button type="button" onclick="window.deleteSmartBunker()" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid #ef4444; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_delete_bunker">🗑️ Radera bunker</button>
@@ -1915,6 +1916,7 @@
                     <!-- Actions for Active Fairway -->
                     <div id="sf-active-actions" style="display:none; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px; margin-bottom:4px;">
                         <button type="button" onclick="window.centerCameraOnFairway()" style="background:#1e293b; color:#fbbf24; border:1px solid #fbbf24; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_find_fairway">🔍 Hitta på kartan</button>
+                        <button type="button" id="sf-toggle-outline-btn" onclick="window.toggleFairwayOutline()" style="background:#1e293b; color:#38bdf8; border:1px solid rgba(56,189,248,0.5); padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_fairway_outline_visible">👁️ Fairway-kontur: Synlig</button>
                         <button type="button" onclick="window.activateMoveFairwayMode()" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_move_fairway">✥ Flytta fairway</button>
                         <button type="button" onclick="window.redrawSmartFairway()" style="background:#1e293b; color:#a855f7; border:1px solid #a855f7; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_redraw_fairway">🔄 Ändra form</button>
                         <button type="button" onclick="window.deleteSmartFairway()" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid #ef4444; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_delete_fairway">🗑️ Radera fairway</button>
@@ -12752,8 +12754,10 @@
         if (typeof updateSBHoleDisplay === 'function') updateSBHoleDisplay();
         if (typeof window.updateTopbarHoleDistance === 'function') window.updateTopbarHoleDistance();
         if (window._smartBuilderType && typeof setSmartBuilderType === 'function') setSmartBuilderType(window._smartBuilderType);
+        if (typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
         if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+        if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
     }
 
     window.performUndo = function() {
@@ -13406,6 +13410,8 @@
             if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
         }
         appMode = mode;
+        if (typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
+        if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         
         // --- INVISIBLE OB TOGGLE & SPATIAL OVERLAYS ---
         if (window.terrainShaderUniforms) {
@@ -13730,6 +13736,8 @@
         }
         
         currentTool = toolName;
+        if (typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
+        if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         
         let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'hole', 'measure', 'eraser', 'colorize', 'mtn', 'poly', 'env'];
         
@@ -13981,10 +13989,13 @@
             safeSetDisplay('smart-green-action-panel', 'none');
             if(typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
             if(typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
+            if(typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         } else {
             safeSetDisplay('smart-green-action-panel', 'flex');
             if(typeof updateSBHoleDisplay === 'function') updateSBHoleDisplay();
             if(typeof setSmartBuilderType === 'function') setSmartBuilderType(window._smartBuilderType || 'GREEN');
+            if(typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
+            if(typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         }
         
         document.getElementById('terrain-paint-group').style.display = (toolName === 'MTN') ? 'flex' : 'none';
@@ -17808,6 +17819,17 @@ window.triggerExplosion = function(x, y, z) {
                         btn.style.color = (p === mp) ? '#0f172a' : '#94a3b8';
                     }
                 });
+
+                let outlineBtn = document.getElementById('sf-toggle-outline-btn');
+                if (outlineBtn) {
+                    let showOutline = (window._showFairwayOutline !== false);
+                    outlineBtn.style.background = showOutline ? '#1e293b' : 'rgba(15,23,42,0.8)';
+                    outlineBtn.style.color = showOutline ? '#38bdf8' : '#64748b';
+                    outlineBtn.style.borderColor = showOutline ? 'rgba(56,189,248,0.6)' : '#334155';
+                    outlineBtn.innerHTML = showOutline
+                        ? (typeof window.t === 'function' ? window.t('sb_fairway_outline_visible') : '👁️ Fairway-kontur: Synlig')
+                        : (typeof window.t === 'function' ? window.t('sb_fairway_outline_hidden') : '👁️‍🗨️ Fairway-kontur: Dold');
+                }
             } else {
                 if (banner) banner.style.display = 'none';
                 if (actActions) actActions.style.display = 'none';
@@ -18052,6 +18074,17 @@ window.triggerExplosion = function(x, y, z) {
                 let es = bd.edgeSharpness !== undefined ? bd.edgeSharpness : 100;
                 if (esS && document.activeElement !== esS) esS.value = es;
                 if (esV) esV.textContent = (es === 100) ? 'Sharp' : (es === 0 ? 'Soft' : es + '%');
+
+                let outlineBtn = document.getElementById('sbk-toggle-outline-btn');
+                if (outlineBtn) {
+                    let showOutline = (window._showBunkerOutline !== false);
+                    outlineBtn.style.background = showOutline ? '#1e293b' : 'rgba(15,23,42,0.8)';
+                    outlineBtn.style.color = showOutline ? '#fbbf24' : '#64748b';
+                    outlineBtn.style.borderColor = showOutline ? 'rgba(251,191,36,0.6)' : '#334155';
+                    outlineBtn.innerHTML = showOutline
+                        ? (typeof window.t === 'function' ? window.t('sb_bunker_outline_visible') : '👁️ Gul kontur: Synlig')
+                        : (typeof window.t === 'function' ? window.t('sb_bunker_outline_hidden') : '👁️‍🗨️ Gul kontur: Dold');
+                }
             } else {
                 if (banner) banner.style.display = 'none';
                 if (actActions) actActions.style.display = 'none';

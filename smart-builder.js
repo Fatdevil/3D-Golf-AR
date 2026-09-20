@@ -587,17 +587,43 @@ window.getDenseBunkerPoints = getDenseBunkerPoints;
 // 3D Outline Mesh for Selected Bunker (Amber/Gold 0xfbbf24)
 let activeBunkerOutlineMesh = null;
 function updateActiveBunkerOutline() {
+    let hadMesh = !!activeBunkerOutlineMesh;
     if (activeBunkerOutlineMesh && window._arcadeScene) {
         window._arcadeScene.remove(activeBunkerOutlineMesh);
+        if (activeBunkerOutlineMesh.geometry) activeBunkerOutlineMesh.geometry.dispose();
+        if (activeBunkerOutlineMesh.material) activeBunkerOutlineMesh.material.dispose();
         activeBunkerOutlineMesh = null;
     }
-    if ((window.currentTool && window.currentTool !== 'SMART_BUILDER') || window._smartBuilderType !== 'BUNKER') return;
+    if ((window.appMode && window.appMode !== 'BUILD') || 
+        (window.currentTool && window.currentTool !== 'SMART_BUILDER') || 
+        window._smartBuilderType !== 'BUNKER' || 
+        window._showBunkerOutline === false) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-    if (!hole || hole.activeBunkerIndex === null || hole.activeBunkerIndex === undefined) return;
-    if (!hole.bunkers || !hole.bunkers[hole.activeBunkerIndex]) return;
+    if (!hole || hole.activeBunkerIndex === null || hole.activeBunkerIndex === undefined) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
+    if (!hole.bunkers || !hole.bunkers[hole.activeBunkerIndex]) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
 
     let bd = hole.bunkers[hole.activeBunkerIndex];
-    if (!bd.points || bd.points.length < 3) return;
+    if (!bd.points || bd.points.length < 3) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
 
     let densePts = getDenseBunkerPoints(bd.points);
     let linePts = densePts.map(p => {
@@ -620,6 +646,15 @@ function updateActiveBunkerOutline() {
     }
 }
 window.updateActiveBunkerOutline = updateActiveBunkerOutline;
+
+window.toggleBunkerOutline = function() {
+    if (window._showBunkerOutline === undefined) window._showBunkerOutline = true;
+    window._showBunkerOutline = !window._showBunkerOutline;
+    updateActiveBunkerOutline();
+    if (typeof window.updateSBBunkerControls === 'function') {
+        window.updateSBBunkerControls();
+    }
+};
 
 // Center Camera on Selected Bunker
 window.centerCameraOnBunker = function(holeIndex, bunkerIndex) {
@@ -1518,17 +1553,43 @@ window.getActiveFairway = getActiveFairway;
 // 3D Outline Mesh for Selected Fairway
 let activeFairwayOutlineMesh = null;
 function updateActiveFairwayOutline() {
+    let hadMesh = !!activeFairwayOutlineMesh;
     if (activeFairwayOutlineMesh && window._arcadeScene) {
         window._arcadeScene.remove(activeFairwayOutlineMesh);
+        if (activeFairwayOutlineMesh.geometry) activeFairwayOutlineMesh.geometry.dispose();
+        if (activeFairwayOutlineMesh.material) activeFairwayOutlineMesh.material.dispose();
         activeFairwayOutlineMesh = null;
     }
-    if ((window.currentTool && window.currentTool !== 'SMART_BUILDER') || window._smartBuilderType !== 'FAIRWAY') return;
+    if ((window.appMode && window.appMode !== 'BUILD') || 
+        (window.currentTool && window.currentTool !== 'SMART_BUILDER') || 
+        window._smartBuilderType !== 'FAIRWAY' || 
+        window._showFairwayOutline === false) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-    if (!hole || hole.activeFairwayIndex === null || hole.activeFairwayIndex === undefined) return;
-    if (!hole.fairways || !hole.fairways[hole.activeFairwayIndex]) return;
+    if (!hole || hole.activeFairwayIndex === null || hole.activeFairwayIndex === undefined) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
+    if (!hole.fairways || !hole.fairways[hole.activeFairwayIndex]) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
 
     let fd = hole.fairways[hole.activeFairwayIndex];
-    if (!fd.points || fd.points.length < 3) return;
+    if (!fd.points || fd.points.length < 3) {
+        if (hadMesh && window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+        return;
+    }
 
     let densePts = getDenseFairwayPoints(fd.points);
     let linePts = densePts.map(p => {
@@ -1551,6 +1612,15 @@ function updateActiveFairwayOutline() {
     }
 }
 window.updateActiveFairwayOutline = updateActiveFairwayOutline;
+
+window.toggleFairwayOutline = function() {
+    if (window._showFairwayOutline === undefined) window._showFairwayOutline = true;
+    window._showFairwayOutline = !window._showFairwayOutline;
+    updateActiveFairwayOutline();
+    if (typeof window.updateSBFairwayControls === 'function') {
+        window.updateSBFairwayControls();
+    }
+};
 
 // Center Camera on Selected Fairway
 window.centerCameraOnFairway = function(holeIndex, fairwayIndex) {
