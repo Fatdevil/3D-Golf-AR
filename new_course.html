@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf OS — Create New Course</title>
+    <meta name="description" content="Select your world and choose from a rich catalog of terrain layouts to start building.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="i18n.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0a0e1a;
+            color: #e2e8f0;
+            font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Ambient Glows */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse at 15% 20%, rgba(56, 189, 248, 0.08) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 60%, rgba(234, 179, 8, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 90%, rgba(99, 102, 241, 0.05) 0%, transparent 60%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 24px 4% 90px;
+        }
+
+        /* Header Navigation */
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+        }
+
+        .back-btn:hover {
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(30, 41, 59, 0.9);
+            transform: translateX(-3px);
+        }
+
+        .logo-text {
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: #38bdf8;
+            text-transform: uppercase;
+        }
+
+        /* Main Heading */
+        .main-title-block {
+            margin-bottom: 28px;
+        }
+
+        .main-title-block h1 {
+            font-size: clamp(28px, 4vw, 42px);
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: -1.2px;
+            line-height: 1.1;
+        }
+
+        .main-title-block p {
+            color: #94a3b8;
+            font-size: clamp(14px, 1.6vw, 16px);
+            margin-top: 6px;
+            max-width: 650px;
+        }
+
+        /* Section Titles */
+        .section-header {
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #38bdf8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-sub {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .count-badge {
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            padding: 3px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        /* ═══════════════════════════════════════════════════════════ */
+        /*  ROW 1: 2 WORLDS (Grassland & Desert)                       */
+        /* ═══════════════════════════════════════════════════════════ */
+        .world-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 34px;
+        }
+
+        .world-card {
+            background: rgba(15, 23, 42, 0.65);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+
+        .world-card:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(30, 41, 59, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .world-card.active {
+            border-color: #38bdf8;
+            background: rgba(14, 116, 144, 0.25);
+            box-shadow: 0 0 0 1px #38bdf8, 0 12px 28px rgba(56, 189, 248, 0.2);
+        }
+
+        .world-card.active .world-radio {
+            background: #38bdf8;
+            border-color: #38bdf8;
+        }
+
+        .world-card.active .world-radio::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #0f172a;
+            border-radius: 50%;
+        }
+
+        .world-icon {
+            font-size: 26px;
+            flex-shrink: 0;
+        }
+
+        .world-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .world-name {
+            font-size: 15px;
+            font-weight: 800;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .world-sub {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .world-radio {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        /* ═══════════════════════════════════════════════════════════ */
+        /*  ROW 2: VARIANT GALLERY GRID                               */
+        /* ═══════════════════════════════════════════════════════════ */
+        .variant-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 36px;
+            min-height: 280px;
+        }
+
+        .variant-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 16px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .variant-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(56, 189, 248, 0.35);
+            background: rgba(20, 29, 47, 0.9);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .variant-card.active {
+            border-color: #4ade80;
+            background: rgba(22, 101, 52, 0.2);
+            box-shadow: 0 0 0 1px #4ade80, 0 14px 30px rgba(74, 222, 128, 0.15);
+        }
+
+        .variant-card.active .var-indicator {
+            background: #4ade80;
+            border-color: #4ade80;
+        }
+
+        .variant-card.active .var-indicator::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #0f172a;
+            border-radius: 50%;
+        }
+
+        .var-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .var-badge {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            text-transform: uppercase;
+        }
+
+        .badge-green { background: rgba(74, 222, 128, 0.15); color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+        .badge-water { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); }
+        .badge-elevation { background: rgba(234, 179, 8, 0.15); color: #facc15; border-color: rgba(234, 179, 8, 0.3); }
+        .badge-arcade { background: rgba(168, 85, 247, 0.15); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
+
+        .var-indicator {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .var-visual {
+            height: 95px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #090d16;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .var-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .var-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.45;
+            flex-grow: 1;
+            margin-bottom: 10px;
+        }
+
+        .var-features {
+            font-size: 10px;
+            font-weight: 600;
+            color: #64748b;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        /* ═══════════════════════════════════════════════════════════ */
+        /*  ROW 3: SEASON & ATMOSPHERE SELECTOR                        */
+        /* ═══════════════════════════════════════════════════════════ */
+        .season-section-wrapper {
+            margin-bottom: 36px;
+            position: relative;
+        }
+
+        .season-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            transition: opacity 0.3s ease;
+        }
+
+        .season-card {
+            background: rgba(15, 23, 42, 0.65);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            position: relative;
+        }
+
+        .season-card:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(30, 41, 59, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .season-card.active {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.15);
+            box-shadow: 0 0 0 1px #f59e0b, 0 12px 26px rgba(245, 158, 11, 0.2);
+        }
+
+        .season-card.active .season-radio {
+            background: #f59e0b;
+            border-color: #f59e0b;
+        }
+
+        .season-card.active .season-radio::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #0f172a;
+            border-radius: 50%;
+        }
+
+        .season-icon {
+            font-size: 28px;
+            flex-shrink: 0;
+        }
+
+        .season-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .season-name {
+            font-size: 15px;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .season-sub {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 2px;
+            line-height: 1.35;
+        }
+
+        .season-radio {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .season-badge {
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 7px;
+            border-radius: 6px;
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            letter-spacing: 0.5px;
+        }
+
+        .moon-vacuum-banner {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px dashed rgba(148, 163, 184, 0.3);
+            border-radius: 16px;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            backdrop-filter: blur(12px);
+        }
+
+        .vacuum-icon {
+            font-size: 32px;
+            flex-shrink: 0;
+        }
+
+        .vacuum-content {
+            flex-grow: 1;
+        }
+
+        .vacuum-title {
+            font-size: 14px;
+            font-weight: 900;
+            color: #cbd5e1;
+            letter-spacing: 1px;
+        }
+
+        .vacuum-sub {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 3px;
+            line-height: 1.4;
+        }
+
+        .vacuum-tag {
+            font-size: 10px;
+            font-weight: 800;
+            background: rgba(100, 116, 139, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            padding: 4px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        /* ═══════════════════════════════════════════════════════════ */
+        /*  STICKY ACTION FOOTER                                      */
+        /* ═══════════════════════════════════════════════════════════ */
+        .action-bar {
+            position: sticky;
+            bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 16px 26px;
+            border-radius: 18px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+            z-index: 100;
+        }
+
+        .summary-info {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .summary-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .summary-value {
+            font-size: 15px;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .summary-world-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+        }
+
+        .summary-variant-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+        }
+
+        .summary-season-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+            color: #0f172a;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 25px rgba(56, 189, 248, 0.35);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 14px 32px rgba(56, 189, 248, 0.5);
+            background: linear-gradient(135deg, #7dd3fc 0%, #0369a1 100%);
+        }
+
+        .svg-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        @media (max-width: 860px) {
+            .world-row, .season-row {
+                grid-template-columns: 1fr;
+            }
+            .action-bar {
+                flex-direction: column;
+                gap: 12px;
+                text-align: center;
+            }
+            .btn-start {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Navigation Header -->
+    <header class="nav-header">
+        <div class="nav-left">
+            <a href="build.html" class="back-btn" data-i18n="nav_build">← Back to Build</a>
+            <div class="logo-text">Golf OS</div>
+        </div>
+        <div id="header-lang-slot"></div>
+    </header>
+
+    <!-- Main Title -->
+    <div class="main-title-block">
+        <h1 data-i18n="nc_title">CREATE NEW COURSE</h1>
+        <p data-i18n="nc_subtitle">Select your world, then choose a terrain layout to start building.</p>
+    </div>
+
+    <!-- 1. SELECT WORLD / BIOME (3 Worlds on 1 Row) -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>🌍</span>
+            <span data-i18n="nc_step1">1. SELECT WORLD / BIOME</span>
+        </div>
+        <div class="section-sub" data-i18n="nc_step1_sub">Choose the environment theme for your course</div>
+    </div>
+
+    <div class="world-row">
+        <!-- WORLD 1: GRASSLAND -->
+        <div class="world-card active" data-world="grass" onclick="selectWorld('grass', this)">
+            <div class="world-icon">🟢</div>
+            <div class="world-info">
+                <div class="world-name" data-i18n="world_grass">Grassland</div>
+                <div class="world-sub" data-i18n="world_grass_sub">Parkland & Lakes</div>
+            </div>
+            <div class="world-radio"></div>
+        </div>
+
+        <!-- WORLD 2: DESERT -->
+        <div class="world-card" data-world="desert" onclick="selectWorld('desert', this)">
+            <div class="world-icon">🏜️</div>
+            <div class="world-info">
+                <div class="world-name" data-i18n="world_desert">Desert</div>
+                <div class="world-sub" data-i18n="world_desert_sub">Sand & Canyons</div>
+            </div>
+            <div class="world-radio"></div>
+        </div>
+
+        <!-- WORLD 3: MOON (Hidden to focus scope on Grassland & Desert) -->
+        <div class="world-card" id="world-card-moon" data-world="moon" onclick="selectWorld('moon', this)" style="display:none !important;">
+            <div class="world-icon">🌙</div>
+            <div class="world-info">
+                <div class="world-name" data-i18n="world_moon">Moon</div>
+                <div class="world-sub" data-i18n="world_moon_sub">Space & Craters</div>
+            </div>
+            <div class="world-radio"></div>
+        </div>
+    </div>
+
+    <!-- 2. SELECT TERRAIN PLATE (Dynamic Variant Gallery) -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>📐</span>
+            <span data-i18n="nc_step2">2. SELECT TERRAIN PLATE</span>
+        </div>
+        <div class="count-badge" id="layout-count-badge">12 Layouts Available</div>
+    </div>
+
+    <div class="variant-grid" id="variant-gallery">
+        <!-- Rendered dynamically by JavaScript based on active world -->
+    </div>
+
+    <!-- 3. SELECT SEASON & ATMOSPHERE -->
+    <div class="section-header" id="season-section-header">
+        <div class="section-title">
+            <span>⛅</span>
+            <span data-i18n="nc_step3">3. SELECT SEASON & ATMOSPHERE</span>
+        </div>
+        <div class="section-sub" id="season-header-sub" data-i18n="nc_step3_sub">Choose seasonal weather and lighting atmosphere</div>
+    </div>
+
+    <div class="season-section-wrapper" id="season-section-wrapper">
+        <div class="season-row" id="season-gallery">
+            <!-- Rendered dynamically by JavaScript based on active world -->
+        </div>
+        <div class="moon-vacuum-banner" id="moon-vacuum-banner" style="display:none;">
+            <div class="vacuum-icon">🌑</div>
+            <div class="vacuum-content">
+                <div class="vacuum-title">INGEN ATMOSFÄR (PERMANENT RYMDVAKUUM)</div>
+                <div class="vacuum-sub">Månen har ingen atmosfär — inga jordiska årstider, väderomslag eller fallande löv existerar i rymdens vakuum.</div>
+            </div>
+            <span class="vacuum-tag">RYMDLAGAR 🪐</span>
+        </div>
+    </div>
+
+    <!-- Sticky Action Bar -->
+    <div class="action-bar">
+        <div class="summary-info">
+            <span class="summary-label" data-i18n="nc_selected_setup">Selected Setup</span>
+            <div class="summary-value">
+                <span class="summary-world-tag" id="summary-world-tag">Grassland</span>
+                <span style="color:#64748b;">•</span>
+                <span class="summary-variant-tag" id="summary-variant-tag">Helt plan platta</span>
+                <span style="color:#64748b;">•</span>
+                <span class="summary-season-tag" id="summary-season-tag">☀️ Sommar</span>
+            </div>
+        </div>
+        <button type="button" class="btn-start" onclick="launchBuilder()">
+            <span data-i18n="btn_start_build">🚀 START BUILDING</span>
+        </button>
+    </div>
+</div>
+
+<script>
+    // ═══════════════════════════════════════════════════════════
+    //  Catalog of Layout Variants per World (12+ Grass, 12+ Desert, Moon, Blank)
+    // ═══════════════════════════════════════════════════════════
+    const CATALOG = {
+        grass: [
+            {
+                id: 'flat',
+                name_en: 'Clean Slate (Flat 0m)',
+                name_sv: 'Helt plan platta (0m)',
+                badge: 'PLAN',
+                badgeClass: 'badge-green',
+                desc_en: '100% pure flat fairway plane (0m elevation). Total creative freedom to sculpt or paint.',
+                desc_sv: 'Helt plan gräsyta (0m höjd). Total arkitekturfrihet att skulptera eller måla från grunden.',
+                feat_en: '• 100% Flat surface  • 0m Elevation  • Pure canvas',
+                feat_sv: '• 100% Plan yta  • 0m Höjd  • Rent kanvas',
+                preview_image: 'golf_practice.png',
+                svg: `<rect width="240" height="95" fill="#0f172a"/>
+                      <path d="M20 75 L120 30 L220 75 L120 90 Z" fill="#1e3a1f" stroke="#22c55e" stroke-width="1.5"/>
+                      <line x1="60" y1="58" x2="160" y2="48" stroke="#4ade80" stroke-width="0.7" stroke-dasharray="2 2"/>
+                      <ellipse cx="120" cy="62" rx="42" ry="18" fill="#2d6b14" stroke="#4ade80" stroke-width="1"/>`
+            }
+        ],
+        desert: [
+            {
+                id: 'flat_sand',
+                name_en: 'Clean Slate Desert (0m)',
+                name_sv: 'Helt plan ökensand (0m)',
+                badge: 'PLAN',
+                badgeClass: 'badge-elevation',
+                desc_en: 'Pure flat arid sand terrain (0m elevation) under warm desert sun, ready to sculpt.',
+                desc_sv: 'Helt plan sandöken (0m höjd) under varm sol, perfekt start för ökenbanor.',
+                feat_en: '• 100% Flat sand  • 0m Elevation  • Pure desert canvas',
+                feat_sv: '• 100% Plan sand  • 0m Höjd  • Ren ökenkanvas',
+                preview_image: 'golf_practice.png',
+                svg: `<rect width="240" height="95" fill="#140f07"/>
+                      <path d="M20 75 L120 30 L220 75 L120 90 Z" fill="#78552b" stroke="#eab308" stroke-width="1.5"/>
+                      <line x1="60" y1="58" x2="160" y2="48" stroke="#eab308" stroke-width="0.7" stroke-dasharray="2 2"/>
+                      <ellipse cx="120" cy="62" rx="42" ry="18" fill="#8c6432" stroke="#f59e0b" stroke-width="1"/>`
+            }
+        ],
+        moon: []
+    };
+
+    const SEASONS = {
+        grass: [
+            {
+                id: 'GLOBAL',
+                name_en: 'Summer',
+                name_sv: 'Sommar',
+                desc_en: 'Lush fairways, azure blue skies and bright daylight.',
+                desc_sv: 'Grönskande fairways, klarblå himmel & full sommarsol.',
+                icon: '☀️',
+                badge: 'STANDARD'
+            },
+            {
+                id: 'AUTUMN',
+                name_en: 'Autumn',
+                name_sv: 'Höst',
+                desc_en: 'Warm amber haze, golden trees & 3D falling leaves.',
+                desc_sv: 'Varm bärnstenshimmel, gyllene träd & fallande 3D-löv.',
+                icon: '🍂',
+                badge: '3D LÖV'
+            },
+            {
+                id: 'WINTER',
+                name_en: 'Winter',
+                name_sv: 'Vinter',
+                desc_en: 'Crisp cold skies, frosted rough & snow flurries.',
+                desc_sv: 'Krispigt vinterljus, frostklädda tallar & snöflingor.',
+                icon: '❄️',
+                badge: 'SNÖ'
+            }
+        ],
+        desert: [
+            {
+                id: 'DESERT',
+                name_en: 'Summer',
+                name_sv: 'Sommar',
+                desc_en: 'Scorching summer sun across warm golden dunes & cacti.',
+                desc_sv: 'Gassande sommarsol över varma gyllene sanddyner & kaktusar.',
+                icon: '☀️',
+                badge: 'SOL'
+            },
+            {
+                id: 'DESERT_AUTUMN',
+                name_en: 'Autumn',
+                name_sv: 'Höst',
+                desc_en: 'Warm amber glow, golden desert brush & softer light.',
+                desc_sv: 'Varm bärnstenston, gyllene ökenbuskage & mjukt ljus.',
+                icon: '🍂',
+                badge: 'GYLLENE'
+            },
+            {
+                id: 'DESERT_WINTER',
+                name_en: 'Winter',
+                name_sv: 'Vinter',
+                desc_en: 'Crisp high-desert chill, pale sand & frosted scrub.',
+                desc_sv: 'Kyligt höglandsklimat, blek sand & krispig frost.',
+                icon: '❄️',
+                badge: 'FROST'
+            }
+        ],
+        moon: []
+    };
+
+    let activeWorld = 'grass';
+    let activeVariant = 'flat';
+    let activeSeason = 'GLOBAL';
+
+    function selectWorld(worldKey, el) {
+        activeWorld = worldKey;
+        document.querySelectorAll('.world-card').forEach(c => c.classList.remove('active'));
+        if (el) el.classList.add('active');
+
+        // Set default season for world
+        if (worldKey === 'grass') activeSeason = 'GLOBAL';
+        else if (worldKey === 'desert') activeSeason = 'DESERT';
+        else if (worldKey === 'moon') activeSeason = 'MOON';
+
+        // Pick first variant of this world by default (always the flat plate at index 0)
+        const variants = CATALOG[worldKey] || [];
+        if (variants.length > 0) {
+            activeVariant = variants[0].id;
+        }
+
+        renderVariants();
+        renderSeasons();
+        updateSummary();
+    }
+
+    function selectVariant(varId, el) {
+        activeVariant = varId;
+        document.querySelectorAll('.variant-card').forEach(c => c.classList.remove('active'));
+        if (el) el.classList.add('active');
+        updateSummary();
+    }
+
+    function selectSeason(seasonId, el) {
+        activeSeason = seasonId;
+        document.querySelectorAll('.season-card').forEach(c => c.classList.remove('active'));
+        if (el) el.classList.add('active');
+        updateSummary();
+    }
+
+    function renderVariants() {
+        const variants = CATALOG[activeWorld] || [];
+        const gallery = document.getElementById('variant-gallery');
+        const badge = document.getElementById('layout-count-badge');
+        const lang = (window.GolfI18n && window.GolfI18n.getLang()) || 'en';
+        
+        if (badge) {
+            badge.textContent = (lang === 'sv')
+                ? `${variants.length} Layout${variants.length === 1 ? '' : 'er'} tillgängliga`
+                : `${variants.length} Layout${variants.length === 1 ? '' : 's'} Available`;
+        }
+
+        let html = '';
+        variants.forEach(v => {
+            const isSelected = v.id === activeVariant;
+            const name = (lang === 'sv' && v.name_sv) ? v.name_sv : (v.name_en || v.name || v.id);
+            const desc = (lang === 'sv' && v.desc_sv) ? v.desc_sv : (v.desc_en || v.desc || '');
+            const feat = (lang === 'sv' && v.feat_sv) ? v.feat_sv : (v.feat_en || v.feat || '');
+
+            html += `
+            <div class="variant-card ${isSelected ? 'active' : ''}" data-variant="${v.id}" onclick="selectVariant('${v.id}', this)">
+                <div class="var-top">
+                    <span class="var-badge ${v.badgeClass}">${v.badge}</span>
+                    <div class="var-indicator"></div>
+                </div>
+                <div class="var-visual" style="overflow:hidden; border-radius:8px;">
+                    ${v.preview_image ? 
+                        `<img src="${v.preview_image}" alt="${name}" style="width:100%; height:100%; object-fit:cover; display:block;">` :
+                        `<svg class="svg-canvas" viewBox="0 0 240 95" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            ${v.svg || ''}
+                        </svg>`
+                    }
+                </div>
+                <div class="var-title">${name}</div>
+                <div class="var-desc">${desc}</div>
+                <div class="var-features">${feat}</div>
+            </div>`;
+        });
+
+        if (gallery) gallery.innerHTML = html;
+    }
+
+    function renderSeasons() {
+        const seasonGallery = document.getElementById('season-gallery');
+        const vacuumBanner = document.getElementById('moon-vacuum-banner');
+        const seasonHeaderSub = document.getElementById('season-header-sub');
+        const lang = (window.GolfI18n && window.GolfI18n.getLang()) || 'en';
+
+        if (activeWorld === 'moon') {
+            if (seasonGallery) seasonGallery.style.display = 'none';
+            if (vacuumBanner) vacuumBanner.style.display = 'flex';
+            if (seasonHeaderSub) {
+                seasonHeaderSub.textContent = (lang === 'sv')
+                    ? 'Permanent rymdvakuum — inga jordiska årstider eller väderlek'
+                    : 'Permanent space vacuum — no earthly seasons or weather';
+            }
+            return;
+        }
+
+        if (vacuumBanner) vacuumBanner.style.display = 'none';
+        if (seasonGallery) seasonGallery.style.display = 'grid';
+        if (seasonHeaderSub) {
+            seasonHeaderSub.textContent = (lang === 'sv')
+                ? 'Välj säsong, väderlek och stämning för banan'
+                : 'Choose seasonal conditions & sky atmosphere';
+        }
+
+        const seasons = SEASONS[activeWorld] || [];
+        let html = '';
+        seasons.forEach(s => {
+            const isSelected = s.id === activeSeason;
+            const name = (lang === 'sv' && s.name_sv) ? s.name_sv : s.name_en;
+            const desc = (lang === 'sv' && s.desc_sv) ? s.desc_sv : s.desc_en;
+
+            html += `
+            <div class="season-card ${isSelected ? 'active' : ''}" data-season="${s.id}" onclick="selectSeason('${s.id}', this)">
+                <div class="season-icon">${s.icon}</div>
+                <div class="season-info">
+                    <div class="season-name">
+                        <span>${name}</span>
+                        ${s.badge ? `<span class="season-badge">${s.badge}</span>` : ''}
+                    </div>
+                    <div class="season-sub">${desc}</div>
+                </div>
+                <div class="season-radio"></div>
+            </div>`;
+        });
+
+        if (seasonGallery) seasonGallery.innerHTML = html;
+    }
+
+    function updateSummary() {
+        const lang = (window.GolfI18n && window.GolfI18n.getLang()) || 'en';
+        const worldNames = {
+            grass: lang === 'sv' ? 'Gräsmark' : 'Grassland',
+            desert: lang === 'sv' ? 'Öken' : 'Desert',
+            moon: lang === 'sv' ? 'Månen' : 'Moon'
+        };
+
+        const variants = CATALOG[activeWorld] || [];
+        const currentVarObj = variants.find(v => v.id === activeVariant) || variants[0];
+
+        const worldEl = document.getElementById('summary-world-tag');
+        const varEl = document.getElementById('summary-variant-tag');
+        const seasonEl = document.getElementById('summary-season-tag');
+
+        if (worldEl) worldEl.textContent = worldNames[activeWorld] || activeWorld;
+        if (varEl && currentVarObj) {
+            varEl.textContent = (lang === 'sv' && currentVarObj.name_sv) ? currentVarObj.name_sv : (currentVarObj.name_en || currentVarObj.name || currentVarObj.id);
+        }
+
+        if (seasonEl) {
+            if (activeWorld === 'moon') {
+                seasonEl.textContent = lang === 'sv' ? '🌑 Vakuum' : '🌑 Vacuum';
+                seasonEl.style.background = 'rgba(100, 116, 139, 0.2)';
+                seasonEl.style.color = '#94a3b8';
+            } else {
+                const seasons = SEASONS[activeWorld] || [];
+                const currentSeasonObj = seasons.find(s => s.id === activeSeason) || seasons[0];
+                if (currentSeasonObj) {
+                    const sName = (lang === 'sv' && currentSeasonObj.name_sv) ? currentSeasonObj.name_sv : currentSeasonObj.name_en;
+                    seasonEl.textContent = `${currentSeasonObj.icon} ${sName}`;
+                    seasonEl.style.background = 'rgba(245, 158, 11, 0.15)';
+                    seasonEl.style.color = '#f59e0b';
+                }
+            }
+        }
+    }
+
+    function launchBuilder() {
+        const biomeMap = {
+            grass: activeSeason || 'GLOBAL',
+            desert: activeSeason || 'DESERT',
+            moon: 'MOON'
+        };
+        const biome = biomeMap[activeWorld] || 'GLOBAL';
+        const url = `arcade.html?v=${Date.now()}&autorun=new_build&world=${activeWorld}&variant=${activeVariant}&template_id=${activeVariant}&template=${activeVariant}&biome=${biome}&season=${activeSeason}`;
+        window.location.href = url;
+    }
+
+    async function fetchCloudStarterPlates() {
+        try {
+            const res = await fetch('/api/starter-plates');
+            if (res.ok) {
+                const plates = await res.json();
+                if (Array.isArray(plates) && plates.length > 0) {
+                    plates.forEach(p => {
+                        let world = (p.world || 'grass').toLowerCase();
+                        if (world === 'blank') world = 'grass';
+                        if (!CATALOG[world]) CATALOG[world] = [];
+                        
+                        const existingIdx = CATALOG[world].findIndex(item => item.id === p.id);
+                        const plateItem = {
+                            id: p.id,
+                            name_en: p.name,
+                            name_sv: p.name_sv || p.name,
+                            badge: p.badge || 'PLATE',
+                            badgeClass: p.badge_class || 'badge-green',
+                            desc_en: p.description || '',
+                            desc_sv: p.description_sv || p.description || '',
+                            feat_en: p.features || '',
+                            feat_sv: p.features_sv || p.features || '',
+                            preview_image: p.preview_image || '',
+                            is_cloud_plate: true
+                        };
+
+                        if (existingIdx >= 0) {
+                            CATALOG[world][existingIdx] = plateItem;
+                        } else {
+                            // Insert custom plate at index 1 to keep index 0 as the pure flat plate
+                            CATALOG[world].splice(1, 0, plateItem);
+                        }
+                    });
+
+                    const currentVariants = CATALOG[activeWorld] || [];
+                    if (!currentVariants.some(v => v.id === activeVariant) && currentVariants.length > 0) {
+                        activeVariant = currentVariants[0].id;
+                    }
+                    renderVariants();
+                    updateSummary();
+                }
+            }
+        } catch(e) {
+            console.warn("Could not load cloud starter plates:", e);
+        }
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const qWorld = urlParams.get('world');
+        if (qWorld && CATALOG[qWorld]) {
+            activeWorld = qWorld;
+            const targetCard = document.querySelector(`.world-card[data-world="${qWorld}"]`);
+            if (targetCard) {
+                document.querySelectorAll('.world-card').forEach(c => c.classList.remove('active'));
+                targetCard.classList.add('active');
+            }
+            if (qWorld === 'grass') activeSeason = 'GLOBAL';
+            else if (qWorld === 'desert') activeSeason = 'DESERT';
+            else if (qWorld === 'moon') activeSeason = 'MOON';
+
+            const qVariants = CATALOG[qWorld];
+            if (qVariants.length > 0) activeVariant = qVariants[0].id;
+        }
+
+        const slot = document.getElementById('header-lang-slot');
+        if (slot && typeof window.createGolfLangSwitcher === 'function') {
+            slot.innerHTML = window.createGolfLangSwitcher();
+        }
+        renderVariants();
+        renderSeasons();
+        updateSummary();
+        fetchCloudStarterPlates();
+    });
+
+    window.addEventListener('golf_lang_changed', () => {
+        renderVariants();
+        renderSeasons();
+        updateSummary();
+    });
+</script>
+
+</body>
+</html>

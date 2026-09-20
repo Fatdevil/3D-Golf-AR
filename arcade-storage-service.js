@@ -82,5 +82,97 @@ window.ArcadeStorage = {
             drafts.push({ code, name, date: new Date().toISOString() });
         }
         this.saveDrafts(drafts);
+    },
+
+    // ----- INDEXEDDB: FULL COURSE PERSISTENCE (Heightmap + Textures + Holes + Trees) -----
+    _db: null,
+    _openDB() {
+        if (this._db) return Promise.resolve(this._db);
+        return new Promise((resolve, reject) => {
+            if (typeof indexedDB === 'undefined') {
+                return reject(new Error('IndexedDB not supported'));
+            }
+            const req = indexedDB.open('GolfOS_Storage', 1);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('course_drafts')) {
+                    db.createObjectStore('course_drafts');
+                }
+            };
+            req.onsuccess = (e) => {
+                this._db = e.target.result;
+                resolve(this._db);
+            };
+            req.onerror = (e) => reject(e.target.error);
+        });
+    },
+
+    async saveFullDraft(key = 'quick_draft', data) {
+        try {
+            const db = await this._openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('course_drafts', 'readwrite');
+                const store = tx.objectStore('course_drafts');
+                const payload = Object.assign({}, data, {
+                    _fullSave: true,
+                    savedAt: Date.now()
+                });
+                const req = store.put(payload, key);
+                req.onsuccess = () => {
+                    // Also save light metadata snapshot to localStorage for synchronous checks
+                    try {
+                        const meta = {
+                            hasFullDraft: true,
+                            savedAt: payload.savedAt,
+                            name: data.name || 'Quick Draft',
+                            holeCount: (data.holes && data.holes.length) || 1,
+                            totalPar: data.total_par || 4
+                        };
+                        localStorage.setItem(this.KEYS.CUSTOM_LEVEL, JSON.stringify(meta));
+                    } catch(err) {}
+                    resolve(true);
+                };
+                req.onerror = (e) => reject(e.target.error);
+            });
+        } catch(e) {
+            console.warn('[STORAGE] IndexedDB save fallback:', e);
+            this.saveCustomLevel(data);
+            return false;
+        }
+    },
+
+    async loadFullDraft(key = 'quick_draft') {
+        try {
+            const db = await this._openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('course_drafts', 'readonly');
+                const store = tx.objectStore('course_drafts');
+                const req = store.get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = (e) => reject(e.target.error);
+            });
+        } catch(e) {
+            console.warn('[STORAGE] IndexedDB load fallback:', e);
+            return null;
+        }
+    },
+
+    async deleteFullDraft(key = 'quick_draft') {
+        try {
+            const db = await this._openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('course_drafts', 'readwrite');
+                const store = tx.objectStore('course_drafts');
+                const req = store.delete(key);
+                req.onsuccess = () => {
+                    this.removeCustomLevel();
+                    resolve(true);
+                };
+                req.onerror = (e) => reject(e.target.error);
+            });
+        } catch(e) {
+            this.removeCustomLevel();
+            return false;
+        }
     }
 };

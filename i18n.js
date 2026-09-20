@@ -1,0 +1,598 @@
+/**
+ * Golf OS — Lightweight i18n Engine
+ * Ultra-fast, zero-dependency translation dictionary.
+ * Default: English ('en'). Supported: English ('en'), Swedish ('sv').
+ */
+
+(function() {
+    const STORAGE_KEY = 'golf_os_lang';
+    
+    const DICTIONARY = {
+        en: {
+            // General & Common
+            "nav_back": "← Back",
+            "nav_hub": "← Hub",
+            "nav_build": "← Back to Build",
+            "logo_sub": "GOLF OS",
+            "loading": "Loading...",
+            "free_player": "Free Player",
+            "lm_connected": "LM Connected",
+            "lm_disconnected": "LM Disconnected",
+            "cancel": "Cancel",
+            "confirm": "Confirm",
+            "close": "Close",
+            "save": "Save",
+            "edit": "Edit",
+            "play": "Play",
+            "delete": "Delete",
+            "discard_prompt": "Discard unsaved changes and start a new project?",
+            
+            // Hub (arcade_hub.html)
+            "hub_title": "SELECT ACTIVITY",
+            "hub_range_badge": "Practice",
+            "hub_range_title": "Range",
+            "hub_range_desc": "Practice on the driving range and track your shots.",
+            "hub_courses_badge": "Community",
+            "hub_courses_title": "Courses",
+            "hub_courses_desc": "Play your drafts and challenge the world.",
+            "hub_build_badge": "Editor",
+            "hub_build_title": "Build",
+            "hub_build_desc": "Sculpt, build and publish your own custom courses.",
+            "hub_games_badge": "Coming Soon",
+            "hub_games_title": "Games",
+            "hub_games_desc": "Neon-putting, moongolf, and party challenges.",
+            
+            // Build Page (build.html)
+            "build_title": "Course Creator",
+            "build_subtitle": "Create a new course from scratch, continue on a draft, or edit your published courses.",
+            "btn_new_plate": "⛳ New Course (3 Holes)",
+            "btn_new_range": "🏌️ New Range",
+            "btn_col_6h": "📦 6H Course",
+            "btn_col_9h": "📦 9H Course",
+            "btn_col_18h": "📦 18H Course",
+            "section_drafts": "My Drafts",
+            "section_published": "My Published",
+            "section_collections": "Multi-Plate Collections",
+            "badge_draft": "DRAFT",
+            "badge_published": "PUBLISHED",
+            "badge_collection": "MULTI-PLATE",
+            "quick_draft_title": "Quick Draft",
+            "quick_draft_desc": "Your last session in the editor",
+            "quick_draft_local": "⚡ Local backup",
+            "empty_drafts": "No saved drafts found.",
+            "empty_published": "Loading published courses...",
+            
+            // New Course / Starting Plate (new_course.html)
+            "nc_title": "CREATE NEW COURSE",
+            "nc_subtitle": "Select your world, then choose a terrain layout to start building.",
+            "nc_step1": "1. SELECT WORLD / BIOME",
+            "nc_step1_sub": "Choose the environment theme for your course",
+            "nc_step2": "2. SELECT TERRAIN PLATE",
+            "nc_step2_sub": "Choose the starting landscape layout",
+            "nc_step3": "3. SELECT SEASON & ATMOSPHERE",
+            "nc_step3_sub": "Choose seasonal weather and lighting atmosphere",
+            
+            // Worlds
+            "world_grass": "Grassland",
+            "world_grass_sub": "Parkland & Lakes",
+            "world_desert": "Desert",
+            "world_desert_sub": "Sand & Canyons",
+            "world_moon": "Moon",
+            "world_moon_sub": "Space & Craters",
+            "nc_selected_setup": "Selected Setup",
+            
+            "btn_start_build": "🚀 START BUILDING",
+            
+            // Editor / Arcade
+            "save": "Save",
+            "saved": "Saved",
+            "saving": "Saving...",
+            "ed_test_course": "Test Course",
+            "test_course": "Test Course",
+            "ed_build_mode": "Build",
+            "ed_save_draft": "Save Draft",
+            "ed_publish": "Publish",
+            "ed_undo": "Undo",
+            "ed_redo": "Redo",
+            "ed_clear": "Clear Course",
+            "tab_tools": "Tools",
+            "tab_env": "Environment",
+            "tab_map": "Map",
+            "sculpt_tools_header": "Sculpt Terrain",
+            "tool_inspect": "Inspect",
+            "tool_course": "Holes",
+            "tool_spline": "Fences & Walls",
+            "tool_hole": "Range",
+            "tool_sculpt": "Sculpt",
+            "tool_paint": "Paint Surface",
+            "tool_water": "Water",
+            "tool_props": "Objects",
+            "tool_env": "Environment",
+            "tool_block": "Block",
+            "tool_measure": "Measure",
+            "tool_eraser": "Eraser",
+            "tool_undo": "Undo",
+            "tool_redo": "Redo",
+            "tool_grid": "Grid",
+            "tool_rings": "Rings",
+            "tool_pro_mode": "Pro Mode",
+            "tool_basic_mode": "Basic Mode",
+            "sub_sculpt": "Sculpt",
+            "sub_smooth": "Smooth",
+            "sub_mtn": "Mountain",
+            "sub_flatten": "Flatten",
+            "sub_ramp": "Ramp",
+            "sub_ridge": "Ridge",
+            "sub_noise": "Noise",
+
+            // Flyout Navigation
+            "flyout_objects_header": "Objects & Scenery",
+            "flyout_obj_trees": "Trees",
+            "flyout_obj_plants": "Plants & Bushes",
+            "flyout_obj_rocks": "Rocks",
+            "flyout_obj_fences": "Fences & Walls",
+            "flyout_obj_blocks": "Building Blocks",
+            "flyout_obj_colorize": "Colorize",
+            "flyout_sculpt_header": "Sculpt Terrain",
+            "flyout_env_header": "Environment & Sky",
+            "flyout_env_sun": "Light & Time",
+            "flyout_env_weather": "Weather & Wind",
+            "flyout_env_surround": "Horizon & Ocean",
+            "flyout_env_grass": "3D Grass & Particles",
+
+            // Environment Panels
+            "env_sun_header": "Lighting & Time of Day",
+            "env_sun_pos": "Sun Position",
+            "env_quick_select": "Quick Presets",
+            "env_dawn": "🌅 Dawn",
+            "env_day": "☀️ Day",
+            "env_golden": "🌇 Golden",
+            "env_night": "🌙 Night",
+            "env_fog": "Fog Density",
+            "env_fog_clear": "Clear",
+            "env_fog_dense": "Dense Fog",
+            "env_weather_header": "Weather & Wind",
+            "env_weather_label": "Weather",
+            "env_wind_speed": "Wind Speed",
+            "env_wind_calm": "Calm (0)",
+            "env_wind_storm": "Storm (30 mph)",
+            "env_wind_dir": "Wind Direction",
+            "env_surround_header": "Surrounding Horizon",
+            "env_surround_desc": "Choose what meets the eye at the course edges. Saved automatically.",
+            "env_surround_north": "North (N)",
+            "env_surround_east": "East (E)",
+            "env_surround_south": "South (S)",
+            "env_surround_west": "West (W)",
+            "env_surround_blend": "Horizon Transition",
+            "env_blend_soft": "Soft blend",
+            "env_blend_sharp": "Sharp edge",
+            "env_grass_header": "3D Grass & Particles",
+            "env_grass_3d": "Volumetric 3D Grass",
+            "env_grass_rough_h": "Rough Height",
+            "env_grass_deep_h": "Deep Rough Height",
+            "env_particles_label": "Particles (Leaves & Pollen)",
+            "env_particles_none": "None",
+            "env_particles_max": "Maximum",
+            "env_particle_size": "Particle Size",
+            "env_particle_tiny": "Tiny",
+            "env_particle_huge": "Huge",
+
+            // Weather options
+            "weather_clear": "☀️ Clear / Sunny",
+            "weather_overcast": "☁️ Overcast / Cloudy",
+            "weather_drizzle": "🌦️ Light Drizzle",
+            "weather_rain": "🌧️ Rain",
+            "weather_storm": "⛈️ Thunderstorm",
+            "weather_fog": "🌫️ Dense Fog",
+
+            // Horizon options
+            "surr_opt_none": "❌ None",
+            "surr_opt_rough": "🟢 Rough",
+            "surr_opt_waste": "🟡 Waste / Sand",
+            "surr_opt_fescue": "🌲 Deep Rough",
+            "surr_opt_water": "💧 Lake (Water)",
+            "surr_opt_ocean": "🌊 Ocean",
+            "surr_opt_horizon": "🌫️ Mountain Horizon",
+            "surr_opt_sky": "⛅ Sky",
+
+            // Spline (Fences & Walls)
+            "spline_header": "Fences & Walls",
+            "spline_desc": "Click and draw a line on the ground to build fences, walls or hedges along the curve.",
+            "spline_choose_type": "Select Type",
+            "spline_wood_fence": "Wood Fence",
+            "spline_stone_wall": "Stone Wall",
+            "spline_ob_stakes": "O.B. Stakes",
+            "spline_hedge": "Leaf Hedge",
+            "spline_clear": "❌ Clear drawn line",
+
+            // Hole Builder (Smart Builder)
+            "flyout_holes_header": "Hole Builder",
+            "sb_type_green": "Green",
+            "sb_type_fairway": "Fairway",
+            "sb_type_bunker": "Bunker",
+            "sb_type_tee": "Tee",
+            "sb_type_aim": "Aim Point",
+            "sb_green_header": "Green & Mowing",
+            "sb_fairway_header": "Fairway & Rough",
+            "sb_bunker_header": "Bunker & Sand",
+            "sb_tee_header": "Tee Box & Markers",
+            "sb_aim_header": "Aim Point & Target",
+            "sb_build_green": "⛳ Build Green",
+            "sb_build_fairway": "🏌️ Build Fairway",
+            "sb_build_bunker": "🏖️ Build Bunker",
+            "sb_build_tee": "🟦 Build Tee Box",
+            "sb_clear_points": "❌ Clear Drawn Shape",
+            "sb_contour": "Contour",
+            "sb_foregreen": "Foregreen",
+            "sb_raised_green": "Raised Green (optional)",
+            "sb_surround_h": "Surround Height",
+            "sb_surround_r": "Surround Radius",
+            "sb_tilt_aim": "Tilt → AimPoint",
+            "sb_mow_pattern": "Mowing Pattern",
+            "sb_edge": "Edge Sharpness",
+            "sb_bunker_depth": "Depth",
+            "sb_bunker_lip": "Lip",
+            "sb_bunker_shape": "Shape",
+            "sb_fairway_terrain": "Terrain",
+            "sb_semi_rough": "Semi-Rough",
+            "sb_rough": "Rough",
+            "sb_tee_markers": "Tee Markers",
+            "sb_raised_tee": "Raised Tee (optional)",
+            "sb_aim_instruction": "🎯 Click terrain to set aim point",
+            "sb_aim_hint": "Click again to move • Right click to remove",
+            "sb_aim_delete": "🗑️ Delete Aim Point",
+            "sb_drawing_hint": "Click to place points. Loop closes auto.",
+            "sb_tee_step1": "Step 1: Aim Point",
+            "sb_tee_step2": "Step 2: Tee Markers",
+            "sb_tee_aim_desc": "Aim point sets landing direction and aligns tee marker balls.",
+            "sb_aim_required": "⚠️ Required",
+            "sb_aim_set": "✅ Aim Set",
+            "sb_btn_set_aim_txt": "Set Aim Point on Map",
+            "sb_btn_move_aim_txt": "Move Aim Point"
+        },
+        sv: {
+            // General & Common
+            "nav_back": "← Tillbaka",
+            "nav_hub": "← Hub",
+            "nav_build": "← Tillbaka till Bygg",
+            "logo_sub": "GOLF OS",
+            "loading": "Laddar...",
+            "free_player": "Gratis Spelare",
+            "lm_connected": "LM Ansluten",
+            "lm_disconnected": "LM Frånkopplad",
+            "cancel": "Avbryt",
+            "confirm": "Bekräfta",
+            "close": "Stäng",
+            "save": "Spara",
+            "edit": "Redigera",
+            "play": "Spela",
+            "delete": "Radera",
+            "discard_prompt": "Kastar osparad data. Nytt projekt?",
+            
+            // Hub (arcade_hub.html)
+            "hub_title": "VÄLJ AKTIVITET",
+            "hub_range_badge": "Träning",
+            "hub_range_title": "Range",
+            "hub_range_desc": "Träna på driving rangen och analysera dina slag.",
+            "hub_courses_badge": "Community",
+            "hub_courses_title": "Banor",
+            "hub_courses_desc": "Spela dina banor och utmana andra spelare.",
+            "hub_build_badge": "Banbyggare",
+            "hub_build_title": "Bygg",
+            "hub_build_desc": "Skulptera, bygg och publicera dina egna banor.",
+            "hub_games_badge": "Kommer Snart",
+            "hub_games_title": "Spel",
+            "hub_games_desc": "Neon-putting, mångolf och partylägen.",
+            
+            // Build Page (build.html)
+            "build_title": "Bygg bana",
+            "build_subtitle": "Skapa en ny bana från grunden, fortsätt på ett sparat utkast eller redigera dina publicerade mästerverk.",
+            "btn_new_plate": "⛳ Ny platta (3 hål)",
+            "btn_new_range": "🏌️ Ny range",
+            "btn_col_6h": "📦 Ny bana 6H",
+            "btn_col_9h": "📦 Ny bana 9H",
+            "btn_col_18h": "📦 Ny bana 18H",
+            "section_drafts": "Mina Utkast",
+            "section_published": "Mina Publicerade",
+            "section_collections": "Mina Collections",
+            "badge_draft": "DRAFT",
+            "badge_published": "PUBLISHED",
+            "badge_collection": "MULTI-PLATE",
+            "quick_draft_title": "Snabbutkast",
+            "quick_draft_desc": "Din senaste session i editorn",
+            "quick_draft_local": "⚡ Lokal backup",
+            "empty_drafts": "Inga sparade utkast hittades.",
+            "empty_published": "Laddar publicerade banor...",
+            
+            // New Course / Starting Plate (new_course.html)
+            "nc_title": "SKAPA NY BANA",
+            "nc_subtitle": "Välj din värld, och välj sedan en startlayout för att börja bygga.",
+            "nc_step1": "1. VÄLJ VÄRLD / MILJÖ",
+            "nc_step1_sub": "Välj miljötema och atmosfär för din bana",
+            "nc_step2": "2. VÄLJ STARTPLATTA",
+            "nc_step2_sub": "Välj utgångslayout för terrängen",
+            "nc_step3": "3. VÄLJ ÅRSTID & ATMOSFÄR",
+            "nc_step3_sub": "Välj säsong, väderlek och stämning för banan",
+            
+            // Worlds
+            "world_grass": "Gräsmark",
+            "world_grass_sub": "Parkbana & sjöar",
+            "world_desert": "Öken",
+            "world_desert_sub": "Sand & kanjoner",
+            "world_moon": "Månen",
+            "world_moon_sub": "Rymd & kratrar",
+            "nc_selected_setup": "Vald uppsättning",
+            
+            "btn_start_build": "🚀 BÖRJA BYGGA",
+            
+            // Editor / Arcade
+            "save": "Spara",
+            "saved": "Sparad",
+            "saving": "Sparar...",
+            "ed_test_course": "Testspela",
+            "test_course": "Testspela",
+            "ed_build_mode": "Bygg",
+            "ed_save_draft": "Spara utkast",
+            "ed_publish": "Publicera",
+            "ed_undo": "Ångra",
+            "ed_redo": "Gör om",
+            "ed_clear": "Rensa bana",
+            "tab_tools": "Verktyg",
+            "tab_env": "Miljö",
+            "tab_map": "Karta",
+            "sculpt_tools_header": "Forma terräng",
+            "tool_inspect": "Markera",
+            "tool_course": "Hål",
+            "tool_spline": "Staket & Murar",
+            "tool_hole": "Range",
+            "tool_sculpt": "Forma",
+            "tool_paint": "Måla yta",
+            "tool_water": "Vatten",
+            "tool_props": "Objekt",
+            "tool_env": "Miljö",
+            "tool_block": "Byggblock",
+            "tool_measure": "Mät avstånd",
+            "tool_eraser": "Radera",
+            "tool_undo": "Ångra",
+            "tool_redo": "Gör om",
+            "tool_grid": "Rutnät",
+            "tool_rings": "Ringar",
+            "tool_pro_mode": "Pro-läge",
+            "tool_basic_mode": "Bas-läge",
+            "sub_sculpt": "Forma",
+            "sub_smooth": "Jämna ut",
+            "sub_mtn": "Berg",
+            "sub_flatten": "Platta till",
+            "sub_ramp": "Ramp",
+            "sub_ridge": "Ås",
+            "sub_noise": "Kupering",
+
+            // Flyout Navigation
+            "flyout_objects_header": "Objekt & Dekoration",
+            "flyout_obj_trees": "Träd",
+            "flyout_obj_plants": "Buskar & Växter",
+            "flyout_obj_rocks": "Stenar",
+            "flyout_obj_fences": "Staket & Murar",
+            "flyout_obj_blocks": "Byggblock",
+            "flyout_obj_colorize": "Färga",
+            "flyout_sculpt_header": "Forma Terräng",
+            "flyout_env_header": "Miljö & Atmosfär",
+            "flyout_env_sun": "Ljus & Tid",
+            "flyout_env_weather": "Väder & Vind",
+            "flyout_env_surround": "Horisont & Hav",
+            "flyout_env_grass": "3D-Gräs & Partiklar",
+
+            // Environment Panels
+            "env_sun_header": "Ljus & Tid på dygnet",
+            "env_sun_pos": "Solposition",
+            "env_quick_select": "Snabbval",
+            "env_dawn": "🌅 Gryning",
+            "env_day": "☀️ Dag",
+            "env_golden": "🌇 Gyllene",
+            "env_night": "🌙 Natt",
+            "env_fog": "Dimma (Fog Density)",
+            "env_fog_clear": "Klar sikt",
+            "env_fog_dense": "Tät dimma",
+            "env_weather_header": "Väder & Vind",
+            "env_weather_label": "Väderlek",
+            "env_wind_speed": "Vindstyrka",
+            "env_wind_calm": "Stiltje (0)",
+            "env_wind_storm": "Storm (30 mph)",
+            "env_wind_dir": "Vindriktning",
+            "env_surround_header": "Omgivande Horisont",
+            "env_surround_desc": "Välj vad som möter ögat vid banans kanter. Sparas automatiskt med hålet.",
+            "env_surround_north": "Norr (N)",
+            "env_surround_east": "Öster (E)",
+            "env_surround_south": "Söder (S)",
+            "env_surround_west": "Väster (W)",
+            "env_surround_blend": "Övergång till horisont",
+            "env_blend_soft": "Mjuk toning",
+            "env_blend_sharp": "Skarp gräns",
+            "env_grass_header": "3D-Gräs & Partiklar",
+            "env_grass_3d": "Volumetriskt 3D-Gräs",
+            "env_grass_rough_h": "Rough Höjd",
+            "env_grass_deep_h": "Deep Rough Höjd",
+            "env_particles_label": "Partiklar (Löv & Pollen)",
+            "env_particles_none": "Inga",
+            "env_particles_max": "Maximalt",
+            "env_particle_size": "Partikelstorlek",
+            "env_particle_tiny": "Små",
+            "env_particle_huge": "Stora",
+
+            // Weather options
+            "weather_clear": "☀️ Klart / Soligt",
+            "weather_overcast": "☁️ Mulet / Molnigt",
+            "weather_drizzle": "🌦️ Lätt duggregn",
+            "weather_rain": "🌧️ Regn",
+            "weather_storm": "⛈️ Åskoväder / Storm",
+            "weather_fog": "🌫️ Tät dimma",
+
+            // Horizon options
+            "surr_opt_none": "❌ Ingen",
+            "surr_opt_rough": "🟢 Rough",
+            "surr_opt_waste": "🟡 Waste / Sand",
+            "surr_opt_fescue": "🌲 Deep Rough",
+            "surr_opt_water": "💧 Insjö (Water)",
+            "surr_opt_ocean": "🌊 Hav (Ocean)",
+            "surr_opt_horizon": "🌫️ Bergshorisont",
+            "surr_opt_sky": "⛅ Himmel (Sky)",
+
+            // Spline (Fences & Walls)
+            "spline_header": "Staket & Murar",
+            "spline_desc": "Klicka och rita en linje på marken för att bygga staket, murar eller häckar längs kurvan.",
+            "spline_choose_type": "Välj Typ",
+            "spline_wood_fence": "Trästaket",
+            "spline_stone_wall": "Stenmur",
+            "spline_ob_stakes": "OB-pinnar",
+            "spline_hedge": "Häck",
+            "spline_clear": "❌ Rensa ritad linje",
+
+            // Hole Builder (Smart Builder)
+            "flyout_holes_header": "Hålbyggare",
+            "sb_type_green": "Green",
+            "sb_type_fairway": "Fairway",
+            "sb_type_bunker": "Bunker",
+            "sb_type_tee": "Tee",
+            "sb_type_aim": "Sikte (Aim)",
+            "sb_green_header": "Green & Klippning",
+            "sb_fairway_header": "Fairway & Rough",
+            "sb_bunker_header": "Bunker & Sand",
+            "sb_tee_header": "Tee Box & Markörer",
+            "sb_aim_header": "Siktpunkt & Riktlinje",
+            "sb_build_green": "⛳ Bygg Green",
+            "sb_build_fairway": "🏌️ Bygg Fairway",
+            "sb_build_bunker": "🏖️ Bygg Bunker",
+            "sb_build_tee": "🟦 Bygg Tee Box",
+            "sb_clear_points": "❌ Rensa ritad linje",
+            "sb_contour": "Kontur",
+            "sb_foregreen": "Foregreen",
+            "sb_raised_green": "Upphöjd Green (valfritt)",
+            "sb_surround_h": "Omgivningshöjd",
+            "sb_surround_r": "Omgivningsradie",
+            "sb_tilt_aim": "Tilt → Siktpunkt",
+            "sb_mow_pattern": "Klippmönster",
+            "sb_edge": "Kantskärpa",
+            "sb_bunker_depth": "Djup",
+            "sb_bunker_lip": "Vall / Lip",
+            "sb_bunker_shape": "Form",
+            "sb_fairway_terrain": "Terräng",
+            "sb_semi_rough": "Semi-Rough",
+            "sb_rough": "Rough",
+            "sb_tee_markers": "Teemarkörer",
+            "sb_raised_tee": "Upphöjd Tee (valfritt)",
+            "sb_aim_instruction": "🎯 Klicka på marken för att sätta sikte",
+            "sb_aim_hint": "Klicka igen för att flytta • Högerklick för att ta bort",
+            "sb_aim_delete": "🗑️ Ta bort Aim Point",
+            "sb_drawing_hint": "Klicka för att sätta punkter. Sluten form skapas automatiskt.",
+            "sb_tee_step1": "Steg 1: Siktpunkt",
+            "sb_tee_step2": "Steg 2: Teemarkörer",
+            "sb_tee_aim_desc": "Siktpunkten anger spelriktning och vrider teemarkörerna mot fairway.",
+            "sb_aim_required": "⚠️ Krävs",
+            "sb_aim_set": "✅ Sikte satt",
+            "sb_btn_set_aim_txt": "Sätt siktpunkt på kartan",
+            "sb_btn_move_aim_txt": "Flytta siktpunkt"
+        }
+    };
+
+    function getLang() {
+        return localStorage.getItem(STORAGE_KEY) || 'sv';
+    }
+
+    function t(key) {
+        const lang = getLang();
+        if (DICTIONARY[lang] && DICTIONARY[lang][key]) {
+            return DICTIONARY[lang][key];
+        }
+        if (DICTIONARY.en[key]) {
+            return DICTIONARY.en[key];
+        }
+        return key;
+    }
+
+    function setLanguage(lang) {
+        if (!DICTIONARY[lang]) lang = 'en';
+        localStorage.setItem(STORAGE_KEY, lang);
+        applyToDOM();
+        updateSwitcherUI();
+        window.dispatchEvent(new CustomEvent('golf_lang_changed', { detail: { lang: lang } }));
+    }
+
+    function applyToDOM() {
+        const currentLang = getLang();
+        document.documentElement.lang = currentLang;
+
+        // Elements with data-i18n
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            const translation = t(key);
+            if (translation && translation !== key) {
+                if (el.getAttribute('data-i18n-html') === 'true') {
+                    el.innerHTML = translation;
+                } else {
+                    el.textContent = translation;
+                }
+            }
+        });
+
+        // Elements with data-i18n-placeholder
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            const translation = t(key);
+            if (translation && translation !== key) el.placeholder = translation;
+        });
+
+        // Elements with data-i18n-title
+        document.querySelectorAll('[data-i18n-title]').forEach(el => {
+            const key = el.getAttribute('data-i18n-title');
+            const translation = t(key);
+            if (translation && translation !== key) el.title = translation;
+        });
+    }
+
+    function updateSwitcherUI() {
+        const current = getLang();
+        document.querySelectorAll('.lang-switcher-btn').forEach(btn => {
+            const btnLang = btn.getAttribute('data-lang');
+            if (btnLang === current) {
+                btn.classList.add('active');
+                btn.style.background = '#38bdf8';
+                btn.style.color = '#0f172a';
+                btn.style.fontWeight = 'bold';
+            } else {
+                btn.classList.remove('active');
+                btn.style.background = 'transparent';
+                btn.style.color = '#94a3b8';
+                btn.style.fontWeight = 'normal';
+            }
+        });
+    }
+
+    function createSwitcherHTML() {
+        const current = getLang();
+        return `
+            <div class="lang-switcher-container" style="display:inline-flex; align-items:center; background:rgba(30,41,59,0.7); border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:2px; font-size:11px; backdrop-filter:blur(8px); gap:2px;">
+                <span style="padding:0 4px 0 6px; color:#64748b; font-size:12px;">🌐</span>
+                <button type="button" class="lang-switcher-btn" data-lang="en" onclick="window.setGolfLanguage('en')" style="background:${current==='en'?'#38bdf8':'transparent'}; color:${current==='en'?'#0f172a':'#94a3b8'}; border:none; padding:4px 8px; border-radius:14px; font-size:11px; cursor:pointer; font-weight:${current==='en'?'bold':'normal'}; transition:all 0.2s;">EN</button>
+                <button type="button" class="lang-switcher-btn" data-lang="sv" onclick="window.setGolfLanguage('sv')" style="background:${current==='sv'?'#38bdf8':'transparent'}; color:${current==='sv'?'#0f172a':'#94a3b8'}; border:none; padding:4px 8px; border-radius:14px; font-size:11px; cursor:pointer; font-weight:${current==='sv'?'bold':'normal'}; transition:all 0.2s;">SV</button>
+            </div>
+        `;
+    }
+
+    // Expose globals
+    window.t = t;
+    window.getGolfLanguage = getLang;
+    window.setGolfLanguage = setLanguage;
+    window.applyGolfI18n = applyToDOM;
+    window.createGolfLangSwitcher = createSwitcherHTML;
+
+    // Run on DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            applyToDOM();
+            updateSwitcherUI();
+        });
+    } else {
+        applyToDOM();
+        updateSwitcherUI();
+    }
+})();

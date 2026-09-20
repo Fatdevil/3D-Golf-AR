@@ -34,19 +34,122 @@
         
         #btn-delete { background: #ef4444; color: white; display: none; margin-top:0; }
         #btn-delete:hover { background: #dc2626; }
+
+        .badge-green  { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); }
+        .badge-gold   { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); }
+        .badge-blue   { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+        .badge-arcade { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.4); }
+        .badge-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+
+        .plate-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .plate-card:hover {
+            border-color: #38bdf8;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .plate-thumb {
+            width: 100%;
+            height: 140px;
+            background: #0a0e1a;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .plate-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .plate-body {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+        }
+        .world-pill {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+        .pill-grass { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .pill-desert { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+        .pill-moon { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+        .pill-blank { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
     </style>
 </head>
 <body>
 
+    <!-- ADMIN LOGIN GATE OVERLAY -->
+    <div id="admin-login-modal" style="display:flex; position:fixed; inset:0; background:rgba(10, 14, 26, 0.96); backdrop-filter:blur(16px); z-index:999999; justify-content:center; align-items:center;">
+        <div style="background:#1e293b; border:1px solid #38bdf8; border-radius:16px; padding:32px; width:380px; max-width:90%; box-shadow:0 25px 60px rgba(0,0,0,0.8); text-align:center;">
+            <div style="width:56px; height:56px; margin:0 auto 16px; background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:26px;">🔒</div>
+            <h2 style="margin:0 0 8px; font-size:20px; color:#f8fafc; font-weight:800; letter-spacing:0.5px;">Golf OS Admin</h2>
+            <p style="margin:0 0 20px; font-size:12px; color:#94a3b8; line-height:1.5;">Ange administratörslösenord för att hantera startplattor, 3D-modeller och biomer.</p>
+            
+            <div style="display:flex; flex-direction:column; gap:12px; text-align:left;">
+                <label style="font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase;">Lösenord</label>
+                <input type="password" id="gate-password" placeholder="golfadmin123" style="width:100%; padding:12px; background:#0f172a; border:1px solid #334155; border-radius:8px; color:white; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitAdminLogin()">
+                <div id="gate-error" style="display:none; color:#ef4444; font-size:12px; font-weight:600; text-align:center;"></div>
+                <button onclick="submitAdminLogin()" id="gate-submit-btn" style="width:100%; padding:12px; background:#38bdf8; color:#0f172a; font-weight:800; border-radius:8px; border:none; cursor:pointer; font-size:14px; margin-top:4px;">Logga in i Admin</button>
+                <button onclick="window.location.href='hub.html'" style="width:100%; padding:8px; background:transparent; border:none; color:#64748b; font-size:12px; cursor:pointer;">Avbryt och återgå till Hub</button>
+            </div>
+        </div>
+    </div>
+
     <div id="library-sidebar">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 10px;">
-            <h1 style="margin:0; border:none; padding:0;">Cloud Database</h1>
-            <button onclick="window.location.href='index.html'" style="margin:0; padding:6px 12px; background:#475569; color:#f8fafc; font-size:11px; border-radius:4px;">⬅ HOME</button>
+            <h1 style="margin:0; border:none; padding:0; font-size:17px;">Admin Console</h1>
+            <div style="display:flex; gap:6px;">
+                <button onclick="logoutAdmin()" title="Logga ut" style="margin:0; padding:6px 8px; background:#ef4444; color:#fff; font-size:11px; border-radius:4px; cursor:pointer;">🚪</button>
+                <button onclick="window.location.href='hub.html'" style="margin:0; padding:6px 10px; background:#475569; color:#f8fafc; font-size:11px; border-radius:4px; cursor:pointer;">⬅ HUB</button>
+            </div>
         </div>
         
-        <div style="display:flex; gap:10px; margin-bottom:10px;">
-            <button id="tab-btn-assets" onclick="switchLibTab('ASSETS')" style="flex:1; margin:0; padding:8px; background:#38bdf8; color:#0f172a; font-size:12px;">📦 Assets</button>
-            <button id="tab-btn-themes" onclick="switchLibTab('THEMES')" style="flex:1; margin:0; padding:8px; background:#334155; color:#94a3b8; font-size:12px;">🎨 Themes</button>
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+            <button id="tab-btn-plates" onclick="switchLibTab('PLATES')" style="flex:1; margin:0; padding:8px 4px; background:#38bdf8; color:#0f172a; font-size:11px; font-weight:bold; border-radius:4px;">📐 Plates</button>
+            <button id="tab-btn-assets" onclick="switchLibTab('ASSETS')" style="flex:1; margin:0; padding:8px 4px; background:#334155; color:#94a3b8; font-size:11px; font-weight:bold; border-radius:4px;">📦 Assets</button>
+            <button id="tab-btn-themes" onclick="switchLibTab('THEMES')" style="flex:1; margin:0; padding:8px 4px; background:#334155; color:#94a3b8; font-size:11px; font-weight:bold; border-radius:4px;">🎨 Themes</button>
+        </div>
+
+        <!-- PLATES SIDEBAR TAB -->
+        <div id="tab-content-plates" style="display:flex; flex-direction:column; gap:8px;">
+            <div class="form-group">
+                <label>Filter efter Värld</label>
+                <select id="plate-world-filter" onchange="filterPlatesGallery(this.value)">
+                    <option value="all">Alla Världar (All)</option>
+                    <option value="grass">Gräsmark (Grassland)</option>
+                    <option value="desert">Öken (Desert)</option>
+                    <option value="blank">Tomt ark (Blank Canvas)</option>
+                </select>
+            </div>
+            <div style="background:#0f172a; border:1px solid #334155; border-radius:6px; padding:10px; font-size:12px; color:#94a3b8;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Aktiva startplattor:</span>
+                    <span id="plate-count-badge" style="color:#38bdf8; font-weight:bold;">0</span>
+                </div>
+                <div style="font-size:11px; color:#64748b; line-height:1.4;">
+                    Skapa nya startplattor från banor du skulpterat i buildern!
+                </div>
+            </div>
+            <div id="plate-quick-list" style="display:flex; flex-direction:column; gap:6px; max-height:450px; overflow-y:auto; margin-top:4px;">
+                <!-- Populeras dynamiskt -->
+            </div>
         </div>
 
         <!-- ASSET TAB -->
@@ -55,8 +158,7 @@
                 <option value="ALL">All Biomes</option>
                 <option value="GLOBAL">Global</option>
                 <option value="DESERT">Desert</option>
-                <option value="SNOW">Snow</option>
-                <option value="MOON">Moon</option>
+                <option value="SNOW">Snow / Winter</option>
                 <option value="AUTUMN">Autumn</option>
             </select>
             
@@ -164,12 +266,7 @@
                 <input type="color" id="theme-water" value="#38bdf8" style="width:100%; height:30px; cursor:pointer;">
             </div>
             
-            <div class="form-group" style="margin-top:10px; border-top: 1px solid #334155; padding-top: 10px;">
-                <label>Admin Password</label>
-                <input type="password" id="theme-password" placeholder="golfadmin123">
-            </div>
-            
-            <div style="display:flex; gap:10px; margin-top:0;">
+            <div style="display:flex; gap:10px; margin-top:10px;">
                 <button onclick="saveThemeToCloud()" style="background:#10b981; color:#fff; flex:2;">💾 Save Theme</button>
                 <button onclick="loadSelectedThemeUI()" style="background:#475569; color:#f8fafc; flex:1;" title="Discard unsaved changes">↩️ Revert</button>
             </div>
@@ -178,12 +275,155 @@
     </div>
 
     <div id="canvas-container">
-        <!-- Overlay HUD -->
-        <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; pointer-events:none; z-index:10;">
+        <!-- Overlay HUD for 3D view -->
+        <div id="canvas-hud" style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; pointer-events:none; z-index:10;">
             <div>Grid = 1x1 Meter</div>
             <div>Red Wireframe = Hitbox</div>
         </div>
-        <button onclick="resetCamera()" style="position:absolute; top:70px; left:10px; padding:6px 12px; background:#475569; border-radius:4px; border:none; color:white; cursor:pointer; z-index:10;">Reset Camera</button>
+        <button id="btn-reset-cam" onclick="resetCamera()" style="position:absolute; top:70px; left:10px; padding:6px 12px; background:#475569; border-radius:4px; border:none; color:white; cursor:pointer; z-index:10;">Reset Camera</button>
+
+        <!-- STARTER PLATES DASHBOARD (Shown when PLATES tab is active) -->
+        <div id="plates-dashboard" style="position:absolute; inset:0; background:#0b1120; z-index:20; overflow-y:auto; padding:28px 36px; display:flex; flex-direction:column; gap:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid #1e293b; padding-bottom:16px;">
+                <div>
+                    <h2 style="margin:0; font-size:24px; color:#f8fafc; font-weight:900; letter-spacing:-0.5px;">Officiella Startplattor & Mallar</h2>
+                    <p style="margin:4px 0 0 0; color:#94a3b8; font-size:13px;">Skapa officiella startplattor direkt från banor du byggt i 3D-buildern, med riktiga foton!</p>
+                </div>
+                <button onclick="togglePromoteForm()" id="btn-toggle-promote" style="background:#10b981; color:white; font-size:12px; font-weight:800; padding:10px 18px; border-radius:8px; display:flex; align-items:center; gap:8px; margin-top:0;">
+                    ⭐ Främja Sparad Bana till Platta
+                </button>
+            </div>
+
+            <!-- PROMOTE / CREATE STUDIO FORM -->
+            <div id="promote-course-panel" style="background:#1e293b; border:1px solid #38bdf8; border-radius:14px; padding:20px; display:none; flex-direction:column; gap:16px; box-shadow:0 15px 35px rgba(0,0,0,0.4);">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:12px;">
+                    <div style="font-size:15px; font-weight:800; color:#38bdf8; display:flex; align-items:center; gap:8px;">
+                        <span>⭐</span> Skapa Officiell Startplatta från Byggd Bana
+                    </div>
+                    <button onclick="togglePromoteForm()" style="background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:0 6px; margin-top:0;">✕</button>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:20px;">
+                    <div style="display:flex; flex-direction:column; gap:12px;">
+                        <div class="form-group">
+                            <label>1. Välj sparad bana från databasen</label>
+                            <select id="promote-course-select" onchange="onSelectCourseToPromote(this.value)" style="width:100%; padding:10px; background:#0f172a; border:1px solid #334155; border-radius:6px; color:white; font-weight:600;">
+                                <option value="">-- Välj bana du byggt --</option>
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <label>Målvärld (World)</label>
+                                <select id="promote-world" style="background:#0f172a;">
+                                    <option value="grass">Gräsmark (Grassland)</option>
+                                    <option value="desert">Öken (Desert)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Unikt Platta-ID (slug)</label>
+                                <input type="text" id="promote-id" placeholder="t.ex. desert_canyon_01">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <label>Titel (Engelska)</label>
+                                <input type="text" id="promote-name-en" placeholder="Ex: Canyon Chasm">
+                            </div>
+                            <div class="form-group">
+                                <label>Titel (Svenska)</label>
+                                <input type="text" id="promote-name-sv" placeholder="Ex: Kanjonavgrund">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <label>Beskrivning (Engelska)</label>
+                                <input type="text" id="promote-desc-en" placeholder="Ex: Deep winding canyon with elevated tee box">
+                            </div>
+                            <div class="form-group">
+                                <label>Beskrivning (Svenska)</label>
+                                <input type="text" id="promote-desc-sv" placeholder="Ex: Djup slingrande kanjon med upphöjd utslagsplats">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <label>Badge Text</label>
+                                <input type="text" id="promote-badge" placeholder="Ex: CANYON, ISLAND, ROLLING">
+                            </div>
+                            <div class="form-group">
+                                <label>Badge Färgstil</label>
+                                <select id="promote-badge-class">
+                                    <option value="badge-gold">Guld / Öken (badge-gold)</option>
+                                    <option value="badge-green">Grön / Gräsmark (badge-green)</option>
+                                    <option value="badge-blue">Blå / Vatten (badge-blue)</option>
+                                    <option value="badge-arcade">Neonrosa / Special (badge-arcade)</option>
+                                    <option value="badge-purple">Lila / Månen (badge-purple)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="max-width:100px;">
+                                <label>Sortering</label>
+                                <input type="number" id="promote-sort" value="0">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <label>Egenskaper (EN, • punktlista)</label>
+                                <input type="text" id="promote-feat-en" placeholder="• Deep trench • Elevated plateau • 2 Ponds">
+                            </div>
+                            <div class="form-group">
+                                <label>Egenskaper (SV, • punktlista)</label>
+                                <input type="text" id="promote-feat-sv" placeholder="• Djup klyfta • Upphöjd platå • 2 Dammar">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FÖRHANDSVISNING AV FOTOT -->
+                    <div style="display:flex; flex-direction:column; gap:10px; background:#0f172a; padding:16px; border-radius:10px; border:1px solid #334155;">
+                        <label style="font-size:12px; color:#38bdf8;">📸 Fotografiskt Skärmklipp (Preview Image)</label>
+                        <div id="promote-img-wrap" style="width:100%; height:180px; background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid #334155; position:relative;">
+                            <img id="promote-preview-img" src="" alt="" style="width:100%; height:100%; object-fit:cover; display:none;">
+                            <div id="promote-img-placeholder" style="color:#64748b; font-size:12px; text-align:center; padding:12px;">
+                                Inget foto valt ännu.<br>Välj en sparad bana ovan eller ladda upp ett foto.
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <input type="file" id="promote-file-input" accept="image/*" style="display:none;" onchange="handleCustomPlatePhoto(event)">
+                            <button type="button" id="btn-auto-3d-photo" onclick="generateAuto3DPlatePhoto()" style="background:#0284c7; color:white; font-size:11px; font-weight:700; padding:8px 12px; flex:1; margin-top:0; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;">📸 Generera 3D-foto</button>
+                            <button type="button" onclick="document.getElementById('promote-file-input').click()" style="background:#334155; color:#cbd5e1; font-size:11px; padding:8px 12px; flex:1; margin-top:0; cursor:pointer;">📁 Ladda upp egen bild</button>
+                        </div>
+                        <div id="promote-course-stats" style="font-size:11px; color:#94a3b8; line-height:1.4;">
+                            Klicka på "Spara & Publicera" för att göra denna startplatta tillgänglig i <em>Skapa ny bana</em>.
+                        </div>
+                        <button onclick="saveStarterPlateFromStudio()" id="btn-save-starter-plate" style="background:#38bdf8; color:#0f172a; font-weight:800; padding:12px; border-radius:8px; margin-top:auto; font-size:13px;">
+                            ⭐ Spara & Publicera som Officiell Startplatta
+                        </button>
+                        <div id="promote-msg" style="font-size:12px; text-align:center; display:none; font-weight:600;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACTIVE PLATES GALLERY -->
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <div style="font-size:15px; font-weight:800; color:#f8fafc; text-transform:uppercase; letter-spacing:1px;">
+                        Katalog med Aktiva Plattor
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button onclick="filterPlatesGallery('all')" class="plate-filter-btn active" data-filter="all" style="padding:4px 12px; font-size:11px; margin:0; border-radius:20px; background:#38bdf8; color:#0f172a;">Alla</button>
+                        <button onclick="filterPlatesGallery('grass')" class="plate-filter-btn" data-filter="grass" style="padding:4px 12px; font-size:11px; margin:0; border-radius:20px; background:#1e293b; color:#94a3b8;">Gräsmark</button>
+                        <button onclick="filterPlatesGallery('desert')" class="plate-filter-btn" data-filter="desert" style="padding:4px 12px; font-size:11px; margin:0; border-radius:20px; background:#1e293b; color:#94a3b8;">Öken</button>
+                        <button onclick="filterPlatesGallery('moon')" class="plate-filter-btn" data-filter="moon" style="padding:4px 12px; font-size:11px; margin:0; border-radius:20px; background:#1e293b; color:#94a3b8;">Månen</button>
+                    </div>
+                </div>
+                <div id="plates-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:18px;">
+                    <!-- Populeras dynamiskt -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="sidebar">
@@ -211,8 +451,9 @@
                 <select id="asset-subcat">
                     <option value="TREES">Trees</option>
                     <option value="ROCKS">Rocks</option>
-                    <option value="PLANTS">Plants</option>
+                    <option value="PLANTS">Plants & Bushes</option>
                     <option value="LANDSCAPE">Landscape</option>
+                    <option value="BLOCKS">Blocks / Architecture</option>
                 </select>
             </div>
             <div class="form-group" style="align-items:flex-start;">
@@ -228,9 +469,9 @@
         <div class="form-group" style="flex-direction:row; flex-wrap:wrap; gap:10px;">
             <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="GLOBAL" checked> Global</label>
             <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="DESERT"> Desert</label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="SNOW"> Snow</label>
-            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="MOON"> Moon</label>
+            <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="SNOW"> Snow / Winter</label>
             <label style="display:flex; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="AUTUMN"> Autumn</label>
+            <label style="display:none; align-items:center; gap:4px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" class="biome-cb" value="MOON"> Moon</label>
         </div>
 
         <div class="row">
@@ -536,29 +777,627 @@
             });
         }
         
-        // --- CLOUD LIBRARY LOGIC ---
-        let allLibraryAssets = [];
+    // --- ADMIN AUTHENTICATION ---
+    function getAdminToken() {
+        return sessionStorage.getItem('golf_admin_token') || '';
+    }
+
+    async function checkAdminAuth() {
+        const token = getAdminToken();
+        const modal = document.getElementById('admin-login-modal');
+        if (!token) {
+            modal.style.display = 'flex';
+            return false;
+        }
+
+        try {
+            const res = await fetch('/api/admin/verify', {
+                headers: { 'x-admin-token': token }
+            });
+            const data = await res.json();
+            if (data.isAdmin) {
+                modal.style.display = 'none';
+                return true;
+            } else {
+                sessionStorage.removeItem('golf_admin_token');
+                modal.style.display = 'flex';
+                return false;
+            }
+        } catch(e) {
+            console.error("Auth check failed:", e);
+            modal.style.display = 'flex';
+            return false;
+        }
+    }
+
+    async function submitAdminLogin() {
+        const pass = document.getElementById('gate-password').value;
+        const btn = document.getElementById('gate-submit-btn');
+        const err = document.getElementById('gate-error');
+        
+        if (!pass) {
+            err.innerText = "Ange ett lösenord";
+            err.style.display = 'block';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerText = "Loggar in...";
+        err.style.display = 'none';
+
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pass })
+            });
+            const data = await res.json();
+            if (res.ok && data.success && data.token) {
+                sessionStorage.setItem('golf_admin_token', data.token);
+                document.getElementById('admin-login-modal').style.display = 'none';
+                switchLibTab('PLATES');
+            } else {
+                err.innerText = data.error || "Felaktigt administratörslösenord";
+                err.style.display = 'block';
+            }
+        } catch(e) {
+            err.innerText = "Kunde inte ansluta till servern: " + e.message;
+            err.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Logga in i Admin";
+        }
+    }
+
+    async function logoutAdmin() {
+        const token = getAdminToken();
+        if (token) {
+            try {
+                await fetch('/api/admin/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-token': token }
+                });
+            } catch(e) {}
+        }
+        sessionStorage.removeItem('golf_admin_token');
+        document.getElementById('admin-login-modal').style.display = 'flex';
+    }
+
+    // --- CLOUD LIBRARY & STARTER PLATES LOGIC ---
+    let allLibraryAssets = [];
     let allThemes = {};
+    let allStarterPlates = [];
+    let availableCourses = [];
+    let currentPlateWorldFilter = 'all';
 
     function switchLibTab(tab) {
+        let btnPlates = document.getElementById('tab-btn-plates');
         let btnAssets = document.getElementById('tab-btn-assets');
         let btnThemes = document.getElementById('tab-btn-themes');
+
+        let contentPlates = document.getElementById('tab-content-plates');
         let contentAssets = document.getElementById('tab-content-assets');
         let contentThemes = document.getElementById('tab-content-themes');
-        
-        if (tab === 'ASSETS') {
-            btnAssets.style.background = '#38bdf8'; btnAssets.style.color = '#0f172a';
-            btnThemes.style.background = '#334155'; btnThemes.style.color = '#94a3b8';
-            contentAssets.style.display = 'flex';
-            contentThemes.style.display = 'none';
+
+        let platesDash = document.getElementById('plates-dashboard');
+        let sidebar = document.getElementById('sidebar');
+        let canvasHud = document.getElementById('canvas-hud');
+        let resetCamBtn = document.getElementById('btn-reset-cam');
+
+        [btnPlates, btnAssets, btnThemes].forEach(b => {
+            if (b) { b.style.background = '#334155'; b.style.color = '#94a3b8'; }
+        });
+        if (contentPlates) contentPlates.style.display = 'none';
+        if (contentAssets) contentAssets.style.display = 'none';
+        if (contentThemes) contentThemes.style.display = 'none';
+
+        if (tab === 'PLATES') {
+            if (btnPlates) { btnPlates.style.background = '#38bdf8'; btnPlates.style.color = '#0f172a'; }
+            if (contentPlates) contentPlates.style.display = 'flex';
+            if (platesDash) platesDash.style.display = 'flex';
+            if (sidebar) sidebar.style.display = 'none';
+            if (canvasHud) canvasHud.style.display = 'none';
+            if (resetCamBtn) resetCamBtn.style.display = 'none';
+            
+            fetchStarterPlates();
+            fetchAdminCourses();
+            logMsg("Starter Plates Dashboard active.");
+        } else if (tab === 'ASSETS') {
+            if (btnAssets) { btnAssets.style.background = '#38bdf8'; btnAssets.style.color = '#0f172a'; }
+            if (contentAssets) contentAssets.style.display = 'flex';
+            if (platesDash) platesDash.style.display = 'none';
+            if (sidebar) sidebar.style.display = 'flex';
+            if (canvasHud) canvasHud.style.display = 'block';
+            if (resetCamBtn) resetCamBtn.style.display = 'block';
             logMsg("Switched to Asset Library.");
         } else {
-            btnThemes.style.background = '#38bdf8'; btnThemes.style.color = '#0f172a';
-            btnAssets.style.background = '#334155'; btnAssets.style.color = '#94a3b8';
-            contentThemes.style.display = 'flex';
-            contentAssets.style.display = 'none';
+            if (btnThemes) { btnThemes.style.background = '#38bdf8'; btnThemes.style.color = '#0f172a'; }
+            if (contentThemes) contentThemes.style.display = 'flex';
+            if (platesDash) platesDash.style.display = 'none';
+            if (sidebar) sidebar.style.display = 'none';
+            if (canvasHud) canvasHud.style.display = 'block';
+            if (resetCamBtn) resetCamBtn.style.display = 'block';
             loadSelectedThemeUI();
             logMsg("Switched to Theme Settings.");
+        }
+    }
+
+    // --- STARTER PLATES FUNCTIONS ---
+    async function fetchStarterPlates() {
+        try {
+            const res = await fetch('/api/starter-plates');
+            if (res.ok) {
+                allStarterPlates = await res.json();
+                renderStarterPlates();
+            }
+        } catch(e) {
+            console.error("Failed to fetch starter plates:", e);
+        }
+    }
+
+    function filterPlatesGallery(world) {
+        currentPlateWorldFilter = world;
+        const select = document.getElementById('plate-world-filter');
+        if (select) select.value = world;
+
+        document.querySelectorAll('.plate-filter-btn').forEach(btn => {
+            if (btn.getAttribute('data-filter') === world) {
+                btn.style.background = '#38bdf8';
+                btn.style.color = '#0f172a';
+            } else {
+                btn.style.background = '#1e293b';
+                btn.style.color = '#94a3b8';
+            }
+        });
+
+        renderStarterPlates();
+    }
+
+    function renderStarterPlates() {
+        const grid = document.getElementById('plates-grid');
+        const quickList = document.getElementById('plate-quick-list');
+        const countBadge = document.getElementById('plate-count-badge');
+        
+        let filtered = allStarterPlates;
+        if (currentPlateWorldFilter && currentPlateWorldFilter !== 'all') {
+            filtered = allStarterPlates.filter(p => (p.world || '').toLowerCase() === currentPlateWorldFilter.toLowerCase());
+        }
+
+        if (countBadge) countBadge.textContent = `${filtered.length} / ${allStarterPlates.length}`;
+
+        if (!grid) return;
+
+        if (filtered.length === 0) {
+            grid.innerHTML = `
+                <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: #64748b; background: #1e293b; border-radius: 12px; border: 1px dashed #334155;">
+                    <div style="font-size: 32px; margin-bottom: 10px;">📐</div>
+                    <div style="font-weight: 700; color: #f8fafc; margin-bottom: 6px;">Inga startplattor i denna kategori ännu</div>
+                    <div style="font-size: 12px; margin-bottom: 16px;">Klicka på knappen ovan för att främja en bana du byggt i 3D-buildern till en officiell startplatta!</div>
+                    <button onclick="togglePromoteForm(true)" style="background:#38bdf8; color:#0f172a; font-weight:bold; padding:8px 16px; border-radius:6px; font-size:12px; margin:0;">
+                        + Skapa Första Plattan
+                    </button>
+                </div>
+            `;
+        } else {
+            let html = '';
+            filtered.forEach(p => {
+                const worldClass = `pill-${p.world || 'grass'}`;
+                const worldName = {
+                    grass: 'Gräsmark',
+                    desert: 'Öken',
+                    moon: 'Månen',
+                    blank: 'Tomt ark'
+                }[p.world] || p.world;
+
+                const biomeParam = {
+                    desert: 'DESERT',
+                    moon: 'MOON',
+                    blank: 'GLOBAL',
+                    grass: 'GLOBAL'
+                }[p.world] || 'GLOBAL';
+
+                const testUrl = `arcade.html?autorun=new_build&world=${p.world}&template_id=${p.id}&template=${p.id}&biome=${biomeParam}`;
+
+                html += `
+                <div class="plate-card" id="card-${p.id}">
+                    <div class="plate-thumb">
+                        ${p.preview_image 
+                            ? `<img src="${p.preview_image}" alt="${p.name}">` 
+                            : `<div style="color:#64748b; font-size:11px;">Inget foto</div>`
+                        }
+                        <div style="position:absolute; top:8px; left:8px; display:flex; gap:6px;">
+                            <span class="world-pill ${worldClass}">${worldName}</span>
+                            ${p.badge ? `<span class="var-badge ${p.badge_class || 'badge-green'}" style="font-size:10px; padding:2px 6px; border-radius:4px;">${p.badge}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="plate-body">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div>
+                                <div style="font-weight:800; font-size:14px; color:#f8fafc;">${p.name_sv || p.name}</div>
+                                ${p.name_sv && p.name !== p.name_sv ? `<div style="font-size:11px; color:#94a3b8;">${p.name}</div>` : ''}
+                            </div>
+                            <span style="font-size:11px; color:#64748b; font-family:monospace;">${p.id}</span>
+                        </div>
+                        <div style="font-size:12px; color:#cbd5e1; line-height:1.4; margin-top:2px;">${p.description_sv || p.description || ''}</div>
+                        ${(p.features_sv || p.features) ? `<div style="font-size:11px; color:#38bdf8; margin-top:2px;">${p.features_sv || p.features}</div>` : ''}
+                        
+                        <div style="display:flex; gap:8px; margin-top:12px; border-top:1px solid #334155; padding-top:10px;">
+                            <button onclick="window.open('${testUrl}', '_blank')" style="flex:1; background:#38bdf8; color:#0f172a; padding:6px 10px; font-size:11px; margin:0; border-radius:4px; font-weight:700;">
+                                👁️ Testa i 3D
+                            </button>
+                            <button onclick="deleteStarterPlate('${p.id}')" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.4); padding:6px 10px; font-size:11px; margin:0; border-radius:4px; font-weight:700;">
+                                🗑️ Ta bort
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            grid.innerHTML = html;
+        }
+
+        // Quick list in sidebar
+        if (quickList) {
+            let qHtml = '';
+            filtered.slice(0, 15).forEach(p => {
+                qHtml += `
+                <div class="lib-item" onclick="document.getElementById('card-${p.id}')?.scrollIntoView({behavior:'smooth'})" style="padding:6px 10px;">
+                    <div style="width:28px; height:28px; border-radius:4px; overflow:hidden; background:#000; flex-shrink:0;">
+                        ${p.preview_image ? `<img src="${p.preview_image}" style="width:100%; height:100%; object-fit:cover;">` : ''}
+                    </div>
+                    <div class="details" style="overflow:hidden;">
+                        <div class="name" style="font-size:12px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${p.name_sv || p.name}</div>
+                        <div class="subcat" style="font-size:9px;">${p.world} • ${p.badge || 'Starter'}</div>
+                    </div>
+                </div>`;
+            });
+            quickList.innerHTML = qHtml;
+        }
+    }
+
+    async function fetchAdminCourses() {
+        try {
+            const token = getAdminToken();
+            const res = await fetch('/api/admin/courses', {
+                headers: { 'x-admin-token': token }
+            });
+            if (res.ok) {
+                availableCourses = await res.json();
+                populateCourseSelector();
+            } else {
+                const pubRes = await fetch('/api/courses');
+                if (pubRes.ok) {
+                    availableCourses = await pubRes.json();
+                    populateCourseSelector();
+                }
+            }
+        } catch(e) {
+            console.error("Failed to fetch courses for admin:", e);
+        }
+    }
+
+    function populateCourseSelector() {
+        const select = document.getElementById('promote-course-select');
+        if (!select) return;
+
+        let options = '<option value="">-- Välj bana du byggt --</option>';
+        availableCourses.forEach(c => {
+            const draftTag = c.is_draft ? ' [DRAFT]' : '';
+            const holesTag = c.hole_count ? ` (${c.hole_count} hål)` : '';
+            options += `<option value="${c.share_code}">${c.name}${draftTag}${holesTag} — ${c.share_code}</option>`;
+        });
+        select.innerHTML = options;
+    }
+
+    let studioSelectedCourse = null;
+    let studioCustomPhotoBase64 = null;
+
+    async function onSelectCourseToPromote(shareCode) {
+        if (!shareCode) {
+            studioSelectedCourse = null;
+            return;
+        }
+
+        const statsEl = document.getElementById('promote-course-stats');
+        const imgEl = document.getElementById('promote-preview-img');
+        const placeholderEl = document.getElementById('promote-img-placeholder');
+
+        if (statsEl) statsEl.innerText = "Hämtar banans terräng och foton...";
+
+        try {
+            const res = await fetch(`/api/courses/${shareCode}`);
+            if (!res.ok) throw new Error("Could not load course data");
+            const course = await res.json();
+            studioSelectedCourse = course;
+
+            const slug = (course.name || 'plate').toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 30);
+            document.getElementById('promote-id').value = `${slug}_plate`;
+            document.getElementById('promote-name-en').value = course.name || '';
+            document.getElementById('promote-name-sv').value = course.name || '';
+
+            if (course.theme_data && course.theme_data.biome) {
+                const b = course.theme_data.biome.toLowerCase();
+                if (b.includes('desert')) document.getElementById('promote-world').value = 'desert';
+                else if (b.includes('moon')) document.getElementById('promote-world').value = 'moon';
+            }
+
+            if (course.cover_image) {
+                imgEl.src = course.cover_image;
+                imgEl.style.display = 'block';
+                if (placeholderEl) placeholderEl.style.display = 'none';
+                studioCustomPhotoBase64 = course.cover_image;
+            } else {
+                imgEl.style.display = 'none';
+                if (placeholderEl) {
+                    placeholderEl.style.display = 'block';
+                    placeholderEl.innerHTML = "Banan saknar skärmklipp.<br>Du kan ladda upp en egen bild nedan!";
+                }
+                studioCustomPhotoBase64 = null;
+            }
+
+            if (statsEl) {
+                statsEl.innerHTML = `
+                    <div style="color:#4ade80; font-weight:bold;">✅ Banan '${course.name}' laddad!</div>
+                    <div>Skapare: ${course.author || 'Okänd'} • Skapad: ${new Date(course.created_at).toLocaleDateString()}</div>
+                `;
+            }
+        } catch(e) {
+            console.error("Error loading course for promotion:", e);
+            if (statsEl) statsEl.innerText = "Kunde inte ladda bana: " + e.message;
+        }
+    }
+
+    function togglePromoteForm(forceOpen = false) {
+        const panel = document.getElementById('promote-course-panel');
+        if (!panel) return;
+        if (forceOpen || panel.style.display === 'none') {
+            panel.style.display = 'flex';
+            panel.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            panel.style.display = 'none';
+        }
+    }
+
+    function handleCustomPlatePhoto(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            studioCustomPhotoBase64 = e.target.result;
+            const imgEl = document.getElementById('promote-preview-img');
+            const placeholderEl = document.getElementById('promote-img-placeholder');
+            if (imgEl) {
+                imgEl.src = studioCustomPhotoBase64;
+                imgEl.style.display = 'block';
+            }
+            if (placeholderEl) placeholderEl.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function generateAuto3DPlatePhoto() {
+        if (!studioSelectedCourse) {
+            alert("Välj en sparad bana i listan ovan först!");
+            return;
+        }
+        const btn = document.getElementById('btn-auto-3d-photo');
+        if (btn) btn.innerText = "⏳ Renderar 3D-vy...";
+
+        try {
+            let heightData = null;
+            let segs = 128;
+            if (studioSelectedCourse.terrain_heightmap) {
+                let mapData = (typeof studioSelectedCourse.terrain_heightmap === 'string')
+                    ? JSON.parse(studioSelectedCourse.terrain_heightmap)
+                    : studioSelectedCourse.terrain_heightmap;
+                heightData = Array.isArray(mapData) ? mapData : (mapData.ground || null);
+                if (mapData && mapData.segs) segs = mapData.segs;
+                else if (heightData) segs = Math.round(Math.sqrt(heightData.length) - 1);
+            }
+
+            const width = 480;
+            const height = 240;
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = width;
+            offCanvas.height = height;
+
+            const offRenderer = new THREE.WebGLRenderer({
+                canvas: offCanvas,
+                antialias: true,
+                preserveDrawingBuffer: true
+            });
+            offRenderer.setSize(width, height);
+            offRenderer.outputEncoding = THREE.sRGBEncoding;
+
+            const offScene = new THREE.Scene();
+            const world = document.getElementById('promote-world').value || 'grass';
+            const isDesert = world === 'desert';
+
+            offScene.background = new THREE.Color(isDesert ? '#140f07' : '#0f172a');
+
+            // Lighting
+            const amb = new THREE.AmbientLight(0xffffff, 0.75);
+            offScene.add(amb);
+            const sun = new THREE.DirectionalLight(isDesert ? 0xfffaed : 0xffffff, 1.1);
+            sun.position.set(220, 380, 220);
+            offScene.add(sun);
+
+            // Terrain Geometry
+            const terrainSize = 600;
+            const actualSegs = Math.max(16, Math.min(segs, 128));
+            const planeGeo = new THREE.PlaneGeometry(terrainSize, terrainSize, actualSegs, actualSegs);
+            planeGeo.rotateX(-Math.PI / 2);
+
+            if (heightData && heightData.length > 0) {
+                const pos = planeGeo.attributes.position;
+                const vertCount = (actualSegs + 1) * (actualSegs + 1);
+                for (let i = 0; i < vertCount && i < heightData.length; i++) {
+                    pos.setY(i, heightData[i]);
+                }
+                pos.needsUpdate = true;
+                planeGeo.computeVertexNormals();
+            }
+
+            // Material
+            let mat = null;
+            if (studioSelectedCourse.terrain_biomemap) {
+                const texLoader = new THREE.TextureLoader();
+                const texture = await new Promise((resolve) => {
+                    texLoader.load(studioSelectedCourse.terrain_biomemap, resolve, undefined, () => resolve(null));
+                });
+                if (texture) {
+                    mat = new THREE.MeshLambertMaterial({ map: texture });
+                }
+            }
+            if (!mat) {
+                mat = new THREE.MeshLambertMaterial({
+                    color: isDesert ? 0x926c42 : 0x2e6f28
+                });
+            }
+
+            const terrainMesh = new THREE.Mesh(planeGeo, mat);
+            offScene.add(terrainMesh);
+
+            // Camera: Isometric perspective angled from corner
+            const offCamera = new THREE.PerspectiveCamera(40, width / height, 10, 3000);
+            offCamera.position.set(400, 320, 440);
+            offCamera.lookAt(0, 15, 0);
+
+            offRenderer.render(offScene, offCamera);
+
+            const dataUrl = offCanvas.toDataURL('image/jpeg', 0.85);
+            studioCustomPhotoBase64 = dataUrl;
+
+            const imgEl = document.getElementById('promote-preview-img');
+            const placeholderEl = document.getElementById('promote-img-placeholder');
+            if (imgEl) {
+                imgEl.src = dataUrl;
+                imgEl.style.display = 'block';
+            }
+            if (placeholderEl) placeholderEl.style.display = 'none';
+
+            // Cleanup WebGL resources to avoid context limits
+            planeGeo.dispose();
+            if (mat.map) mat.map.dispose();
+            mat.dispose();
+            offRenderer.dispose();
+
+            if (btn) btn.innerText = "📸 Generera 3D-foto";
+        } catch(err) {
+            console.error("Auto 3D plate photo failed:", err);
+            alert("Kunde inte generera 3D-foto: " + err.message);
+            if (btn) btn.innerText = "📸 Generera 3D-foto";
+        }
+    }
+
+    async function saveStarterPlateFromStudio() {
+        const token = getAdminToken();
+        if (!token) {
+            alert("Du är inte inloggad som admin. Logga in igen.");
+            checkAdminAuth();
+            return;
+        }
+
+        const id = document.getElementById('promote-id').value.trim();
+        const world = document.getElementById('promote-world').value;
+        const nameEn = document.getElementById('promote-name-en').value.trim();
+        const nameSv = document.getElementById('promote-name-sv').value.trim();
+        const descEn = document.getElementById('promote-desc-en').value.trim();
+        const descSv = document.getElementById('promote-desc-sv').value.trim();
+        const badge = document.getElementById('promote-badge').value.trim();
+        const badgeClass = document.getElementById('promote-badge-class').value;
+        const sort = parseInt(document.getElementById('promote-sort').value) || 0;
+        const featEn = document.getElementById('promote-feat-en').value.trim();
+        const featSv = document.getElementById('promote-feat-sv').value.trim();
+
+        const msg = document.getElementById('promote-msg');
+        const btn = document.getElementById('btn-save-starter-plate');
+
+        if (!id) { alert("Platta-ID saknas"); return; }
+        if (!nameEn && !nameSv) { alert("Titel saknas"); return; }
+
+        let courseData = null;
+        if (studioSelectedCourse) {
+            courseData = {
+                terrain_heightmap: studioSelectedCourse.terrain_heightmap,
+                terrain_biomemap: studioSelectedCourse.terrain_biomemap,
+                terrain_watermask: studioSelectedCourse.terrain_watermask,
+                trees: studioSelectedCourse.trees || [],
+                theme_data: studioSelectedCourse.theme_data || {},
+                holes: []
+            };
+        }
+
+        btn.disabled = true;
+        btn.innerText = "Sparar till Cloud...";
+        msg.style.display = 'none';
+
+        try {
+            const payload = {
+                id,
+                world,
+                name: nameEn || nameSv,
+                name_sv: nameSv || nameEn,
+                description: descEn || descSv,
+                description_sv: descSv || descEn,
+                badge: badge || 'STARTER',
+                badge_class: badgeClass,
+                features: featEn || featSv,
+                features_sv: featSv || featEn,
+                preview_image: studioCustomPhotoBase64 || '',
+                course_data: courseData,
+                sort_order: sort,
+                from_course_code: studioSelectedCourse ? studioSelectedCourse.share_code : null
+            };
+
+            const res = await fetch('/api/starter-plates', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-token': token
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                msg.style.display = 'block';
+                msg.style.color = '#4ade80';
+                msg.innerText = "✅ Startplattan har sparats och publicerats!";
+                fetchStarterPlates();
+                setTimeout(() => { togglePromoteForm(); }, 1500);
+            } else {
+                msg.style.display = 'block';
+                msg.style.color = '#ef4444';
+                msg.innerText = "❌ Fel vid sparning: " + (data.error || 'Okänt fel');
+            }
+        } catch(e) {
+            msg.style.display = 'block';
+            msg.style.color = '#ef4444';
+            msg.innerText = "❌ Fel: " + e.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "⭐ Spara & Publicera som Officiell Startplatta";
+        }
+    }
+
+    async function deleteStarterPlate(plateId) {
+        if (!confirm(`Är du säker på att du vill ta bort startplattan '${plateId}'?`)) return;
+
+        const token = getAdminToken();
+        try {
+            const res = await fetch(`/api/starter-plates/${plateId}`, {
+                method: 'DELETE',
+                headers: { 'x-admin-token': token }
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                fetchStarterPlates();
+            } else {
+                alert("Kunde inte ta bort: " + (data.error || 'Okänt fel'));
+            }
+        } catch(e) {
+            alert("Fel: " + e.message);
         }
     }
 
@@ -668,8 +1507,12 @@
     });
 
     async function saveThemeToCloud() {
-        let password = document.getElementById('theme-password').value;
-        if (!password) { alert("Admin password required!"); return; }
+        const token = getAdminToken();
+        if (!token) {
+            alert("Admin login required");
+            checkAdminAuth();
+            return;
+        }
         
         let themeId = document.getElementById('theme-selector').value;
         let config = {
@@ -690,9 +1533,11 @@
         try {
             const res = await fetch('/api/biomes', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-token': token
+                },
                 body: JSON.stringify({
-                    adminPassword: password,
                     id: themeId,
                     name: themeId,
                     config: config
@@ -970,9 +1815,13 @@
             document.getElementById('log').innerText = "Uploading to Cloud...";
 
             try {
+                const token = getAdminToken();
                 const res = await fetch('/api/assets', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-admin-token': token
+                    },
                     body: JSON.stringify({
                         id, name, category: 'nature', subcategory: subcat, icon: '', file_data: base64Data, config, password: pass
                     })
@@ -994,7 +1843,8 @@
         // --- DELETE FRÅN BACKEND ---
         document.getElementById('btn-delete').addEventListener('click', async () => {
             const pass = document.getElementById('admin-pass').value;
-            if (!pass) return alert("Password required to delete");
+            const token = getAdminToken();
+            if (!pass && !token) return alert("Password or admin session required to delete");
             const id = document.getElementById('asset-id').value;
             
             if (!confirm("Are you sure you want to permanently delete '" + id + "' from the Cloud? This will break any courses using it.")) return;
@@ -1003,7 +1853,10 @@
             try {
                 const res = await fetch('/api/assets/' + id, {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-admin-token': token
+                    },
                     body: JSON.stringify({ password: pass })
                 });
                 
@@ -1029,6 +1882,14 @@
                 }
             } catch(e) {
                 document.getElementById('log').innerText = "❌ Exception: " + e.message;
+            }
+        });
+
+        // Initialize admin state
+        document.addEventListener('DOMContentLoaded', async () => {
+            const isAuth = await checkAdminAuth();
+            if (isAuth) {
+                switchLibTab('PLATES');
             }
         });
 

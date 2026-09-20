@@ -86,9 +86,7 @@
             for (let c of this.chunks) {
                 if (c.dirty) this._syncPos(c, mP);
             }
-            if (window._terrainShells && window._terrainShells.quality !== 'OFF') {
-                window._terrainShells.syncHeights();
-            }
+            // Defer _terrainShells.syncHeights to pointerup (via syncDirty/syncAll) to ensure smooth 60fps sculpting
         }
 
         markDirty(worldX, worldZ, radius) {

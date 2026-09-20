@@ -1,0 +1,68 @@
+[
+  {
+    "id": "grass_rolling_hills",
+    "world": "grass",
+    "name": "Rolling Hills",
+    "name_sv": "Böljande kullar",
+    "description": "Gentle natural rolling topography with mild elevation changes (1-4m).",
+    "description_sv": "Naturligt böljande landskap med mjuka höjdskillnader (1-4m).",
+    "badge": "POPULAR",
+    "badge_class": "badge-green",
+    "features": "• Soft undulations • Ideal for classic parkland courses • Natural drainage",
+    "features_sv": "• Mjuka onduleringar • Perfekt för klassisk parkbana • Naturliga linjer",
+    "preview_image": "golf_courses.png",
+    "course_data": {
+      "theme_data": {
+        "biome": "GLOBAL"
+      },
+      "holes": []
+    },
+    "sort_order": 1,
+    "is_active": true,
+    "created_at": "2026-09-18T20:00:00.000Z"
+  },
+  {
+    "id": "desert_canyon_run",
+    "world": "desert",
+    "name": "Canyon Run",
+    "name_sv": "Kanjonavgrund",
+    "description": "Dry desert wadi with winding sunken chasm and plateau tee zones.",
+    "description_sv": "Torr öken-wadi med slingrande nedsänkt kanjon och platå-utslag.",
+    "badge": "CANYON",
+    "badge_class": "badge-gold",
+    "features": "• Sunken canyon (-6m) • Red rock aesthetic • Risk/reward carry",
+    "features_sv": "• Djup kanjon (-6m) • Röd sten-estetik • Spännande carry",
+    "preview_image": "golf_build.png",
+    "course_data": {
+      "theme_data": {
+        "biome": "DESERT"
+      },
+      "holes": []
+    },
+    "sort_order": 1,
+    "is_active": true,
+    "created_at": "2026-09-18T20:05:00.000Z"
+  },
+  {
+    "id": "moon_crater_basin",
+    "world": "moon",
+    "name": "Impact Crater",
+    "name_sv": "Nedslagskrater",
+    "description": "Dramatic central lunar impact basin surrounded by raised ridge rim.",
+    "description_sv": "Dramatisk månkratersänka omgiven av upphöjd kraterkant.",
+    "badge": "LOW-G",
+    "badge_class": "badge-purple",
+    "features": "• Deep central basin • Crater rim tier • Low gravity feel",
+    "features_sv": "• Djup kraterbassäng • Terrasserad kant • Rymdkänsla",
+    "preview_image": "golf_games.png",
+    "course_data": {
+      "theme_data": {
+        "biome": "MOON"
+      },
+      "holes": []
+    },
+    "sort_order": 1,
+    "is_active": true,
+    "created_at": "2026-09-18T20:10:00.000Z"
+  }
+]

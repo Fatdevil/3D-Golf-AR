@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -70,7 +71,31 @@ async function initDB() {
             );
         `);
 
+        // Tabell för officiella startplattor (Starter Plates / Plattformar)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS starter_plates (
+                id VARCHAR(50) PRIMARY KEY,
+                world VARCHAR(20) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                name_sv VARCHAR(255),
+                description TEXT,
+                description_sv TEXT,
+                badge VARCHAR(50),
+                badge_class VARCHAR(50) DEFAULT 'badge-green',
+                features TEXT,
+                features_sv TEXT,
+                preview_image TEXT,
+                course_data JSONB NOT NULL,
+                sort_order INT DEFAULT 0,
+                is_active BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         try {
+            await pool.query(`CREATE INDEX IF NOT EXISTS idx_starter_plates_world ON starter_plates(world);`);
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS cover_image TEXT;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS likes INT DEFAULT 0;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT false;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_range BOOLEAN DEFAULT false;`);
@@ -226,6 +251,116 @@ function requireDB(req, res, next) {
     }
     next();
 }
+
+// --- ADMIN AUTH & TOKENS ---
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'golfadmin123';
+const activeAdminTokens = new Map(); // token -> { expiresAt: number }
+
+function generateAdminToken() {
+    const rand = crypto.randomBytes(24).toString('hex');
+    const token = `adm_${Date.now()}_${rand}`;
+    activeAdminTokens.set(token, { expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+    return token;
+}
+
+function isValidAdminToken(token) {
+    if (!token) return false;
+    const session = activeAdminTokens.get(token);
+    if (!session) return false;
+    if (Date.now() > session.expiresAt) {
+        activeAdminTokens.delete(token);
+        return false;
+    }
+    return true;
+}
+
+function requireAdmin(req, res, next) {
+    const token = req.headers['x-admin-token'] || req.query.admin_token || (req.body && req.body.admin_token);
+    if (isValidAdminToken(token)) {
+        return next();
+    }
+    // Backwards compatibility for direct password verification
+    const pw = (req.body && (req.body.password || req.body.adminPassword)) || req.headers['x-admin-password'];
+    if (pw && pw === ADMIN_PASSWORD) {
+        return next();
+    }
+    return res.status(401).json({ error: 'Unauthorized: Admin authentication required' });
+}
+
+// --- LOCAL STARTER PLATES FALLBACK FILE ---
+const STARTER_PLATES_FILE = path.join(__dirname, 'data', 'starter_plates.json');
+
+function loadLocalStarterPlates() {
+    try {
+        if (!fs.existsSync(STARTER_PLATES_FILE)) {
+            const dataDir = path.dirname(STARTER_PLATES_FILE);
+            if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+            fs.writeFileSync(STARTER_PLATES_FILE, JSON.stringify([]));
+            return [];
+        }
+        const raw = fs.readFileSync(STARTER_PLATES_FILE, 'utf8');
+        return JSON.parse(raw);
+    } catch(e) {
+        console.error('Error loading local starter plates:', e);
+        return [];
+    }
+}
+
+function saveLocalStarterPlates(plates) {
+    try {
+        const dataDir = path.dirname(STARTER_PLATES_FILE);
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        fs.writeFileSync(STARTER_PLATES_FILE, JSON.stringify(plates, null, 2), 'utf8');
+        return true;
+    } catch(e) {
+        console.error('Error saving local starter plates:', e);
+        return false;
+    }
+}
+
+// --- ADMIN AUTH ENDPOINTS ---
+app.post('/api/admin/login', (req, res) => {
+    const { password } = req.body || {};
+    if (!password || password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ error: 'Incorrect admin password' });
+    }
+    const token = generateAdminToken();
+    const session = activeAdminTokens.get(token);
+    res.json({ success: true, token, expiresAt: session.expiresAt });
+});
+
+app.post('/api/admin/logout', (req, res) => {
+    const token = req.headers['x-admin-token'] || (req.body && req.body.admin_token);
+    if (token) {
+        activeAdminTokens.delete(token);
+    }
+    res.json({ success: true });
+});
+
+app.get('/api/admin/verify', (req, res) => {
+    const token = req.headers['x-admin-token'] || req.query.admin_token;
+    res.json({ isAdmin: isValidAdminToken(token) });
+});
+
+// Hämta kurser för admin (inklusive drafts) för att kunna främja till platta
+app.get('/api/admin/courses', requireAdmin, async (req, res) => {
+    try {
+        if (DB_AVAILABLE) {
+            const result = await pool.query(`
+                SELECT share_code, name, author, is_draft, cover_image, hole_count, total_par, created_at 
+                FROM courses 
+                ORDER BY created_at DESC 
+                LIMIT 100
+            `);
+            res.json(result.rows);
+        } else {
+            res.json([]);
+        }
+    } catch(err) {
+        console.error('GET /api/admin/courses error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
 
 // Auth middleware: extract user ID from header
 function authMiddleware(req, res, next) {
@@ -663,8 +798,8 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index, cover_image) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
@@ -846,15 +981,238 @@ app.get('/api/assets/:id/download', requireDB, async (req, res) => {
     }
 });
 
-// Spara/Uppdatera en custom asset
-app.post('/api/assets', requireDB, async (req, res) => {
+// --- STARTER PLATES API ---
+
+// Hämta alla aktiva starter plates (lättviktig payload utan tung course_data för snabb gallerivisning)
+app.get('/api/starter-plates', async (req, res) => {
     try {
-        const { id, name, category, subcategory, icon, file_data, config, password } = req.body;
-        
-        // Enkelt lösenordsskydd för admin-verktyget
-        if (password !== 'golfadmin123') {
-            return res.status(401).json({ error: 'Unauthorized' });
+        const { world, include_data } = req.query;
+        const includeData = include_data === 'true';
+
+        if (DB_AVAILABLE) {
+            let sql = `
+                SELECT id, world, name, name_sv, description, description_sv, 
+                       badge, badge_class, features, features_sv, preview_image, 
+                       sort_order, is_active, created_at, updated_at
+                       ${includeData ? ', course_data' : ''}
+                FROM starter_plates 
+                WHERE is_active = true
+            `;
+            const params = [];
+            if (world && world !== 'all') {
+                params.push(world.toLowerCase());
+                sql += ` AND LOWER(world) = $${params.length}`;
+            }
+            sql += ` ORDER BY sort_order ASC, created_at ASC`;
+
+            const result = await pool.query(sql, params);
+            return res.json(result.rows);
+        } else {
+            let plates = loadLocalStarterPlates();
+            let filtered = plates.filter(p => p.is_active !== false);
+            if (world && world !== 'all') {
+                filtered = filtered.filter(p => (p.world || '').toLowerCase() === world.toLowerCase());
+            }
+            filtered.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            if (!includeData) {
+                filtered = filtered.map(({ course_data, ...rest }) => rest);
+            }
+            return res.json(filtered);
         }
+    } catch(err) {
+        console.error('GET /api/starter-plates error:', err);
+        res.status(500).json({ error: 'Failed to fetch starter plates' });
+    }
+});
+
+// Hämta en specifik starter plate inklusive all 3D ban- och terrängdata
+app.get('/api/starter-plates/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        if (DB_AVAILABLE) {
+            const result = await pool.query('SELECT * FROM starter_plates WHERE id = $1', [id]);
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Starter plate not found' });
+            }
+            return res.json(result.rows[0]);
+        } else {
+            const plates = loadLocalStarterPlates();
+            const found = plates.find(p => p.id === id);
+            if (!found) {
+                return res.status(404).json({ error: 'Starter plate not found' });
+            }
+            return res.json(found);
+        }
+    } catch(err) {
+        console.error('GET /api/starter-plates/:id error:', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Skapa eller uppdatera en officiell startplatta (skyddat med requireAdmin)
+app.post('/api/starter-plates', requireAdmin, async (req, res) => {
+    try {
+        let { 
+            id, world, name, name_sv, description, description_sv, 
+            badge, badge_class, features, features_sv, 
+            preview_image, course_data, sort_order, is_active, 
+            from_course_code 
+        } = req.body;
+
+        // Om skapad från en befintlig bana i systemet
+        if (from_course_code && (!course_data || !preview_image)) {
+            let course = null;
+            if (DB_AVAILABLE) {
+                const cRes = await pool.query('SELECT * FROM courses WHERE share_code = $1', [from_course_code.toUpperCase()]);
+                if (cRes.rows.length > 0) course = cRes.rows[0];
+            }
+            if (course) {
+                if (!course_data) {
+                    course_data = {
+                        terrain_heightmap: course.terrain_heightmap,
+                        terrain_biomemap: course.terrain_biomemap,
+                        terrain_watermask: course.terrain_watermask,
+                        trees: course.trees,
+                        theme_data: course.theme_data,
+                        holes: []
+                    };
+                }
+                if (!preview_image && course.cover_image) {
+                    preview_image = course.cover_image;
+                }
+                if (!name && course.name) name = course.name;
+            }
+        }
+
+        if (!id) {
+            id = (name || 'plate').toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 40) + '_' + Date.now().toString().slice(-4);
+        }
+        world = (world || 'grass').toLowerCase();
+        name = name || 'Custom Plate';
+        course_data = course_data || {};
+        sort_order = parseInt(sort_order) || 0;
+        is_active = is_active !== false;
+
+        const plateRecord = {
+            id,
+            world,
+            name,
+            name_sv: name_sv || name,
+            description: description || '',
+            description_sv: description_sv || description || '',
+            badge: badge || 'STARTER',
+            badge_class: badge_class || 'badge-green',
+            features: features || '',
+            features_sv: features_sv || features || '',
+            preview_image: preview_image || '',
+            course_data,
+            sort_order,
+            is_active,
+            updated_at: new Date().toISOString()
+        };
+
+        if (DB_AVAILABLE) {
+            const result = await pool.query(`
+                INSERT INTO starter_plates 
+                (id, world, name, name_sv, description, description_sv, badge, badge_class, features, features_sv, preview_image, course_data, sort_order, is_active, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP)
+                ON CONFLICT (id) DO UPDATE SET
+                    world = EXCLUDED.world,
+                    name = EXCLUDED.name,
+                    name_sv = EXCLUDED.name_sv,
+                    description = EXCLUDED.description,
+                    description_sv = EXCLUDED.description_sv,
+                    badge = EXCLUDED.badge,
+                    badge_class = EXCLUDED.badge_class,
+                    features = EXCLUDED.features,
+                    features_sv = EXCLUDED.features_sv,
+                    preview_image = EXCLUDED.preview_image,
+                    course_data = EXCLUDED.course_data,
+                    sort_order = EXCLUDED.sort_order,
+                    is_active = EXCLUDED.is_active,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+            `, [
+                id, world, name, plateRecord.name_sv, plateRecord.description, plateRecord.description_sv,
+                plateRecord.badge, plateRecord.badge_class, plateRecord.features, plateRecord.features_sv,
+                plateRecord.preview_image, JSON.stringify(course_data), sort_order, is_active
+            ]);
+            return res.json({ success: true, plate: result.rows[0] });
+        } else {
+            let plates = loadLocalStarterPlates();
+            const idx = plates.findIndex(p => p.id === id);
+            if (idx >= 0) {
+                plates[idx] = { ...plates[idx], ...plateRecord };
+            } else {
+                plateRecord.created_at = new Date().toISOString();
+                plates.push(plateRecord);
+            }
+            saveLocalStarterPlates(plates);
+            return res.json({ success: true, plate: plateRecord });
+        }
+    } catch(err) {
+        console.error('POST /api/starter-plates error:', err);
+        res.status(500).json({ error: 'Failed to save starter plate: ' + err.message });
+    }
+});
+
+// Ta bort en officiell startplatta (skyddat med requireAdmin)
+app.delete('/api/starter-plates/:id', requireAdmin, async (req, res) => {
+    try {
+        const id = req.params.id;
+        if (DB_AVAILABLE) {
+            const result = await pool.query('DELETE FROM starter_plates WHERE id = $1 RETURNING id', [id]);
+            if (result.rows.length === 0) return res.status(404).json({ error: 'Starter plate not found' });
+            return res.json({ success: true, deleted_id: result.rows[0].id });
+        } else {
+            let plates = loadLocalStarterPlates();
+            const initLen = plates.length;
+            plates = plates.filter(p => p.id !== id);
+            if (plates.length === initLen) return res.status(404).json({ error: 'Starter plate not found' });
+            saveLocalStarterPlates(plates);
+            return res.json({ success: true, deleted_id: id });
+        }
+    } catch(err) {
+        console.error('DELETE /api/starter-plates/:id error:', err);
+        res.status(500).json({ error: 'Failed to delete starter plate' });
+    }
+});
+
+// --- ASSET MANAGER API ---
+
+// Hämta alla custom assets (Mindre payload, exkluderar den tunga file_data vid lista)
+app.get('/api/assets', requireDB, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, name, category, subcategory, icon, config, created_at 
+            FROM custom_assets 
+            ORDER BY created_at DESC
+        `);
+        res.json(result.rows);
+    } catch(err) {
+        console.error("Error fetching assets:", err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// Hämta en specifik custom asset INKLUSIVE base64-filen
+app.get('/api/assets/:id/download', requireDB, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT file_data FROM custom_assets WHERE id = $1", [req.params.id]);
+        if(result.rows.length === 0) {
+            return res.status(404).json({ error: 'Asset not found' });
+        }
+        res.json({ file_data: result.rows[0].file_data });
+    } catch(err) {
+        console.error("Error downloading asset:", err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Spara/Uppdatera en custom asset (kräver admin)
+app.post('/api/assets', requireDB, requireAdmin, async (req, res) => {
+    try {
+        const { id, name, category, subcategory, icon, file_data, config } = req.body;
 
         if (!id || !file_data) {
             return res.status(400).json({ error: 'Missing id or file_data' });
@@ -881,13 +1239,9 @@ app.post('/api/assets', requireDB, async (req, res) => {
     }
 });
 
-// Ta bort en custom asset (kräver lösenord)
-app.delete('/api/assets/:id', requireDB, async (req, res) => {
+// Ta bort en custom asset (kräver admin)
+app.delete('/api/assets/:id', requireDB, requireAdmin, async (req, res) => {
     try {
-        const { password } = req.body;
-        if (password !== 'golfadmin123') {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
         const result = await pool.query("DELETE FROM custom_assets WHERE id = $1 RETURNING id", [req.params.id]);
         if(result.rows.length === 0) {
             return res.status(404).json({ error: 'Asset not found' });
@@ -910,12 +1264,9 @@ app.get('/api/biomes', requireDB, async (req, res) => {
     }
 });
 
-app.post('/api/biomes', requireDB, async (req, res) => {
+app.post('/api/biomes', requireDB, requireAdmin, async (req, res) => {
     try {
-        const { adminPassword, id, name, config } = req.body;
-        if(adminPassword !== 'golfadmin123') {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
+        const { id, name, config } = req.body;
         if(!id || !config) return res.status(400).json({ error: 'Missing required fields' });
         
         await pool.query(`
@@ -1021,15 +1372,21 @@ app.get('/api/poly/search', async (req, res) => {
         }
 
         const { q, category, page } = req.query;
-        let url = 'https://api.poly.pizza/v1.1/search?';
-        if (q) url += `q=${encodeURIComponent(q)}&`;
-        if (category !== undefined && category !== '' && category !== 'all') {
-            url += `category=${category}&`;
-        } else {
-            // API requires at least one of: Category, Licence, or Animated
-            url += `Licence=CC0&`;
+        let baseUrl = 'https://api.poly.pizza/v1.1/search';
+        if (q && q.trim()) {
+            baseUrl += `/${encodeURIComponent(q.trim())}`;
         }
-        url += `page=${page || 0}`;
+
+        let params = [];
+        if (category !== undefined && category !== '' && category !== 'all') {
+            params.push(`category=${category}`);
+        } else if (!q || !q.trim()) {
+            // API requires at least one of: Category, License, or Animated
+            params.push('License=0');
+        }
+        params.push(`page=${page || 0}`);
+
+        const url = `${baseUrl}?${params.join('&')}`;
 
         const response = await fetch(url, {
             headers: { 'x-auth-token': apiKey }

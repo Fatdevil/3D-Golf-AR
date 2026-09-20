@@ -958,8 +958,12 @@ window.executeSmartTee = function() {
     // GATE: Require AimPoint before ANY tee work (paint + markers)
     let _hole = window.courseHoles[window.currentHoleIndex];
     if(!_hole.aimPoint) {
-        window.showBuildToast('🎯 Set Aim Point first! Click AIM → click on landing zone.', '#ef4444');
-        setTimeout(function() { setSmartBuilderType('AIM'); }, 300);
+        let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
+        let msg = (curLang === 'en') ? '🎯 Set Aim Point first! Click "Set Aim Point" in the Tee panel.' : '🎯 Sätt siktpunkt först! Klicka på "Sätt siktpunkt" i Tee-panelen.';
+        window.showBuildToast(msg, '#ef4444');
+        if (typeof activateAimMode === 'function') {
+            activateAimMode();
+        }
         return; // Don't clear points — user can retry after setting aim
     }
 
@@ -1368,7 +1372,8 @@ window.buildFenceMesh = function(pathType, splinePoints) {
                     if(progress >= 1.0) progress -= 1.0;
                     
                     let pos = seg.pt.clone().lerp(seg.nextPt, progress);
-                    pos.y += yOffset;
+                    let surf = window.localGetTerrainAt(pos.x, -pos.z);
+                    pos.y = (surf ? surf.z : pos.y) + yOffset;
                     
                     // Very subtle rotations to simulate imperfect hand-carved blocks
                     let rotY = (Math.random() - 0.5) * 0.05;
@@ -1411,6 +1416,34 @@ window.buildFenceMesh = function(pathType, splinePoints) {
         stoneMesh.instanceMatrix.needsUpdate = true;
         if (stoneMesh.instanceColor) stoneMesh.instanceColor.needsUpdate = true;
         pMesh.add(stoneMesh);
+    } else if (pathType === 'HEDGE') {
+        let bushGeo = new THREE.SphereGeometry(0.7, 8, 8);
+        bushGeo.scale(1.2, 0.9, 1.0);
+        let mat = new THREE.MeshLambertMaterial({ color: 0x1e5631 });
+        let hedgeSpacing = 1.0;
+        let countH = Math.max(2, Math.floor(len / hedgeSpacing));
+        let ptsH = curve.getSpacedPoints(countH);
+        
+        let instMesh = new THREE.InstancedMesh(bushGeo, mat, ptsH.length);
+        instMesh.castShadow = true;
+        instMesh.receiveShadow = true;
+        instMesh.boundingSphere = bigSphere;
+        
+        let dummy = new THREE.Object3D();
+        for (let i = 0; i < ptsH.length; i++) {
+            let pt = ptsH[i].clone();
+            let surf = window.localGetTerrainAt(pt.x, -pt.z);
+            pt.y = (surf ? surf.z : 0) + 0.45;
+            
+            dummy.position.copy(pt);
+            dummy.rotation.set((Math.random()-0.5)*0.2, Math.random()*Math.PI*2, (Math.random()-0.5)*0.2);
+            let s = 0.85 + Math.random() * 0.3;
+            dummy.scale.set(s, s, s);
+            dummy.updateMatrix();
+            instMesh.setMatrixAt(i, dummy.matrix);
+        }
+        instMesh.instanceMatrix.needsUpdate = true;
+        pMesh.add(instMesh);
     }
     
     pMesh.userData.collisionPts = pts.map(p => ({x:p.x, y:p.y, z:p.z}));
@@ -1433,6 +1466,10 @@ window.executeSplinePath = function(pathType) {
     window._arcadeScene.add(pMesh);
     if (!window.courseHoles[window.currentHoleIndex].envObjects) window.courseHoles[window.currentHoleIndex].envObjects = [];
     window.courseHoles[window.currentHoleIndex].envObjects.push(rObj);
+    
+    let labels = { 'WOOD_FENCE': 'Wood Fence', 'STONE_WALL': 'Stone Wall', 'OB_STAKES': 'O.B. Stakes', 'HEDGE': 'Leaf Hedge' };
+    let name = labels[pathType] || 'Fence/Wall';
+    if(typeof window.showBuildToast === 'function') window.showBuildToast('🚧 ' + name + ' placed!', '#38bdf8');
     
     window.clearSpline();
 };
@@ -1912,16 +1949,43 @@ window.executeSplineSmartGreen = function() {
         if(hasTee && hasFlag && hasAim) status = '✅'; // complete
         else if(hasTee || hasFlag) status = '⚠️'; // partial
         el.textContent = 'Hole ' + (window.currentHoleIndex + 1) + ' (Par ' + hole.par + ') ' + status;
-        // Also sync HOLE tool display
+        // Also sync HOLE tool display and topbar
         let holeNum = document.getElementById('hole-ui-num');
         if(holeNum) holeNum.innerText = 'Hole ' + (window.currentHoleIndex + 1);
         let holePar = document.getElementById('hole-ui-par');
         if(holePar) holePar.innerText = 'Par ' + hole.par;
         let sbPar = document.getElementById('sb-par-display');
         if(sbPar) sbPar.innerText = 'Par ' + hole.par;
+        let tbNum = document.getElementById('topbar-hole-num');
+        if(tbNum) tbNum.innerText = 'Hole ' + (window.currentHoleIndex + 1);
+        let tbPar = document.getElementById('topbar-hole-par');
+        if(tbPar) tbPar.innerText = 'Par ' + hole.par;
+        
+        let aimDelBtn = document.getElementById('sb-aim-clear-btn');
+        if(aimDelBtn) {
+            let curHole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            if(curHole && curHole.aimPoint) {
+                aimDelBtn.style.display = 'block';
+                aimDelBtn.innerHTML = '🗑️ Ta bort Aim Point (Hål ' + (window.currentHoleIndex + 1) + ')';
+            } else {
+                let otherIdx = -1;
+                for(let i = 0; i < window.MAX_HOLES; i++) {
+                    if(window.courseHoles && window.courseHoles[i] && window.courseHoles[i].aimPoint) { otherIdx = i; break; }
+                }
+                if(otherIdx >= 0) {
+                    aimDelBtn.style.display = 'block';
+                    aimDelBtn.innerHTML = '🗑️ Ta bort Aim Point (Hål ' + (otherIdx + 1) + ')';
+                } else {
+                    aimDelBtn.style.display = 'none';
+                }
+            }
+        }
+        if (typeof window.updateSBAimCard === 'function') {
+            window.updateSBAimCard();
+        }
     };
 
-    // Auto-advance to next incomplete hole
+    // Check hole completion status (notifies user without forcefully switching holes)
     window.autoAdvanceHole = function() {
         let hole = window.courseHoles[window.currentHoleIndex];
         let hasTee = hole.tees.yellow || hole.tees.red || hole.tees.white || hole.tees.black;
@@ -1936,13 +2000,9 @@ window.executeSplineSmartGreen = function() {
                 if(!ht || !h.flag || !h.aimPoint) { nextIdx = i; break; }
             }
             if(nextIdx >= 0) {
-                window.showBuildToast('✅ Hole ' + (window.currentHoleIndex+1) + ' Complete! → Hole ' + (nextIdx+1), '#4ade80');
-                setTimeout(function() {
-                    window.currentHoleIndex = nextIdx;
-                    updateSBHoleDisplay();
-                }, 1500);
+                window.showBuildToast('✅ Hål ' + (window.currentHoleIndex+1) + ' är klart! Klicka [>] för att bygga Hål ' + (nextIdx+1), '#4ade80');
             } else {
-                window.showBuildToast('🏆 All holes configured!', '#fbbf24');
+                window.showBuildToast('🏆 Alla hål är färdigbyggda!', '#fbbf24');
             }
         }
         updateSBHoleDisplay();

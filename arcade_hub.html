@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Golf OS - Arcade Hub</title>
+<script src="i18n.js"></script>
 <script>
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
         window.location.replace("arcade_mobile_hub.html");
@@ -182,14 +183,17 @@ body {
 <div class="max-w">
   <header class="header">
     <div>
-        <a href="hub.html" class="back-btn">← GOLF OS</a>
-        <h1 class="header-title">Select Activity</h1>
+        <a href="hub.html" class="back-btn" data-i18n="nav_back">← GOLF OS</a>
+        <h1 class="header-title" data-i18n="hub_title">Select Activity</h1>
     </div>
-    <div class="profile-chip" onclick="promptDisplayName()" style="cursor:pointer;" title="Klicka för att ändra namn">
-      <div class="profile-avatar" id="hub-avatar">?</div>
-      <div>
-        <div style="font-weight: 800; font-size: 14px; color:#fff;" id="hub-display-name">Loading...</div>
-        <div style="font-size: 11px; color:#94a3b8;" id="hub-user-tier">Free Player</div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div id="header-lang-slot"></div>
+      <div class="profile-chip" onclick="promptDisplayName()" style="cursor:pointer;" title="Click to change name">
+        <div class="profile-avatar" id="hub-avatar">?</div>
+        <div>
+          <div style="font-weight: 800; font-size: 14px; color:#fff;" id="hub-display-name">Loading...</div>
+          <div style="font-size: 11px; color:#94a3b8;" id="hub-user-tier" data-i18n="free_player">Free Player</div>
+        </div>
       </div>
     </div>
   </header>
@@ -200,9 +204,9 @@ body {
     <div class="tm-card" style="background-image: url('golf_practice.png');" onclick="openModal('modal-ranges')">
       <div class="tm-overlay"></div>
       <div class="tm-content">
-         <div class="tm-badge" style="color:#fff;">Practice</div>
-         <h2>Range</h2>
-         <p>Välj en sparad range och slå bollar.</p>
+         <div class="tm-badge" style="color:#fff;" data-i18n="hub_range_badge">Practice</div>
+         <h2 data-i18n="hub_range_title">Range</h2>
+         <p data-i18n="hub_range_desc">Practice on the driving range and track your shots.</p>
       </div>
     </div>
     
@@ -210,9 +214,9 @@ body {
     <div class="tm-card" style="background-image: url('golf_courses.png');" onclick="window.location.href='courses.html'">
       <div class="tm-overlay"></div>
       <div class="tm-content">
-         <div class="tm-badge" style="background:#eab308; color:#0f172a;">Community</div>
-         <h2 style="color:#fde047;">Courses</h2>
-         <p>Play your drafts and challenge the world.</p>
+         <div class="tm-badge" style="background:#eab308; color:#0f172a;" data-i18n="hub_courses_badge">Community</div>
+         <h2 style="color:#fde047;" data-i18n="hub_courses_title">Courses</h2>
+         <p data-i18n="hub_courses_desc">Play your drafts and challenge the world.</p>
       </div>
     </div>
 
@@ -220,9 +224,9 @@ body {
     <div class="tm-card" style="background-image: url('golf_build.png');" onclick="window.location.href='build.html'">
       <div class="tm-overlay"></div>
       <div class="tm-content">
-         <div class="tm-badge" style="background:#38bdf8; color:#0f172a;">Editor</div>
-         <h2 style="color:#e0f2fe;">Build</h2>
-         <p>Sculpt, build and publish your own crazy courses.</p>
+         <div class="tm-badge" style="background:#38bdf8; color:#0f172a;" data-i18n="hub_build_badge">Editor</div>
+         <h2 style="color:#e0f2fe;" data-i18n="hub_build_title">Build</h2>
+         <p data-i18n="hub_build_desc">Sculpt, build and publish your own custom courses.</p>
       </div>
     </div>
 
@@ -230,9 +234,9 @@ body {
     <div class="tm-card" style="background-image: url('golf_games.png');">
       <div class="tm-overlay"></div>
       <div class="tm-content">
-         <div class="tm-badge" style="color:#fff;">Coming Soon</div>
-         <h2>Games</h2>
-         <p>Neon-putting, moongolf, and party challenges.</p>
+         <div class="tm-badge" style="color:#fff;" data-i18n="hub_games_badge">Coming Soon</div>
+         <h2 data-i18n="hub_games_title">Games</h2>
+         <p data-i18n="hub_games_desc">Neon-putting, moongolf, and party challenges.</p>
       </div>
     </div>
 
@@ -249,14 +253,14 @@ body {
       <p style="color:#94a3b8; margin-bottom:30px;">Create a new course or continue working on a saved draft.</p>
       
       <div style="display:flex; gap:15px; margin-bottom:30px;">
-          <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#38bdf8; color:#0f172a;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build'">
-            + BYGG BANA
+          <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#38bdf8; color:#0f172a;" onclick="window.location.href='new_course.html'">
+            + NEW COURSE
           </button>
           <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#10b981; color:#0f172a;" onclick="openCombineModal()">
-            + KOMBINERA BANOR
+            + COMBINE COURSES
           </button>
           <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#eab308; color:#0f172a;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build&mode=range'">
-            + BYGG RANGE
+            + BUILD RANGE
           </button>
       </div>
       
@@ -265,7 +269,7 @@ body {
       
       <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase; margin-bottom:15px; margin-top:30px;">Your Published Courses</h3>
       <div id="published-courses-container" class="course-grid">
-         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar publicerade banor...</div>
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Loading published courses...</div>
       </div>
    </div>
 </div>
@@ -274,29 +278,29 @@ body {
 <div id="modal-combine" class="tm-modal" onclick="if(event.target===this) closeModal('modal-combine')">
    <div class="tm-modal-content wide">
       <button class="tm-close" onclick="closeModal('modal-combine')">&times;</button>
-      <h2 style="font-size:32px; font-weight:900; margin-top:0;">KOMBINERA BANOR</h2>
-      <p style="color:#94a3b8; margin-bottom:20px;">Välj längd på den stora banan och knyt ihop dina 3-håls-byggen.</p>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">COMBINE COURSES</h2>
+      <p style="color:#94a3b8; margin-bottom:20px;">Choose full course length and link your 3-hole plates together.</p>
       
       <div style="display:flex; gap:10px; margin-bottom:20px;">
-          <button class="btn-play" style="flex:1; padding:15px; font-size:18px;" id="btn-len-6" onclick="setCombineLength(6)">6 Hål (2 Byggen)</button>
-          <button class="btn-play" style="flex:1; padding:15px; font-size:18px;" id="btn-len-9" onclick="setCombineLength(9)">9 Hål (3 Byggen)</button>
-          <button class="btn-play" style="flex:1; padding:15px; font-size:18px;" id="btn-len-18" onclick="setCombineLength(18)">18 Hål (6 Byggen)</button>
+          <button class="btn-play" style="flex:1; padding:15px; font-size:18px;" id="btn-len-6" onclick="setCombineLength(6)">6 Holes (2 Plates)</button>
+          <button class="btn-play" style="flex:1; padding:15px; font-size:18px;" id="btn-len-9" onclick="setCombineLength(9)">9 Holes (3 Plates)</button>
+          <button class="btn-play" style="flex:1; padding:15px; font-size:18px;" id="btn-len-18" onclick="setCombineLength(18)">18 Holes (6 Plates)</button>
       </div>
 
       <div id="combine-setup" style="display:none; background:rgba(15,23,42,0.5); padding:20px; border-radius:12px; border:1px solid #334155;">
-          <input type="text" id="combine-name" placeholder="Namn på den stora banan (t.ex. Augusta National)" style="width:100%; padding:15px; border-radius:8px; border:1px solid #475569; background:#0f172a; color:#fff; font-size:18px; margin-bottom:20px; box-sizing:border-box;">
+          <input type="text" id="combine-name" placeholder="Course Name (e.g. Augusta National)" style="width:100%; padding:15px; border-radius:8px; border:1px solid #475569; background:#0f172a; color:#fff; font-size:18px; margin-bottom:20px; box-sizing:border-box;">
           
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
               <div>
-                  <h3 style="color:#fff; margin-top:0;">Banans ordning</h3>
+                  <h3 style="color:#fff; margin-top:0;">Hole Order</h3>
                   <div id="combine-slots" style="display:flex; flex-direction:column; gap:10px;"></div>
               </div>
               <div>
-                  <h3 style="color:#fff; margin-top:0;">Dina 3-håls-banor</h3>
+                  <h3 style="color:#fff; margin-top:0;">Your 3-Hole Plates</h3>
                   <div id="combine-available" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; max-height:400px; overflow-y:auto; padding-right:10px;"></div>
               </div>
           </div>
-          <button class="btn-play" style="width:100%; margin-top:20px; background:#4ade80; color:#0f172a; padding:15px; font-size:18px;" onclick="publishCombinedCourse()">🚀 PUBLICERA STOR BANA</button>
+          <button class="btn-play" style="width:100%; margin-top:20px; background:#4ade80; color:#0f172a; padding:15px; font-size:18px;" onclick="publishCombinedCourse()">🚀 PUBLISH FULL COURSE</button>
       </div>
    </div>
 </div>
@@ -316,7 +320,7 @@ body {
       </div>
 
       <div id="ugc-container" class="course-grid">
-         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar moln-banor...</div>
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Loading cloud courses...</div>
       </div>
    </div>
 </div>
@@ -325,10 +329,10 @@ body {
 <div id="modal-ranges" class="tm-modal" onclick="if(event.target===this) closeModal('modal-ranges')">
    <div class="tm-modal-content wide">
       <button class="tm-close" onclick="closeModal('modal-ranges')">&times;</button>
-      <h2 style="font-size:32px; font-weight:900; margin-top:0;">RANGES</h2>
-      <p style="color:#94a3b8; margin-bottom:20px;">Välj en sparad driving range och börja slå bollar direkt.</p>
+      <h2 style="font-size:32px; font-weight:900; margin-top:0;">DRIVING RANGES</h2>
+      <p style="color:#94a3b8; margin-bottom:20px;">Choose a saved driving range and start hitting balls.</p>
       <div id="range-container" class="course-grid">
-         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Laddar ranges...</div>
+         <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Loading ranges...</div>
       </div>
    </div>
 </div>
@@ -336,7 +340,7 @@ body {
 <!-- LM STATUS -->
 <div id="lm-status">
    <div id="lm-status-dot" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
-   <span id="lm-status-text">LM Frånkopplad</span>
+   <span id="lm-status-text" data-i18n="lm_disconnected">LM Disconnected</span>
 </div>
 
 <script>
@@ -363,8 +367,8 @@ function loadDrafts() {
         html += `
         <div class="course-item" style="border-color:#eab308; background:rgba(234,179,8,0.1);">
             <div class="course-info">
-              <h4 style="color:#fde047;">⚠️ Snabbutkast (WIP)</h4>
-              <p>Din absolut senaste session i editor</p>
+              <h4 style="color:#fde047;">⚡ Quick Draft (WIP)</h4>
+              <p>Your last session in the editor</p>
             </div>
             <div style="display:flex; gap:10px;">
                 <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build'">Edit</button>
@@ -379,7 +383,7 @@ function loadDrafts() {
              <div class="course-item">
                 <div class="course-info">
                   <h4>${d.name}</h4>
-                  <p>Sparat: ${dDate}</p>
+                  <p>Saved: ${dDate}</p>
                 </div>
                 <div style="display:flex; gap:10px;">
                     <button class="btn-play" style="background:#38bdf8; font-size:12px; padding: 10px;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=${d.code}'">Edit</button>
@@ -759,10 +763,17 @@ async function publishCombinedCourse() {
     } catch(e) {
         alert('Nätverksfel.');
     } finally {
-        btn.innerText = "🚀 PUBLICERA STOR BANA";
+        btn.innerText = "🚀 PUBLISH FULL COURSE";
         btn.disabled = false;
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const slot = document.getElementById('header-lang-slot');
+    if (slot && typeof window.createGolfLangSwitcher === 'function') {
+        slot.innerHTML = window.createGolfLangSwitcher();
+    }
+});
 
 </script>
 </body>

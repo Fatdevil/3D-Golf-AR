@@ -44,17 +44,17 @@
             vSlope = 1.0 - abs(normal.z);
             vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
 
-            // Adaptive displacement:
-            // Flat → world-up (clean from above)
-            // Slopes → follow terrain normal (layers hidden from side)
-            // Normal clamped to max ~60° to prevent spikes at bunker edges
+            // Natural slope scaling: grass compresses smoothly on steep slopes (>30°-60°)
+            // so layers stay tightly packed along surface normal without slicing gaps,
+            // while remaining seamless, lush ground cover (no hard culling or blotches).
+            float slopeHeightScale = mix(0.35, 1.0, 1.0 - smoothstep(0.18, 0.55, vSlope));
+
             vec3 up = vec3(0.0, 0.0, 1.0);
-            vec3 clampedN = normalize(vec3(normal.xy * 0.7, max(normal.z, 0.4)));
-            float slope = 1.0 - abs(normal.z); // 0=flat, 1=vertical
-            vec3 dir = mix(up, clampedN, smoothstep(0.10, 0.50, slope));
-            // Minimum displacement bias on slopes: ensures even layer 0 sits above terrain
-            float slopeBias = smoothstep(0.10, 0.40, slope) * 0.015;
-            float layerDisp = max(vL * uMaxHeight, slopeBias);
+            vec3 trueN = normalize(normal);
+            vec3 dir = mix(up, trueN, smoothstep(0.08, 0.30, vSlope));
+            
+            float slopeBias = smoothstep(0.08, 0.30, vSlope) * 0.015;
+            float layerDisp = max(vL * uMaxHeight * slopeHeightScale, slopeBias);
             vec3 p = position + dir * layerDisp;
 
             // Wind sway (disabled for visual stability and performance)
@@ -89,6 +89,18 @@
         uniform vec3  uLightDir;
         uniform vec3  uDirColor;
         uniform vec3  uAmbColor;
+
+        uniform float uGridMode;
+        uniform float uShowRings;
+        uniform vec2  uTeePos;
+
+        float evalTerrainGridLine(vec2 p, float size, float halfWidth) {
+            vec2 coord = p / size;
+            vec2 fw = max(fwidth(coord), vec2(0.00005));
+            vec2 gridDist = abs(fract(coord - 0.5) - 0.5);
+            vec2 line = smoothstep(fw * halfWidth, vec2(0.0), gridDist);
+            return max(line.x, line.y);
+        }
 
         varying vec2  vUv;
         varying float vL;
@@ -183,6 +195,35 @@
             float dotNL = max(0.0, dot(N, L));
             vec3 lightColor = uAmbColor + uDirColor * dotNL;
             col *= lightColor;
+
+            // Builder spatial measurement grid & range rings on 3D grass
+            if (uGridMode > 0.5) {
+                float gridVal = 0.0;
+                vec3 gridCol = vec3(0.35, 0.85, 1.0);
+                if (uGridMode < 1.5) {
+                    float majLine = evalTerrainGridLine(wXZ, 100.0, 1.6);
+                    float minLine = evalTerrainGridLine(wXZ, 25.0, 1.1);
+                    gridVal = max(majLine * 0.50, minLine * 0.22);
+                } else if (uGridMode < 2.5) {
+                    gridVal = evalTerrainGridLine(wXZ, 50.0, 1.3) * 0.40;
+                } else {
+                    gridVal = evalTerrainGridLine(wXZ, 100.0, 1.6) * 0.50;
+                }
+                float originX = smoothstep(max(fwidth(wXZ.x) * 2.0, 0.2), 0.0, abs(wXZ.x));
+                float originZ = smoothstep(max(fwidth(wXZ.y) * 2.0, 0.2), 0.0, abs(wXZ.y));
+                gridVal = max(gridVal, max(originX, originZ) * 0.4);
+                col = mix(col, gridCol, gridVal);
+            }
+            if (uShowRings > 0.5) {
+                float distTee = distance(wXZ, uTeePos);
+                if (distTee >= 75.0 && distTee <= 325.0) {
+                    float ringMod = abs(fract((distTee - 25.0) / 50.0) - 0.5) * 50.0;
+                    float fwR = max(fwidth(distTee), 0.05);
+                    float ringLine = smoothstep(fwR * 1.5, 0.0, ringMod);
+                    vec3 ringCol = vec3(0.98, 0.75, 0.14);
+                    col = mix(col, ringCol, ringLine * 0.65);
+                }
+            }
 
             gl_FragColor = vec4(col, 1.0);
         }
@@ -281,6 +322,12 @@
                 s.mat.uniforms.uLightDir.value.set(lx, ly, lz);
                 s.mat.uniforms.uDirColor.value.set(dirR, dirG, dirB);
                 s.mat.uniforms.uAmbColor.value.set(ambR, ambG, ambB);
+
+                if (window.terrainShaderUniforms) {
+                    if (s.mat.uniforms.uGridMode) s.mat.uniforms.uGridMode.value = window.terrainShaderUniforms.uGridMode.value;
+                    if (s.mat.uniforms.uShowRings) s.mat.uniforms.uShowRings.value = window.terrainShaderUniforms.uShowRings.value;
+                    if (s.mat.uniforms.uTeePos) s.mat.uniforms.uTeePos.value.copy(window.terrainShaderUniforms.uTeePos.value);
+                }
 
                 // Dynamic maxDist: desktop build=unlimited, mobile play=reduced
                 let isPlayMode = window.terrainShaderUniforms && window.terrainShaderUniforms.uPlayMode.value > 0.5;
@@ -457,6 +504,7 @@
             let preset = QUALITY[this.quality] || { maxDist: 250 };
             let maxDist = preset.maxDist || 250;
             return new THREE.ShaderMaterial({
+                extensions: { derivatives: true },
                 uniforms: {
                     uLayer:    { value: layer },
                     uLayers:   { value: total },
@@ -475,7 +523,10 @@
                     uMaxDist:  { value: maxDist },
                     uLightDir: { value: new THREE.Vector3(0, 1, 0) },
                     uDirColor: { value: new THREE.Vector3(1, 1, 1) },
-                    uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) }
+                    uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+                    uGridMode: { value: (window.terrainShaderUniforms && window.terrainShaderUniforms.uGridMode) ? window.terrainShaderUniforms.uGridMode.value : 0.0 },
+                    uShowRings: { value: (window.terrainShaderUniforms && window.terrainShaderUniforms.uShowRings) ? window.terrainShaderUniforms.uShowRings.value : 0.0 },
+                    uTeePos: { value: (window.terrainShaderUniforms && window.terrainShaderUniforms.uTeePos) ? window.terrainShaderUniforms.uTeePos.value.clone() : new THREE.Vector2(0, 0) }
                 },
                 vertexShader: VERT,
                 fragmentShader: FRAG,

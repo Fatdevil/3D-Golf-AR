@@ -453,7 +453,9 @@ window.SwingEngine = SwingEngine;
 (function detectAndEnableMobile() {
     const isTouch  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     const isNarrow = window.innerWidth < 768;
-    if (isTouch || isNarrow) {
+    const params   = new URLSearchParams(window.location.search);
+    const isBuild  = params.get('autorun') === 'new_build' || params.has('edit') || (typeof appMode !== 'undefined' && appMode === 'BUILD');
+    if (!isBuild && (isTouch || isNarrow)) {
         SwingEngine.enableSwingMode();
         console.log('[SwingEngine] Auto-enabled (touch/narrow:', isTouch, isNarrow, ')');
     }

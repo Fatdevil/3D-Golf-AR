@@ -633,64 +633,68 @@
         }
     </style>
     <script src="arcade-auth.js"></script>
+    <script src="i18n.js"></script>
 </head>
 <body>
 
 <div class="container">
     <!-- Header -->
     <header class="nav-header">
-        <a href="arcade_hub.html" class="back-btn">← Hub</a>
-        <div class="logo-text">Golf OS</div>
+        <a href="arcade_hub.html" class="back-btn" data-i18n="nav_hub">← Hub</a>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div id="header-lang-slot"></div>
+            <div class="logo-text">Golf OS</div>
+        </div>
     </header>
 
     <!-- Main Title -->
     <div class="main-title-block">
-        <h1>Bygg bana</h1>
-        <p>Skapa en ny bana från grunden, fortsätt på ett sparat utkast eller redigera dina publicerade mästerverk.</p>
+        <h1 data-i18n="build_title">Course Creator</h1>
+        <p data-i18n="build_subtitle">Create a new course from scratch, continue on a draft, or edit your published courses.</p>
     </div>
 
     <!-- Create Buttons -->
     <div class="create-row">
-        <a href="#" class="create-btn create-btn-course" id="btn-new-course" onclick="newBuild('course')">
-            ⛳ Ny platta (3 hål)
+        <a href="new_course.html" class="create-btn create-btn-course" id="btn-new-course">
+            <span data-i18n="btn_new_plate">⛳ New Course (3 Holes)</span>
         </a>
         <a href="#" class="create-btn create-btn-range" id="btn-new-range" onclick="newBuild('range')">
-            🏌️ Ny range
+            <span data-i18n="btn_new_range">🏌️ New Range</span>
         </a>
     </div>
 
     <!-- Collection Create Row -->
     <div class="collection-row">
         <a href="#" class="col-btn" onclick="createCollection('6')">
-            📦 Ny bana <span class="col-holes">6H</span>
+            <span data-i18n="btn_col_6h">📦 6H Course</span>
         </a>
         <a href="#" class="col-btn" onclick="createCollection('9')">
-            📦 Ny bana <span class="col-holes">9H</span>
+            <span data-i18n="btn_col_9h">📦 9H Course</span>
         </a>
         <a href="#" class="col-btn" onclick="createCollection('18')">
-            📦 Ny bana <span class="col-holes">18H</span>
+            <span data-i18n="btn_col_18h">📦 18H Course</span>
         </a>
     </div>
 
     <!-- Category 0: Collections -->
     <section class="category-row" id="collections-section" style="display:none;">
-        <h2 class="category-title">Mina Collections <span class="cat-badge-collection">MULTI-PLATE</span></h2>
+        <h2 class="category-title"><span data-i18n="section_collections">Multi-Plate Collections</span> <span class="cat-badge-collection" data-i18n="badge_collection">MULTI-PLATE</span></h2>
         <div class="build-carousel" id="collections-carousel"></div>
     </section>
 
     <!-- Category 1: Drafts -->
     <section class="category-row" id="drafts-section">
-        <h2 class="category-title">Mina Utkast <span class="cat-badge-draft">DRAFT</span></h2>
+        <h2 class="category-title"><span data-i18n="section_drafts">My Drafts</span> <span class="cat-badge-draft" data-i18n="badge_draft">DRAFT</span></h2>
         <div class="build-carousel" id="drafts-carousel">
-            <div class="empty-state">Letar efter sparade utkast...</div>
+            <div class="empty-state" data-i18n="empty_drafts">Searching for saved drafts...</div>
         </div>
     </section>
 
     <!-- Category 2: Published -->
     <section class="category-row" id="published-section">
-        <h2 class="category-title">Mina Publicerade <span class="cat-badge-published">PUBLISHED</span></h2>
+        <h2 class="category-title"><span data-i18n="section_published">My Published</span> <span class="cat-badge-published" data-i18n="badge_published">PUBLISHED</span></h2>
         <div class="build-carousel" id="published-carousel">
-            <div class="empty-state">Laddar publicerade banor...</div>
+            <div class="empty-state" data-i18n="empty_published">Loading published courses...</div>
         </div>
     </section>
 
@@ -755,20 +759,28 @@
 
         // Snabbutkast — always first if exists
         if (hasLocalCopy) {
+            let localMeta = null;
+            try { localMeta = JSON.parse(localStorage.getItem('arcade_custom_level')); } catch(e) {}
+            let timeStr = "Senaste sessionen";
+            if (localMeta && localMeta.savedAt) {
+                let d = new Date(localMeta.savedAt);
+                timeStr = "Sparat kl " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            let holeCountStr = (localMeta && localMeta.holeCount) ? ` • ${localMeta.holeCount} hål` : '';
             html += `
             <div class="build-card quickdraft" onclick="editQuickDraft()">
                 <div class="card-image-wrapper">
-                    <div class="card-fallback" style="background: linear-gradient(135deg, rgba(234,179,8,0.15), rgba(234,179,8,0.05));">
+                    <div class="card-fallback" style="background: linear-gradient(135deg, rgba(234,179,8,0.2), rgba(234,179,8,0.06)); border:1px solid rgba(234,179,8,0.3);">
                         <div class="card-letters">⚡</div>
                     </div>
-                    <div class="card-badges"><span class="badge badge-wip">WIP</span></div>
+                    <div class="card-badges"><span class="badge badge-wip">UTKAST</span></div>
                 </div>
                 <div class="card-info">
                     <div class="card-title">Snabbutkast</div>
-                    <div class="card-subtitle">Din senaste session i editorn</div>
+                    <div class="card-subtitle">${timeStr}${holeCountStr}</div>
                     <div class="card-stats">
-                        <span class="stat-item">⚡ Lokal backup</span>
-                        <span class="stat-item">EDIT →</span>
+                        <span class="stat-item" style="color:#4ade80;">✓ 100% Terräng</span>
+                        <span class="stat-item">FORTSÄTT →</span>
                     </div>
                 </div>
             </div>`;
@@ -788,9 +800,9 @@
                     </div>
                     <div class="card-info">
                         <div class="card-title">${d.name || 'Unnamed Draft'}</div>
-                        <div class="card-subtitle">Sparat ${formatDate(d.date)}</div>
+                        <div class="card-subtitle">Saved ${formatDate(d.date)}</div>
                         <div class="card-stats">
-                            <span class="stat-item">☁️ Moln-draft</span>
+                            <span class="stat-item">☁️ Cloud Draft</span>
                             <span class="stat-item">EDIT →</span>
                         </div>
                     </div>
@@ -799,7 +811,7 @@
         }
 
         if (!hasLocalCopy && drafts.length === 0) {
-            html = '<div class="empty-state">Inga utkast hittade. Klicka "Ny bana" för att börja bygga!</div>';
+            html = '<div class="empty-state">No drafts found. Click "New Course" to start building!</div>';
         }
 
         carousel.innerHTML = html;
@@ -817,7 +829,7 @@
             renderMyPublished();
         } catch(e) {
             document.getElementById('published-carousel').innerHTML = 
-                '<div class="empty-state" style="color: #f87171;">Kunde inte ladda banor från servern. Försök igen senare.</div>';
+                '<div class="empty-state" style="color: #f87171;">Could not load courses from server. Try again later.</div>';
         }
     }
 
@@ -826,7 +838,7 @@
         let carousel = document.getElementById('published-carousel');
 
         if (!myDeviceId) {
-            carousel.innerHTML = '<div class="empty-state">Kunde inte verifiera ditt enhets-ID.</div>';
+            carousel.innerHTML = '<div class="empty-state">Could not verify your device ID.</div>';
             return;
         }
 
@@ -853,25 +865,25 @@
             <div class="build-card">
                 <div class="card-image-wrapper">
                     ${imageHtml}
-                    <span class="badge-holes ${badgeClass}">${isRange ? 'RANGE' : holeCount + ' HÅL'}</span>
+                    <span class="badge-holes ${badgeClass}">${isRange ? 'RANGE' : holeCount + ' HOLES'}</span>
                 </div>
                 <div class="card-info">
                     <div class="card-title">${c.name}</div>
                     <div class="card-subtitle">${isRange ? 'Driving Range' : 'Par ' + totalPar}</div>
                     <div class="card-stats">
-                        <span class="stat-item">🏌️ ${c.play_count || 0} spelad${(c.play_count || 0) !== 1 ? 'e' : ''}</span>
+                        <span class="stat-item">🏌️ ${c.play_count || 0} play${(c.play_count || 0) !== 1 ? 's' : ''}</span>
                         <span class="stat-item">👍 ${c.likes || 0}</span>
                     </div>
                     <div class="card-actions">
-                        <button class="card-btn card-btn-edit" onclick="event.stopPropagation(); editDraft('${c.share_code}')">✏️ Redigera</button>
-                        <button class="card-btn card-btn-delete" onclick="event.stopPropagation(); deleteCourse('${c.share_code}')" title="Radera">🗑️</button>
+                        <button class="card-btn card-btn-edit" onclick="event.stopPropagation(); editDraft('${c.share_code}')">✏️ Edit</button>
+                        <button class="card-btn card-btn-delete" onclick="event.stopPropagation(); deleteCourse('${c.share_code}')" title="Delete">🗑️</button>
                     </div>
                 </div>
             </div>`;
         });
 
         if (myCourses.length === 0) {
-            html = '<div class="empty-state">Du har inga publicerade banor än. Bygg din första bana och publicera den!</div>';
+            html = '<div class="empty-state">You have no published courses yet. Build your first course and publish it!</div>';
         }
 
         carousel.innerHTML = html;
@@ -1088,7 +1100,7 @@
             });
             loadCollections();
         } catch(e) {
-            alert('Nätverksfel.');
+            alert('Network error.');
         }
     }
 
@@ -1096,6 +1108,11 @@
     //  Boot
     // ═══════════════════════════════════════════════════════════
     async function initBuild() {
+        const slot = document.getElementById('header-lang-slot');
+        if (slot && typeof window.createGolfLangSwitcher === 'function') {
+            slot.innerHTML = window.createGolfLangSwitcher();
+        }
+
         if (window.GolfAuth) {
             await window.GolfAuth.init();
         }
@@ -1104,17 +1121,23 @@
         loadCollections();
     }
 
+    window.addEventListener('golf_lang_changed', () => {
+        loadDrafts();
+        loadPublished();
+        loadCollections();
+    });
+
     initBuild();
 </script>
 
 <!-- Plate Picker Modal -->
 <div class="plate-picker-overlay" id="plate-picker-overlay" onclick="if(event.target===this) closePlatePicker()">
     <div class="plate-picker">
-        <h3>Välj platta</h3>
-        <p>Välj en av dina publicerade 3-hålsplattor att lägga till i denna collection.</p>
+        <h3>Choose Plate</h3>
+        <p>Select one of your published 3-hole plates to add to this collection.</p>
         <div id="plate-picker-list"></div>
         <div style="text-align:center; margin-top:16px;">
-            <button onclick="closePlatePicker()" style="background:rgba(100,116,139,0.3); color:#94a3b8; border:1px solid rgba(255,255,255,0.1); padding:10px 24px; border-radius:10px; font-weight:700; cursor:pointer;">Avbryt</button>
+            <button onclick="closePlatePicker()" style="background:rgba(100,116,139,0.3); color:#94a3b8; border:1px solid rgba(255,255,255,0.1); padding:10px 24px; border-radius:10px; font-weight:700; cursor:pointer;">Cancel</button>
         </div>
     </div>
 </div>

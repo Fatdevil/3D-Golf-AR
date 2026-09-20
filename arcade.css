@@ -131,61 +131,202 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   .palette-btn { width:100%; height:auto; padding:8px 4px; border-radius:8px; cursor:pointer; border:3px solid transparent; transition:transform 0.1s; font-size:10px; font-weight:800; color:#fff; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:0.5px; }
   .palette-btn.active { border-color:white; transform:scale(1.05); }
   
-  /* NEW PRO UI LAYOUT */
+  /* SLIM 1-COLUMN PRO UI LAYOUT (Level 1) */
   #left-toolbar {
       position: absolute;
       top: 50%; left: 10px;
       transform: translateY(-50%);
-      background: rgba(15,23,42,0.9);
-      padding: 10px;
-      border-radius: 12px;
+      background: rgba(15,23,42,0.92);
+      backdrop-filter: blur(14px);
+      padding: 8px 6px;
+      border-radius: 14px;
       border: 1px solid #475569;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
+      flex-direction: column;
+      width: 78px;
       gap: 5px;
+      align-items: center;
       pointer-events: auto;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       z-index: 100;
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+      scrollbar-width: none;
   }
+  #left-toolbar::-webkit-scrollbar { display: none; }
   
   #left-toolbar button {
-      background: transparent; color: #94a3b8; border: none; padding: 10px;
-      border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+      background: transparent; color: #94a3b8; border: none; padding: 7px 1px;
+      border-radius: 10px; font-weight: 700; cursor: pointer; transition: all 0.15s ease;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-size: 10px; min-width: 65px; height: 50px; gap: 4px;
+      font-size: 8.5px; width: 66px; min-height: 48px; gap: 2px; text-transform: uppercase;
+      letter-spacing: 0.1px; text-align: center; white-space: nowrap;
   }
-  #left-toolbar button:hover { background: rgba(255,255,255,0.1); color: #fff; }
-  #left-toolbar button.active { background: #38bdf8; color: #0f172a; }
-  #left-toolbar button.active-green { background: #4ade80; color: #0f172a; }
+  #left-toolbar button:hover { background: rgba(255,255,255,0.08); color: #fff; transform: scale(1.02); }
+  #left-toolbar button.active { background: #38bdf8; color: #0f172a; box-shadow: 0 4px 12px rgba(56,189,248,0.35); }
+  #left-toolbar button.active-green { background: #4ade80; color: #0f172a; box-shadow: 0 4px 12px rgba(74,222,128,0.35); }
   #left-toolbar button.active-yellow { background: #fbbf24; color: #0f172a; }
   #left-toolbar button.active-red { background: #ef4444; color: #fff; }
   #left-toolbar:not(.pro-mode) .pro-tool { display: none !important; }
   #left-toolbar:not(.pro-mode) .pro-divider { display: none !important; }
+  #left-toolbar #btn-undo { display: none !important; }
+  .toolbar-divider { height: 1px; background: #334155; width: 80%; margin: 3px 0; }
   #btn-pro-toggle {
-      grid-column: 1 / -1; margin-top: 4px;
-      background: rgba(56, 189, 248, 0.1) !important;
+      margin-top: 2px;
+      background: rgba(56, 189, 248, 0.08) !important;
       border: 1px dashed #475569 !important;
       color: #94a3b8 !important;
-      font-size: 9px !important; height: 32px !important;
-      letter-spacing: 1px;
+      font-size: 9px !important; min-height: 36px !important; width: 66px !important;
+      letter-spacing: 0.5px;
   }
   #btn-pro-toggle:hover { background: rgba(56, 189, 248, 0.2) !important; color: #38bdf8 !important; }
-  #left-toolbar.pro-mode #btn-pro-toggle { border-color: #38bdf8 !important; color: #38bdf8 !important; }
+  #left-toolbar.pro-mode #btn-pro-toggle { border-color: #38bdf8 !important; color: #38bdf8 !important; background: rgba(56, 189, 248, 0.18) !important; }
+
+  /* SUBCATEGORY FLYOUT DOCK (Level 2) */
+  #left-flyout-toolbar {
+      position: absolute;
+      top: 50%; left: 96px;
+      transform: translateY(-50%);
+      background: rgba(15,23,42,0.95);
+      backdrop-filter: blur(16px);
+      padding: 10px 8px;
+      border-radius: 14px;
+      border: 1px solid #475569;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      pointer-events: auto;
+      box-shadow: 0 12px 35px rgba(0,0,0,0.6);
+      z-index: 99;
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+      animation: flyoutSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes flyoutSlideIn {
+      from { opacity: 0; transform: translateY(-50%) translateX(-10px); }
+      to { opacity: 1; transform: translateY(-50%) translateX(0); }
+  }
+  .flyout-strip {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+  }
+  .flyout-header {
+      color: #64748b;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 2px 6px 4px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 3px;
+      text-align: left;
+  }
+  .flyout-btn {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 135px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+  }
+  .flyout-btn:hover {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border-color: #64748b;
+  }
+  .flyout-btn.active {
+      background: #38bdf8;
+      color: #0f172a;
+      border-color: #38bdf8;
+      box-shadow: 0 3px 10px rgba(56,189,248,0.3);
+  }
+  .flyout-btn.active-green {
+      background: #4ade80;
+      color: #0f172a;
+      border-color: #4ade80;
+      box-shadow: 0 3px 10px rgba(74,222,128,0.3);
+  }
+  #left-flyout-toolbar:not(.pro-mode) .pro-sub {
+      display: none !important;
+  }
+
+  /* ASSET GALLERY 2-COLUMN CARDS (Level 3) */
+  .asset-card {
+      background: #1e293b;
+      border: 2px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      overflow: hidden;
+      position: relative;
+  }
+  .asset-card:hover {
+      background: #273549;
+      border-color: #38bdf8;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+  }
+  .asset-card.active {
+      border-color: #4ade80 !important;
+      background: rgba(74, 222, 128, 0.1) !important;
+      box-shadow: 0 0 14px rgba(74, 222, 128, 0.4) !important;
+  }
+  .asset-card-thumb {
+      width: 100%;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15,23,42,0.6);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 5px;
+  }
+  .asset-card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+  }
+  .asset-card-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: #cbd5e1;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      line-height: 1.2;
+  }
   
   /* SCULPT SUB-TOOL STRIP (in right panel) */
   .subtool-btn {
       background: #1e293b;
       color: #94a3b8;
       border: 1px solid #334155;
-      padding: 6px 10px;
+      padding: 8px 12px;
       border-radius: 8px;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: bold;
       cursor: pointer;
+      min-height: 40px;
       transition: all 0.2s;
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 5px;
       white-space: nowrap;
   }
   .subtool-btn:hover { background: #334155; color: #e2e8f0; border-color: #64748b; }
@@ -277,22 +418,23 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #top-bar {
       position: absolute; top: 10px; left: 10px; right: 10px;
       display: flex; justify-content: space-between; align-items: center;
-      pointer-events: none; z-index: 101;
+      gap: 10px; pointer-events: none; z-index: 101;
+      flex-wrap: nowrap;
   }
   #top-bar .top-left, #top-bar .top-center, #top-bar .top-right {
-      display: flex; gap: 8px; align-items: center;
+      display: flex; gap: 8px; align-items: center; flex-shrink: 0;
   }
   #top-bar .top-center {
-      position: absolute; left: 50%; transform: translateX(-50%);
+      margin: 0 auto;
   }
   
   .sys-btn {
       background: rgba(15,23,42,0.9); color: #fff; border: 1px solid #475569;
-      padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer;
-      pointer-events: auto; display: flex; align-items: center; gap: 8px; font-size: 14px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: all 0.2s;
+      padding: 8px 12px; border-radius: 8px; font-weight: bold; cursor: pointer;
+      pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: all 0.2s; white-space: nowrap;
   }
-  .sys-btn:hover { background: #334155; transform: scale(1.05); }
+  .sys-btn:hover { background: #334155; transform: scale(1.03); }
   
   #dropdown-menu {
       position: absolute; top: 60px; left: 15px; background: rgba(15,23,42,0.95);
@@ -312,7 +454,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
   }
   #elevation-hud {
-      position: absolute; bottom: 20px; left: 160px;
+      position: absolute; bottom: 15px; left: 195px;
       background: rgba(15,23,42,0.92); padding: 8px 18px; border-radius: 10px;
       pointer-events: none; border: 1px solid #475569; z-index: 100;
       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
@@ -523,3 +665,12 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   }
   #btn-actions { transition: background 0.15s; }
   #btn-actions:hover { background: #475569 !important; }
+
+  /* Compact top-bar spacing for viewports < 1100px */
+  @media (max-width: 1100px) {
+      #top-bar { gap: 6px; }
+      #top-bar .top-left, #top-bar .top-center, #top-bar .top-right { gap: 5px; }
+      .sys-btn { padding: 6px 10px; font-size: 12px; }
+      #topbar-hole-nav { padding: 3px 8px !important; }
+      #biome-selector-container { padding: 4px 8px !important; }
+  }
