@@ -413,6 +413,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       background: rgba(15,23,42,0.9); padding: 15px; border-radius: 12px;
       border: 1px solid #475569; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       pointer-events: auto; display: none; flex-direction: column; gap: 10px;
+      box-sizing: border-box;
   }
   
   #top-bar {
@@ -450,14 +451,15 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   
   #tool-hints {
       position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: rgba(15,23,42,0.8); padding: 8px 15px; border-radius: 8px;
+      background: rgba(15,23,42,0.85); padding: 8px 15px; border-radius: 8px;
       color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
+      transition: bottom 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 999;
   }
   #elevation-hud {
-      position: absolute; bottom: 15px; left: 195px;
-      background: rgba(15,23,42,0.92); padding: 8px 18px; border-radius: 10px;
-      pointer-events: none; border: 1px solid #475569; z-index: 100;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      display: flex; gap: 16px; align-items: center;
+      background: transparent; padding: 0; border: none;
+      pointer-events: none; box-shadow: none;
   }
   
   #global-loader {

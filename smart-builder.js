@@ -349,7 +349,7 @@ function updateSmartGreenPreview() {
     let pnl = document.getElementById('smart-green-action-panel');
     let buildBtn = document.getElementById('sb-build-btn');
     if(pnl) {
-        if(window.currentTool === 'SMART_BUILDER') pnl.style.display = 'block';
+        if(window.currentTool === 'SMART_BUILDER') pnl.style.display = 'flex';
         else pnl.style.display = 'none';
     }
     // Ensure build button is always clickable (build functions check point count internally)
@@ -399,8 +399,66 @@ function updateSmartGreenPreview() {
             measEl.innerHTML = '<span style="color:#fbbf24">📐 ' + Math.round(w) + 'm × ' + Math.round(h) + 'm</span>' +
                 '<span style="color:#94a3b8; margin-left:6px">Area: ~' + Math.round(area) + 'm²</span>' +
                 '<br><span style="color:#64748b; font-size:9px">Perimeter: ' + Math.round(perim) + 'm · Last: ' + lastSeg.toFixed(1) + 'm · Points: ' + pts.length + '</span>';
+
+            if (buildBtn && window._smartBuilderType === 'GREEN') {
+                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                buildBtn.textContent = (isSv ? '⛳ Bygg Green (~' : '⛳ Build Green (~') + Math.round(area) + ' m²)';
+                buildBtn.classList.add('pulse-green-btn');
+            } else if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
+                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+                let fwCount = (hole && hole.fairways) ? hole.fairways.length : (hole && hole.fairwayData ? 1 : 0);
+                let nextNum = fwCount + 1;
+                let fwLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+                buildBtn.textContent = (isSv ? ('🏌️ Bygg Fairway' + fwLabel + ' (~') : ('🏌️ Build Fairway' + fwLabel + ' (~')) + Math.round(area) + ' m²)';
+                buildBtn.classList.add('pulse-green-btn');
+            } else if (buildBtn && window._smartBuilderType === 'BUNKER') {
+                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+                let bkCount = (hole && hole.bunkers) ? hole.bunkers.length : (hole && hole.bunkerData ? 1 : 0);
+                let nextNum = bkCount + 1;
+                let bkLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+                buildBtn.textContent = (isSv ? ('🏖️ Bygg Bunker' + bkLabel + ' (~') : ('🏖️ Build Bunker' + bkLabel + ' (~')) + Math.round(area) + ' m²)';
+                buildBtn.classList.add('pulse-green-btn');
+            }
+            let dg = document.getElementById('sg-drawing-guide');
+            if (dg && window._smartBuilderType === 'GREEN') dg.style.display = 'none';
+            let fdg = document.getElementById('sf-drawing-guide');
+            if (fdg && window._smartBuilderType === 'FAIRWAY') fdg.style.display = 'none';
+            let bkd = document.getElementById('sbk-drawing-guide');
+            if (bkd && window._smartBuilderType === 'BUNKER') bkd.style.display = 'none';
         } else {
             measEl.style.display = 'none';
+            if (buildBtn && window._smartBuilderType === 'GREEN') {
+                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                buildBtn.textContent = isSv ? '⛳ Bygg Green' : '⛳ Build Green';
+                buildBtn.classList.remove('pulse-green-btn');
+            } else if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
+                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+                let fwCount = (hole && hole.fairways) ? hole.fairways.length : (hole && hole.fairwayData ? 1 : 0);
+                let nextNum = fwCount + 1;
+                let fwLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+                buildBtn.textContent = isSv ? ('🏌️ Bygg Fairway' + fwLabel) : ('🏌️ Build Fairway' + fwLabel);
+                buildBtn.classList.remove('pulse-green-btn');
+            } else if (buildBtn && window._smartBuilderType === 'BUNKER') {
+                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+                let bkCount = (hole && hole.bunkers) ? hole.bunkers.length : (hole && hole.bunkerData ? 1 : 0);
+                let nextNum = bkCount + 1;
+                let bkLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+                buildBtn.textContent = isSv ? ('🏖️ Bygg Bunker' + bkLabel) : ('🏖️ Build Bunker' + bkLabel);
+                buildBtn.classList.remove('pulse-green-btn');
+            }
+            let dg = document.getElementById('sg-drawing-guide');
+            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            if (dg && window._smartBuilderType === 'GREEN' && (!hole || !hole.greenData)) dg.style.display = 'block';
+            let fdg = document.getElementById('sf-drawing-guide');
+            let hasActiveFw = hole && (hole.activeFairwayIndex !== null && hole.activeFairwayIndex !== undefined) && (hole.fairways && hole.fairways[hole.activeFairwayIndex]);
+            if (fdg && window._smartBuilderType === 'FAIRWAY' && !hasActiveFw) fdg.style.display = 'block';
+            let bkd = document.getElementById('sbk-drawing-guide');
+            let hasActiveBk = hole && (hole.activeBunkerIndex !== null && hole.activeBunkerIndex !== undefined) && (hole.bunkers && hole.bunkers[hole.activeBunkerIndex]);
+            if (bkd && window._smartBuilderType === 'BUNKER' && !hasActiveBk) bkd.style.display = 'block';
         }
     }
 }
@@ -474,14 +532,904 @@ function offsetPolygon(densePts, dist) {
     return result;
 }
 
-// === SMART BUNKER: Sand Fill + Dig Down + Lip ===
+// === SMART BUNKER LIVE STUDIO: Multi-Bunker Instances + Parametric Sand + Dig Down + Lip ===
+
+// Helper: Ensure hole has bunkers array with backward compatibility
+function ensureHoleBunkers(hole) {
+    if (!hole) return [];
+    if (!hole.bunkers) {
+        hole.bunkers = [];
+        if (hole.bunkerData && hole.bunkerData.points && hole.bunkerData.points.length >= 3) {
+            hole.bunkers.push(hole.bunkerData);
+        }
+    }
+    if (hole.bunkers.length === 0 && hole.bunkerData && hole.bunkerData.points && hole.bunkerData.points.length >= 3) {
+        hole.bunkers.push(hole.bunkerData);
+    }
+    if (hole.bunkers.length > 0) {
+        hole.bunkerData = hole.bunkers[0];
+        // DO NOT overwrite null! null means "drawing mode for new bunker"
+        if (hole.activeBunkerIndex === undefined) {
+            hole.activeBunkerIndex = 0;
+        } else if (hole.activeBunkerIndex !== null && hole.activeBunkerIndex >= hole.bunkers.length) {
+            hole.activeBunkerIndex = hole.bunkers.length - 1;
+        }
+    } else {
+        hole.bunkerData = null;
+        hole.activeBunkerIndex = null;
+    }
+    return hole.bunkers;
+}
+window.ensureHoleBunkers = ensureHoleBunkers;
+
+function getActiveBunker(hole) {
+    if (!hole) return null;
+    ensureHoleBunkers(hole);
+    if (hole.activeBunkerIndex === null || hole.activeBunkerIndex === undefined) {
+        return null;
+    }
+    return hole.bunkers[hole.activeBunkerIndex] || null;
+}
+window.getActiveBunker = getActiveBunker;
+
+// Helper: Generate dense smooth curve points from control points for Bunker
+function getDenseBunkerPoints(points) {
+    if (typeof getDenseGreenPoints === 'function') {
+        return getDenseGreenPoints(points);
+    }
+    let pts3 = points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
+    let curve = new THREE.CatmullRomCurve3(pts3, true);
+    let numSamples = Math.max(200, points.length * 40);
+    return curve.getPoints(numSamples);
+}
+window.getDenseBunkerPoints = getDenseBunkerPoints;
+
+// 3D Outline Mesh for Selected Bunker (Amber/Gold 0xfbbf24)
+let activeBunkerOutlineMesh = null;
+function updateActiveBunkerOutline() {
+    if (activeBunkerOutlineMesh && window._arcadeScene) {
+        window._arcadeScene.remove(activeBunkerOutlineMesh);
+        activeBunkerOutlineMesh = null;
+    }
+    if ((window.currentTool && window.currentTool !== 'SMART_BUILDER') || window._smartBuilderType !== 'BUNKER') return;
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole || hole.activeBunkerIndex === null || hole.activeBunkerIndex === undefined) return;
+    if (!hole.bunkers || !hole.bunkers[hole.activeBunkerIndex]) return;
+
+    let bd = hole.bunkers[hole.activeBunkerIndex];
+    if (!bd.points || bd.points.length < 3) return;
+
+    let densePts = getDenseBunkerPoints(bd.points);
+    let linePts = densePts.map(p => {
+        let y = (typeof window.getTerrainHeight === 'function') 
+            ? window.getTerrainHeight(p.x, p.z) 
+            : (p.y || 0);
+        return new THREE.Vector3(p.x, y + 0.25, p.z);
+    });
+    if (linePts.length > 0) {
+        linePts.push(linePts[0].clone());
+    }
+
+    let geo = new THREE.BufferGeometry().setFromPoints(linePts);
+    let mat = new THREE.LineBasicMaterial({ color: 0xfbbf24, linewidth: 3, depthTest: false });
+    activeBunkerOutlineMesh = new THREE.Line(geo, mat);
+    activeBunkerOutlineMesh.renderOrder = 998;
+    if (window._arcadeScene) window._arcadeScene.add(activeBunkerOutlineMesh);
+    if (window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+        window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+    }
+}
+window.updateActiveBunkerOutline = updateActiveBunkerOutline;
+
+// Center Camera on Selected Bunker
+window.centerCameraOnBunker = function(holeIndex, bunkerIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    if (bunkerIndex === undefined) bunkerIndex = hole.activeBunkerIndex;
+    let bd = (hole.bunkers && bunkerIndex !== null && bunkerIndex !== undefined) ? hole.bunkers[bunkerIndex] : null;
+    if (!bd || !bd.points || bd.points.length === 0) return;
+
+    let cx = 0, cz = 0;
+    for (let p of bd.points) { cx += p.x; cz += p.z; }
+    cx /= bd.points.length;
+    cz /= bd.points.length;
+    let cy = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(cx, cz) : 0;
+
+    if (window._arcadeCamera && window.controls) {
+        window.controls.target.set(cx, cy, cz);
+        window._arcadeCamera.position.set(cx, cy + 40, cz + 45);
+        window.controls.update();
+        if (window._arcadeRenderer && window._arcadeScene) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
+    }
+    updateActiveBunkerOutline();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let bkNum = (bunkerIndex !== null && bunkerIndex !== undefined) ? (bunkerIndex + 1) : '';
+    window.showBuildToast(isSv ? `🔍 Centrerad på Bunker ${bkNum}` : `🔍 Centered on Bunker ${bkNum}`, '#fbbf24');
+};
+
+window.selectActiveBunker = function(holeIndex, bunkerIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    if (bunkerIndex >= 0 && bunkerIndex < hole.bunkers.length) {
+        hole.activeBunkerIndex = bunkerIndex;
+        if (typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
+    }
+    updateActiveBunkerOutline();
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+};
+
+window.startNewBunkerDrawing = function(holeIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (hole) {
+        ensureHoleBunkers(hole);
+        hole.activeBunkerIndex = null;
+    }
+    if (typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
+    updateActiveBunkerOutline();
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let bkCount = (hole && hole.bunkers) ? hole.bunkers.length : 0;
+    let nextNum = bkCount + 1;
+    window.showBuildToast(isSv ? `✏️ Klicka på marken för att rita Bunker ${nextNum} (minst 3 punkter)` : `✏️ Click on ground to shape Bunker ${nextNum} (min 3 points)`, '#fbbf24');
+};
+
+// 1. Capture baseline snapshot of natural terrain & canvas before bunker is built
+window.captureBunkerSnapshot = function(hole, points, margin) {
+    margin = Math.max(15, margin || 15);
+    let densePts = getDenseBunkerPoints(points);
+    let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
+    for(let pt of densePts) {
+        if(pt.x < pathMinX) pathMinX = pt.x;
+        if(pt.x > pathMaxX) pathMaxX = pt.x;
+        if(pt.z < pathMinZ) pathMinZ = pt.z;
+        if(pt.z > pathMaxZ) pathMaxZ = pt.z;
+    }
+
+    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
+    let gxStart = Math.max(0, Math.floor((pathMinX - margin + window.TERRAIN_SIZE/2) / step));
+    let gxEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxX + margin + window.TERRAIN_SIZE/2) / step));
+    let gzStart = Math.max(0, Math.floor((pathMinZ - margin + window.TERRAIN_SIZE/2) / step));
+    let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + window.TERRAIN_SIZE/2) / step));
+    let gWidth = gxEnd - gxStart + 1;
+    let gHeight = gzEnd - gzStart + 1;
+
+    let texMargin = margin + 4;
+    let pxMinX = Math.max(0, Math.floor(((pathMinX - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxX = Math.min(4096, Math.ceil(((pathMaxX + texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMinY = Math.max(0, Math.floor(((pathMinZ - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxY = Math.min(4096, Math.ceil(((pathMaxZ + texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pw = Math.max(1, pxMaxX - pxMinX);
+    let ph = Math.max(1, pxMaxY - pxMinY);
+
+    let positions = window._arcadePlaneGeo.attributes.position.array;
+    let origHeights = new Float32Array(gWidth * gHeight);
+    for(let gz = gzStart; gz <= gzEnd; gz++) {
+        for(let gx = gxStart; gx <= gxEnd; gx++) {
+            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+            let oi = (gz - gzStart) * gWidth + (gx - gxStart);
+            origHeights[oi] = positions[idx*3+2];
+        }
+    }
+
+    let origCanvasPixels = null;
+    if (window._arcadePCtx) {
+        origCanvasPixels = window._arcadePCtx.getImageData(pxMinX, pxMinY, pw, ph);
+    }
+
+    let baseH = 0;
+    for(let pt of points) {
+        let h = (typeof window.getTerrainHeight === 'function')
+            ? window.getTerrainHeight(pt.x, pt.z)
+            : (window.localGetTerrainAt ? (window.localGetTerrainAt(pt.x, -pt.z) || {}).z || 0 : 0);
+        baseH += h;
+    }
+    baseH /= Math.max(1, points.length);
+
+    return {
+        baseElevation: baseH,
+        bbox: {
+            gxStart, gxEnd, gzStart, gzEnd,
+            gWidth, gHeight,
+            pxMinX, pxMaxX, pxMinY, pxMaxY,
+            pw, ph, margin
+        },
+        origHeights: origHeights,
+        origCanvasPixels: origCanvasPixels
+    };
+};
+
+// 1.5. Cleanly erase a bunker's footprint from 2D canvas texture
+window.eraseBunkerTexture = function(bd) {
+    if (!bd || !bd.points || !window._arcadePCtx) return;
+    let densePts = (typeof getDenseBunkerPoints === 'function') ? getDenseBunkerPoints(bd.points) : bd.points;
+    if (!densePts || densePts.length < 3) return;
+
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let roughColor = cfg.roughColor || '#4a782b';
+    let eraseMargin = 6.0;
+
+    let ctx = window._arcadePCtx;
+    ctx.save();
+    ctx.filter = 'blur(6px)';
+
+    ctx.beginPath();
+    densePts.forEach((pt, i) => {
+        let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        if (i === 0) ctx.moveTo(pxX, pxY);
+        else ctx.lineTo(pxX, pxY);
+    });
+    ctx.closePath();
+
+    ctx.lineWidth = eraseMargin * 2 * (4096 / window.TERRAIN_SIZE);
+    ctx.strokeStyle = roughColor;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.fillStyle = roughColor;
+    ctx.fill();
+
+    ctx.filter = 'none';
+    ctx.restore();
+};
+
+// 2. Restore pristine baseline ground & texture before applying modified parameters
+window.restoreBunkerBase = function(hole, restoreTexture, targetBunker) {
+    if (restoreTexture === undefined) restoreTexture = false;
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    let bds = targetBunker ? [targetBunker] : (hole.bunkers && hole.bunkers.length > 0 ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []));
+    if (bds.length === 0) return;
+
+    bds.forEach(bd => {
+        if (!bd || !bd.bbox) return;
+        if (bd.origHeights && window._arcadePlaneGeo) {
+            let positions = window._arcadePlaneGeo.attributes.position.array;
+            let gWidth = bd.bbox.gWidth;
+
+            for(let gz = bd.bbox.gzStart; gz <= bd.bbox.gzEnd; gz++) {
+                for(let gx = bd.bbox.gxStart; gx <= bd.bbox.gxEnd; gx++) {
+                    let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                    let oi = (gz - bd.bbox.gzStart) * gWidth + (gx - bd.bbox.gxStart);
+                    if (oi >= 0 && oi < bd.origHeights.length) {
+                        positions[idx*3+2] = bd.origHeights[oi];
+                    }
+                }
+            }
+        }
+
+        if (restoreTexture) {
+            if (typeof window.eraseBunkerTexture === 'function') {
+                window.eraseBunkerTexture(bd);
+            } else if (bd.origCanvasPixels && window._arcadePCtx) {
+                window._arcadePCtx.putImageData(bd.origCanvasPixels, bd.bbox.pxMinX, bd.bbox.pxMinY);
+            }
+        }
+    });
+};
+
+// 3. Apply full bunker pipeline (Painting + Sculpting + Smoothing)
+window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunker) {
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    let bds = targetBunker ? [targetBunker] : (hole.bunkers && hole.bunkers.length > 0 ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []));
+    if (bds.length === 0) return;
+    if (updateTexture === undefined) updateTexture = true;
+
+    // Reset ground vertex heights to pristine baseline for targeted bunker(s)
+    window.restoreBunkerBase(hole, false, targetBunker);
+
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let sandColor = cfg.bunkerColor || '#e0d8a4';
+
+    let waterGeo = window._arcadeWaterGeo;
+    let wPosArray = waterGeo ? waterGeo.attributes.position.array : null;
+
+    let positions = window._arcadePlaneGeo ? window._arcadePlaneGeo.attributes.position.array : null;
+    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
+
+    function pointInPolygon(px, pz, polyPts) {
+        let inside = false;
+        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+            let xi = polyPts[i].x, zi = polyPts[i].z;
+            let xj = polyPts[j].x, zj = polyPts[j].z;
+            if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    function distToPolygon(px, pz, polyPts) {
+        let minDist = Infinity;
+        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+            let ax = polyPts[j].x, az = polyPts[j].z;
+            let bx = polyPts[i].x, bz = polyPts[i].z;
+            let dx = bx - ax, dz = bz - az;
+            let len2 = dx*dx + dz*dz;
+            let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
+            let projX = ax + t*dx, projZ = az + t*dz;
+            let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
+            if(d < minDist) minDist = d;
+        }
+        return minDist;
+    }
+
+    bds.forEach(bd => {
+        if (!bd || !bd.points || bd.points.length < 3) return;
+        let densePts = getDenseBunkerPoints(bd.points);
+
+        // === PAINT PASS ===
+        if (updateTexture && window._arcadePCtx) {
+            window._arcadePCtx.save();
+
+            let sharpness = bd.edgeSharpness !== undefined ? bd.edgeSharpness : 100;
+            if (sharpness < 100) {
+                let blurPx = Math.round((100 - sharpness) * 0.06);
+                if (blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
+            }
+
+            window._arcadePCtx.beginPath();
+            densePts.forEach((pt, i) => {
+                let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
+                else window._arcadePCtx.lineTo(pxX, pxY);
+            });
+            window._arcadePCtx.closePath();
+            window._arcadePCtx.fillStyle = sandColor;
+            window._arcadePCtx.fill();
+
+            window._arcadePCtx.filter = 'none';
+            window._arcadePCtx.restore();
+        }
+
+        // === SCULPT PASS ===
+        if (positions) {
+            let depth = bd.depth !== undefined ? bd.depth : 0.8;
+            let lipHeight = bd.lipHeight !== undefined ? bd.lipHeight : 0.3;
+            let shape = bd.shape || 'BOWL';
+
+            // Bounding box
+            let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
+            for(let pt of densePts) {
+                if(pt.x < pathMinX) pathMinX = pt.x;
+                if(pt.x > pathMaxX) pathMaxX = pt.x;
+                if(pt.z < pathMinZ) pathMinZ = pt.z;
+                if(pt.z > pathMaxZ) pathMaxZ = pt.z;
+            }
+
+            let gxStart = Math.max(0, Math.floor((pathMinX - 1 + window.TERRAIN_SIZE/2) / step));
+            let gxEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxX + 1 + window.TERRAIN_SIZE/2) / step));
+            let gzStart = Math.max(0, Math.floor((pathMinZ - 1 + window.TERRAIN_SIZE/2) / step));
+            let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + 1 + window.TERRAIN_SIZE/2) / step));
+
+            // Face direction: first point = face (lip side)
+            let facePt = bd.points[0];
+            let cx = 0, cz = 0;
+            for(let pt of bd.points) { cx += pt.x; cz += pt.z; }
+            cx /= bd.points.length;
+            cz /= bd.points.length;
+            let faceDx = facePt.x - cx;
+            let faceDz = facePt.z - cz;
+            let faceLen = Math.sqrt(faceDx*faceDx + faceDz*faceDz) + 0.001;
+            faceDx /= faceLen; faceDz /= faceLen;
+
+            let maxDist = 0;
+            for(let pt of densePts) {
+                let d = Math.sqrt((pt.x - cx)**2 + (pt.z - cz)**2);
+                if(d > maxDist) maxDist = d;
+            }
+
+            // Pass 1: Digging + Lip
+            for(let gz = gzStart; gz <= gzEnd; gz++) {
+                for(let gx = gxStart; gx <= gxEnd; gx++) {
+                    let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+
+                    let isInside = pointInPolygon(vx, vz, densePts);
+                    if(!isInside) continue;
+
+                    // Remove water inside bunker
+                    if (wPosArray) {
+                        wPosArray[idx*3 + 2] = -99.0;
+                        if (window.waterBaseZ) window.waterBaseZ[idx] = -99.0;
+                    }
+
+                    let distEdge = distToPolygon(vx, vz, densePts);
+                    let currentH = positions[idx*3+2];
+
+                    let digDepth = depth;
+                    if (shape === 'BOWL') {
+                        let distCenter = Math.sqrt((vx - cx)**2 + (vz - cz)**2);
+                        let normalizedDist = distCenter / (maxDist + 0.001);
+                        let bowlFactor = 1.0 - Math.min(1.0, normalizedDist * normalizedDist);
+                        digDepth = depth * (0.4 + 0.6 * bowlFactor);
+                    }
+
+                    let targetHeight = currentH - digDepth;
+
+                    let relX = vx - cx;
+                    let relZ = vz - cz;
+                    let faceDot = relX * faceDx + relZ * faceDz;
+                    let distCenter = Math.sqrt(relX*relX + relZ*relZ);
+                    let cosTheta = distCenter > 0 ? (faceDot / distCenter) : 0;
+                    let t = (cosTheta + 1.0) / 2.0;
+
+                    let blendDist = 2.5 + (5.0 - 2.5) * t;
+                    let edgeBlend = Math.min(1.0, distEdge / blendDist);
+                    edgeBlend = edgeBlend * edgeBlend * (3.0 - 2.0 * edgeBlend);
+
+                    let blendedDig = currentH + (targetHeight - currentH) * edgeBlend;
+
+                    if (lipHeight > 0) {
+                        let normalized = faceDot / (faceLen + 0.001);
+                        let edgeProximity = 1.0 - Math.min(1.0, distEdge / 5.0);
+                        if (normalized > 0 && edgeProximity > 0) {
+                            let lipInfluence = edgeProximity * edgeProximity * Math.min(1.0, normalized);
+                            let lipAdd = lipHeight * lipInfluence;
+                            blendedDig += lipAdd;
+                        }
+                    }
+
+                    positions[idx*3+2] = blendedDig;
+                }
+            }
+
+            // Pass 2: Auto-smooth edges (Laplacian)
+            let _smoothStride = window.TERRAIN_SEGS + 1;
+            let smGxStart = Math.max(0, gxStart - 3);
+            let smGxEnd = Math.min(window.TERRAIN_SEGS, gxEnd + 3);
+            let smGzStart = Math.max(0, gzStart - 3);
+            let smGzEnd = Math.min(window.TERRAIN_SEGS, gzEnd + 3);
+
+            for(let smPass = 0; smPass < 5; smPass++) {
+                let tempHeights = new Float32Array(positions.length / 3);
+                for (let i = 0; i < tempHeights.length; i++) {
+                    tempHeights[i] = positions[i*3 + 2];
+                }
+
+                for(let gz = smGzStart; gz <= smGzEnd; gz++) {
+                    for(let gx = smGxStart; gx <= smGxEnd; gx++) {
+                        let idx = gz * _smoothStride + gx;
+                        let vx = positions[idx*3];
+                        let vz = -positions[idx*3+1];
+
+                        let isInside = pointInPolygon(vx, vz, densePts);
+                        let distEdge = distToPolygon(vx, vz, densePts);
+
+                        if (isInside || distEdge < 2.5) {
+                            let nCount = 0;
+                            let nSum = 0;
+                            if (gz > 0) { nSum += tempHeights[(gz-1)*_smoothStride + gx]; nCount++; }
+                            if (gz < window.TERRAIN_SEGS) { nSum += tempHeights[(gz+1)*_smoothStride + gx]; nCount++; }
+                            if (gx > 0) { nSum += tempHeights[gz*_smoothStride + gx-1]; nCount++; }
+                            if (gx < window.TERRAIN_SEGS) { nSum += tempHeights[gz*_smoothStride + gx+1]; nCount++; }
+
+                            if (nCount > 0) {
+                                let localAvg = nSum / nCount;
+                                let smoothStrength = 0.6;
+                                if (isInside && distEdge > 2.0) smoothStrength = 0.15;
+                                if (!isInside && distEdge > 1.5) smoothStrength = 0.25;
+
+                                positions[idx*3 + 2] += (localAvg - tempHeights[idx]) * smoothStrength;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (updateTexture && window._arcadeMapTex) {
+        window._arcadeMapTex.needsUpdate = true;
+        if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        if (typeof window.debounceRebuildRoughMask === 'function') {
+            window.debounceRebuildRoughMask(500);
+        } else if (typeof window.rebuildRoughMask === 'function') {
+            window.rebuildRoughMask();
+        }
+    }
+
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    window.snapObjectsToGround();
+
+    if (wPosArray && window.rebuildWaterMask) {
+        waterGeo.attributes.position.needsUpdate = true;
+        window.rebuildWaterMask(false);
+    }
+
+    if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+};
+
+// 4. Live reactive update triggered from UI sliders or buttons
+window.updateLiveBunker = function(property, value) {
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole) return;
+    let bd = getActiveBunker(hole);
+    if (!bd) return;
+
+    if (!bd.origHeights && bd.points && typeof window.captureBunkerSnapshot === 'function') {
+        let snap = window.captureBunkerSnapshot(hole, bd.points, 15);
+        bd.bbox = snap.bbox;
+        bd.origHeights = snap.origHeights;
+        bd.origCanvasPixels = snap.origCanvasPixels;
+        if (bd.baseElevation === undefined) bd.baseElevation = snap.baseElevation;
+    }
+
+    bd[property] = value;
+
+    let needsRepaint = (property === 'edgeSharpness');
+
+    if (window._bunkerRebakePending) return;
+    window._bunkerRebakePending = true;
+    requestAnimationFrame(function() {
+        window._bunkerRebakePending = false;
+        let curHole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (curHole) {
+            let activeBd = getActiveBunker(curHole);
+            if (activeBd) {
+                window.applyBunkerPipeline(curHole, false, needsRepaint, activeBd);
+            }
+        }
+    });
+};
+
+// 5. Delete active bunker and restore 100% untouched natural ground
+window.deleteSmartBunker = function(holeIndex, bunkerIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    if (bunkerIndex === undefined) bunkerIndex = hole.activeBunkerIndex;
+    if (bunkerIndex === null || bunkerIndex === undefined || !hole.bunkers[bunkerIndex]) return;
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let bkNum = bunkerIndex + 1;
+    let msg = isSv 
+        ? ('Vill du ta bort Bunker ' + bkNum + ' och återställa marken till 100% orörd natur?') 
+        : ('Delete Bunker ' + bkNum + ' and restore terrain to 100% natural condition?');
+    if (!confirm(msg)) return;
+
+    window.saveUndoState();
+
+    let targetBd = hole.bunkers[bunkerIndex];
+    window.restoreBunkerBase(hole, true, targetBd);
+    if (typeof window.eraseBunkerTexture === 'function') {
+        window.eraseBunkerTexture(targetBd);
+    }
+
+    hole.bunkers.splice(bunkerIndex, 1);
+    if (hole.bunkers.length > 0) {
+        hole.activeBunkerIndex = Math.max(0, Math.min(bunkerIndex, hole.bunkers.length - 1));
+        hole.bunkerData = hole.bunkers[0];
+    } else {
+        hole.activeBunkerIndex = null;
+        hole.bunkerData = null;
+    }
+
+    // Re-apply remaining elements so everything is cleanly layered
+    if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
+        window.applyFairwayPipeline(hole, false, true);
+    }
+    if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, true);
+    }
+    if (hole.bunkers.length > 0) {
+        window.applyBunkerPipeline(hole, false, true);
+    }
+
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    window.snapObjectsToGround();
+
+    if (window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if (window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if (window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+
+    updateActiveBunkerOutline();
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+    window.saveLevel();
+    window.showBuildToast(isSv ? ('🗑️ Bunker ' + bkNum + ' raderad!') : ('🗑️ Bunker ' + bkNum + ' deleted!'), '#ef4444');
+};
+
+// 5.5. Delete ALL bunkers on current hole and restore 100% untouched natural ground
+window.deleteAllSmartBunkers = function(holeIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    if (!hole.bunkers || hole.bunkers.length === 0) return;
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let count = hole.bunkers.length;
+    let msg = isSv 
+        ? ('Vill du radera ALLA (' + count + ') bunkrar på detta hål och återställa marken till 100% orörd natur?') 
+        : ('Delete ALL (' + count + ') bunkers on this hole and restore terrain to 100% natural condition?');
+    if (!confirm(msg)) return;
+
+    window.saveUndoState();
+
+    hole.bunkers.forEach(bd => {
+        window.restoreBunkerBase(hole, true, bd);
+        if (typeof window.eraseBunkerTexture === 'function') {
+            window.eraseBunkerTexture(bd);
+        }
+    });
+
+    hole.bunkers = [];
+    hole.bunkerData = null;
+    hole.activeBunkerIndex = null;
+
+    if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
+        window.applyFairwayPipeline(hole, false, true);
+    }
+    if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, true);
+    }
+
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+    window.snapObjectsToGround();
+
+    if (window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if (window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if (window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+
+    updateActiveBunkerOutline();
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+    window.saveLevel();
+    window.showBuildToast(isSv ? ('🗑️ Alla bunkrar raderade — marken återställd!') : ('🗑️ All bunkers deleted — terrain restored!'), '#ef4444');
+};
+
+// 6. Redraw shape: restores ground and puts points back in interactive drawing mode
+window.redrawSmartBunker = function(holeIndex, bunkerIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    if (bunkerIndex === undefined) bunkerIndex = hole.activeBunkerIndex;
+    if (bunkerIndex === null || bunkerIndex === undefined || !hole.bunkers[bunkerIndex]) return;
+
+    window.saveUndoState();
+
+    let targetBd = hole.bunkers[bunkerIndex];
+    let savedPoints = targetBd.points.map(p => ({ x: p.x, y: p.y, z: p.z }));
+
+    window.restoreBunkerBase(hole, true, targetBd);
+    if (typeof window.eraseBunkerTexture === 'function') {
+        window.eraseBunkerTexture(targetBd);
+    }
+
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+
+    hole.bunkers.splice(bunkerIndex, 1);
+    if (hole.bunkers.length > 0) {
+        hole.bunkerData = hole.bunkers[0];
+    } else {
+        hole.bunkerData = null;
+    }
+    hole.activeBunkerIndex = null;
+
+    if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
+        window.applyFairwayPipeline(hole, false, true);
+    }
+    if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, true);
+    }
+    if (hole.bunkers.length > 0) {
+        window.applyBunkerPipeline(hole, false, true);
+    }
+
+    smartGreenPoints = savedPoints.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
+    window._smartShapeClosed = false;
+    updateSmartGreenPreview();
+
+    updateActiveBunkerOutline();
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    window.showBuildToast(isSv ? '🔄 Justera form: Dra i punkterna eller lägg till nya' : '🔄 Adjust shape: Drag points or add new ones', '#fbbf24');
+};
+
+// 7. Scale entire bunker up or down symmetrically around its centroid
+window.scaleSmartBunker = function(holeIndex, factor, bunkerIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    if (bunkerIndex === undefined) bunkerIndex = hole.activeBunkerIndex;
+    if (bunkerIndex === null || bunkerIndex === undefined || !hole.bunkers[bunkerIndex]) return;
+
+    let bd = hole.bunkers[bunkerIndex];
+    if (!bd.points || bd.points.length < 3) return;
+
+    window.saveUndoState();
+
+    let cx = 0, cz = 0;
+    for(let pt of bd.points) { cx += pt.x; cz += pt.z; }
+    cx /= bd.points.length;
+    cz /= bd.points.length;
+
+    let maxDist = 0;
+    for(let pt of bd.points) {
+        let d = Math.sqrt((pt.x - cx)**2 + (pt.z - cz)**2);
+        if (d > maxDist) maxDist = d;
+    }
+    let newMaxDist = maxDist * factor;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    if (newMaxDist < 2.0) {
+        window.showBuildToast(isSv ? '⚠️ Bunkern kan inte minskas mer' : '⚠️ Bunker cannot be scaled smaller', '#f59e0b');
+        return;
+    }
+    if (newMaxDist > 100.0) {
+        window.showBuildToast(isSv ? '⚠️ Bunkern har nått maxstorlek' : '⚠️ Bunker has reached max size', '#f59e0b');
+        return;
+    }
+
+    // 1. Restore pristine ground before modifying points
+    window.restoreBunkerBase(hole, true, bd);
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) window._terrainChunks.syncAll();
+
+    // 2. Scale all control points outward or inward from centroid
+    for(let pt of bd.points) {
+        pt.x = cx + (pt.x - cx) * factor;
+        pt.z = cz + (pt.z - cz) * factor;
+    }
+
+    // 3. Capture clean snapshot for new scaled bounding box
+    let snap = window.captureBunkerSnapshot(hole, bd.points, 15);
+    bd.baseElevation = snap.baseElevation;
+    bd.bbox = snap.bbox;
+    bd.origHeights = snap.origHeights;
+    bd.origCanvasPixels = snap.origCanvasPixels;
+
+    // 4. Re-apply pipeline
+    window.applyBunkerPipeline(hole, false, true, bd);
+    updateActiveBunkerOutline();
+
+    if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+
+    let area = 0;
+    if (bd.points && bd.points.length >= 3) {
+        for (let i = 0, j = bd.points.length - 1; i < bd.points.length; j = i++) {
+            area += (bd.points[j].x + bd.points[i].x) * (bd.points[j].z - bd.points[i].z);
+        }
+        area = Math.round(Math.abs(area / 2));
+    }
+    let bkNum = bunkerIndex + 1;
+    let toastMsg = factor > 1
+        ? (isSv ? `➕ Bunker ${bkNum} utökad till ~${area} m²` : `➕ Bunker ${bkNum} scaled up to ~${area} m²`)
+        : (isSv ? `➖ Bunker ${bkNum} minskad till ~${area} m²` : `➖ Bunker ${bkNum} scaled down to ~${area} m²`);
+    window.showBuildToast(toastMsg, '#4ade80');
+};
+
+// 8. Move entire bunker to new center coordinates
+window.moveSmartBunker = function(holeIndex, newCenterX, newCenterZ, bunkerIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+    if (bunkerIndex === undefined) bunkerIndex = hole.activeBunkerIndex;
+    if (bunkerIndex === null || bunkerIndex === undefined || !hole.bunkers[bunkerIndex]) return;
+
+    let bd = hole.bunkers[bunkerIndex];
+    if (!bd.points || bd.points.length < 3) return;
+
+    window.saveUndoState();
+
+    let oldCx = 0, oldCz = 0;
+    for(let pt of bd.points) { oldCx += pt.x; oldCz += pt.z; }
+    oldCx /= bd.points.length;
+    oldCz /= bd.points.length;
+
+    let dx = newCenterX - oldCx;
+    let dz = newCenterZ - oldCz;
+
+    // Restore old ground 100% clean
+    window.restoreBunkerBase(hole, true, bd);
+
+    // Shift all points
+    for(let pt of bd.points) {
+        pt.x += dx;
+        pt.z += dz;
+    }
+
+    // Capture new snapshot
+    let snap = window.captureBunkerSnapshot(hole, bd.points, 15);
+    bd.baseElevation = snap.baseElevation;
+    bd.bbox = snap.bbox;
+    bd.origHeights = snap.origHeights;
+    bd.origCanvasPixels = snap.origCanvasPixels;
+
+    window.applyBunkerPipeline(hole, false, true, bd);
+    updateActiveBunkerOutline();
+
+    if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let bkNum = bunkerIndex + 1;
+    window.showBuildToast(isSv ? `✥ Bunker ${bkNum} flyttad!` : `✥ Bunker ${bkNum} moved!`, '#4ade80');
+};
+
+// 9. Activate "Move Bunker" picking mode
+window.activateMoveBunkerMode = function() {
+    window._movingBunkerMode = true;
+    window._movingFairwayMode = false;
+    window._movingGreenMode = false;
+    window._movingFlagMode = false;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    let bkNum = (hole && hole.activeBunkerIndex !== null && hole.activeBunkerIndex !== undefined) ? (hole.activeBunkerIndex + 1) : '';
+    let msg = isSv 
+        ? (`📍 Klicka på kartan där Bunker ${bkNum} ska placeras (Esc för att avbryta)`) 
+        : (`📍 Click on map to place Bunker ${bkNum} (Esc to cancel)`);
+    window.showBuildToast(msg, '#f59e0b');
+};
+
+// 10. Initial Bunker Build triggered from UI button
 window.executeSmartBunker = function() {
     if(smartGreenPoints.length < 3) return;
     window.saveUndoState();
 
-    let cfg = window.CURRENT_BIOME_CONFIG;
-    let sandColor = cfg.bunkerColor || '#e0d8a4';
-    
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole) return;
+    ensureHoleBunkers(hole);
+
     // Read sliders
     let depthSlider = document.getElementById('sb-bunker-depth');
     let lipSlider = document.getElementById('sb-bunker-lip');
@@ -489,358 +1437,199 @@ window.executeSmartBunker = function() {
     let lipHeight = lipSlider ? parseFloat(lipSlider.value) : 0.3;
     let shape = window._smartBunkerShape || 'BOWL';
 
-    let waterGeo = window._arcadeWaterGeo;
-    let wPosArray = waterGeo ? waterGeo.attributes.position.array : null;
-
-    // Build closed curve
-    let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
-    let numSamples = Math.max(200, smartGreenPoints.length * 40);
-    let densePts = curve.getPoints(numSamples);
-
-    // === 1. PAINT: Sand fill ===
-    window._arcadePCtx.save();
-    
-    // Edge sharpness
     let sharpSlider = document.getElementById('sg-edge-sharpness');
     let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
-    if(sharpness < 100) {
-        let blurPx = Math.round((100 - sharpness) * 0.06);
-        if(blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
-    }
 
-    window._arcadePCtx.beginPath();
-    densePts.forEach((pt, i) => {
-        let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-        let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-        if(i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-        else window._arcadePCtx.lineTo(pxX, pxY);
-    });
-    window._arcadePCtx.closePath();
-    window._arcadePCtx.fillStyle = sandColor;
-    window._arcadePCtx.fill();
-    window._arcadePCtx.filter = 'none';
-    window._arcadePCtx.restore();
-    window._arcadeMapTex.needsUpdate = true;
-    window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
-    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    let snap = window.captureBunkerSnapshot(hole, smartGreenPoints, 15);
 
-    // === 2. TERRAIN SCULPTING: Dig + Bowl + Lip ===
-    let positions = window._arcadePlaneGeo.attributes.position.array;
-    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
+    let newBunker = {
+        id: 'bk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        points: smartGreenPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
+        baseElevation: snap.baseElevation,
+        bbox: snap.bbox,
+        origHeights: snap.origHeights,
+        origCanvasPixels: snap.origCanvasPixels,
 
-    // Bounding box
-    let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
-    for(let pt of densePts) {
-        if(pt.x < pathMinX) pathMinX = pt.x;
-        if(pt.x > pathMaxX) pathMaxX = pt.x;
-        if(pt.z < pathMinZ) pathMinZ = pt.z;
-        if(pt.z > pathMaxZ) pathMaxZ = pt.z;
-    }
-    let margin = 0; // Bunker: NO outside influence
+        shape: shape,
+        depth: depth,
+        lipHeight: lipHeight,
+        edgeSharpness: sharpness
+    };
 
-    let gxStart = Math.max(0, Math.floor((pathMinX - 1 + window.TERRAIN_SIZE/2) / step));
-    let gxEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxX + 1 + window.TERRAIN_SIZE/2) / step));
-    let gzStart = Math.max(0, Math.floor((pathMinZ - 1 + window.TERRAIN_SIZE/2) / step));
-    let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + 1 + window.TERRAIN_SIZE/2) / step));
+    hole.bunkers.push(newBunker);
+    hole.activeBunkerIndex = hole.bunkers.length - 1;
+    hole.bunkerData = hole.bunkers[0]; // Mirror primary for backward compatibility
 
-    // Read actual terrain height at each control point from vertex buffer directly
-    let baseH = 0;
-    let minEdgeH = Infinity;
-    for(let pt of smartGreenPoints) {
-        let gxi = Math.round((pt.x + window.TERRAIN_SIZE/2) / step);
-        let gzi = Math.round((pt.z + window.TERRAIN_SIZE/2) / step);
-        gxi = Math.max(0, Math.min(window.TERRAIN_SEGS, gxi));
-        gzi = Math.max(0, Math.min(window.TERRAIN_SEGS, gzi));
-        let vidx = gzi * (window.TERRAIN_SEGS+1) + gxi;
-        let h = positions[vidx * 3 + 2];
-        baseH += h;
-        if (h < minEdgeH) minEdgeH = h;
-    }
-    baseH /= smartGreenPoints.length;
-
-    // Face direction: first point = face (lip side)
-    let facePt = smartGreenPoints[0];
-    let cx = 0, cz = 0;
-    for(let pt of smartGreenPoints) { cx += pt.x; cz += pt.z; }
-    cx /= smartGreenPoints.length;
-    cz /= smartGreenPoints.length;
-    let faceDx = facePt.x - cx;
-    let faceDz = facePt.z - cz;
-    let faceLen = Math.sqrt(faceDx*faceDx + faceDz*faceDz) + 0.001;
-    faceDx /= faceLen; faceDz /= faceLen;
-
-    // Reuse helpers from Smart Green
-    function pointInPolygon(px, pz, polyPts) {
-        let inside = false;
-        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
-            let xi = polyPts[i].x, zi = polyPts[i].z;
-            let xj = polyPts[j].x, zj = polyPts[j].z;
-            if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
-                inside = !inside;
-            }
-        }
-        return inside;
-    }
-    function distToPolygon(px, pz, polyPts) {
-        let minDist = Infinity;
-        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
-            let ax = polyPts[j].x, az = polyPts[j].z;
-            let bx = polyPts[i].x, bz = polyPts[i].z;
-            let dx = bx - ax, dz = bz - az;
-            let len2 = dx*dx + dz*dz;
-            let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
-            let projX = ax + t*dx, projZ = az + t*dz;
-            let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
-            if(d < minDist) minDist = d;
-        }
-        return minDist;
-    }
-
-    // Max distance from center to edge (for bowl normalization)
-    let maxDist = 0;
-    for(let pt of densePts) {
-        let d = Math.sqrt((pt.x - cx)**2 + (pt.z - cz)**2);
-        if(d > maxDist) maxDist = d;
-    }
-
-    // === PASS 1: DIGGING ===
-    // Dig the bunker relative to the terrain, using continuous blend distances and shapes (FLAT / BOWL)
-    for(let gz = gzStart; gz <= gzEnd; gz++) {
-        for(let gx = gxStart; gx <= gxEnd; gx++) {
-            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-            let vx = positions[idx*3];
-            let vz = -positions[idx*3+1];
-
-            let isInside = pointInPolygon(vx, vz, densePts);
-            if(!isInside) continue; // ONLY dig inside the polygon
-
-            // Remove water inside the bunker
-            if (wPosArray) {
-                wPosArray[idx*3 + 2] = -99.0;
-                if (window.waterBaseZ) {
-                    window.waterBaseZ[idx] = -99.0;
-                }
-            }
-
-            let distEdge = distToPolygon(vx, vz, densePts);
-            let currentH = positions[idx*3+2];
-
-            // Determine dig depth based on shape (FLAT or BOWL)
-            let digDepth = depth;
-            if (shape === 'BOWL') {
-                let distCenter = Math.sqrt((vx - cx)**2 + (vz - cz)**2);
-                let normalizedDist = distCenter / (maxDist + 0.001);
-                let bowlFactor = 1.0 - Math.min(1.0, normalizedDist * normalizedDist);
-                // Bowl is deeper in center (100% of depth) and shallower at edges (40% of depth)
-                digDepth = depth * (0.4 + 0.6 * bowlFactor);
-            }
-
-            let targetHeight = currentH - digDepth;
-
-            // Continuous blend distance calculation based on angle to face direction
-            let relX = vx - cx;
-            let relZ = vz - cz;
-            let faceDot = relX * faceDx + relZ * faceDz;
-            let distCenter = Math.sqrt(relX*relX + relZ*relZ);
-            let cosTheta = distCenter > 0 ? (faceDot / distCenter) : 0;
-            let t = (cosTheta + 1.0) / 2.0; // range [0, 1]
-            
-            // Smoothly vary blendDist between 2.5m (back side) and 5.0m (face side)
-            let blendDist = 2.5 + (5.0 - 2.5) * t;
-            let edgeBlend = Math.min(1.0, distEdge / blendDist);
-            
-            // Cubic smoothstep transition
-            edgeBlend = edgeBlend * edgeBlend * (3.0 - 2.0 * edgeBlend);
-
-            // Dig down towards target
-            let blendedDig = currentH + (targetHeight - currentH) * edgeBlend;
-
-            // Phase 2: LIP — raise edge on green-facing side (relative to local terrain)
-            if (lipHeight > 0) {
-                let normalized = faceDot / (faceLen + 0.001);
-                let edgeProximity = 1.0 - Math.min(1.0, distEdge / 5.0); // 5m lip zone
-                if (normalized > 0 && edgeProximity > 0) {
-                    // Quadratic falloff + directional alignment
-                    let lipInfluence = edgeProximity * edgeProximity * Math.min(1.0, normalized);
-                    let lipAdd = lipHeight * lipInfluence;
-                    blendedDig += lipAdd;
-                }
-            }
-
-            positions[idx*3+2] = blendedDig;
-        }
-    }
-
-    // === PASS 2: AUTO-SMOOTH EDGES ===
-    // Run 5 passes of unbiased Laplacian smoothing on the transition zone (creases at bunker edges)
-    let _smoothStride = window.TERRAIN_SEGS + 1;
-    let smGxStart = Math.max(0, gxStart - 3);
-    let smGxEnd = Math.min(window.TERRAIN_SEGS, gxEnd + 3);
-    let smGzStart = Math.max(0, gzStart - 3);
-    let smGzEnd = Math.min(window.TERRAIN_SEGS, gzEnd + 3);
-
-    for(let smPass = 0; smPass < 5; smPass++) {
-        // Copy current heights to a temp buffer for unbiased smoothing
-        let tempHeights = new Float32Array(positions.length / 3);
-        for (let i = 0; i < tempHeights.length; i++) {
-            tempHeights[i] = positions[i*3 + 2];
-        }
-
-        for(let gz = smGzStart; gz <= smGzEnd; gz++) {
-            for(let gx = smGxStart; gx <= smGxEnd; gx++) {
-                let idx = gz * _smoothStride + gx;
-                let vx = positions[idx*3];
-                let vz = -positions[idx*3+1];
-
-                let isInside = pointInPolygon(vx, vz, densePts);
-                let distEdge = distToPolygon(vx, vz, densePts);
-
-                // Smooth inside the bunker, and a margin outside (up to 2.5m) to blend the edges nicely
-                if (isInside || distEdge < 2.5) {
-                    let nCount = 0;
-                    let nSum = 0;
-                    if (gz > 0) { nSum += tempHeights[(gz-1)*_smoothStride + gx]; nCount++; }
-                    if (gz < window.TERRAIN_SEGS) { nSum += tempHeights[(gz+1)*_smoothStride + gx]; nCount++; }
-                    if (gx > 0) { nSum += tempHeights[gz*_smoothStride + gx-1]; nCount++; }
-                    if (gx < window.TERRAIN_SEGS) { nSum += tempHeights[gz*_smoothStride + gx+1]; nCount++; }
-                    
-                    if (nCount > 0) {
-                        let localAvg = nSum / nCount;
-                        // Strength: strong at edge to remove jaggedness, milder further away
-                        let smoothStrength = 0.6;
-                        if (isInside && distEdge > 2.0) smoothStrength = 0.15; // Keep center shape intact
-                        if (!isInside && distEdge > 1.5) smoothStrength = 0.25; // Fade out smoothing outside
-                        
-                        positions[idx*3 + 2] += (localAvg - tempHeights[idx]) * smoothStrength;
-                    }
-                }
-            }
-        }
-    }
-
-
-    window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-    window._arcadePlaneGeo.computeVertexNormals();
-    window._arcadePlaneGeo.computeBoundingBox();
-    window._arcadePlaneGeo.computeBoundingSphere();
-    if (window._terrainChunks) window._terrainChunks.syncAll();
-    window.snapObjectsToGround();
-
-    if(window.slopeOverlayActive) window.updateSlopeOverlay();
-    if(window.contourLinesActive) window.updateContourLines();
-    if(window.elevationHeatmapActive) window.updateElevationHeatmap();
-
-    if (wPosArray && window.rebuildWaterMask) {
-        waterGeo.attributes.position.needsUpdate = true;
-        window.rebuildWaterMask(false);
-    }
-
+    window.applyBunkerPipeline(hole, true, true, newBunker);
     clearSmartGreen();
+    updateActiveBunkerOutline();
+
+    window.saveLevel();
+    if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let bkNum = hole.bunkers.length;
+    window.showBuildToast(isSv ? (`✅ Bunker ${bkNum} byggd!`) : (`✅ Bunker ${bkNum} built!`), '#4ade80');
+
+    window._smartBuildCooldown = true;
+    setTimeout(function() { window._smartBuildCooldown = false; }, 500);
 };
 
-// === SMART FAIRWAY: Fairway Fill + Semi-Rough Ring + Rolling Terrain ===
-window.executeSmartFairway = function() {
-    if(smartGreenPoints.length < 3) return;
-    window.saveUndoState();
+// === SMART FAIRWAY LIVE STUDIO: Parametric Fairway + Rough + Rolling Terrain ===
 
-    let cfg = window.CURRENT_BIOME_CONFIG;
-    let fairwayColor = cfg.fairwayColor || '#7db952';
-    let semiRoughColor = cfg.semiColor || '#6b9e3d';
-    let difficulty = window._fairwayDifficulty || 'FLAT';
+// Helper: Ensure hole has fairways array with backward compatibility
+function ensureHoleFairways(hole) {
+    if (!hole) return [];
+    if (!hole.fairways) {
+        hole.fairways = [];
+        if (hole.fairwayData && hole.fairwayData.points && hole.fairwayData.points.length >= 3) {
+            hole.fairways.push(hole.fairwayData);
+        }
+    }
+    if (hole.fairways.length === 0 && hole.fairwayData && hole.fairwayData.points && hole.fairwayData.points.length >= 3) {
+        hole.fairways.push(hole.fairwayData);
+    }
+    if (hole.fairways.length > 0) {
+        hole.fairwayData = hole.fairways[0];
+        // DO NOT overwrite null! null means "drawing mode for new fairway"
+        if (hole.activeFairwayIndex === undefined) {
+            hole.activeFairwayIndex = 0;
+        } else if (hole.activeFairwayIndex !== null && hole.activeFairwayIndex >= hole.fairways.length) {
+            hole.activeFairwayIndex = hole.fairways.length - 1;
+        }
+    } else {
+        hole.fairwayData = null;
+        hole.activeFairwayIndex = null;
+    }
+    return hole.fairways;
+}
+window.ensureHoleFairways = ensureHoleFairways;
 
-    // Random seed for unique terrain per build
-    let seedX = (Math.random() - 0.5) * 200;
-    let seedZ = (Math.random() - 0.5) * 200;
+function getActiveFairway(hole) {
+    if (!hole) return null;
+    ensureHoleFairways(hole);
+    if (hole.activeFairwayIndex === null || hole.activeFairwayIndex === undefined) {
+        return null;
+    }
+    return hole.fairways[hole.activeFairwayIndex] || null;
+}
+window.getActiveFairway = getActiveFairway;
 
-    // Semi-rough width from slider
-    let srSlider = document.getElementById('sf-semirough-width');
-    let semiRoughWidth = srSlider ? parseFloat(srSlider.value) : 2.0;
+// 3D Outline Mesh for Selected Fairway
+let activeFairwayOutlineMesh = null;
+function updateActiveFairwayOutline() {
+    if (activeFairwayOutlineMesh && window._arcadeScene) {
+        window._arcadeScene.remove(activeFairwayOutlineMesh);
+        activeFairwayOutlineMesh = null;
+    }
+    if ((window.currentTool && window.currentTool !== 'SMART_BUILDER') || window._smartBuilderType !== 'FAIRWAY') return;
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole || hole.activeFairwayIndex === null || hole.activeFairwayIndex === undefined) return;
+    if (!hole.fairways || !hole.fairways[hole.activeFairwayIndex]) return;
 
-    // Build closed curve
-    let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
-    let numSamples = Math.max(200, smartGreenPoints.length * 40);
-    let densePts = curve.getPoints(numSamples);
+    let fd = hole.fairways[hole.activeFairwayIndex];
+    if (!fd.points || fd.points.length < 3) return;
 
-    // === 1. PAINT: Semi-rough ring + Fairway fill ===
-    window._arcadePCtx.save();
-
-    // Edge sharpness
-    let sharpSlider = document.getElementById('sg-edge-sharpness');
-    let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
-    if(sharpness < 100) {
-        let blurPx = Math.round((100 - sharpness) * 0.06);
-        if(blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
+    let densePts = getDenseFairwayPoints(fd.points);
+    let linePts = densePts.map(p => {
+        let y = (typeof window.getTerrainHeight === 'function') 
+            ? window.getTerrainHeight(p.x, p.z) 
+            : (p.y || 0);
+        return new THREE.Vector3(p.x, y + 0.35, p.z);
+    });
+    if (linePts.length > 0) {
+        linePts.push(linePts[0].clone());
     }
 
-    // Polygon center (still needed for Smart Green center ref)
+    let geo = new THREE.BufferGeometry().setFromPoints(linePts);
+    let mat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 3, depthTest: false });
+    activeFairwayOutlineMesh = new THREE.Line(geo, mat);
+    activeFairwayOutlineMesh.renderOrder = 998;
+    if (window._arcadeScene) window._arcadeScene.add(activeFairwayOutlineMesh);
+    if (window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+        window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+    }
+}
+window.updateActiveFairwayOutline = updateActiveFairwayOutline;
+
+// Center Camera on Selected Fairway
+window.centerCameraOnFairway = function(holeIndex, fairwayIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    if (fairwayIndex === undefined) fairwayIndex = hole.activeFairwayIndex;
+    let fd = (hole.fairways && fairwayIndex !== null && fairwayIndex !== undefined) ? hole.fairways[fairwayIndex] : null;
+    if (!fd || !fd.points || fd.points.length === 0) return;
+
     let cx = 0, cz = 0;
-    for(let pt of densePts) { cx += pt.x; cz += pt.z; }
-    cx /= densePts.length;
-    cz /= densePts.length;
+    for (let p of fd.points) { cx += p.x; cz += p.z; }
+    cx /= fd.points.length;
+    cz /= fd.points.length;
+    let cy = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(cx, cz) : 0;
 
-    // Draw rough ring (outermost): only if checkbox is checked
-    let roughCb = document.getElementById('sf-rough-cb');
-    let roughSlider = document.getElementById('sf-rough-width');
-    let roughWidth = (roughCb && roughCb.checked && roughSlider) ? parseFloat(roughSlider.value) : 0;
-    // Shared path function for fairway boundary
-    function traceFairwayPath() {
-        window._arcadePCtx.beginPath();
-        densePts.forEach((pt, i) => {
-            let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            if(i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-            else window._arcadePCtx.lineTo(pxX, pxY);
-        });
-        window._arcadePCtx.closePath();
+    if (window._arcadeCamera && window.controls) {
+        window.controls.target.set(cx, cy, cz);
+        window._arcadeCamera.position.set(cx, cy + 50, cz + 60);
+        window.controls.update();
+        if (window._arcadeRenderer && window._arcadeScene) {
+            window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+        }
     }
+    updateActiveFairwayOutline();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let fwNum = (fairwayIndex !== null && fairwayIndex !== undefined) ? (fairwayIndex + 1) : '';
+    window.showBuildToast(isSv ? `🔍 Centrerad på Fairway ${fwNum}` : `🔍 Centered on Fairway ${fwNum}`, '#fbbf24');
+};
 
-    // Draw rough ring (outermost) using thick stroke to avoid self-intersection spikes
-    let roughColor = cfg.roughColor || '#3d6b2b';
-    if(roughWidth > 0) {
-        traceFairwayPath();
-        window._arcadePCtx.lineWidth = (semiRoughWidth + roughWidth) * 2 * (4096 / window.TERRAIN_SIZE);
-        window._arcadePCtx.strokeStyle = roughColor;
-        window._arcadePCtx.lineJoin = 'round';
-        window._arcadePCtx.stroke();
-        window._arcadePCtx.fillStyle = roughColor; // Fill interior to prevent gaps
-        window._arcadePCtx.fill();
+window.selectActiveFairway = function(holeIndex, fairwayIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    if (fairwayIndex >= 0 && fairwayIndex < hole.fairways.length) {
+        hole.activeFairwayIndex = fairwayIndex;
+        if (typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
+        let activeFd = hole.fairways[fairwayIndex];
+        if (activeFd && typeof window.applyFairwayPipeline === 'function') {
+            window.applyFairwayPipeline(hole, false, true, activeFd);
+        }
     }
+    updateActiveFairwayOutline();
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+};
 
-    // Draw semi-rough ring using thick stroke
-    if(semiRoughWidth > 0) {
-        traceFairwayPath();
-        window._arcadePCtx.lineWidth = semiRoughWidth * 2 * (4096 / window.TERRAIN_SIZE);
-        window._arcadePCtx.strokeStyle = semiRoughColor;
-        window._arcadePCtx.lineJoin = 'round';
-        window._arcadePCtx.stroke();
-        window._arcadePCtx.fillStyle = semiRoughColor; // Fill interior
-        window._arcadePCtx.fill();
+window.startNewFairwayDrawing = function(holeIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (hole) {
+        ensureHoleFairways(hole);
+        hole.activeFairwayIndex = null;
     }
+    if (typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
+    updateActiveFairwayOutline();
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let fwCount = (hole && hole.fairways) ? hole.fairways.length : 0;
+    let nextNum = fwCount + 1;
+    window.showBuildToast(isSv ? `✏️ Klicka på marken för att rita Fairway ${nextNum} (minst 3 punkter)` : `✏️ Click on ground to shape Fairway ${nextNum} (min 3 points)`, '#38bdf8');
+};
 
-    // Draw fairway fill (inner polygon, on top)
-    traceFairwayPath();
-    window._arcadePCtx.fillStyle = fairwayColor;
-    window._arcadePCtx.fill();
-
-    // === MOWING PATTERN OVERLAY (Fairway) ===
-    let mowPattern = window._smartMowPattern || 'SOLID';
-    if (mowPattern !== 'SOLID') {
-        paintMowingPattern(window._arcadePCtx, densePts, fairwayColor, mowPattern);
+// Helper: Generate dense smooth curve points from control points for Fairway
+function getDenseFairwayPoints(points) {
+    if (typeof getDenseGreenPoints === 'function') {
+        return getDenseGreenPoints(points);
     }
+    let pts3 = points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
+    let curve = new THREE.CatmullRomCurve3(pts3, true);
+    let numSamples = Math.max(200, points.length * 40);
+    return curve.getPoints(numSamples);
+}
 
-    window._arcadePCtx.filter = 'none';
-    window._arcadePCtx.restore();
-    window._arcadeMapTex.needsUpdate = true;
-    window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
-    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
-
-    // === 2. TERRAIN SCULPTING: Rolling undulations ===
-    // FLAT/NATURAL = paint only, preserve natural terrain contours
-    if(difficulty !== 'FLAT') {
-    let positions = window._arcadePlaneGeo.attributes.position.array;
-    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
-
-    // Bounding box
+// 1. Capture baseline snapshot of natural terrain & canvas before fairway is built
+window.captureFairwaySnapshot = function(hole, points, margin) {
+    margin = Math.max(30, margin || 30);
+    let densePts = getDenseFairwayPoints(points);
     let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
     for(let pt of densePts) {
         if(pt.x < pathMinX) pathMinX = pt.x;
@@ -848,107 +1637,846 @@ window.executeSmartFairway = function() {
         if(pt.z < pathMinZ) pathMinZ = pt.z;
         if(pt.z > pathMaxZ) pathMaxZ = pt.z;
     }
-    let margin = semiRoughWidth + roughWidth + 8;
 
+    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
     let gxStart = Math.max(0, Math.floor((pathMinX - margin + window.TERRAIN_SIZE/2) / step));
     let gxEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxX + margin + window.TERRAIN_SIZE/2) / step));
     let gzStart = Math.max(0, Math.floor((pathMinZ - margin + window.TERRAIN_SIZE/2) / step));
     let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + window.TERRAIN_SIZE/2) / step));
+    let gWidth = gxEnd - gxStart + 1;
+    let gHeight = gzEnd - gzStart + 1;
 
-    // Average height as base
-    let baseH = 0;
-    for(let pt of smartGreenPoints) {
-        let surf = window.localGetTerrainAt(pt.x, -pt.z);
-        baseH += surf ? surf.z : 0;
-    }
-    baseH /= smartGreenPoints.length;
+    // Texture snapshot with margin for rough ring + blur
+    let texMargin = margin + 4;
+    let pxMinX = Math.max(0, Math.floor(((pathMinX - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxX = Math.min(4096, Math.ceil(((pathMaxX + texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMinY = Math.max(0, Math.floor(((pathMinZ - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxY = Math.min(4096, Math.ceil(((pathMaxZ + texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pw = Math.max(1, pxMaxX - pxMinX);
+    let ph = Math.max(1, pxMaxY - pxMinY);
 
-    // Point-in-polygon
-    function pointInPolygon(px, pz, polyPts) {
-        let inside = false;
-        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
-            let xi = polyPts[i].x, zi = polyPts[i].z;
-            let xj = polyPts[j].x, zj = polyPts[j].z;
-            if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
-                inside = !inside;
-            }
-        }
-        return inside;
-    }
-    function distToPolygon(px, pz, polyPts) {
-        let minDist = Infinity;
-        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
-            let ax = polyPts[j].x, az = polyPts[j].z;
-            let bx = polyPts[i].x, bz = polyPts[i].z;
-            let dx = bx - ax, dz = bz - az;
-            let len2 = dx*dx + dz*dz;
-            let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
-            let projX = ax + t*dx, projZ = az + t*dz;
-            let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
-            if(d < minDist) minDist = d;
-        }
-        return minDist;
-    }
-
-    // Single pass for performance
+    let positions = window._arcadePlaneGeo.attributes.position.array;
+    let origHeights = new Float32Array(gWidth * gHeight);
     for(let gz = gzStart; gz <= gzEnd; gz++) {
         for(let gx = gxStart; gx <= gxEnd; gx++) {
             let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-            let vx = positions[idx*3];
-            let vz = -positions[idx*3+1];
-
-            let isInside = pointInPolygon(vx, vz, densePts);
-            let distEdge = distToPolygon(vx, vz, densePts);
-
-            if(!isInside && distEdge > margin) continue;
-
-            // Fairway rolling terrain: large-scale, soft, natural mounds
-            // Low-frequency sin waves = long rolling hills
-            let sx = vx + seedX;
-            let sz = vz + seedZ;
-            let targetHeight = baseH;
-
-            if(difficulty === 'EASY') {
-                // Gentle rolls ~0.3m amplitude, very long wavelength
-                targetHeight += Math.sin(sx * 0.025) * Math.cos(sz * 0.03) * 0.30;
-            } else if(difficulty === 'MED') {
-                // Medium rolls ~0.6m, two overlapping waves
-                targetHeight += Math.sin(sx * 0.03) * Math.cos(sz * 0.025) * 0.45;
-                targetHeight += Math.sin(sx * 0.015 + sz * 0.02) * 0.20;
-            } else if(difficulty === 'HARD') {
-                // Strong undulations ~1.0m, multi-frequency
-                targetHeight += Math.sin(sx * 0.035) * Math.cos(sz * 0.03) * 0.55;
-                targetHeight += Math.sin(sx * 0.02 + sz * 0.025) * 0.30;
-                targetHeight += Math.cos(sx * 0.05) * Math.sin(sz * 0.04) * 0.15;
-            }
-
-            let currentH = positions[idx*3+2];
-            let influence;
-
-            if(isInside) {
-                influence = 1.0;
-            } else {
-                influence = 1.0 - (distEdge / margin);
-                influence = Math.max(0, influence * influence * (3 - 2 * influence));
-            }
-
-            positions[idx*3+2] = currentH + (targetHeight - currentH) * influence;
+            let oi = (gz - gzStart) * gWidth + (gx - gxStart);
+            origHeights[oi] = positions[idx*3+2];
         }
     }
-    } // end if(difficulty !== 'FLAT')
 
-    window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-    window._arcadePlaneGeo.computeVertexNormals();
-    window._arcadePlaneGeo.computeBoundingBox();
-    window._arcadePlaneGeo.computeBoundingSphere();
+    let origCanvasPixels = null;
+    if (window._arcadePCtx) {
+        origCanvasPixels = window._arcadePCtx.getImageData(pxMinX, pxMinY, pw, ph);
+    }
+
+    let baseH = 0;
+    for(let pt of points) {
+        let h = (typeof window.getTerrainHeight === 'function')
+            ? window.getTerrainHeight(pt.x, pt.z)
+            : (window.localGetTerrainAt ? (window.localGetTerrainAt(pt.x, -pt.z) || {}).z || 0 : 0);
+        baseH += h;
+    }
+    baseH /= Math.max(1, points.length);
+
+    return {
+        baseElevation: baseH,
+        bbox: {
+            gxStart, gxEnd, gzStart, gzEnd,
+            gWidth, gHeight,
+            pxMinX, pxMaxX, pxMinY, pxMaxY,
+            pw, ph, margin
+        },
+        origHeights: origHeights,
+        origCanvasPixels: origCanvasPixels
+    };
+};
+
+// 1.5. Cleanly erase a fairway's footprint and paint natural rough grass with soft blending
+window.eraseFairwayTexture = function(fd) {
+    if (!fd || !fd.points || !window._arcadePCtx) return;
+    let densePts = (typeof getDenseFairwayPoints === 'function') ? getDenseFairwayPoints(fd.points) : fd.points;
+    if (!densePts || densePts.length < 3) return;
+
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let roughColor = cfg.roughColor || '#4a782b';
+
+    let semiRoughWidth = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
+    let roughWidth = (fd.roughEnabled !== false) ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
+    // Total erase margin in meters to cover the outer rough ring and softly feather into terrain
+    let eraseMargin = semiRoughWidth + roughWidth + 6.0;
+
+    let ctx = window._arcadePCtx;
+    ctx.save();
+    ctx.filter = 'blur(6px)';
+
+    ctx.beginPath();
+    densePts.forEach((pt, i) => {
+        let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        if (i === 0) ctx.moveTo(pxX, pxY);
+        else ctx.lineTo(pxX, pxY);
+    });
+    ctx.closePath();
+
+    ctx.lineWidth = eraseMargin * 2 * (4096 / window.TERRAIN_SIZE);
+    ctx.strokeStyle = roughColor;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.fillStyle = roughColor;
+    ctx.fill();
+
+    ctx.filter = 'none';
+    ctx.restore();
+};
+
+// 2. Restore pristine baseline ground & texture before applying modified parameters
+window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
+    if (restoreTexture === undefined) restoreTexture = false;
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    let fds = targetFairway ? [targetFairway] : (hole.fairways && hole.fairways.length > 0 ? hole.fairways : (hole.fairwayData ? [hole.fairwayData] : []));
+    if (fds.length === 0) return;
+
+    fds.forEach(fd => {
+        if (!fd || !fd.bbox) return;
+        // Restore vertex heights across entire bounding box without clipping gaps
+        if (fd.origHeights && window._arcadePlaneGeo) {
+            let positions = window._arcadePlaneGeo.attributes.position.array;
+            let gWidth = fd.bbox.gWidth;
+
+            for(let gz = fd.bbox.gzStart; gz <= fd.bbox.gzEnd; gz++) {
+                for(let gx = fd.bbox.gxStart; gx <= fd.bbox.gxEnd; gx++) {
+                    let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                    let oi = (gz - fd.bbox.gzStart) * gWidth + (gx - fd.bbox.gxStart);
+                    if (oi >= 0 && oi < fd.origHeights.length) {
+                        positions[idx*3+2] = fd.origHeights[oi];
+                    }
+                }
+            }
+        }
+
+        // Restore 2D canvas texture: paint pristine rough grass over fairway footprint
+        if (restoreTexture) {
+            if (typeof window.eraseFairwayTexture === 'function') {
+                window.eraseFairwayTexture(fd);
+            } else if (fd.origCanvasPixels && window._arcadePCtx) {
+                window._arcadePCtx.putImageData(fd.origCanvasPixels, fd.bbox.pxMinX, fd.bbox.pxMinY);
+            }
+        }
+    });
+};
+
+// 3. Apply full fairway pipeline (Painting + Sculpting)
+window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFairway) {
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    let fds = targetFairway ? [targetFairway] : (hole.fairways && hole.fairways.length > 0 ? hole.fairways : (hole.fairwayData ? [hole.fairwayData] : []));
+    if (fds.length === 0) return;
+    if (updateTexture === undefined) updateTexture = true;
+
+    // Reset ground vertex heights to pristine baseline for targeted fairway(s)
+    window.restoreFairwayBase(hole, false, targetFairway);
+
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let fairwayColor = cfg.fairwayColor || '#7db952';
+    let semiRoughColor = cfg.semiColor || '#6b9e3d';
+    let roughColor = cfg.roughColor || '#3d6b2b';
+
+    fds.forEach(fd => {
+        if (!fd || !fd.points || fd.points.length < 3) return;
+        let densePts = getDenseFairwayPoints(fd.points);
+
+        // === PAINT PASS ===
+        if (updateTexture && window._arcadePCtx) {
+            window._arcadePCtx.save();
+
+            let sharpness = fd.edgeSharpness !== undefined ? fd.edgeSharpness : 100;
+            if (sharpness < 100) {
+                let blurPx = Math.round((100 - sharpness) * 0.06);
+                if (blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
+            }
+
+            function traceFairwayPath() {
+                window._arcadePCtx.beginPath();
+                densePts.forEach((pt, i) => {
+                    let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                    let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                    if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
+                    else window._arcadePCtx.lineTo(pxX, pxY);
+                });
+                window._arcadePCtx.closePath();
+            }
+
+            let semiRoughWidth = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
+            let roughEnabled = (fd.roughEnabled !== false);
+            let roughWidth = roughEnabled ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
+
+            // Draw rough ring (outermost)
+            if (roughWidth > 0) {
+                traceFairwayPath();
+                window._arcadePCtx.lineWidth = (semiRoughWidth + roughWidth) * 2 * (4096 / window.TERRAIN_SIZE);
+                window._arcadePCtx.strokeStyle = roughColor;
+                window._arcadePCtx.lineJoin = 'round';
+                window._arcadePCtx.stroke();
+                window._arcadePCtx.fillStyle = roughColor;
+                window._arcadePCtx.fill();
+            }
+
+            // Draw semi-rough ring
+            if (semiRoughWidth > 0) {
+                traceFairwayPath();
+                window._arcadePCtx.lineWidth = semiRoughWidth * 2 * (4096 / window.TERRAIN_SIZE);
+                window._arcadePCtx.strokeStyle = semiRoughColor;
+                window._arcadePCtx.lineJoin = 'round';
+                window._arcadePCtx.stroke();
+                window._arcadePCtx.fillStyle = semiRoughColor;
+                window._arcadePCtx.fill();
+            }
+
+            // Draw fairway fill
+            traceFairwayPath();
+            window._arcadePCtx.fillStyle = fairwayColor;
+            window._arcadePCtx.fill();
+
+            // Mowing pattern overlay
+            let mowPattern = fd.mowPattern || 'SOLID';
+            if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
+                paintMowingPattern(window._arcadePCtx, densePts, fairwayColor, mowPattern);
+            }
+
+            window._arcadePCtx.filter = 'none';
+            window._arcadePCtx.restore();
+        }
+
+        // === SCULPT PASS ===
+        let difficulty = fd.difficulty || 'FLAT';
+        if (difficulty !== 'FLAT' && fd.bbox && fd.origHeights) {
+            let positions = window._arcadePlaneGeo.attributes.position.array;
+            let baseH = fd.baseElevation || 0;
+            let seedX = fd.seedOffsetX || 0;
+            let seedZ = fd.seedOffsetZ || 0;
+            let semiRoughWidth = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
+            let roughWidth = (fd.roughEnabled !== false) ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
+            let margin = semiRoughWidth + roughWidth + 8.0;
+
+            let gxStart = fd.bbox.gxStart;
+            let gxEnd = fd.bbox.gxEnd;
+            let gzStart = fd.bbox.gzStart;
+            let gzEnd = fd.bbox.gzEnd;
+            let gWidth = fd.bbox.gWidth;
+            let origHeights = fd.origHeights;
+
+            for(let gz = gzStart; gz <= gzEnd; gz++) {
+                for(let gx = gxStart; gx <= gxEnd; gx++) {
+                    let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+
+                    let isInside = pointInPolygon(vx, vz, densePts);
+                    let distEdge = distToPolygon(vx, vz, densePts);
+
+                    if(!isInside && distEdge > margin) continue;
+
+                    let oi = (gz - gzStart) * gWidth + (gx - gxStart);
+                    if (oi < 0 || oi >= origHeights.length) continue;
+                    let originalH = origHeights[oi];
+
+                    let sx = vx + seedX;
+                    let sz = vz + seedZ;
+                    let targetHeight = originalH;
+
+                    if(difficulty === 'EASY') {
+                        targetHeight += Math.sin(sx * 0.025) * Math.cos(sz * 0.03) * 0.30;
+                    } else if(difficulty === 'MED') {
+                        targetHeight += Math.sin(sx * 0.03) * Math.cos(sz * 0.025) * 0.45;
+                        targetHeight += Math.sin(sx * 0.015 + sz * 0.02) * 0.20;
+                    } else if(difficulty === 'HARD') {
+                        targetHeight += Math.sin(sx * 0.035) * Math.cos(sz * 0.03) * 0.55;
+                        targetHeight += Math.sin(sx * 0.02 + sz * 0.025) * 0.30;
+                        targetHeight += Math.cos(sx * 0.05) * Math.sin(sz * 0.04) * 0.15;
+                    }
+
+                    let influence;
+                    if(isInside) {
+                        influence = 1.0;
+                    } else {
+                        influence = 1.0 - (distEdge / margin);
+                        influence = Math.max(0, influence * influence * (3 - 2 * influence));
+                    }
+
+                    positions[idx*3+2] = originalH + (targetHeight - originalH) * influence;
+                }
+            }
+        }
+    });
+
+    if (updateTexture && window._arcadeMapTex) {
+        window._arcadeMapTex.needsUpdate = true;
+        if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        if (typeof window.debounceRebuildRoughMask === 'function') {
+            window.debounceRebuildRoughMask(500);
+        } else if (typeof window.rebuildRoughMask === 'function') {
+            window.rebuildRoughMask();
+        }
+    }
+
+    // Sync mesh geometry
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
     if (window._terrainChunks) window._terrainChunks.syncAll();
     window.snapObjectsToGround();
 
-    if(window.slopeOverlayActive) window.updateSlopeOverlay();
-    if(window.contourLinesActive) window.updateContourLines();
-    if(window.elevationHeatmapActive) window.updateElevationHeatmap();
+    // Re-render Smart Green on top so green always stays on top
+    if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, updateTexture);
+    }
 
+    if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+};
+
+// 4. Live reactive update triggered from UI sliders or buttons
+window.updateLiveFairway = function(property, value) {
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole) return;
+    let fd = getActiveFairway(hole);
+    if (!fd) return;
+
+    // If loaded from file without in-memory snapshot, capture baseline now
+    if (!fd.origHeights && fd.points && typeof window.captureFairwaySnapshot === 'function') {
+        let snap = window.captureFairwaySnapshot(hole, fd.points, 35);
+        fd.bbox = snap.bbox;
+        fd.origHeights = snap.origHeights;
+        fd.origCanvasPixels = snap.origCanvasPixels;
+        if (fd.baseElevation === undefined) fd.baseElevation = snap.baseElevation;
+    }
+
+    fd[property] = value;
+
+    let needsRepaint = (property === 'semiRoughWidth' || property === 'roughWidth' || property === 'roughEnabled' || property === 'edgeSharpness' || property === 'mowPattern');
+
+    if (window._fairwayRebakePending) return;
+    window._fairwayRebakePending = true;
+    requestAnimationFrame(function() {
+        window._fairwayRebakePending = false;
+        let curHole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (curHole) {
+            let activeFd = getActiveFairway(curHole);
+            if (activeFd) {
+                window.applyFairwayPipeline(curHole, false, needsRepaint, activeFd);
+            }
+        }
+    });
+};
+
+// 5. Delete active fairway and restore 100% untouched natural ground
+window.deleteSmartFairway = function(holeIndex, fairwayIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    if (fairwayIndex === undefined) fairwayIndex = hole.activeFairwayIndex;
+    if (fairwayIndex === null || fairwayIndex === undefined || !hole.fairways[fairwayIndex]) return;
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let fwNum = fairwayIndex + 1;
+    let msg = isSv 
+        ? ('Vill du ta bort Fairway ' + fwNum + ' och återställa marken till 100% orörd natur?') 
+        : ('Delete Fairway ' + fwNum + ' and restore terrain to 100% natural condition?');
+    if (!confirm(msg)) return;
+
+    window.saveUndoState();
+
+    let targetFd = hole.fairways[fairwayIndex];
+    window.restoreFairwayBase(hole, true, targetFd);
+    if (typeof window.eraseFairwayTexture === 'function') {
+        window.eraseFairwayTexture(targetFd);
+    }
+
+    // Remove from fairways array
+    hole.fairways.splice(fairwayIndex, 1);
+    if (hole.fairways.length > 0) {
+        hole.activeFairwayIndex = Math.max(0, Math.min(fairwayIndex, hole.fairways.length - 1));
+        hole.fairwayData = hole.fairways[0];
+    } else {
+        hole.activeFairwayIndex = null;
+        hole.fairwayData = null;
+    }
+
+    // Re-apply any remaining fairways & green so everything is clean and properly layered
+    if (hole.fairways.length > 0) {
+        window.applyFairwayPipeline(hole, false, true);
+    } else if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, true);
+    }
+
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+    }
+    window.snapObjectsToGround();
+
+    if (window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if (window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if (window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+
+    updateActiveFairwayOutline();
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+    window.saveLevel();
+    window.showBuildToast(isSv ? ('🗑️ Fairway ' + fwNum + ' raderad!') : ('🗑️ Fairway ' + fwNum + ' deleted!'), '#ef4444');
+};
+
+// 5.5. Delete ALL fairways on current hole and restore 100% untouched natural ground
+window.deleteAllSmartFairways = function(holeIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    if (!hole.fairways || hole.fairways.length === 0) return;
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let count = hole.fairways.length;
+    let msg = isSv 
+        ? ('Vill du radera ALLA (' + count + ') fairways på detta hål och återställa marken till 100% orörd natur?') 
+        : ('Delete ALL (' + count + ') fairways on this hole and restore terrain to 100% natural condition?');
+    if (!confirm(msg)) return;
+
+    window.saveUndoState();
+
+    // 1. Restore heights and erase texture for all fairways
+    hole.fairways.forEach(fd => {
+        window.restoreFairwayBase(hole, true, fd);
+        if (typeof window.eraseFairwayTexture === 'function') {
+            window.eraseFairwayTexture(fd);
+        }
+    });
+
+    hole.fairways = [];
+    hole.fairwayData = null;
+    hole.activeFairwayIndex = null;
+
+    // 2. Re-apply green on top if exists
+    if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, true);
+    }
+
+    // 3. Sync textures and masks
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+
+    // 4. Sync geometry
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+    }
+    window.snapObjectsToGround();
+
+    if (window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if (window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if (window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+
+    updateActiveFairwayOutline();
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+    window.saveLevel();
+    window.showBuildToast(isSv ? ('🗑️ Alla fairways raderade — marken återställd!') : ('🗑️ All fairways deleted — terrain restored!'), '#ef4444');
+};
+
+// 5.8. Clean any ghost fairway pixels in the hole corridor and restore clean natural ground
+window.cleanGhostFairways = function(holeIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole || !window._arcadePCtx) return;
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let msg = isSv 
+        ? 'Vill du rensa eventuella spök-fairways och återställa hålets mark till 100% ren ruff?' 
+        : 'Do you want to clean ghost fairways and restore hole terrain to 100% natural rough?';
+    if (!confirm(msg)) return;
+
+    window.saveUndoState();
+
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let roughColor = cfg.roughColor || '#4a782b';
+
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    function includePt(x, z) {
+        if (typeof x === 'number' && !isNaN(x) && typeof z === 'number' && !isNaN(z)) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (z < minZ) minZ = z;
+            if (z > maxZ) maxZ = z;
+        }
+    }
+
+    if (hole.tees) {
+        ['red','yellow','white','black','range'].forEach(t => {
+            if (hole.tees[t]) includePt(hole.tees[t].x, hole.tees[t].z);
+        });
+    }
+    if (hole.aimPoint) includePt(hole.aimPoint.x, hole.aimPoint.z);
+    if (hole.flag) includePt(hole.flag.x, hole.flag.z);
+    if (hole.greenData && hole.greenData.points) {
+        hole.greenData.points.forEach(p => includePt(p.x, p.z));
+    }
+    ensureHoleFairways(hole);
+    if (hole.fairways) {
+        hole.fairways.forEach(fw => {
+            if (fw.points) fw.points.forEach(p => includePt(p.x, p.z));
+        });
+    }
+
+    if (minX === Infinity) { minX = -150; maxX = 150; minZ = -150; maxZ = 150; }
+
+    let margin = 70;
+    minX = Math.max(-window.TERRAIN_SIZE/2, minX - margin);
+    maxX = Math.min(window.TERRAIN_SIZE/2, maxX + margin);
+    minZ = Math.max(-window.TERRAIN_SIZE/2, minZ - margin);
+    maxZ = Math.min(window.TERRAIN_SIZE/2, maxZ + margin);
+
+    let pxMinX = Math.max(0, Math.floor(((minX + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxX = Math.min(4096, Math.ceil(((maxX + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMinY = Math.max(0, Math.floor(((minZ + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxY = Math.min(4096, Math.ceil(((maxZ + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pw = pxMaxX - pxMinX;
+    let ph = pxMaxY - pxMinY;
+
+    if (pw > 0 && ph > 0) {
+        let ctx = window._arcadePCtx;
+        let imgData = ctx.getImageData(pxMinX, pxMinY, pw, ph);
+        let d = imgData.data;
+
+        function hexToRgb(h) {
+            if (!h) return [74, 120, 43];
+            h = h.replace('#', '');
+            return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)];
+        }
+        let fwRgb = hexToRgb(cfg.fairwayColor || '#7db952');
+        let semiRgb = hexToRgb(cfg.semiColor || '#6b9e3d');
+        let roughRgb = hexToRgb(roughColor);
+
+        for (let i = 0; i < d.length; i += 4) {
+            let r = d[i], g = d[i+1], b = d[i+2];
+            let dFw = (r - fwRgb[0])**2 + (g - fwRgb[1])**2 + (b - fwRgb[2])**2;
+            let dSemi = (r - semiRgb[0])**2 + (g - semiRgb[1])**2 + (b - semiRgb[2])**2;
+            if (dFw < 3200 || dSemi < 3200) {
+                d[i] = roughRgb[0];
+                d[i+1] = roughRgb[1];
+                d[i+2] = roughRgb[2];
+            }
+        }
+        ctx.putImageData(imgData, pxMinX, pxMinY);
+    }
+
+    // Re-apply legitimate fairway(s)
+    if (hole.fairways && hole.fairways.length > 0) {
+        window.applyFairwayPipeline(hole, false, true);
+    }
+    // Re-apply green on top
+    if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, true);
+    }
+
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+
+    updateActiveFairwayOutline();
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+    window.saveLevel();
+    window.showBuildToast(isSv ? '🧹 Hålets mark har rensats och återställts!' : '🧹 Hole terrain cleaned & restored!', '#4ade80');
+};
+
+// 6. Redraw shape: restores ground and puts points back in interactive drawing mode
+window.redrawSmartFairway = function(holeIndex, fairwayIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    if (fairwayIndex === undefined) fairwayIndex = hole.activeFairwayIndex;
+    if (fairwayIndex === null || fairwayIndex === undefined || !hole.fairways[fairwayIndex]) return;
+
+    window.saveUndoState();
+
+    let targetFd = hole.fairways[fairwayIndex];
+    let savedPoints = targetFd.points.map(p => ({ x: p.x, y: p.y, z: p.z }));
+
+    window.restoreFairwayBase(hole, true, targetFd);
+    if (typeof window.eraseFairwayTexture === 'function') {
+        window.eraseFairwayTexture(targetFd);
+    }
+
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+    }
+
+    // Remove from array and enter drawing mode with its points
+    hole.fairways.splice(fairwayIndex, 1);
+    if (hole.fairways.length > 0) {
+        hole.fairwayData = hole.fairways[0];
+    } else {
+        hole.fairwayData = null;
+    }
+    hole.activeFairwayIndex = null;
+
+    if (hole.fairways.length > 0) {
+        window.applyFairwayPipeline(hole, false, true);
+    } else if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+        window.applyGreenPipeline(hole, false, true);
+    }
+
+    smartGreenPoints = savedPoints.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
+    window._smartShapeClosed = false;
+    updateSmartGreenPreview();
+
+    updateActiveFairwayOutline();
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    window.showBuildToast(isSv ? '🔄 Justera form: Dra i punkterna eller lägg till nya' : '🔄 Adjust shape: Drag points or add new ones', '#38bdf8');
+};
+
+// 7. Scale entire fairway up or down symmetrically around its centroid
+window.scaleSmartFairway = function(holeIndex, factor, fairwayIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    if (fairwayIndex === undefined) fairwayIndex = hole.activeFairwayIndex;
+    if (fairwayIndex === null || fairwayIndex === undefined || !hole.fairways[fairwayIndex]) return;
+
+    let fd = hole.fairways[fairwayIndex];
+    if (!fd.points || fd.points.length < 3) return;
+
+    window.saveUndoState();
+
+    let cx = 0, cz = 0;
+    for(let pt of fd.points) { cx += pt.x; cz += pt.z; }
+    cx /= fd.points.length;
+    cz /= fd.points.length;
+
+    let maxDist = 0;
+    for(let pt of fd.points) {
+        let d = Math.sqrt((pt.x - cx)**2 + (pt.z - cz)**2);
+        if (d > maxDist) maxDist = d;
+    }
+    let newMaxDist = maxDist * factor;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    if (newMaxDist < 8.0) {
+        window.showBuildToast(isSv ? '⚠️ Fairwayen kan inte minskas mer' : '⚠️ Fairway cannot be scaled smaller', '#f59e0b');
+        return;
+    }
+    if (newMaxDist > 300.0) {
+        window.showBuildToast(isSv ? '⚠️ Fairwayen har nått maxstorlek' : '⚠️ Fairway has reached max size', '#f59e0b');
+        return;
+    }
+
+    // 1. Restore pristine ground before modifying points
+    window.restoreFairwayBase(hole, true, fd);
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+    }
+
+    // 2. Scale all control points outward or inward from centroid
+    for(let pt of fd.points) {
+        pt.x = cx + (pt.x - cx) * factor;
+        pt.z = cz + (pt.z - cz) * factor;
+    }
+
+    // 3. Capture clean snapshot for new scaled bounding box
+    let margin = (fd.semiRoughWidth || 2.0) + (fd.roughEnabled !== false ? (fd.roughWidth || 5.0) : 0) + 12;
+    let snap = window.captureFairwaySnapshot(hole, fd.points, margin);
+    fd.baseElevation = snap.baseElevation;
+    fd.bbox = snap.bbox;
+    fd.origHeights = snap.origHeights;
+    fd.origCanvasPixels = snap.origCanvasPixels;
+
+    // 4. Re-apply pipeline with exact same parameters
+    window.applyFairwayPipeline(hole, false, true, fd);
+    updateActiveFairwayOutline();
+
+    if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+
+    let area = 0;
+    if (fd.points && fd.points.length >= 3) {
+        for (let i = 0, j = fd.points.length - 1; i < fd.points.length; j = i++) {
+            area += (fd.points[j].x + fd.points[i].x) * (fd.points[j].z - fd.points[i].z);
+        }
+        area = Math.round(Math.abs(area / 2));
+    }
+    let fwNum = fairwayIndex + 1;
+    let toastMsg = factor > 1
+        ? (isSv ? `➕ Fairway ${fwNum} utökad till ~${area} m²` : `➕ Fairway ${fwNum} scaled up to ~${area} m²`)
+        : (isSv ? `➖ Fairway ${fwNum} minskad till ~${area} m²` : `➖ Fairway ${fwNum} scaled down to ~${area} m²`);
+    window.showBuildToast(toastMsg, '#4ade80');
+};
+
+// 8. Move entire fairway to new center coordinates
+window.moveSmartFairway = function(holeIndex, newCenterX, newCenterZ, fairwayIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+    if (fairwayIndex === undefined) fairwayIndex = hole.activeFairwayIndex;
+    if (fairwayIndex === null || fairwayIndex === undefined || !hole.fairways[fairwayIndex]) return;
+
+    let fd = hole.fairways[fairwayIndex];
+    if (!fd.points || fd.points.length < 3) return;
+
+    window.saveUndoState();
+
+    let oldCx = 0, oldCz = 0;
+    for(let pt of fd.points) { oldCx += pt.x; oldCz += pt.z; }
+    oldCx /= fd.points.length;
+    oldCz /= fd.points.length;
+
+    let dx = newCenterX - oldCx;
+    let dz = newCenterZ - oldCz;
+
+    // Restore old ground 100% clean
+    window.restoreFairwayBase(hole, true, fd);
+
+    // Shift all points
+    for(let pt of fd.points) {
+        pt.x += dx;
+        pt.z += dz;
+    }
+
+    // Capture new snapshot
+    let margin = (fd.semiRoughWidth || 2.0) + (fd.roughEnabled !== false ? (fd.roughWidth || 5.0) : 0) + 12;
+    let snap = window.captureFairwaySnapshot(hole, fd.points, margin);
+    fd.baseElevation = snap.baseElevation;
+    fd.bbox = snap.bbox;
+    fd.origHeights = snap.origHeights;
+    fd.origCanvasPixels = snap.origCanvasPixels;
+
+    window.applyFairwayPipeline(hole, false, true, fd);
+    updateActiveFairwayOutline();
+
+    if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let fwNum = fairwayIndex + 1;
+    window.showBuildToast(isSv ? `✥ Fairway ${fwNum} flyttad!` : `✥ Fairway ${fwNum} moved!`, '#4ade80');
+};
+
+// 9. Activate "Move Fairway" picking mode
+window.activateMoveFairwayMode = function() {
+    window._movingFairwayMode = true;
+    window._movingGreenMode = false;
+    window._movingFlagMode = false;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    let fwNum = (hole && hole.activeFairwayIndex !== null && hole.activeFairwayIndex !== undefined) ? (hole.activeFairwayIndex + 1) : '';
+    let msg = isSv 
+        ? (`📍 Klicka på kartan där Fairway ${fwNum} ska placeras (Esc för att avbryta)`) 
+        : (`📍 Click on map to place Fairway ${fwNum} (Esc to cancel)`);
+    window.showBuildToast(msg, '#f59e0b');
+};
+
+// 10. Initial Fairway Build triggered from UI button
+window.executeSmartFairway = function() {
+    if(smartGreenPoints.length < 3) return;
+    window.saveUndoState();
+
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole) return;
+    ensureHoleFairways(hole);
+
+    let difficulty = window._fairwayDifficulty || 'FLAT';
+    let mowPattern = window._smartMowPattern || 'SOLID';
+
+    let srSlider = document.getElementById('sf-semirough-width');
+    let semiRoughWidth = srSlider ? parseFloat(srSlider.value) : 2.0;
+
+    let roughCb = document.getElementById('sf-rough-cb');
+    let roughEnabled = roughCb ? roughCb.checked : true;
+    let roughSlider = document.getElementById('sf-rough-width');
+    let roughWidth = (roughEnabled && roughSlider) ? parseFloat(roughSlider.value) : 0.0;
+
+    let sharpSlider = document.getElementById('sg-edge-sharpness');
+    let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
+
+    let margin = semiRoughWidth + (roughEnabled ? roughWidth : 0) + 12;
+    let snap = window.captureFairwaySnapshot(hole, smartGreenPoints, margin);
+
+    let newFairway = {
+        id: 'fw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        points: smartGreenPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
+        baseElevation: snap.baseElevation,
+        bbox: snap.bbox,
+        origHeights: snap.origHeights,
+        origCanvasPixels: snap.origCanvasPixels,
+
+        difficulty: difficulty,
+        semiRoughWidth: semiRoughWidth,
+        roughWidth: roughWidth,
+        roughEnabled: roughEnabled,
+        mowPattern: mowPattern,
+        edgeSharpness: sharpness,
+        seedOffsetX: (Math.random() - 0.5) * 200,
+        seedOffsetZ: (Math.random() - 0.5) * 200
+    };
+
+    hole.fairways.push(newFairway);
+    hole.activeFairwayIndex = hole.fairways.length - 1;
+    hole.fairwayData = hole.fairways[0]; // Mirror primary for backward compatibility
+
+    window.applyFairwayPipeline(hole, true, true, newFairway);
     clearSmartGreen();
+    updateActiveFairwayOutline();
+
+    window.saveLevel();
+    if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let fwNum = hole.fairways.length;
+    window.showBuildToast(isSv ? (`✅ Fairway ${fwNum} byggd!`) : (`✅ Fairway ${fwNum} built!`), '#4ade80');
+
+    window._smartBuildCooldown = true;
+    setTimeout(function() { window._smartBuildCooldown = false; }, 500);
 };
 
 // === SMART TEE: Flat Tee Box + Auto-Place Markers ===
@@ -1474,106 +3002,49 @@ window.executeSplinePath = function(pathType) {
     window.clearSpline();
 };
 
-window.executeSplineSmartGreen = function() {
-    if(smartGreenPoints.length < 3) return;
-    window.saveUndoState();
+// === PARAMETRIC LIVE GREEN ENGINE ===
 
-    let cfg = window.CURRENT_BIOME_CONFIG;
-    let greenColor = cfg.greenColor || '#98ce68';
-    let foregreenColor = cfg.foregreenColor || '#8bc45d';
-    let difficulty = window.greenDifficulty || 'FLAT';
-    
-    // Random seed offset for unique contours per green build
-    window._sgSeedOffsetX = (Math.random() - 0.5) * 200;
-    window._sgSeedOffsetZ = (Math.random() - 0.5) * 200;
-
-    // Get foregreen width from slider (default 1.0m)
-    let fgSlider = document.getElementById('sg-foregreen-width');
-    let foregreenWidth = fgSlider ? parseFloat(fgSlider.value) : 1.0;
-
-    // Get surround hill settings (only when Raised Green is toggled on)
-    let surroundHeight = 0;
-    let surroundRadius = 8;
-    if (window._raisedGreenActive) {
-        let shSlider = document.getElementById('sg-surround-height');
-        surroundHeight = shSlider ? parseFloat(shSlider.value) : 0;
-        let srSlider = document.getElementById('sg-surround-radius');
-        surroundRadius = srSlider ? parseFloat(srSlider.value) : 8;
+// Helper: Point-in-polygon test (ray casting)
+function pointInPolygon(px, pz, polyPts) {
+    let inside = false;
+    for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+        let xi = polyPts[i].x, zi = polyPts[i].z;
+        let xj = polyPts[j].x, zj = polyPts[j].z;
+        if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
+            inside = !inside;
+        }
     }
+    return inside;
+}
 
-    // Get tilt settings (auto-enabled when Raised Green is on + aimPoint exists)
-    let tiltEnabled = false;
-    let tiltPct = 0.02;
-    let hole = window.courseHoles[window.currentHoleIndex];
-    if (window._raisedGreenActive && hole && hole.aimPoint) {
-        tiltEnabled = true;
-        let tiltSlider = document.getElementById('sg-tilt-pct');
-        tiltPct = tiltSlider ? parseFloat(tiltSlider.value) / 100 : 0.02;
+// Helper: Distance from point to nearest polygon edge
+function distToPolygon(px, pz, polyPts) {
+    let minDist = Infinity;
+    for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+        let ax = polyPts[j].x, az = polyPts[j].z;
+        let bx = polyPts[i].x, bz = polyPts[i].z;
+        let dx = bx - ax, dz = bz - az;
+        let len2 = dx*dx + dz*dz;
+        let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
+        let projX = ax + t*dx, projZ = az + t*dz;
+        let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
+        if(d < minDist) minDist = d;
     }
+    return minDist;
+}
 
-    // Build closed curve from points using closed=true for smooth loop at first point
-    let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
-    let numSamples = Math.max(200, smartGreenPoints.length * 40);
-    let densePts = curve.getPoints(numSamples);
+// Helper: Generate dense smooth curve points from control points
+function getDenseGreenPoints(points) {
+    let pts3 = points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
+    let curve = new THREE.CatmullRomCurve3(pts3, true);
+    let numSamples = Math.max(200, points.length * 40);
+    return curve.getPoints(numSamples);
+}
 
-    // === 1. PAINT: Foregreen ring (expanded polygon) + Green fill ===
-    window._arcadePCtx.save();
-
-    // Edge sharpness: 100 = pixel-perfect sharp (default), 0 = soft feathered edge
-    let sharpSlider = document.getElementById('sg-edge-sharpness');
-    let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
-    
-    if(sharpness < 100) {
-        // Soft edge: subtle blur (max 6px on 4096px canvas = ~0.15% feather)
-        let blurPx = Math.round((100 - sharpness) * 0.06); // 0-6px blur range
-        if(blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
-    }
-
-    // Draw foregreen ring: uniform-width offset polygon
-    if(foregreenWidth > 0) {
-        let expandedPts = offsetPolygon(densePts, foregreenWidth);
-        window._arcadePCtx.beginPath();
-        expandedPts.forEach((pt, i) => {
-            let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            if(i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-            else window._arcadePCtx.lineTo(pxX, pxY);
-        });
-        window._arcadePCtx.closePath();
-        window._arcadePCtx.fillStyle = foregreenColor;
-        window._arcadePCtx.fill();
-    }
-
-    // Draw green fill (inner polygon, on top)
-    window._arcadePCtx.beginPath();
-    densePts.forEach((pt, i) => {
-        let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-        let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-        if(i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-        else window._arcadePCtx.lineTo(pxX, pxY);
-    });
-    window._arcadePCtx.closePath();
-    window._arcadePCtx.fillStyle = greenColor;
-    window._arcadePCtx.fill();
-
-    // === MOWING PATTERN OVERLAY ===
-    let mowPattern = window._smartMowPattern || 'SOLID';
-    if (mowPattern !== 'SOLID') {
-        paintMowingPattern(window._arcadePCtx, densePts, greenColor, mowPattern);
-    }
-
-    window._arcadePCtx.filter = 'none'; // Reset filter
-
-    window._arcadePCtx.restore();
-    window._arcadeMapTex.needsUpdate = true;
-    window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
-    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
-
-    // === 2. TERRAIN SCULPTING: Flatten + Difficulty Contours ===
-    let positions = window._arcadePlaneGeo.attributes.position.array;
-    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
-
-    // Build bounding box for early exit
+// Capture baseline snapshot of natural terrain & canvas before green is built
+window.captureGreenSnapshot = function(hole, points, margin) {
+    margin = Math.max(25, margin || 25);
+    let densePts = getDenseGreenPoints(points);
     let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
     for(let pt of densePts) {
         if(pt.x < pathMinX) pathMinX = pt.x;
@@ -1581,61 +3052,192 @@ window.executeSplineSmartGreen = function() {
         if(pt.z < pathMinZ) pathMinZ = pt.z;
         if(pt.z > pathMaxZ) pathMaxZ = pt.z;
     }
-    let margin = foregreenWidth + Math.max(8, surroundRadius + 2); // Include surround hill area
 
+    let step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
     let gxStart = Math.max(0, Math.floor((pathMinX - margin + window.TERRAIN_SIZE/2) / step));
     let gxEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxX + margin + window.TERRAIN_SIZE/2) / step));
     let gzStart = Math.max(0, Math.floor((pathMinZ - margin + window.TERRAIN_SIZE/2) / step));
     let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + margin + window.TERRAIN_SIZE/2) / step));
+    let gWidth = gxEnd - gxStart + 1;
+    let gHeight = gzEnd - gzStart + 1;
 
-    // Calculate average height of spline points as base plateau height
-    let baseH = 0;
-    for(let pt of smartGreenPoints) {
-        let surf = window.localGetTerrainAt(pt.x, -pt.z);
-        baseH += surf ? surf.z : 0;
+    // Texture snapshot only needs enough margin for foregreen ring (max 3m) + blur, avoiding surrounding 25m terrain overwrites
+    let texMargin = 3.5;
+    let pxMinX = Math.max(0, Math.floor(((pathMinX - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxX = Math.min(4096, Math.ceil(((pathMaxX + texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMinY = Math.max(0, Math.floor(((pathMinZ - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pxMaxY = Math.min(4096, Math.ceil(((pathMaxZ + texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
+    let pw = Math.max(1, pxMaxX - pxMinX);
+    let ph = Math.max(1, pxMaxY - pxMinY);
+
+    let positions = window._arcadePlaneGeo.attributes.position.array;
+    let origHeights = new Float32Array(gWidth * gHeight);
+    for(let gz = gzStart; gz <= gzEnd; gz++) {
+        for(let gx = gxStart; gx <= gxEnd; gx++) {
+            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+            let oi = (gz - gzStart) * gWidth + (gx - gxStart);
+            origHeights[oi] = positions[idx*3+2];
+        }
     }
-    baseH /= smartGreenPoints.length;
 
-    // Point-in-polygon test (ray casting)
-    function pointInPolygon(px, pz, polyPts) {
-        let inside = false;
-        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
-            let xi = polyPts[i].x, zi = polyPts[i].z;
-            let xj = polyPts[j].x, zj = polyPts[j].z;
-            if(((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) {
-                inside = !inside;
+    let origCanvasPixels = null;
+    if (window._arcadePCtx) {
+        origCanvasPixels = window._arcadePCtx.getImageData(pxMinX, pxMinY, pw, ph);
+    }
+
+    let baseH = 0;
+    for(let pt of points) {
+        let h = (typeof window.getTerrainHeight === 'function')
+            ? window.getTerrainHeight(pt.x, pt.z)
+            : (window.localGetTerrainAt ? (window.localGetTerrainAt(pt.x, -pt.z) || {}).z || 0 : 0);
+        baseH += h;
+    }
+    baseH /= Math.max(1, points.length);
+
+    return {
+        baseElevation: baseH,
+        bbox: {
+            gxStart, gxEnd, gzStart, gzEnd,
+            gWidth, gHeight,
+            pxMinX, pxMaxX, pxMinY, pxMaxY,
+            pw, ph, margin
+        },
+        origHeights: origHeights,
+        origCanvasPixels: origCanvasPixels
+    };
+};
+
+// Restore pristine baseline ground & texture before applying modified parameters
+window.restoreGreenBase = function(hole, restoreTexture) {
+    if (restoreTexture === undefined) restoreTexture = true;
+    if (!hole || !hole.greenData || !hole.greenData.bbox) return;
+    let gd = hole.greenData;
+
+    // Restore vertex heights ONLY within green's actual influence radius (never flatten surrounding bunkers, hills, or water)
+    if (gd.origHeights && window._arcadePlaneGeo) {
+        let positions = window._arcadePlaneGeo.attributes.position.array;
+        let gWidth = gd.bbox.gWidth;
+        let densePts = (typeof getDenseGreenPoints === 'function' && gd.points) ? getDenseGreenPoints(gd.points) : gd.points;
+        let fgWidth = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
+        let blendDist = gd.blendDistance !== undefined ? gd.blendDistance : 8.0;
+        let maxInfluence = fgWidth + blendDist + 2.5;
+
+        for(let gz = gd.bbox.gzStart; gz <= gd.bbox.gzEnd; gz++) {
+            for(let gx = gd.bbox.gxStart; gx <= gd.bbox.gxEnd; gx++) {
+                let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+
+                // Protect any terrain outside the green's blend zone (bunkers, hills, water)
+                if (densePts && densePts.length >= 3 && typeof pointInPolygon === 'function' && typeof distToPolygon === 'function') {
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+                    let isInside = pointInPolygon(vx, vz, densePts);
+                    let dist = distToPolygon(vx, vz, densePts);
+                    let signedDist = isInside ? -dist : dist;
+                    if (signedDist > maxInfluence) continue;
+                }
+
+                let oi = (gz - gd.bbox.gzStart) * gWidth + (gx - gd.bbox.gxStart);
+                positions[idx*3+2] = gd.origHeights[oi];
             }
         }
-        return inside;
     }
 
-    // Distance from point to nearest polygon edge
-    function distToPolygon(px, pz, polyPts) {
-        let minDist = Infinity;
-        for(let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
-            let ax = polyPts[j].x, az = polyPts[j].z;
-            let bx = polyPts[i].x, bz = polyPts[i].z;
-            let dx = bx - ax, dz = bz - az;
-            let len2 = dx*dx + dz*dz;
-            let t = len2 > 0 ? Math.max(0, Math.min(1, ((px-ax)*dx + (pz-az)*dz) / len2)) : 0;
-            let projX = ax + t*dx, projZ = az + t*dz;
-            let d = Math.sqrt((px-projX)**2 + (pz-projZ)**2);
-            if(d < minDist) minDist = d;
+    // Restore 2D canvas texture patch only if texture update requested
+    if (restoreTexture && gd.origCanvasPixels && window._arcadePCtx) {
+        window._arcadePCtx.putImageData(gd.origCanvasPixels, gd.bbox.pxMinX, gd.bbox.pxMinY);
+    }
+};
+
+// Apply full green pipeline (Painting + Sculpting + Flag update)
+window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
+    if (!hole || !hole.greenData) return;
+    let gd = hole.greenData;
+    if (updateTexture === undefined) updateTexture = true;
+
+    // 1. Reset ground vertex heights to pristine baseline (do NOT overwrite 2D canvas with stale bitmap rectangle!)
+    window.restoreGreenBase(hole, false);
+
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let greenColor = cfg.greenColor || '#98ce68';
+    let foregreenColor = cfg.foregreenColor || '#8bc45d';
+
+    let densePts = getDenseGreenPoints(gd.points);
+
+    // === PAINT PASS ===
+    if (updateTexture && window._arcadePCtx) {
+        window._arcadePCtx.save();
+
+        let sharpness = gd.edgeSharpness !== undefined ? gd.edgeSharpness : 100;
+        if (sharpness < 100) {
+            let blurPx = Math.round((100 - sharpness) * 0.06);
+            if (blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
         }
-        return minDist;
+
+        // Draw foregreen ring
+        let fgWidth = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
+        if (fgWidth > 0) {
+            let expandedPts = offsetPolygon(densePts, fgWidth);
+            window._arcadePCtx.beginPath();
+            expandedPts.forEach((pt, i) => {
+                let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
+                else window._arcadePCtx.lineTo(pxX, pxY);
+            });
+            window._arcadePCtx.closePath();
+            window._arcadePCtx.fillStyle = foregreenColor;
+            window._arcadePCtx.fill();
+        }
+
+        // Draw green fill
+        window._arcadePCtx.beginPath();
+        densePts.forEach((pt, i) => {
+            let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+            let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+            if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
+            else window._arcadePCtx.lineTo(pxX, pxY);
+        });
+        window._arcadePCtx.closePath();
+        window._arcadePCtx.fillStyle = greenColor;
+        window._arcadePCtx.fill();
+
+        // Mowing pattern overlay
+        let mowPattern = gd.mowPattern || 'SOLID';
+        if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
+            paintMowingPattern(window._arcadePCtx, densePts, greenColor, mowPattern);
+        }
+
+        window._arcadePCtx.filter = 'none';
+        window._arcadePCtx.restore();
+
+        if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        if (typeof window.debounceRebuildRoughMask === 'function') {
+            window.debounceRebuildRoughMask(500);
+        } else if (typeof window.rebuildRoughMask === 'function') {
+            window.rebuildRoughMask();
+        }
     }
 
-    // Compute tilt direction vector (from centroid toward aimPoint)
-    let tiltDirX = 0, tiltDirZ = 0, tiltMaxDist = 1;
+    // === SCULPT PASS ===
+    let positions = window._arcadePlaneGeo.attributes.position.array;
+    let baseH = gd.baseElevation;
+    let elevationOffset = gd.elevationOffset || 0.0;
+    let blendDistance = gd.blendDistance !== undefined ? gd.blendDistance : 8.0;
+    let fgWidth = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
+
     let polyCentX = 0, polyCentZ = 0;
     for (let p of densePts) { polyCentX += p.x; polyCentZ += p.z; }
     polyCentX /= densePts.length; polyCentZ /= densePts.length;
+
+    // Tilt calculation
+    let tiltDirX = 0, tiltDirZ = 0, tiltMaxDist = 1;
+    let tiltEnabled = !!(gd.tiltAim && hole.aimPoint);
     if (tiltEnabled) {
         tiltDirX = hole.aimPoint.x - polyCentX;
         tiltDirZ = hole.aimPoint.z - polyCentZ;
         let len = Math.sqrt(tiltDirX * tiltDirX + tiltDirZ * tiltDirZ);
         if (len > 0) { tiltDirX /= len; tiltDirZ /= len; }
-        // Max distance from centroid to any polygon edge (for scaling)
         tiltMaxDist = 0;
         for (let p of densePts) {
             let d = (p.x - polyCentX) * tiltDirX + (p.z - polyCentZ) * tiltDirZ;
@@ -1644,26 +3246,14 @@ window.executeSplineSmartGreen = function() {
         if (tiltMaxDist < 1) tiltMaxDist = 1;
     }
 
-    // Build expanded foregreen polygon for surround hill start
-    let expandedFG = foregreenWidth > 0 ? offsetPolygon(densePts, foregreenWidth) : densePts;
+    let gxStart = gd.bbox.gxStart;
+    let gxEnd = gd.bbox.gxEnd;
+    let gzStart = gd.bbox.gzStart;
+    let gzEnd = gd.bbox.gzEnd;
+    let gWidth = gd.bbox.gWidth;
+    let origHeights = gd.origHeights;
 
-    // === PASS 1: EXTENDED PLATEAU FLATTENING ===
-    // We flatten the green + foregreen, and taper down to original terrain over a transition zone
-    let taperDist = 5.0;
-    if (window._raisedGreenActive && surroundHeight > 0) {
-        taperDist = surroundRadius;
-    }
-    
-    // Save original heights of the bounding box before modifying
-    let origHeights = new Float32Array((gxEnd - gxStart + 1) * (gzEnd - gzStart + 1));
-    for(let gz = gzStart; gz <= gzEnd; gz++) {
-        for(let gx = gxStart; gx <= gxEnd; gx++) {
-            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-            let oi = (gz - gzStart) * (gxEnd - gxStart + 1) + (gx - gxStart);
-            origHeights[oi] = positions[idx*3+2];
-        }
-    }
-
+    // PASS 1: Plateau Flattening / Elevation
     for(let gz = gzStart; gz <= gzEnd; gz++) {
         for(let gx = gxStart; gx <= gxEnd; gx++) {
             let idx = gz * (window.TERRAIN_SEGS+1) + gx;
@@ -1674,28 +3264,23 @@ window.executeSplineSmartGreen = function() {
             let distEdge = distToPolygon(vx, vz, densePts);
             let signedDist = isInside ? -distEdge : distEdge;
 
-            // Skip vertices too far outside
-            if (signedDist > foregreenWidth + taperDist) continue;
+            if (signedDist > fgWidth + blendDistance) continue;
 
-            // Define target height on the plateau (including tilt if active)
             let tiltVal = 0;
             if (tiltEnabled) {
                 let proj = (vx - polyCentX) * tiltDirX + (vz - polyCentZ) * tiltDirZ;
-                tiltVal = (proj / tiltMaxDist) * tiltMaxDist * tiltPct;
+                tiltVal = (proj / tiltMaxDist) * tiltMaxDist * (gd.tiltPct || 0.02);
             }
-            let targetH = baseH + surroundHeight + tiltVal;
+            let targetH = baseH + elevationOffset + tiltVal;
 
-            let oi = (gz - gzStart) * (gxEnd - gxStart + 1) + (gx - gxStart);
+            let oi = (gz - gzStart) * gWidth + (gx - gxStart);
             let originalH = origHeights[oi];
 
-            // Calculate flattening influence based on distance
             let influence = 0;
-            if (signedDist <= foregreenWidth) {
-                // Inside green and foregreen: 100% flattened to plateau
+            if (signedDist <= fgWidth) {
                 influence = 1.0;
-            } else if (signedDist <= foregreenWidth + taperDist) {
-                // Taper zone outside foregreen: smooth fade to original terrain
-                let t = (signedDist - foregreenWidth) / taperDist;
+            } else if (signedDist <= fgWidth + blendDistance) {
+                let t = (signedDist - fgWidth) / blendDistance;
                 influence = 1.0 - t;
                 influence = influence * influence * (3.0 - 2.0 * influence); // cubic smoothstep
             }
@@ -1706,8 +3291,7 @@ window.executeSplineSmartGreen = function() {
         }
     }
 
-    // === PASS 2: AUTO-SMOOTH PLATEAU EDGES ===
-    // Run unbiased Laplacian smoothing on the transition zone (creases at plateau edge and taper end)
+    // PASS 2: Laplacian Edge Smoothing
     let _smoothStride = window.TERRAIN_SEGS + 1;
     let smGxStart = Math.max(0, gxStart - 2);
     let smGxEnd = Math.min(window.TERRAIN_SEGS, gxEnd + 2);
@@ -1715,11 +3299,8 @@ window.executeSplineSmartGreen = function() {
     let smGzEnd = Math.min(window.TERRAIN_SEGS, gzEnd + 2);
 
     for(let smPass = 0; smPass < 5; smPass++) {
-        // Copy current heights to a temp buffer for unbiased smoothing
         let tempHeights = new Float32Array(positions.length / 3);
-        for (let i = 0; i < tempHeights.length; i++) {
-            tempHeights[i] = positions[i*3 + 2];
-        }
+        for (let i = 0; i < tempHeights.length; i++) tempHeights[i] = positions[i*3 + 2];
 
         for(let gz = smGzStart; gz <= smGzEnd; gz++) {
             for(let gx = smGxStart; gx <= smGxEnd; gx++) {
@@ -1731,8 +3312,7 @@ window.executeSplineSmartGreen = function() {
                 let distEdge = distToPolygon(vx, vz, densePts);
                 let signedDist = isInside ? -distEdge : distEdge;
 
-                // Smooth from 2.0m inside green to 2.0m outside the taper zone
-                if (signedDist > -2.0 && signedDist < foregreenWidth + taperDist + 2.0) {
+                if (signedDist > -2.0 && signedDist < fgWidth + blendDistance + 2.0) {
                     let nCount = 0;
                     let nSum = 0;
                     if (gz > 0) { nSum += tempHeights[(gz-1)*_smoothStride + gx]; nCount++; }
@@ -1750,177 +3330,554 @@ window.executeSplineSmartGreen = function() {
         }
     }
 
-    // === PASS 3: APPLY GREEN CONTOURS & UNDULATIONS ===
-    // Add difficulty-based hills inside the green polygon, blending to 0 at green boundary
-    for(let gz = gzStart; gz <= gzEnd; gz++) {
-        for(let gx = gxStart; gx <= gxEnd; gx++) {
-            let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-            let vx = positions[idx*3];
-            let vz = -positions[idx*3+1];
+    // PASS 3: Difficulty Contours
+    let difficulty = gd.difficulty || 'FLAT';
+    if (difficulty !== 'FLAT') {
+        let sOffX = gd.seedOffsetX || 0;
+        let sOffZ = gd.seedOffsetZ || 0;
+        for(let gz = gzStart; gz <= gzEnd; gz++) {
+            for(let gx = gxStart; gx <= gxEnd; gx++) {
+                let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                let vx = positions[idx*3];
+                let vz = -positions[idx*3+1];
 
-            let isInside = pointInPolygon(vx, vz, densePts);
-            if (!isInside) continue;
+                let isInside = pointInPolygon(vx, vz, densePts);
+                if (!isInside) continue;
 
-            let undulation = 0;
-            let seedX = vx + window._sgSeedOffsetX;
-            let seedZ = vz + window._sgSeedOffsetZ;
+                let undulation = 0;
+                let seedX = vx + sOffX;
+                let seedZ = vz + sOffZ;
 
-            if(difficulty === 'EASY') {
-                undulation += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.10;
-            } else if(difficulty === 'MED') {
-                undulation += Math.sin(seedX * 0.12) * Math.cos(seedZ * 0.12) * 0.18;
-                undulation += Math.sin(seedX * 0.07 + seedZ * 0.05) * 0.08;
-            } else if(difficulty === 'HARD') {
-                undulation += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.12) * 0.22
-                            + Math.sin(seedZ * 0.25 + seedX * 0.08) * 0.06
-                            + Math.cos(seedX * 0.20) * Math.sin(seedZ * 0.18) * 0.05;
-            }
+                if(difficulty === 'EASY') {
+                    undulation += Math.sin(seedX * 0.1) * Math.cos(seedZ * 0.1) * 0.10;
+                } else if(difficulty === 'MED') {
+                    undulation += Math.sin(seedX * 0.12) * Math.cos(seedZ * 0.12) * 0.18;
+                    undulation += Math.sin(seedX * 0.07 + seedZ * 0.05) * 0.08;
+                } else if(difficulty === 'HARD') {
+                    undulation += Math.sin(seedX * 0.15) * Math.cos(seedZ * 0.12) * 0.22
+                                + Math.sin(seedZ * 0.25 + seedX * 0.08) * 0.06
+                                + Math.cos(seedX * 0.20) * Math.sin(seedZ * 0.18) * 0.05;
+                }
 
-            // Blend undulation near green boundary to make it fade out at foregreen edge
-            let distEdge = distToPolygon(vx, vz, densePts);
-            let blendWidth = 2.5; 
-            if (distEdge < blendWidth) {
-                let t = distEdge / blendWidth;
-                let smoothT = t * t * (3 - 2 * t);
-                positions[idx*3+2] += undulation * smoothT;
-            } else {
-                positions[idx*3+2] += undulation;
+                let distEdge = distToPolygon(vx, vz, densePts);
+                let blendWidth = 2.5; 
+                if (distEdge < blendWidth) {
+                    let t = distEdge / blendWidth;
+                    let smoothT = t * t * (3 - 2 * t);
+                    positions[idx*3+2] += undulation * smoothT;
+                } else {
+                    positions[idx*3+2] += undulation;
+                }
             }
         }
     }
 
+    // Sync mesh geometry
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
     window._arcadePlaneGeo.computeVertexNormals();
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
-    // Green was painted — refresh chunk LOD detection
-    setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 200);
+    setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 150);
     window.snapObjectsToGround();
 
-    // Refresh overlays
-    if(window.slopeOverlayActive) window.updateSlopeOverlay();
-    if(window.contourLinesActive) window.updateContourLines();
-    if(window.elevationHeatmapActive) window.updateElevationHeatmap();
+    // === FLAG PLACEMENT & HEIGHT SYNC ===
+    if (isInitial || !hole.flag) {
+        let cx = polyCentX, cz = polyCentZ;
+        let flagX = cx, flagZ = cz;
 
+        if (!pointInPolygon(cx, cz, densePts) || distToPolygon(cx, cz, densePts) < 2.5) {
+            let candidates = [];
+            if (pointInPolygon(cx, cz, densePts)) candidates.push({ x: cx, z: cz });
 
-    // Auto-place Flag at centroid (or fallback inside if centroid is outside/near boundary)
-    let cx = 0, cz = 0;
-    for(let pt of smartGreenPoints) { cx += pt.x; cz += pt.z; }
-    cx /= smartGreenPoints.length;
-    cz /= smartGreenPoints.length;
-
-    // Helper functions for Point-in-Polygon (PIP) and Distance-to-Boundary using densePts (smooth curve)
-    function isPointInGreenPoly(x, z, poly) {
-        let inside = false;
-        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-            let xi = poly[i].x, zi = poly[i].z;
-            let xj = poly[j].x, zj = poly[j].z;
-            if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) {
-                inside = !inside;
+            let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+            for (let pt of densePts) {
+                if (pt.x < minX) minX = pt.x; if (pt.x > maxX) maxX = pt.x;
+                if (pt.z < minZ) minZ = pt.z; if (pt.z > maxZ) maxZ = pt.z;
             }
-        }
-        return inside;
-    }
+            let steps = 15;
+            for (let ix = 0; ix <= steps; ix++) {
+                let px = minX + (maxX - minX) * (ix / steps);
+                for (let iz = 0; iz <= steps; iz++) {
+                    let pz = minZ + (maxZ - minZ) * (iz / steps);
+                    if (pointInPolygon(px, pz, densePts)) candidates.push({ x: px, z: pz });
+                }
+            }
+            for (let pt of gd.points) {
+                let mx = (cx + pt.x) / 2, mz = (cz + pt.z) / 2;
+                if (pointInPolygon(mx, mz, densePts)) candidates.push({ x: mx, z: mz });
+            }
 
-    function distToGreenBoundary(px, pz, poly) {
-        let minDist = Infinity;
-        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-            let ax = poly[j].x, az = poly[j].z;
-            let bx = poly[i].x, bz = poly[i].z;
-            let dx = bx - ax, dz = bz - az;
-            let len2 = dx * dx + dz * dz;
-            let t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / len2)) : 0;
-            let projx = ax + t * dx;
-            let projz = az + t * dz;
-            let dist = Math.hypot(px - projx, pz - projz);
-            if (dist < minDist) minDist = dist;
-        }
-        return minDist;
-    }
-
-    let flagX = cx;
-    let flagZ = cz;
-
-    // Verify if centroid is inside and sufficiently far from green boundary (at least 2.5 meters)
-    if (!isPointInGreenPoly(cx, cz, densePts) || distToGreenBoundary(cx, cz, densePts) < 2.5) {
-        let candidates = [];
-
-        // Candidate 1: Centroid (if inside, even if close to boundary)
-        if (isPointInGreenPoly(cx, cz, densePts)) {
-            candidates.push({ x: cx, z: cz });
+            let bestCandidate = null, maxDist = -1;
+            for (let cand of candidates) {
+                let d = distToPolygon(cand.x, cand.z, densePts);
+                if (d > maxDist) { maxDist = d; bestCandidate = cand; }
+            }
+            if (bestCandidate) { flagX = bestCandidate.x; flagZ = bestCandidate.z; }
         }
 
-        // Candidates 2: 15x15 uniform grid inside bounding box of green
-        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-        for (let pt of densePts) {
-            if (pt.x < minX) minX = pt.x;
-            if (pt.x > maxX) maxX = pt.x;
-            if (pt.z < minZ) minZ = pt.z;
-            if (pt.z > maxZ) maxZ = pt.z;
-        }
+        let cy = (typeof window.getTerrainHeight === 'function')
+            ? window.getTerrainHeight(flagX, flagZ)
+            : (window.localGetTerrainAt ? (window.localGetTerrainAt(flagX, -flagZ) || {}).z || (baseH + elevationOffset) : (baseH + elevationOffset));
 
-        let steps = 15;
-        for (let ix = 0; ix <= steps; ix++) {
-            let px = minX + (maxX - minX) * (ix / steps);
-            for (let iz = 0; iz <= steps; iz++) {
-                let pz = minZ + (maxZ - minZ) * (iz / steps);
-                if (isPointInGreenPoly(px, pz, densePts)) {
-                    candidates.push({ x: px, z: pz });
+        if (hole.flagMesh && window._arcadeScene) window._arcadeScene.remove(hole.flagMesh);
+        hole.flag = { x: flagX, y: cy, z: flagZ };
+        hole.flagMesh = window.createFlagObject(flagX, cy, flagZ);
+        if (!hole.pins) hole.pins = {};
+        hole.pins.easy = { ...hole.flag };
+        hole.pins.medium = { ...hole.flag };
+        hole.pins.hard = { ...hole.flag };
+    } else {
+        let cy = (typeof window.getTerrainHeight === 'function')
+            ? window.getTerrainHeight(hole.flag.x, hole.flag.z)
+            : (window.localGetTerrainAt ? (window.localGetTerrainAt(hole.flag.x, -hole.flag.z) || {}).z || (baseH + elevationOffset) : (baseH + elevationOffset));
+        hole.flag.y = cy;
+        if (hole.flagMesh) hole.flagMesh.position.y = cy;
+        if (hole.pins) {
+            for (let p in hole.pins) {
+                if (hole.pins[p]) {
+                    let psurf = (typeof window.getTerrainHeight === 'function')
+                        ? window.getTerrainHeight(hole.pins[p].x, hole.pins[p].z)
+                        : (window.localGetTerrainAt ? (window.localGetTerrainAt(hole.pins[p].x, -hole.pins[p].z) || {}).z || cy : cy);
+                    hole.pins[p].y = psurf;
                 }
             }
         }
+    }
 
-        // Candidates 3: Midpoints between centroid and each user-clicked point
-        for (let pt of smartGreenPoints) {
-            let mx = (cx + pt.x) / 2;
-            let mz = (cz + pt.z) / 2;
-            if (isPointInGreenPoly(mx, mz, densePts)) {
-                candidates.push({ x: mx, z: mz });
-            }
+    // Refresh overlays
+    if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+};
+
+// Live reactive update triggered from UI sliders or buttons
+window.updateLiveGreen = function(property, value) {
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole || !hole.greenData) return;
+
+    // If loaded from file without in-memory snapshot, capture baseline now
+    if (!hole.greenData.origHeights && hole.greenData.points && typeof window.captureGreenSnapshot === 'function') {
+        let snap = window.captureGreenSnapshot(hole, hole.greenData.points, 25);
+        hole.greenData.bbox = snap.bbox;
+        hole.greenData.origHeights = snap.origHeights;
+        hole.greenData.origCanvasPixels = snap.origCanvasPixels;
+        if (hole.greenData.baseElevation === undefined) hole.greenData.baseElevation = snap.baseElevation;
+    }
+
+    hole.greenData[property] = value;
+
+    let needsRepaint = (property === 'foregreenWidth' || property === 'edgeSharpness' || property === 'mowPattern');
+
+    if (window._greenRebakePending) return;
+    window._greenRebakePending = true;
+    requestAnimationFrame(function() {
+        window._greenRebakePending = false;
+        let curHole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (curHole && curHole.greenData) {
+            window.applyGreenPipeline(curHole, false, needsRepaint);
         }
+    });
+};
 
-        // Select the candidate furthest from any boundary (pole of inaccessibility)
-        let bestCandidate = null;
-        let maxDist = -1;
-        for (let cand of candidates) {
-            let d = distToGreenBoundary(cand.x, cand.z, densePts);
-            if (d > maxDist) {
-                maxDist = d;
-                bestCandidate = cand;
-            }
+// Delete active green and restore 100% untouched natural ground
+window.deleteSmartGreen = function(holeIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole || !hole.greenData) return;
+
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let msg = isSv ? 'Vill du ta bort greenen och återställa marken till 100% orörd natur?' : 'Delete green and restore terrain to 100% natural condition?';
+    if (!confirm(msg)) return;
+
+    window.saveUndoState();
+
+    window.restoreGreenBase(hole);
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+        setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 150);
+    }
+    window.snapObjectsToGround();
+
+    // Remove flag
+    if (hole.flagMesh && window._arcadeScene) {
+        window._arcadeScene.remove(hole.flagMesh);
+        hole.flagMesh = null;
+    }
+    hole.flag = null;
+    if (hole.pins) hole.pins = {};
+
+    hole.greenData = null;
+
+    if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
+    if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
+    if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+
+    if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+    window.saveLevel();
+    window.showBuildToast(isSv ? '🗑️ Green raderad — marken återställd till orörd natur!' : '🗑️ Green deleted — terrain restored to natural state!', '#ef4444');
+};
+
+// Redraw shape: restores ground and puts points back in interactive drawing mode
+window.redrawSmartGreen = function(holeIndex) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole || !hole.greenData) return;
+
+    window.saveUndoState();
+
+    let savedPoints = hole.greenData.points.map(p => ({ x: p.x, y: p.y, z: p.z }));
+
+    window.restoreGreenBase(hole);
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+        setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 150);
+    }
+
+    if (hole.flagMesh && window._arcadeScene) {
+        window._arcadeScene.remove(hole.flagMesh);
+        hole.flagMesh = null;
+    }
+    hole.flag = null;
+    hole.greenData = null;
+
+    smartGreenPoints = savedPoints.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
+    window._smartShapeClosed = false;
+    updateSmartGreenPreview();
+
+    if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    window.showBuildToast(isSv ? '🔄 Justera form: Dra i punkterna eller lägg till nya' : '🔄 Adjust shape: Drag points or add new ones', '#38bdf8');
+};
+
+// Scale entire green up or down symmetrically around its centroid
+window.scaleSmartGreen = function(holeIndex, factor) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole || !hole.greenData || !hole.greenData.points || hole.greenData.points.length < 3) return;
+
+    window.saveUndoState();
+
+    let gd = hole.greenData;
+    let cx = 0, cz = 0;
+    for(let pt of gd.points) { cx += pt.x; cz += pt.z; }
+    cx /= gd.points.length;
+    cz /= gd.points.length;
+
+    // Safety checks for minimum / maximum green radius
+    let maxDist = 0;
+    for(let pt of gd.points) {
+        let d = Math.sqrt((pt.x - cx)**2 + (pt.z - cz)**2);
+        if (d > maxDist) maxDist = d;
+    }
+    let newMaxDist = maxDist * factor;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    if (newMaxDist < 4.0) {
+        window.showBuildToast(isSv ? '⚠️ Greenen kan inte minskas mer' : '⚠️ Green cannot be scaled smaller', '#f59e0b');
+        return;
+    }
+    if (newMaxDist > 45.0) {
+        window.showBuildToast(isSv ? '⚠️ Greenen har nått maxstorlek' : '⚠️ Green has reached max size', '#f59e0b');
+        return;
+    }
+
+    // 1. Restore pristine ground before modifying points
+    window.restoreGreenBase(hole, true);
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+        setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 150);
+    }
+
+    // 2. Scale all control points outward or inward from centroid
+    for(let pt of gd.points) {
+        pt.x = cx + (pt.x - cx) * factor;
+        pt.z = cz + (pt.z - cz) * factor;
+    }
+
+    // 3. Capture clean snapshot for new scaled bounding box
+    let snap = window.captureGreenSnapshot(hole, gd.points, 25);
+    gd.baseElevation = snap.baseElevation;
+    gd.bbox = snap.bbox;
+    gd.origHeights = snap.origHeights;
+    gd.origCanvasPixels = snap.origCanvasPixels;
+
+    // 4. Re-apply pipeline with exact same height, slope, contour, mow pattern
+    window.applyGreenPipeline(hole, false, true);
+
+    if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
+    if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+
+    let area = 0;
+    if (gd.points && gd.points.length >= 3) {
+        for (let i = 0, j = gd.points.length - 1; i < gd.points.length; j = i++) {
+            area += (gd.points[j].x + gd.points[i].x) * (gd.points[j].z - gd.points[i].z);
         }
+        area = Math.round(Math.abs(area / 2));
+    }
+    let toastMsg = factor > 1
+        ? (isSv ? `➕ Green utökad till ~${area} m²` : `➕ Green scaled up to ~${area} m²`)
+        : (isSv ? `➖ Green minskad till ~${area} m²` : `➖ Green scaled down to ~${area} m²`);
+    window.showBuildToast(toastMsg, '#4ade80');
+};
 
-        if (bestCandidate) {
-            flagX = bestCandidate.x;
-            flagZ = bestCandidate.z;
-            console.log("⛳ Auto-shifted flag to optimal green position:", flagX, flagZ, "dist to boundary:", maxDist);
-        } else {
-            // Fallback: pick the first vertex shifted slightly towards the centroid
-            if (smartGreenPoints.length > 0) {
-                let first = smartGreenPoints[0];
-                let dx = cx - first.x, dz = cz - first.z;
-                let len = Math.hypot(dx, dz) + 0.001;
-                flagX = first.x + (dx / len) * 3;
-                flagZ = first.z + (dz / len) * 3;
+// Move entire green to new center coordinates
+window.moveSmartGreen = function(holeIndex, newCenterX, newCenterZ) {
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole || !hole.greenData) return;
+
+    window.saveUndoState();
+
+    let gd = hole.greenData;
+    let oldCx = 0, oldCz = 0;
+    for(let pt of gd.points) { oldCx += pt.x; oldCz += pt.z; }
+    oldCx /= gd.points.length;
+    oldCz /= gd.points.length;
+
+    let dx = newCenterX - oldCx;
+    let dz = newCenterZ - oldCz;
+
+    // Restore old ground 100% clean
+    window.restoreGreenBase(hole);
+    if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+    if (window._arcadePlaneGeo) {
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+    }
+    if (window._terrainChunks) {
+        window._terrainChunks.syncAll();
+        setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 150);
+    }
+
+    // Shift all points to new location
+    for(let pt of gd.points) {
+        pt.x += dx;
+        pt.z += dz;
+    }
+
+    // Take snapshot at new location
+    let snap = window.captureGreenSnapshot(hole, gd.points, 25);
+    gd.baseElevation = snap.baseElevation;
+    gd.bbox = snap.bbox;
+    gd.origHeights = snap.origHeights;
+    gd.origCanvasPixels = snap.origCanvasPixels;
+
+    if (hole.flag) {
+        hole.flag.x += dx;
+        hole.flag.z += dz;
+    }
+
+    // Re-apply pipeline with exact same parameters
+    window.applyGreenPipeline(hole, false);
+
+    window.saveLevel();
+    if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    window.showBuildToast(isSv ? '✥ Green flyttad till ny plats!' : '✥ Green moved to new location!', '#4ade80');
+};
+
+// Activate "Move Green" picking mode
+window.activateMoveGreenMode = function() {
+    window._movingGreenMode = true;
+    window._movingFlagMode = false;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    window.showBuildToast(isSv ? '📍 Klicka på kartan där greenens mitt ska placeras (Esc för att avbryta)' : '📍 Click on map to place green center (Esc to cancel)', '#f59e0b');
+};
+
+// Activate "Move Flag" picking mode
+window.activateMoveFlagMode = function() {
+    window._movingFlagMode = true;
+    window._movingGreenMode = false;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    window.showBuildToast(isSv ? '⛳ Klicka på greenen där flaggan ska stå (Esc för att avbryta)' : '⛳ Click on green where flag should stand (Esc to cancel)', '#f59e0b');
+};
+
+// Adopt pre-existing green (from older saves with flag but no greenData) into Live Studio
+window.adoptExistingGreen = function(holeIndex, immediateSave) {
+    if (immediateSave === undefined) immediateSave = true;
+    if (holeIndex === undefined) holeIndex = window.currentHoleIndex;
+    let hole = window.courseHoles && window.courseHoles[holeIndex];
+    if (!hole || !hole.flag) return false;
+    if (hole.greenData) return true; // Already adopted
+
+    window.saveUndoState();
+
+    let fx = hole.flag.x;
+    let fz = hole.flag.z;
+    let fy = hole.flag.y;
+
+    // Detect approximate green radius from 4K canvas around flag, default ~11.5m (~415 m²)
+    let radius = 11.5;
+    if (window._arcadePCtx) {
+        try {
+            let step = 1;
+            let maxDist = 25;
+            let detectedR = 0;
+            let count = 0;
+            let dirs = [{dx:1,dz:0}, {dx:-1,dz:0}, {dx:0,dz:1}, {dx:0,dz:-1}];
+            for(let d of dirs) {
+                for(let dist = 4; dist <= maxDist; dist += step) {
+                    let testX = fx + d.dx * dist;
+                    let testZ = fz + d.dz * dist;
+                    let pxX = Math.round(((testX + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096);
+                    let pxY = Math.round(((testZ + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096);
+                    let pix = window._arcadePCtx.getImageData(pxX, pxY, 1, 1).data;
+                    let isGreen = (pix[1] > pix[0] + 12 && pix[1] > pix[2]);
+                    if (!isGreen) {
+                        detectedR += dist;
+                        count++;
+                        break;
+                    }
+                }
             }
+            if (count > 0) {
+                let avgR = detectedR / count;
+                if (avgR >= 5 && avgR <= 25) radius = avgR;
+            }
+        } catch(e) {
+            console.warn('[SMART BUILDER] adoptExistingGreen scan:', e);
         }
     }
 
-    let surf = window.localGetTerrainAt(flagX, -flagZ);
-    let cy = surf ? surf.z : baseH;
+    // Create 12 smooth organic points around flag
+    let numPts = 12;
+    let pts = [];
+    for(let i = 0; i < numPts; i++) {
+        let angle = (i / numPts) * Math.PI * 2;
+        let rVar = radius * (1 + 0.1 * Math.sin(angle * 3));
+        pts.push({
+            x: fx + Math.cos(angle) * rVar,
+            y: fy,
+            z: fz + Math.sin(angle) * rVar
+        });
+    }
 
-    hole = window.courseHoles[window.currentHoleIndex];
-    if (hole.flagMesh) window._arcadeScene.remove(hole.flagMesh);
-    hole.flag = { x: flagX, y: cy, z: flagZ };
-    hole.flagMesh = window.createFlagObject(flagX, cy, flagZ);
-    
-    if(!hole.pins) hole.pins = {};
-    hole.pins.easy = { x: flagX, y: cy, z: flagZ };
-    hole.pins.medium = { x: flagX, y: cy, z: flagZ };
-    hole.pins.hard = { x: flagX, y: cy, z: flagZ };
+    let snap = window.captureGreenSnapshot(hole, pts, 25);
+    let elSlider = document.getElementById('sg-elevation-offset');
+    let curElev = elSlider ? parseFloat(elSlider.value) : 0.0;
+    let blSlider = document.getElementById('sg-blend-dist');
+    let curBlend = blSlider ? parseFloat(blSlider.value) : 8.0;
+    let fgSlider = document.getElementById('sg-foregreen-width');
+    let curFg = fgSlider ? parseFloat(fgSlider.value) : 1.0;
+    let sharpSlider = document.getElementById('sg-edge-sharpness');
+    let curSharp = sharpSlider ? parseInt(sharpSlider.value) : 100;
+    let tiltSlider = document.getElementById('sg-tilt-pct');
+    let curTilt = tiltSlider ? parseFloat(tiltSlider.value) / 100 : 0.02;
+    let tiltCb = document.getElementById('sg-tilt-aim-cb');
+    let curTiltAim = tiltCb ? tiltCb.checked : true;
 
-    // After green is built, auto-switch to AIM if tees exist but no aim point
+    hole.greenData = {
+        points: pts,
+        baseElevation: snap.baseElevation,
+        bbox: snap.bbox,
+        origHeights: snap.origHeights,
+        origCanvasPixels: snap.origCanvasPixels,
+        difficulty: window.greenDifficulty || 'FLAT',
+        elevationOffset: curElev,
+        blendDistance: curBlend,
+        tiltPct: curTilt,
+        tiltAim: curTiltAim,
+        mowPattern: window._smartMowPattern || 'SOLID',
+        foregreenWidth: curFg,
+        edgeSharpness: curSharp,
+        seedOffsetX: (Math.random() - 0.5) * 200,
+        seedOffsetZ: (Math.random() - 0.5) * 200
+    };
+
+    window.applyGreenPipeline(hole, false, false);
+    if (immediateSave) {
+        window.saveLevel();
+    } else {
+        if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
+    }
+    if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    window.showBuildToast(isSv ? '✨ Befintlig green är nu aktiv i Live Studio!' : '✨ Existing green is now active in Live Studio!', '#4ade80');
+    return true;
+};
+
+// Initial Green Build triggered from UI button
+window.executeSplineSmartGreen = function() {
+    if(smartGreenPoints.length < 3) return;
+    window.saveUndoState();
+
+    let hole = window.courseHoles[window.currentHoleIndex];
+    if (!hole) return;
+
+    let difficulty = window.greenDifficulty || 'FLAT';
+    let mowPattern = window._smartMowPattern || 'SOLID';
+
+    let fgSlider = document.getElementById('sg-foregreen-width');
+    let foregreenWidth = fgSlider ? parseFloat(fgSlider.value) : 1.0;
+
+    let sharpSlider = document.getElementById('sg-edge-sharpness');
+    let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
+
+    let elevSlider = document.getElementById('sg-elevation-offset');
+    let elevationOffset = elevSlider ? parseFloat(elevSlider.value) : 0.0;
+
+    let blendSlider = document.getElementById('sg-blend-dist');
+    let blendDist = blendSlider ? parseFloat(blendSlider.value) : 8.0;
+
+    let tiltSlider = document.getElementById('sg-tilt-pct');
+    let tiltPct = tiltSlider ? parseFloat(tiltSlider.value) / 100 : 0.02;
+
+    let tiltAim = true;
+    let tiltCb = document.getElementById('sg-tilt-aim-cb');
+    if (tiltCb) tiltAim = tiltCb.checked;
+
+    // Capture pristine terrain & canvas snapshot before any modification
+    let snap = window.captureGreenSnapshot(hole, smartGreenPoints, 25);
+
+    hole.greenData = {
+        points: smartGreenPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
+        baseElevation: snap.baseElevation,
+        bbox: snap.bbox,
+        origHeights: snap.origHeights,
+        origCanvasPixels: snap.origCanvasPixels,
+
+        difficulty: difficulty,
+        elevationOffset: elevationOffset,
+        blendDistance: blendDist,
+        tiltPct: tiltPct,
+        tiltAim: tiltAim,
+        mowPattern: mowPattern,
+        foregreenWidth: foregreenWidth,
+        edgeSharpness: sharpness,
+        seedOffsetX: (Math.random() - 0.5) * 200,
+        seedOffsetZ: (Math.random() - 0.5) * 200
+    };
+
+    // Apply painting, sculpting, and place flag
+    window.applyGreenPipeline(hole, true);
+
+    // Clear the active drawn spline points from the view
+    clearSmartGreen();
+
+    // Auto-switch to AIM if tees exist but no aim point
     if((hole.tees.yellow || hole.tees.red || hole.tees.white || hole.tees.black) && !hole.aimPoint) {
         setTimeout(function() {
             setSmartBuilderType('AIM');
@@ -1928,9 +3885,9 @@ window.executeSplineSmartGreen = function() {
         }, 300);
     }
 
-    clearSmartGreen();
     window.saveLevel();
     window.autoAdvanceHole();
+    if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
 
     // Prevent double-click from starting a new shape immediately
     window._smartBuildCooldown = true;
@@ -1982,6 +3939,12 @@ window.executeSplineSmartGreen = function() {
         }
         if (typeof window.updateSBAimCard === 'function') {
             window.updateSBAimCard();
+        }
+        if (typeof window.updateSBGreenControls === 'function') {
+            window.updateSBGreenControls();
+        }
+        if (typeof window.updateSBFairwayControls === 'function') {
+            window.updateSBFairwayControls();
         }
     };
 
