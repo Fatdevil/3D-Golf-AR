@@ -264,6 +264,29 @@
         <button onclick="startFlyover()" style="width:100%; background:linear-gradient(135deg, #0d9488, #0891b2); color:#fff; border:none; padding:10px 14px; border-radius:8px; font-weight:800; cursor:pointer; font-size:12px; letter-spacing:0.5px; transition:all 0.2s; text-align:center;">🚁 FLYOVER</button>
     </div>
 
+    <!-- TRACKMAN GREEN SLOPE HUD LEGEND -->
+    <div id="green-slope-hud-legend" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.92); backdrop-filter:blur(10px); border:1px solid rgba(56,189,248,0.3); border-radius:24px; padding:6px 16px; z-index:95; pointer-events:none; font-family:'Inter',sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.55); align-items:center; gap:14px;">
+        <span style="font-size:10px; font-weight:800; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.8px; display:flex; align-items:center; gap:4px;">
+            <span style="font-size:12px;">⛳</span> <span id="slope-legend-title">Lutning</span>
+        </span>
+        <div style="display:flex; align-items:center; gap:5px; font-size:10px; font-weight:700; color:#38bdf8;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#38bdf8; box-shadow:0 0 6px rgba(56,189,248,0.8);"></span>
+            <span>&lt; 1%</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:5px; font-size:10px; font-weight:700; color:#facc15;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#facc15; box-shadow:0 0 6px rgba(250,204,21,0.8);"></span>
+            <span>1–2.2%</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:5px; font-size:10px; font-weight:700; color:#fb923c;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#fb923c; box-shadow:0 0 6px rgba(251,146,60,0.8);"></span>
+            <span>2.2–3.8%</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:5px; font-size:10px; font-weight:700; color:#f87171;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f87171; box-shadow:0 0 6px rgba(248,113,113,0.8);"></span>
+            <span>&gt; 3.8%</span>
+        </div>
+    </div>
+
     <!-- MINIMAP CONTAINER (UI wrapper för kameran) -->
     <div id="minimap-container" style="display:none; position:absolute; bottom:20px; right:20px; width:220px; height:340px; border:2px solid rgba(255,255,255,0.2); background:transparent; pointer-events:auto; z-index:10; font-family:'Inter',sans-serif;">
         <!-- HEADER -->
@@ -6391,6 +6414,46 @@
         return h;
     };
 
+    // Centralized green gradient & slope engine (TrackMan/GSPro unified standard)
+    window.sampleGreenGradient = function(wx, wz, sampleRadius = 0.20) {
+        let d = sampleRadius;
+        let hCenter = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz) : 0;
+        let hR = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx + d, wz) : hCenter;
+        let hL = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx - d, wz) : hCenter;
+        let hU = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz + d) : hCenter;
+        let hD = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz - d) : hCenter;
+        
+        let dhdx = (hR - hL) / (2 * d);
+        let dhdz = (hU - hD) / (2 * d);
+        
+        let slopeMagnitude = Math.hypot(dhdx, dhdz);
+        let slopePercent = slopeMagnitude * 100.0;
+        
+        // Downhill unit vector in Three.js world coordinates (-dh/dx, -dh/dz)
+        let downhillX = slopeMagnitude > 1e-6 ? (-dhdx / slopeMagnitude) : 0;
+        let downhillZ = slopeMagnitude > 1e-6 ? (-dhdz / slopeMagnitude) : 0;
+        
+        let len = Math.sqrt(dhdx * dhdx + dhdz * dhdz + 1.0);
+        let normX = -dhdx / len;
+        let normZ = -dhdz / len;
+        let normUp = 1.0 / len;
+        let normal = [normX, normZ, normUp];
+        normal.x = normX;
+        normal.y = normUp; // In Three.js, Y is Up
+        normal.z = normZ;  // In Three.js, Z is Depth
+        
+        return {
+            height: hCenter,
+            dhdx,
+            dhdz,
+            slopePercent,
+            slopeMagnitude,
+            downhillX,
+            downhillZ,
+            normal
+        };
+    };
+
     // Ultra-fast terrain raycasting (replaces Three.js 720k triangle loop with 0.05ms heightfield raymarch)
     plane.raycast = function(raycaster, intersects) {
         if (!window.getTerrainHeight) {
@@ -7557,18 +7620,28 @@
         let positions = planeGeo.attributes.position.array;
         let height = positions[idx * 3 + 2]; 
         
-        let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
-        let gzDown = Math.max(0, gz - 1); 
+        let gxL = Math.max(0, gx - 1);
+        let gxR = Math.min(TERRAIN_SEGS, gx + 1);
+        let gzD = Math.max(0, gz - 1);
+        let gzU = Math.min(TERRAIN_SEGS, gz + 1);
 
-        let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
-        let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+        let hR = positions[(gz * (TERRAIN_SEGS+1) + gxR) * 3 + 2];
+        let hL = positions[(gz * (TERRAIN_SEGS+1) + gxL) * 3 + 2];
+        let hU = positions[(gzU * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+        let hD = positions[(gzD * (TERRAIN_SEGS+1) + gx) * 3 + 2];
         
         let step = TERRAIN_SIZE/TERRAIN_SEGS;
-        let dx_phys = (hR - height) / step;
-        let dy_phys = (hD - height) / step; 
+        let dh_dx = (hR - hL) / ((gxR - gxL || 1) * step);
+        let dh_dz = (hU - hD) / ((gzU - gzD || 1) * step); 
         
-        let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
-        let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
+        let len = Math.sqrt(dh_dx*dh_dx + dh_dz*dh_dz + 1.0);
+        let normX = -dh_dx / len;
+        let normZ = -dh_dz / len;
+        let normUp = 1.0 / len;
+        let normal = [normX, normZ, normUp];
+        normal.x = normX;
+        normal.y = normUp; // In Three.js, Y is Up
+        normal.z = normZ;  // In Three.js, Z is Depth
         
         let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
         let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
@@ -7675,11 +7748,32 @@
     const greenBeadsGroup = new THREE.Group();
     scene.add(greenBeadsGroup);
     window.greenBeadsGroup = greenBeadsGroup;
-    const beadGeo = new THREE.SphereGeometry(0.08, 8, 8);
-    const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false });
-    window.greenBeads = [];
+    const beadGeo = new THREE.SphereGeometry(0.040, 8, 8); // 4.0 cm radius (8 cm diameter) GSPro/TrackMan-style line bead
+    const beadMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -3.0,
+        polygonOffsetUnits: -3.0
+    });
+    const MAX_GREEN_BEADS = 15000;
+    const greenBeadsMesh = new THREE.InstancedMesh(beadGeo, beadMat, MAX_GREEN_BEADS);
+    greenBeadsMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    greenBeadsMesh.count = 0;
+    greenBeadsMesh.renderOrder = 999;
+    greenBeadsMesh.frustumCulled = false; // CRITICAL: World-space instances; prevent Three.js from culling mesh when origin (0,0,0) is off-screen
+    greenBeadsMesh.visible = false;
+    greenBeadsGroup.add(greenBeadsMesh);
+    window.greenBeadsMesh = greenBeadsMesh;
+    const _beadDummy = new THREE.Object3D();
+    window._greenBeadData = [];
+    window.greenBeads = []; // Kept for backwards compatibility
     window.greenBeadsEnabled = true;  // Toggle from hamburger menu
-    window.greenGridEnabled = true;   // BUG-01 FIX: Default ON (was false, making grid never visible)
+    window._greenGridSpacing = 2.0;   // 2.0 meter grid spacing (TrackMan/GSPro standard)
+    window.greenGridEnabled = true;   // Default ON
     window.greenGridMesh = null;      // Grid line mesh on green surface — built ONCE per hole landing
     window.greenGridForHoleIndex = -1; // Track which hole the grid was built for
     const BEAD_ACTIVATION_DISTANCE = 45; // meters (~50 yards) from flag
@@ -7690,12 +7784,17 @@
 
     // Helper: Clear green beads cleanly
     window.clearGreenBeads = function() {
+        if (window.greenBeadsMesh) {
+            window.greenBeadsMesh.count = 0;
+            window.greenBeadsMesh.visible = false;
+        }
         if (window.greenBeads && window.greenBeads.length > 0) {
             window.greenBeads.forEach(b => {
                 if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b);
             });
         }
         window.greenBeads = [];
+        window._greenBeadData = [];
         window._greenBeadsHoleKey = null;
     };
 
@@ -7812,6 +7911,31 @@
         };
     }
 
+    // Centralized active green polygon resolver (guarantees identical coverage for grid, beads, and contours)
+    window.getActiveGreenPolygon = function(hole, coverage = window._greenGridCoverage || 'ALL') {
+        if (!hole || !hole.greenData) return null;
+        let gd = hole.greenData;
+        let outerPoly = null;
+        if (gd.densePts && gd.densePts.length >= 3) {
+            outerPoly = gd.densePts;
+        } else if (gd.points && gd.points.length >= 3) {
+            outerPoly = (typeof window.getDenseGreenPoints === 'function')
+                ? window.getDenseGreenPoints(gd.points, gd.tension !== undefined ? gd.tension : 0.5)
+                : gd.points;
+        }
+        if (!outerPoly || outerPoly.length < 3) return null;
+        if (coverage !== 'GREEN_ONLY') return outerPoly;
+        
+        if (gd.innerDensePts && gd.innerDensePts.length >= 3) {
+            return gd.innerDensePts;
+        }
+        let fgWidth = (gd.foregreenWidth !== undefined) ? gd.foregreenWidth : 1.0;
+        if (fgWidth > 0.05 && typeof window.insetPolygon === 'function') {
+            return window.insetPolygon(outerPoly, fgWidth);
+        }
+        return outerPoly;
+    };
+
     // === TRACKMAN & GSPRO PROFESSIONAL GREEN GRID ENGINE ===
     window._greenGridCoverage = window._greenGridCoverage || 'ALL'; // 'ALL' = Green + Foregreen, 'GREEN_ONLY' = Puttyta
     window._greenGridColorMode = window._greenGridColorMode || 'HEATMAP'; // 'HEATMAP' = TrackMan slope colors, 'WHITE' = Vit
@@ -7858,8 +7982,16 @@
 
     window.buildGreenGrid = function(hole, holeIndex, forceRebuild = false) {
         if (!hole) return;
-        if (!forceRebuild && window.greenGridForHoleIndex === holeIndex) {
-            if (window.greenGridMesh) return;
+        
+        let coverage = window._greenGridCoverage || 'ALL';
+        let colorMode = window._greenGridColorMode || 'HEATMAP';
+        let ptsCount = (hole.greenData && hole.greenData.points) ? hole.greenData.points.length : 0;
+        let terrainRev = window._terrainRevision || 0;
+        let gridStep = window._greenGridSpacing || 2.0;  // 2.0 meter TrackMan/GSPro standard spacing
+        let cacheKey = `${holeIndex}_${terrainRev}_${coverage}_${colorMode}_${ptsCount}_${gridStep}`;
+        
+        if (!forceRebuild && window._greenGridCacheKey === cacheKey && window.greenGridMesh) {
+            return;
         }
         
         // Dispose previous geometry/material
@@ -7876,31 +8008,13 @@
         let gd = hole.greenData;
         if (!gd) return;
         
-        // 1. Resolve High-Definition Spline Polygons
-        let outerPoly = null;
-        if (gd.densePts && gd.densePts.length >= 3) {
-            outerPoly = gd.densePts;
-        } else if (gd.points && gd.points.length >= 3) {
-            outerPoly = (typeof window.getDenseGreenPoints === 'function')
-                ? window.getDenseGreenPoints(gd.points, gd.tension !== undefined ? gd.tension : 0.5)
-                : gd.points;
-        }
+        // 1. Resolve High-Definition Spline Polygons via central resolver
+        let targetPoly = window.getActiveGreenPolygon(hole, coverage);
+        if (!targetPoly || targetPoly.length < 3) return;
         
-        if (!outerPoly || outerPoly.length < 3) return;
-        
-        let innerPoly = null;
+        let innerPoly = window.getActiveGreenPolygon(hole, 'GREEN_ONLY');
+        let outerPoly = window.getActiveGreenPolygon(hole, 'ALL');
         let fgWidth = (gd.foregreenWidth !== undefined) ? gd.foregreenWidth : 1.0;
-        if (gd.innerDensePts && gd.innerDensePts.length >= 3) {
-            innerPoly = gd.innerDensePts;
-        } else if (fgWidth > 0.05 && typeof window.insetPolygon === 'function') {
-            innerPoly = window.insetPolygon(outerPoly, fgWidth);
-        } else {
-            innerPoly = outerPoly;
-        }
-        
-        let coverage = window._greenGridCoverage || 'ALL';
-        let targetPoly = (coverage === 'GREEN_ONLY') ? innerPoly : outerPoly;
-        if (!targetPoly || targetPoly.length < 3) targetPoly = outerPoly;
 
         // 2. Compute Bounding Box
         let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -7911,7 +8025,6 @@
             if (p.z > maxZ) maxZ = p.z;
         }
         
-        let gridStep = 1.0;  // 1 meter standard cell
         let subStep = 0.25;  // 25 cm height-following resolution
         let isHeatmap = (window._greenGridColorMode !== 'WHITE');
         
@@ -7923,14 +8036,10 @@
             if (!isHeatmap) {
                 return isForegreen ? [0.70, 0.70, 0.70] : [1.0, 1.0, 1.0];
             }
-            let d = 0.3;
-            let hR = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx + d, wz) : 0;
-            let hL = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx - d, wz) : 0;
-            let hU = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz + d) : 0;
-            let hD = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz - d) : 0;
-            let sx = (hR - hL) / (2 * d);
-            let sz = (hU - hD) / (2 * d);
-            let slopePct = Math.sqrt(sx * sx + sz * sz) * 100;
+            let grad = (typeof window.sampleGreenGradient === 'function') 
+                ? window.sampleGreenGradient(wx, wz, 0.25)
+                : { slopePercent: 0 };
+            let slopePct = grad.slopePercent;
             
             let r, g, b;
             if (slopePct < 1.0) {
@@ -7974,13 +8083,12 @@
             return window.pointInPolygon(wx, wz, innerPoly);
         }
 
-        // Dual-stroke line offset for physical thickness (3.2 cm total beam width, solid on Retina)
-        const lineOff = 0.016;
-        const lineH = 0.065; // Elevated 6.5cm above terrain + polygonOffset to never submerge
+        // Clean single-stroke line at 8mm height to cling tightly to the turf
+        const lineH = 0.008;
 
         // --- 1. HORIZONTAL GRID LINES (constant Z, running along X) ---
-        let startZ = Math.floor(minZ);
-        let endZ = Math.ceil(maxZ);
+        let startZ = Math.floor(minZ / gridStep) * gridStep;
+        let endZ = Math.ceil(maxZ / gridStep) * gridStep;
         let nPoly = targetPoly.length;
         
         for (let z = startZ; z <= endZ; z += gridStep) {
@@ -8016,13 +8124,8 @@
                     let curIsFg = !isPointInInnerGreen(curX, z);
                     let curColor = getSlopeColor(curX, z, curIsFg);
                     
-                    // Dual-line stroke for bold physical thickness
-                    gridPositions.push(
-                        prevX, prevY, z - lineOff, curX, curY, z - lineOff,
-                        prevX, prevY, z + lineOff, curX, curY, z + lineOff
-                    );
+                    gridPositions.push(prevX, prevY, z, curX, curY, z);
                     gridColors.push(
-                        prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2],
                         prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2]
                     );
                     
@@ -8037,20 +8140,16 @@
                 let endIsFg = !isPointInInnerGreen(xEnd, z);
                 let endColor = getSlopeColor(xEnd, z, endIsFg);
                 
-                gridPositions.push(
-                    prevX, prevY, z - lineOff, xEnd, endY, z - lineOff,
-                    prevX, prevY, z + lineOff, xEnd, endY, z + lineOff
-                );
+                gridPositions.push(prevX, prevY, z, xEnd, endY, z);
                 gridColors.push(
-                    prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2],
                     prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2]
                 );
             }
         }
 
         // --- 2. VERTICAL GRID LINES (constant X, running along Z) ---
-        let startX = Math.floor(minX);
-        let endX = Math.ceil(maxX);
+        let startX = Math.floor(minX / gridStep) * gridStep;
+        let endX = Math.ceil(maxX / gridStep) * gridStep;
         
         for (let x = startX; x <= endX; x += gridStep) {
             let zs = [];
@@ -8082,13 +8181,8 @@
                     let curIsFg = !isPointInInnerGreen(x, curZ);
                     let curColor = getSlopeColor(x, curZ, curIsFg);
                     
-                    // Dual-line stroke for bold physical thickness
-                    gridPositions.push(
-                        x - lineOff, prevY, prevZ, x - lineOff, curY, curZ,
-                        x + lineOff, prevY, prevZ, x + lineOff, curY, curZ
-                    );
+                    gridPositions.push(x, prevY, prevZ, x, curY, curZ);
                     gridColors.push(
-                        prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2],
                         prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2]
                     );
                     
@@ -8102,12 +8196,8 @@
                 let endIsFg = !isPointInInnerGreen(x, zEnd);
                 let endColor = getSlopeColor(x, zEnd, endIsFg);
                 
-                gridPositions.push(
-                    x - lineOff, prevY, prevZ, x - lineOff, endY, zEnd,
-                    x + lineOff, prevY, prevZ, x + lineOff, endY, zEnd
-                );
+                gridPositions.push(x, prevY, prevZ, x, endY, zEnd);
                 gridColors.push(
-                    prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2],
                     prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2]
                 );
             }
@@ -8126,14 +8216,19 @@
                 depthTest: true,
                 depthWrite: false,
                 polygonOffset: true,
-                polygonOffsetFactor: -4.0,
-                polygonOffsetUnits: -4.0
+                polygonOffsetFactor: -2.0,
+                polygonOffsetUnits: -2.0
             });
             window.greenGridMesh = new THREE.LineSegments(gridGeo, gridMat);
             window.greenGridMesh.renderOrder = 998;
-            window.greenGridMesh.visible = window._globalGreenGridEnabled ? true : (window._studioShowGrid !== undefined ? window._studioShowGrid : (window.greenGridEnabled !== false));
+            let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
+            let initialVisible = window._globalGreenGridEnabled
+                ? true
+                : (isStudioLutning ? (window._studioShowGrid !== false) : (window.greenGridEnabled !== false));
+            window.greenGridMesh.visible = initialVisible;
             scene.add(window.greenGridMesh);
             window.greenGridForHoleIndex = holeIndex;
+            window._greenGridCacheKey = cacheKey;
             console.log(`📐 TrackMan Green Grid generated: ${gridPositions.length / 6} segments, coverage: ${coverage}, mode: ${window._greenGridColorMode}`);
         }
     };
@@ -8148,19 +8243,21 @@
             window.greenGridMesh.material.dispose();      // 3. Free GPU shader/texture
             window.greenGridMesh = null;                  // 4. Release JS reference
         }
+        if (typeof window.clearBreakLine === 'function') {
+            window.clearBreakLine();
+        }
         window.greenGridForHoleIndex = -1; // Force rebuild on next green landing
+        window._greenGridCacheKey = null;
+        let leg = document.getElementById('green-slope-hud-legend');
+        if (leg) leg.style.display = 'none';
     };
     
     // === PUTT BREAK LINE ===
     // Simulates a simplified putt path from ball to hole using terrain slope
     // Shows as a curved dashed line on the green surface
     window.buildBreakLine = function() {
-        // Dispose previous
-        if (window.breakLineMesh) {
-            scene.remove(window.breakLineMesh);
-            if (window.breakLineMesh.geometry) window.breakLineMesh.geometry.dispose();
-            if (window.breakLineMesh.material) window.breakLineMesh.material.dispose();
-            window.breakLineMesh = null;
+        if (typeof window.clearBreakLine === 'function') {
+            window.clearBreakLine();
         }
         
         let hole = courseHoles[playingHoleIndex];
@@ -8175,41 +8272,32 @@
         let distToFlag = Math.hypot(ballX - flagX, ballZ - flagZ);
         if (distToFlag > 25 || distToFlag < 0.5) return;
         
-        let ballSurf = localGetTerrainAt(ballX, -ballZ);
+        let ballSurf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(ballX, -ballZ) : null;
         if (!ballSurf || ballSurf.type !== 'GREEN') return;
         
-        // Simulate putt path using terrain slope
-        // Start from ball, aim at flag, but let slope deflect the "ideal" line
-        // This shows WHERE to aim (the adjusted line accounting for break)
         let steps = 60;
         let pts = [];
         
-        // Method: trace from flag BACK to ball, applying reverse slope
-        // This gives the "true line" — where the ball would travel
-        // We do forward simulation from ball toward flag with slope influence
         let dx = flagX - ballX;
         let dz = flagZ - ballZ;
         let dist = Math.hypot(dx, dz);
         let dirX = dx / dist;
         let dirZ = dz / dist;
         
-        // Simulate forward path with slope deflection
         let simX = ballX;
         let simZ = ballZ;
         let stepSize = dist / steps;
-        let slopeInfluence = 0.35; // How much slope affects the line (tunable)
+        let slopeInfluence = 0.35; // How much slope affects the line
         
         for (let i = 0; i <= steps; i++) {
-            let surf = localGetTerrainAt(simX, -simZ);
-            let h = surf ? surf.z + 0.04 : 0.04;
+            let h = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(simX, simZ) + 0.04 : 0.04;
             pts.push(simX, h, simZ);
             
             if (i < steps) {
-                // Get slope at this point from terrain normal
-                let nx = surf ? surf.normal[0] : 0; // X-component of normal (slope in X)
-                let nz = surf ? surf.normal[1] : 0; // Z-component of normal (slope in Z)
+                let grad = (typeof window.sampleGreenGradient === 'function')
+                    ? window.sampleGreenGradient(simX, simZ, 0.20)
+                    : { downhillX: 0, downhillZ: 0, slopeMagnitude: 0 };
                 
-                // Recalculate direction toward flag from current sim position
                 let toFlagX = flagX - simX;
                 let toFlagZ = flagZ - simZ;
                 let toFlagDist = Math.hypot(toFlagX, toFlagZ);
@@ -8218,10 +8306,11 @@
                     dirZ = toFlagZ / toFlagDist;
                 }
                 
-                // Apply slope deflection (perpendicular to direction of travel)
-                // Slope pushes the ball sideways based on terrain normal
-                simX += (dirX + nx * slopeInfluence) * stepSize;
-                simZ += (dirZ + nz * slopeInfluence) * stepSize;
+                // Downhill slope deflection
+                let deflectX = grad.downhillX * grad.slopeMagnitude * slopeInfluence;
+                let deflectZ = grad.downhillZ * grad.slopeMagnitude * slopeInfluence;
+                simX += (dirX + deflectX) * stepSize;
+                simZ += (dirZ + deflectZ) * stepSize;
             }
         }
         
@@ -8248,10 +8337,26 @@
     window.clearBreakLine = function() {
         if (window.breakLineMesh) {
             scene.remove(window.breakLineMesh);
-            if (window.breakLineMesh.geometry) window.breakLineMesh.geometry.dispose();
-            if (window.breakLineMesh.material) window.breakLineMesh.material.dispose();
+        }
+        if (window._breakLineGeo) {
+            window._breakLineGeo.dispose();
+            window._breakLineGeo = null;
+        }
+        if (window._breakLineMat) {
+            window._breakLineMat.dispose();
+            window._breakLineMat = null;
+        }
+        if (window.breakLineMesh) {
+            if (window.breakLineMesh.geometry && window.breakLineMesh.geometry !== window._breakLineGeo) {
+                window.breakLineMesh.geometry.dispose();
+            }
+            if (window.breakLineMesh.material && window.breakLineMesh.material !== window._breakLineMat) {
+                window.breakLineMesh.material.dispose();
+            }
             window.breakLineMesh = null;
         }
+        window._breakLinePositions = null;
+        window._breakLinePosAttr = null;
     };
     
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
@@ -13344,18 +13449,24 @@
                 let positions = planeGeo.attributes.position.array;
                 let height = positions[idx * 3 + 2]; 
                 
-                let gxRight = Math.min(TERRAIN_SEGS, gx + 1);
-                let gzDown = Math.max(0, gz - 1); 
+                let gxL = Math.max(0, gx - 1);
+                let gxR = Math.min(TERRAIN_SEGS, gx + 1);
+                let gzD = Math.max(0, gz - 1);
+                let gzU = Math.min(TERRAIN_SEGS, gz + 1);
 
-                let hR = positions[(gz * (TERRAIN_SEGS+1) + gxRight) * 3 + 2];
-                let hD = positions[(gzDown * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+                let hR = positions[(gz * (TERRAIN_SEGS+1) + gxR) * 3 + 2];
+                let hL = positions[(gz * (TERRAIN_SEGS+1) + gxL) * 3 + 2];
+                let hU = positions[(gzU * (TERRAIN_SEGS+1) + gx) * 3 + 2];
+                let hD = positions[(gzD * (TERRAIN_SEGS+1) + gx) * 3 + 2];
                 
                 let step = TERRAIN_SIZE/TERRAIN_SEGS;
-                let dx_phys = (hR - height) / step;
-                let dy_phys = (hD - height) / step; 
+                let dh_dx = (hR - hL) / ((gxR - gxL || 1) * step);
+                let dh_dz = (hU - hD) / ((gzU - gzD || 1) * step); 
                 
-                let len = Math.sqrt(dx_phys*dx_phys + dy_phys*dy_phys + 1.0);
-                let normal = [-dx_phys/len, -dy_phys/len, 1.0/len];
+                let len = Math.sqrt(dh_dx*dh_dx + dh_dz*dh_dz + 1.0);
+                // Physics space: px = threeX, py = -threeZ (so dh/dpy = -dh/dz)
+                // Upward surface normal in physics (px, py, pz) coordinates:
+                let normal = [-dh_dx / len, dh_dz / len, 1.0 / len];
                 
                 let cX = Math.floor(((threeX + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
                 let cZ = Math.floor(((threeZ + (TERRAIN_SIZE/2)) / TERRAIN_SIZE) * 4096);
@@ -16729,7 +16840,13 @@ window.triggerExplosion = function(x, y, z) {
                 let dx = window.ballPos.x - vizHole.flag.x;
                 let dz = window.ballPos.z - vizHole.flag.z;
                 let distToFlag = Math.hypot(dx, dz);
-                showGreenViz = distToFlag < BEAD_ACTIVATION_DISTANCE;
+                if (distToFlag < BEAD_ACTIVATION_DISTANCE) {
+                    let isPutting = !!window.isPuttingMode;
+                    let ballSurf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(window.ballPos.x, -window.ballPos.z) : null;
+                    let onGreenOrFringe = ballSurf && (ballSurf.type === 'GREEN' || ballSurf.type === 'FOREGREEN');
+                    // Contextual activation: On green/foregreen, putting mode, or within 12m fringe approach
+                    showGreenViz = isPutting || onGreenOrFringe || (distToFlag < 12.0 && ballSurf && ballSurf.type === 'FAIRWAY');
+                }
             }
         }
         
@@ -16743,131 +16860,148 @@ window.triggerExplosion = function(x, y, z) {
                 : (isGlobalSlopeActive
                     ? (window._globalGreenBeadsEnabled !== false && window.greenBeadsEnabled !== false)
                     : (window.greenBeadsEnabled !== false));
-            let gd = hole.greenData;
-            let activePoly = null;
-            if (gd) {
-                if (window._greenGridCoverage === 'GREEN_ONLY' && gd.innerDensePts && gd.innerDensePts.length >= 3) {
-                    activePoly = gd.innerDensePts;
-                } else if (gd.densePts && gd.densePts.length >= 3) {
-                    activePoly = gd.densePts;
-                } else if (gd.points && gd.points.length >= 3) {
-                    activePoly = (typeof window.getDenseGreenPoints === 'function')
-                        ? window.getDenseGreenPoints(gd.points, gd.tension !== undefined ? gd.tension : 0.5)
-                        : gd.points;
-                }
-            }
+            let activePoly = (typeof window.getActiveGreenPolygon === 'function')
+                ? window.getActiveGreenPolygon(hole, window._greenGridCoverage || 'ALL')
+                : (hole.greenData ? hole.greenData.densePts : null);
             
             // --- BEADS (toggle: window.greenBeadsEnabled or studio toggle) ---
             if (showBeads) {
-                let currentHoleKey = isStudioMode ? ('studio_' + window.currentHoleIndex) : ('play_' + (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0));
-                let originX = 0, originZ = 0, beadRadius = 25;
+                let covKey = window._greenGridCoverage || 'ALL';
+                let revKey = window._terrainRevision || 0;
+                let stepKey = window._greenGridSpacing || 2.0;
+                let currentHoleKey = (isStudioMode ? ('studio_' + window.currentHoleIndex) : ('play_' + (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0))) + '_' + covKey + '_' + revKey + '_' + stepKey;
+                
+                // TrackMan / GSPro 2.0m Grid Alignment Bounding Box
+                let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
                 if (activePoly && activePoly.length >= 3) {
-                    let sx = 0, sz = 0;
-                    for (let p of activePoly) { sx += p.x; sz += p.z; }
-                    originX = sx / activePoly.length;
-                    originZ = sz / activePoly.length;
-                    let maxD = 0;
                     for (let p of activePoly) {
-                        let d = Math.hypot(p.x - originX, p.z - originZ);
-                        if (d > maxD) maxD = d;
+                        if (p.x < minX) minX = p.x;
+                        if (p.x > maxX) maxX = p.x;
+                        if (p.z < minZ) minZ = p.z;
+                        if (p.z > maxZ) maxZ = p.z;
                     }
-                    beadRadius = Math.max(12, Math.ceil(maxD + 2));
                 } else if (hole.flag) {
-                    originX = hole.flag.x;
-                    originZ = hole.flag.z;
-                    beadRadius = 25;
+                    minX = hole.flag.x - 20; maxX = hole.flag.x + 20;
+                    minZ = hole.flag.z - 20; maxZ = hole.flag.z + 20;
+                }
+                if (!isFinite(minX)) {
+                    minX = -20; maxX = 20; minZ = -20; maxZ = 20;
                 }
 
-                if (!window.greenBeads || window.greenBeads.length === 0 || window._greenBeadsHoleKey !== currentHoleKey) {
-                    if (window.greenBeads && window.greenBeads.length > 0) {
-                        window.greenBeads.forEach(b => { if (greenBeadsGroup) greenBeadsGroup.remove(b); });
+                if (!window._greenBeadData || window._greenBeadData.length === 0 || window._greenBeadsHoleKey !== currentHoleKey) {
+                    if (typeof window.clearGreenBeads === 'function') {
+                        window.clearGreenBeads();
                     }
-                    window.greenBeads = [];
+                    window._greenBeadData = [];
                     window._greenBeadsHoleKey = currentHoleKey;
-                    let step = 1.5; // 1.5m grid of beads
-                    for (let x = -beadRadius; x <= beadRadius; x += step) {
-                        for (let z = -beadRadius; z <= beadRadius; z += step) {
-                            let wx = originX + x;
-                            let wz = originZ + z;
+                    
+                    let gridStep = window._greenGridSpacing || 2.0;
+                    let sX = Math.floor(minX / gridStep) * gridStep;
+                    let eX = Math.ceil(maxX / gridStep) * gridStep;
+                    let sZ = Math.floor(minZ / gridStep) * gridStep;
+                    let eZ = Math.ceil(maxZ / gridStep) * gridStep;
+                    
+                    // GSPro-style Dual-Axis Line Beads (Horizontal X-lines + Vertical Z-lines)
+                    // 1. Horizontal grid lines (constant Z, beads slide along X showing lateral break)
+                    genLoopX:
+                    for (let z = sZ; z <= eZ; z += gridStep) {
+                        for (let x = sX; x < eX; x += gridStep) {
+                            if (window._greenBeadData.length >= MAX_GREEN_BEADS) break genLoopX;
+                            let wx = x + gridStep * 0.5;
+                            let wz = z;
                             let inside = activePoly ? window.pointInPolygon(wx, wz, activePoly) : true;
                             if (inside) {
-                                let bead = new THREE.Mesh(beadGeo, beadMat);
-                                bead.startX = wx;
-                                bead.startZ = wz;
-                                bead.position.set(wx, 0, wz);
-                                bead.distOffset = Math.random(); 
-                                bead.renderOrder = 999;
-                                greenBeadsGroup.add(bead);
-                                window.greenBeads.push(bead);
+                                let distOffset = (Math.sin(wx * 12.9898 + wz * 78.233) * 43758.5453) % 1;
+                                if (distOffset < 0) distOffset += 1.0;
+                                window._greenBeadData.push({
+                                    axis: 'X',
+                                    startX: wx,
+                                    startZ: wz,
+                                    distOffset: distOffset
+                                });
+                            }
+                        }
+                    }
+
+                    // 2. Vertical grid lines (constant X, beads slide along Z showing uphill/downhill slope)
+                    genLoopZ:
+                    for (let x = sX; x <= eX; x += gridStep) {
+                        for (let z = sZ; z < eZ; z += gridStep) {
+                            if (window._greenBeadData.length >= MAX_GREEN_BEADS) break genLoopZ;
+                            let wx = x;
+                            let wz = z + gridStep * 0.5;
+                            let inside = activePoly ? window.pointInPolygon(wx, wz, activePoly) : true;
+                            if (inside) {
+                                let distOffset = (Math.sin(wx * 26.431 + wz * 53.177) * 43758.5453) % 1;
+                                if (distOffset < 0) distOffset += 1.0;
+                                window._greenBeadData.push({
+                                    axis: 'Z',
+                                    startX: wx,
+                                    startZ: wz,
+                                    distOffset: distOffset
+                                });
                             }
                         }
                     }
                 }
                 
                 let stimp = (window.matchSettings && window.matchSettings.greenStimp) || window.GREEN_STIMP || 10.0;
-                let dt = 0.016; 
-                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
-                let grainSeed = holeIdx * 7.3;
-                let grainScale = 0.03 * (10.0 / stimp);
+                let tSec = performance.now() * 0.001;
+                let gridStep = window._greenGridSpacing || 2.0;
+                let cycleDist = gridStep * 0.85; // 1.70 m travel along the 2.0m grid segment!
+                let beadCount = (window._greenBeadData && window.greenBeadsMesh) ? window._greenBeadData.length : 0;
                 
-                if (window.greenBeads) {
-                    for (let i = 0; i < window.greenBeads.length; i++) {
-                        let bead = window.greenBeads[i];
-                        let wx = bead.position.x;
-                        let wz = bead.position.z;
-                        let isGreen = activePoly ? window.pointInPolygon(wx, wz, activePoly) : false;
-                        let surf = null;
-                        if (!activePoly) {
-                            surf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(wx, -wz) : null;
-                            isGreen = (surf && surf.type === 'GREEN');
-                        }
+                if (beadCount > 0 && window.greenBeadsMesh) {
+                    window.greenBeadsMesh.count = beadCount;
+                    window.greenBeadsMesh.visible = true;
+                    for (let i = 0; i < beadCount; i++) {
+                        let bead = window._greenBeadData[i];
+                        let sx = bead.startX;
+                        let sz = bead.startZ;
                         
-                        if (isGreen) {
-                            bead.visible = true;
-                            let eps = 0.25;
-                            let hCenter = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz) : (surf ? surf.z : 0);
-                            let hX = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx + eps, wz) : hCenter;
-                            let hZ = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz + eps) : hCenter;
-                            bead.position.y = hCenter + 0.08; 
-                            
-                            let dh_dx = (hX - hCenter) / eps;
-                            let dh_dz = (hZ - hCenter) / eps;
-                            let fallX = -dh_dx;
-                            let fallZ = -dh_dz;
-                            let slopeMag = Math.hypot(fallX, fallZ);
-                            
-                            let sx = Math.sin(wx * 0.3 + wz * 0.2 + grainSeed);
-                            let sz = Math.cos(wz * 0.3 - wx * 0.2 + grainSeed);
-                            let gl = Math.hypot(sx, sz) || 1e-6;
-
-                            if (slopeMag > 0.001) {
-                                let dirX = fallX / slopeMag;
-                                let dirZ = fallZ / slopeMag;
-                                let speed = slopeMag * stimp * 2.0;
-                                bead.position.x += (dirX * speed + (sx / gl) * grainScale * 25.0) * dt;
-                                bead.position.z += (dirZ * speed + (sz / gl) * grainScale * 25.0) * dt;
-                            } else {
-                                bead.position.x += (sx / gl) * grainScale * 15.0 * dt;
-                                bead.position.z += (sz / gl) * grainScale * 15.0 * dt;
+                        let grad = (typeof window.sampleGreenGradient === 'function')
+                            ? window.sampleGreenGradient(sx, sz, 0.20)
+                            : { downhillX: 0, downhillZ: 0, dhdx: 0, dhdz: 0, slopePercent: 0, height: 0 };
+                        
+                        let curX = sx;
+                        let curZ = sz;
+                        
+                        if (bead.axis === 'X') {
+                            // Lateral slope along the horizontal grid line (X-axis)
+                            let slopeX = Math.abs(grad.dhdx) * 100.0;
+                            if (slopeX >= 0.20) {
+                                let dirX = grad.dhdx > 1e-5 ? -1.0 : (grad.dhdx < -1e-5 ? 1.0 : 0.0);
+                                let speed = Math.min(2.0, Math.max(0.20, slopeX * 0.35 * (stimp / 10.0)));
+                                let phase = ((tSec * speed / cycleDist) + bead.distOffset) % 1.0;
+                                curX = sx + dirX * (phase * cycleDist - cycleDist * 0.5);
                             }
                         } else {
-                            bead.visible = false;
-                            bead.position.x = bead.startX;
-                            bead.position.z = bead.startZ;
+                            // Longitudinal slope along the vertical grid line (Z-axis, uphill/downhill)
+                            let slopeZ = Math.abs(grad.dhdz) * 100.0;
+                            if (slopeZ >= 0.20) {
+                                let dirZ = grad.dhdz > 1e-5 ? -1.0 : (grad.dhdz < -1e-5 ? 1.0 : 0.0);
+                                let speed = Math.min(2.0, Math.max(0.20, slopeZ * 0.35 * (stimp / 10.0)));
+                                let phase = ((tSec * speed / cycleDist) + bead.distOffset) % 1.0;
+                                curZ = sz + dirZ * (phase * cycleDist - cycleDist * 0.5);
+                            }
                         }
                         
-                        let dX = bead.position.x - bead.startX;
-                        let dZ = bead.position.z - bead.startZ;
-                        let traveled = Math.hypot(dX, dZ);
-                        if (traveled > (2.0 + bead.distOffset * 1.0)) {
-                            bead.position.x = bead.startX;
-                            bead.position.z = bead.startZ;
-                        }
+                        // Height positioned so 4.0cm radius bead sits directly on 8mm line (0.048 - 0.040 = 0.008m)
+                        let curH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(curX, curZ) : grad.height;
+                        _beadDummy.position.set(curX, curH + 0.048, curZ);
+                        _beadDummy.scale.set(1, 1, 1);
+                        _beadDummy.updateMatrix();
+                        window.greenBeadsMesh.setMatrixAt(i, _beadDummy.matrix);
                     }
+                    window.greenBeadsMesh.instanceMatrix.needsUpdate = true;
                 }
-            } else if (window.greenBeads && window.greenBeads.length > 0) {
-                window.greenBeads.forEach(b => { if (greenBeadsGroup) greenBeadsGroup.remove(b); });
-                window.greenBeads = [];
+            } else if ((window.greenBeadsMesh && window.greenBeadsMesh.visible) || (window.greenBeads && window.greenBeads.length > 0)) {
+                if (typeof window.clearGreenBeads === 'function') {
+                    window.clearGreenBeads();
+                } else if (window.greenBeadsMesh) {
+                    window.greenBeadsMesh.visible = false;
+                    window.greenBeadsMesh.count = 0;
+                }
             }
             
             // --- GREEN GRID ---
@@ -16877,47 +17011,96 @@ window.triggerExplosion = function(x, y, z) {
                 let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
                 window.buildGreenGrid(hole, holeIdx);
                 if (window.greenGridMesh) window.greenGridMesh.visible = true;
-                if (!isStudioMode && typeof window.buildBreakLine === 'function') {
-                    window.buildBreakLine();
+            }
+
+            // --- TRACKMAN SLOPE HUD LEGEND ---
+            let slopeLegend = document.getElementById('green-slope-hud-legend');
+            if (slopeLegend) {
+                let isLegendVisible = showGrid && (window.greenGridMesh && window.greenGridMesh.visible) && (window._greenGridColorMode !== 'WHITE');
+                slopeLegend.style.display = isLegendVisible ? 'flex' : 'none';
+                if (isLegendVisible) {
+                    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                    let titleEl = document.getElementById('slope-legend-title');
+                    if (titleEl) titleEl.textContent = isSv ? 'Lutning' : 'Slope';
                 }
             }
 
-            // --- GSPro Break Line Indicator (only in putting mode during play) ---
-            if (window.breakLineMesh) {
-                scene.remove(window.breakLineMesh);
-                window.breakLineMesh = null;
-            }
-            if (!isStudioMode && window.isPuttingMode) {
-                let aimDir = new THREE.Vector3().subVectors(controls.target, camera.position);
-                aimDir.y = 0; aimDir.normalize();
-                
-                let bPoints = [new THREE.Vector3(window.ballMesh.position.x, window.ballMesh.position.y, window.ballMesh.position.z)];
-                let bCur = { x: window.ballMesh.position.x, z: window.ballMesh.position.z };
-                let bDir = aimDir.clone();
-                for(let i=0; i<150; i++) {
-                    let surf = localGetTerrainAt(bCur.x, -bCur.z);
-                    if (!surf || surf.type !== 'GREEN') break;
-                    let normX = surf.normal ? (surf.normal.x !== undefined ? surf.normal.x : surf.normal[0]) : 0;
-                    let normZ = surf.normal ? (surf.normal.z !== undefined ? surf.normal.z : surf.normal[1]) : 0;
-                    let slopeForce = new THREE.Vector3(-normX, 0, -normZ);
-                    bDir.add(slopeForce.multiplyScalar(0.15));
-                    
-                    let sx = Math.sin(bCur.x * 0.3 + bCur.z * 0.2);
-                    let sz = Math.cos(bCur.z * 0.3 - bCur.x * 0.2);
-                    let currentStimp = window.GREEN_STIMP || 10.0;
-                    let grainScale = 0.03 * (10.0 / currentStimp);
-                    let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
-                    bDir.add(new THREE.Vector3(sx/gl, 0, sz/gl).multiplyScalar(grainScale * 0.8));
-                    bDir.normalize();
-                    
-                    bCur.x += bDir.x * 0.1;
-                    bCur.z += bDir.z * 0.1;
-                    bPoints.push(new THREE.Vector3(bCur.x, surf.z + 0.02, bCur.z));
+            // --- GSPro Break Line Indicator (only in putting mode during play, pooled geometry to avoid GPU leak) ---
+            if (!isStudioMode && window.isPuttingMode && window.ballMesh && controls) {
+                if (!window._breakLineGeo) {
+                    window._breakLineMaxPts = 160;
+                    window._breakLinePositions = new Float32Array(window._breakLineMaxPts * 3);
+                    window._breakLinePosAttr = new THREE.BufferAttribute(window._breakLinePositions, 3);
+                    window._breakLinePosAttr.setUsage(THREE.DynamicDrawUsage);
+                    window._breakLineGeo = new THREE.BufferGeometry();
+                    window._breakLineGeo.setAttribute('position', window._breakLinePosAttr);
+                    window._breakLineMat = new THREE.LineBasicMaterial({
+                        color: 0xffffff,
+                        transparent: true,
+                        opacity: 0.65,
+                        depthTest: true
+                    });
+                    window.breakLineMesh = new THREE.Line(window._breakLineGeo, window._breakLineMat);
+                    window.breakLineMesh.renderOrder = 997;
+                    scene.add(window.breakLineMesh);
                 }
-                let lineGeo = new THREE.BufferGeometry().setFromPoints(bPoints);
-                let lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-                window.breakLineMesh = new THREE.Line(lineGeo, lineMat);
-                scene.add(window.breakLineMesh);
+                
+                let aimDir = new THREE.Vector3().subVectors(controls.target, camera.position);
+                aimDir.y = 0;
+                if (aimDir.lengthSq() > 1e-6) aimDir.normalize();
+                else aimDir.set(0, 0, -1);
+                
+                let bCurX = window.ballMesh.position.x;
+                let bCurZ = window.ballMesh.position.z;
+                let startH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(bCurX, bCurZ) : window.ballMesh.position.y;
+                
+                let posArray = window._breakLinePositions;
+                let ptCount = 0;
+                posArray[0] = bCurX;
+                posArray[1] = startH + 0.025;
+                posArray[2] = bCurZ;
+                ptCount = 1;
+                
+                let bDirX = aimDir.x;
+                let bDirZ = aimDir.z;
+                let stimp = (window.matchSettings && window.matchSettings.greenStimp) || window.GREEN_STIMP || 10.0;
+                let stimpFactor = Math.max(0.6, Math.min(1.5, stimp / 10.0));
+                let stepDist = 0.10; // 10 cm per step
+                
+                for (let i = 0; i < 150 && ptCount < window._breakLineMaxPts; i++) {
+                    let surf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(bCurX, -bCurZ) : null;
+                    if (!surf || surf.type !== 'GREEN') break;
+                    
+                    let grad = (typeof window.sampleGreenGradient === 'function')
+                        ? window.sampleGreenGradient(bCurX, bCurZ, 0.20)
+                        : { downhillX: 0, downhillZ: 0, slopeMagnitude: 0 };
+                    
+                    // Downhill slope deflection scaled by stimp
+                    let deflectX = grad.downhillX * grad.slopeMagnitude * 0.35 * stimpFactor;
+                    let deflectZ = grad.downhillZ * grad.slopeMagnitude * 0.35 * stimpFactor;
+                    bDirX += deflectX;
+                    bDirZ += deflectZ;
+                    
+                    let dirLen = Math.hypot(bDirX, bDirZ) || 1e-6;
+                    bDirX /= dirLen;
+                    bDirZ /= dirLen;
+                    
+                    bCurX += bDirX * stepDist;
+                    bCurZ += bDirZ * stepDist;
+                    let curH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(bCurX, bCurZ) : surf.z;
+                    
+                    let idx3 = ptCount * 3;
+                    posArray[idx3] = bCurX;
+                    posArray[idx3 + 1] = curH + 0.025;
+                    posArray[idx3 + 2] = bCurZ;
+                    ptCount++;
+                }
+                
+                window._breakLineGeo.setDrawRange(0, ptCount);
+                window._breakLinePosAttr.needsUpdate = true;
+                window.breakLineMesh.visible = true;
+            } else if (window.breakLineMesh && window.breakLineMesh.visible) {
+                window.breakLineMesh.visible = false;
             }
 
             // --- ELEVATION PROFILE (Tour de France style cross-section, play mode only) ---
@@ -17059,13 +17242,14 @@ window.triggerExplosion = function(x, y, z) {
 
         } else {
             // Outside activation distance — cleanup all green viz
-            if (window.greenBeads && window.greenBeads.length > 0) {
+            if (typeof window.clearGreenBeads === 'function') {
+                window.clearGreenBeads();
+            } else if (window.greenBeads && window.greenBeads.length > 0) {
                 window.greenBeads.forEach(b => greenBeadsGroup.remove(b));
                 window.greenBeads = [];
             }
-            if (window.breakLineMesh) {
-                scene.remove(window.breakLineMesh);
-                window.breakLineMesh = null;
+            if (typeof window.clearBreakLine === 'function') {
+                window.clearBreakLine();
             }
             // BUG-04 FIX: Do NOT destroy greenGridMesh when ball leaves 45m zone.
             // Grid is persistent until hole changes. Only hide it.
@@ -17074,6 +17258,8 @@ window.triggerExplosion = function(x, y, z) {
             }
             let epContainer = document.getElementById('elevation-profile-container');
             if (epContainer) epContainer.style.display = 'none';
+            let slopeLegend = document.getElementById('green-slope-hud-legend');
+            if (slopeLegend) slopeLegend.style.display = 'none';
         }
 
         applySculpting();

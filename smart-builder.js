@@ -3978,6 +3978,9 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
     if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
     if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
 
+    // Increment terrain revision for caching invalidation
+    window._terrainRevision = (window._terrainRevision || 0) + 1;
+
     // Rebuild 3D Green Grid if in Green Studio Steg 2 (Lutning och höjd) or if Global Slope is active
     let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
     let isGlobalSlope = !!window._globalGreenGridEnabled;

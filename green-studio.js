@@ -277,9 +277,13 @@
 
         toggleStudioBeads(enabled) {
             window._studioShowBeads = !!enabled;
-            if (!window._studioShowBeads && window.greenBeads && window.greenBeads.length > 0) {
-                window.greenBeads.forEach(b => { if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b); });
-                window.greenBeads = [];
+            if (!window._studioShowBeads) {
+                if (typeof window.clearGreenBeads === 'function') {
+                    window.clearGreenBeads();
+                } else if (window.greenBeads && window.greenBeads.length > 0) {
+                    window.greenBeads.forEach(b => { if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b); });
+                    window.greenBeads = [];
+                }
             }
         }
 
@@ -425,7 +429,9 @@
             let isGlobalSlope = !!window._globalGreenGridEnabled;
             if (!isPlaying && !isGlobalSlope) {
                 if (window.greenGridMesh) window.greenGridMesh.visible = false;
-                if (window.greenBeads && window.greenBeads.length > 0) {
+                if (typeof window.clearGreenBeads === 'function') {
+                    window.clearGreenBeads();
+                } else if (window.greenBeads && window.greenBeads.length > 0) {
                     window.greenBeads.forEach(b => { if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b); });
                     window.greenBeads = [];
                 }
