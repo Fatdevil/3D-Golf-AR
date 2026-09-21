@@ -259,13 +259,18 @@
         <canvas id="elevation-canvas" width="220" height="80" style="width:100%; height:100%;"></canvas>
     </div>
 
-    <!-- FLYOVER PANEL (replaces Green Read — above minimap) -->
-    <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:8px 12px; z-index:11; backdrop-filter:blur(8px); min-width:140px; pointer-events:auto;">
-        <button onclick="startFlyover()" style="width:100%; background:linear-gradient(135deg, #0d9488, #0891b2); color:#fff; border:none; padding:10px 14px; border-radius:8px; font-weight:800; cursor:pointer; font-size:12px; letter-spacing:0.5px; transition:all 0.2s; text-align:center;">🚁 FLYOVER</button>
+    <!-- FLYOVER & GREEN READ PANEL (above minimap in play mode) -->
+    <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.92); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:6px; z-index:11; backdrop-filter:blur(8px); min-width:145px; pointer-events:auto;">
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button onclick="startFlyover()" style="width:100%; background:linear-gradient(135deg, #0d9488, #0891b2); color:#fff; border:none; padding:8px 10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:11px; letter-spacing:0.5px; transition:all 0.2s; text-align:center;">🚁 FLYOVER</button>
+            <button id="game-btn-slope-toggle" onclick="cycleGreenSlopeMode()" style="width:100%; background:rgba(15,23,42,0.85); color:#94a3b8; border:1px solid #334155; padding:8px 10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:11px; letter-spacing:0.4px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:5px;" title="Växla greenlutning: Av ➔ Gridd & Bollar ➔ Heatmap [L]">
+                <span>⚡</span> <span id="game-slope-btn-label">Lutning: Av</span>
+            </button>
+        </div>
     </div>
 
     <!-- TRACKMAN GREEN SLOPE HUD LEGEND -->
-    <div id="green-slope-hud-legend" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.92); backdrop-filter:blur(10px); border:1px solid rgba(56,189,248,0.3); border-radius:24px; padding:6px 16px; z-index:95; pointer-events:none; font-family:'Inter',sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.55); align-items:center; gap:14px;">
+    <div id="green-slope-hud-legend" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.92); backdrop-filter:blur(10px); border:1px solid rgba(56,189,248,0.3); border-radius:24px; padding:6px 16px; z-index:95; pointer-events:none; font-family:'Inter',sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.55); align-items:center; gap:14px; transition:bottom 0.25s cubic-bezier(0.4, 0, 0.2, 1);">
         <span style="font-size:10px; font-weight:800; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.8px; display:flex; align-items:center; gap:4px;">
             <span style="font-size:12px;">⛳</span> <span id="slope-legend-title">Lutning</span>
         </span>
@@ -347,7 +352,7 @@
                     <span style="font-size:12px;">📐</span> <span id="grid-btn-label" data-i18n="tool_grid">Rutnät</span>
                 </button>
                 <div style="width:1px; height:18px; background:#334155; margin:0 1px;"></div>
-                <button id="btn-slope-grid-toggle" onclick="toggleGlobalSlopeGrid()" style="background:transparent; color:#94a3b8; border:none; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Växla TrackMan greenlutning och vinklar (PÅ / AV) [L]">
+                <button id="btn-slope-grid-toggle" onclick="cycleGreenSlopeMode()" style="background:transparent; color:#94a3b8; border:none; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Växla greenlutning: Av ➔ Gridd & Bollar ➔ Heatmap [L]">
                     <span style="font-size:12px;">⚡</span> <span id="slope-grid-btn-label">Lutning</span>
                 </button>
             </div>
@@ -1971,17 +1976,20 @@
                             <input type="range" id="gs-blend-slider" min="3" max="18" value="8" step="1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.blendDistance = parseFloat(this.value); window.applyGreenPipeline(hole, false, true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
                         </div>
 
-                        <!-- 3D Rutnät & Fallinjer Visualisering -->
+                        <!-- 3D Rutnät, Fallinjer & Heatmap Visualisering -->
                         <div style="background:#1e293b; border-radius:6px; padding:8px 8px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; border:1px solid #334155;">
-                            <div style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Visualisering i 3D (TrackMan & GSPro)</div>
-                            <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                                <span style="color:#cbd5e1; font-size:9px; font-weight:600;">📐 Visa Green-Rutnät (1x1m)</span>
-                                <input type="checkbox" id="gs-show-grid-cb" checked onchange="if(window.GreenStudio) window.GreenStudio.toggleStudioGrid(this.checked);" style="accent-color:#38bdf8; cursor:pointer;">
-                            </label>
+                            <div style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Greenläsning i 3D (GSPro & TrackMan)</div>
+                            
+                            <!-- 3-lägesväljare: Av / Gridd & Bollar / Heatmap -->
+                            <div style="display:flex; gap:3px; background:rgba(15,23,42,0.6); padding:3px; border-radius:6px; border:1px solid #334155;">
+                                <button type="button" id="gs-slope-mode-off" onclick="window.cycleGreenSlopeMode('OFF')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Inget rutnät eller heatmap">Av</button>
+                                <button type="button" id="gs-slope-mode-grid" onclick="window.cycleGreenSlopeMode('GRID')" style="flex:1.3; background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="2m rutnät med linjeföljande rörliga pärlor">⚡ Gridd & Bollar</button>
+                                <button type="button" id="gs-slope-mode-heatmap" onclick="window.cycleGreenSlopeMode('HEATMAP')" style="flex:1.1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Fullständig färggradient över greenytan utan bollar">🌈 Heatmap</button>
+                            </div>
 
                             <!-- Rutnät Täckning: Hela komplexet vs Endast green -->
                             <div id="gs-grid-coverage-box" style="display:flex; flex-direction:column; gap:3px; background:rgba(15,23,42,0.6); padding:5px 6px; border-radius:5px; border:1px solid #334155;">
-                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Rutnätstäckning</span>
+                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Täckning</span>
                                 <div style="display:flex; gap:4px;">
                                     <button type="button" id="gs-grid-cov-all" onclick="window.setGreenGridCoverage('ALL')" style="flex:1; background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck hela greenen inklusive foregreen (TrackMan & GSPro standard)">Hela komplexet</button>
                                     <button type="button" id="gs-grid-cov-green" onclick="window.setGreenGridCoverage('GREEN_ONLY')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck enbart puttytan">Endast green</button>
@@ -1990,17 +1998,13 @@
 
                             <!-- Rutnät Färgkodning: TrackMan Heatmap vs Vit -->
                             <div id="gs-grid-style-box" style="display:flex; flex-direction:column; gap:3px; background:rgba(15,23,42,0.6); padding:5px 6px; border-radius:5px; border:1px solid #334155;">
-                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Rutnätsstil</span>
+                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Rutnätsstil (vid gridd-läge)</span>
                                 <div style="display:flex; gap:4px;">
-                                    <button type="button" id="gs-grid-style-heatmap" onclick="window.setGreenGridStyle('HEATMAP')" style="flex:1; background:rgba(74,222,128,0.25); color:#4ade80; border:1px solid #4ade80; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="TrackMan färgkarta: Blå=Platt, Grön=Lätt, Gul=Medel, Röd=Brant">⚡ TrackMan Färg</button>
+                                    <button type="button" id="gs-grid-style-heatmap" onclick="window.setGreenGridStyle('HEATMAP')" style="flex:1; background:rgba(74,222,128,0.25); color:#4ade80; border:1px solid #4ade80; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="TrackMan färgkarta: Blå=Platt, Gul=Lätt, Orange=Medel, Röd=Brant">⚡ TrackMan Färg</button>
                                     <button type="button" id="gs-grid-style-white" onclick="window.setGreenGridStyle('WHITE')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Klassisk vit trådmodell">Klassiskt Vit</button>
                                 </div>
                             </div>
 
-                            <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                                <span style="color:#cbd5e1; font-size:9px; font-weight:600;">🔮 Visa Fallinjer (Pärlor)</span>
-                                <input type="checkbox" id="gs-show-beads-cb" checked onchange="if(window.GreenStudio) window.GreenStudio.toggleStudioBeads(this.checked);" style="accent-color:#4ade80; cursor:pointer;">
-                            </label>
                             <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
                                 <span style="color:#94a3b8; font-size:9px; font-weight:600;">〰️ Visa höjdkurvor (10cm)</span>
                                 <input type="checkbox" id="gs-show-contours-cb" onchange="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.showContours=this.checked; if(window.GreenStudio) window.GreenStudio.sync(); }" style="accent-color:#38bdf8; cursor:pointer;">
@@ -7980,6 +7984,49 @@
         }
     };
 
+    // Global TrackMan Slope Color Mapping (Used by both 3D Grid and Surface Heatmap)
+    window.getGreenSlopeColor = function(wx, wz, isForegreen = false) {
+        let grad = (typeof window.sampleGreenGradient === 'function') 
+            ? window.sampleGreenGradient(wx, wz, 0.25)
+            : { slopePercent: 0 };
+        let slopePct = grad.slopePercent;
+        
+        let r, g, b;
+        if (slopePct < 1.0) {
+            // Flat / Level: Vivid Electric Cyan / Ice Blue (Maximum contrast on grass)
+            let t = Math.max(0, Math.min(1, slopePct / 1.0));
+            r = 0.05 + t * 0.10;
+            g = 0.88 + t * 0.07;
+            b = 1.0;
+        } else if (slopePct < 2.2) {
+            // Gentle break (typical putting green 1-2%): High-Contrast Neon Gold / Yellow
+            let t = (slopePct - 1.0) / (2.2 - 1.0);
+            r = 1.0;
+            g = 0.90 + t * 0.05;
+            b = 0.10 + (1.0 - t) * 0.20;
+        } else if (slopePct < 3.8) {
+            // Moderate break: Vivid Amber / Tangerine
+            let t = (slopePct - 2.2) / (3.8 - 2.2);
+            r = 1.0;
+            g = 0.90 - t * 0.35;
+            b = 0.05;
+        } else {
+            // Severe break / Slant: Fiery Coral Red
+            let t = Math.min(1, (slopePct - 3.8) / 2.5);
+            r = 1.0;
+            g = 0.55 - t * 0.35;
+            b = 0.15;
+        }
+        
+        if (isForegreen) {
+            // Mjukare kontrast på foregreen så puttytan syns distinkt
+            r *= 0.65;
+            g *= 0.65;
+            b *= 0.65;
+        }
+        return [r, g, b];
+    };
+
     window.buildGreenGrid = function(hole, holeIndex, forceRebuild = false) {
         if (!hole) return;
         
@@ -8036,45 +8083,7 @@
             if (!isHeatmap) {
                 return isForegreen ? [0.70, 0.70, 0.70] : [1.0, 1.0, 1.0];
             }
-            let grad = (typeof window.sampleGreenGradient === 'function') 
-                ? window.sampleGreenGradient(wx, wz, 0.25)
-                : { slopePercent: 0 };
-            let slopePct = grad.slopePercent;
-            
-            let r, g, b;
-            if (slopePct < 1.0) {
-                // Flat / Level: Vivid Electric Cyan / Ice Blue (Maximum contrast on grass)
-                let t = Math.max(0, Math.min(1, slopePct / 1.0));
-                r = 0.05 + t * 0.10;
-                g = 0.88 + t * 0.07;
-                b = 1.0;
-            } else if (slopePct < 2.2) {
-                // Gentle break (typical putting green 1-2%): High-Contrast Neon Gold / Yellow
-                let t = (slopePct - 1.0) / (2.2 - 1.0);
-                r = 1.0;
-                g = 0.90 + t * 0.05;
-                b = 0.10 + (1.0 - t) * 0.20;
-            } else if (slopePct < 3.8) {
-                // Moderate break: Vivid Amber / Tangerine
-                let t = (slopePct - 2.2) / (3.8 - 2.2);
-                r = 1.0;
-                g = 0.90 - t * 0.35;
-                b = 0.05;
-            } else {
-                // Severe break / Slant: Fiery Coral Red
-                let t = Math.min(1, (slopePct - 3.8) / 2.5);
-                r = 1.0;
-                g = 0.55 - t * 0.35;
-                b = 0.15;
-            }
-            
-            if (isForegreen) {
-                // Mjukare kontrast på foregreen så puttytan syns distinkt
-                r *= 0.65;
-                g *= 0.65;
-                b *= 0.65;
-            }
-            return [r, g, b];
+            return window.getGreenSlopeColor(wx, wz, isForegreen);
         }
 
         // Helper: Check if point is inside inner green
@@ -8233,9 +8242,158 @@
         }
     };
 
-    // Reset grid when moving to a new hole.
+    // Reset grid & heatmap when moving to a new hole.
     // IMPORTANT: scene.remove() BEFORE dispose() — THREE.js internal refs must
     // be released from the scene graph before GPU resources are freed.
+    window.clearGreenHeatmap = function() {
+        if (window.greenHeatmapMesh) {
+            scene.remove(window.greenHeatmapMesh);
+            if (window.greenHeatmapMesh.geometry) window.greenHeatmapMesh.geometry.dispose();
+            if (window.greenHeatmapMesh.material) window.greenHeatmapMesh.material.dispose();
+            window.greenHeatmapMesh = null;
+        }
+        window._greenHeatmapCacheKey = null;
+        window.greenHeatmapForHoleIndex = -1;
+    };
+
+    window.buildGreenHeatmapMesh = function(hole, holeIndex, forceRebuild = false) {
+        if (!hole) return;
+        
+        let coverage = window._greenGridCoverage || 'ALL';
+        let ptsCount = (hole.greenData && hole.greenData.points) ? hole.greenData.points.length : 0;
+        let terrainRev = window._terrainRevision || 0;
+        let hmStep = 0.50;  // 50 cm smooth grid resolution
+        let cacheKey = `hm_${holeIndex}_${terrainRev}_${coverage}_${ptsCount}_${hmStep}`;
+        
+        if (!forceRebuild && window._greenHeatmapCacheKey === cacheKey && window.greenHeatmapMesh) {
+            return;
+        }
+        
+        window.clearGreenHeatmap();
+        
+        let gd = hole.greenData;
+        if (!gd) return;
+        
+        let targetPoly = (typeof window.getActiveGreenPolygon === 'function')
+            ? window.getActiveGreenPolygon(hole, coverage)
+            : (gd.densePts || null);
+        if (!targetPoly || targetPoly.length < 3) return;
+        
+        let innerPoly = (typeof window.getActiveGreenPolygon === 'function')
+            ? window.getActiveGreenPolygon(hole, 'GREEN_ONLY')
+            : null;
+        let fgWidth = (gd.foregreenWidth !== undefined) ? gd.foregreenWidth : 1.0;
+        
+        // Bounding Box
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (let p of targetPoly) {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.z < minZ) minZ = p.z;
+            if (p.z > maxZ) maxZ = p.z;
+        }
+        if (!isFinite(minX)) return;
+        
+        let startX = Math.floor(minX / hmStep) * hmStep;
+        let endX = Math.ceil(maxX / hmStep) * hmStep;
+        let startZ = Math.floor(minZ / hmStep) * hmStep;
+        let endZ = Math.ceil(maxZ / hmStep) * hmStep;
+        
+        let cols = Math.round((endX - startX) / hmStep) + 1;
+        let rows = Math.round((endZ - startZ) / hmStep) + 1;
+        let vertMap = new Int32Array(cols * rows);
+        vertMap.fill(-1);
+        
+        let positions = [];
+        let colors = [];
+        let indices = [];
+        let vertCount = 0;
+        
+        function getOrCreateVertex(col, row, wx, wz) {
+            let mapIdx = row * cols + col;
+            if (vertMap[mapIdx] !== -1) {
+                return vertMap[mapIdx];
+            }
+            let curH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz) : 0;
+            let y = curH + 0.005; // 5 mm elevation above grass to eliminate z-fighting
+            
+            let isFg = (innerPoly && fgWidth > 0.05) ? !window.pointInPolygon(wx, wz, innerPoly) : false;
+            let rgb = (typeof window.getGreenSlopeColor === 'function')
+                ? window.getGreenSlopeColor(wx, wz, isFg)
+                : [0.38, 0.82, 0.38];
+                
+            positions.push(wx, y, wz);
+            colors.push(rgb[0], rgb[1], rgb[2]);
+            
+            let newIdx = vertCount++;
+            vertMap[mapIdx] = newIdx;
+            return newIdx;
+        }
+        
+        for (let r = 0; r < rows - 1; r++) {
+            let wz0 = startZ + r * hmStep;
+            let wz1 = wz0 + hmStep;
+            for (let c = 0; c < cols - 1; c++) {
+                let wx0 = startX + c * hmStep;
+                let wx1 = wx0 + hmStep;
+                
+                // Fast polygon inclusion test: check center, then corners
+                let midX = (wx0 + wx1) * 0.5;
+                let midZ = (wz0 + wz1) * 0.5;
+                let centerIn = window.pointInPolygon(midX, midZ, targetPoly);
+                if (!centerIn) {
+                    let in00 = window.pointInPolygon(wx0, wz0, targetPoly);
+                    let in10 = window.pointInPolygon(wx1, wz0, targetPoly);
+                    let in11 = window.pointInPolygon(wx1, wz1, targetPoly);
+                    let in01 = window.pointInPolygon(wx0, wz1, targetPoly);
+                    if (!in00 && !in10 && !in11 && !in01) {
+                        continue;
+                    }
+                }
+                
+                let v00 = getOrCreateVertex(c, r, wx0, wz0);
+                let v10 = getOrCreateVertex(c + 1, r, wx1, wz0);
+                let v11 = getOrCreateVertex(c + 1, r + 1, wx1, wz1);
+                let v01 = getOrCreateVertex(c, r + 1, wx0, wz1);
+                
+                // Quad: two CCW triangles
+                indices.push(v00, v10, v11);
+                indices.push(v00, v11, v01);
+            }
+        }
+        
+        if (indices.length === 0) return;
+        
+        let geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        
+        let mat = new THREE.MeshBasicMaterial({
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.68,
+            depthTest: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -3.0,
+            polygonOffsetUnits: -3.0,
+            side: THREE.DoubleSide
+        });
+        
+        let mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = 996; // Under grid (998) and break line (997)
+        mesh.frustumCulled = false;
+        mesh.visible = (window._greenSlopeMode === 'HEATMAP');
+        scene.add(mesh);
+        
+        window.greenHeatmapMesh = mesh;
+        window._greenHeatmapCacheKey = cacheKey;
+        window.greenHeatmapForHoleIndex = holeIndex;
+        console.log(`🌈 Green Slope Heatmap generated: ${indices.length / 3} triangles, ${positions.length / 3} vertices for hole ${holeIndex}`);
+    };
+
     window.resetGreenGrid = function() {
         if (window.greenGridMesh) {
             scene.remove(window.greenGridMesh);           // 1. Remove from scene graph first
@@ -8243,13 +8401,17 @@
             window.greenGridMesh.material.dispose();      // 3. Free GPU shader/texture
             window.greenGridMesh = null;                  // 4. Release JS reference
         }
+        window.clearGreenHeatmap();
         if (typeof window.clearBreakLine === 'function') {
             window.clearBreakLine();
         }
         window.greenGridForHoleIndex = -1; // Force rebuild on next green landing
         window._greenGridCacheKey = null;
         let leg = document.getElementById('green-slope-hud-legend');
-        if (leg) leg.style.display = 'none';
+        if (leg && leg.style.display !== 'none') {
+            leg.style.display = 'none';
+            if (typeof window.updateBottomHUDLayout === 'function') window.updateBottomHUDLayout();
+        }
     };
     
     // === PUTT BREAK LINE ===
@@ -8396,7 +8558,7 @@
                 btnEl.classList.remove('active');
             }
             if (legend) legend.style.display = 'none';
-            if (toolHints) toolHints.style.bottom = '20px';
+            if (typeof window.updateBottomHUDLayout === 'function') window.updateBottomHUDLayout();
             showBuildToast(isSv ? '📐 Terrängrutnät: AV' : '📐 Terrain Grid: OFF', '#94a3b8');
         } else {
             if (btnEl) {
@@ -8405,57 +8567,182 @@
                 btnEl.classList.add('active');
             }
             if (legend) legend.style.display = 'flex';
-            if (toolHints) toolHints.style.bottom = '95px';
+            if (typeof window.updateBottomHUDLayout === 'function') window.updateBottomHUDLayout();
             showBuildToast(isSv ? '📐 Terrängrutnät: PÅ (100m + 25m)' : '📐 Terrain Grid: ON (100m + 25m)', '#38bdf8');
         }
     };
     
+    // Dynamically coordinate bottom HUD pills (tool-hints, slope-legend, grid-scale-legend)
+    window.updateBottomHUDLayout = function() {
+        let toolHints = document.getElementById('tool-hints');
+        let slopeLegend = document.getElementById('green-slope-hud-legend');
+        let gridLegend = document.getElementById('grid-scale-legend');
+        
+        let isSlopeActive = slopeLegend && slopeLegend.style.display !== 'none';
+        let isGridActive = gridLegend && gridLegend.style.display !== 'none';
+
+        // 1. Position slope legend (push up if terrain grid scale guide is open)
+        if (slopeLegend) {
+            slopeLegend.style.bottom = isGridActive ? '88px' : '20px';
+        }
+
+        // 2. Position tool hints (always float cleanly above visible legends)
+        if (toolHints) {
+            if (isGridActive && isSlopeActive) {
+                toolHints.style.bottom = '132px';
+            } else if (isGridActive) {
+                toolHints.style.bottom = '95px';
+            } else if (isSlopeActive) {
+                toolHints.style.bottom = '64px';
+            } else {
+                toolHints.style.bottom = '20px';
+            }
+        }
+    };
+
+    window._greenSlopeMode = 'OFF'; // 'OFF' | 'GRID' | 'HEATMAP'
     window._globalGreenGridEnabled = false;
-    window.toggleGlobalSlopeGrid = function(explicitState) {
-        if (explicitState !== undefined) {
-            window._globalGreenGridEnabled = !!explicitState;
-        } else {
-            window._globalGreenGridEnabled = !window._globalGreenGridEnabled;
+
+    window.syncGreenSlopeUI = function() {
+        let mode = window._greenSlopeMode || 'OFF';
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+
+        // 1. Topbar Button (Build mode)
+        let topBtnLabel = document.getElementById('slope-grid-btn-label');
+        let topBtnEl = document.getElementById('btn-slope-grid-toggle');
+        if (topBtnLabel) {
+            if (mode === 'OFF') topBtnLabel.textContent = isSv ? 'Lutning' : 'Slope';
+            else if (mode === 'GRID') topBtnLabel.textContent = isSv ? 'Gridd' : 'Grid';
+            else if (mode === 'HEATMAP') topBtnLabel.textContent = 'Heatmap';
+        }
+        if (topBtnEl) {
+            if (mode === 'OFF') {
+                topBtnEl.style.color = '#94a3b8';
+                topBtnEl.style.background = 'transparent';
+                topBtnEl.classList.remove('active');
+            } else if (mode === 'GRID') {
+                topBtnEl.style.color = '#38bdf8';
+                topBtnEl.style.background = 'rgba(56,189,248,0.18)';
+                topBtnEl.classList.add('active');
+            } else if (mode === 'HEATMAP') {
+                topBtnEl.style.color = '#4ade80';
+                topBtnEl.style.background = 'rgba(74,222,128,0.18)';
+                topBtnEl.classList.add('active');
+            }
+        }
+
+        // 2. Game HUD Button (Play / Putting mode)
+        let gameBtnLabel = document.getElementById('game-slope-btn-label');
+        let gameBtnEl = document.getElementById('game-btn-slope-toggle');
+        if (gameBtnLabel) {
+            if (mode === 'OFF') gameBtnLabel.textContent = isSv ? 'Lutning: Av' : 'Slope: Off';
+            else if (mode === 'GRID') gameBtnLabel.textContent = isSv ? 'Gridd & Bollar' : 'Grid & Beads';
+            else if (mode === 'HEATMAP') gameBtnLabel.textContent = '🌈 Heatmap';
+        }
+        if (gameBtnEl) {
+            if (mode === 'OFF') {
+                gameBtnEl.style.color = '#94a3b8';
+                gameBtnEl.style.background = 'rgba(15,23,42,0.85)';
+                gameBtnEl.style.borderColor = '#334155';
+            } else if (mode === 'GRID') {
+                gameBtnEl.style.color = '#38bdf8';
+                gameBtnEl.style.background = 'rgba(56,189,248,0.22)';
+                gameBtnEl.style.borderColor = '#38bdf8';
+            } else if (mode === 'HEATMAP') {
+                gameBtnEl.style.color = '#4ade80';
+                gameBtnEl.style.background = 'rgba(74,222,128,0.22)';
+                gameBtnEl.style.borderColor = '#4ade80';
+            }
+        }
+
+        // 3. Green Studio 3-way segmented buttons (if present)
+        let bOff = document.getElementById('gs-slope-mode-off');
+        let bGrid = document.getElementById('gs-slope-mode-grid');
+        let bHm = document.getElementById('gs-slope-mode-heatmap');
+        if (bOff) {
+            bOff.style.background = (mode === 'OFF') ? '#334155' : '#0f172a';
+            bOff.style.color = (mode === 'OFF') ? '#f1f5f9' : '#94a3b8';
+            bOff.style.borderColor = (mode === 'OFF') ? '#64748b' : '#334155';
+        }
+        if (bGrid) {
+            bGrid.style.background = (mode === 'GRID') ? 'rgba(56,189,248,0.25)' : '#0f172a';
+            bGrid.style.color = (mode === 'GRID') ? '#38bdf8' : '#94a3b8';
+            bGrid.style.borderColor = (mode === 'GRID') ? '#38bdf8' : '#334155';
+        }
+        if (bHm) {
+            bHm.style.background = (mode === 'HEATMAP') ? 'rgba(74,222,128,0.25)' : '#0f172a';
+            bHm.style.color = (mode === 'HEATMAP') ? '#4ade80' : '#94a3b8';
+            bHm.style.borderColor = (mode === 'HEATMAP') ? '#4ade80' : '#334155';
         }
         
-        let btn = document.getElementById('slope-grid-btn-label');
-        let btnEl = document.getElementById('btn-slope-grid-toggle');
+        if (typeof window.updateBottomHUDLayout === 'function') {
+            window.updateBottomHUDLayout();
+        }
+    };
+
+    window.cycleGreenSlopeMode = function(targetMode) {
+        if (targetMode !== undefined) {
+            window._greenSlopeMode = targetMode;
+        } else {
+            if (window._greenSlopeMode === 'OFF') {
+                window._greenSlopeMode = 'GRID';
+            } else if (window._greenSlopeMode === 'GRID') {
+                window._greenSlopeMode = 'HEATMAP';
+            } else {
+                window._greenSlopeMode = 'OFF';
+            }
+        }
+
+        window._globalGreenGridEnabled = (window._greenSlopeMode !== 'OFF');
+        let mode = window._greenSlopeMode;
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
         let hole = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null);
+        let hasGreen = hole && hole.greenData && hole.greenData.points && hole.greenData.points.length >= 3;
+        let leg = document.getElementById('green-slope-hud-legend');
 
-        if (btn) btn.textContent = isSv ? 'Lutning' : 'Slope';
-        if (window._globalGreenGridEnabled) {
-            if (btnEl) {
-                btnEl.style.color = '#38bdf8';
-                btnEl.style.background = 'rgba(56,189,248,0.18)';
-                btnEl.classList.add('active');
-            }
-            if (hole && hole.greenData && hole.greenData.points && hole.greenData.points.length >= 3) {
+        if (mode === 'OFF') {
+            if (window.greenGridMesh) window.greenGridMesh.visible = false;
+            if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = false;
+            if (typeof window.clearGreenBeads === 'function') window.clearGreenBeads();
+            if (leg) leg.style.display = 'none';
+            showBuildToast(isSv ? '⚡ Greenlutning: AV' : '⚡ Green Slope: OFF', '#94a3b8');
+        } else if (mode === 'GRID') {
+            if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = false;
+            if (hasGreen) {
                 if (typeof window.buildGreenGrid === 'function') {
                     window.buildGreenGrid(hole, window.currentHoleIndex, true);
                 }
                 if (window.greenGridMesh) window.greenGridMesh.visible = true;
-                showBuildToast(isSv ? '⚡ TrackMan Greenlutning: PÅ' : '⚡ TrackMan Slope Grid: ON', '#38bdf8');
+                if (leg) leg.style.display = 'flex';
+                showBuildToast(isSv ? '⚡ Greenlutning: Gridd & Bollar' : '⚡ Slope: Grid & Beads', '#38bdf8');
             } else {
-                showBuildToast(isSv ? '⚠️ Skapa en green först för att se lutningsrutnät' : '⚠️ Create a green first to view slope grid', '#fbbf24');
+                showBuildToast(isSv ? '⚠️ Skapa en green först för att se lutning' : '⚠️ Create a green first to view slope', '#fbbf24');
             }
-        } else {
-            if (btnEl) {
-                btnEl.style.color = '#94a3b8';
-                btnEl.style.background = 'transparent';
-                btnEl.classList.remove('active');
-            }
-            let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
-            if (!isStudioLutning) {
-                if (window.greenGridMesh) window.greenGridMesh.visible = false;
-                if (typeof window.clearGreenBeads === 'function') {
-                    window.clearGreenBeads();
-                } else if (window.greenBeads && window.greenBeads.length > 0) {
-                    window.greenBeads.forEach(b => { if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b); });
-                    window.greenBeads = [];
+        } else if (mode === 'HEATMAP') {
+            if (window.greenGridMesh) window.greenGridMesh.visible = false;
+            if (typeof window.clearGreenBeads === 'function') window.clearGreenBeads();
+            if (hasGreen) {
+                if (typeof window.buildGreenHeatmapMesh === 'function') {
+                    window.buildGreenHeatmapMesh(hole, window.currentHoleIndex, true);
                 }
+                if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = true;
+                if (leg) leg.style.display = 'flex';
+                showBuildToast(isSv ? '🌈 Greenlutning: Heatmap' : '🌈 Slope: Heatmap', '#4ade80');
+            } else {
+                showBuildToast(isSv ? '⚠️ Skapa en green först för att se lutning' : '⚠️ Create a green first to view slope', '#fbbf24');
             }
-            showBuildToast(isSv ? '⚡ TrackMan Greenlutning: AV' : '⚡ TrackMan Slope Grid: OFF', '#94a3b8');
+        }
+        
+        window.syncGreenSlopeUI();
+    };
+
+    window.toggleGlobalSlopeGrid = function(explicitState) {
+        if (explicitState === true) {
+            window.cycleGreenSlopeMode('GRID');
+        } else if (explicitState === false) {
+            window.cycleGreenSlopeMode('OFF');
+        } else {
+            window.cycleGreenSlopeMode();
         }
     };
     
@@ -11355,7 +11642,7 @@
                 }
                 if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
                 if(h.aimMesh) { scene.remove(h.aimMesh); h.aimMesh=null; }
-                h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.bunkerData=null; h.pins={};
+                h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.fairways=[]; h.activeFairwayIndex=null; h.bunkerData=null; h.bunkers=[]; h.activeBunkerIndex=null; h.pins={};
             }
             window._allFlagCloths = [];  // Clear wave animation references
             
@@ -13768,12 +14055,12 @@
         }
     }
 
-    function captureEditorState() {
+    function captureEditorState(forceFull = false) {
         let posCopy = new Float32Array(planeGeo.attributes.position.array);
         
-        // Only clone heavy 4K textures if the current tool modifies textures (PAINT / WATER).
-        // For SCULPT, SMOOTH, FLATTEN, RAMP, PROPS, etc., colorCanvas is null, saving 134MB RAM and 100ms per click!
-        let needsColorCanvas = (currentTool === 'PAINT');
+        // Only clone heavy 4K textures if the current tool modifies textures (PAINT / WATER),
+        // or if forceFull is true (e.g. before destructive operations like NUKE).
+        let needsColorCanvas = forceFull || (currentTool === 'PAINT');
         let cCopy = null;
         if (needsColorCanvas && typeof paintCanvas !== 'undefined') {
             cCopy = document.createElement('canvas');
@@ -13782,7 +14069,7 @@
         }
         
         let wPosCopy = window.waterData ? new Float32Array(window.waterData) : null;
-        let needsWaterCanvas = (currentTool === 'WATER');
+        let needsWaterCanvas = forceFull || (currentTool === 'WATER');
         let wCanvasCopy = null;
         if (needsWaterCanvas && typeof waterCanvas !== 'undefined') {
             wCanvasCopy = document.createElement('canvas');
@@ -13794,8 +14081,11 @@
         let treesCopy = window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, scale: t.scale, rot: t.rot, tilt: t.tiltX, roll: t.rollZ, color: t.color, trunkColor: t.trunkColor, yOffset: t.yOffset, brightness: t.brightness}));
         
         let holesCopy = courseHoles.map(h => ({
+            par: h.par !== undefined ? h.par : 4,
             tees: JSON.parse(JSON.stringify(h.tees || {})),
             flag: h.flag ? JSON.parse(JSON.stringify(h.flag)) : null,
+            aimPoint: h.aimPoint ? { ...h.aimPoint } : null,
+            pins: h.pins ? JSON.parse(JSON.stringify(h.pins)) : {},
             envObjects: h.envObjects ? h.envObjects.slice() : [],
             greenData: h.greenData ? { ...h.greenData } : null,
             fairways: h.fairways ? h.fairways.map(f => ({ ...f, points: f.points ? f.points.map(p => ({ ...p })) : [] })) : (h.fairwayData ? [{ ...h.fairwayData, points: h.fairwayData.points ? h.fairwayData.points.map(p => ({ ...p })) : [] }] : []),
@@ -13803,7 +14093,11 @@
             fairwayData: h.fairwayData ? { ...h.fairwayData } : null,
             bunkers: h.bunkers ? h.bunkers.map(b => ({ ...b, points: b.points ? b.points.map(p => ({ ...p })) : [] })) : (h.bunkerData ? [{ ...h.bunkerData, points: h.bunkerData.points ? h.bunkerData.points.map(p => ({ ...p })) : [] }] : []),
             activeBunkerIndex: h.activeBunkerIndex,
-            bunkerData: h.bunkerData ? { ...h.bunkerData } : null
+            bunkerData: h.bunkerData ? { ...h.bunkerData } : null,
+            panorama: h.panorama || null,
+            surrounding: h.surrounding || null,
+            surroundConfig: h.surroundConfig ? JSON.parse(JSON.stringify(h.surroundConfig)) : null,
+            rangeLinesEnabled: h.rangeLinesEnabled !== false
         }));
         
         return { 
@@ -13922,6 +14216,18 @@
                     h.flagMesh = null;
                 }
                 
+                h.par = hState.par !== undefined ? hState.par : 4;
+                h.aimPoint = hState.aimPoint ? JSON.parse(JSON.stringify(hState.aimPoint)) : null;
+                if(h.aimMesh) { scene.remove(h.aimMesh); h.aimMesh = null; }
+                if(h.aimPoint && typeof createAimPointMarker === 'function') {
+                    h.aimMesh = createAimPointMarker(h.aimPoint.x, h.aimPoint.y, h.aimPoint.z, i + 1);
+                }
+                h.pins = hState.pins ? JSON.parse(JSON.stringify(hState.pins)) : {};
+                h.panorama = hState.panorama || null;
+                h.surrounding = hState.surrounding || null;
+                h.surroundConfig = hState.surroundConfig || null;
+                h.rangeLinesEnabled = hState.rangeLinesEnabled !== false;
+
                 // Restore envObjects
                 if (h.envObjects) {
                     h.envObjects.forEach(obj => { if(obj.mesh) scene.remove(obj.mesh); });
@@ -13979,9 +14285,9 @@
         }
     };
 
-    function saveUndoState() {
+    function saveUndoState(forceFull = false) {
         if (undoStack.length >= 20) undoStack.shift();
-        undoStack.push(captureEditorState());
+        undoStack.push(captureEditorState(forceFull));
         redoStack.length = 0; // Clear redo history on new action
         updateUndoRedoUI();
         
@@ -14674,7 +14980,11 @@
         let isGridActive = (mode === 'BUILD' && window._builderGridMode > 0);
         if (legend) legend.style.display = isGridActive ? 'flex' : 'none';
         let toolHints = document.getElementById('tool-hints');
-        if (toolHints) toolHints.style.bottom = isGridActive ? '95px' : '20px';
+        if (typeof window.updateBottomHUDLayout === 'function') {
+            window.updateBottomHUDLayout();
+        } else if (toolHints) {
+            toolHints.style.bottom = isGridActive ? '95px' : '20px';
+        }
         if (typeof window.updateRangeRingLabels === 'function') window.updateRangeRingLabels();
         if (typeof window.updateTopbarHoleDistance === 'function') window.updateTopbarHoleDistance();
         let btnBuild = document.getElementById('btn-mode-build');
@@ -14729,6 +15039,7 @@
         safeSetDisplay('btn-start-round', mode === 'PLAY' ? 'block' : 'none');
         
         if (window.initAutoPerformanceLOD) window.initAutoPerformanceLOD();
+        if (typeof window.syncGreenSlopeUI === 'function') window.syncGreenSlopeUI();
         
         // Range mode: hide course-only buttons
         let isRangeHide = !!window._isRangeMode;
@@ -15202,14 +15513,28 @@
         else if (toolName === 'SMART_BUILDER') {
             let curH = window.courseHoles && window.courseHoles[window.currentHoleIndex];
             let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-            if (window._smartBuilderType === 'GREEN' && curH && curH.greenData && curH.greenData.points && curH.greenData.points.length >= 3) {
+            let sbType = window._smartBuilderType || 'GREEN';
+            let typeNameSv = 'green';
+            let typeNameEn = 'Green';
+            if (sbType === 'FAIRWAY') {
+                typeNameSv = 'fairway';
+                typeNameEn = 'Fairway';
+            } else if (sbType === 'BUNKER') {
+                typeNameSv = 'bunker';
+                typeNameEn = 'Bunker';
+            } else if (sbType === 'TEE') {
+                typeNameSv = 'teebox';
+                typeNameEn = 'Tee Box';
+            }
+
+            if (sbType === 'GREEN' && curH && curH.greenData && curH.greenData.points && curH.greenData.points.length >= 3) {
                 hintHtml = isSv
                     ? "💡 <b>Dra golfbollarna</b> för att forma greenen<br>Klicka på linjen för ny punkt • Högerklicka för att ta bort"
                     : "💡 <b>Drag golf balls</b> to shape green<br>Click line to add point • Right-click to remove";
             } else {
                 hintHtml = isSv
-                    ? "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa green"
-                    : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build";
+                    ? `Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa ${typeNameSv}`
+                    : `Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then click Build ${typeNameEn}`;
             }
         }
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
@@ -15224,6 +15549,9 @@
         else if (toolName === 'MTN') hintHtml = "Click on mountain: <b>Auto-paint with terrain colors</b> (flood-fill detects mountain)";
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
+        if (typeof window.updateBottomHUDLayout === 'function') {
+            window.updateBottomHUDLayout();
+        }
         
         ghostBlock.visible = false;
         sculptBrushCursor.visible = false;
@@ -15335,8 +15663,8 @@
         document.getElementById('confirm-modal').style.display = 'none';
     }
     
-    function executeClear() {
-        if (typeof saveUndoState === 'function') saveUndoState();
+    async function executeClear() {
+        if (typeof saveUndoState === 'function') saveUndoState(true);
 
         targets.forEach(t => scene.remove(t.mesh));
         targets.length = 0;
@@ -15346,7 +15674,10 @@
             destroyAllPools();
         }
         
-        // Reset all course holes completely (tees, flags, aims, greens, bunkers, fairways)
+        // Reset flag cloth animation registry to prevent memory leak and CPU waste
+        window._allFlagCloths = [];
+
+        // Reset all course holes completely (tees, flags, aims, greens, bunkers, fairways, surroundings)
         for(let i=0; i<MAX_HOLES; i++) {
             let h = courseHoles[i];
             for(let key in h.teeMeshes) {
@@ -15359,13 +15690,21 @@
             h.aimPoint = null;
             h.greenData = null;
             h.fairwayData = null;
+            h.fairways = [];
+            h.activeFairwayIndex = null;
             h.bunkerData = null;
+            h.bunkers = [];
+            h.activeBunkerIndex = null;
             h.pins = {};
+            h.par = 4;
+            h.rangeLinesEnabled = false;
+            h.panorama = null;
+            h.surrounding = null;
+            h.surroundConfig = null;
             if (h.envObjects) {
                 h.envObjects.forEach(obj => { if(obj && obj.mesh) scene.remove(obj.mesh); });
                 h.envObjects = [];
             }
-            h.par = 4;
         }
 
         currentHoleIndex = 0;
@@ -15377,6 +15716,39 @@
         window._moveFlagMode = false;
         window._moveGreenMode = false;
         window._editingGreenPoints = false;
+        window._movingFairwayMode = false;
+        window._movingBunkerMode = false;
+        window._movingGreenMode = false;
+        window._movingFlagMode = false;
+
+        // Remove active outline meshes from 3D scene
+        if (typeof window.updateActiveFairwayOutline === 'function') {
+            window.updateActiveFairwayOutline();
+        }
+        if (typeof window.updateActiveBunkerOutline === 'function') {
+            window.updateActiveBunkerOutline();
+        }
+
+        // Clean up green grid, heatmap, and slope beads
+        if (window.greenGridMesh) {
+            scene.remove(window.greenGridMesh);
+            if (window.greenGridMesh.geometry) window.greenGridMesh.geometry.dispose();
+            if (window.greenGridMesh.material) window.greenGridMesh.material.dispose();
+            window.greenGridMesh = null;
+        }
+        if (window.greenHeatmapMesh) {
+            scene.remove(window.greenHeatmapMesh);
+            if (window.greenHeatmapMesh.geometry) window.greenHeatmapMesh.geometry.dispose();
+            if (window.greenHeatmapMesh.material) window.greenHeatmapMesh.material.dispose();
+            window.greenHeatmapMesh = null;
+        }
+        if (window.greenBeads && window.greenBeads.length > 0) {
+            window.greenBeads.forEach(b => {
+                if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b);
+                else if (scene) scene.remove(b);
+            });
+            window.greenBeads = [];
+        }
 
         // Reset studio sliders and values to clean defaults
         let elS = document.getElementById('sg-elevation-offset');
@@ -15402,6 +15774,7 @@
         if (esS) esS.value = 100;
         if (esV) esV.textContent = 'Sharp';
         window.greenDifficulty = 'FLAT';
+        window._fairwayDifficulty = 'FLAT';
         window._smartMowPattern = 'SOLID';
         
         let pos = planeGeo.attributes.position;
@@ -15431,6 +15804,12 @@
         wCtx.fillRect(0,0,4096,4096);
         waterTex.needsUpdate = true;
 
+        // Invalidate texture caches so saveLevel captures new clean canvases
+        window._biomeDirty = true;
+        window._waterMaskDirty = true;
+        window._cachedBiomeDataUrl = null;
+        window._cachedWaterMaskDataUrl = null;
+
         // Reset overlays
         if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
         if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
@@ -15439,6 +15818,8 @@
         // Update all UI elements & tool states
         if (typeof window.changeHoleTo === 'function') window.changeHoleTo(0);
         if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+        if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+        if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
         if (typeof window.updateSBHoleDisplay === 'function') window.updateSBHoleDisplay();
         if (typeof window.updateSBAimCard === 'function') window.updateSBAimCard();
         if (typeof window.updateTopbarHoleDistance === 'function') window.updateTopbarHoleDistance();
@@ -15446,7 +15827,12 @@
             setSmartBuilderType(window._smartBuilderType);
         }
         
-        saveLevel();
+        try {
+            await saveLevel();
+        } catch(err) {
+            console.error("Error saving cleared course level:", err);
+        }
+
         closeConfirmModal();
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
         showBuildToast(isSv ? '💥 Banan är helt rensad!' : '💥 Course completely cleared!', '#ef4444');
@@ -16852,14 +17238,39 @@ window.triggerExplosion = function(x, y, z) {
         
         if (showGreenViz) {
             let hole = vizHole;
-            let showGrid = isGlobalSlopeActive
-                ? true
-                : (isStudioLutning ? (window._studioShowGrid !== false) : (window.greenGridEnabled !== false));
-            let showBeads = isStudioLutning
-                ? (window._studioShowBeads !== false)
-                : (isGlobalSlopeActive
-                    ? (window._globalGreenBeadsEnabled !== false && window.greenBeadsEnabled !== false)
-                    : (window.greenBeadsEnabled !== false));
+            let slopeMode = window._greenSlopeMode || (window._globalGreenGridEnabled ? 'GRID' : 'OFF');
+            let isHeatmapMode = (slopeMode === 'HEATMAP');
+            let isGridMode = (slopeMode === 'GRID');
+            
+            let showGrid = false;
+            let showBeads = false;
+            let showHeatmap = false;
+
+            if (isStudioLutning) {
+                if (isHeatmapMode) {
+                    showHeatmap = true;
+                } else if (isGridMode) {
+                    showGrid = (window._studioShowGrid !== false);
+                    showBeads = (window._studioShowBeads !== false);
+                } else {
+                    showGrid = (window._studioShowGrid !== false);
+                    showBeads = (window._studioShowBeads !== false);
+                }
+            } else if (isGlobalSlopeActive) {
+                if (isHeatmapMode) {
+                    showHeatmap = true;
+                } else if (isGridMode) {
+                    showGrid = true;
+                    showBeads = (window._globalGreenBeadsEnabled !== false && window.greenBeadsEnabled !== false);
+                }
+            } else {
+                if (isHeatmapMode) {
+                    showHeatmap = true;
+                } else if (isGridMode) {
+                    showGrid = (window.greenGridEnabled !== false);
+                    showBeads = (window.greenBeadsEnabled !== false);
+                }
+            }
             let activePoly = (typeof window.getActiveGreenPolygon === 'function')
                 ? window.getActiveGreenPolygon(hole, window._greenGridCoverage || 'ALL')
                 : (hole.greenData ? hole.greenData.densePts : null);
@@ -17013,15 +17424,35 @@ window.triggerExplosion = function(x, y, z) {
                 if (window.greenGridMesh) window.greenGridMesh.visible = true;
             }
 
+            // --- GREEN HEATMAP ---
+            if (window.greenHeatmapMesh) {
+                window.greenHeatmapMesh.visible = showHeatmap;
+            } else if (showHeatmap) {
+                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
+                if (typeof window.buildGreenHeatmapMesh === 'function') {
+                    window.buildGreenHeatmapMesh(hole, holeIdx);
+                }
+                if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = true;
+            }
+
             // --- TRACKMAN SLOPE HUD LEGEND ---
             let slopeLegend = document.getElementById('green-slope-hud-legend');
             if (slopeLegend) {
-                let isLegendVisible = showGrid && (window.greenGridMesh && window.greenGridMesh.visible) && (window._greenGridColorMode !== 'WHITE');
-                slopeLegend.style.display = isLegendVisible ? 'flex' : 'none';
+                let isLegendVisible = (showGrid && window.greenGridMesh && window.greenGridMesh.visible && window._greenGridColorMode !== 'WHITE')
+                    || (showHeatmap && window.greenHeatmapMesh && window.greenHeatmapMesh.visible);
+                let currentDisplay = isLegendVisible ? 'flex' : 'none';
+                if (slopeLegend.style.display !== currentDisplay) {
+                    slopeLegend.style.display = currentDisplay;
+                    if (typeof window.updateBottomHUDLayout === 'function') {
+                        window.updateBottomHUDLayout();
+                    }
+                }
                 if (isLegendVisible) {
                     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                     let titleEl = document.getElementById('slope-legend-title');
-                    if (titleEl) titleEl.textContent = isSv ? 'Lutning' : 'Slope';
+                    if (titleEl) {
+                        titleEl.textContent = isSv ? (showHeatmap ? 'Lutning (Heatmap)' : 'Lutning') : (showHeatmap ? 'Slope (Heatmap)' : 'Slope');
+                    }
                 }
             }
 
@@ -17256,10 +17687,18 @@ window.triggerExplosion = function(x, y, z) {
             if (window.greenGridMesh) {
                 window.greenGridMesh.visible = false;
             }
+            if (window.greenHeatmapMesh) {
+                window.greenHeatmapMesh.visible = false;
+            }
             let epContainer = document.getElementById('elevation-profile-container');
             if (epContainer) epContainer.style.display = 'none';
             let slopeLegend = document.getElementById('green-slope-hud-legend');
-            if (slopeLegend) slopeLegend.style.display = 'none';
+            if (slopeLegend && slopeLegend.style.display !== 'none') {
+                slopeLegend.style.display = 'none';
+                if (typeof window.updateBottomHUDLayout === 'function') {
+                    window.updateBottomHUDLayout();
+                }
+            }
         }
 
         applySculpting();
@@ -18908,8 +19347,15 @@ window.triggerExplosion = function(x, y, z) {
                 }
             }
         };
-        function setSFDiff(diff) {
+        window.setSFDiff = function(diff) {
             window._fairwayDifficulty = diff;
+            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            if (hole) {
+                if (typeof ensureHoleFairways === 'function') ensureHoleFairways(hole);
+                if ((hole.activeFairwayIndex === null || hole.activeFairwayIndex === undefined) && hole.fairways && hole.fairways.length > 0) {
+                    hole.activeFairwayIndex = 0;
+                }
+            }
             ['FLAT','EASY','MED','HARD'].forEach(d => {
                 let btn = document.getElementById('sf-diff-' + d.toLowerCase());
                 if(btn) {
@@ -18921,7 +19367,18 @@ window.triggerExplosion = function(x, y, z) {
                 window.updateLiveFairway('difficulty', diff);
             }
             if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
-        }
+
+            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+            let labels = {
+                FLAT: isSv ? '🌱 Fairway-terräng: Naturlig (orörd mark)' : '🌱 Fairway Terrain: Natural',
+                EASY: isSv ? '🌊 Fairway-terräng: Lätt kupering' : '🌊 Fairway Terrain: Easy rolling',
+                MED: isSv ? '🌊 Fairway-terräng: Medel kupering' : '🌊 Fairway Terrain: Medium undulation',
+                HARD: isSv ? '🏔️ Fairway-terräng: Kraftig kupering (dyner/links)' : '🏔️ Fairway Terrain: Hard dunes / links'
+            };
+            if (typeof window.showBuildToast === 'function') {
+                window.showBuildToast(labels[diff] || diff, '#4ade80');
+            }
+        };
 
         // Synchronize Fairway Studio Panel
         window.updateSBFairwayControls = function() {

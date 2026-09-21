@@ -1775,9 +1775,13 @@ function getActiveFairway(hole) {
     if (!hole) return null;
     ensureHoleFairways(hole);
     if (hole.activeFairwayIndex === null || hole.activeFairwayIndex === undefined) {
+        if (hole.fairways && hole.fairways.length > 0) {
+            hole.activeFairwayIndex = 0;
+            return hole.fairways[0];
+        }
         return null;
     }
-    return hole.fairways[hole.activeFairwayIndex] || null;
+    return hole.fairways[hole.activeFairwayIndex] || (hole.fairways && hole.fairways.length > 0 ? hole.fairways[0] : null);
 }
 window.getActiveFairway = getActiveFairway;
 
@@ -2034,7 +2038,9 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
     fds.forEach(fd => {
         if (!fd || !fd.bbox) return;
         let densePts = (fd.points && fd.points.length >= 3 && typeof getDenseFairwayPoints === 'function') ? getDenseFairwayPoints(fd.points) : null;
-        let maxReach = 5.0;
+        let semiRoughWidth = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
+        let roughWidth = (fd.roughEnabled !== false) ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
+        let maxReach = semiRoughWidth + roughWidth + 12.0;
 
         // Restore vertex heights across organic fairway zone without rectangular scars
         if (fd.origHeights && window._arcadePlaneGeo) {
@@ -2211,14 +2217,14 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
                     let targetHeight = originalH;
 
                     if(difficulty === 'EASY') {
-                        targetHeight += Math.sin(sx * 0.025) * Math.cos(sz * 0.03) * 0.30;
+                        targetHeight += Math.sin(sx * 0.08) * Math.cos(sz * 0.09) * 0.40;
                     } else if(difficulty === 'MED') {
-                        targetHeight += Math.sin(sx * 0.03) * Math.cos(sz * 0.025) * 0.45;
-                        targetHeight += Math.sin(sx * 0.015 + sz * 0.02) * 0.20;
+                        targetHeight += Math.sin(sx * 0.09) * Math.cos(sz * 0.10) * 0.65;
+                        targetHeight += Math.sin(sx * 0.05 + sz * 0.07) * 0.30;
                     } else if(difficulty === 'HARD') {
-                        targetHeight += Math.sin(sx * 0.035) * Math.cos(sz * 0.03) * 0.55;
-                        targetHeight += Math.sin(sx * 0.02 + sz * 0.025) * 0.30;
-                        targetHeight += Math.cos(sx * 0.05) * Math.sin(sz * 0.04) * 0.15;
+                        targetHeight += Math.sin(sx * 0.10) * Math.cos(sz * 0.11) * 0.85;
+                        targetHeight += Math.sin(sx * 0.06 + sz * 0.08) * 0.45;
+                        targetHeight += Math.cos(sx * 0.14) * Math.sin(sz * 0.12) * 0.25;
                     }
 
                     let influence;
@@ -2272,7 +2278,12 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
 window.updateLiveFairway = function(property, value) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     if (!hole) return;
-    let fd = getActiveFairway(hole);
+    if (typeof ensureHoleFairways === 'function') ensureHoleFairways(hole);
+    let fd = (typeof getActiveFairway === 'function') ? getActiveFairway(hole) : null;
+    if (!fd && hole.fairways && hole.fairways.length > 0) {
+        hole.activeFairwayIndex = 0;
+        fd = hole.fairways[0];
+    }
     if (!fd) return;
 
     // If loaded from file without in-memory snapshot, capture baseline now

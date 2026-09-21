@@ -202,19 +202,23 @@
             });
 
             try {
-                // If entering Steg 2 (lutning) or global slope is active, ensure 3D green grid is built & visible
+                // If entering Steg 2 (lutning) or global slope is active, ensure 3D green slope viz is built & visible
                 let isGlobalSlope = !!window._globalGreenGridEnabled;
                 if (tabName === 'lutning' || isGlobalSlope) {
                     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-                    if (hole && typeof window.buildGreenGrid === 'function' && window._studioShowGrid !== false) {
-                        window.buildGreenGrid(hole, window.currentHoleIndex, true);
-                        if (window.greenGridMesh) window.greenGridMesh.visible = true;
+                    if (hole) {
+                        if (window._greenSlopeMode === 'OFF') {
+                            window._greenSlopeMode = 'GRID';
+                            window._globalGreenGridEnabled = true;
+                        }
+                        this.rebuildSlopeViz(hole);
                     }
                 } else {
-                    // Leaving Steg 2: hide grid and beads if not currently playing a round and global slope is not active
+                    // Leaving Steg 2: hide grid, beads and heatmap if not currently playing a round and global slope is not active
                     let isPlaying = (typeof playState !== 'undefined' && playState === 'ROUND_IDLE');
                     if (!isPlaying && !isGlobalSlope) {
                         if (window.greenGridMesh) window.greenGridMesh.visible = false;
+                        if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = false;
                         if (typeof window.clearGreenBeads === 'function') {
                             window.clearGreenBeads();
                         } else if (window.greenBeads && window.greenBeads.length > 0) {
@@ -228,6 +232,32 @@
             } finally {
                 this.updateVisibility();
                 this.updateBottomHints();
+            }
+        }
+
+        rebuildSlopeViz(hole) {
+            if (!hole) return;
+            let mode = window._greenSlopeMode || (window._globalGreenGridEnabled ? 'GRID' : 'OFF');
+            if (mode === 'HEATMAP') {
+                if (window.greenGridMesh) window.greenGridMesh.visible = false;
+                if (typeof window.clearGreenBeads === 'function') window.clearGreenBeads();
+                if (typeof window.buildGreenHeatmapMesh === 'function') {
+                    window.buildGreenHeatmapMesh(hole, window.currentHoleIndex, true);
+                }
+                if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = true;
+            } else if (mode === 'GRID') {
+                if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = false;
+                if (typeof window.buildGreenGrid === 'function' && window._studioShowGrid !== false) {
+                    window.buildGreenGrid(hole, window.currentHoleIndex, true);
+                }
+                if (window.greenGridMesh) window.greenGridMesh.visible = (window._studioShowGrid !== false);
+            } else {
+                if (window.greenGridMesh) window.greenGridMesh.visible = false;
+                if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = false;
+                if (typeof window.clearGreenBeads === 'function') window.clearGreenBeads();
+            }
+            if (typeof window.syncGreenSlopeUI === 'function') {
+                window.syncGreenSlopeUI();
             }
         }
 
@@ -259,6 +289,9 @@
                 th.innerHTML = isSv
                     ? "💡 <b>Välj klippmönster</b> och rullhastighet (stimpmeter) för greenen"
                     : "💡 <b>Select mowing pattern</b> and stimpmeter roll speed for the green";
+            }
+            if (typeof window.updateBottomHUDLayout === 'function') {
+                window.updateBottomHUDLayout();
             }
         }
 
@@ -348,9 +381,8 @@
                     this.updateSlopeArrow(hole);
                     this.updateContourLines(hole);
                     this.syncUIValues(hole);
-                    if ((this.activeTab === 'lutning' || window._globalGreenGridEnabled) && typeof window.buildGreenGrid === 'function' && window._studioShowGrid !== false) {
-                        window.buildGreenGrid(hole, window.currentHoleIndex, true);
-                        if (window.greenGridMesh) window.greenGridMesh.visible = true;
+                    if (this.activeTab === 'lutning' || window._globalGreenGridEnabled) {
+                        this.rebuildSlopeViz(hole);
                     }
                 } catch (err) {
                     console.error('GreenStudio sync error:', err);
@@ -841,9 +873,8 @@
 
                         window.applyGreenPipeline(hole, false, true);
                         this.rebuildHandles(hole);
-                        if ((this.activeTab === 'lutning' || window._globalGreenGridEnabled) && typeof window.buildGreenGrid === 'function' && window._studioShowGrid !== false) {
-                            window.buildGreenGrid(hole, window.currentHoleIndex, true);
-                            if (window.greenGridMesh) window.greenGridMesh.visible = true;
+                        if (this.activeTab === 'lutning' || window._globalGreenGridEnabled) {
+                            this.rebuildSlopeViz(hole);
                         }
                         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                         window.showBuildToast(isSv ? '➕ Ny nod tillagd på greenen!' : '➕ New green handle added!', '#4ade80');
@@ -1033,9 +1064,8 @@
                     window.applyGreenPipeline(hole, false, true);
                     this.rebuildHandles(hole);
                     this.updateSlopeArrow(hole);
-                    if ((this.activeTab === 'lutning' || window._globalGreenGridEnabled) && typeof window.buildGreenGrid === 'function' && window._studioShowGrid !== false) {
-                        window.buildGreenGrid(hole, window.currentHoleIndex, true);
-                        if (window.greenGridMesh) window.greenGridMesh.visible = true;
+                    if (this.activeTab === 'lutning' || window._globalGreenGridEnabled) {
+                        this.rebuildSlopeViz(hole);
                     }
                     this._pendingRebuild = false;
                     if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
@@ -1120,9 +1150,8 @@
 
                     window.applyGreenPipeline(hole, false, true);
                     this.rebuildHandles(hole);
-                    if ((this.activeTab === 'lutning' || window._globalGreenGridEnabled) && typeof window.buildGreenGrid === 'function' && window._studioShowGrid !== false) {
-                        window.buildGreenGrid(hole, window.currentHoleIndex, true);
-                        if (window.greenGridMesh) window.greenGridMesh.visible = true;
+                    if (this.activeTab === 'lutning' || window._globalGreenGridEnabled) {
+                        this.rebuildSlopeViz(hole);
                     }
                     window.showBuildToast(isSv ? '🗑️ Punkt raderad' : '🗑️ Point deleted', '#f87171');
                     return true;
