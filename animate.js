@@ -104,82 +104,152 @@
         controls.update();
 
         // --- GREEN BEADS + GRID VISUALIZATION (Trackman/GSPro style) ---
-        // Activate when ball is within 50 yards of flag (not just putting mode)
+        // Activate when ball is within 50 yards of flag (not just putting mode), or during Green Studio Steg 2 (Lutning), or via Global Slope Grid button
+        let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
+        let isGlobalSlopeActive = !!window._globalGreenGridEnabled;
         let showGreenViz = false;
-        let vizHole = courseHoles[playingHoleIndex];
-        if (vizHole && vizHole.flag && playState === 'ROUND_IDLE' && window.ballPos) {
-            let dx = window.ballPos.x - vizHole.flag.x;
-            let dz = window.ballPos.z - vizHole.flag.z;
-            let distToFlag = Math.sqrt(dx*dx + dz*dz);
-            showGreenViz = distToFlag < BEAD_ACTIVATION_DISTANCE;
+        let vizHole = null;
+        let isStudioMode = false;
+
+        if (isStudioLutning || isGlobalSlopeActive) {
+            vizHole = (typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null;
+            if (vizHole && vizHole.greenData && vizHole.greenData.points && vizHole.greenData.points.length >= 3) {
+                showGreenViz = true;
+                isStudioMode = true;
+            }
+        } else if (typeof courseHoles !== 'undefined' && courseHoles && typeof playingHoleIndex !== 'undefined') {
+            vizHole = courseHoles[playingHoleIndex];
+            if (vizHole && vizHole.flag && playState === 'ROUND_IDLE' && window.ballPos) {
+                let dx = window.ballPos.x - vizHole.flag.x;
+                let dz = window.ballPos.z - vizHole.flag.z;
+                let distToFlag = Math.hypot(dx, dz);
+                showGreenViz = distToFlag < BEAD_ACTIVATION_DISTANCE;
+            }
         }
         
         if (showGreenViz) {
             let hole = vizHole;
+            let showBeads = isStudioLutning
+                ? (window._studioShowBeads !== false)
+                : (isGlobalSlopeActive
+                    ? (window._globalGreenBeadsEnabled !== false && window.greenBeadsEnabled !== false)
+                    : (window.greenBeadsEnabled !== false));
+            let showGrid = isStudioLutning ? (window._studioShowGrid !== false) : (isGlobalSlopeActive ? true : (window.greenGridEnabled !== false));
+            let gd = hole.greenData;
+            let activePoly = null;
+            if (gd) {
+                if (window._greenGridCoverage === 'GREEN_ONLY' && gd.innerDensePts && gd.innerDensePts.length >= 3) {
+                    activePoly = gd.innerDensePts;
+                } else if (gd.densePts && gd.densePts.length >= 3) {
+                    activePoly = gd.densePts;
+                } else if (gd.points && gd.points.length >= 3) {
+                    activePoly = (typeof window.getDenseGreenPoints === 'function')
+                        ? window.getDenseGreenPoints(gd.points, gd.tension !== undefined ? gd.tension : 0.5)
+                        : gd.points;
+                }
+            }
             
-            // --- BEADS (toggle: window.greenBeadsEnabled) ---
-            if (window.greenBeadsEnabled) {
-                if (window.greenBeads.length === 0) {
-                    for(let x=-40; x<=40; x+=2.5) {
-                        for(let z=-40; z<=40; z+=2.5) {
-                            let bead = new THREE.Mesh(beadGeo, beadMat);
-                            bead.startX = hole.flag.x + x;
-                            bead.startZ = hole.flag.z + z;
-                            bead.position.set(bead.startX, 0, bead.startZ);
-                            bead.distOffset = Math.random(); 
-                            greenBeadsGroup.add(bead);
-                            window.greenBeads.push(bead);
+            // --- BEADS (toggle: window.greenBeadsEnabled or studio toggle) ---
+            if (showBeads) {
+                let currentHoleKey = isStudioMode ? ('studio_' + window.currentHoleIndex) : ('play_' + (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0));
+                let originX = 0, originZ = 0, beadRadius = 25;
+                if (activePoly && activePoly.length >= 3) {
+                    let sx = 0, sz = 0;
+                    for (let p of activePoly) { sx += p.x; sz += p.z; }
+                    originX = sx / activePoly.length;
+                    originZ = sz / activePoly.length;
+                    let maxD = 0;
+                    for (let p of activePoly) {
+                        let d = Math.hypot(p.x - originX, p.z - originZ);
+                        if (d > maxD) maxD = d;
+                    }
+                    beadRadius = Math.max(12, Math.ceil(maxD + 2));
+                } else if (hole.flag) {
+                    originX = hole.flag.x;
+                    originZ = hole.flag.z;
+                    beadRadius = 25;
+                }
+
+                if (window.greenBeads.length === 0 || window._greenBeadsHoleKey !== currentHoleKey) {
+                    if (window.greenBeads.length > 0) {
+                        window.greenBeads.forEach(b => greenBeadsGroup.remove(b));
+                        window.greenBeads = [];
+                    }
+                    window._greenBeadsHoleKey = currentHoleKey;
+                    let step = 1.5; // 1.5m grid of beads
+                    for (let x = -beadRadius; x <= beadRadius; x += step) {
+                        for (let z = -beadRadius; z <= beadRadius; z += step) {
+                            let wx = originX + x;
+                            let wz = originZ + z;
+                            let inside = activePoly ? window.pointInPolygon(wx, wz, activePoly) : true;
+                            if (inside) {
+                                let bead = new THREE.Mesh(beadGeo, beadMat);
+                                bead.startX = wx;
+                                bead.startZ = wz;
+                                bead.position.set(wx, 0, wz);
+                                bead.distOffset = Math.random(); 
+                                bead.renderOrder = 999;
+                                greenBeadsGroup.add(bead);
+                                window.greenBeads.push(bead);
+                            }
                         }
                     }
                 }
                 
-                let stimp = window.GREEN_STIMP || 10.0;
+                let stimp = (window.matchSettings && window.matchSettings.greenStimp) || window.GREEN_STIMP || 10.0;
                 let dt = 0.016; 
+                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
+                let grainSeed = holeIdx * 7.3;
+                let grainScale = 0.03 * (10.0 / stimp);
                 
-                for(let i=0; i<window.greenBeads.length; i++) {
+                for (let i = 0; i < window.greenBeads.length; i++) {
                     let bead = window.greenBeads[i];
-                    let surf = localGetTerrainAt(bead.position.x, -bead.position.z);
+                    let wx = bead.position.x;
+                    let wz = bead.position.z;
+                    let isGreen = activePoly ? window.pointInPolygon(wx, wz, activePoly) : false;
+                    let surf = null;
+                    if (!activePoly) {
+                        surf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(wx, -wz) : null;
+                        isGreen = (surf && surf.type === 'GREEN');
+                    }
                     
-                    if (surf && surf.type === 'GREEN') {
+                    if (isGreen) {
                         bead.visible = true;
-                        bead.position.y = surf.z + 0.05; 
+                        let eps = 0.25;
+                        let hCenter = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz) : (surf ? surf.z : 0);
+                        let hX = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx + eps, wz) : hCenter;
+                        let hZ = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz + eps) : hCenter;
+                        bead.position.y = hCenter + 0.08; 
                         
-                        let fallX = -surf.normal.x;
-                        let fallZ = -surf.normal.z;
-                        let slopeMag = Math.sqrt(fallX*fallX + fallZ*fallZ);
+                        let dh_dx = (hX - hCenter) / eps;
+                        let dh_dz = (hZ - hCenter) / eps;
+                        let fallX = -dh_dx;
+                        let fallZ = -dh_dz;
+                        let slopeMag = Math.hypot(fallX, fallZ);
                         
+                        let sx = Math.sin(wx * 0.3 + wz * 0.2 + grainSeed);
+                        let sz = Math.cos(wz * 0.3 - wx * 0.2 + grainSeed);
+                        let gl = Math.hypot(sx, sz) || 1e-6;
+
                         if (slopeMag > 0.001) {
                             let dirX = fallX / slopeMag;
                             let dirZ = fallZ / slopeMag;
                             let speed = slopeMag * stimp * 2.0;
-                            // BUG-07: Grass grain uses hole-index seed for per-hole variation.
-                            // Multiplier 7.3 (irrational-ish) avoids visible repetition patterns.
-                            let grainSeed = (typeof playingHoleIndex !== 'undefined') ? playingHoleIndex * 7.3 : 0;
-                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2 + grainSeed);
-                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2 + grainSeed);
-                            let currentStimp = window.GREEN_STIMP || 10.0;
-                            let grainScale = 0.03 * (10.0 / currentStimp);
-                            let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
-                            bead.position.x += (dirX * speed + (sx/gl) * grainScale * 25.0) * dt;
-                            bead.position.z += (dirZ * speed + (sz/gl) * grainScale * 25.0) * dt;
+                            bead.position.x += (dirX * speed + (sx / gl) * grainScale * 25.0) * dt;
+                            bead.position.z += (dirZ * speed + (sz / gl) * grainScale * 25.0) * dt;
                         } else {
-                            // Flat green: grain only, seeded per hole
-                            let grainSeed = (typeof playingHoleIndex !== 'undefined') ? playingHoleIndex * 7.3 : 0;
-                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2 + grainSeed);
-                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2 + grainSeed);
-                            let currentStimp = window.GREEN_STIMP || 10.0;
-                            let grainScale = 0.03 * (10.0 / currentStimp);
-                            let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
                             bead.position.x += (sx / gl) * grainScale * 15.0 * dt;
                             bead.position.z += (sz / gl) * grainScale * 15.0 * dt;
                         }
                     } else {
                         bead.visible = false;
+                        bead.position.x = bead.startX;
+                        bead.position.z = bead.startZ;
                     }
                     
                     let dX = bead.position.x - bead.startX;
                     let dZ = bead.position.z - bead.startZ;
-                    let traveled = Math.sqrt(dX*dX + dZ*dZ);
+                    let traveled = Math.hypot(dX, dZ);
                     if (traveled > (2.0 + bead.distOffset * 1.0)) {
                         bead.position.x = bead.startX;
                         bead.position.z = bead.startZ;

@@ -53,7 +53,7 @@
             vec3 trueN = normalize(normal);
             vec3 dir = mix(up, trueN, smoothstep(0.08, 0.30, vSlope));
             
-            float slopeBias = smoothstep(0.08, 0.30, vSlope) * 0.015;
+            float slopeBias = smoothstep(0.08, 0.30, vSlope) * 0.035;
             float layerDisp = max(vL * uMaxHeight * slopeHeightScale, slopeBias);
             vec3 p = position + dir * layerDisp;
 
@@ -74,6 +74,7 @@
 
     const FRAG = `
         uniform sampler2D uRoughMask;
+        uniform sampler2D uWaterMap;
         uniform vec3  uRoughCol;
         uniform vec3  uDeepCol;
         uniform vec3  uSemiCol;
@@ -135,6 +136,12 @@
             float distFade = 1.0 - smoothstep(uMaxDist * 0.75, uMaxDist, vCamDist);
             if (hash(vWorldPos.xz * 37.0) > distFade) discard;
 
+            // ── Water exclusion: no 3D grass inside water bodies or on submerged banks ──
+            float waterMask = texture2D(uWaterMap, vUv).r;
+            if (waterMask > 0.015) discard;
+            float shoreFade = 1.0 - smoothstep(0.0, 0.02, waterMask);
+            if (shoreFade < 0.05) discard;
+
             // ── Biome mask: R=rough, G=deep ──
             vec3 mask = texture2D(uRoughMask, vUv).rgb;
             float isRough = step(0.75, mask.r);                    // R=1.0
@@ -142,18 +149,15 @@
             float roughness = max(isRough, isDeep);
             if (roughness < 0.1) discard;
 
-            // Pick color and height based on dominant biome channel
+            // Pick color and height based on dominant biome channel (pure canvas colors)
             vec3 baseCol;
             float targetH;
-            float tipBright;
             if (isDeep > 0.5) {
                 baseCol = uDeepCol;
                 targetH = uDeepH;
-                tipBright = 0.05;
             } else {
                 baseCol = uRoughCol;
                 targetH = uRoughH;
-                tipBright = 0.25;
             }
 
             // Height-proportional layer culling with soft fade
@@ -163,11 +167,10 @@
 
             vec2 wXZ = vWorldPos.xz;
 
-            // Grass: standard FBM tufts
-            float clump = fbm(wXZ * 0.8);
-            float tuft = fbm(wXZ * 4.0 + 50.0);
-            float blade = vnoise(wXZ * 15.0 + 100.0);
-            float grass = clump * 0.3 + tuft * 0.4 + blade * 0.3;
+            // Dense, fine-grained turf structure (uniform coverage without coarse blotchy clumps)
+            float tuft = fbm(wXZ * 5.0 + 50.0);
+            float blade = vnoise(wXZ * 20.0 + 100.0);
+            float grass = tuft * 0.5 + blade * 0.5;
 
             // Gentle threshold: bottom layers keep ~90% pixels, top ~60%
             // On slopes: bottom layers are fully solid to prevent terrain showing through
@@ -180,19 +183,19 @@
             float edgeThreshold = threshold + (1.0 - roughness) * 0.15;
             if (grass < edgeThreshold) discard;
 
-            // AO: warm bottom, tips highlighted per biome
-            float aoBase = mix(0.85, 0.95, slopeCompensation);
-            float ao = mix(aoBase, 1.10, eL);
+            // Pure uniform color matching canvas 1:1 at tips, with deep vertical cavity shadow (AO) at roots
+            // Natural root-to-tip ambient occlusion (0.72 at root to 1.0 at tip) reveals 3D tuft volume without horizontal blotches
+            float normH = clamp(eL, 0.0, 1.0);
+            float aoBase = mix(0.72, 0.82, slopeCompensation);
+            float ao = mix(aoBase, 1.0, normH);
             vec3 col = baseCol * ao;
-            col += baseCol * tipBright * eL;
 
-            float colorVar = vnoise(vUv * 80.0 + 33.0);
-            col *= 0.95 + 0.10 * colorVar;
-
-            // Apply dynamic diffuse lighting matching the terrain
+            // Apply dynamic diffuse lighting matching the terrain plane
             vec3 N = normalize(vWorldNormal);
             vec3 L = uLightDir;
-            float dotNL = max(0.0, dot(N, L));
+            // Foliage diffuse wrap: softens harsh shadow cutoff on steep cuts and banks
+            float wrap = smoothstep(0.10, 0.40, vSlope) * 0.20;
+            float dotNL = max(0.0, (dot(N, L) + wrap) / (1.0 + wrap));
             vec3 lightColor = uAmbColor + uDirColor * dotNL;
             col *= lightColor;
 
@@ -232,15 +235,21 @@
     // ─── Manager ─────────────────────────────────────────────────
 
     class TerrainShellManager {
-        constructor(masterGeo, masterMesh, scene, biomeTex, roughMaskTex) {
+        constructor(masterGeo, masterMesh, scene, biomeTex, roughMaskTex, waterTex) {
             this.masterGeo = masterGeo;
             this.masterMesh = masterMesh;
             this.scene = scene;
             this.biomeTex = biomeTex;
             this.roughMaskTex = roughMaskTex || null;
+            this.waterTex = waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || null;
             this.quality = 'OFF';
             this.shells = [];   // { layer, mesh, mat }
             this._frame = 0;
+
+            // 1x1 black dummy texture fallback so shader never fails if waterTex is null
+            let blackPixel = new Uint8Array([0, 0, 0, 255]);
+            this._dummyWaterTex = new THREE.DataTexture(blackPixel, 1, 1, THREE.RGBAFormat);
+            this._dummyWaterTex.needsUpdate = true;
 
             this.roughHeight = 0.30;
             this.deepHeight  = 0.60;
@@ -317,11 +326,17 @@
             let len = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1.0;
             lx /= len; ly /= len; lz /= len;
 
+            let curWaterTex = this.waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || this._dummyWaterTex;
+
             for (let s of this.shells) {
                 s.mat.uniforms.uTime.value = time;
                 s.mat.uniforms.uLightDir.value.set(lx, ly, lz);
                 s.mat.uniforms.uDirColor.value.set(dirR, dirG, dirB);
                 s.mat.uniforms.uAmbColor.value.set(ambR, ambG, ambB);
+
+                if (s.mat.uniforms.uWaterMap && s.mat.uniforms.uWaterMap.value !== curWaterTex) {
+                    s.mat.uniforms.uWaterMap.value = curWaterTex;
+                }
 
                 if (window.terrainShaderUniforms) {
                     if (s.mat.uniforms.uGridMode) s.mat.uniforms.uGridMode.value = window.terrainShaderUniforms.uGridMode.value;
@@ -515,6 +530,7 @@
                     uWindStr:  { value: 0.3 },
                     uTime:     { value: 0 },
                     uRoughMask:{ value: this.roughMaskTex },
+                    uWaterMap: { value: this.waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || this._dummyWaterTex },
                     uRoughCol: { value: this._roughCol.clone() },
                     uDeepCol:  { value: this._deepCol.clone() },
                     uSemiCol:  { value: this._semiCol.clone() },

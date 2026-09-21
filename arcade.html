@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=10">
+<link rel="stylesheet" href="arcade.css?v=11">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -24,12 +24,12 @@
 <script src="terrain-chunks.js?v=7"></script>
 <script src="terrain-shells.js?v=24"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
-<script src="arcade-scene-engine.js?v=7"></script>
+<script src="arcade-scene-engine.js?v=8"></script>
 <script src="arcade-tracer-engine.js"></script>
 <script src="arcade-audio-engine.js"></script>
 <script src="arcade-particle-engine.js"></script>
 <script src="arcade-wind-sway.js"></script>
-<script src="arcade-leaves.js"></script>
+<script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
 <div id="global-loader">
@@ -306,42 +306,49 @@
     
     <!-- UNIFIED TOP BAR: 3 zones (left / center / right) -->
     <div id="top-bar">
-        <!-- LEFT: Meny & Sparstatus -->
+        <!-- LEFT: Meny, Sparstatus & Verktyg -->
         <div class="top-left">
-            <button id="btn-hamburger" class="sys-btn" onclick="toggleMenu()" title="Meny & Inställningar">☰</button>
-            <div id="save-status-indicator" onclick="saveQuickDraft()" style="display:inline-flex; align-items:center; gap:6px; font-size:11px; color:#4ade80; background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); padding:6px 14px; border-radius:20px; font-weight:bold; cursor:pointer; pointer-events:auto; transition:all 0.2s;" title="Klicka för att spara manuellt (Autosave är aktivt)">
+            <button id="btn-hamburger" class="sys-btn" onclick="toggleMenu()" title="Meny & Inställningar" style="padding:6px 11px;">☰</button>
+            <div id="save-status-indicator" onclick="saveQuickDraft()" style="display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size:11px; color:#4ade80; background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); padding:5px 8px; width:76px; min-width:76px; max-width:76px; border-radius:20px; font-weight:bold; cursor:pointer; pointer-events:auto; transition:all 0.2s; box-sizing:border-box; flex-shrink:0;" title="Banan är sparad (Autosave är aktivt)">
                 <span id="save-status-icon">✓</span>
                 <span id="save-status-text" data-i18n="saved">Sparad</span>
+            </div>
+            <div id="topbar-undo-group" style="display:flex; gap:2px; background:rgba(15,23,42,0.9); padding:3px; border-radius:10px; border:1px solid #334155; pointer-events:auto; align-items:center; flex-shrink:0;">
+                <button id="topbar-btn-undo" onclick="performUndo()" style="background:transparent; color:#f87171; border:none; padding:5px 8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; opacity:0.4; display:flex; align-items:center; gap:4px;" title="Ångra senaste ändring (Cmd+Z / Ctrl+Z)">↶ <span class="btn-label-text" data-i18n="tool_undo">Ångra</span></button>
+                <button id="topbar-btn-redo" onclick="performRedo()" style="background:transparent; color:#38bdf8; border:none; padding:5px 8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; opacity:0.4; display:flex; align-items:center; gap:4px;" title="Gör om ångrad ändring (Cmd+Shift+Z / Ctrl+Y)">↷ <span class="btn-label-text" data-i18n="tool_redo">Gör om</span></button>
+                <div style="width:1px; height:18px; background:#334155; margin:0 2px;"></div>
+                <button id="topbar-btn-eraser" onclick="toggleEraserTool()" style="background:transparent; color:#94a3b8; border:none; padding:5px 8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Radera träd, objekt eller klossar (klicka igen eller tryck Esc för att avbryta)">🗑️ <span class="btn-label-text" data-i18n="tool_eraser">Radera</span></button>
+            </div>
+            <div id="topbar-view-group" style="display:flex; gap:2px; background:rgba(15,23,42,0.9); padding:3px; border-radius:10px; border:1px solid #334155; pointer-events:auto; align-items:center; flex-shrink:0;">
+                <button id="btn-grid-toggle" onclick="cycleTerrainGrid()" style="background:transparent; color:#94a3b8; border:none; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Växla terrängrutnät (100m + 25m / Av) [G]">
+                    <span style="font-size:12px;">📐</span> <span id="grid-btn-label" data-i18n="tool_grid">Rutnät</span>
+                </button>
+                <div style="width:1px; height:18px; background:#334155; margin:0 1px;"></div>
+                <button id="btn-slope-grid-toggle" onclick="toggleGlobalSlopeGrid()" style="background:transparent; color:#94a3b8; border:none; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Växla TrackMan greenlutning och vinklar (PÅ / AV) [L]">
+                    <span style="font-size:12px;">⚡</span> <span id="slope-grid-btn-label">Lutning</span>
+                </button>
             </div>
             <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="display:none; background:linear-gradient(135deg, #38bdf8, #0284c7); color:#fff; border:none; padding:7px 14px; border-radius:10px; font-weight:bold; box-shadow:0 4px 12px rgba(56,189,248,0.35);">🔨 <span data-i18n="ed_build_mode">Tillbaka till Bygg</span></button>
         </div>
         
-        <!-- CENTER: Ångra / Gör om & Hål-navigator -->
+        <!-- CENTER: Hål-navigator (Huvudfokus centrerat i toppen) -->
         <div class="top-center">
-            <div style="display:flex; align-items:center; gap:8px;">
-                <div id="topbar-undo-group" style="display:flex; gap:3px; background:rgba(15,23,42,0.9); padding:3px; border-radius:10px; border:1px solid #334155; pointer-events:auto; align-items:center;">
-                    <button id="topbar-btn-undo" onclick="performUndo()" style="background:transparent; color:#f87171; border:none; padding:6px 10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; opacity:0.4; display:flex; align-items:center; gap:4px;" title="Ångra senaste ändring (Cmd+Z / Ctrl+Z)">↶ <span data-i18n="tool_undo">Ångra</span></button>
-                    <button id="topbar-btn-redo" onclick="performRedo()" style="background:transparent; color:#38bdf8; border:none; padding:6px 10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; opacity:0.4; display:flex; align-items:center; gap:4px;" title="Gör om ångrad ändring (Cmd+Shift+Z / Ctrl+Y)">↷ <span data-i18n="tool_redo">Gör om</span></button>
-                    <div style="width:1px; height:18px; background:#334155; margin:0 2px;"></div>
-                    <button id="topbar-btn-eraser" onclick="toggleEraserTool()" style="background:transparent; color:#94a3b8; border:none; padding:6px 10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Radera träd, objekt eller klossar (klicka igen eller tryck Esc för att avbryta)">🗑️ <span data-i18n="tool_eraser">Radera</span></button>
-                </div>
-                
-                <button id="btn-grid-toggle" onclick="cycleTerrainGrid()" class="sys-btn" style="padding:6px 12px; font-size:12px; border-radius:10px; border-color:#334155; color:#94a3b8; display:inline-flex; align-items:center; gap:5px;" title="Växla terrängrutnät (100m + 25m / Av) [G]">
-                    <span style="font-size:13px;">📐</span> <span id="grid-btn-label" data-i18n="tool_grid">RUTNÄT</span>
-                </button>
-                
-                <div id="topbar-hole-nav" style="display: flex; align-items: center; gap: 8px; background: rgba(15,23,42,0.9); border: 1px solid #334155; padding: 4px 12px; border-radius: 20px; font-family: 'Inter', sans-serif; pointer-events: auto;">
-                    <button onclick="changeHole(-1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: transparent; color: #94a3b8; border: none; font-weight: 800; font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: color 0.2s;" title="Föregående hål">&lt;</button>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 13px;">⛳</span>
-                        <span id="topbar-hole-num" style="color: #fff; font-weight: 800; font-size: 13px; text-transform: uppercase;">Hole 1</span>
-                        <span style="color: #64748b; font-size: 12px;">•</span>
-                        <span id="topbar-hole-par" style="color: #fbbf24; font-weight: 800; font-size: 12px;">Par 4</span>
-                        <span style="color: #64748b; font-size: 12px;">•</span>
-                        <span id="topbar-hole-dist" style="color: #38bdf8; font-weight: 800; font-size: 12px;" title="Avstånd från aktiv tee till flagga">---m</span>
+            <div id="topbar-hole-nav" style="display: flex; align-items: center; gap: 8px; background: rgba(15,23,42,0.95); backdrop-filter: blur(12px); border: 1px solid rgba(74,222,128,0.4); padding: 4px 12px; border-radius: 22px; font-family: 'Inter', sans-serif; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 14px rgba(74,222,128,0.15);">
+                <button onclick="changeHole(-1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: rgba(255,255,255,0.08); color: #cbd5e1; border: 1px solid #334155; font-weight: 800; font-size: 13px; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" title="Föregående hål" onmouseover="this.style.background='rgba(74,222,128,0.25)'; this.style.color='#4ade80';" onmouseout="this.style.background='rgba(255,255,255,0.08)'; this.style.color='#cbd5e1';">&lt;</button>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 13px;">⛳</span>
+                    <span id="topbar-hole-num" style="color: #4ade80; font-weight: 900; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase;">HÅL 1</span>
+                    <span style="color: #475569; font-size: 11px;">•</span>
+                    <!-- Interaktiv Par-väljare direkt i topplisten -->
+                    <div style="display: flex; align-items: center; gap: 2px; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">
+                        <button onclick="changeHolePar(-1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: transparent; color: #94a3b8; border: none; font-weight: 900; font-size: 12px; cursor: pointer; padding: 0 3px; line-height: 1;" title="Minska Par">−</button>
+                        <span id="topbar-hole-par" style="color: #fbbf24; font-weight: 800; font-size: 12px; min-width: 34px; text-align: center;">Par 4</span>
+                        <button onclick="changeHolePar(1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: transparent; color: #94a3b8; border: none; font-weight: 900; font-size: 12px; cursor: pointer; padding: 0 3px; line-height: 1;" title="Öka Par">+</button>
                     </div>
-                    <button onclick="changeHole(1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: transparent; color: #94a3b8; border: none; font-weight: 800; font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: color 0.2s;" title="Nästa hål">&gt;</button>
+                    <span style="color: #475569; font-size: 11px;">•</span>
+                    <span id="topbar-hole-dist" style="color: #38bdf8; font-weight: 800; font-size: 12px; min-width: 38px;" title="Avstånd från aktiv tee till flagga">---m</span>
                 </div>
+                <button onclick="changeHole(1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: rgba(255,255,255,0.08); color: #cbd5e1; border: 1px solid #334155; font-weight: 800; font-size: 13px; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" title="Nästa hål" onmouseover="this.style.background='rgba(74,222,128,0.25)'; this.style.color='#4ade80';" onmouseout="this.style.background='rgba(255,255,255,0.08)'; this.style.color='#cbd5e1';">&gt;</button>
             </div>
         </div>
         
@@ -574,7 +581,7 @@
             ArcadeStorage.setProMode(isPro);
             // If switching to BASIC and current tool is a pro-tool, fallback to SCULPT (within group) or INSPECT
             if (!isPro && typeof currentTool !== 'undefined') {
-                let proTools = ['FLATTEN','RAMP','NOISE','WATER','SPLINE','RIDGE','FOREST','ERASER','COLORIZE'];
+                let proTools = ['FLATTEN','RAMP','NOISE','SPLINE','RIDGE','FOREST','ERASER','COLORIZE'];
                 if (proTools.includes(currentTool)) {
                     let sculptFamily = ['FLATTEN','RAMP','RIDGE','NOISE'];
                     let objectsFamily = ['COLORIZE'];
@@ -625,7 +632,7 @@
             <span style="font-size:16px;">🖌️</span>
             <span data-i18n="tool_paint">Måla</span>
         </button>
-        <button id="tool-water" onclick="setTool('WATER')" class="pro-tool" title="Create lakes and water hazards">
+        <button id="tool-water" onclick="setTool('WATER')" title="Create lakes and water hazards">
             <span style="font-size:16px;">💧</span>
             <span data-i18n="tool_water">Vatten</span>
         </button>
@@ -751,6 +758,32 @@
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
                     <button id="water-type-lake-btn" onclick="setWaterType('LAKE')" style="background:#38bdf8; color:#0f172a; border:none; padding:7px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">💧 Lake</button>
                     <button id="water-type-ocean-btn" onclick="setWaterType('OCEAN')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:7px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">🌊 Ocean</button>
+                </div>
+            </div>
+
+            <!-- Water Reflection Quality -->
+            <div style="margin-top:6px; padding-top:6px; border-top:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🪞 Spegelyta & Vågor</label>
+                    <span id="water-refl-badge" style="color:#38bdf8; font-size:9px; font-weight:bold;">MED (Himmel)</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1.3fr 1.1fr; gap:4px;">
+                    <button id="water-refl-btn-off" onclick="setWaterQuality('OFF')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">Av</button>
+                    <button id="water-refl-btn-med" onclick="setWaterQuality('MED')" style="background:#38bdf8; color:#0f172a; border:1px solid #38bdf8; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">💧 Himmel/Glans</button>
+                    <button id="water-refl-btn-high" onclick="setWaterQuality('HIGH')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">🪞 Äkta Spegel</button>
+                </div>
+            </div>
+
+            <!-- Shoreline Bank Styling -->
+            <div style="margin-top:6px; padding-top:6px; border-top:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🏖️ Strandkant runt vatten</label>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:3px;">
+                    <button id="water-shore-btn-sand" onclick="setShoreStyle('SAND')" style="background:#38bdf8; color:#0f172a; border:1px solid #38bdf8; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">🏖️ Sand</button>
+                    <button id="water-shore-btn-mud" onclick="setShoreStyle('MUD')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">🍂 Lera</button>
+                    <button id="water-shore-btn-stone" onclick="setShoreStyle('STONE')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">🪨 Sten</button>
+                    <button id="water-shore-btn-off" onclick="setShoreStyle('OFF')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">❌ Av</button>
                 </div>
             </div>
         </div>
@@ -1619,6 +1652,29 @@
                     <span data-i18n="env_blend_soft">Mjuk toning</span><span data-i18n="env_blend_sharp">Skarp gräns</span>
                 </div>
             </div>
+
+            <!-- Vattenspegling & Strandkant i Miljö-modalen -->
+            <div style="margin-top:6px; padding-top:10px; border-top:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <label style="color:#94a3b8; font-size:10px; font-weight:bold;">🪞 <span data-i18n="env_water_reflection">VATTENSPEGLING & VÅGOR</span></label>
+                    <span id="env-refl-badge" style="color:#38bdf8; font-size:9px; font-weight:bold;">MED (Himmel)</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1.3fr 1.1fr; gap:4px;">
+                    <button id="env-refl-btn-off" onclick="setWaterQuality('OFF')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">Av</button>
+                    <button id="env-refl-btn-med" onclick="setWaterQuality('MED')" style="background:#38bdf8; color:#0f172a; border:1px solid #38bdf8; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">💧 Himmel/Glans</button>
+                    <button id="env-refl-btn-high" onclick="setWaterQuality('HIGH')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">🪞 Äkta Spegel</button>
+                </div>
+            </div>
+
+            <div style="margin-top:6px; padding-top:8px; border-top:1px solid #334155;">
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:4px; display:block;">🏖️ <span data-i18n="env_shore_style">STRANDKANT RUNT VATTEN</span></label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:3px;">
+                    <button id="env-shore-btn-sand" onclick="setShoreStyle('SAND')" style="background:#38bdf8; color:#0f172a; border:1px solid #38bdf8; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">🏖️ Sand</button>
+                    <button id="env-shore-btn-mud" onclick="setShoreStyle('MUD')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">🍂 Lera</button>
+                    <button id="env-shore-btn-stone" onclick="setShoreStyle('STONE')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">🪨 Sten</button>
+                    <button id="env-shore-btn-off" onclick="setShoreStyle('OFF')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 2px; font-size:9px; border-radius:5px; cursor:pointer;">❌ Av</button>
+                </div>
+            </div>
         </div>
 
         <!-- 4. 3D-GRÄS & PARTIKLAR -->
@@ -1671,15 +1727,15 @@
         </div>
 
         <!-- === SMART BUILDER / HÅLBYGGARE PANEL (Nivå 3) === -->
-        <div id="smart-green-action-panel" class="prop-panel" style="display:none; flex-direction:column; gap:10px; width:260px; max-width:calc(100vw - 20px); box-sizing:border-box;">
+        <div id="smart-green-action-panel" class="prop-panel" style="display:none; flex-direction:column; gap:8px; width:280px; max-width:calc(100vw - 20px); box-sizing:border-box;">
             <!-- Dynamic Contextual Header -->
             <div id="sb-context-header" style="color:#4ade80; font-size:12px; font-weight:bold; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(74,222,128,0.25); padding-bottom:6px;">
                 <span id="sb-context-icon" style="font-size:14px;">⛳</span>
                 <span id="sb-context-title" data-i18n="sb_green_header">Green & Klippning</span>
             </div>
             
-            <!-- Compact Hole & Par selector row -->
-            <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border-radius:8px; padding:4px 6px; border:1px solid #334155;">
+            <!-- Compact Hole & Par selector row (Hidden in Green Studio - top bar handles hole & par) -->
+            <div id="sb-hole-selector-row" style="display:none; justify-content:space-between; align-items:center; background:#1e293b; border-radius:8px; padding:4px 6px; border:1px solid #334155;">
                 <div style="display:flex; align-items:center; gap:2px;">
                     <button onclick="changeHole(-1); updateSBHoleDisplay()" style="background:transparent; color:#94a3b8; border:none; font-weight:bold; cursor:pointer; padding:2px 6px; font-size:13px;" title="Föregående hål">&lt;</button>
                     <span id="sb-hole-display" style="color:#4ade80; font-weight:bold; font-size:11px;">Hole 1 (Par 4) ○</span>
@@ -1692,98 +1748,296 @@
                 </div>
             </div>
 
-            <!-- GREEN controls (Unified Parametric Studio) -->
+            <!-- GREEN controls (Dedicated Parametric Green Studio) -->
             <div id="sb-green-controls">
-                <!-- Status Banner for Active Green -->
-                <div id="sg-status-banner" style="display:none; justify-content:space-between; align-items:center; background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); border-radius:6px; padding:6px 8px; margin-bottom:6px;">
-                    <span id="sg-act-status-badge" style="color:#4ade80; font-size:10px; font-weight:bold;">✅ Aktiv Green</span>
-                    <span style="color:#94a3b8; font-size:8px;">Live Editor</span>
-                </div>
-
-                <!-- Drawing Guide Banner (shown when placing points before green is built) -->
-                <div id="sg-drawing-guide" style="display:none; background:rgba(56,189,248,0.1); border:1px dashed #38bdf8; border-radius:6px; padding:6px 8px; margin-bottom:6px; text-align:center;">
-                    <div style="color:#38bdf8; font-size:9px; font-weight:bold;" data-i18n="sb_draw_min_points_hint">✏️ Klicka på marken för att rita greenens form (minst 3 punkter)</div>
-                </div>
-
-                <!-- Studio Locked Banner (shown when green is not built yet) -->
-                <div id="sg-studio-locked-banner" style="display:none; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; margin-bottom:6px; text-align:center;">
-                    <span style="color:#94a3b8; font-size:9px;" data-i18n="sb_studio_locked_hint">🔒 Live Studio aktiveras när greenen är byggd</span>
-                </div>
-
-                <!-- Adoption button for pre-existing greens with flag but no greenData -->
-                <div id="sg-adopt-card" style="display:none; background:#1e293b; border:1px solid #38bdf850; border-radius:6px; padding:6px 8px; margin-bottom:6px;">
-                    <div style="color:#38bdf8; font-size:9.5px; font-weight:bold; margin-bottom:4px;" data-i18n="sb_existing_green_found">⛳ Befintlig green upptäckt</div>
-                    <button type="button" onclick="window.adoptExistingGreen()" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0284c7); color:#0f172a; border:none; padding:6px 8px; border-radius:5px; font-size:10px; font-weight:bold; cursor:pointer;" data-i18n="sb_adopt_green">✨ Gör greenen redigerbar (Live Studio)</button>
-                </div>
-
-                <!-- Live Studio Parametric Controls (Dimmed while drawing, active once built) -->
-                <div id="sg-studio-params" style="transition:all 0.25s ease;">
-                    <!-- 1-Click Contour Switching -->
-                    <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;" data-i18n="sb_contour">Contour</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:6px;">
-                        <button id="sg-diff-flat" onclick="setSGDiff('FLAT')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">FLAT</button>
-                        <button id="sg-diff-easy" onclick="setSGDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">EASY</button>
-                        <button id="sg-diff-med" onclick="setSGDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">MED</button>
-                        <button id="sg-diff-hard" onclick="setSGDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">HARD</button>
+                <!-- Studio Header with Live Saved Badge (Hidden - top bar & context header suffice) -->
+                <div id="gs-title-row" style="display:none; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(74,222,128,0.2);">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:14px;">🚩</span>
+                        <span id="gs-title-text" style="color:#4ade80; font-size:12px; font-weight:800; letter-spacing:0.3px;">Redigera green</span>
                     </div>
+                    <span id="gs-status-badge" style="display:none; background:rgba(74,222,128,0.15); border:1px solid rgba(74,222,128,0.35); color:#4ade80; font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:12px; align-items:center; gap:4px;">● Sparad</span>
+                </div>
 
-                    <!-- Green Elevation Offset Slider (Höja / Sänka greenen - Alltid synlig!) -->
-                    <div style="background:#1e293b; padding:6px 10px; border-radius:6px; margin-bottom:4px; border:1px solid #334155;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span style="color:#38bdf8; font-size:9px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_elevation_offset">Green-höjd</span>
-                            <span id="sg-elevation-val" style="color:#38bdf8; font-weight:bold; font-size:11px;">0.0m</span>
+                <!-- ========================================== -->
+                <!-- MODE 1: SKAPA GREEN (When hole has no green) -->
+                <!-- ========================================== -->
+                <div id="gs-panel-unbuilt" style="display:none; flex-direction:column; gap:8px;">
+                    <!-- Step 1 banner -->
+                    <div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.3); border-radius:8px; padding:8px 10px;">
+                        <div style="display:flex; align-items:center; gap:5px; margin-bottom:4px;">
+                            <span style="background:#38bdf8; color:#0f172a; font-size:9px; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">1</span>
+                            <span style="color:#38bdf8; font-size:10.5px; font-weight:700;" data-i18n="gs_step_draw">Rita formen</span>
                         </div>
-                        <input type="range" id="sg-elevation-offset" min="-2.0" max="4.0" value="0.0" step="0.1" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                        <div style="color:#94a3b8; font-size:9px; line-height:1.4;" data-i18n="gs_draw_hint">Klicka för att sätta golfbollar. Dra valfri boll för att justera formen. Högerklicka för att radera.</div>
                     </div>
 
-                    <!-- Blend / Slope Taper Distance Slider (Släntövergång) -->
-                    <div style="background:#1e293b; padding:6px 10px; border-radius:6px; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_blend_distance">Släntövergång</span>
-                            <span id="sg-blend-val" style="color:#38bdf8; font-weight:bold; font-size:10px;">8m</span>
+                    <!-- Points counter & status indicator -->
+                    <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; text-align:center;">
+                        <div id="gs-draw-status" style="font-size:10px; font-weight:600; color:#94a3b8;">
+                            0 punkter valda (minst 3 krävs)
                         </div>
-                        <input type="range" id="sg-blend-dist" min="3" max="18" value="8" step="1" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
                     </div>
 
-                    <!-- Foregreen Width Slider -->
-                    <div style="background:#1e293b; padding:6px 10px; border-radius:6px; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_foregreen">Foregreen</span>
-                            <span id="sg-foregreen-val" style="color:#4ade80; font-weight:bold; font-size:10px;">1.00m</span>
+                    <!-- Actions: Undo point & Clear -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                        <button type="button" onclick="window.undoSmartGreenPoint()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Ångra sista punkten">
+                            ↶ <span data-i18n="gs_undo_point">Ångra punkt</span>
+                        </button>
+                        <button type="button" onclick="window.clearSmartGreen()" style="background:#1e293b; color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Börja om från början">
+                            🔄 <span data-i18n="gs_reset">Börja om</span>
+                        </button>
+                    </div>
+
+                    <!-- Primary Action Button: Create Green -->
+                    <button type="button" id="gs-build-green-btn" onclick="window.executeSplineSmartGreen()" style="width:100%; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(74,222,128,0.25); transition:all 0.2s;">
+                        ⛳ <span id="gs-build-green-btn-text" data-i18n="gs_create_green">Skapa green</span>
+                    </button>
+
+                    <!-- Adoption button for pre-existing green flags -->
+                    <div id="gs-adopt-unbuilt-row" style="display:none; background:#1e293b; border:1px solid rgba(56,189,248,0.4); border-radius:8px; padding:8px 10px; text-align:center;">
+                        <div style="color:#38bdf8; font-size:9.5px; font-weight:700; margin-bottom:4px;">⛳ Befintlig green upptäckt</div>
+                        <button type="button" onclick="window.adoptExistingGreen()" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0284c7); color:#0f172a; border:none; padding:6px 8px; border-radius:6px; font-size:10px; font-weight:700; cursor:pointer;">✨ Gör greenen redigerbar</button>
+                    </div>
+                </div>
+
+                <!-- ========================================== -->
+                <!-- MODE 2: REDIGERA GREEN (When green is built) -->
+                <!-- ========================================== -->
+                <div id="gs-panel-built" style="display:none;">
+                    <!-- 3-Tab Workflow Bar (1. Form, 2. Lutning, 3. Klippning) -->
+                    <div style="display:flex; background:#0b1120; border:1px solid #1e293b; border-radius:10px; padding:3px; margin-bottom:10px; gap:4px;">
+                        <button type="button" id="gs-tab-form" onclick="window.GreenStudio.setTab('form')" style="flex:1; background:#4ade80; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(74,222,128,0.3);">
+                            <span style="font-size:12px;">📐</span>
+                            <span>1. Form</span>
+                        </button>
+                        <button type="button" id="gs-tab-lutning" onclick="window.GreenStudio.setTab('lutning')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">⛰️</span>
+                            <span>2. Lutning</span>
+                        </button>
+                        <button type="button" id="gs-tab-klippning" onclick="window.GreenStudio.setTab('klippning')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">🚜</span>
+                            <span>3. Klippning</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: FORM -->
+                    <div id="gs-content-form">
+                        <!-- Contextual Tip Banner -->
+                        <div style="background:#1e293b; border-left:3px solid #4ade80; border-radius:4px; padding:6px 8px; margin-bottom:8px;">
+                            <div id="gs-form-tip-text" style="color:#cbd5e1; font-size:9px; line-height:1.4;">
+                                💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Klicka på linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.
+                            </div>
                         </div>
-                        <input type="range" id="sg-foregreen-width" min="0" max="3" value="1.0" step="0.25" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+
+                        <!-- Foregreen-bredd -->
+                        <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Foregreen-bredd</span>
+                                <span id="gs-foregreen-val" style="color:#4ade80; font-weight:700; font-size:9.5px;">1.00m</span>
+                            </div>
+                            <input type="range" id="gs-foregreen-slider" min="0" max="3" value="1.0" step="0.25" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.foregreenWidth = parseFloat(this.value); window.applyGreenPipeline(hole, false, true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        </div>
+
+                        <!-- Form Tab Actions Footer -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:6px;">
+                            <button type="button" onclick="window.activateMoveFlagMode()" style="background:#1e293b; color:#fbbf24; border:1px solid rgba(251,191,36,0.5); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;">🎯 Flytta flagga</button>
+                            <button type="button" onclick="window.redrawSmartGreen()" style="background:#1e293b; color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;" title="Ändra formen på greenen">✏️ Rita om green</button>
+                        </div>
+                        <button type="button" onclick="window.deleteSmartGreen()" style="width:100%; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer; margin-bottom:8px;">🗑️ Radera green & återställ mark</button>
+
+                        <!-- Step 1 -> Step 2 Guidance Button -->
+                        <button type="button" onclick="window.GreenStudio.setTab('lutning')" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0284c7); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(56,189,248,0.25); transition:transform 0.1s;">
+                            <span>Steg 2: Justera lutning & höjd</span> ➔
+                        </button>
                     </div>
 
-                    <!-- Tilt Control -->
-                    <div style="background:#1e293b; padding:6px 10px; border-radius:6px; margin-bottom:6px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
-                            <label style="display:flex; align-items:center; gap:4px; color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase; cursor:pointer;">
-                                <input type="checkbox" id="sg-tilt-aim-cb" checked style="accent-color:#f59e0b; cursor:pointer;">
-                                <span data-i18n="sb_tilt_aim">Tilt → Siktpunkt</span>
+                    <!-- TAB 2: LUTNING -->
+                    <div id="gs-content-lutning" style="display:none;">
+                        <!-- Lutningsmallar (Slope Preset Cards) -->
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">Lutningsmallar</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:8px;">
+                            <button type="button" id="gs-slope-card-flat" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='FLAT'; h.greenData.tiltPct=0.005; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Platt <span style="font-size:8px; opacity:0.8;">0.5%</span>
+                            </button>
+                            <button type="button" id="gs-slope-card-easy" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='EASY'; h.greenData.tiltPct=0.015; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Lätt <span style="font-size:8px; opacity:0.8;">1.5%</span>
+                            </button>
+                            <button type="button" id="gs-slope-card-med" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='MED'; h.greenData.tiltPct=0.025; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Medel <span style="font-size:8px; opacity:0.8;">2.5%</span>
+                            </button>
+                            <button type="button" id="gs-slope-card-hard" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='HARD'; h.greenData.tiltPct=0.04; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Svår <span style="font-size:8px; opacity:0.8;">4.0%</span>
+                            </button>
+                        </div>
+
+                        <!-- Lutning % Slider -->
+                        <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Lutning %</span>
+                                <span id="gs-tilt-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">2.0%</span>
+                            </div>
+                            <input type="range" id="gs-tilt-slider" min="0.5" max="5.0" value="2.0" step="0.1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.tiltPct = parseFloat(this.value)/100; window.applyGreenPipeline(hole, false, false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                        </div>
+
+                        <!-- Riktning (Compass Rose + Mot flaggan) -->
+                        <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Riktning</span>
+                                <label style="display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; color:#38bdf8; cursor:pointer;">
+                                    <input type="checkbox" id="gs-tilt-to-flag-cb" checked onchange="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.tiltToFlag=this.checked; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="accent-color:#38bdf8; cursor:pointer;">
+                                    Mot flaggan
+                                </label>
+                            </div>
+
+                            <!-- Interactive Compass Rose Container -->
+                            <div style="display:flex; align-items:center; justify-content:space-around; gap:8px;">
+                                <!-- Compass Rose SVG with rotating needle -->
+                                <div style="position:relative; width:68px; height:68px; cursor:pointer;" onclick="let rect=this.getBoundingClientRect(); let x=event.clientX-rect.left-34; let y=event.clientY-rect.top-34; let deg=Math.round(((Math.atan2(x,-y)*180/Math.PI)%360+360)%360); if(window.GreenStudio) window.GreenStudio.setTiltDirection(deg);" title="Klicka för att sätta lutningsriktning">
+                                    <svg width="68" height="68" viewBox="0 0 68 68">
+                                        <circle cx="34" cy="34" r="32" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+                                        <!-- Cardinal ticks -->
+                                        <line x1="34" y1="4" x2="34" y2="10" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <line x1="34" y1="58" x2="34" y2="64" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <line x1="4" y1="34" x2="10" y2="34" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <line x1="58" y1="34" x2="64" y2="34" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <!-- Cardinal labels -->
+                                        <text x="34" y="15" fill="#38bdf8" font-size="8" font-weight="bold" text-anchor="middle">N</text>
+                                        <text x="56" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">Ö</text>
+                                        <text x="34" y="58" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">S</text>
+                                        <text x="12" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">V</text>
+                                    </svg>
+                                    <!-- Rotating needle -->
+                                    <div id="gs-compass-needle" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; transition:transform 0.2s ease;">
+                                        <svg width="68" height="68" viewBox="0 0 68 68">
+                                            <polygon points="34,14 38,34 34,30 30,34" fill="#38bdf8"/>
+                                            <polygon points="34,54 38,34 34,30 30,34" fill="#64748b"/>
+                                            <circle cx="34" cy="34" r="3" fill="#38bdf8"/>
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                <!-- Readout & Quick Direction Buttons -->
+                                <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                                    <div id="gs-compass-deg" style="color:#38bdf8; font-size:11px; font-weight:800; text-align:center;">135° Sydost</div>
+                                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:2px;">
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(0)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">N</button>
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(90)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">Ö</button>
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(180)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">S</button>
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(270)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">V</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Greenens höjd slider -->
+                        <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Green-höjd</span>
+                                <span id="gs-elev-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">+0.0m</span>
+                            </div>
+                            <input type="range" id="gs-elev-slider" min="-2.0" max="4.0" value="0.0" step="0.1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.elevationOffset=parseFloat(this.value); window.applyGreenPipeline(hole, false, true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                        </div>
+
+                        <!-- Mjuk övergång / Slänt slider -->
+                        <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Mjuk övergång (Slänt)</span>
+                                <span id="gs-blend-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">8m</span>
+                            </div>
+                            <input type="range" id="gs-blend-slider" min="3" max="18" value="8" step="1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.blendDistance = parseFloat(this.value); window.applyGreenPipeline(hole, false, true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                        </div>
+
+                        <!-- 3D Rutnät & Fallinjer Visualisering -->
+                        <div style="background:#1e293b; border-radius:6px; padding:8px 8px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; border:1px solid #334155;">
+                            <div style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Visualisering i 3D (TrackMan & GSPro)</div>
+                            <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                                <span style="color:#cbd5e1; font-size:9px; font-weight:600;">📐 Visa Green-Rutnät (1x1m)</span>
+                                <input type="checkbox" id="gs-show-grid-cb" checked onchange="if(window.GreenStudio) window.GreenStudio.toggleStudioGrid(this.checked);" style="accent-color:#38bdf8; cursor:pointer;">
                             </label>
-                            <span id="sg-tilt-val" style="color:#f59e0b; font-weight:bold; font-size:10px;">2.0%</span>
+
+                            <!-- Rutnät Täckning: Hela komplexet vs Endast green -->
+                            <div id="gs-grid-coverage-box" style="display:flex; flex-direction:column; gap:3px; background:rgba(15,23,42,0.6); padding:5px 6px; border-radius:5px; border:1px solid #334155;">
+                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Rutnätstäckning</span>
+                                <div style="display:flex; gap:4px;">
+                                    <button type="button" id="gs-grid-cov-all" onclick="window.setGreenGridCoverage('ALL')" style="flex:1; background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck hela greenen inklusive foregreen (TrackMan & GSPro standard)">Hela komplexet</button>
+                                    <button type="button" id="gs-grid-cov-green" onclick="window.setGreenGridCoverage('GREEN_ONLY')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck enbart puttytan">Endast green</button>
+                                </div>
+                            </div>
+
+                            <!-- Rutnät Färgkodning: TrackMan Heatmap vs Vit -->
+                            <div id="gs-grid-style-box" style="display:flex; flex-direction:column; gap:3px; background:rgba(15,23,42,0.6); padding:5px 6px; border-radius:5px; border:1px solid #334155;">
+                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Rutnätsstil</span>
+                                <div style="display:flex; gap:4px;">
+                                    <button type="button" id="gs-grid-style-heatmap" onclick="window.setGreenGridStyle('HEATMAP')" style="flex:1; background:rgba(74,222,128,0.25); color:#4ade80; border:1px solid #4ade80; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="TrackMan färgkarta: Blå=Platt, Grön=Lätt, Gul=Medel, Röd=Brant">⚡ TrackMan Färg</button>
+                                    <button type="button" id="gs-grid-style-white" onclick="window.setGreenGridStyle('WHITE')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Klassisk vit trådmodell">Klassiskt Vit</button>
+                                </div>
+                            </div>
+
+                            <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                                <span style="color:#cbd5e1; font-size:9px; font-weight:600;">🔮 Visa Fallinjer (Pärlor)</span>
+                                <input type="checkbox" id="gs-show-beads-cb" checked onchange="if(window.GreenStudio) window.GreenStudio.toggleStudioBeads(this.checked);" style="accent-color:#4ade80; cursor:pointer;">
+                            </label>
+                            <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                                <span style="color:#94a3b8; font-size:9px; font-weight:600;">〰️ Visa höjdkurvor (10cm)</span>
+                                <input type="checkbox" id="gs-show-contours-cb" onchange="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.showContours=this.checked; if(window.GreenStudio) window.GreenStudio.sync(); }" style="accent-color:#38bdf8; cursor:pointer;">
+                            </label>
                         </div>
-                        <input type="range" id="sg-tilt-pct" min="0.5" max="5.0" value="2.0" step="0.5" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
+
+                        <!-- Lutning Footer: Reset -->
+                        <div style="margin-bottom:8px;">
+                            <button type="button" onclick="window.resetGreenSlope()" style="width:100%; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:7px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;">↺ Återställ lutning & höjd</button>
+                        </div>
+
+                        <!-- Step 2 -> Step 3 Guidance Button -->
+                        <button type="button" onclick="window.GreenStudio.setTab('klippning')" style="width:100%; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(74,222,128,0.25); transition:transform 0.1s;">
+                            <span>Steg 3: Klippmönster & hastighet</span> ➔
+                        </button>
                     </div>
 
-                    <!-- Green Size (Scale) Card -->
-                    <div id="sg-scale-card" style="display:none; background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 8px; margin-bottom:6px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                            <span style="color:#94a3b8; font-size:8.5px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_scale_title">Green-storlek (Skala)</span>
-                            <span id="sg-scale-area-badge" style="color:#4ade80; font-size:9px; font-weight:bold;">~0 m²</span>
+                    <!-- TAB 3: KLIPPNING & FINISH -->
+                    <div id="gs-content-klippning" style="display:none;">
+                        <!-- Mowing Pattern Header -->
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">Klippmönster</div>
+                        
+                        <!-- 4 Mowing Pattern Cards Grid -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">
+                            <div id="gs-mow-solid" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='SOLID'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">━</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Slät</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Klassisk ren gräsyta</div>
+                            </div>
+                            <div id="gs-mow-stripes" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='STRIPES'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">≡</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Ränder</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Klassiska linjer</div>
+                            </div>
+                            <div id="gs-mow-checkerboard" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='CHECKERBOARD'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">▦</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Schack</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Prestige-rutmönster</div>
+                            </div>
+                            <div id="gs-mow-diamond" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='DIAMOND'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">◈</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Diamant</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Diagonala rutor</div>
+                            </div>
                         </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
-                            <button type="button" onclick="window.scaleSmartGreen(window.currentHoleIndex, 0.9)" style="background:#0f172a; color:#f87171; border:1px solid rgba(239,68,68,0.4); padding:6px 4px; font-size:9.5px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_scale_down">➖ Minska (-10%)</button>
-                            <button type="button" onclick="window.scaleSmartGreen(window.currentHoleIndex, 1.1)" style="background:#0f172a; color:#4ade80; border:1px solid rgba(74,222,128,0.4); padding:6px 4px; font-size:9.5px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_scale_up">➕ Öka (+10%)</button>
-                        </div>
-                    </div>
 
-                    <!-- Actions for Active Green -->
-                    <div id="sg-active-actions" style="display:none; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px; margin-bottom:4px;">
-                        <button onclick="window.activateMoveFlagMode()" style="background:#1e293b; color:#fbbf24; border:1px solid #fbbf24; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_move_flag">🎯 Flytta flagga</button>
-                        <button onclick="window.activateMoveGreenMode()" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_move_green">✥ Flytta green</button>
-                        <button onclick="window.redrawSmartGreen()" style="background:#1e293b; color:#a855f7; border:1px solid #a855f7; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_adjust_shape">🔄 Ändra form</button>
-                        <button onclick="window.deleteSmartGreen()" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid #ef4444; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_delete_green">🗑️ Radera green</button>
+                        <!-- Info Banner explaining that Stimp & Firmness are set during Match / Round Setup -->
+                        <div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:8px 10px; margin-bottom:12px;">
+                            <div style="display:flex; align-items:flex-start; gap:6px;">
+                                <span style="font-size:12px; line-height:1.2;">ℹ️</span>
+                                <div style="color:#94a3b8; font-size:8.5px; line-height:1.4;">
+                                    <b style="color:#38bdf8;">Spelförhållanden:</b> Greenhastighet (Stimp) och fasthet bestäms inför varje matchstart för hela banan.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Finish Button -->
+                        <button type="button" onclick="if(typeof setTool==='function') setTool('INSPECT')" style="width:100%; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; border:none; padding:9px 8px; font-size:11px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 12px rgba(74,222,128,0.3); transition:transform 0.1s;">
+                            ✔ <span>Klar med greenen!</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1994,7 +2248,7 @@
             </div>
 
             <!-- Build + Clear buttons -->
-            <div id="sb-build-clear-group" style="display:flex; flex-direction:column; gap:4px; margin-top:2px;">
+            <div id="sb-build-clear-group" style="display:none; flex-direction:column; gap:4px; margin-top:2px;">
                 <button onclick="executeSmartBuilder()" id="sb-build-btn" style="background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; font-weight:bold; padding:8px 10px; border-radius:6px; border:none; cursor:pointer; font-size:11px; letter-spacing:0.5px;" data-i18n="sb_build_green">⛳ Build Green</button>
                 <button onclick="clearSmartGreen()" style="background:#ef4444; color:#fff; font-weight:bold; padding:6px 10px; border-radius:6px; border:none; cursor:pointer; font-size:10px;" data-i18n="sb_clear_points">❌ Clear</button>
             </div>
@@ -2384,7 +2638,7 @@
                         <div>
                             <label style="color:#94a3b8; font-size:11px; font-weight:600; display:block; margin-bottom:6px;">WIND</label>
                             <select id="set-wind" style="width:100%; padding:7px 10px; background:#1e293b; color:#fff; border:1px solid #334155; border-radius:8px; font-size:12px; font-weight:600; outline:none;">
-                                <option value="0">Calm (0-2 mph)</option>
+                                <option value="0">Calm (0 mph)</option>
                                 <option value="1">Breezy (5-10)</option>
                                 <option value="2">Gusty (10-18)</option>
                                 <option value="3">Windy (18-25)</option>
@@ -2402,8 +2656,14 @@
                         </div>
                         <!-- Stimp -->
                         <div>
-                            <label style="color:#94a3b8; font-size:11px; font-weight:600; display:flex; justify-content:space-between; margin-bottom:6px;"><span>GREEN STIMP</span><span id="stimp-val" style="color:#4ade80;">10.0</span></label>
-                            <input type="range" id="set-green-stimp" min="6" max="14" step="0.5" value="10" oninput="document.getElementById('stimp-val').innerText = this.value; document.getElementById('in-stimp').value = this.value;" style="width:100%; accent-color:#4ade80;">
+                            <label style="color:#94a3b8; font-size:11px; font-weight:600; display:flex; justify-content:space-between; margin-bottom:4px;"><span>GREEN STIMP</span><span id="stimp-val" style="color:#4ade80;">10.0</span></label>
+                            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:2px; margin-bottom:4px;">
+                                <button type="button" onclick="document.getElementById('set-green-stimp').value=8.5; document.getElementById('stimp-val').innerText='8.5'; if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value='8.5';" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:2px 0; font-size:8px; font-weight:700; cursor:pointer;">8.5</button>
+                                <button type="button" onclick="document.getElementById('set-green-stimp').value=10.0; document.getElementById('stimp-val').innerText='10.0'; if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value='10.0';" style="background:#1e293b; color:#4ade80; border:1px solid rgba(74,222,128,0.4); border-radius:4px; padding:2px 0; font-size:8px; font-weight:700; cursor:pointer;">10.0</button>
+                                <button type="button" onclick="document.getElementById('set-green-stimp').value=11.5; document.getElementById('stimp-val').innerText='11.5'; if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value='11.5';" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:2px 0; font-size:8px; font-weight:700; cursor:pointer;">11.5</button>
+                                <button type="button" onclick="document.getElementById('set-green-stimp').value=13.0; document.getElementById('stimp-val').innerText='13.0'; if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value='13.0';" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:2px 0; font-size:8px; font-weight:700; cursor:pointer;">13.0</button>
+                            </div>
+                            <input type="range" id="set-green-stimp" min="6" max="14" step="0.5" value="10" oninput="document.getElementById('stimp-val').innerText = this.value; if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value = this.value;" style="width:100%; accent-color:#4ade80; cursor:pointer;">
                         </div>
                         <!-- Temperature -->
                         <div>
@@ -2494,7 +2754,7 @@
                 <div style="margin-bottom:12px;">
                     <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">WIND STRENGTH</label>
                     <select id="ir-wind" onchange="if(window.matchSettings) window.matchSettings.windStrength=parseInt(this.value);" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
-                        <option value="0">Calm (0-2 mph)</option>
+                        <option value="0">Calm (0 mph)</option>
                         <option value="1">Breezy (5-10 mph)</option>
                         <option value="2">Gusty (10-18 mph)</option>
                         <option value="3">Windy (18-25 mph)</option>
@@ -2502,11 +2762,17 @@
                     </select>
                 </div>
                 <div style="margin-bottom:12px;">
-                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:flex; justify-content:space-between; margin-bottom:4px;">
                         <span>GREEN STIMP</span>
-                        <span id="ir-stimp-val" style="color:#fff;">10.0</span>
+                        <span id="ir-stimp-val" style="color:#4ade80;">10.0</span>
                     </label>
-                    <input type="range" id="ir-stimp" min="6" max="14" step="0.5" value="10" oninput="document.getElementById('ir-stimp-val').innerText=this.value; if(window.matchSettings) { window.matchSettings.greenStimp=parseFloat(this.value); window.GREEN_STIMP=parseFloat(this.value); } if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value=this.value;" style="width:100%; accent-color:#4ade80;">
+                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:4px; margin-bottom:6px;">
+                        <button type="button" onclick="let s=8.5; document.getElementById('ir-stimp').value=s; document.getElementById('ir-stimp-val').innerText=s; if(window.matchSettings){window.matchSettings.greenStimp=s; window.GREEN_STIMP=s;}" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 0; font-size:9px; font-weight:700; cursor:pointer;">Mjuk 8.5</button>
+                        <button type="button" onclick="let s=10.0; document.getElementById('ir-stimp').value=s; document.getElementById('ir-stimp-val').innerText=s; if(window.matchSettings){window.matchSettings.greenStimp=s; window.GREEN_STIMP=s;}" style="background:#0f172a; color:#4ade80; border:1px solid rgba(74,222,128,0.4); border-radius:4px; padding:4px 0; font-size:9px; font-weight:700; cursor:pointer;">Klubb 10</button>
+                        <button type="button" onclick="let s=11.5; document.getElementById('ir-stimp').value=s; document.getElementById('ir-stimp-val').innerText=s; if(window.matchSettings){window.matchSettings.greenStimp=s; window.GREEN_STIMP=s;}" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 0; font-size:9px; font-weight:700; cursor:pointer;">Snabb 11.5</button>
+                        <button type="button" onclick="let s=13.0; document.getElementById('ir-stimp').value=s; document.getElementById('ir-stimp-val').innerText=s; if(window.matchSettings){window.matchSettings.greenStimp=s; window.GREEN_STIMP=s;}" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 0; font-size:9px; font-weight:700; cursor:pointer;">Tour 13</button>
+                    </div>
+                    <input type="range" id="ir-stimp" min="6" max="14" step="0.5" value="10" oninput="document.getElementById('ir-stimp-val').innerText=this.value; if(window.matchSettings) { window.matchSettings.greenStimp=parseFloat(this.value); window.GREEN_STIMP=parseFloat(this.value); } if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value=this.value;" style="width:100%; accent-color:#4ade80; cursor:pointer;">
                 </div>
                 <div style="margin-bottom:12px;">
                     <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">GREEN FIRMNESS</label>
@@ -3452,7 +3718,7 @@
         fescueColor: '#2d4c1a',
         waterColor: '#38bdf8',
         oceanColor: '#1e3a5f',
-        horizonColor: '#ffffff'
+        horizonColor: '#cce7ff'
     };
     window.CLOUD_BIOMES['AUTUMN'] = {
         skyColor: '#c4a882',         // Warm hazy sky
@@ -3569,7 +3835,7 @@
         fescueColor: '#2d4c1a',
         waterColor: '#38bdf8',
         oceanColor: '#1e3a5f',
-        horizonColor: '#ffffff'
+        horizonColor: '#cce7ff'
     };
 
     window.openColorPicker = function(materialKey) {
@@ -4050,7 +4316,7 @@
                 fescueColor: config.fescueColor || window.CURRENT_BIOME_CONFIG.fescueColor,
                 waterColor: config.waterColor || window.CURRENT_BIOME_CONFIG.waterColor,
                 oceanColor: config.oceanColor || window.CURRENT_BIOME_CONFIG.oceanColor || '#1e3a5f',
-                horizonColor: config.horizonColor || window.CURRENT_BIOME_CONFIG.horizonColor || '#ffffff'
+                horizonColor: config.horizonColor || window.CURRENT_BIOME_CONFIG.horizonColor || '#cce7ff'
             };
             
             // Uppdatera 3D-scenen
@@ -5945,6 +6211,7 @@
     wCtx.fillRect(0, 0, 4096, 4096);
     const waterTex = new THREE.CanvasTexture(waterCanvas);
     waterTex.magFilter = THREE.LinearFilter;
+    window.waterTex = waterTex;
     
     const TERRAIN_SIZE = 600; 
     const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
@@ -5956,14 +6223,17 @@
     
     planeMat.extensions = { derivatives: true };
     
-    // --- TERRAIN SHADER INJECTIONS: OB, SPATIAL GRID & TEE RANGE RINGS ---
+    // --- TERRAIN SHADER INJECTIONS: OB, SPATIAL GRID, TEE RANGE RINGS & SHORELINE BANK ---
     window.terrainShaderUniforms = {
         uPlayMode: { value: 0.0 },
         uObColor: { value: new THREE.Color(0xef4444) },
         uRoughColor: { value: new THREE.Color(0x4a782b) },
         uGridMode: { value: 0.0 },
         uShowRings: { value: 0.0 },
-        uTeePos: { value: new THREE.Vector2(0, 0) }
+        uTeePos: { value: new THREE.Vector2(0, 0) },
+        uWaterMap: { value: waterTex },
+        uShoreColor: { value: new THREE.Color(0xc2b082) }, // Default: Sand #c2b082
+        uShoreBlend: { value: 1.0 }
     };
     planeMat.onBeforeCompile = (shader) => {
         shader.uniforms.uPlayMode = window.terrainShaderUniforms.uPlayMode;
@@ -5972,6 +6242,9 @@
         shader.uniforms.uGridMode = window.terrainShaderUniforms.uGridMode;
         shader.uniforms.uShowRings = window.terrainShaderUniforms.uShowRings;
         shader.uniforms.uTeePos = window.terrainShaderUniforms.uTeePos;
+        shader.uniforms.uWaterMap = window.terrainShaderUniforms.uWaterMap;
+        shader.uniforms.uShoreColor = window.terrainShaderUniforms.uShoreColor;
+        shader.uniforms.uShoreBlend = window.terrainShaderUniforms.uShoreBlend;
         
         shader.fragmentShader = `
             uniform float uPlayMode;
@@ -5980,6 +6253,9 @@
             uniform float uGridMode;
             uniform float uShowRings;
             uniform vec2 uTeePos;
+            uniform sampler2D uWaterMap;
+            uniform vec3 uShoreColor;
+            uniform float uShoreBlend;
             
             float evalTerrainGridLine(vec2 p, float size, float halfWidth) {
                 vec2 coord = p / size;
@@ -6002,6 +6278,15 @@
                 }
                 vec4 texelColor = mapTexelToLinear( rawColor );
                 diffuseColor *= texelColor;
+                
+                // --- AUTOMATIC SHORELINE BANK (Sand / Mud / Stone) ---
+                if (uShoreBlend > 0.01) {
+                    float waterVal = texture2D(uWaterMap, vUv).r;
+                    if (waterVal > 0.003) {
+                        float shoreFactor = smoothstep(0.003, 0.035, waterVal) * uShoreBlend;
+                        diffuseColor.rgb = mix(diffuseColor.rgb, uShoreColor, shoreFactor);
+                    }
+                }
                 
                 // --- BUILDER SPATIAL GRID & RANGE RINGS (zero extra tris) ---
                 if (uPlayMode < 0.5) {
@@ -6211,7 +6496,7 @@
     // === SHELL TEXTURING: Volumetric 3D grass for rough/deep rough ===
     // v6: Shells render directly on master geometry — no chunk dependency
     if (window.TerrainShellManager) {
-        window._terrainShells = new TerrainShellManager(planeGeo, plane, scene, mapTex, window.roughMaskTex);
+        window._terrainShells = new TerrainShellManager(planeGeo, plane, scene, mapTex, window.roughMaskTex, waterTex);
     }
 
     // === TERRAIN CHUNKING: Split into 8x8 frustum-culled chunks with distance LOD ===
@@ -6697,8 +6982,8 @@
         );
     };
     
-    // --- LOW-RES WATER VISUAL (50x50 = 5000 tris instead of 720,000) ---
-    const WATER_SEGS = 50;
+    // --- OPTIMIZED WATER VISUAL (100x100 = 20,000 tris, smooth fit without depth sag) ---
+    const WATER_SEGS = 100;
     let waterGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, WATER_SEGS, WATER_SEGS);
     window._arcadeWaterGeo = waterGeo;
     waterGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
@@ -6756,12 +7041,365 @@
         transparent: true, 
         opacity: 1.0, 
         alphaMap: waterTex, 
-        depthWrite: true
+        depthWrite: true,
+        alphaTest: 0.05
     });
     const waterMesh = new THREE.Mesh(waterGeo, window.waterMat);
     waterMesh.rotation.x = -Math.PI / 2;
     waterMesh.receiveShadow = true;
     scene.add(waterMesh);
+    window.waterMesh = waterMesh;
+
+    // === WATER SHADER UNIFORMS & REFLECTION SYSTEM ===
+    const _dummyReflectTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
+    _dummyReflectTex.needsUpdate = true;
+
+    window.waterShaderUniforms = {
+        uWaterQuality: { value: 1.0 }, // 0.0 = OFF, 1.0 = MED, 2.0 = HIGH
+        uTime: { value: 0.0 },
+        uWindDir: { value: new THREE.Vector2(1.0, 0.0) },
+        uWindSpeed: { value: 0.0 },
+        uSkyColor: { value: new THREE.Color(0x7dd3fc) },
+        uHorizonColor: { value: new THREE.Color(0xbfe0f7) },
+        uSunDir: { value: new THREE.Vector3(0.5, 0.8, 0.3).normalize() },
+        uSunColor: { value: new THREE.Color(0xfffbeb) },
+        uReflectorTex: { value: _dummyReflectTex },
+        uTextureMatrix: { value: new THREE.Matrix4() },
+        uHasReflector: { value: 0.0 }
+    };
+
+    window.waterMat.onBeforeCompile = (shader) => {
+        shader.uniforms.uWaterQuality = window.waterShaderUniforms.uWaterQuality;
+        shader.uniforms.uTime = window.waterShaderUniforms.uTime;
+        shader.uniforms.uWindDir = window.waterShaderUniforms.uWindDir;
+        shader.uniforms.uWindSpeed = window.waterShaderUniforms.uWindSpeed;
+        shader.uniforms.uSkyColor = window.waterShaderUniforms.uSkyColor;
+        shader.uniforms.uHorizonColor = window.waterShaderUniforms.uHorizonColor;
+        shader.uniforms.uSunDir = window.waterShaderUniforms.uSunDir;
+        shader.uniforms.uSunColor = window.waterShaderUniforms.uSunColor;
+        shader.uniforms.uReflectorTex = window.waterShaderUniforms.uReflectorTex;
+        shader.uniforms.uTextureMatrix = window.waterShaderUniforms.uTextureMatrix;
+        shader.uniforms.uHasReflector = window.waterShaderUniforms.uHasReflector;
+
+        shader.vertexShader = `
+            varying vec3 vWaterWorldPos;
+            varying vec4 vReflectCoord;
+            uniform mat4 uTextureMatrix;
+            uniform float uHasReflector;
+        ` + shader.vertexShader;
+
+        shader.vertexShader = shader.vertexShader.replace(
+            `#include <worldpos_vertex>`,
+            `
+            #include <worldpos_vertex>
+            vWaterWorldPos = worldPosition.xyz;
+            if (uHasReflector > 0.5) {
+                vReflectCoord = uTextureMatrix * vec4(worldPosition.xyz, 1.0);
+            } else {
+                vReflectCoord = vec4(0.0);
+            }
+            `
+        );
+
+        shader.fragmentShader = `
+            varying vec3 vWaterWorldPos;
+            varying vec4 vReflectCoord;
+
+            uniform float uWaterQuality;
+            uniform float uTime;
+            uniform vec2 uWindDir;
+            uniform float uWindSpeed;
+            uniform vec3 uSkyColor;
+            uniform vec3 uHorizonColor;
+            uniform vec3 uSunDir;
+            uniform vec3 uSunColor;
+            uniform sampler2D uReflectorTex;
+            uniform float uHasReflector;
+        ` + shader.fragmentShader;
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+            `#include <dithering_fragment>`,
+            `
+            #include <dithering_fragment>
+
+            if (uWaterQuality > 0.5) {
+                vec3 V = normalize(cameraPosition - vWaterWorldPos);
+                
+                // Wind-driven wave ripples
+                // At 0 MPH: waveAmp = 0.0 -> perfectly flat glass-like surface (spegelblankt)
+                // At >0 MPH: gentle silky ripples scaling smoothly with wind speed
+                float windFactor = clamp(uWindSpeed / 25.0, 0.0, 1.0);
+                float waveAmp = windFactor * 0.045;
+
+                vec3 rippleN = vec3(0.0, 1.0, 0.0);
+                if (waveAmp > 0.0002) {
+                    vec2 waveUv = vWaterWorldPos.xz * 0.12;
+                    float wSpeed = uWindSpeed * 0.12;
+                    vec2 flow = uWindDir * (uTime * wSpeed * 0.07);
+
+                    float wave1 = sin(waveUv.x * 3.5 + flow.x * 2.0 + waveUv.y * 1.5);
+                    float wave2 = cos(waveUv.y * 4.0 + flow.y * 2.5 - waveUv.x * 1.8);
+                    float wave3 = sin((waveUv.x + waveUv.y) * 4.0 + uTime * wSpeed * 0.35);
+
+                    rippleN = normalize(vec3(
+                        (wave1 - wave2) * waveAmp,
+                        1.0,
+                        (wave2 + wave3) * waveAmp
+                    ));
+                }
+
+                // Physically-based Fresnel for clean water surface
+                float dotNV = clamp(dot(rippleN, V), 0.0, 1.0);
+                float fresnel = 0.04 + 0.94 * pow(1.0 - dotNV, 4.0);
+
+                // Natural sky reflection without synthetic white blotches
+                vec3 R = reflect(-V, rippleN);
+                float skyFactor = clamp(R.y, 0.0, 1.0);
+                // Soft horizon sky tint derived from skyColor - never chalk white
+                vec3 horizonSky = mix(uSkyColor, vec3(0.72, 0.86, 0.96), 0.25);
+                vec3 skyReflect = mix(horizonSky, uSkyColor, pow(skyFactor, 0.55));
+
+                // Sun specular glint (tight and crisp, only glitters in direction of sun)
+                vec3 H = normalize(V + uSunDir);
+                float dotNH = max(0.0, dot(rippleN, H));
+                float sunSpec = pow(dotNH, 160.0) * 3.5;
+                vec3 sunGlint = uSunColor * sunSpec;
+
+                vec3 reflectColor = skyReflect;
+                if (uWaterQuality > 1.5 && uHasReflector > 0.5) {
+                    vec4 projCoords = vReflectCoord;
+                    // Mirror ripples only when wind is blowing; at 0 MPH distortion is 0 (pure mirror)
+                    projCoords.xy += rippleN.xz * (0.5 * waveAmp * projCoords.w);
+                    vec2 mirrorUv = projCoords.xy / max(0.0001, projCoords.w);
+                    mirrorUv = clamp(mirrorUv, 0.001, 0.999);
+                    vec4 mirrorSample = texture2D(uReflectorTex, mirrorUv);
+                    reflectColor = mirrorSample.rgb;
+                }
+
+                vec3 baseCol = gl_FragColor.rgb;
+                vec3 finalCol = mix(baseCol, reflectColor, fresnel);
+                finalCol += sunGlint * (0.35 + 0.65 * fresnel);
+                gl_FragColor.rgb = finalCol;
+            }
+            `
+        );
+    };
+
+    // === PLANAR WATER REFLECTOR (SMART-CULLED REAL-TIME MIRROR) ===
+    class PlanarWaterReflector {
+        constructor(renderer, scene) {
+            this.renderer = renderer;
+            this.scene = scene;
+            this.enabled = false;
+            
+            this.renderTarget = new THREE.WebGLRenderTarget(512, 512, {
+                minFilter: THREE.LinearFilter,
+                magFilter: THREE.LinearFilter,
+                format: THREE.RGBAFormat,
+                generateMipmaps: false
+            });
+            
+            this.virtualCamera = new THREE.PerspectiveCamera();
+            this.textureMatrix = new THREE.Matrix4();
+            this.reflectorPlane = new THREE.Plane();
+            this.normal = new THREE.Vector3(0, 1, 0);
+            this.clipPlane = new THREE.Vector4();
+            this.q = new THREE.Vector4();
+            this.reflectorWorldPos = new THREE.Vector3();
+            this.view = new THREE.Vector3();
+            this.target = new THREE.Vector3();
+            this.lookAtPos = new THREE.Vector3();
+        }
+        
+        update(cam) {
+            if (!this.enabled || !cam) return;
+            let waterY = (window.waterTableLevel != null) ? window.waterTableLevel : -2.0;
+            if (cam.position.y <= waterY + 0.1) return; // Underwater / touching water
+            
+            this.reflectorWorldPos.set(0, waterY, 0);
+            this.normal.set(0, 1, 0);
+            
+            this.view.subVectors(this.reflectorWorldPos, cam.position);
+            if (this.view.dot(this.normal) > 0) return; // Facing away
+            
+            this.view.reflect(this.normal).negate();
+            this.view.add(this.reflectorWorldPos);
+            
+            this.lookAtPos.set(0, 0, -1);
+            this.lookAtPos.applyQuaternion(cam.quaternion);
+            this.lookAtPos.add(cam.position);
+            
+            this.target.subVectors(this.reflectorWorldPos, this.lookAtPos);
+            this.target.reflect(this.normal).negate();
+            this.target.add(this.reflectorWorldPos);
+            
+            this.virtualCamera.position.copy(this.view);
+            this.virtualCamera.up.set(0, 1, 0);
+            this.virtualCamera.up.applyQuaternion(cam.quaternion);
+            this.virtualCamera.up.reflect(this.normal);
+            this.virtualCamera.lookAt(this.target);
+            
+            this.virtualCamera.fov = cam.fov;
+            this.virtualCamera.aspect = cam.aspect;
+            this.virtualCamera.near = cam.near;
+            this.virtualCamera.far = cam.far;
+            
+            this.virtualCamera.updateMatrixWorld();
+            this.virtualCamera.matrixWorldInverse.copy(this.virtualCamera.matrixWorld).invert();
+            this.virtualCamera.updateProjectionMatrix();
+            
+            // Oblique clipping plane
+            this.reflectorPlane.setFromNormalAndCoplanarPoint(this.normal, this.reflectorWorldPos);
+            this.reflectorPlane.applyMatrix4(this.virtualCamera.matrixWorldInverse);
+            this.clipPlane.set(this.reflectorPlane.normal.x, this.reflectorPlane.normal.y, this.reflectorPlane.normal.z, this.reflectorPlane.constant);
+            
+            let proj = this.virtualCamera.projectionMatrix;
+            this.q.x = (Math.sign(this.clipPlane.x) + proj.elements[8]) / proj.elements[0];
+            this.q.y = (Math.sign(this.clipPlane.y) + proj.elements[9]) / proj.elements[5];
+            this.q.z = -1.0;
+            this.q.w = (1.0 + proj.elements[10]) / proj.elements[14];
+            
+            let c = this.clipPlane.clone().multiplyScalar(2.0 / this.clipPlane.dot(this.q));
+            proj.elements[2] = c.x;
+            proj.elements[6] = c.y;
+            proj.elements[10] = c.z + 1.0;
+            proj.elements[14] = c.w;
+            
+            // Update texture matrix
+            this.textureMatrix.set(
+                0.5, 0.0, 0.0, 0.5,
+                0.0, 0.5, 0.0, 0.5,
+                0.0, 0.0, 0.5, 0.5,
+                0.0, 0.0, 0.0, 1.0
+            );
+            this.textureMatrix.multiply(this.virtualCamera.projectionMatrix);
+            this.textureMatrix.multiply(this.virtualCamera.matrixWorldInverse);
+            
+            // SMART CULLING: Exclude waterMesh, 3D grass shells and particle engine
+            let waterVis = (typeof waterMesh !== 'undefined') ? waterMesh.visible : false;
+            if (typeof waterMesh !== 'undefined') waterMesh.visible = false;
+            
+            let savedShellVis = [];
+            if (window._terrainShells && Array.isArray(window._terrainShells.shells)) {
+                for (let i = 0; i < window._terrainShells.shells.length; i++) {
+                    let s = window._terrainShells.shells[i];
+                    if (s && s.mesh) {
+                        savedShellVis.push({ s: s, vis: s.mesh.visible });
+                        s.mesh.visible = false;
+                    }
+                }
+            }
+            let particleVis = false;
+            if (window.ParticleEngine && window.ParticleEngine.group) {
+                particleVis = window.ParticleEngine.group.visible;
+                window.ParticleEngine.group.visible = false;
+            }
+            
+            let curRT = this.renderer.getRenderTarget();
+            this.renderer.setRenderTarget(this.renderTarget);
+            this.renderer.clear();
+            this.renderer.render(this.scene, this.virtualCamera);
+            this.renderer.setRenderTarget(curRT);
+            
+            // Restore visibility
+            if (typeof waterMesh !== 'undefined') waterMesh.visible = waterVis;
+            if (savedShellVis.length > 0) {
+                for (let i = 0; i < savedShellVis.length; i++) {
+                    let item = savedShellVis[i];
+                    if (item.s && item.s.mesh) item.s.mesh.visible = item.vis;
+                }
+            }
+            if (window.ParticleEngine && window.ParticleEngine.group) {
+                window.ParticleEngine.group.visible = particleVis;
+            }
+        }
+    }
+
+    // === WATER QUALITY & SHORELINE CONTROLLER FUNCTIONS ===
+    window.waterQuality = 'MED'; // Default: MED (Sky + Glint, 0% FPS loss)
+    window.currentShoreStyle = 'SAND'; // Default: Sand #c2b082
+
+    window.setWaterQuality = function(quality) {
+        window.waterQuality = quality;
+        let qVal = (quality === 'HIGH') ? 2.0 : (quality === 'OFF' ? 0.0 : 1.0);
+        
+        if (window.waterShaderUniforms) {
+            window.waterShaderUniforms.uWaterQuality.value = qVal;
+            if (quality === 'HIGH') {
+                if (!window._planarWaterReflector) {
+                    window._planarWaterReflector = new PlanarWaterReflector(renderer, scene);
+                }
+                window._planarWaterReflector.enabled = true;
+                window.waterShaderUniforms.uHasReflector.value = 1.0;
+                window.waterShaderUniforms.uReflectorTex.value = window._planarWaterReflector.renderTarget.texture;
+                window.waterShaderUniforms.uTextureMatrix.value = window._planarWaterReflector.textureMatrix;
+            } else {
+                if (window._planarWaterReflector) window._planarWaterReflector.enabled = false;
+                window.waterShaderUniforms.uHasReflector.value = 0.0;
+            }
+        }
+        
+        // Sync UI badges & buttons
+        let badgeText = (quality === 'HIGH') ? 'HIGH (Spegel)' : (quality === 'OFF' ? 'Av' : 'MED (Himmel)');
+        ['water-refl-badge', 'env-refl-badge'].forEach(id => {
+            let el = document.getElementById(id);
+            if (el) el.textContent = badgeText;
+        });
+        
+        ['water-refl-btn-', 'env-refl-btn-'].forEach(prefix => {
+            ['off', 'med', 'high'].forEach(key => {
+                let btn = document.getElementById(prefix + key);
+                if (!btn) return;
+                if (key.toUpperCase() === quality) {
+                    btn.style.background = '#38bdf8';
+                    btn.style.color = '#0f172a';
+                    btn.style.borderColor = '#38bdf8';
+                    btn.style.fontWeight = 'bold';
+                } else {
+                    btn.style.background = '#1e293b';
+                    btn.style.color = '#94a3b8';
+                    btn.style.borderColor = '#334155';
+                    btn.style.fontWeight = 'normal';
+                }
+            });
+        });
+    };
+
+    window.setShoreStyle = function(style) {
+        window.currentShoreStyle = style;
+        if (window.terrainShaderUniforms) {
+            if (style === 'OFF') {
+                window.terrainShaderUniforms.uShoreBlend.value = 0.0;
+            } else if (style === 'MUD') {
+                window.terrainShaderUniforms.uShoreBlend.value = 1.0;
+                window.terrainShaderUniforms.uShoreColor.value.setHex(0x5a4833);
+            } else if (style === 'STONE') {
+                window.terrainShaderUniforms.uShoreBlend.value = 1.0;
+                window.terrainShaderUniforms.uShoreColor.value.setHex(0x737068);
+            } else { // 'SAND' (default)
+                window.terrainShaderUniforms.uShoreBlend.value = 1.0;
+                window.terrainShaderUniforms.uShoreColor.value.setHex(0xc2b082);
+            }
+        }
+        
+        ['water-shore-btn-', 'env-shore-btn-'].forEach(prefix => {
+            ['sand', 'mud', 'stone', 'off'].forEach(key => {
+                let btn = document.getElementById(prefix + key);
+                if (!btn) return;
+                if (key.toUpperCase() === style) {
+                    btn.style.background = '#38bdf8';
+                    btn.style.color = '#0f172a';
+                    btn.style.borderColor = '#38bdf8';
+                    btn.style.fontWeight = 'bold';
+                } else {
+                    btn.style.background = '#1e293b';
+                    btn.style.color = '#94a3b8';
+                    btn.style.borderColor = '#334155';
+                    btn.style.fontWeight = 'normal';
+                }
+            });
+        });
+    };
 
     // === GLOBAL WATER TABLE ===
     window.waterTableLevel = -2.0; // Default: 2m below surface
@@ -6786,6 +7424,12 @@
             if (oceanBtn) { oceanBtn.style.background = '#1e293b'; oceanBtn.style.color = '#94a3b8'; oceanBtn.style.border = '1px solid #334155'; }
         }
     };
+
+    // Initialize default water quality and shoreline style
+    setTimeout(() => {
+        window.setWaterQuality('MED');
+        window.setShoreStyle('SAND');
+    }, 100);
 
     // Regenerate water alpha mask from heightmap data
     // Called after loading water heights to ensure visibility
@@ -7030,96 +7674,467 @@
 
     const greenBeadsGroup = new THREE.Group();
     scene.add(greenBeadsGroup);
+    window.greenBeadsGroup = greenBeadsGroup;
+    const beadGeo = new THREE.SphereGeometry(0.08, 8, 8);
+    const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false });
     window.greenBeads = [];
-    const beadGeo = new THREE.SphereGeometry(0.06, 6, 6);
-    const beadMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
-    
     window.greenBeadsEnabled = true;  // Toggle from hamburger menu
     window.greenGridEnabled = true;   // BUG-01 FIX: Default ON (was false, making grid never visible)
     window.greenGridMesh = null;      // Grid line mesh on green surface — built ONCE per hole landing
     window.greenGridForHoleIndex = -1; // Track which hole the grid was built for
     const BEAD_ACTIVATION_DISTANCE = 45; // meters (~50 yards) from flag
     window.breakLineMesh = null;
+    window._studioShowGrid = true;    // Studio Steg 2 3D Grid toggle (default ON)
+    window._studioShowBeads = true;   // Studio Steg 2 Slope Beads toggle (default ON)
+    window._globalGreenBeadsEnabled = true; // Global slope toggle beads (default ON)
 
-    // BUG-04 FIX: buildGreenGrid() is called ONCE when ball lands on green,
-    // NOT inside the animate() loop. The animate loop only toggles .visible.
-    window.buildGreenGrid = function(hole, holeIndex) {
-        // Guard: skip rebuild if this hole's grid is already built and visible,
-        // OR if this hole has already been built once (even if mesh was disposed by
-        // an external codepath without resetting the index — e.g. water drop → re-land).
-        if (window.greenGridForHoleIndex === holeIndex) {
-            // Same hole — if mesh still exists, nothing to do
+    // Helper: Clear green beads cleanly
+    window.clearGreenBeads = function() {
+        if (window.greenBeads && window.greenBeads.length > 0) {
+            window.greenBeads.forEach(b => {
+                if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b);
+            });
+        }
+        window.greenBeads = [];
+        window._greenBeadsHoleKey = null;
+    };
+
+    // Robust Point-In-Polygon (Ray Casting) available globally
+    window.pointInPolygon = function(px, pz, polyPts) {
+        if (!polyPts || polyPts.length < 3) return false;
+        let inside = false;
+        for (let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+            let pi = polyPts[i];
+            let pj = polyPts[j];
+            if (!pi || !pj) continue;
+            let xi = pi.x !== undefined ? pi.x : pi[0];
+            let zi = pi.z !== undefined ? pi.z : (pi.y !== undefined ? pi.y : pi[1]);
+            let xj = pj.x !== undefined ? pj.x : pj[0];
+            let zj = pj.z !== undefined ? pj.z : (pj.y !== undefined ? pj.y : pj[1]);
+            if (((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi + 1e-12) + xi)) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    };
+
+    // Helper: Distance to polygon edges
+    window.distToPolygon = function(px, pz, polyPts) {
+        if (!polyPts || polyPts.length < 2) return Infinity;
+        let minDist = Infinity;
+        for (let i = 0, j = polyPts.length - 1; i < polyPts.length; j = i++) {
+            let pa = polyPts[j], pb = polyPts[i];
+            if (!pa || !pb) continue;
+            let ax = pa.x !== undefined ? pa.x : pa[0];
+            let az = pa.z !== undefined ? pa.z : (pa.y !== undefined ? pa.y : pa[1]);
+            let bx = pb.x !== undefined ? pb.x : pb[0];
+            let bz = pb.z !== undefined ? pb.z : (pb.y !== undefined ? pb.y : pb[1]);
+            let dx = bx - ax, dz = bz - az;
+            let len2 = dx * dx + dz * dz;
+            let t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / len2)) : 0;
+            let projX = ax + t * dx, projZ = az + t * dz;
+            let d = Math.hypot(px - projX, pz - projZ);
+            if (d < minDist) minDist = d;
+        }
+        return minDist;
+    };
+
+    // Fallback: Generate dense CatmullRom spline polygon points
+    if (typeof window.getDenseGreenPoints !== 'function') {
+        window.getDenseGreenPoints = function(points, tension) {
+            if (!points || points.length < 3) return points || [];
+            let pts3 = points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
+            let curTension = (tension !== undefined) ? tension : 0.5;
+            let curve = new THREE.CatmullRomCurve3(pts3, true, 'catmullrom', curTension);
+            let numSamples = Math.max(200, points.length * 40);
+            return curve.getPoints(numSamples);
+        };
+    }
+
+    // Fallback: Inset polygon inward towards centroid
+    if (typeof window.insetPolygon !== 'function') {
+        window.insetPolygon = function(densePts, dist) {
+            if (!densePts || densePts.length < 3 || dist <= 0) return densePts;
+            let n = densePts.length;
+            let result = [];
+            let cx = 0, cz = 0;
+            for (let p of densePts) { cx += p.x; cz += p.z; }
+            cx /= n; cz /= n;
+            for (let i = 0; i < n; i++) {
+                let prev = (i - 1 + n) % n;
+                let next = (i + 1) % n;
+                let e1x = densePts[i].x - densePts[prev].x, e1z = densePts[i].z - densePts[prev].z;
+                let e2x = densePts[next].x - densePts[i].x, e2z = densePts[next].z - densePts[i].z;
+                let len1 = Math.hypot(e1x, e1z) || 1e-4;
+                let n1x = -e1z / len1, n1z = e1x / len1;
+                let len2 = Math.hypot(e2x, e2z) || 1e-4;
+                let n2x = -e2z / len2, n2z = e2x / len2;
+                let nx = n1x + n2x, nz = n1z + n2z;
+                let nLen = Math.hypot(nx, nz) || 1e-4;
+                nx /= nLen; nz /= nLen;
+                let dot = nx * n1x + nz * n1z;
+                let miter = dot > 0.25 ? (dist / dot) : (dist * 1.2);
+                miter = Math.min(miter, dist * 1.5);
+                result.push({ x: densePts[i].x + nx * miter, z: densePts[i].z + nz * miter });
+            }
+            let areaOrig = 0, areaOff = 0;
+            for (let i = 0; i < n; i++) {
+                let j = (i + 1) % n;
+                areaOrig += densePts[i].x * densePts[j].z - densePts[j].x * densePts[i].z;
+                areaOff += result[i].x * result[j].z - result[j].x * result[i].z;
+            }
+            let flip = Math.abs(areaOff) > Math.abs(areaOrig);
+            let finalPts = [];
+            for (let i = 0; i < n; i++) {
+                let pt = densePts[i];
+                let prev = (i - 1 + n) % n;
+                let next = (i + 1) % n;
+                let e1x = pt.x - densePts[prev].x, e1z = pt.z - densePts[prev].z;
+                let e2x = densePts[next].x - pt.x, e2z = densePts[next].z - pt.z;
+                let len1 = Math.hypot(e1x, e1z) || 1e-4;
+                let n1x = -e1z / len1, n1z = e1x / len1;
+                let len2 = Math.hypot(e2x, e2z) || 1e-4;
+                let n2x = -e2z / len2, n2z = e2x / len2;
+                let nx = n1x + n2x, nz = n1z + n2z;
+                let nLen = Math.hypot(nx, nz) || 1e-4;
+                nx /= nLen; nz /= nLen;
+                let dot = nx * n1x + nz * n1z;
+                let miter = dot > 0.25 ? (dist / dot) : (dist * 1.2);
+                miter = Math.min(miter, dist * 1.5);
+                let sign = flip ? -1 : 1;
+                let dirX = nx * sign, dirZ = nz * sign;
+                let dToCent = Math.hypot(pt.x - cx, pt.z - cz);
+                let maxStep = Math.max(0.2, dToCent * 0.70);
+                let actualStep = Math.min(miter, maxStep);
+                finalPts.push({ x: pt.x + dirX * actualStep, z: pt.z + dirZ * actualStep });
+            }
+            return finalPts;
+        };
+    }
+
+    // === TRACKMAN & GSPRO PROFESSIONAL GREEN GRID ENGINE ===
+    window._greenGridCoverage = window._greenGridCoverage || 'ALL'; // 'ALL' = Green + Foregreen, 'GREEN_ONLY' = Puttyta
+    window._greenGridColorMode = window._greenGridColorMode || 'HEATMAP'; // 'HEATMAP' = TrackMan slope colors, 'WHITE' = Vit
+
+    window.setGreenGridCoverage = function(cov) {
+        window._greenGridCoverage = cov;
+        let bAll = document.getElementById('gs-grid-cov-all');
+        let bGreen = document.getElementById('gs-grid-cov-green');
+        if (bAll) {
+            bAll.style.background = (cov === 'ALL') ? 'rgba(56,189,248,0.25)' : '#0f172a';
+            bAll.style.color = (cov === 'ALL') ? '#38bdf8' : '#94a3b8';
+            bAll.style.borderColor = (cov === 'ALL') ? '#38bdf8' : '#334155';
+        }
+        if (bGreen) {
+            bGreen.style.background = (cov === 'GREEN_ONLY') ? 'rgba(56,189,248,0.25)' : '#0f172a';
+            bGreen.style.color = (cov === 'GREEN_ONLY') ? '#38bdf8' : '#94a3b8';
+            bGreen.style.borderColor = (cov === 'GREEN_ONLY') ? '#38bdf8' : '#334155';
+        }
+        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (hole && typeof window.buildGreenGrid === 'function') {
+            window.buildGreenGrid(hole, window.currentHoleIndex, true);
+        }
+    };
+
+    window.setGreenGridStyle = function(style) {
+        window._greenGridColorMode = style;
+        let bHm = document.getElementById('gs-grid-style-heatmap');
+        let bWh = document.getElementById('gs-grid-style-white');
+        if (bHm) {
+            bHm.style.background = (style === 'HEATMAP') ? 'rgba(74,222,128,0.25)' : '#0f172a';
+            bHm.style.color = (style === 'HEATMAP') ? '#4ade80' : '#94a3b8';
+            bHm.style.borderColor = (style === 'HEATMAP') ? '#4ade80' : '#334155';
+        }
+        if (bWh) {
+            bWh.style.background = (style === 'WHITE') ? 'rgba(74,222,128,0.25)' : '#0f172a';
+            bWh.style.color = (style === 'WHITE') ? '#4ade80' : '#94a3b8';
+            bWh.style.borderColor = (style === 'WHITE') ? '#4ade80' : '#334155';
+        }
+        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (hole && typeof window.buildGreenGrid === 'function') {
+            window.buildGreenGrid(hole, window.currentHoleIndex, true);
+        }
+    };
+
+    window.buildGreenGrid = function(hole, holeIndex, forceRebuild = false) {
+        if (!hole) return;
+        if (!forceRebuild && window.greenGridForHoleIndex === holeIndex) {
             if (window.greenGridMesh) return;
-            // Mesh gone but index still set: allow rebuild (e.g. after a manual dispose)
         }
         
-        // Dispose previous geometry/material (correct THREE.js order: remove before dispose)
+        // Dispose previous geometry/material
         if (window.greenGridMesh) {
             scene.remove(window.greenGridMesh);
             window.greenGridMesh.geometry.dispose();
             window.greenGridMesh.material.dispose();
             window.greenGridMesh = null;
         }
+        if (forceRebuild && typeof window.clearGreenBeads === 'function') {
+            window.clearGreenBeads();
+        }
         
-        let gridPoints = [];
-        let gridStep = 1.0;  // 1 meter spacing
-        let gridRange = 25;
-        let sampleStep = 0.5;
+        let gd = hole.greenData;
+        if (!gd) return;
         
-        // Horizontal grid lines (X direction)
-        for (let z = -gridRange; z <= gridRange; z += gridStep) {
-            let lineStart = null;
-            for (let x = -gridRange; x <= gridRange; x += sampleStep) {
-                let wx = hole.flag.x + x;
-                let wz = hole.flag.z + z;
-                let surf = localGetTerrainAt(wx, -wz);
-                if (surf && surf.type === 'GREEN') {
-                    let pt = new THREE.Vector3(wx, surf.z + 0.03, wz);
-                    if (lineStart) {
-                        gridPoints.push(lineStart.x, lineStart.y, lineStart.z);
-                        gridPoints.push(pt.x, pt.y, pt.z);
-                    }
-                    lineStart = pt;
-                } else {
-                    lineStart = null;
+        // 1. Resolve High-Definition Spline Polygons
+        let outerPoly = null;
+        if (gd.densePts && gd.densePts.length >= 3) {
+            outerPoly = gd.densePts;
+        } else if (gd.points && gd.points.length >= 3) {
+            outerPoly = (typeof window.getDenseGreenPoints === 'function')
+                ? window.getDenseGreenPoints(gd.points, gd.tension !== undefined ? gd.tension : 0.5)
+                : gd.points;
+        }
+        
+        if (!outerPoly || outerPoly.length < 3) return;
+        
+        let innerPoly = null;
+        let fgWidth = (gd.foregreenWidth !== undefined) ? gd.foregreenWidth : 1.0;
+        if (gd.innerDensePts && gd.innerDensePts.length >= 3) {
+            innerPoly = gd.innerDensePts;
+        } else if (fgWidth > 0.05 && typeof window.insetPolygon === 'function') {
+            innerPoly = window.insetPolygon(outerPoly, fgWidth);
+        } else {
+            innerPoly = outerPoly;
+        }
+        
+        let coverage = window._greenGridCoverage || 'ALL';
+        let targetPoly = (coverage === 'GREEN_ONLY') ? innerPoly : outerPoly;
+        if (!targetPoly || targetPoly.length < 3) targetPoly = outerPoly;
+
+        // 2. Compute Bounding Box
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (let p of targetPoly) {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.z < minZ) minZ = p.z;
+            if (p.z > maxZ) maxZ = p.z;
+        }
+        
+        let gridStep = 1.0;  // 1 meter standard cell
+        let subStep = 0.25;  // 25 cm height-following resolution
+        let isHeatmap = (window._greenGridColorMode !== 'WHITE');
+        
+        let gridPositions = [];
+        let gridColors = [];
+        
+        // TrackMan Color Mapping Function (High-contrast against green turf)
+        function getSlopeColor(wx, wz, isForegreen) {
+            if (!isHeatmap) {
+                return isForegreen ? [0.70, 0.70, 0.70] : [1.0, 1.0, 1.0];
+            }
+            let d = 0.3;
+            let hR = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx + d, wz) : 0;
+            let hL = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx - d, wz) : 0;
+            let hU = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz + d) : 0;
+            let hD = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz - d) : 0;
+            let sx = (hR - hL) / (2 * d);
+            let sz = (hU - hD) / (2 * d);
+            let slopePct = Math.sqrt(sx * sx + sz * sz) * 100;
+            
+            let r, g, b;
+            if (slopePct < 1.0) {
+                // Flat / Level: Vivid Electric Cyan / Ice Blue (Maximum contrast on grass)
+                let t = Math.max(0, Math.min(1, slopePct / 1.0));
+                r = 0.05 + t * 0.10;
+                g = 0.88 + t * 0.07;
+                b = 1.0;
+            } else if (slopePct < 2.2) {
+                // Gentle break (typical putting green 1-2%): High-Contrast Neon Gold / Yellow
+                let t = (slopePct - 1.0) / (2.2 - 1.0);
+                r = 1.0;
+                g = 0.90 + t * 0.05;
+                b = 0.10 + (1.0 - t) * 0.20;
+            } else if (slopePct < 3.8) {
+                // Moderate break: Vivid Amber / Tangerine
+                let t = (slopePct - 2.2) / (3.8 - 2.2);
+                r = 1.0;
+                g = 0.90 - t * 0.35;
+                b = 0.05;
+            } else {
+                // Severe break / Slant: Fiery Coral Red
+                let t = Math.min(1, (slopePct - 3.8) / 2.5);
+                r = 1.0;
+                g = 0.55 - t * 0.35;
+                b = 0.15;
+            }
+            
+            if (isForegreen) {
+                // Mjukare kontrast på foregreen så puttytan syns distinkt
+                r *= 0.65;
+                g *= 0.65;
+                b *= 0.65;
+            }
+            return [r, g, b];
+        }
+
+        // Helper: Check if point is inside inner green
+        function isPointInInnerGreen(wx, wz) {
+            if (!innerPoly || innerPoly === outerPoly || fgWidth <= 0.05) return true;
+            return window.pointInPolygon(wx, wz, innerPoly);
+        }
+
+        // Dual-stroke line offset for physical thickness (3.2 cm total beam width, solid on Retina)
+        const lineOff = 0.016;
+        const lineH = 0.065; // Elevated 6.5cm above terrain + polygonOffset to never submerge
+
+        // --- 1. HORIZONTAL GRID LINES (constant Z, running along X) ---
+        let startZ = Math.floor(minZ);
+        let endZ = Math.ceil(maxZ);
+        let nPoly = targetPoly.length;
+        
+        for (let z = startZ; z <= endZ; z += gridStep) {
+            // Find all exact X intersections with targetPoly edges
+            let xs = [];
+            for (let i = 0; i < nPoly; i++) {
+                let p1 = targetPoly[i];
+                let p2 = targetPoly[(i + 1) % nPoly];
+                let z1 = p1.z, z2 = p2.z;
+                if ((z1 <= z && z2 > z) || (z2 <= z && z1 > z)) {
+                    let t = (z - z1) / (z2 - z1);
+                    let xInter = p1.x + t * (p2.x - p1.x);
+                    xs.push(xInter);
                 }
+            }
+            xs.sort((a, b) => a - b);
+            
+            // For each pair of intersections [x1, x2]
+            for (let k = 0; k + 1 < xs.length; k += 2) {
+                let xStart = xs[k];
+                let xEnd = xs[k + 1];
+                if (xEnd - xStart < 0.05) continue;
+                
+                // Sample points along terrain
+                let prevX = xStart;
+                let prevY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(prevX, z) + lineH : lineH;
+                let prevIsFg = !isPointInInnerGreen(prevX, z);
+                let prevColor = getSlopeColor(prevX, z, prevIsFg);
+                
+                let curX = xStart + subStep;
+                while (curX < xEnd) {
+                    let curY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(curX, z) + lineH : lineH;
+                    let curIsFg = !isPointInInnerGreen(curX, z);
+                    let curColor = getSlopeColor(curX, z, curIsFg);
+                    
+                    // Dual-line stroke for bold physical thickness
+                    gridPositions.push(
+                        prevX, prevY, z - lineOff, curX, curY, z - lineOff,
+                        prevX, prevY, z + lineOff, curX, curY, z + lineOff
+                    );
+                    gridColors.push(
+                        prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2],
+                        prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2]
+                    );
+                    
+                    prevX = curX;
+                    prevY = curY;
+                    prevColor = curColor;
+                    curX += subStep;
+                }
+                
+                // Final exact endpoint to xEnd
+                let endY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(xEnd, z) + lineH : lineH;
+                let endIsFg = !isPointInInnerGreen(xEnd, z);
+                let endColor = getSlopeColor(xEnd, z, endIsFg);
+                
+                gridPositions.push(
+                    prevX, prevY, z - lineOff, xEnd, endY, z - lineOff,
+                    prevX, prevY, z + lineOff, xEnd, endY, z + lineOff
+                );
+                gridColors.push(
+                    prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2],
+                    prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2]
+                );
+            }
+        }
+
+        // --- 2. VERTICAL GRID LINES (constant X, running along Z) ---
+        let startX = Math.floor(minX);
+        let endX = Math.ceil(maxX);
+        
+        for (let x = startX; x <= endX; x += gridStep) {
+            let zs = [];
+            for (let i = 0; i < nPoly; i++) {
+                let p1 = targetPoly[i];
+                let p2 = targetPoly[(i + 1) % nPoly];
+                let x1 = p1.x, x2 = p2.x;
+                if ((x1 <= x && x2 > x) || (x2 <= x && x1 > x)) {
+                    let t = (x - x1) / (x2 - x1);
+                    let zInter = p1.z + t * (p2.z - p1.z);
+                    zs.push(zInter);
+                }
+            }
+            zs.sort((a, b) => a - b);
+            
+            for (let k = 0; k + 1 < zs.length; k += 2) {
+                let zStart = zs[k];
+                let zEnd = zs[k + 1];
+                if (zEnd - zStart < 0.05) continue;
+                
+                let prevZ = zStart;
+                let prevY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(x, prevZ) + lineH : lineH;
+                let prevIsFg = !isPointInInnerGreen(x, prevZ);
+                let prevColor = getSlopeColor(x, prevZ, prevIsFg);
+                
+                let curZ = zStart + subStep;
+                while (curZ < zEnd) {
+                    let curY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(x, curZ) + lineH : lineH;
+                    let curIsFg = !isPointInInnerGreen(x, curZ);
+                    let curColor = getSlopeColor(x, curZ, curIsFg);
+                    
+                    // Dual-line stroke for bold physical thickness
+                    gridPositions.push(
+                        x - lineOff, prevY, prevZ, x - lineOff, curY, curZ,
+                        x + lineOff, prevY, prevZ, x + lineOff, curY, curZ
+                    );
+                    gridColors.push(
+                        prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2],
+                        prevColor[0], prevColor[1], prevColor[2], curColor[0], curColor[1], curColor[2]
+                    );
+                    
+                    prevZ = curZ;
+                    prevY = curY;
+                    prevColor = curColor;
+                    curZ += subStep;
+                }
+                
+                let endY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(x, zEnd) + lineH : lineH;
+                let endIsFg = !isPointInInnerGreen(x, zEnd);
+                let endColor = getSlopeColor(x, zEnd, endIsFg);
+                
+                gridPositions.push(
+                    x - lineOff, prevY, prevZ, x - lineOff, endY, zEnd,
+                    x + lineOff, prevY, prevZ, x + lineOff, endY, zEnd
+                );
+                gridColors.push(
+                    prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2],
+                    prevColor[0], prevColor[1], prevColor[2], endColor[0], endColor[1], endColor[2]
+                );
             }
         }
         
-        // Vertical grid lines (Z direction)
-        for (let x = -gridRange; x <= gridRange; x += gridStep) {
-            let lineStart = null;
-            for (let z = -gridRange; z <= gridRange; z += sampleStep) {
-                let wx = hole.flag.x + x;
-                let wz = hole.flag.z + z;
-                let surf = localGetTerrainAt(wx, -wz);
-                if (surf && surf.type === 'GREEN') {
-                    let pt = new THREE.Vector3(wx, surf.z + 0.03, wz);
-                    if (lineStart) {
-                        gridPoints.push(lineStart.x, lineStart.y, lineStart.z);
-                        gridPoints.push(pt.x, pt.y, pt.z);
-                    }
-                    lineStart = pt;
-                } else {
-                    lineStart = null;
-                }
-            }
-        }
-        
-        if (gridPoints.length > 0) {
+        // --- 3. CREATE THREE.JS LINE MESH ---
+        if (gridPositions.length > 0) {
             let gridGeo = new THREE.BufferGeometry();
-            gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPoints, 3));
+            gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPositions, 3));
+            gridGeo.setAttribute('color', new THREE.Float32BufferAttribute(gridColors, 3));
+            
             let gridMat = new THREE.LineBasicMaterial({
-                // BUG-01 FIX: Raised opacity from 0.18 (near-invisible) to 0.45
-                color: 0xffffff, transparent: true, opacity: 0.45,
-                depthTest: true, depthWrite: false
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.95,
+                depthTest: true,
+                depthWrite: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -4.0,
+                polygonOffsetUnits: -4.0
             });
             window.greenGridMesh = new THREE.LineSegments(gridGeo, gridMat);
-            // BUG-01 FIX: Set visibility explicitly — don't rely on THREE.js default
-            window.greenGridMesh.visible = window.greenGridEnabled;
+            window.greenGridMesh.renderOrder = 998;
+            window.greenGridMesh.visible = window._globalGreenGridEnabled ? true : (window._studioShowGrid !== undefined ? window._studioShowGrid : (window.greenGridEnabled !== false));
             scene.add(window.greenGridMesh);
             window.greenGridForHoleIndex = holeIndex;
-            console.log(`📐 Green Grid built for hole ${holeIndex}: ${gridPoints.length / 6} line segments`);
+            console.log(`📐 TrackMan Green Grid generated: ${gridPositions.length / 6} segments, coverage: ${coverage}, mode: ${window._greenGridColorMode}`);
         }
     };
 
@@ -7268,10 +8283,9 @@
         let toolHints = document.getElementById('tool-hints');
         
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        if (btn) btn.textContent = isSv ? 'Rutnät' : 'Grid';
         if (window._builderGridMode === 0) {
-            if (btn) btn.textContent = isSv ? 'RUTNÄT' : 'GRID';
             if (btnEl) {
-                btnEl.style.borderColor = '#334155';
                 btnEl.style.color = '#94a3b8';
                 btnEl.style.background = 'transparent';
                 btnEl.classList.remove('active');
@@ -7280,16 +8294,63 @@
             if (toolHints) toolHints.style.bottom = '20px';
             showBuildToast(isSv ? '📐 Terrängrutnät: AV' : '📐 Terrain Grid: OFF', '#94a3b8');
         } else {
-            if (btn) btn.textContent = '100m + 25m';
             if (btnEl) {
-                btnEl.style.borderColor = '#38bdf8';
                 btnEl.style.color = '#38bdf8';
-                btnEl.style.background = 'rgba(56,189,248,0.15)';
+                btnEl.style.background = 'rgba(56,189,248,0.18)';
                 btnEl.classList.add('active');
             }
             if (legend) legend.style.display = 'flex';
             if (toolHints) toolHints.style.bottom = '95px';
             showBuildToast(isSv ? '📐 Terrängrutnät: PÅ (100m + 25m)' : '📐 Terrain Grid: ON (100m + 25m)', '#38bdf8');
+        }
+    };
+    
+    window._globalGreenGridEnabled = false;
+    window.toggleGlobalSlopeGrid = function(explicitState) {
+        if (explicitState !== undefined) {
+            window._globalGreenGridEnabled = !!explicitState;
+        } else {
+            window._globalGreenGridEnabled = !window._globalGreenGridEnabled;
+        }
+        
+        let btn = document.getElementById('slope-grid-btn-label');
+        let btnEl = document.getElementById('btn-slope-grid-toggle');
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        let hole = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null);
+
+        if (btn) btn.textContent = isSv ? 'Lutning' : 'Slope';
+        if (window._globalGreenGridEnabled) {
+            if (btnEl) {
+                btnEl.style.color = '#38bdf8';
+                btnEl.style.background = 'rgba(56,189,248,0.18)';
+                btnEl.classList.add('active');
+            }
+            if (hole && hole.greenData && hole.greenData.points && hole.greenData.points.length >= 3) {
+                if (typeof window.buildGreenGrid === 'function') {
+                    window.buildGreenGrid(hole, window.currentHoleIndex, true);
+                }
+                if (window.greenGridMesh) window.greenGridMesh.visible = true;
+                showBuildToast(isSv ? '⚡ TrackMan Greenlutning: PÅ' : '⚡ TrackMan Slope Grid: ON', '#38bdf8');
+            } else {
+                showBuildToast(isSv ? '⚠️ Skapa en green först för att se lutningsrutnät' : '⚠️ Create a green first to view slope grid', '#fbbf24');
+            }
+        } else {
+            if (btnEl) {
+                btnEl.style.color = '#94a3b8';
+                btnEl.style.background = 'transparent';
+                btnEl.classList.remove('active');
+            }
+            let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
+            if (!isStudioLutning) {
+                if (window.greenGridMesh) window.greenGridMesh.visible = false;
+                if (typeof window.clearGreenBeads === 'function') {
+                    window.clearGreenBeads();
+                } else if (window.greenBeads && window.greenBeads.length > 0) {
+                    window.greenBeads.forEach(b => { if (window.greenBeadsGroup) window.greenBeadsGroup.remove(b); });
+                    window.greenBeads = [];
+                }
+            }
+            showBuildToast(isSv ? '⚡ TrackMan Greenlutning: AV' : '⚡ TrackMan Slope Grid: OFF', '#94a3b8');
         }
     };
     
@@ -8319,6 +9380,16 @@
         if(typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
         // Refresh Smart Builder state for new hole
         if(window._smartBuilderType && typeof setSmartBuilderType === 'function') setSmartBuilderType(window._smartBuilderType);
+        // Refresh TrackMan slope grid if globally active
+        if (window._globalGreenGridEnabled && typeof window.buildGreenGrid === 'function') {
+            let nextHole = courseHoles[currentHoleIndex];
+            if (nextHole && nextHole.greenData && nextHole.greenData.points && nextHole.greenData.points.length >= 3) {
+                window.buildGreenGrid(nextHole, currentHoleIndex, true);
+                if (window.greenGridMesh) window.greenGridMesh.visible = true;
+            } else if (window.greenGridMesh) {
+                window.greenGridMesh.visible = false;
+            }
+        }
     };
 
     window.changeHole = function(dir) {
@@ -8468,12 +9539,13 @@
         let sInd = document.getElementById('save-status-indicator');
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
 
-        if (sText) sText.textContent = isSv ? 'Sparar...' : 'Saving...';
+        if (sText) sText.textContent = isSv ? 'Sparar' : 'Saving';
         if (sIcon) sIcon.textContent = '⏳';
         if (sInd) {
             sInd.style.color = '#fbbf24';
             sInd.style.background = 'rgba(251,191,36,0.12)';
             sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+            sInd.title = isSv ? 'Sparar banan...' : 'Saving course...';
         }
 
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
@@ -8760,6 +9832,7 @@
                 sInd.style.color = '#4ade80';
                 sInd.style.background = 'rgba(74,222,128,0.12)';
                 sInd.style.borderColor = 'rgba(74,222,128,0.3)';
+                sInd.title = isSv ? 'Banan är sparad (Autosave är aktivt)' : 'Course is saved (Autosave active)';
             }
         }, 200);
         return fullData;
@@ -8776,12 +9849,13 @@
         let sIcon = document.getElementById('save-status-icon');
         let sInd = document.getElementById('save-status-indicator');
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-        if (sText) sText.textContent = isSv ? 'Osparade ändringar' : 'Unsaved changes';
-        if (sIcon) sIcon.textContent = '⚡';
+        if (sText) sText.textContent = isSv ? 'Ändrad' : 'Unsaved';
+        if (sIcon) sIcon.textContent = '●';
         if (sInd) {
             sInd.style.color = '#fbbf24';
             sInd.style.background = 'rgba(251,191,36,0.1)';
             sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+            sInd.title = isSv ? 'Osparade ändringar (Klicka för att spara direkt)' : 'Unsaved changes (Click to save now)';
         }
 
         if (window._saveDebounceTimer) clearTimeout(window._saveDebounceTimer);
@@ -10547,9 +11621,10 @@
         else if (matchWindLevel === 2) windMph = 10 + Math.random() * 8; 
         else if (matchWindLevel === 3) windMph = 18 + Math.random() * 7; 
         else if (matchWindLevel === 4) windMph = 25 + Math.random() * 10; 
-        else if (matchWindLevel === 0) windMph = Math.random() * 2; 
+        else if (matchWindLevel === 0) windMph = 0; 
         
         window.currentWindMph += (windMph - window.currentWindMph) * 0.1;
+        if (windMph === 0 && Math.abs(window.currentWindMph) < 0.05) window.currentWindMph = 0;
         
         let windMs = window.currentWindMph * 0.44704;
         
@@ -12427,6 +13502,7 @@
     let isSculpting = false;
     let sculptDirection = 1;
     let currentTool = 'SCULPT'; 
+    window.currentTool = currentTool;
     let currentBrushSize = 6.0;
     let currentBrushShape = 'ROUND'; // ROUND or SQUARE
 
@@ -12438,6 +13514,7 @@
     // === SMART BUILDER MODULE BRIDGE ===
     // Code moved to smart-builder.js — expose required locals
     window.courseHoles = courseHoles;
+    window.controls = controls;
     window.saveUndoState = saveUndoState;
     window.saveLevel = saveLevel;
     window.createTeeObject = createTeeObject;
@@ -12758,6 +13835,12 @@
         if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
         if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+        if (window._globalGreenGridEnabled && typeof window.buildGreenGrid === 'function') {
+            let h = (typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null;
+            if (h && h.greenData && h.greenData.points && h.greenData.points.length >= 3) {
+                window.buildGreenGrid(h, window.currentHoleIndex, true);
+            }
+        }
     }
 
     window.performUndo = function() {
@@ -12795,12 +13878,19 @@
         let sText = document.getElementById('save-status-text');
         let sIcon = document.getElementById('save-status-icon');
         let sInd = document.getElementById('save-status-indicator');
-        if (sText) sText.textContent = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Osparade ändringar' : 'Unsaved changes';
-        if (sIcon) sIcon.textContent = '⚡';
+        if (sText) sText.textContent = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Ändrad' : 'Unsaved';
+        if (sIcon) sIcon.textContent = '●';
         if (sInd) {
             sInd.style.color = '#fbbf24';
             sInd.style.background = 'rgba(251,191,36,0.1)';
             sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+            sInd.title = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Osparade ändringar (Klicka för att spara direkt)' : 'Unsaved changes (Click to save now)';
+        }
+        if (window._globalGreenGridEnabled && typeof window.buildGreenGrid === 'function') {
+            let h = (typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null;
+            if (h && h.greenData && h.greenData.points && h.greenData.points.length >= 3) {
+                window.buildGreenGrid(h, window.currentHoleIndex, true);
+            }
         }
     }
 
@@ -12905,6 +13995,17 @@
     renderer.domElement.addEventListener('pointerdown', e => {
         if(appMode !== 'BUILD') return;
         
+        let rect = renderer.domElement.getBoundingClientRect();
+        let w = rect.width || window.innerWidth;
+        let h = rect.height || window.innerHeight;
+        mouse.x = ((e.clientX - (rect.left || 0)) / w) * 2 - 1;
+        mouse.y = -((e.clientY - (rect.top || 0)) / h) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        let planeHits = raycaster.intersectObject(plane);
+        if (planeHits.length > 0) {
+            lastHitPoint = planeHits[0].point;
+        }
+
         // --- PROP SELECTION FOR INSPECT & PROPS ---
         if ((currentTool === 'INSPECT' || currentTool === 'PROPS') && e.button === 0) {
             if (window._hoveredPropIndex !== undefined && window._hoveredPropIndex !== null) {
@@ -13236,12 +14337,17 @@
                     controls.enabled = false;
                     return;
                 }
-                // If green is already built, inform user instead of adding points
+                // Delegate to GreenStudio (supports both Mode 1 node dragging/insertion and Mode 2 built-green editing)
                 if(window._smartBuilderType === 'GREEN') {
                     let curHole = courseHoles[currentHoleIndex];
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.GreenStudio && window.GreenStudio.onPointerDown(e, lastHitPoint, raycaster)) {
+                        controls.enabled = false;
+                        return;
+                    }
                     if(curHole && curHole.greenData && curHole.greenData.points && curHole.greenData.points.length >= 3) {
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
-                        showBuildToast(curLang === 'en' ? 'ℹ️ Green is active. Use the right panel to adjust or redraw!' : 'ℹ️ Green är aktiv. Använd panelen till höger för att justera eller rita om!', '#4ade80');
+                        showBuildToast(curLang === 'en' ? 'ℹ️ Green is active. Drag golf balls, or click [✏️ Redraw green] in panel!' : 'ℹ️ Green är aktiv. Dra golfbollarna, eller klicka på [✏️ Rita om green] i panelen!', '#4ade80');
                         controls.enabled = false;
                         return;
                     } else if(curHole && curHole.greenData && (!curHole.greenData.points || curHole.greenData.points.length < 3)) {
@@ -13275,9 +14381,32 @@
                     showBuildToast('\u26a0\ufe0f Shape cannot cross itself!', '#ef4444');
                 }
                 updateSmartGreenPreview();
-            } else if (e.button === 2 && smartGreenPoints.length > 0) {
-                smartGreenPoints.pop();
-                updateSmartGreenPreview();
+                if (window._smartBuilderType === 'GREEN' && typeof window.updateSBGreenControls === 'function') {
+                    window.updateSBGreenControls();
+                } else if (window._smartBuilderType === 'FAIRWAY' && typeof window.updateSBFairwayControls === 'function') {
+                    window.updateSBFairwayControls();
+                } else if (window._smartBuilderType === 'BUNKER' && typeof window.updateSBBunkerControls === 'function') {
+                    window.updateSBBunkerControls();
+                }
+            } else if (e.button === 2) {
+                if(window._smartBuilderType === 'GREEN') {
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.GreenStudio && window.GreenStudio.onRightClick(e, lastHitPoint, raycaster)) {
+                        controls.enabled = false;
+                        return;
+                    }
+                }
+                if(smartGreenPoints.length > 0) {
+                    smartGreenPoints.pop();
+                    updateSmartGreenPreview();
+                    if (window._smartBuilderType === 'GREEN' && typeof window.updateSBGreenControls === 'function') {
+                        window.updateSBGreenControls();
+                    } else if (window._smartBuilderType === 'FAIRWAY' && typeof window.updateSBFairwayControls === 'function') {
+                        window.updateSBFairwayControls();
+                    } else if (window._smartBuilderType === 'BUNKER' && typeof window.updateSBBunkerControls === 'function') {
+                        window.updateSBBunkerControls();
+                    }
+                }
             }
             controls.enabled = false;
         } else if((currentTool === 'PAINT' && window._paintToolMode === 'POLYGON') || (currentTool === 'PROPS' && window._propsToolMode === 'POLYGON')) {
@@ -13332,8 +14461,10 @@
 
     let isMeasuring = false;
 
-    // pointerup on WINDOW — catches releases outside canvas (e.g. on UI panels)
     window.addEventListener('pointerup', e => {
+        if(window.GreenStudio && window.GreenStudio.onPointerUp) {
+            window.GreenStudio.onPointerUp(e);
+        }
         if(typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
             activeRotatingTee = null;
             controls.enabled = true;
@@ -13366,6 +14497,7 @@
                 planeGeo.computeBoundingBox();
                 planeGeo.computeBoundingSphere();
                 if (window._terrainChunks) window._terrainChunks.syncDirty();
+                if (window._terrainShells) window._terrainShells.syncHeights();
                 snapObjectsToGround();
                 // Rebuild water mask (visual-only to preserve the flat water mesh and smooth edges)
                 rebuildWaterMask(true);
@@ -13460,7 +14592,7 @@
         safeSetDisplay('btn-publish', mode === 'BUILD' ? 'inline-flex' : 'none');
         safeSetDisplay('save-status-indicator', mode === 'BUILD' ? 'inline-flex' : 'none');
         safeSetDisplay('topbar-undo-group', mode === 'BUILD' ? 'flex' : 'none');
-        safeSetDisplay('btn-grid-toggle', mode === 'BUILD' ? 'inline-flex' : 'none');
+        safeSetDisplay('topbar-view-group', mode === 'BUILD' ? 'flex' : 'none');
         
         if (mode === 'BUILD' && typeof window.disableSwingMode === 'function') {
             window.disableSwingMode();
@@ -13736,8 +14868,14 @@
         }
         
         currentTool = toolName;
+        window.currentTool = toolName;
         if (typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
         if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
+        if (toolName !== 'SMART_BUILDER' && window.GreenStudio) {
+            window.GreenStudio.hide();
+        } else if (toolName === 'SMART_BUILDER' && window._smartBuilderType === 'GREEN' && window.GreenStudio) {
+            window.GreenStudio.sync();
+        }
         
         let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'hole', 'measure', 'eraser', 'colorize', 'mtn', 'poly', 'env'];
         
@@ -13950,9 +15088,19 @@
         else if (toolName === 'SMOOTH') hintHtml = "Hold Mouse: <b>Smooth Terrain</b>";
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
-        else if (toolName === 'WATER') hintHtml = "Hold Left: <b>Dig Water</b><br>Hold Right: <b>Drain Water</b>";
-        else if (toolName === 'SMART_BUILDER') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build";
-        else if (toolName === 'TEST_PUTT') hintHtml = "Left Click: <b>Drop Ball & Test Putt</b>";
+        else if (toolName === 'SMART_BUILDER') {
+            let curH = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+            if (window._smartBuilderType === 'GREEN' && curH && curH.greenData && curH.greenData.points && curH.greenData.points.length >= 3) {
+                hintHtml = isSv
+                    ? "💡 <b>Dra golfbollarna</b> för att forma greenen<br>Klicka på linjen för ny punkt • Högerklicka för att ta bort"
+                    : "💡 <b>Drag golf balls</b> to shape green<br>Click line to add point • Right-click to remove";
+            } else {
+                hintHtml = isSv
+                    ? "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa green"
+                    : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build";
+            }
+        }
         else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
         else if (toolName === 'MEASURE') hintHtml = "Click: <b>Place Line</b> (1st = start, 2nd = end) max 20<br>Right Click: <b>Cancel / Remove Nearest</b>";
         else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
@@ -14409,6 +15557,9 @@
                     lastHitPoint = intersects[0].point;
                 }
                 if(typeof window.updateElevationHUD === 'function') window.updateElevationHUD(lastHitPoint);
+                if (currentTool === 'SMART_BUILDER' && window._smartBuilderType === 'GREEN' && window.GreenStudio) {
+                    window.GreenStudio.onMouseMove(event, lastHitPoint, raycaster);
+                }
                 
                 if (currentTool === 'COLORIZE' && event.buttons === 1) {
                     let col = window.activeColorizeColor || '#ffffff';
@@ -14785,6 +15936,13 @@
         if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey) {
             e.preventDefault();
             if (typeof window.cycleTerrainGrid === 'function') window.cycleTerrainGrid();
+            return;
+        }
+
+        // Toggle Green Slope Grid with 'L'
+        if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            if (typeof window.toggleGlobalSlopeGrid === 'function') window.toggleGlobalSlopeGrid();
             return;
         }
 
@@ -15417,6 +16575,7 @@ window.triggerExplosion = function(x, y, z) {
         if (window.WindSway) window.WindSway.update(now * 0.001); // Wind sway
         if (window.AutumnLeaves) window.AutumnLeaves.update(dt); // 3D falling leaves
         if (window.updateTracerFade) window.updateTracerFade(); // Tracer fade-out after landing
+        if (window.GreenStudio && window.GreenStudio.update) window.GreenStudio.update(dt); // 3D Green Studio animation & easing
 
         // --- Process Explosions ---
         if (window.activeExplosions && window.activeExplosions.length > 0) {
@@ -15551,109 +16710,184 @@ window.triggerExplosion = function(x, y, z) {
 
 
         // --- GREEN BEADS + GRID VISUALIZATION (Trackman/GSPro style) ---
-        // Activate when ball is within 50 yards of flag (not just putting mode)
+        // Activate when ball is within 50 yards of flag (not just putting mode), or during Green Studio Steg 2 (Lutning), or via Global Slope Grid button
+        let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
+        let isGlobalSlopeActive = !!window._globalGreenGridEnabled;
         let showGreenViz = false;
-        let vizHole = courseHoles[playingHoleIndex];
-        if (vizHole && vizHole.flag && playState === 'ROUND_IDLE' && window.ballPos) {
-            let dx = window.ballPos.x - vizHole.flag.x;
-            let dz = window.ballPos.z - vizHole.flag.z;
-            let distToFlag = Math.sqrt(dx*dx + dz*dz);
-            showGreenViz = distToFlag < BEAD_ACTIVATION_DISTANCE;
+        let vizHole = null;
+        let isStudioMode = false;
+
+        if (isStudioLutning || isGlobalSlopeActive) {
+            vizHole = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null);
+            if (vizHole && vizHole.greenData && vizHole.greenData.points && vizHole.greenData.points.length >= 3) {
+                showGreenViz = true;
+                isStudioMode = true;
+            }
+        } else if (typeof courseHoles !== 'undefined' && courseHoles && typeof playingHoleIndex !== 'undefined') {
+            vizHole = courseHoles[playingHoleIndex];
+            if (vizHole && vizHole.flag && playState === 'ROUND_IDLE' && window.ballPos) {
+                let dx = window.ballPos.x - vizHole.flag.x;
+                let dz = window.ballPos.z - vizHole.flag.z;
+                let distToFlag = Math.hypot(dx, dz);
+                showGreenViz = distToFlag < BEAD_ACTIVATION_DISTANCE;
+            }
         }
         
         if (showGreenViz) {
             let hole = vizHole;
+            let showGrid = isGlobalSlopeActive
+                ? true
+                : (isStudioLutning ? (window._studioShowGrid !== false) : (window.greenGridEnabled !== false));
+            let showBeads = isStudioLutning
+                ? (window._studioShowBeads !== false)
+                : (isGlobalSlopeActive
+                    ? (window._globalGreenBeadsEnabled !== false && window.greenBeadsEnabled !== false)
+                    : (window.greenBeadsEnabled !== false));
+            let gd = hole.greenData;
+            let activePoly = null;
+            if (gd) {
+                if (window._greenGridCoverage === 'GREEN_ONLY' && gd.innerDensePts && gd.innerDensePts.length >= 3) {
+                    activePoly = gd.innerDensePts;
+                } else if (gd.densePts && gd.densePts.length >= 3) {
+                    activePoly = gd.densePts;
+                } else if (gd.points && gd.points.length >= 3) {
+                    activePoly = (typeof window.getDenseGreenPoints === 'function')
+                        ? window.getDenseGreenPoints(gd.points, gd.tension !== undefined ? gd.tension : 0.5)
+                        : gd.points;
+                }
+            }
             
-            // --- BEADS (toggle: window.greenBeadsEnabled) ---
-            if (window.greenBeadsEnabled) {
-                if (window.greenBeads.length === 0) {
-                    for(let x=-40; x<=40; x+=2.5) {
-                        for(let z=-40; z<=40; z+=2.5) {
-                            let bead = new THREE.Mesh(beadGeo, beadMat);
-                            bead.startX = hole.flag.x + x;
-                            bead.startZ = hole.flag.z + z;
-                            bead.position.set(bead.startX, 0, bead.startZ);
-                            bead.distOffset = Math.random(); 
-                            greenBeadsGroup.add(bead);
-                            window.greenBeads.push(bead);
+            // --- BEADS (toggle: window.greenBeadsEnabled or studio toggle) ---
+            if (showBeads) {
+                let currentHoleKey = isStudioMode ? ('studio_' + window.currentHoleIndex) : ('play_' + (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0));
+                let originX = 0, originZ = 0, beadRadius = 25;
+                if (activePoly && activePoly.length >= 3) {
+                    let sx = 0, sz = 0;
+                    for (let p of activePoly) { sx += p.x; sz += p.z; }
+                    originX = sx / activePoly.length;
+                    originZ = sz / activePoly.length;
+                    let maxD = 0;
+                    for (let p of activePoly) {
+                        let d = Math.hypot(p.x - originX, p.z - originZ);
+                        if (d > maxD) maxD = d;
+                    }
+                    beadRadius = Math.max(12, Math.ceil(maxD + 2));
+                } else if (hole.flag) {
+                    originX = hole.flag.x;
+                    originZ = hole.flag.z;
+                    beadRadius = 25;
+                }
+
+                if (!window.greenBeads || window.greenBeads.length === 0 || window._greenBeadsHoleKey !== currentHoleKey) {
+                    if (window.greenBeads && window.greenBeads.length > 0) {
+                        window.greenBeads.forEach(b => { if (greenBeadsGroup) greenBeadsGroup.remove(b); });
+                    }
+                    window.greenBeads = [];
+                    window._greenBeadsHoleKey = currentHoleKey;
+                    let step = 1.5; // 1.5m grid of beads
+                    for (let x = -beadRadius; x <= beadRadius; x += step) {
+                        for (let z = -beadRadius; z <= beadRadius; z += step) {
+                            let wx = originX + x;
+                            let wz = originZ + z;
+                            let inside = activePoly ? window.pointInPolygon(wx, wz, activePoly) : true;
+                            if (inside) {
+                                let bead = new THREE.Mesh(beadGeo, beadMat);
+                                bead.startX = wx;
+                                bead.startZ = wz;
+                                bead.position.set(wx, 0, wz);
+                                bead.distOffset = Math.random(); 
+                                bead.renderOrder = 999;
+                                greenBeadsGroup.add(bead);
+                                window.greenBeads.push(bead);
+                            }
                         }
                     }
                 }
                 
-                let stimp = window.GREEN_STIMP || 10.0;
+                let stimp = (window.matchSettings && window.matchSettings.greenStimp) || window.GREEN_STIMP || 10.0;
                 let dt = 0.016; 
+                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
+                let grainSeed = holeIdx * 7.3;
+                let grainScale = 0.03 * (10.0 / stimp);
                 
-                for(let i=0; i<window.greenBeads.length; i++) {
-                    let bead = window.greenBeads[i];
-                    let surf = localGetTerrainAt(bead.position.x, -bead.position.z);
-                    
-                    if (surf && surf.type === 'GREEN') {
-                        bead.visible = true;
-                        bead.position.y = surf.z + 0.05; 
-                        
-                        let fallX = -surf.normal.x;
-                        let fallZ = -surf.normal.z;
-                        let slopeMag = Math.sqrt(fallX*fallX + fallZ*fallZ);
-                        
-                        if (slopeMag > 0.001) {
-                            let dirX = fallX / slopeMag;
-                            let dirZ = fallZ / slopeMag;
-                            let speed = slopeMag * stimp * 2.0;
-                            // BUG-07: Grass grain uses hole-index seed for per-hole variation.
-                            // Multiplier 7.3 (irrational-ish) avoids visible repetition patterns.
-                            let grainSeed = (typeof playingHoleIndex !== 'undefined') ? playingHoleIndex * 7.3 : 0;
-                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2 + grainSeed);
-                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2 + grainSeed);
-                            let currentStimp = window.GREEN_STIMP || 10.0;
-                            let grainScale = 0.03 * (10.0 / currentStimp);
-                            let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
-                            bead.position.x += (dirX * speed + (sx/gl) * grainScale * 25.0) * dt;
-                            bead.position.z += (dirZ * speed + (sz/gl) * grainScale * 25.0) * dt;
-                        } else {
-                            // Flat green: grain only, seeded per hole
-                            let grainSeed = (typeof playingHoleIndex !== 'undefined') ? playingHoleIndex * 7.3 : 0;
-                            let sx = Math.sin(bead.position.x * 0.3 + bead.position.z * 0.2 + grainSeed);
-                            let sz = Math.cos(bead.position.z * 0.3 - bead.position.x * 0.2 + grainSeed);
-                            let currentStimp = window.GREEN_STIMP || 10.0;
-                            let grainScale = 0.03 * (10.0 / currentStimp);
-                            let gl = Math.sqrt(sx*sx + sz*sz + 1e-6);
-                            bead.position.x += (sx / gl) * grainScale * 15.0 * dt;
-                            bead.position.z += (sz / gl) * grainScale * 15.0 * dt;
+                if (window.greenBeads) {
+                    for (let i = 0; i < window.greenBeads.length; i++) {
+                        let bead = window.greenBeads[i];
+                        let wx = bead.position.x;
+                        let wz = bead.position.z;
+                        let isGreen = activePoly ? window.pointInPolygon(wx, wz, activePoly) : false;
+                        let surf = null;
+                        if (!activePoly) {
+                            surf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(wx, -wz) : null;
+                            isGreen = (surf && surf.type === 'GREEN');
                         }
-                    } else {
-                        bead.visible = false;
-                    }
-                    
-                    let dX = bead.position.x - bead.startX;
-                    let dZ = bead.position.z - bead.startZ;
-                    let traveled = Math.sqrt(dX*dX + dZ*dZ);
-                    if (traveled > (2.0 + bead.distOffset * 1.0)) {
-                        bead.position.x = bead.startX;
-                        bead.position.z = bead.startZ;
+                        
+                        if (isGreen) {
+                            bead.visible = true;
+                            let eps = 0.25;
+                            let hCenter = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz) : (surf ? surf.z : 0);
+                            let hX = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx + eps, wz) : hCenter;
+                            let hZ = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz + eps) : hCenter;
+                            bead.position.y = hCenter + 0.08; 
+                            
+                            let dh_dx = (hX - hCenter) / eps;
+                            let dh_dz = (hZ - hCenter) / eps;
+                            let fallX = -dh_dx;
+                            let fallZ = -dh_dz;
+                            let slopeMag = Math.hypot(fallX, fallZ);
+                            
+                            let sx = Math.sin(wx * 0.3 + wz * 0.2 + grainSeed);
+                            let sz = Math.cos(wz * 0.3 - wx * 0.2 + grainSeed);
+                            let gl = Math.hypot(sx, sz) || 1e-6;
+
+                            if (slopeMag > 0.001) {
+                                let dirX = fallX / slopeMag;
+                                let dirZ = fallZ / slopeMag;
+                                let speed = slopeMag * stimp * 2.0;
+                                bead.position.x += (dirX * speed + (sx / gl) * grainScale * 25.0) * dt;
+                                bead.position.z += (dirZ * speed + (sz / gl) * grainScale * 25.0) * dt;
+                            } else {
+                                bead.position.x += (sx / gl) * grainScale * 15.0 * dt;
+                                bead.position.z += (sz / gl) * grainScale * 15.0 * dt;
+                            }
+                        } else {
+                            bead.visible = false;
+                            bead.position.x = bead.startX;
+                            bead.position.z = bead.startZ;
+                        }
+                        
+                        let dX = bead.position.x - bead.startX;
+                        let dZ = bead.position.z - bead.startZ;
+                        let traveled = Math.hypot(dX, dZ);
+                        if (traveled > (2.0 + bead.distOffset * 1.0)) {
+                            bead.position.x = bead.startX;
+                            bead.position.z = bead.startZ;
+                        }
                     }
                 }
-            } else if (window.greenBeads.length > 0) {
-                window.greenBeads.forEach(b => greenBeadsGroup.remove(b));
+            } else if (window.greenBeads && window.greenBeads.length > 0) {
+                window.greenBeads.forEach(b => { if (greenBeadsGroup) greenBeadsGroup.remove(b); });
                 window.greenBeads = [];
             }
             
-            // --- GREEN GRID (BUG-01/04 FIX: Persistent mesh, visibility toggle only) ---
-            // buildGreenGrid() is called once when ball lands on green (see landing callback).
-            // Here we only sync visibility with the toggle switch.
+            // --- GREEN GRID ---
             if (window.greenGridMesh) {
-                window.greenGridMesh.visible = window.greenGridEnabled;
-            } else if (window.greenGridEnabled) {
-                // Fallback: build if somehow missing (e.g. first load with grid ON)
-                window.buildGreenGrid(hole, playingHoleIndex);
-                            window.buildBreakLine(); // Show putt break line
+                window.greenGridMesh.visible = showGrid;
+            } else if (showGrid) {
+                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
+                window.buildGreenGrid(hole, holeIdx);
+                if (window.greenGridMesh) window.greenGridMesh.visible = true;
+                if (!isStudioMode && typeof window.buildBreakLine === 'function') {
+                    window.buildBreakLine();
+                }
             }
 
-            // --- GSPro Break Line Indicator (only in putting mode) ---
+            // --- GSPro Break Line Indicator (only in putting mode during play) ---
             if (window.breakLineMesh) {
                 scene.remove(window.breakLineMesh);
                 window.breakLineMesh = null;
             }
-            if (window.isPuttingMode) {
+            if (!isStudioMode && window.isPuttingMode) {
                 let aimDir = new THREE.Vector3().subVectors(controls.target, camera.position);
                 aimDir.y = 0; aimDir.normalize();
                 
@@ -15663,7 +16897,9 @@ window.triggerExplosion = function(x, y, z) {
                 for(let i=0; i<150; i++) {
                     let surf = localGetTerrainAt(bCur.x, -bCur.z);
                     if (!surf || surf.type !== 'GREEN') break;
-                    let slopeForce = new THREE.Vector3(-surf.normal.x, 0, -surf.normal.z);
+                    let normX = surf.normal ? (surf.normal.x !== undefined ? surf.normal.x : surf.normal[0]) : 0;
+                    let normZ = surf.normal ? (surf.normal.z !== undefined ? surf.normal.z : surf.normal[1]) : 0;
+                    let slopeForce = new THREE.Vector3(-normX, 0, -normZ);
                     bDir.add(slopeForce.multiplyScalar(0.15));
                     
                     let sx = Math.sin(bCur.x * 0.3 + bCur.z * 0.2);
@@ -15684,10 +16920,10 @@ window.triggerExplosion = function(x, y, z) {
                 scene.add(window.breakLineMesh);
             }
 
-            // --- ELEVATION PROFILE (Tour de France style cross-section) ---
+            // --- ELEVATION PROFILE (Tour de France style cross-section, play mode only) ---
             let epContainer = document.getElementById('elevation-profile-container');
             let epCanvas = document.getElementById('elevation-canvas');
-            if (epContainer && epCanvas && window.ballPos && hole && hole.flag) {
+            if (!isStudioMode && epContainer && epCanvas && window.ballPos && hole && hole.flag) {
                 epContainer.style.display = 'block';
                 let ctx = epCanvas.getContext('2d');
                 let W = 220, H = 80;
@@ -16465,6 +17701,29 @@ window.triggerExplosion = function(x, y, z) {
                     }
                 }
                 waterGeo.attributes.position.needsUpdate = true;
+                waterGeo._wasDisplaced = true;
+            } else if (waterGeo._wasDisplaced) {
+                let wSegsL = WATER_SEGS;
+                let tSegsL = window.TERRAIN_SEGS;
+                let halfL = TERRAIN_SIZE / 2;
+                let wStepL = TERRAIN_SIZE / wSegsL;
+                let tStepL = TERRAIN_SIZE / tSegsL;
+                for (let wz = 0; wz <= wSegsL; wz++) {
+                    for (let wx = 0; wx <= wSegsL; wx++) {
+                        let vi = (wz * (wSegsL + 1) + wx) * 3;
+                        let worldX = -halfL + wx * wStepL;
+                        let worldZ = -halfL + wz * wStepL;
+                        let txI = Math.min(tSegsL, Math.max(0, Math.round((worldX + halfL) / tStepL)));
+                        let tzI = Math.min(tSegsL, Math.max(0, Math.round((worldZ + halfL) / tStepL)));
+                        let tIdx = tzI * (tSegsL + 1) + txI;
+                        let baseZ = window.waterBaseZ[tIdx];
+                        if (baseZ > -90) {
+                            wArr[vi + 2] = baseZ;
+                        }
+                    }
+                }
+                waterGeo.attributes.position.needsUpdate = true;
+                waterGeo._wasDisplaced = false;
             }
         }
 
@@ -16478,6 +17737,33 @@ window.triggerExplosion = function(x, y, z) {
 
         // Shell texturing: wind animation + distance visibility
         if (window._terrainShells) window._terrainShells.update(performance.now() / 1000, camera);
+
+        // Water Shader: Dynamic wave ripples, sun glitter & planar mirror reflection
+        if (window.waterShaderUniforms && window.waterQuality !== 'OFF') {
+            let wu = window.waterShaderUniforms;
+            wu.uTime.value = now * 0.001;
+            let wMph = (typeof window.currentWindMph === 'number') ? window.currentWindMph : 0;
+            let wRad = (window.currentWindDir || 0) * Math.PI / 180;
+            wu.uWindDir.value.set(Math.cos(wRad), Math.sin(wRad));
+            wu.uWindSpeed.value = wMph;
+
+            if (window.CURRENT_BIOME_CONFIG) {
+                if (window.CURRENT_BIOME_CONFIG.skyColor) wu.uSkyColor.value.setStyle(window.CURRENT_BIOME_CONFIG.skyColor);
+                if (window.CURRENT_BIOME_CONFIG.horizonColor && window.CURRENT_BIOME_CONFIG.horizonColor !== '#ffffff') {
+                    wu.uHorizonColor.value.setStyle(window.CURRENT_BIOME_CONFIG.horizonColor);
+                } else {
+                    wu.uHorizonColor.value.copy(wu.uSkyColor.value).lerp(new THREE.Color(0xbfe0f7), 0.25);
+                }
+            }
+            if (typeof dirLight !== 'undefined') {
+                wu.uSunDir.value.copy(dirLight.position).normalize();
+                wu.uSunColor.value.copy(dirLight.color);
+            }
+
+            if (window.waterQuality === 'HIGH' && window._planarWaterReflector) {
+                window._planarWaterReflector.update(camera);
+            }
+        }
 
         renderer.render(scene, camera);
         
@@ -17080,28 +18366,26 @@ window.triggerExplosion = function(x, y, z) {
             if (aimCtrl) aimCtrl.style.display = 'none';
             let mowCtrl = document.getElementById('sb-mow-controls');
             if (mowCtrl) {
-                mowCtrl.style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
-                if (type !== 'GREEN') {
-                    mowCtrl.style.opacity = '1';
-                    mowCtrl.style.pointerEvents = 'auto';
-                    mowCtrl.style.filter = 'none';
-                }
+                mowCtrl.style.display = (type === 'FAIRWAY' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
+                mowCtrl.style.opacity = '1';
+                mowCtrl.style.pointerEvents = 'auto';
+                mowCtrl.style.filter = 'none';
             }
             let edgeCtrl = document.getElementById('sb-edge-controls');
             if (edgeCtrl) {
-                edgeCtrl.style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'BUNKER' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
-                if (type !== 'GREEN') {
-                    edgeCtrl.style.opacity = '1';
-                    edgeCtrl.style.pointerEvents = 'auto';
-                    edgeCtrl.style.filter = 'none';
-                }
+                edgeCtrl.style.display = (type === 'FAIRWAY' || type === 'BUNKER' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
+                edgeCtrl.style.opacity = '1';
+                edgeCtrl.style.pointerEvents = 'auto';
+                edgeCtrl.style.filter = 'none';
             }
             if (type !== 'GREEN') {
                 let bBtn = document.getElementById('sb-build-btn');
                 if (bBtn) bBtn.classList.remove('pulse-green-btn');
             }
             let buildClearCtrl = document.getElementById('sb-build-clear-group');
-            if (buildClearCtrl) buildClearCtrl.style.display = (type === 'AIM') ? 'none' : 'flex';
+            if (buildClearCtrl) buildClearCtrl.style.display = (type === 'GREEN' || type === 'AIM') ? 'none' : 'flex';
+            let sbHint = document.getElementById('sb-hint-text');
+            if (sbHint) sbHint.style.display = (type === 'GREEN') ? 'none' : 'block';
 
             // Reset mowing pattern UI state when leaving GREEN/FAIRWAY/TEE (do NOT trigger live green rebuild)
             if (type !== 'GREEN' && type !== 'FAIRWAY' && type !== 'TEE' && type !== 'AIM') {
@@ -17189,8 +18473,13 @@ window.triggerExplosion = function(x, y, z) {
             if (typeof window.updateSBAimCard === 'function') {
                 window.updateSBAimCard();
             }
-            if (type === 'GREEN' && typeof window.updateSBGreenControls === 'function') {
-                window.updateSBGreenControls();
+            if (type === 'GREEN') {
+                if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+                if (window.GreenStudio) {
+                    window.GreenStudio.sync();
+                }
+            } else {
+                if (window.GreenStudio) window.GreenStudio.hide();
             }
             if (type === 'FAIRWAY' && typeof window.updateSBFairwayControls === 'function') {
                 window.updateSBFairwayControls();
@@ -17423,194 +18712,14 @@ window.triggerExplosion = function(x, y, z) {
 
         // Synchronize Green Studio Panel
         window.updateSBGreenControls = function() {
-            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-            let banner = document.getElementById('sg-status-banner');
-            let lockedBanner = document.getElementById('sg-studio-locked-banner');
-            let drawingGuide = document.getElementById('sg-drawing-guide');
-            let paramsEl = document.getElementById('sg-studio-params');
-            let scaleCard = document.getElementById('sg-scale-card');
-            let scaleBadge = document.getElementById('sg-scale-area-badge');
-            let adoptCard = document.getElementById('sg-adopt-card');
-            let actActions = document.getElementById('sg-active-actions');
-            let buildClearGroup = document.getElementById('sb-build-clear-group');
-            let buildBtn = document.getElementById('sb-build-btn');
-            let mowCtrl = document.getElementById('sb-mow-controls');
-            let edgeCtrl = document.getElementById('sb-edge-controls');
-            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-
-            if (hole && hole.greenData && hole.greenData.points && hole.greenData.points.length >= 3) {
-                let gd = hole.greenData;
-                if (banner) banner.style.display = 'flex';
-                if (lockedBanner) lockedBanner.style.display = 'none';
-                if (drawingGuide) drawingGuide.style.display = 'none';
-                if (adoptCard) adoptCard.style.display = 'none';
-                if (actActions) actActions.style.display = 'grid';
-                if (buildClearGroup) buildClearGroup.style.display = 'none';
-                if (buildBtn) buildBtn.classList.remove('pulse-green-btn');
-
-                // Unlock studio controls
-                if (paramsEl) {
-                    paramsEl.style.opacity = '1';
-                    paramsEl.style.pointerEvents = 'auto';
-                    paramsEl.style.filter = 'none';
+            if (window._smartBuilderType === 'GREEN') {
+                let buildClearCtrl = document.getElementById('sb-build-clear-group');
+                if (buildClearCtrl) buildClearCtrl.style.display = 'none';
+                let sbHint = document.getElementById('sb-hint-text');
+                if (sbHint) sbHint.style.display = 'none';
+                if (window.GreenStudio) {
+                    window.GreenStudio.sync();
                 }
-                if (mowCtrl && window._smartBuilderType === 'GREEN') {
-                    mowCtrl.style.opacity = '1';
-                    mowCtrl.style.pointerEvents = 'auto';
-                    mowCtrl.style.filter = 'none';
-                }
-                if (edgeCtrl && window._smartBuilderType === 'GREEN') {
-                    edgeCtrl.style.opacity = '1';
-                    edgeCtrl.style.pointerEvents = 'auto';
-                    edgeCtrl.style.filter = 'none';
-                }
-
-                let area = 0;
-                if (gd.points && gd.points.length >= 3) {
-                    for (let i = 0, j = gd.points.length - 1; i < gd.points.length; j = i++) {
-                        area += (gd.points[j].x + gd.points[i].x) * (gd.points[j].z - gd.points[i].z);
-                    }
-                    area = Math.abs(area / 2);
-                }
-                let badge = document.getElementById('sg-act-status-badge');
-                if (badge) {
-                    badge.textContent = (isSv ? '✅ Aktiv Green (~' : '✅ Active Green (~') + Math.round(area) + ' m²)';
-                }
-
-                if (scaleCard) scaleCard.style.display = 'block';
-                if (scaleBadge) scaleBadge.textContent = '~' + Math.round(area) + ' m²';
-
-                let diff = gd.difficulty || 'FLAT';
-                window.greenDifficulty = diff;
-                ['FLAT','EASY','MED','HARD'].forEach(d => {
-                    let btn = document.getElementById('sg-diff-' + d.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (d === diff) ? '#4ade80' : '#334155';
-                        btn.style.color = (d === diff) ? '#0f172a' : '#94a3b8';
-                    }
-                });
-
-                let elS = document.getElementById('sg-elevation-offset');
-                let elV = document.getElementById('sg-elevation-val');
-                let ev = gd.elevationOffset !== undefined ? gd.elevationOffset : 0.0;
-                if (elS && document.activeElement !== elS) elS.value = ev;
-                if (elV) elV.textContent = (ev >= 0 ? '+' : '') + ev.toFixed(1) + 'm';
-
-                let blS = document.getElementById('sg-blend-dist');
-                let blV = document.getElementById('sg-blend-val');
-                let bv = gd.blendDistance !== undefined ? gd.blendDistance : 8.0;
-                if (blS && document.activeElement !== blS) blS.value = bv;
-                if (blV) blV.textContent = bv.toFixed(0) + 'm';
-
-                let tCb = document.getElementById('sg-tilt-aim-cb');
-                if (tCb) tCb.checked = (gd.tiltAim !== false);
-                let tS = document.getElementById('sg-tilt-pct');
-                let tV = document.getElementById('sg-tilt-val');
-                let tp = (gd.tiltPct !== undefined ? gd.tiltPct * 100 : 2.0);
-                if (tS && document.activeElement !== tS) tS.value = tp;
-                if (tV) tV.textContent = tp.toFixed(1) + '%';
-
-                let fgS = document.getElementById('sg-foregreen-width');
-                let fgV = document.getElementById('sg-foregreen-val');
-                let fgw = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
-                if (fgS && document.activeElement !== fgS) fgS.value = fgw;
-                if (fgV) fgV.textContent = fgw.toFixed(2) + 'm';
-
-                let esS = document.getElementById('sg-edge-sharpness');
-                let esV = document.getElementById('sg-edge-val');
-                let es = gd.edgeSharpness !== undefined ? gd.edgeSharpness : 100;
-                if (esS && document.activeElement !== esS) esS.value = es;
-                if (esV) esV.textContent = (es === 100) ? 'Sharp' : (es === 0 ? 'Soft' : es + '%');
-
-                let mp = gd.mowPattern || 'SOLID';
-                window._smartMowPattern = mp;
-                ['SOLID','STRIPES','DIAGONAL','CHECKERBOARD','DIAMOND'].forEach(function(p) {
-                    let btn = document.getElementById('sb-mow-' + p.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (p === mp) ? '#4ade80' : '#334155';
-                        btn.style.color = (p === mp) ? '#0f172a' : '#94a3b8';
-                    }
-                });
-            } else {
-                if (banner) banner.style.display = 'none';
-                if (actActions) actActions.style.display = 'none';
-                if (scaleCard) scaleCard.style.display = 'none';
-                if (lockedBanner) lockedBanner.style.display = 'block';
-                if (buildClearGroup && window._smartBuilderType !== 'AIM') buildClearGroup.style.display = 'flex';
-
-                // Dim studio controls when green is not yet built
-                if (paramsEl) {
-                    paramsEl.style.opacity = '0.45';
-                    paramsEl.style.pointerEvents = 'none';
-                    paramsEl.style.filter = 'grayscale(0.2)';
-                }
-                if (mowCtrl && window._smartBuilderType === 'GREEN') {
-                    mowCtrl.style.opacity = '0.45';
-                    mowCtrl.style.pointerEvents = 'none';
-                    mowCtrl.style.filter = 'grayscale(0.2)';
-                }
-                if (edgeCtrl && window._smartBuilderType === 'GREEN') {
-                    edgeCtrl.style.opacity = '0.45';
-                    edgeCtrl.style.pointerEvents = 'none';
-                    edgeCtrl.style.filter = 'grayscale(0.2)';
-                }
-
-                // Check if spline points are being placed
-                let pts = window.smartGreenPoints || [];
-                if (pts.length >= 3) {
-                    if (drawingGuide) drawingGuide.style.display = 'none';
-                    if (buildBtn && window._smartBuilderType === 'GREEN') {
-                        buildBtn.classList.add('pulse-green-btn');
-                    }
-                } else {
-                    if (drawingGuide) drawingGuide.style.display = 'block';
-                    if (buildBtn && window._smartBuilderType === 'GREEN') {
-                        buildBtn.classList.remove('pulse-green-btn');
-                    }
-                }
-
-                // Check if hole has pre-existing flag from earlier saves
-                if (hole && hole.flag) {
-                    if (adoptCard) adoptCard.style.display = 'block';
-                } else {
-                    if (adoptCard) adoptCard.style.display = 'none';
-                }
-
-                // Sync current values with UI
-                let elS = document.getElementById('sg-elevation-offset');
-                let elV = document.getElementById('sg-elevation-val');
-                if (elS && elV) {
-                    let ev = parseFloat(elS.value) || 0.0;
-                    elV.textContent = (ev >= 0 ? '+' : '') + ev.toFixed(1) + 'm';
-                }
-                let blS = document.getElementById('sg-blend-dist');
-                let blV = document.getElementById('sg-blend-val');
-                if (blS && blV) {
-                    let bv = parseFloat(blS.value) || 8.0;
-                    blV.textContent = bv.toFixed(0) + 'm';
-                }
-                let fgS = document.getElementById('sg-foregreen-width');
-                let fgV = document.getElementById('sg-foregreen-val');
-                if (fgS && fgV) {
-                    let fgw = parseFloat(fgS.value) || 1.0;
-                    fgV.textContent = fgw.toFixed(2) + 'm';
-                }
-                let diff = window.greenDifficulty || 'FLAT';
-                ['FLAT','EASY','MED','HARD'].forEach(d => {
-                    let btn = document.getElementById('sg-diff-' + d.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (d === diff) ? '#4ade80' : '#334155';
-                        btn.style.color = (d === diff) ? '#0f172a' : '#94a3b8';
-                    }
-                });
-                let mp = window._smartMowPattern || 'SOLID';
-                ['SOLID','STRIPES','DIAGONAL','CHECKERBOARD','DIAMOND'].forEach(function(p) {
-                    let btn = document.getElementById('sb-mow-' + p.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (p === mp) ? '#4ade80' : '#334155';
-                        btn.style.color = (p === mp) ? '#0f172a' : '#94a3b8';
-                    }
-                });
             }
         };
         function setSFDiff(diff) {
@@ -17843,7 +18952,7 @@ window.triggerExplosion = function(x, y, z) {
                     }
                 }
                 if (dgClean) dgClean.style.display = 'block';
-                if (buildClearGroup && window._smartBuilderType !== 'AIM') buildClearGroup.style.display = 'flex';
+                if (buildClearGroup && window._smartBuilderType === 'FAIRWAY') buildClearGroup.style.display = 'flex';
 
                 // Dim studio controls when fairway is not yet built or drawing new
                 if (paramsEl) {
@@ -18097,7 +19206,7 @@ window.triggerExplosion = function(x, y, z) {
                         lockedBanner.innerHTML = `<span style="color:#94a3b8; font-size:9px;" data-i18n="sb_bunker_studio_locked_hint">🔒 ${isSv ? 'Live Studio aktiveras när bunkern är byggd' : 'Live Studio activates once bunker is built'}</span>`;
                     }
                 }
-                if (buildClearGroup && window._smartBuilderType !== 'AIM') buildClearGroup.style.display = 'flex';
+                if (buildClearGroup && window._smartBuilderType === 'BUNKER') buildClearGroup.style.display = 'flex';
 
                 // Dim studio controls when bunker is not yet built or drawing new
                 if (paramsEl) {
@@ -18152,7 +19261,8 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="smart-builder.js?v=2"></script>
+<script src="green-studio.js?v=21"></script>
+<script src="smart-builder.js?v=19"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

@@ -186,35 +186,103 @@
         };
 
         // ============================================================
-        // STAR FIELD — Night Sky
+        // STAR FIELD — Night Sky (Round, glowing & twinkling stars)
         // ============================================================
-        const STAR_COUNT = 600;
+        const STAR_COUNT = 850;
         const starPositions = new Float32Array(STAR_COUNT * 3);
         const starSizes = new Float32Array(STAR_COUNT);
         const starPhases = new Float32Array(STAR_COUNT);
         const starBaseSizes = new Float32Array(STAR_COUNT);
+        const starColors = new Float32Array(STAR_COUNT * 3);
+
+        // Procedural circular texture: crisp white round star core with soft realistic celestial aura
+        function _createRoundStarTexture() {
+            let canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            let ctx = canvas.getContext('2d');
+            
+            let grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');     // Pure white dense core
+            grad.addColorStop(0.18, 'rgba(255, 255, 255, 0.95)');    // Solid circular disc
+            grad.addColorStop(0.40, 'rgba(225, 240, 255, 0.55)');    // Natural soft shimmer halo
+            grad.addColorStop(0.70, 'rgba(180, 220, 255, 0.15)');    // Atmospheric glow
+            grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');            // Fade to transparent edge
+            
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 64, 64);
+            
+            let tex = new THREE.CanvasTexture(canvas);
+            tex.generateMipmaps = true;
+            return tex;
+        }
 
         for (let i = 0; i < STAR_COUNT; i++) {
             let theta = Math.random() * Math.PI * 2;
-            let phi = Math.acos(Math.random() * 0.85 + 0.15);
+            let phi = Math.acos(Math.random() * 0.88 + 0.12);
             let r = 14000;
-            starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            starPositions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
             starPositions[i * 3 + 1] = r * Math.cos(phi);
             starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-            starBaseSizes[i] = 1.0 + Math.random() * 2.5;
+
+            // Natural star size distribution:
+            // ~80% delicate pinpoint stars, ~15% medium bright stars, ~5% luminous landmark stars
+            let roll = Math.random();
+            if (roll > 0.95) {
+                starBaseSizes[i] = 24.0 + Math.random() * 10.0; // Major luminous star
+            } else if (roll > 0.80) {
+                starBaseSizes[i] = 16.0 + Math.random() * 6.0;  // Medium bright star
+            } else {
+                starBaseSizes[i] = 9.0 + Math.random() * 6.0;   // Pinpoint round star
+            }
             starSizes[i] = starBaseSizes[i];
             starPhases[i] = Math.random() * Math.PI * 2;
+
+            // Natural star spectral colors (white, warm gold, electric blue)
+            let colRoll = Math.random();
+            if (colRoll < 0.70) {
+                // Bright white
+                starColors[i * 3]     = 1.0;
+                starColors[i * 3 + 1] = 1.0;
+                starColors[i * 3 + 2] = 1.0;
+            } else if (colRoll < 0.85) {
+                // Warm golden / amber (like Betelgeuse or Arcturus)
+                starColors[i * 3]     = 1.0;
+                starColors[i * 3 + 1] = 0.92;
+                starColors[i * 3 + 2] = 0.75;
+            } else {
+                // Electric ice blue (like Sirius or Rigel)
+                starColors[i * 3]     = 0.82;
+                starColors[i * 3 + 1] = 0.92;
+                starColors[i * 3 + 2] = 1.0;
+            }
         }
 
         const starGeo = new THREE.BufferGeometry();
         starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+        starGeo.setAttribute('starSize', new THREE.BufferAttribute(starSizes, 1));
+        starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
 
         const starMat = new THREE.PointsMaterial({
-            color: 0xffffff, size: 2.5, sizeAttenuation: false,
-            transparent: true, opacity: 0, depthWrite: false,
+            size: 16.0,
+            sizeAttenuation: false,
+            map: _createRoundStarTexture(),
+            vertexColors: true,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
             blending: THREE.AdditiveBlending
         });
+
+        // Hook up individual star size attribute in GLSL without colliding with uniform size
+        starMat.onBeforeCompile = (shader) => {
+            shader.vertexShader = 'attribute float starSize;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                'gl_PointSize = size;',
+                'gl_PointSize = starSize;'
+            );
+        };
+
         const starField = new THREE.Points(starGeo, starMat);
         scene.add(starField);
         window._starOpacity = 0;
@@ -232,12 +300,18 @@
         // Twinkle — called from render loop
         window.animateStars = function() {
             if (window._starOpacity < 0.01) return;
+            
+            // Keep celestial sphere locked to camera so stars stay at astronomical distance
+            if (typeof camera !== 'undefined' && camera) {
+                starField.position.copy(camera.position);
+            }
+
             let t = performance.now() * 0.001;
             for (let i = 0; i < STAR_COUNT; i++) {
-                let twinkle = 0.7 + 0.3 * Math.sin(t * (1.5 + (starPhases[i] % 1.0) * 2.0) + starPhases[i]);
+                let twinkle = 0.75 + 0.25 * Math.sin(t * (1.6 + (starPhases[i] % 1.0) * 2.4) + starPhases[i]);
                 starSizes[i] = starBaseSizes[i] * twinkle;
             }
-            starGeo.attributes.size.needsUpdate = true;
+            starGeo.attributes.starSize.needsUpdate = true;
         };
 
         // ============================================================

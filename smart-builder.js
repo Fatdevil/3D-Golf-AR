@@ -9,6 +9,8 @@
 var smartGreenPoints = [];
 var smartGreenSpheres = [];
 var smartGreenLineMesh = null;
+window.smartGreenPoints = smartGreenPoints;
+window.smartGreenSpheres = smartGreenSpheres;
 
 // === MOWING PATTERN PAINTER ===
 // Paints stripe/checker/diamond patterns inside a polygon on the terrain canvas
@@ -178,26 +180,12 @@ function findNearestEdge(pts, pt) {
     return bestIdx;
 }
 
-// Smart point placement: always append, with magnet-snap to close the shape
+// Smart point placement: append point, shape auto-closes dynamically at >= 3 points
 function smartAddPoint(pt) {
-    // If shape is already closed, don't add more points
-    if(window._smartShapeClosed) return false;
-    
-    // Magnet-snap: if >= 3 points and new click is within 10m of FIRST point → close shape
-    if(smartGreenPoints.length >= 3) {
-        let first = smartGreenPoints[0];
-        let dist = Math.sqrt((pt.x - first.x)**2 + (pt.z - first.z)**2);
-        if(dist < 5.0) {
-            // Snap! Close the shape (don't add the point — loop back to start)
-            window._smartShapeClosed = true;
-            window.showBuildToast('🔒 Shape closed! Press Build', '#4ade80');
-            return true;
-        }
-    }
-    
     smartGreenPoints.push(pt);
     return true;
 }
+window.smartAddPoint = smartAddPoint;
 
 function resortTeesForAimPoint(hole) {
     if (!hole.aimPoint) return;
@@ -316,40 +304,87 @@ function autoSortTees(hole) {
 function updateSmartGreenPreview() {
     smartGreenSpheres.forEach(s => window._arcadeScene.remove(s));
     smartGreenSpheres = [];
+    window.smartGreenSpheres = smartGreenSpheres;
+    window.smartGreenPoints = smartGreenPoints;
+
     if(smartGreenLineMesh) { window._arcadeScene.remove(smartGreenLineMesh); smartGreenLineMesh = null; }
+
+    let isGreen = (window._smartBuilderType === 'GREEN');
+    if (isGreen && window.GreenStudio && !window.GreenStudio.group && window._arcadeScene) {
+        window.GreenStudio.init(window._arcadeScene);
+    }
 
     let sMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, depthTest: false });
     let sMatFirst = new THREE.MeshBasicMaterial({ color: 0x38bdf8, depthTest: false }); // Blue = start point
     let sGeo = new THREE.SphereGeometry(0.4, 8, 8);
     let sGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
+
+    let ballGeo = (isGreen && window.GreenStudio && window.GreenStudio.geometries && window.GreenStudio.geometries.ball)
+        ? window.GreenStudio.geometries.ball
+        : new THREE.SphereGeometry(0.85, 24, 24);
+    let ballMat = (isGreen && window.GreenStudio && window.GreenStudio.materials && window.GreenStudio.materials.ball)
+        ? window.GreenStudio.materials.ball
+        : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05, depthTest: false });
+
     smartGreenPoints.forEach((pt, idx) => {
-        let s = new THREE.Mesh(idx === 0 ? sGeoFirst : sGeo, idx === 0 ? sMatFirst : sMat);
-        s.position.copy(pt);
-        s.position.y += 1.5;
-        s.renderOrder = 999;
+        let s;
+        if (isGreen) {
+            s = new THREE.Mesh(ballGeo, ballMat);
+            let y = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(pt.x, pt.z) : pt.y;
+            s.position.set(pt.x, y + 0.85, pt.z);
+            s.renderOrder = 999;
+            s.userData = { isSmartGreenBall: true, pointIndex: idx };
+
+            if (idx === 0) {
+                let ringGeo = new THREE.RingGeometry(1.0, 1.45, 32);
+                ringGeo.rotateX(-Math.PI / 2);
+                let ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.85 });
+                let ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.position.set(0, -0.78, 0);
+                ring.renderOrder = 998;
+                s.add(ring);
+            }
+        } else {
+            s = new THREE.Mesh(idx === 0 ? sGeoFirst : sGeo, idx === 0 ? sMatFirst : sMat);
+            s.position.copy(pt);
+            s.position.y += 1.5;
+            s.renderOrder = 999;
+            s.userData = { isSmartGreenBall: true, pointIndex: idx };
+        }
         window._arcadeScene.add(s);
         smartGreenSpheres.push(s);
     });
 
     if(smartGreenPoints.length > 1) {
-        // Open spline while placing — closes when magnet-snapped to first point
-        let shouldClose = !!window._smartShapeClosed;
-        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, shouldClose);
-        let curvePts = curve.getPoints(50 * smartGreenPoints.length);
+        let shouldClose = (smartGreenPoints.length >= 3);
+        let v3Pts;
+        if (isGreen) {
+            v3Pts = smartGreenPoints.map(p => {
+                let y = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(p.x, p.z) : p.y;
+                return new THREE.Vector3(p.x, y + 0.18, p.z);
+            });
+        } else {
+            v3Pts = smartGreenPoints.map(p => {
+                let v = p.clone();
+                v.y += 1.5;
+                return v;
+            });
+        }
+        let curve = new THREE.CatmullRomCurve3(v3Pts, shouldClose, 'catmullrom', 0.5);
+        let curvePts = curve.getPoints(Math.max(60, 30 * smartGreenPoints.length));
         let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
-        // Gold line when closed, green when open
-        let lineColor = shouldClose ? 0xfbbf24 : 0x4ade80;
+        let lineColor = shouldClose ? (isGreen ? 0x4ade80 : 0xfbbf24) : (isGreen ? 0x38bdf8 : 0x4ade80);
         let lineMat = new THREE.LineBasicMaterial({ color: lineColor, linewidth: 3, depthTest: false });
         smartGreenLineMesh = new THREE.Line(lineGeo, lineMat);
-        smartGreenLineMesh.position.y += 1.5;
-        smartGreenLineMesh.renderOrder = 999;
+        smartGreenLineMesh.renderOrder = 997;
         window._arcadeScene.add(smartGreenLineMesh);
     }
 
     let pnl = document.getElementById('smart-green-action-panel');
     let buildBtn = document.getElementById('sb-build-btn');
+    let isSB = (window.currentTool === 'SMART_BUILDER' || (typeof currentTool !== 'undefined' && currentTool === 'SMART_BUILDER'));
     if(pnl) {
-        if(window.currentTool === 'SMART_BUILDER') pnl.style.display = 'flex';
+        if(isSB) pnl.style.display = 'flex';
         else pnl.style.display = 'none';
     }
     // Ensure build button is always clickable (build functions check point count internally)
@@ -358,110 +393,162 @@ function updateSmartGreenPreview() {
         buildBtn.style.opacity = '1';
         buildBtn.style.cursor = 'pointer';
     }
-    window._arcadeRenderer.render(scene, window._arcadeCamera);
+    if (window._arcadeRenderer && window._arcadeScene && window._arcadeCamera) {
+        window._arcadeRenderer.render(window._arcadeScene, window._arcadeCamera);
+    }
 
-    // === LIVE MEASUREMENTS ===
+    updateSmartGreenHUD();
+}
+
+// === LIVE MEASUREMENTS & HUD UPDATE ===
+function updateSmartGreenHUD() {
     let measEl = document.getElementById('sb-measure-hud');
-    if(measEl) {
-        if(smartGreenPoints.length >= 2) {
-            let pts = smartGreenPoints;
-            // Bounding box (width × length)
-            let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-            for(let p of pts) {
-                if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
-                if(p.z < minZ) minZ = p.z; if(p.z > maxZ) maxZ = p.z;
-            }
-            let w = maxX - minX;
-            let h = maxZ - minZ;
-            // Perimeter (sum of segment lengths along spline)
-            let perim = 0;
-            for(let i = 0; i < pts.length; i++) {
-                let next = (i + 1) % pts.length;
-                let dx = pts[next].x - pts[i].x;
-                let dz = pts[next].z - pts[i].z;
-                perim += Math.sqrt(dx*dx + dz*dz);
-            }
-            // Area (Shoelace formula)
-            let area = 0;
-            for(let i = 0; i < pts.length; i++) {
-                let next = (i + 1) % pts.length;
-                area += pts[i].x * pts[next].z;
-                area -= pts[next].x * pts[i].z;
-            }
-            area = Math.abs(area) / 2;
-            // Last segment length
-            let lastSeg = 0;
-            if(pts.length >= 2) {
-                let a = pts[pts.length-2], b = pts[pts.length-1];
-                lastSeg = Math.sqrt((b.x-a.x)*(b.x-a.x) + (b.z-a.z)*(b.z-a.z));
-            }
-            measEl.style.display = 'block';
-            measEl.innerHTML = '<span style="color:#fbbf24">📐 ' + Math.round(w) + 'm × ' + Math.round(h) + 'm</span>' +
-                '<span style="color:#94a3b8; margin-left:6px">Area: ~' + Math.round(area) + 'm²</span>' +
-                '<br><span style="color:#64748b; font-size:9px">Perimeter: ' + Math.round(perim) + 'm · Last: ' + lastSeg.toFixed(1) + 'm · Points: ' + pts.length + '</span>';
+    let buildBtn = document.getElementById('sb-build-btn');
+    if(!measEl) return;
 
-            if (buildBtn && window._smartBuilderType === 'GREEN') {
-                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-                buildBtn.textContent = (isSv ? '⛳ Bygg Green (~' : '⛳ Build Green (~') + Math.round(area) + ' m²)';
-                buildBtn.classList.add('pulse-green-btn');
-            } else if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
-                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-                let fwCount = (hole && hole.fairways) ? hole.fairways.length : (hole && hole.fairwayData ? 1 : 0);
-                let nextNum = fwCount + 1;
-                let fwLabel = (nextNum > 1) ? (' ' + nextNum) : '';
-                buildBtn.textContent = (isSv ? ('🏌️ Bygg Fairway' + fwLabel + ' (~') : ('🏌️ Build Fairway' + fwLabel + ' (~')) + Math.round(area) + ' m²)';
-                buildBtn.classList.add('pulse-green-btn');
-            } else if (buildBtn && window._smartBuilderType === 'BUNKER') {
-                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-                let bkCount = (hole && hole.bunkers) ? hole.bunkers.length : (hole && hole.bunkerData ? 1 : 0);
-                let nextNum = bkCount + 1;
-                let bkLabel = (nextNum > 1) ? (' ' + nextNum) : '';
-                buildBtn.textContent = (isSv ? ('🏖️ Bygg Bunker' + bkLabel + ' (~') : ('🏖️ Build Bunker' + bkLabel + ' (~')) + Math.round(area) + ' m²)';
-                buildBtn.classList.add('pulse-green-btn');
-            }
-            let dg = document.getElementById('sg-drawing-guide');
-            if (dg && window._smartBuilderType === 'GREEN') dg.style.display = 'none';
-            let fdg = document.getElementById('sf-drawing-guide');
-            if (fdg && window._smartBuilderType === 'FAIRWAY') fdg.style.display = 'none';
-            let bkd = document.getElementById('sbk-drawing-guide');
-            if (bkd && window._smartBuilderType === 'BUNKER') bkd.style.display = 'none';
-        } else {
-            measEl.style.display = 'none';
-            if (buildBtn && window._smartBuilderType === 'GREEN') {
-                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-                buildBtn.textContent = isSv ? '⛳ Bygg Green' : '⛳ Build Green';
-                buildBtn.classList.remove('pulse-green-btn');
-            } else if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
-                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-                let fwCount = (hole && hole.fairways) ? hole.fairways.length : (hole && hole.fairwayData ? 1 : 0);
-                let nextNum = fwCount + 1;
-                let fwLabel = (nextNum > 1) ? (' ' + nextNum) : '';
-                buildBtn.textContent = isSv ? ('🏌️ Bygg Fairway' + fwLabel) : ('🏌️ Build Fairway' + fwLabel);
-                buildBtn.classList.remove('pulse-green-btn');
-            } else if (buildBtn && window._smartBuilderType === 'BUNKER') {
-                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-                let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-                let bkCount = (hole && hole.bunkers) ? hole.bunkers.length : (hole && hole.bunkerData ? 1 : 0);
-                let nextNum = bkCount + 1;
-                let bkLabel = (nextNum > 1) ? (' ' + nextNum) : '';
-                buildBtn.textContent = isSv ? ('🏖️ Bygg Bunker' + bkLabel) : ('🏖️ Build Bunker' + bkLabel);
-                buildBtn.classList.remove('pulse-green-btn');
-            }
-            let dg = document.getElementById('sg-drawing-guide');
-            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-            if (dg && window._smartBuilderType === 'GREEN' && (!hole || !hole.greenData)) dg.style.display = 'block';
-            let fdg = document.getElementById('sf-drawing-guide');
-            let hasActiveFw = hole && (hole.activeFairwayIndex !== null && hole.activeFairwayIndex !== undefined) && (hole.fairways && hole.fairways[hole.activeFairwayIndex]);
-            if (fdg && window._smartBuilderType === 'FAIRWAY' && !hasActiveFw) fdg.style.display = 'block';
-            let bkd = document.getElementById('sbk-drawing-guide');
-            let hasActiveBk = hole && (hole.activeBunkerIndex !== null && hole.activeBunkerIndex !== undefined) && (hole.bunkers && hole.bunkers[hole.activeBunkerIndex]);
-            if (bkd && window._smartBuilderType === 'BUNKER' && !hasActiveBk) bkd.style.display = 'block';
+    if(smartGreenPoints.length >= 2) {
+        let pts = smartGreenPoints;
+        // Bounding box (width × length)
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for(let p of pts) {
+            if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+            if(p.z < minZ) minZ = p.z; if(p.z > maxZ) maxZ = p.z;
         }
+        let w = maxX - minX;
+        let h = maxZ - minZ;
+        // Perimeter (sum of segment lengths along spline)
+        let perim = 0;
+        for(let i = 0; i < pts.length; i++) {
+            let next = (i + 1) % pts.length;
+            let dx = pts[next].x - pts[i].x;
+            let dz = pts[next].z - pts[i].z;
+            perim += Math.sqrt(dx*dx + dz*dz);
+        }
+        // Area (Shoelace formula)
+        let area = 0;
+        for(let i = 0; i < pts.length; i++) {
+            let next = (i + 1) % pts.length;
+            area += pts[i].x * pts[next].z;
+            area -= pts[next].x * pts[i].z;
+        }
+        area = Math.abs(area) / 2;
+        // Last segment length
+        let lastSeg = 0;
+        if(pts.length >= 2) {
+            let a = pts[pts.length-2], b = pts[pts.length-1];
+            lastSeg = Math.sqrt((b.x-a.x)*(b.x-a.x) + (b.z-a.z)*(b.z-a.z));
+        }
+        measEl.style.display = 'block';
+        measEl.innerHTML = '<span style="color:#fbbf24">📐 ' + Math.round(w) + 'm × ' + Math.round(h) + 'm</span>' +
+            '<span style="color:#94a3b8; margin-left:6px">Area: ~' + Math.round(area) + 'm²</span>' +
+            '<br><span style="color:#64748b; font-size:9px">Perimeter: ' + Math.round(perim) + 'm · Last: ' + lastSeg.toFixed(1) + 'm · Points: ' + pts.length + '</span>';
+
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        let gsBuildBtn = document.getElementById('gs-build-green-btn');
+        if (gsBuildBtn && window._smartBuilderType === 'GREEN') {
+            let areaText = (pts.length >= 3 && area > 0) ? (' (~' + Math.round(area) + ' m²)') : '';
+            gsBuildBtn.innerHTML = '⛳ ' + (isSv ? 'Skapa green' : 'Create Green') + areaText;
+            if (pts.length >= 3) {
+                gsBuildBtn.style.opacity = '1';
+                gsBuildBtn.style.cursor = 'pointer';
+                gsBuildBtn.classList.add('pulse-green-btn');
+            } else {
+                gsBuildBtn.style.opacity = '0.5';
+                gsBuildBtn.style.cursor = 'not-allowed';
+                gsBuildBtn.classList.remove('pulse-green-btn');
+            }
+        }
+        if (buildBtn && window._smartBuilderType === 'GREEN') {
+            buildBtn.textContent = (isSv ? '⛳ Bygg Green (~' : '⛳ Build Green (~') + Math.round(area) + ' m²)';
+            buildBtn.classList.add('pulse-green-btn');
+        } else if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
+            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            let fwCount = (hole && hole.fairways) ? hole.fairways.length : (hole && hole.fairwayData ? 1 : 0);
+            let nextNum = fwCount + 1;
+            let fwLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+            buildBtn.textContent = (isSv ? ('🏌️ Bygg Fairway' + fwLabel + ' (~') : ('🏌️ Build Fairway' + fwLabel + ' (~')) + Math.round(area) + ' m²)';
+            buildBtn.classList.add('pulse-green-btn');
+        } else if (buildBtn && window._smartBuilderType === 'BUNKER') {
+            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            let bkCount = (hole && hole.bunkers) ? hole.bunkers.length : (hole && hole.bunkerData ? 1 : 0);
+            let nextNum = bkCount + 1;
+            let bkLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+            buildBtn.textContent = (isSv ? ('🏖️ Bygg Bunker' + bkLabel + ' (~') : ('🏖️ Build Bunker' + bkLabel + ' (~')) + Math.round(area) + ' m²)';
+            buildBtn.classList.add('pulse-green-btn');
+        }
+        let dg = document.getElementById('sg-drawing-guide');
+        if (dg && window._smartBuilderType === 'GREEN') dg.style.display = 'none';
+        let fdg = document.getElementById('sf-drawing-guide');
+        if (fdg && window._smartBuilderType === 'FAIRWAY') fdg.style.display = 'none';
+        let bkd = document.getElementById('sbk-drawing-guide');
+        if (bkd && window._smartBuilderType === 'BUNKER') bkd.style.display = 'none';
+    } else {
+        measEl.style.display = 'none';
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        let gsBuildBtn = document.getElementById('gs-build-green-btn');
+        if (gsBuildBtn && window._smartBuilderType === 'GREEN') {
+            gsBuildBtn.innerHTML = '⛳ ' + (isSv ? 'Skapa green' : 'Create Green');
+            gsBuildBtn.classList.remove('pulse-green-btn');
+            gsBuildBtn.style.opacity = '0.5';
+            gsBuildBtn.style.cursor = 'not-allowed';
+        }
+        if (buildBtn && window._smartBuilderType === 'GREEN') {
+            buildBtn.textContent = isSv ? '⛳ Bygg Green' : '⛳ Build Green';
+            buildBtn.classList.remove('pulse-green-btn');
+        } else if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
+            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            let fwCount = (hole && hole.fairways) ? hole.fairways.length : (hole && hole.fairwayData ? 1 : 0);
+            let nextNum = fwCount + 1;
+            let fwLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+            buildBtn.textContent = isSv ? ('🏌️ Bygg Fairway' + fwLabel) : ('🏌️ Build Fairway' + fwLabel);
+            buildBtn.classList.remove('pulse-green-btn');
+        } else if (buildBtn && window._smartBuilderType === 'BUNKER') {
+            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+            let bkCount = (hole && hole.bunkers) ? hole.bunkers.length : (hole && hole.bunkerData ? 1 : 0);
+            let nextNum = bkCount + 1;
+            let bkLabel = (nextNum > 1) ? (' ' + nextNum) : '';
+            buildBtn.textContent = isSv ? ('🏖️ Bygg Bunker' + bkLabel) : ('🏖️ Build Bunker' + bkLabel);
+            buildBtn.classList.remove('pulse-green-btn');
+        }
+        let dg = document.getElementById('sg-drawing-guide');
+        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (dg && window._smartBuilderType === 'GREEN' && (!hole || !hole.greenData)) dg.style.display = 'block';
+        let fdg = document.getElementById('sf-drawing-guide');
+        let hasActiveFw = hole && (hole.activeFairwayIndex !== null && hole.activeFairwayIndex !== undefined) && (hole.fairways && hole.fairways[hole.activeFairwayIndex]);
+        if (fdg && window._smartBuilderType === 'FAIRWAY' && !hasActiveFw) fdg.style.display = 'block';
+        let bkd = document.getElementById('sbk-drawing-guide');
+        let hasActiveBk = hole && (hole.activeBunkerIndex !== null && hole.activeBunkerIndex !== undefined) && (hole.bunkers && hole.bunkers[hole.activeBunkerIndex]);
+        if (bkd && window._smartBuilderType === 'BUNKER' && !hasActiveBk) bkd.style.display = 'block';
     }
 }
+window.updateSmartGreenHUD = updateSmartGreenHUD;
+
+// Fast 60 FPS spline deformation during dragging
+window.updateSmartGreenSplineOnly = function() {
+    if(!smartGreenLineMesh || smartGreenPoints.length < 2) return;
+    let isGreen = (window._smartBuilderType === 'GREEN');
+    let shouldClose = (smartGreenPoints.length >= 3);
+    let v3Pts;
+    if (isGreen) {
+        v3Pts = smartGreenPoints.map(p => {
+            let y = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(p.x, p.z) : p.y;
+            return new THREE.Vector3(p.x, y + 0.18, p.z);
+        });
+    } else {
+        v3Pts = smartGreenPoints.map(p => {
+            let v = p.clone();
+            v.y += 1.5;
+            return v;
+        });
+    }
+    let curve = new THREE.CatmullRomCurve3(v3Pts, shouldClose, 'catmullrom', 0.5);
+    let curvePts = curve.getPoints(Math.max(60, 30 * smartGreenPoints.length));
+    smartGreenLineMesh.geometry.setFromPoints(curvePts);
+    smartGreenLineMesh.geometry.attributes.position.needsUpdate = true;
+    updateSmartGreenHUD();
+};
 
 window.clearSmartGreen = function() {
     smartGreenPoints = [];
@@ -469,6 +556,28 @@ window.clearSmartGreen = function() {
     let measEl = document.getElementById('sb-measure-hud');
     if(measEl) measEl.style.display = 'none';
     updateSmartGreenPreview();
+    if (window._smartBuilderType === 'GREEN' && typeof window.updateSBGreenControls === 'function') {
+        window.updateSBGreenControls();
+    } else if (window._smartBuilderType === 'FAIRWAY' && typeof window.updateSBFairwayControls === 'function') {
+        window.updateSBFairwayControls();
+    } else if (window._smartBuilderType === 'BUNKER' && typeof window.updateSBBunkerControls === 'function') {
+        window.updateSBBunkerControls();
+    }
+};
+
+window.undoSmartGreenPoint = function() {
+    if (smartGreenPoints.length > 0) {
+        smartGreenPoints.pop();
+        window._smartShapeClosed = false;
+        updateSmartGreenPreview();
+        if (window._smartBuilderType === 'GREEN' && typeof window.updateSBGreenControls === 'function') {
+            window.updateSBGreenControls();
+        } else if (window._smartBuilderType === 'FAIRWAY' && typeof window.updateSBFairwayControls === 'function') {
+            window.updateSBFairwayControls();
+        } else if (window._smartBuilderType === 'BUNKER' && typeof window.updateSBBunkerControls === 'function') {
+            window.updateSBBunkerControls();
+        }
+    }
 };
 
 // === SHARED: Uniform polygon offset using edge normals ===
@@ -531,6 +640,82 @@ function offsetPolygon(densePts, dist) {
     }
     return result;
 }
+
+// Inset polygon inward by dist meters (shrinks shape inward towards centroid)
+function insetPolygon(densePts, dist) {
+    if (!densePts || densePts.length < 3 || dist <= 0) return densePts;
+    let n = densePts.length;
+    let result = [];
+    
+    // Centroid for safety bounds
+    let cx = 0, cz = 0;
+    for (let p of densePts) { cx += p.x; cz += p.z; }
+    cx /= n; cz /= n;
+
+    for (let i = 0; i < n; i++) {
+        let prev = (i - 1 + n) % n;
+        let next = (i + 1) % n;
+        let e1x = densePts[i].x - densePts[prev].x;
+        let e1z = densePts[i].z - densePts[prev].z;
+        let e2x = densePts[next].x - densePts[i].x;
+        let e2z = densePts[next].z - densePts[i].z;
+        let len1 = Math.hypot(e1x, e1z) || 1e-4;
+        let n1x = -e1z / len1, n1z = e1x / len1;
+        let len2 = Math.hypot(e2x, e2z) || 1e-4;
+        let n2x = -e2z / len2, n2z = e2x / len2;
+        let nx = n1x + n2x, nz = n1z + n2z;
+        let nLen = Math.hypot(nx, nz) || 1e-4;
+        nx /= nLen; nz /= nLen;
+        let dot = nx * n1x + nz * n1z;
+        let miter = dot > 0.25 ? (dist / dot) : (dist * 1.2);
+        miter = Math.min(miter, dist * 1.5);
+        result.push({ x: densePts[i].x + nx * miter, z: densePts[i].z + nz * miter });
+    }
+
+    // Check area: we want inset to be SMALLER than original
+    let areaOrig = 0, areaOff = 0;
+    for (let i = 0; i < n; i++) {
+        let j = (i + 1) % n;
+        areaOrig += densePts[i].x * densePts[j].z - densePts[j].x * densePts[i].z;
+        areaOff += result[i].x * result[j].z - result[j].x * result[i].z;
+    }
+
+    // If offset went outward (larger area), flip direction so it goes inward
+    let flip = Math.abs(areaOff) > Math.abs(areaOrig);
+    let finalPts = [];
+    for (let i = 0; i < n; i++) {
+        let pt = densePts[i];
+        let prev = (i - 1 + n) % n;
+        let next = (i + 1) % n;
+        let e1x = pt.x - densePts[prev].x;
+        let e1z = pt.z - densePts[prev].z;
+        let e2x = densePts[next].x - pt.x;
+        let e2z = densePts[next].z - pt.z;
+        let len1 = Math.hypot(e1x, e1z) || 1e-4;
+        let n1x = -e1z / len1, n1z = e1x / len1;
+        let len2 = Math.hypot(e2x, e2z) || 1e-4;
+        let n2x = -e2z / len2, n2z = e2x / len2;
+        let nx = n1x + n2x, nz = n1z + n2z;
+        let nLen = Math.hypot(nx, nz) || 1e-4;
+        nx /= nLen; nz /= nLen;
+        let dot = nx * n1x + nz * n1z;
+        let miter = dot > 0.25 ? (dist / dot) : (dist * 1.2);
+        miter = Math.min(miter, dist * 1.5);
+
+        let sign = flip ? -1 : 1;
+        let dirX = nx * sign;
+        let dirZ = nz * sign;
+
+        // Safety clamp: don't let vertex cross over 70% toward centroid
+        let dToCent = Math.hypot(pt.x - cx, pt.z - cz);
+        let maxStep = Math.max(0.2, dToCent * 0.70);
+        let actualStep = Math.min(miter, maxStep);
+
+        finalPts.push({ x: pt.x + dirX * actualStep, z: pt.z + dirZ * actualStep });
+    }
+    return finalPts;
+}
+window.insetPolygon = insetPolygon;
 
 // === SMART BUNKER LIVE STUDIO: Multi-Bunker Instances + Parametric Sand + Dig Down + Lip ===
 
@@ -780,37 +965,45 @@ window.captureBunkerSnapshot = function(hole, points, margin) {
     };
 };
 
+function sbHexToRgb(h) {
+    if (!h) return [74, 120, 43];
+    let hex = h.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    let num = parseInt(hex, 16);
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function getBaseGroundColor(hole) {
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let curHole = hole || (window.courseHoles && window.courseHoles[window.currentHoleIndex]);
+    let surr = (curHole && curHole.surroundConfig) || window.surroundConfig || {};
+    let surrKey = surr.N || surr.E || surr.S || surr.W || 'roughColor';
+    return cfg[surrKey] || cfg.roughColor || '#4a782b';
+}
+
 // 1.5. Cleanly erase a bunker's footprint from 2D canvas texture
-window.eraseBunkerTexture = function(bd) {
+window.eraseBunkerTexture = function(bd, hole) {
     if (!bd || !bd.points || !window._arcadePCtx) return;
     let densePts = (typeof getDenseBunkerPoints === 'function') ? getDenseBunkerPoints(bd.points) : bd.points;
     if (!densePts || densePts.length < 3) return;
 
-    let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let roughColor = cfg.roughColor || '#4a782b';
-    let eraseMargin = 6.0;
-
+    let baseGroundColor = getBaseGroundColor(hole);
     let ctx = window._arcadePCtx;
     ctx.save();
-    ctx.filter = 'blur(6px)';
+    ctx.filter = 'none';
 
+    let expandedPts = (typeof offsetPolygon === 'function') ? offsetPolygon(densePts, 0.3) : densePts;
     ctx.beginPath();
-    densePts.forEach((pt, i) => {
+    expandedPts.forEach((pt, i) => {
         let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
         let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
         if (i === 0) ctx.moveTo(pxX, pxY);
         else ctx.lineTo(pxX, pxY);
     });
     ctx.closePath();
-
-    ctx.lineWidth = eraseMargin * 2 * (4096 / window.TERRAIN_SIZE);
-    ctx.strokeStyle = roughColor;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    ctx.fillStyle = roughColor;
+    ctx.fillStyle = baseGroundColor;
     ctx.fill();
 
-    ctx.filter = 'none';
     ctx.restore();
 };
 
@@ -824,6 +1017,9 @@ window.restoreBunkerBase = function(hole, restoreTexture, targetBunker) {
 
     bds.forEach(bd => {
         if (!bd || !bd.bbox) return;
+        let densePts = (bd.points && bd.points.length >= 3 && typeof getDenseBunkerPoints === 'function') ? getDenseBunkerPoints(bd.points) : null;
+        let maxReach = 4.5; // Bunkers sculpt inside and smooth up to ~3.5m out
+
         if (bd.origHeights && window._arcadePlaneGeo) {
             let positions = window._arcadePlaneGeo.attributes.position.array;
             let gWidth = bd.bbox.gWidth;
@@ -831,6 +1027,13 @@ window.restoreBunkerBase = function(hole, restoreTexture, targetBunker) {
             for(let gz = bd.bbox.gzStart; gz <= bd.bbox.gzEnd; gz++) {
                 for(let gx = bd.bbox.gxStart; gx <= bd.bbox.gxEnd; gx++) {
                     let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+
+                    let isInside = densePts ? pointInPolygon(vx, vz, densePts) : false;
+                    let distEdge = isInside ? 0 : (densePts ? distToPolygon(vx, vz, densePts) : 0);
+                    if (densePts && distEdge > maxReach) continue;
+
                     let oi = (gz - bd.bbox.gzStart) * gWidth + (gx - bd.bbox.gxStart);
                     if (oi >= 0 && oi < bd.origHeights.length) {
                         positions[idx*3+2] = bd.origHeights[oi];
@@ -840,10 +1043,28 @@ window.restoreBunkerBase = function(hole, restoreTexture, targetBunker) {
         }
 
         if (restoreTexture) {
-            if (typeof window.eraseBunkerTexture === 'function') {
-                window.eraseBunkerTexture(bd);
-            } else if (bd.origCanvasPixels && window._arcadePCtx) {
-                window._arcadePCtx.putImageData(bd.origCanvasPixels, bd.bbox.pxMinX, bd.bbox.pxMinY);
+            if (bd.origCanvasPixels && densePts && window._arcadePCtx && bd.bbox.pw > 0 && bd.bbox.ph > 0) {
+                let ctx = window._arcadePCtx;
+                if (!window._bunkerSnapCanvas) window._bunkerSnapCanvas = document.createElement('canvas');
+                window._bunkerSnapCanvas.width = bd.bbox.pw;
+                window._bunkerSnapCanvas.height = bd.bbox.ph;
+                let bCtx = window._bunkerSnapCanvas.getContext('2d');
+                bCtx.putImageData(bd.origCanvasPixels, 0, 0);
+
+                ctx.save();
+                ctx.beginPath();
+                densePts.forEach((pt, i) => {
+                    let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                    let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                    if (i === 0) ctx.moveTo(pxX, pxY);
+                    else ctx.lineTo(pxX, pxY);
+                });
+                ctx.closePath();
+                ctx.clip();
+                ctx.drawImage(window._bunkerSnapCanvas, bd.bbox.pxMinX, bd.bbox.pxMinY);
+                ctx.restore();
+            } else if (typeof window.eraseBunkerTexture === 'function') {
+                window.eraseBunkerTexture(bd, hole);
             }
         }
     });
@@ -852,13 +1073,16 @@ window.restoreBunkerBase = function(hole, restoreTexture, targetBunker) {
 // 3. Apply full bunker pipeline (Painting + Sculpting + Smoothing)
 window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunker) {
     if (!hole) return;
-    ensureHoleBunkers(hole);
-    let bds = targetBunker ? [targetBunker] : (hole.bunkers && hole.bunkers.length > 0 ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []));
-    if (bds.length === 0) return;
-    if (updateTexture === undefined) updateTexture = true;
+    if (window._isApplyingBunkerPipeline) return;
+    window._isApplyingBunkerPipeline = true;
+    try {
+        ensureHoleBunkers(hole);
+        let bds = targetBunker ? [targetBunker] : (hole.bunkers && hole.bunkers.length > 0 ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []));
+        if (bds.length === 0) return;
+        if (updateTexture === undefined) updateTexture = true;
 
-    // Reset ground vertex heights to pristine baseline for targeted bunker(s)
-    window.restoreBunkerBase(hole, false, targetBunker);
+        // Reset ground vertex heights to pristine baseline for targeted bunker(s)
+        window.restoreBunkerBase(hole, false, targetBunker);
 
     let cfg = window.CURRENT_BIOME_CONFIG || {};
     let sandColor = cfg.bunkerColor || '#e0d8a4';
@@ -1090,6 +1314,9 @@ window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunk
     if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
     if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
     if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+    } finally {
+        window._isApplyingBunkerPipeline = false;
+    }
 };
 
 // 4. Live reactive update triggered from UI sliders or buttons
@@ -1458,7 +1685,11 @@ window.activateMoveBunkerMode = function() {
 
 // 10. Initial Bunker Build triggered from UI button
 window.executeSmartBunker = function() {
-    if(smartGreenPoints.length < 3) return;
+    if(smartGreenPoints.length < 3) {
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        window.showBuildToast(isSv ? '⚠️ Rita minst 3 punkter för att bygga bunker!' : '⚠️ Draw at least 3 points to build bunker!', '#ef4444');
+        return;
+    }
     window.saveUndoState();
 
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
@@ -1762,41 +1993,33 @@ window.captureFairwaySnapshot = function(hole, points, margin) {
     };
 };
 
-// 1.5. Cleanly erase a fairway's footprint and paint natural rough grass with soft blending
-window.eraseFairwayTexture = function(fd) {
+// 1.5. Cleanly erase a fairway's footprint
+window.eraseFairwayTexture = function(fd, hole) {
     if (!fd || !fd.points || !window._arcadePCtx) return;
     let densePts = (typeof getDenseFairwayPoints === 'function') ? getDenseFairwayPoints(fd.points) : fd.points;
     if (!densePts || densePts.length < 3) return;
 
-    let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let roughColor = cfg.roughColor || '#4a782b';
-
+    let baseGroundColor = getBaseGroundColor(hole);
     let semiRoughWidth = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
     let roughWidth = (fd.roughEnabled !== false) ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
-    // Total erase margin in meters to cover the outer rough ring and softly feather into terrain
-    let eraseMargin = semiRoughWidth + roughWidth + 6.0;
+    let eraseMargin = semiRoughWidth + roughWidth + 0.3;
 
     let ctx = window._arcadePCtx;
     ctx.save();
-    ctx.filter = 'blur(6px)';
+    ctx.filter = 'none';
 
+    let expandedPts = (typeof offsetPolygon === 'function') ? offsetPolygon(densePts, eraseMargin) : densePts;
     ctx.beginPath();
-    densePts.forEach((pt, i) => {
+    expandedPts.forEach((pt, i) => {
         let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
         let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
         if (i === 0) ctx.moveTo(pxX, pxY);
         else ctx.lineTo(pxX, pxY);
     });
     ctx.closePath();
-
-    ctx.lineWidth = eraseMargin * 2 * (4096 / window.TERRAIN_SIZE);
-    ctx.strokeStyle = roughColor;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    ctx.fillStyle = roughColor;
+    ctx.fillStyle = baseGroundColor;
     ctx.fill();
 
-    ctx.filter = 'none';
     ctx.restore();
 };
 
@@ -1810,7 +2033,10 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
 
     fds.forEach(fd => {
         if (!fd || !fd.bbox) return;
-        // Restore vertex heights across entire bounding box without clipping gaps
+        let densePts = (fd.points && fd.points.length >= 3 && typeof getDenseFairwayPoints === 'function') ? getDenseFairwayPoints(fd.points) : null;
+        let maxReach = 5.0;
+
+        // Restore vertex heights across organic fairway zone without rectangular scars
         if (fd.origHeights && window._arcadePlaneGeo) {
             let positions = window._arcadePlaneGeo.attributes.position.array;
             let gWidth = fd.bbox.gWidth;
@@ -1818,6 +2044,13 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
             for(let gz = fd.bbox.gzStart; gz <= fd.bbox.gzEnd; gz++) {
                 for(let gx = fd.bbox.gxStart; gx <= fd.bbox.gxEnd; gx++) {
                     let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                    let vx = positions[idx*3];
+                    let vz = -positions[idx*3+1];
+
+                    let isInside = densePts ? pointInPolygon(vx, vz, densePts) : false;
+                    let distEdge = isInside ? 0 : (densePts ? distToPolygon(vx, vz, densePts) : 0);
+                    if (densePts && distEdge > maxReach) continue;
+
                     let oi = (gz - fd.bbox.gzStart) * gWidth + (gx - fd.bbox.gxStart);
                     if (oi >= 0 && oi < fd.origHeights.length) {
                         positions[idx*3+2] = fd.origHeights[oi];
@@ -1826,12 +2059,30 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
             }
         }
 
-        // Restore 2D canvas texture: paint pristine rough grass over fairway footprint
+        // Restore 2D canvas texture: restore clipped pixels or paint base ground color
         if (restoreTexture) {
-            if (typeof window.eraseFairwayTexture === 'function') {
-                window.eraseFairwayTexture(fd);
-            } else if (fd.origCanvasPixels && window._arcadePCtx) {
-                window._arcadePCtx.putImageData(fd.origCanvasPixels, fd.bbox.pxMinX, fd.bbox.pxMinY);
+            if (fd.origCanvasPixels && densePts && window._arcadePCtx && fd.bbox.pw > 0 && fd.bbox.ph > 0) {
+                let ctx = window._arcadePCtx;
+                if (!window._fairwaySnapCanvas) window._fairwaySnapCanvas = document.createElement('canvas');
+                window._fairwaySnapCanvas.width = fd.bbox.pw;
+                window._fairwaySnapCanvas.height = fd.bbox.ph;
+                let fCtx = window._fairwaySnapCanvas.getContext('2d');
+                fCtx.putImageData(fd.origCanvasPixels, 0, 0);
+
+                ctx.save();
+                ctx.beginPath();
+                densePts.forEach((pt, i) => {
+                    let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                    let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                    if (i === 0) ctx.moveTo(pxX, pxY);
+                    else ctx.lineTo(pxX, pxY);
+                });
+                ctx.closePath();
+                ctx.clip();
+                ctx.drawImage(window._fairwaySnapCanvas, fd.bbox.pxMinX, fd.bbox.pxMinY);
+                ctx.restore();
+            } else if (typeof window.eraseFairwayTexture === 'function') {
+                window.eraseFairwayTexture(fd, hole);
             }
         }
     });
@@ -1840,18 +2091,21 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
 // 3. Apply full fairway pipeline (Painting + Sculpting)
 window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFairway) {
     if (!hole) return;
-    ensureHoleFairways(hole);
-    let fds = targetFairway ? [targetFairway] : (hole.fairways && hole.fairways.length > 0 ? hole.fairways : (hole.fairwayData ? [hole.fairwayData] : []));
-    if (fds.length === 0) return;
-    if (updateTexture === undefined) updateTexture = true;
+    if (window._isApplyingFairwayPipeline) return;
+    window._isApplyingFairwayPipeline = true;
+    try {
+        ensureHoleFairways(hole);
+        let fds = targetFairway ? [targetFairway] : (hole.fairways && hole.fairways.length > 0 ? hole.fairways : (hole.fairwayData ? [hole.fairwayData] : []));
+        if (fds.length === 0) return;
+        if (updateTexture === undefined) updateTexture = true;
 
-    // Reset ground vertex heights to pristine baseline for targeted fairway(s)
-    window.restoreFairwayBase(hole, false, targetFairway);
+        // Reset ground vertex heights to pristine baseline for targeted fairway(s)
+        window.restoreFairwayBase(hole, false, targetFairway);
 
     let cfg = window.CURRENT_BIOME_CONFIG || {};
     let fairwayColor = cfg.fairwayColor || '#7db952';
     let semiRoughColor = cfg.semiColor || '#6b9e3d';
-    let roughColor = cfg.roughColor || '#3d6b2b';
+    let roughColor = cfg.roughColor || '#4a782b';
 
     fds.forEach(fd => {
         if (!fd || !fd.points || fd.points.length < 3) return;
@@ -2001,14 +2255,17 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
     if (window._terrainChunks) window._terrainChunks.syncAll();
     window.snapObjectsToGround();
 
-    // Re-render Smart Green on top so green always stays on top
-    if (hole.greenData && typeof window.applyGreenPipeline === 'function') {
+    // Re-render Smart Green on top so green always stays on top (only if not already applying green)
+    if (!window._isApplyingGreenPipeline && hole.greenData && typeof window.applyGreenPipeline === 'function') {
         window.applyGreenPipeline(hole, false, updateTexture);
     }
 
     if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
     if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
     if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+    } finally {
+        window._isApplyingFairwayPipeline = false;
+    }
 };
 
 // 4. Live reactive update triggered from UI sliders or buttons
@@ -2488,7 +2745,11 @@ window.activateMoveFairwayMode = function() {
 
 // 10. Initial Fairway Build triggered from UI button
 window.executeSmartFairway = function() {
-    if(smartGreenPoints.length < 3) return;
+    if(smartGreenPoints.length < 3) {
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        window.showBuildToast(isSv ? '⚠️ Rita minst 3 punkter för att bygga fairway!' : '⚠️ Draw at least 3 points to build fairway!', '#ef4444');
+        return;
+    }
     window.saveUndoState();
 
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
@@ -3086,6 +3347,7 @@ function pointInPolygon(px, pz, polyPts) {
     }
     return inside;
 }
+window.pointInPolygon = pointInPolygon;
 
 // Helper: Distance from point to nearest polygon edge
 function distToPolygon(px, pz, polyPts) {
@@ -3102,14 +3364,17 @@ function distToPolygon(px, pz, polyPts) {
     }
     return minDist;
 }
+window.distToPolygon = distToPolygon;
 
 // Helper: Generate dense smooth curve points from control points
-function getDenseGreenPoints(points) {
+function getDenseGreenPoints(points, tension) {
     let pts3 = points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
-    let curve = new THREE.CatmullRomCurve3(pts3, true);
+    let curTension = (tension !== undefined) ? tension : 0.5;
+    let curve = new THREE.CatmullRomCurve3(pts3, true, 'catmullrom', curTension);
     let numSamples = Math.max(200, points.length * 40);
     return curve.getPoints(numSamples);
 }
+window.getDenseGreenPoints = getDenseGreenPoints;
 
 // Capture baseline snapshot of natural terrain & canvas before green is built
 window.captureGreenSnapshot = function(hole, points, margin) {
@@ -3131,8 +3396,8 @@ window.captureGreenSnapshot = function(hole, points, margin) {
     let gWidth = gxEnd - gxStart + 1;
     let gHeight = gzEnd - gzStart + 1;
 
-    // Texture snapshot only needs enough margin for foregreen ring (max 3m) + blur, avoiding surrounding 25m terrain overwrites
-    let texMargin = 3.5;
+    // Texture snapshot covers enough margin for foregreen ring (max 5m) + blur, avoiding surrounding terrain overwrites
+    let texMargin = 8.0;
     let pxMinX = Math.max(0, Math.floor(((pathMinX - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
     let pxMaxX = Math.min(4096, Math.ceil(((pathMaxX + texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
     let pxMinY = Math.max(0, Math.floor(((pathMinZ - texMargin + window.TERRAIN_SIZE/2) / window.TERRAIN_SIZE) * 4096));
@@ -3177,61 +3442,205 @@ window.captureGreenSnapshot = function(hole, points, margin) {
     };
 };
 
-// Restore pristine baseline ground & texture before applying modified parameters
-window.restoreGreenBase = function(hole, restoreTexture) {
-    if (restoreTexture === undefined) restoreTexture = true;
-    if (!hole || !hole.greenData || !hole.greenData.bbox) return;
-    let gd = hole.greenData;
+// 1.4. Repair any legacy Deep Rough stain left around green by old bugs
+function repairStainedDeepRough(hole, gd, densePts) {
+    if (!gd || !gd.bbox || !window._arcadePCtx) return;
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let roughHex = cfg.roughColor || '#4a782b';
+    let fescueHex = cfg.fescueColor || '#2d4c1a';
 
-    // Restore vertex heights ONLY within green's actual influence radius (never flatten surrounding bunkers, hills, or water)
+    let [targetR, targetG, targetB] = sbHexToRgb(roughHex);
+    let [fR, fG, fB] = sbHexToRgb(fescueHex);
+
+    let pxMinX = gd.bbox.pxMinX;
+    let pxMinY = gd.bbox.pxMinY;
+    let pw = gd.bbox.pw;
+    let ph = gd.bbox.ph;
+    if (pw <= 0 || ph <= 0) return;
+
+    function fixImageData(imgData) {
+        let d = imgData.data;
+        let modified = false;
+        for (let py = 0; py < ph; py++) {
+            for (let px = 0; px < pw; px++) {
+                let canvasX = pxMinX + px;
+                let canvasY = pxMinY + py;
+                let worldX = (canvasX / 4096) * window.TERRAIN_SIZE - (window.TERRAIN_SIZE / 2);
+                let worldZ = (canvasY / 4096) * window.TERRAIN_SIZE - (window.TERRAIN_SIZE / 2);
+
+                // Only repair outside the green complex (densePts)
+                if (pointInPolygon(worldX, worldZ, densePts)) continue;
+
+                let idx = (py * pw + px) * 4;
+                let r = d[idx], g = d[idx+1], b = d[idx+2];
+                let distFescue = (r - fR)**2 + (g - fG)**2 + (b - fB)**2;
+                if (distFescue < 3000) {
+                    d[idx]   = targetR;
+                    d[idx+1] = targetG;
+                    d[idx+2] = targetB;
+                    modified = true;
+                }
+            }
+        }
+        return modified;
+    }
+
+    if (gd.origCanvasPixels) {
+        fixImageData(gd.origCanvasPixels);
+    }
+    let liveImg = window._arcadePCtx.getImageData(pxMinX, pxMinY, pw, ph);
+    if (fixImageData(liveImg)) {
+        window._arcadePCtx.putImageData(liveImg, pxMinX, pxMinY);
+    }
+}
+
+// 1.5. Cleanly erase a green's footprint from 2D canvas texture
+window.eraseGreenTexture = function(gd, hole) {
+    if (!gd || !gd.points || !window._arcadePCtx) return;
+    let tension = (gd.tension !== undefined) ? gd.tension : 0.5;
+    let densePts = (typeof getDenseGreenPoints === 'function') ? getDenseGreenPoints(gd.points, tension) : gd.points;
+    if (!densePts || densePts.length < 3) return;
+
+    let baseGroundColor = getBaseGroundColor(hole);
+    let ctx = window._arcadePCtx;
+    ctx.save();
+    ctx.filter = 'none';
+
+    // Foregreen is inside densePts, so erase only inside densePts without expanding outward
+    ctx.beginPath();
+    densePts.forEach((pt, i) => {
+        let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        if (i === 0) ctx.moveTo(pxX, pxY);
+        else ctx.lineTo(pxX, pxY);
+    });
+    ctx.closePath();
+    ctx.fillStyle = baseGroundColor;
+    ctx.fill();
+
+    ctx.restore();
+};
+
+// 2. Restore pristine baseline ground & texture before applying modified parameters
+window.restoreGreenBase = function(hole, restoreTexture, targetGd, isDeleting) {
+    if (restoreTexture === undefined) restoreTexture = true;
+    if (!hole || !hole.greenData) return;
+    let gd = targetGd || hole.greenData;
+    if (!gd || !gd.bbox) return;
+
+    let tension = (gd.tension !== undefined) ? gd.tension : 0.5;
+    let densePts = (gd.densePts && gd.densePts.length >= 3) ? gd.densePts : ((gd.points && gd.points.length >= 3 && typeof getDenseGreenPoints === 'function') ? getDenseGreenPoints(gd.points, tension) : null);
+    let curBlend = (gd.blendDistance !== undefined) ? gd.blendDistance : 8.0;
+    let maxReach = Math.max(curBlend, (gd._maxBlendDistance || 0)) + 3.0;
+
+    // 1. Restore vertex heights across organic green influence zone without leaving plateau gaps or rectangular scars
     if (gd.origHeights && window._arcadePlaneGeo) {
         let positions = window._arcadePlaneGeo.attributes.position.array;
         let gWidth = gd.bbox.gWidth;
-        let densePts = (typeof getDenseGreenPoints === 'function' && gd.points) ? getDenseGreenPoints(gd.points) : gd.points;
-        let fgWidth = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
-        let blendDist = gd.blendDistance !== undefined ? gd.blendDistance : 8.0;
-        let maxInfluence = fgWidth + blendDist + 2.5;
 
         for(let gz = gd.bbox.gzStart; gz <= gd.bbox.gzEnd; gz++) {
             for(let gx = gd.bbox.gxStart; gx <= gd.bbox.gxEnd; gx++) {
                 let idx = gz * (window.TERRAIN_SEGS+1) + gx;
+                let vx = positions[idx*3];
+                let vz = -positions[idx*3+1];
 
-                // Protect any terrain outside the green's blend zone (bunkers, hills, water)
-                if (densePts && densePts.length >= 3 && typeof pointInPolygon === 'function' && typeof distToPolygon === 'function') {
-                    let vx = positions[idx*3];
-                    let vz = -positions[idx*3+1];
-                    let isInside = pointInPolygon(vx, vz, densePts);
-                    let dist = distToPolygon(vx, vz, densePts);
-                    let signedDist = isInside ? -dist : dist;
-                    if (signedDist > maxInfluence) continue;
-                }
+                let isInside = densePts ? pointInPolygon(vx, vz, densePts) : false;
+                let distEdge = isInside ? 0 : (densePts ? distToPolygon(vx, vz, densePts) : 0);
+
+                // Organic mask: Only restore vertices within the green's actual influence radius!
+                if (densePts && distEdge > maxReach) continue;
 
                 let oi = (gz - gd.bbox.gzStart) * gWidth + (gx - gd.bbox.gxStart);
-                positions[idx*3+2] = gd.origHeights[oi];
+                if (oi >= 0 && oi < gd.origHeights.length) {
+                    // Water-awareness: If this vertex is currently water and outside the putting green,
+                    // do NOT stomp it back to dry-land snapshot height! Preserve the lake bed.
+                    if (window.waterData && window.waterData[idx] > -90 && !isInside) {
+                        // Keep submerged bed intact
+                    } else {
+                        positions[idx*3+2] = gd.origHeights[oi];
+                    }
+                }
             }
+        }
+
+        window._arcadePlaneGeo.attributes.position.needsUpdate = true;
+        window._arcadePlaneGeo.computeVertexNormals();
+        window._arcadePlaneGeo.computeBoundingBox();
+        window._arcadePlaneGeo.computeBoundingSphere();
+        if (window._terrainChunks) {
+            window._terrainChunks.syncAll();
         }
     }
 
-    // Restore 2D canvas texture patch only if texture update requested
-    if (restoreTexture && gd.origCanvasPixels && window._arcadePCtx) {
-        window._arcadePCtx.putImageData(gd.origCanvasPixels, gd.bbox.pxMinX, gd.bbox.pxMinY);
+    // 2. Restore 2D canvas texture: cleanly erase green footprint or restore clipped snapshot
+    if (restoreTexture && window._arcadePCtx) {
+        if (gd.origCanvasPixels && densePts && densePts.length >= 3 && gd.bbox.pw > 0 && gd.bbox.ph > 0) {
+            let ctx = window._arcadePCtx;
+            if (!window._greenSnapCanvas) {
+                window._greenSnapCanvas = document.createElement('canvas');
+            }
+            window._greenSnapCanvas.width = gd.bbox.pw;
+            window._greenSnapCanvas.height = gd.bbox.ph;
+            let sCtx = window._greenSnapCanvas.getContext('2d');
+            sCtx.putImageData(gd.origCanvasPixels, 0, 0);
+
+            ctx.save();
+            ctx.beginPath();
+            densePts.forEach((pt, i) => {
+                let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+                if (i === 0) ctx.moveTo(pxX, pxY);
+                else ctx.lineTo(pxX, pxY);
+            });
+            ctx.closePath();
+            ctx.clip(); // ONLY restore pixels INSIDE the green polygon!
+            ctx.drawImage(window._greenSnapCanvas, gd.bbox.pxMinX, gd.bbox.pxMinY);
+            ctx.restore();
+        } else if (typeof window.eraseGreenTexture === 'function') {
+            window.eraseGreenTexture(gd, hole);
+        }
+
+        // Re-layer underlying fairway and bunker ONLY when green is explicitly deleted or redrawn (isDeleting === true)
+        if (isDeleting && !window._isApplyingGreenPipeline) {
+            if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
+                window.applyFairwayPipeline(hole, false, true);
+            }
+            if (hole.bunkers && hole.bunkers.length > 0 && typeof window.applyBunkerPipeline === 'function') {
+                window.applyBunkerPipeline(hole, false, true);
+            }
+        }
+
+        if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+        if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
     }
 };
 
 // Apply full green pipeline (Painting + Sculpting + Flag update)
 window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
     if (!hole || !hole.greenData) return;
-    let gd = hole.greenData;
-    if (updateTexture === undefined) updateTexture = true;
+    if (window._isApplyingGreenPipeline) return;
+    window._isApplyingGreenPipeline = true;
+    try {
+        let gd = hole.greenData;
+        if (updateTexture === undefined) updateTexture = true;
 
-    // 1. Reset ground vertex heights to pristine baseline (do NOT overwrite 2D canvas with stale bitmap rectangle!)
-    window.restoreGreenBase(hole, false);
+        // 1. Reset ground vertex heights to pristine baseline (and erase old canvas footprint if updating texture)
+        window.restoreGreenBase(hole, updateTexture, undefined, false);
 
-    let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let greenColor = cfg.greenColor || '#98ce68';
-    let foregreenColor = cfg.foregreenColor || '#8bc45d';
+        let cfg = window.CURRENT_BIOME_CONFIG || {};
+        let greenColor = cfg.greenColor || '#98ce68';
+        let foregreenColor = cfg.foregreenColor || '#8bc45d';
 
-    let densePts = getDenseGreenPoints(gd.points);
+        let tension = (gd.tension !== undefined) ? gd.tension : 0.5;
+        let densePts = getDenseGreenPoints(gd.points, tension);
+        gd.densePts = densePts;
+
+        // 1.5. Repair any legacy Deep Rough stain outside green
+        if (updateTexture && window._arcadePCtx) {
+            repairStainedDeepRough(hole, gd, densePts);
+        }
 
     // === PAINT PASS ===
     if (updateTexture && window._arcadePCtx) {
@@ -3243,12 +3652,14 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
             if (blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
         }
 
-        // Draw foregreen ring
+        // Foregreen och green skapas FRÅN BOLLARNA OCH INÅT.
+        // Utanför bollarna rör man ej underlaget!
         let fgWidth = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
-        if (fgWidth > 0) {
-            let expandedPts = offsetPolygon(densePts, fgWidth);
+
+        if (fgWidth > 0.05) {
+            // 1. Fyll hela ytan innanför bollarna (densePts) med FOREGREEN
             window._arcadePCtx.beginPath();
-            expandedPts.forEach((pt, i) => {
+            densePts.forEach((pt, i) => {
                 let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
                 let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
                 if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
@@ -3257,24 +3668,46 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
             window._arcadePCtx.closePath();
             window._arcadePCtx.fillStyle = foregreenColor;
             window._arcadePCtx.fill();
-        }
 
-        // Draw green fill
-        window._arcadePCtx.beginPath();
-        densePts.forEach((pt, i) => {
-            let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-            else window._arcadePCtx.lineTo(pxX, pxY);
-        });
-        window._arcadePCtx.closePath();
-        window._arcadePCtx.fillStyle = greenColor;
-        window._arcadePCtx.fill();
+            // 2. Fyll den inre ytan (krymt inåt med fgWidth) med GREEN (puttyta)
+            let innerPts = insetPolygon(densePts, fgWidth);
+            gd.innerDensePts = innerPts;
 
-        // Mowing pattern overlay
-        let mowPattern = gd.mowPattern || 'SOLID';
-        if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
-            paintMowingPattern(window._arcadePCtx, densePts, greenColor, mowPattern);
+            window._arcadePCtx.beginPath();
+            innerPts.forEach((pt, i) => {
+                let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
+                else window._arcadePCtx.lineTo(pxX, pxY);
+            });
+            window._arcadePCtx.closePath();
+            window._arcadePCtx.fillStyle = greenColor;
+            window._arcadePCtx.fill();
+
+            // 3. Mowing pattern overlay på den inre greenen
+            let mowPattern = gd.mowPattern || 'SOLID';
+            if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
+                paintMowingPattern(window._arcadePCtx, innerPts, greenColor, mowPattern);
+            }
+        } else {
+            // Inget foregreen: hela ytan innanför bollarna är GREEN
+            gd.innerDensePts = densePts;
+
+            window._arcadePCtx.beginPath();
+            densePts.forEach((pt, i) => {
+                let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
+                else window._arcadePCtx.lineTo(pxX, pxY);
+            });
+            window._arcadePCtx.closePath();
+            window._arcadePCtx.fillStyle = greenColor;
+            window._arcadePCtx.fill();
+
+            let mowPattern = gd.mowPattern || 'SOLID';
+            if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
+                paintMowingPattern(window._arcadePCtx, densePts, greenColor, mowPattern);
+            }
         }
 
         window._arcadePCtx.filter = 'none';
@@ -3294,6 +3727,7 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
     let baseH = gd.baseElevation;
     let elevationOffset = gd.elevationOffset || 0.0;
     let blendDistance = gd.blendDistance !== undefined ? gd.blendDistance : 8.0;
+    gd._maxBlendDistance = Math.max(gd._maxBlendDistance || 0, blendDistance);
     let fgWidth = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
 
     let polyCentX = 0, polyCentZ = 0;
@@ -3302,10 +3736,20 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
 
     // Tilt calculation
     let tiltDirX = 0, tiltDirZ = 0, tiltMaxDist = 1;
-    let tiltEnabled = !!(gd.tiltAim && hole.aimPoint);
+    let tiltEnabled = (gd.tiltPct !== undefined && gd.tiltPct > 0);
     if (tiltEnabled) {
-        tiltDirX = hole.aimPoint.x - polyCentX;
-        tiltDirZ = hole.aimPoint.z - polyCentZ;
+        if (gd.tiltToFlag !== false && hole.flag) {
+            let fx = hole.flag.x !== undefined ? hole.flag.x : hole.flag.position.x;
+            let fz = hole.flag.z !== undefined ? hole.flag.z : hole.flag.position.z;
+            tiltDirX = fx - polyCentX;
+            tiltDirZ = fz - polyCentZ;
+        } else if (gd.tiltAngle !== undefined) {
+            tiltDirX = Math.sin(gd.tiltAngle);
+            tiltDirZ = Math.cos(gd.tiltAngle);
+        } else if (gd.tiltAim && hole.aimPoint) {
+            tiltDirX = hole.aimPoint.x - polyCentX;
+            tiltDirZ = hole.aimPoint.z - polyCentZ;
+        }
         let len = Math.sqrt(tiltDirX * tiltDirX + tiltDirZ * tiltDirZ);
         if (len > 0) { tiltDirX /= len; tiltDirZ /= len; }
         tiltMaxDist = 0;
@@ -3334,7 +3778,7 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
             let distEdge = distToPolygon(vx, vz, densePts);
             let signedDist = isInside ? -distEdge : distEdge;
 
-            if (signedDist > fgWidth + blendDistance) continue;
+            if (signedDist > blendDistance) continue;
 
             let tiltVal = 0;
             if (tiltEnabled) {
@@ -3346,11 +3790,20 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
             let oi = (gz - gzStart) * gWidth + (gx - gxStart);
             let originalH = origHeights[oi];
 
+            // Water-awareness: If vertex is part of a water body and outside the putting green,
+            // blend down into the lake bed instead of dry land above water
+            if (window.waterData && window.waterData[idx] > -90 && !isInside) {
+                let waterLevel = window.waterData[idx];
+                let currentBed = positions[idx*3+2];
+                let bedH = (currentBed < waterLevel) ? currentBed : (waterLevel - 2.5);
+                originalH = Math.min(originalH, bedH);
+            }
+
             let influence = 0;
-            if (signedDist <= fgWidth) {
+            if (signedDist <= 0) {
                 influence = 1.0;
-            } else if (signedDist <= fgWidth + blendDistance) {
-                let t = (signedDist - fgWidth) / blendDistance;
+            } else if (signedDist <= blendDistance) {
+                let t = signedDist / blendDistance;
                 influence = 1.0 - t;
                 influence = influence * influence * (3.0 - 2.0 * influence); // cubic smoothstep
             }
@@ -3382,7 +3835,7 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
                 let distEdge = distToPolygon(vx, vz, densePts);
                 let signedDist = isInside ? -distEdge : distEdge;
 
-                if (signedDist > -2.0 && signedDist < fgWidth + blendDistance + 2.0) {
+                if (signedDist > -2.0 && signedDist < blendDistance + 2.0) {
                     let nCount = 0;
                     let nSum = 0;
                     if (gz > 0) { nSum += tempHeights[(gz-1)*_smoothStride + gx]; nCount++; }
@@ -3450,6 +3903,8 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
     if (window._terrainChunks) window._terrainChunks.syncAll();
     setTimeout(function() { if (window._terrainChunks) window._terrainChunks.refreshGreenDetection(); }, 150);
     window.snapObjectsToGround();
+    if (typeof window.rebuildWaterMask === 'function') window.rebuildWaterMask(false);
+    if (window.syncWaterVisual) window.syncWaterVisual();
 
     // === FLAG PLACEMENT & HEIGHT SYNC ===
     if (isInitial || !hole.flag) {
@@ -3515,10 +3970,29 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
         }
     }
 
+    // Remember last built points so next edit erases the exact footprint
+    gd.lastBuiltPoints = gd.points.map(p => ({ x: p.x, y: p.y, z: p.z }));
+
     // Refresh overlays
     if(window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
     if(window.contourLinesActive && typeof window.updateContourLines === 'function') window.updateContourLines();
     if(window.elevationHeatmapActive && typeof window.updateElevationHeatmap === 'function') window.updateElevationHeatmap();
+
+    // Rebuild 3D Green Grid if in Green Studio Steg 2 (Lutning och höjd) or if Global Slope is active
+    let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
+    let isGlobalSlope = !!window._globalGreenGridEnabled;
+    if (isStudioLutning || isGlobalSlope) {
+        if (window._studioShowGrid !== false && typeof window.buildGreenGrid === 'function') {
+            window.buildGreenGrid(hole, window.currentHoleIndex, true);
+            if (window.greenGridMesh) window.greenGridMesh.visible = true;
+        }
+        if (typeof window.clearGreenBeads === 'function') {
+            window.clearGreenBeads();
+        }
+    }
+    } finally {
+        window._isApplyingGreenPipeline = false;
+    }
 };
 
 // Live reactive update triggered from UI sliders or buttons
@@ -3562,7 +4036,8 @@ window.deleteSmartGreen = function(holeIndex) {
 
     window.saveUndoState();
 
-    window.restoreGreenBase(hole);
+    let oldGd = { ...hole.greenData, points: (hole.greenData.lastBuiltPoints || hole.greenData.points) };
+    window.restoreGreenBase(hole, true, oldGd, true);
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
@@ -3604,8 +4079,9 @@ window.redrawSmartGreen = function(holeIndex) {
     window.saveUndoState();
 
     let savedPoints = hole.greenData.points.map(p => ({ x: p.x, y: p.y, z: p.z }));
+    let oldGd = { ...hole.greenData, points: (hole.greenData.lastBuiltPoints || hole.greenData.points) };
 
-    window.restoreGreenBase(hole);
+    window.restoreGreenBase(hole, true, oldGd, true);
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
@@ -3666,7 +4142,8 @@ window.scaleSmartGreen = function(holeIndex, factor) {
     }
 
     // 1. Restore pristine ground before modifying points
-    window.restoreGreenBase(hole, true);
+    let oldGd = { ...gd, points: (gd.lastBuiltPoints || gd.points) };
+    window.restoreGreenBase(hole, true, oldGd);
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
@@ -3695,6 +4172,7 @@ window.scaleSmartGreen = function(holeIndex, factor) {
     // 4. Re-apply pipeline with exact same height, slope, contour, mow pattern
     window.applyGreenPipeline(hole, false, true);
 
+    if (window.GreenStudio) window.GreenStudio.sync();
     if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
     if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
 
@@ -3729,7 +4207,8 @@ window.moveSmartGreen = function(holeIndex, newCenterX, newCenterZ) {
     let dz = newCenterZ - oldCz;
 
     // Restore old ground 100% clean
-    window.restoreGreenBase(hole);
+    let oldGd = { ...gd, points: (gd.lastBuiltPoints || gd.points) };
+    window.restoreGreenBase(hole, true, oldGd);
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
@@ -3761,8 +4240,9 @@ window.moveSmartGreen = function(holeIndex, newCenterX, newCenterZ) {
     }
 
     // Re-apply pipeline with exact same parameters
-    window.applyGreenPipeline(hole, false);
+    window.applyGreenPipeline(hole, false, true);
 
+    if (window.GreenStudio) window.GreenStudio.sync();
     window.saveLevel();
     if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
@@ -3870,9 +4350,15 @@ window.adoptExistingGreen = function(holeIndex, immediateSave) {
         blendDistance: curBlend,
         tiltPct: curTilt,
         tiltAim: curTiltAim,
+        tiltToFlag: true,
+        stimp: 10.0,
+        firmness: 'NORMAL',
+        tension: 0.5,
+        showContours: false,
+        showBallPath: true,
         mowPattern: window._smartMowPattern || 'SOLID',
         foregreenWidth: curFg,
-        edgeSharpness: curSharp,
+        edgeSharpness: 100,
         seedOffsetX: (Math.random() - 0.5) * 200,
         seedOffsetZ: (Math.random() - 0.5) * 200
     };
@@ -3891,7 +4377,13 @@ window.adoptExistingGreen = function(holeIndex, immediateSave) {
 
 // Initial Green Build triggered from UI button
 window.executeSplineSmartGreen = function() {
-    if(smartGreenPoints.length < 3) return;
+    if(smartGreenPoints.length < 3) {
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        if (typeof window.showBuildToast === 'function') {
+            window.showBuildToast(isSv ? '⚠️ Sätt ut minst 3 punkter för att skapa greenen!' : '⚠️ Place at least 3 points to create the green!', '#ef4444');
+        }
+        return;
+    }
     window.saveUndoState();
 
     let hole = window.courseHoles[window.currentHoleIndex];
@@ -3900,23 +4392,20 @@ window.executeSplineSmartGreen = function() {
     let difficulty = window.greenDifficulty || 'FLAT';
     let mowPattern = window._smartMowPattern || 'SOLID';
 
-    let fgSlider = document.getElementById('sg-foregreen-width');
+    let fgSlider = document.getElementById('gs-foregreen-slider') || document.getElementById('sg-foregreen-width');
     let foregreenWidth = fgSlider ? parseFloat(fgSlider.value) : 1.0;
 
-    let sharpSlider = document.getElementById('sg-edge-sharpness');
-    let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
-
-    let elevSlider = document.getElementById('sg-elevation-offset');
+    let elevSlider = document.getElementById('gs-elev-slider') || document.getElementById('sg-elevation-offset');
     let elevationOffset = elevSlider ? parseFloat(elevSlider.value) : 0.0;
 
-    let blendSlider = document.getElementById('sg-blend-dist');
+    let blendSlider = document.getElementById('gs-blend-slider') || document.getElementById('sg-blend-dist');
     let blendDist = blendSlider ? parseFloat(blendSlider.value) : 8.0;
 
-    let tiltSlider = document.getElementById('sg-tilt-pct');
+    let tiltSlider = document.getElementById('gs-tilt-slider') || document.getElementById('sg-tilt-pct');
     let tiltPct = tiltSlider ? parseFloat(tiltSlider.value) / 100 : 0.02;
 
     let tiltAim = true;
-    let tiltCb = document.getElementById('sg-tilt-aim-cb');
+    let tiltCb = document.getElementById('gs-tilt-to-flag-cb') || document.getElementById('sg-tilt-aim-cb');
     if (tiltCb) tiltAim = tiltCb.checked;
 
     // Capture pristine terrain & canvas snapshot before any modification
@@ -3934,9 +4423,15 @@ window.executeSplineSmartGreen = function() {
         blendDistance: blendDist,
         tiltPct: tiltPct,
         tiltAim: tiltAim,
+        tiltToFlag: true,
+        stimp: 10.0,
+        firmness: 'NORMAL',
+        tension: 0.5,
+        showContours: false,
+        showBallPath: true,
         mowPattern: mowPattern,
         foregreenWidth: foregreenWidth,
-        edgeSharpness: sharpness,
+        edgeSharpness: 100,
         seedOffsetX: (Math.random() - 0.5) * 200,
         seedOffsetZ: (Math.random() - 0.5) * 200
     };
@@ -3947,44 +4442,43 @@ window.executeSplineSmartGreen = function() {
     // Clear the active drawn spline points from the view
     clearSmartGreen();
 
-    // Auto-switch to AIM if tees exist but no aim point
-    if((hole.tees.yellow || hole.tees.red || hole.tees.white || hole.tees.black) && !hole.aimPoint) {
-        setTimeout(function() {
-            setSmartBuilderType('AIM');
-            window.showBuildToast('🎯 Click to set Aim Point — tees will auto-sort', '#f59e0b');
-        }, 300);
-    }
-
     window.saveLevel();
     window.autoAdvanceHole();
     if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
+    if (window.GreenStudio) {
+        window.GreenStudio.sync();
+    }
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    if (typeof window.showBuildToast === 'function') {
+        window.showBuildToast(isSv ? '⛳ Green skapad! Dra golfbollarna för att justera formen.' : '⛳ Green created! Drag golf balls to adjust shape.', '#4ade80');
+    }
 
     // Prevent double-click from starting a new shape immediately
     window._smartBuildCooldown = true;
     setTimeout(function() { window._smartBuildCooldown = false; }, 500);
 };
 
-    // Update hole display in Smart Builder panel
     window.updateSBHoleDisplay = function() {
-        let el = document.getElementById('sb-hole-display');
-        if(!el) return;
-        let hole = window.courseHoles[window.currentHoleIndex];
-        let hasTee = hole.tees.yellow || hole.tees.red || hole.tees.white || hole.tees.black;
+        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (!hole) return;
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+        let hasTee = hole.tees && (hole.tees.yellow || hole.tees.red || hole.tees.white || hole.tees.black);
         let hasFlag = hole.flag;
         let hasAim = hole.aimPoint;
         let status = '○'; // empty
         if(hasTee && hasFlag && hasAim) status = '✅'; // complete
         else if(hasTee || hasFlag) status = '⚠️'; // partial
-        el.textContent = 'Hole ' + (window.currentHoleIndex + 1) + ' (Par ' + hole.par + ') ' + status;
+        let el = document.getElementById('sb-hole-display');
+        if(el) el.textContent = (isSv ? 'Hål ' : 'Hole ') + (window.currentHoleIndex + 1) + ' (Par ' + hole.par + ') ' + status;
         // Also sync HOLE tool display and topbar
         let holeNum = document.getElementById('hole-ui-num');
-        if(holeNum) holeNum.innerText = 'Hole ' + (window.currentHoleIndex + 1);
+        if(holeNum) holeNum.innerText = (isSv ? 'Hål ' : 'Hole ') + (window.currentHoleIndex + 1);
         let holePar = document.getElementById('hole-ui-par');
         if(holePar) holePar.innerText = 'Par ' + hole.par;
         let sbPar = document.getElementById('sb-par-display');
         if(sbPar) sbPar.innerText = 'Par ' + hole.par;
         let tbNum = document.getElementById('topbar-hole-num');
-        if(tbNum) tbNum.innerText = 'Hole ' + (window.currentHoleIndex + 1);
+        if(tbNum) tbNum.innerText = (isSv ? 'HÅL ' : 'HOLE ') + (window.currentHoleIndex + 1);
         let tbPar = document.getElementById('topbar-hole-par');
         if(tbPar) tbPar.innerText = 'Par ' + hole.par;
         
@@ -4044,17 +4538,22 @@ window.executeSplineSmartGreen = function() {
     function executeSmartBuilder() {
         if(window._smartBuildCooldown) return;
         if(window._smartBuilderType === 'BUNKER') {
-            executeSmartBunker();
+            if (typeof window.executeSmartBunker === 'function') window.executeSmartBunker();
+            else if (typeof executeSmartBunker === 'function') executeSmartBunker();
         } else if(window._smartBuilderType === 'FAIRWAY') {
-            executeSmartFairway();
+            if (typeof window.executeSmartFairway === 'function') window.executeSmartFairway();
+            else if (typeof executeSmartFairway === 'function') executeSmartFairway();
         } else if(window._smartBuilderType === 'TEE') {
-            executeSmartTee();
+            if (typeof window.executeSmartTee === 'function') window.executeSmartTee();
+            else if (typeof executeSmartTee === 'function') executeSmartTee();
         } else if(window._smartBuilderType === 'PAINT') {
-            window.executeSmartPaint();
+            if (typeof window.executeSmartPaint === 'function') window.executeSmartPaint();
         } else {
-            executeSplineSmartGreen();
+            if (typeof window.executeSplineSmartGreen === 'function') window.executeSplineSmartGreen();
+            else if (typeof executeSplineSmartGreen === 'function') executeSplineSmartGreen();
         }
     }
+    window.executeSmartBuilder = executeSmartBuilder;
 
     // === SMART PAINT: Precision polygon surface painting ===
     window.executeSmartPaint = function() {

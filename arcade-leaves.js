@@ -222,6 +222,13 @@
                 if (!isLeafy) continue; // Skip fairway/green/bunker/water
             }
 
+            if (typeof window.localGetTerrainAt === 'function') {
+                let surf = window.localGetTerrainAt(x, -z);
+                if (surf && (surf.type === 'GREEN' || surf.type === 'BUNKER' || surf.type === 'WATER' || surf.type === 'TEE')) {
+                    continue;
+                }
+            }
+
             // Get terrain height
             let groundY = GROUND_Y;
             if (window.getTerrainHeight) {
@@ -352,6 +359,13 @@
         if (window.getTerrainHeight) {
             let h = window.getTerrainHeight(leaf.x, leaf.z);
             if (h !== undefined && h !== null) groundY = h + 0.08;
+        }
+
+        if (typeof window.localGetTerrainAt === 'function') {
+            let surf = window.localGetTerrainAt(leaf.x, -leaf.z);
+            if (surf && (surf.type === 'GREEN' || surf.type === 'BUNKER' || surf.type === 'WATER' || surf.type === 'TEE')) {
+                return; // Do not deposit ground leaves on green, bunker, water or tee
+            }
         }
 
         let idx = _groundIdx % MAX_GROUND;

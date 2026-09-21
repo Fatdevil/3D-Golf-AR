@@ -418,15 +418,29 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   
   #top-bar {
       position: absolute; top: 10px; left: 10px; right: 10px;
-      display: flex; justify-content: space-between; align-items: center;
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
       gap: 10px; pointer-events: none; z-index: 101;
+  }
+  #top-bar .top-left {
+      display: flex; gap: 6px; align-items: center; justify-self: start;
       flex-wrap: nowrap;
   }
-  #top-bar .top-left, #top-bar .top-center, #top-bar .top-right {
-      display: flex; gap: 8px; align-items: center; flex-shrink: 0;
-  }
   #top-bar .top-center {
-      margin: 0 auto;
+      position: relative;
+      left: auto;
+      transform: none;
+      justify-self: center;
+      display: flex; gap: 8px; align-items: center;
+      pointer-events: auto;
+  }
+  #top-bar .top-right {
+      display: flex; gap: 8px; align-items: center; justify-self: end;
+  }
+
+  @media (max-width: 1260px) {
+      #topbar-undo-group .btn-label-text {
+          display: none;
+      }
   }
   
   .sys-btn {
