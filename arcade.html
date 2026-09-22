@@ -2137,7 +2137,7 @@
                 </div>
             </div>
 
-            <!-- FAIRWAY controls (Unified Parametric Studio) -->
+            <!-- FAIRWAY controls (Dedicated Parametric Fairway Studio) -->
             <div id="sb-fairway-controls" style="display:none;">
                 <!-- Multi-Fairway Header & Add Button -->
                 <div id="sf-header-row" style="display:none; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -2148,67 +2148,178 @@
                 <!-- Multi-Fairway Selector Pills Grid -->
                 <div id="sf-selector-bar" style="display:none; flex-wrap:wrap; gap:4px; margin-bottom:8px;"></div>
 
-                <!-- Status Banner for Active Fairway -->
-                <div id="sf-status-banner" style="display:none; justify-content:space-between; align-items:center; background:rgba(125,185,82,0.15); border:1px solid rgba(125,185,82,0.4); border-radius:6px; padding:6px 8px; margin-bottom:6px;">
-                    <span id="sf-act-status-badge" style="color:#7db952; font-size:10px; font-weight:bold;">✅ Aktiv Fairway</span>
-                    <span style="color:#94a3b8; font-size:8px;">Live Editor</span>
-                </div>
-
-                <!-- Drawing Guide Banner (shown when placing points before fairway is built) -->
-                <div id="sf-drawing-guide" style="display:none; background:rgba(125,185,82,0.1); border:1px dashed #7db952; border-radius:6px; padding:6px 8px; margin-bottom:6px; text-align:center;">
-                    <div style="color:#7db952; font-size:9px; font-weight:bold;" data-i18n="sb_fairway_draw_min_points_hint">✏️ Klicka på marken för att rita fairwayens form (minst 3 punkter)</div>
-                </div>
-
-                <!-- Studio Locked Banner (shown when fairway is not built yet) -->
-                <div id="sf-studio-locked-banner" style="display:none; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; margin-bottom:6px; text-align:center;">
-                    <span style="color:#94a3b8; font-size:9px;" data-i18n="sb_fairway_studio_locked_hint">🔒 Live Studio aktiveras när fairwayen är byggd</span>
-                </div>
-
-                <!-- Live Studio Parametric Controls (Dimmed while drawing, active once built) -->
-                <div id="sf-studio-params" style="transition:all 0.25s ease;">
-                    <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;" data-i18n="sb_fairway_terrain">Terrain</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:6px;">
-                        <button id="sf-diff-flat" onclick="setSFDiff('FLAT')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">NATURAL</button>
-                        <button id="sf-diff-easy" onclick="setSFDiff('EASY')" style="background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">EASY</button>
-                        <button id="sf-diff-med" onclick="setSFDiff('MED')" style="background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">MED</button>
-                        <button id="sf-diff-hard" onclick="setSFDiff('HARD')" style="background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">HARD</button>
-                    </div>
-                    <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_semi_rough">Semi-Rough</span><span id="sf-semirough-val" style="color:#6b9e3d; font-weight:bold; font-size:9px;">2.0m</span></div>
-                        <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" style="width:100%; accent-color:#6b9e3d; cursor:pointer;">
-                    </div>
-                    <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:6px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;"><label style="display:flex; align-items:center; gap:3px; cursor:pointer;"><input type="checkbox" id="sf-rough-cb" checked style="accent-color:#4a782b; cursor:pointer;"><span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_rough">Rough</span></label><span id="sf-rough-val" style="color:#4a782b; font-weight:bold; font-size:9px;">5m</span></div>
-                        <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" style="width:100%; accent-color:#4a782b; cursor:pointer;">
-                    </div>
-
-                    <!-- Fairway Size (Scale) Card -->
-                    <div id="sf-scale-card" style="display:none; background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 8px; margin-bottom:6px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                            <span style="color:#94a3b8; font-size:8.5px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_scale_fairway_title">Fairway-storlek (Skala)</span>
-                            <span id="sf-scale-area-badge" style="color:#7db952; font-size:9px; font-weight:bold;">~0 m²</span>
+                <!-- ========================================== -->
+                <!-- MODE 1: SKAPA FAIRWAY (When hole has no fairway or drawing new) -->
+                <!-- ========================================== -->
+                <div id="sf-panel-unbuilt" style="display:none; flex-direction:column; gap:8px;">
+                    <!-- Step 1 banner -->
+                    <div style="background:rgba(125,185,82,0.1); border:1px solid rgba(125,185,82,0.35); border-radius:8px; padding:8px 10px;">
+                        <div style="display:flex; align-items:center; gap:5px; margin-bottom:4px;">
+                            <span style="background:#7db952; color:#0f172a; font-size:9px; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">1</span>
+                            <span style="color:#7db952; font-size:10.5px; font-weight:700;" data-i18n="sf_step_draw">Rita formen</span>
                         </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
-                            <button type="button" onclick="window.scaleSmartFairway(window.currentHoleIndex, 0.9)" style="background:#0f172a; color:#f87171; border:1px solid rgba(239,68,68,0.4); padding:6px 4px; font-size:9.5px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_scale_down">➖ Minska (-10%)</button>
-                            <button type="button" onclick="window.scaleSmartFairway(window.currentHoleIndex, 1.1)" style="background:#0f172a; color:#4ade80; border:1px solid rgba(74,222,128,0.4); padding:6px 4px; font-size:9.5px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_scale_up">➕ Öka (+10%)</button>
+                        <div style="color:#94a3b8; font-size:9px; line-height:1.4;" data-i18n="sf_draw_hint">Klicka för att sätta ut fairway-punkter. Dra valfri punkt för att justera formen. Högerklicka för att radera.</div>
+                    </div>
+
+                    <!-- Points counter & status indicator -->
+                    <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; text-align:center;">
+                        <div id="sf-draw-status" style="font-size:10px; font-weight:600; color:#94a3b8;">
+                            0 punkter valda (minst 3 krävs)
                         </div>
                     </div>
 
-                    <!-- Actions for Active Fairway -->
-                    <div id="sf-active-actions" style="display:none; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px; margin-bottom:4px;">
-                        <button type="button" onclick="window.centerCameraOnFairway()" style="background:#1e293b; color:#fbbf24; border:1px solid #fbbf24; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_find_fairway">🔍 Hitta på kartan</button>
-                        <button type="button" id="sf-toggle-outline-btn" onclick="window.toggleFairwayOutline()" style="background:#1e293b; color:#38bdf8; border:1px solid rgba(56,189,248,0.5); padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_fairway_outline_visible">👁️ Fairway-kontur: Synlig</button>
-                        <button type="button" onclick="window.activateMoveFairwayMode()" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_move_fairway">✥ Flytta fairway</button>
-                        <button type="button" onclick="window.redrawSmartFairway()" style="background:#1e293b; color:#a855f7; border:1px solid #a855f7; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_redraw_fairway">🔄 Ändra form</button>
-                        <button type="button" onclick="window.deleteSmartFairway()" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid #ef4444; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_delete_fairway">🗑️ Radera fairway</button>
-                        <button type="button" id="sf-delete-all-btn" onclick="window.deleteAllSmartFairways()" style="display:none; background:rgba(239,68,68,0.2); color:#f87171; border:1px dashed #ef4444; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_delete_all_fairways">🗑️ Radera alla fairways</button>
-                        <button type="button" id="sf-clean-ghosts-btn" onclick="window.cleanGhostFairways()" style="background:#0f172a; color:#94a3b8; border:1px dashed #475569; padding:5px 4px; font-size:8.5px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_clean_ghosts">🧹 Rensa spök-fairways på hålet</button>
+                    <!-- Actions: Undo point & Clear -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                        <button type="button" onclick="window.undoSmartGreenPoint()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Ångra sista punkten">
+                            ↶ <span data-i18n="gs_undo_point">Ångra punkt</span>
+                        </button>
+                        <button type="button" onclick="window.clearSmartGreen()" style="background:#1e293b; color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Börja om från början">
+                            🔄 <span data-i18n="gs_reset">Börja om</span>
+                        </button>
                     </div>
+
+                    <!-- Primary Action Button: Create Fairway -->
+                    <button type="button" id="sf-build-fairway-btn" onclick="window.executeSmartFairway()" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(125,185,82,0.3); transition:all 0.2s;">
+                        🏌️ <span id="sf-build-fairway-btn-text" data-i18n="sb_build_fairway">Skapa fairway</span>
+                    </button>
                 </div>
 
-                <!-- Drawing mode clean ghosts shortcut -->
-                <div id="sf-drawing-clean-ghosts" style="display:none; margin-top:8px; text-align:center;">
-                    <button type="button" onclick="window.cleanGhostFairways()" style="background:transparent; color:#64748b; border:none; text-decoration:underline; font-size:8.5px; cursor:pointer;" data-i18n="sb_clean_ghosts">🧹 Rensa spök-fairways på hålet</button>
+                <!-- ========================================== -->
+                <!-- MODE 2: REDIGERA FAIRWAY (When fairway is built) -->
+                <!-- ========================================== -->
+                <div id="sf-panel-built" style="display:none;">
+                    <!-- 3-Tab Workflow Bar (1. Form, 2. Bredd & Terräng, 3. Klippning) -->
+                    <div style="display:flex; background:#0b1120; border:1px solid #1e293b; border-radius:10px; padding:3px; margin-bottom:10px; gap:4px;">
+                        <button type="button" id="sf-tab-form" onclick="window.FairwayStudio.setTab('form')" style="flex:1; background:#7db952; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(125,185,82,0.35);">
+                            <span style="font-size:12px;">📐</span>
+                            <span>1. Form</span>
+                        </button>
+                        <button type="button" id="sf-tab-bredd" onclick="window.FairwayStudio.setTab('bredd')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">🌾</span>
+                            <span>2. Bredd & Terräng</span>
+                        </button>
+                        <button type="button" id="sf-tab-klippning" onclick="window.FairwayStudio.setTab('klippning')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">🚜</span>
+                            <span>3. Klippning</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: FORM -->
+                    <div id="sf-content-form">
+                        <!-- Contextual Tip Banner -->
+                        <div style="background:#1e293b; border-left:3px solid #7db952; border-radius:4px; padding:6px 8px; margin-bottom:8px;">
+                            <div style="color:#cbd5e1; font-size:9px; line-height:1.4;" data-i18n="sf_form_tip">
+                                💡 <b>Dra</b> de vita golfbollarna för att ändra formen. <b>Klicka på linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.
+                            </div>
+                        </div>
+
+                        <!-- Fairway Size Area Display Card -->
+                        <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#94a3b8; font-size:9px; font-weight:700; text-transform:uppercase;" data-i18n="sf_area_label">Areal</span>
+                            <span id="sf-area-val" style="color:#7db952; font-weight:800; font-size:11px;">~0 m²</span>
+                        </div>
+
+                        <!-- Form Tab Actions: Delete Fairway -->
+                        <button type="button" onclick="window.deleteSmartFairway()" style="width:100%; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.4); padding:7px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer; margin-bottom:8px;" data-i18n="sb_delete_fairway">
+                            🗑️ Radera denna fairway & återställ mark
+                        </button>
+
+                        <!-- Step 1 -> Step 2 Guidance Button -->
+                        <button type="button" onclick="window.FairwayStudio.setTab('bredd')" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(125,185,82,0.25); transition:transform 0.1s;">
+                            <span data-i18n="sf_to_step2">Steg 2: Justera rufs & vågor</span> ➔
+                        </button>
+                    </div>
+
+                    <!-- TAB 2: BREDD & TERRÄNG -->
+                    <div id="sf-content-bredd" style="display:none;">
+                        <!-- Semi-Rough Slider -->
+                        <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_semi_rough">Semi-Rough</span>
+                                <span id="sf-semirough-val" style="color:#6b9e3d; font-weight:700; font-size:9.5px;">2.0m</span>
+                            </div>
+                            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" oninput="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.semiRoughWidth=parseFloat(this.value); window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#6b9e3d; cursor:pointer;">
+                        </div>
+
+                        <!-- Rough Width & Toggle -->
+                        <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:10px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                                <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                                    <input type="checkbox" id="sf-rough-cb" checked onchange="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.roughEnabled=this.checked; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="accent-color:#4a782b; cursor:pointer;">
+                                    <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_rough">Rough</span>
+                                </label>
+                                <span id="sf-rough-val" style="color:#4a782b; font-weight:700; font-size:9.5px;">5m</span>
+                            </div>
+                            <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" oninput="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.roughWidth=parseFloat(this.value); window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#4a782b; cursor:pointer;">
+                        </div>
+
+                        <!-- Terrain Waviness / Difficulty Cards -->
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:4px;" data-i18n="sf_terrain_profile_title">Böljande Mark (Terrängprofil)</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:10px;">
+                            <button type="button" id="sf-diff-flat" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='FLAT'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:rgba(125,185,82,0.25); color:#7db952; border:1px solid #7db952; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Platt <span style="font-size:8px; opacity:0.8;">Naturlig</span>
+                            </button>
+                            <button type="button" id="sf-diff-easy" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='EASY'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Lätt <span style="font-size:8px; opacity:0.8;">±0.4m</span>
+                            </button>
+                            <button type="button" id="sf-diff-med" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='MED'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Medel <span style="font-size:8px; opacity:0.8;">±0.65m</span>
+                            </button>
+                            <button type="button" id="sf-diff-hard" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='HARD'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                Svår <span style="font-size:8px; opacity:0.8;">±0.85m</span>
+                            </button>
+                        </div>
+
+                        <!-- Step 2 -> Step 3 Guidance Button -->
+                        <button type="button" onclick="window.FairwayStudio.setTab('klippning')" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(125,185,82,0.25); transition:transform 0.1s;">
+                            <span data-i18n="sf_to_step3">Steg 3: Klippmönster & finish</span> ➔
+                        </button>
+                    </div>
+
+                    <!-- TAB 3: KLIPPNING & FINISH -->
+                    <div id="sf-content-klippning" style="display:none;">
+                        <!-- Mowing Pattern Header -->
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:6px;" data-i18n="sb_mow_pattern">Klippmönster</div>
+                        
+                        <!-- 4 Mowing Pattern Cards Grid -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">
+                            <div id="sf-mow-solid" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.mowPattern='SOLID'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">━</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_solid">Slät</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_solid_desc">Klassisk ren gräsyta</div>
+                            </div>
+                            <div id="sf-mow-stripes" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.mowPattern='STRIPES'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">≡</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_stripes">Ränder</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_stripes_desc">Klassiska linjer</div>
+                            </div>
+                            <div id="sf-mow-checkerboard" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.mowPattern='CHECKERBOARD'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">▦</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_checkerboard">Schack</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_checkerboard_desc">Prestige-rutmönster</div>
+                            </div>
+                            <div id="sf-mow-diamond" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.mowPattern='DIAMOND'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">◈</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_diamond">Diamant</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_diamond_desc">Diagonala rutor</div>
+                            </div>
+                        </div>
+
+                        <!-- Info Banner -->
+                        <div style="background:rgba(125,185,82,0.08); border:1px solid rgba(125,185,82,0.25); border-radius:8px; padding:8px 10px; margin-bottom:12px;">
+                            <div style="display:flex; align-items:flex-start; gap:6px;">
+                                <span style="font-size:12px; line-height:1.2;">ℹ️</span>
+                                <div style="color:#94a3b8; font-size:8.5px; line-height:1.4;">
+                                    <b style="color:#7db952;">Bollrull & Fairway:</b> Fairwayens fasthet och rullhastighet styrs av banans globala förhållanden inför varje match.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Finish Button -->
+                        <button type="button" onclick="if(typeof setTool==='function') setTool('INSPECT')" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:9px 8px; font-size:11px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 12px rgba(125,185,82,0.3); transition:transform 0.1s;">
+                            ✔ <span data-i18n="sf_finish">Klar med fairwayen!</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -14771,13 +14882,18 @@
                         curHole.greenData = null;
                     }
                 }
-                // If a fairway is currently selected, inform user instead of adding points
+                // Delegate to FairwayStudio (supports both Mode 1 node dragging/insertion and Mode 2 built-fairway editing)
                 if(window._smartBuilderType === 'FAIRWAY') {
                     let curHole = courseHoles[currentHoleIndex];
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.FairwayStudio && window.FairwayStudio.onPointerDown(e, lastHitPoint, raycaster)) {
+                        controls.enabled = false;
+                        return;
+                    }
                     let hasActiveFw = curHole && (curHole.activeFairwayIndex !== null && curHole.activeFairwayIndex !== undefined) && curHole.fairways && curHole.fairways[curHole.activeFairwayIndex];
-                    if (hasActiveFw) {
+                    if (hasActiveFw && curHole.fairways[curHole.activeFairwayIndex].points && curHole.fairways[curHole.activeFairwayIndex].points.length >= 3) {
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
-                        showBuildToast(curLang === 'en' ? 'ℹ️ A Fairway is selected. Click [+ New Fairway] to add another, or adjust in the panel!' : 'ℹ️ En Fairway är vald. Klicka på [➕ Ny Fairway] för att rita en till, eller justera i panelen!', '#7db952');
+                        showBuildToast(curLang === 'en' ? 'ℹ️ Fairway is active. Drag golf balls, or click [+ New Fairway] to add another!' : 'ℹ️ Fairway är aktiv. Dra golfbollarna, eller klicka på [➕ Ny Fairway] för att rita en till!', '#7db952');
                         controls.enabled = false;
                         return;
                     }
@@ -14809,6 +14925,13 @@
                 if(window._smartBuilderType === 'GREEN') {
                     raycaster.setFromCamera(mouse, camera);
                     if(window.GreenStudio && window.GreenStudio.onRightClick(e, lastHitPoint, raycaster)) {
+                        controls.enabled = false;
+                        return;
+                    }
+                }
+                if(window._smartBuilderType === 'FAIRWAY') {
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.FairwayStudio && window.FairwayStudio.onRightClick(e, lastHitPoint, raycaster)) {
                         controls.enabled = false;
                         return;
                     }
@@ -14881,6 +15004,9 @@
     window.addEventListener('pointerup', e => {
         if(window.GreenStudio && window.GreenStudio.onPointerUp) {
             window.GreenStudio.onPointerUp(e);
+        }
+        if(window.FairwayStudio && window.FairwayStudio.onPointerUp) {
+            window.FairwayStudio.onPointerUp(e);
         }
         if(typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
             activeRotatingTee = null;
@@ -15293,10 +15419,12 @@
         window.currentTool = toolName;
         if (typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
         if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
-        if (toolName !== 'SMART_BUILDER' && window.GreenStudio) {
-            window.GreenStudio.hide();
-        } else if (toolName === 'SMART_BUILDER' && window._smartBuilderType === 'GREEN' && window.GreenStudio) {
-            window.GreenStudio.sync();
+        if (toolName !== 'SMART_BUILDER') {
+            if (window.GreenStudio) window.GreenStudio.hide();
+            if (window.FairwayStudio) window.FairwayStudio.hide();
+        } else if (toolName === 'SMART_BUILDER') {
+            if (window._smartBuilderType === 'GREEN' && window.GreenStudio) window.GreenStudio.sync();
+            else if (window._smartBuilderType === 'FAIRWAY' && window.FairwayStudio) window.FairwayStudio.sync();
         }
         
         let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'hole', 'measure', 'eraser', 'colorize', 'mtn', 'poly', 'env'];
@@ -16056,6 +16184,8 @@
                 if(typeof window.updateElevationHUD === 'function') window.updateElevationHUD(lastHitPoint);
                 if (currentTool === 'SMART_BUILDER' && window._smartBuilderType === 'GREEN' && window.GreenStudio) {
                     window.GreenStudio.onMouseMove(event, lastHitPoint, raycaster);
+                } else if (currentTool === 'SMART_BUILDER' && window._smartBuilderType === 'FAIRWAY' && window.FairwayStudio) {
+                    window.FairwayStudio.onMouseMove(event, lastHitPoint, raycaster);
                 }
                 
                 if (currentTool === 'COLORIZE' && event.buttons === 1) {
@@ -17073,6 +17203,7 @@ window.triggerExplosion = function(x, y, z) {
         if (window.AutumnLeaves) window.AutumnLeaves.update(dt); // 3D falling leaves
         if (window.updateTracerFade) window.updateTracerFade(); // Tracer fade-out after landing
         if (window.GreenStudio && window.GreenStudio.update) window.GreenStudio.update(dt); // 3D Green Studio animation & easing
+        if (window.FairwayStudio && window.FairwayStudio.update) window.FairwayStudio.update(dt); // 3D Fairway Studio animation & easing
 
         // --- Process Explosions ---
         if (window.activeExplosions && window.activeExplosions.length > 0) {
@@ -18991,14 +19122,14 @@ window.triggerExplosion = function(x, y, z) {
             if (aimCtrl) aimCtrl.style.display = 'none';
             let mowCtrl = document.getElementById('sb-mow-controls');
             if (mowCtrl) {
-                mowCtrl.style.display = (type === 'FAIRWAY' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
+                mowCtrl.style.display = (type === 'TEE' || type === 'AIM') ? 'block' : 'none';
                 mowCtrl.style.opacity = '1';
                 mowCtrl.style.pointerEvents = 'auto';
                 mowCtrl.style.filter = 'none';
             }
             let edgeCtrl = document.getElementById('sb-edge-controls');
             if (edgeCtrl) {
-                edgeCtrl.style.display = (type === 'FAIRWAY' || type === 'BUNKER' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
+                edgeCtrl.style.display = (type === 'BUNKER' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
                 edgeCtrl.style.opacity = '1';
                 edgeCtrl.style.pointerEvents = 'auto';
                 edgeCtrl.style.filter = 'none';
@@ -19008,9 +19139,9 @@ window.triggerExplosion = function(x, y, z) {
                 if (bBtn) bBtn.classList.remove('pulse-green-btn');
             }
             let buildClearCtrl = document.getElementById('sb-build-clear-group');
-            if (buildClearCtrl) buildClearCtrl.style.display = (type === 'GREEN' || type === 'AIM') ? 'none' : 'flex';
+            if (buildClearCtrl) buildClearCtrl.style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'AIM') ? 'none' : 'flex';
             let sbHint = document.getElementById('sb-hint-text');
-            if (sbHint) sbHint.style.display = (type === 'GREEN') ? 'none' : 'block';
+            if (sbHint) sbHint.style.display = (type === 'GREEN' || type === 'FAIRWAY') ? 'none' : 'block';
 
             // Reset mowing pattern UI state when leaving GREEN/FAIRWAY/TEE (do NOT trigger live green rebuild)
             if (type !== 'GREEN' && type !== 'FAIRWAY' && type !== 'TEE' && type !== 'AIM') {
@@ -19106,8 +19237,13 @@ window.triggerExplosion = function(x, y, z) {
             } else {
                 if (window.GreenStudio) window.GreenStudio.hide();
             }
-            if (type === 'FAIRWAY' && typeof window.updateSBFairwayControls === 'function') {
-                window.updateSBFairwayControls();
+            if (type === 'FAIRWAY') {
+                if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+                if (window.FairwayStudio) {
+                    window.FairwayStudio.sync();
+                }
+            } else {
+                if (window.FairwayStudio) window.FairwayStudio.hide();
             }
             if (typeof window.updateActiveFairwayOutline === 'function') {
                 window.updateActiveFairwayOutline();
@@ -19382,281 +19518,18 @@ window.triggerExplosion = function(x, y, z) {
 
         // Synchronize Fairway Studio Panel
         window.updateSBFairwayControls = function() {
-            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-            let fairways = (typeof ensureHoleFairways === 'function') ? ensureHoleFairways(hole) : (hole && hole.fairways ? hole.fairways : (hole && hole.fairwayData ? [hole.fairwayData] : []));
-            let activeIdx = (hole && hole.activeFairwayIndex !== undefined) ? hole.activeFairwayIndex : null;
-            let activeFd = (fairways && activeIdx !== null && activeIdx !== undefined && fairways[activeIdx]) ? fairways[activeIdx] : null;
-
-            let selectorBar = document.getElementById('sf-selector-bar');
-            let banner = document.getElementById('sf-status-banner');
-            let lockedBanner = document.getElementById('sf-studio-locked-banner');
-            let drawingGuide = document.getElementById('sf-drawing-guide');
-            let paramsEl = document.getElementById('sf-studio-params');
-            let scaleCard = document.getElementById('sf-scale-card');
-            let scaleBadge = document.getElementById('sf-scale-area-badge');
-            let actActions = document.getElementById('sf-active-actions');
-            let buildClearGroup = document.getElementById('sb-build-clear-group');
-            let buildBtn = document.getElementById('sb-build-btn');
-            let mowCtrl = document.getElementById('sb-mow-controls');
-            let edgeCtrl = document.getElementById('sb-edge-controls');
-            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-
-            // 1. RENDER MULTI-FAIRWAY SELECTOR BAR & HEADER
-            let headerRow = document.getElementById('sf-header-row');
-            let countEl = document.getElementById('sf-count');
-            let addBtn = document.getElementById('sf-add-fairway-btn');
-
-            if (fairways && fairways.length > 0) {
-                if (headerRow) headerRow.style.display = 'flex';
-                if (countEl) countEl.textContent = fairways.length;
-
-                let isDrawingNew = (activeIdx === null);
-                if (addBtn) {
-                    addBtn.style.cssText = isDrawingNew
-                        ? 'background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:5px; padding:3px 8px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px; box-shadow:0 0 8px rgba(56,189,248,0.35);'
-                        : 'background:#0f172a; color:#38bdf8; border:1px dashed rgba(56,189,248,0.6); border-radius:5px; padding:3px 8px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px; transition:all 0.2s;';
-                    addBtn.innerHTML = `<span>➕</span> <span>${isSv ? 'Ny Fairway' : 'New Fairway'}</span>`;
+            if (window._smartBuilderType === 'FAIRWAY') {
+                let buildClearCtrl = document.getElementById('sb-build-clear-group');
+                if (buildClearCtrl) buildClearCtrl.style.display = 'none';
+                let sbHint = document.getElementById('sb-hint-text');
+                if (sbHint) sbHint.style.display = 'none';
+                let edgeCtrl = document.getElementById('sb-edge-controls');
+                if (edgeCtrl) edgeCtrl.style.display = 'none';
+                let mowCtrl = document.getElementById('sb-mow-controls');
+                if (mowCtrl) mowCtrl.style.display = 'none';
+                if (window.FairwayStudio) {
+                    window.FairwayStudio.sync();
                 }
-
-                if (selectorBar) {
-                    selectorBar.style.display = 'flex';
-                    selectorBar.innerHTML = '';
-
-                    let count = fairways.length;
-                    fairways.forEach((fd, idx) => {
-                        let fArea = 0;
-                        if (fd.points && fd.points.length >= 3) {
-                            for (let i = 0, j = fd.points.length - 1; i < fd.points.length; j = i++) {
-                                fArea += (fd.points[j].x + fd.points[i].x) * (fd.points[j].z - fd.points[i].z);
-                            }
-                            fArea = Math.round(Math.abs(fArea / 2));
-                        }
-                        let isSelected = (activeIdx === idx);
-                        let btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.title = `Fairway ${idx + 1} (~${fArea} m²)`;
-
-                        // Smart adaptive label:
-                        // 1 fairway: "🏌️ Fairway 1 (~Xm²)"
-                        // 2 fairways: "🏌️ FW 1 (~Xm²)"
-                        // 3+ fairways: "🏌️ FW 1" (compact, fits side by side without blowing up panel)
-                        let label = '';
-                        if (count === 1) {
-                            label = `<span>🏌️ Fairway 1</span><span style="font-size:8px; opacity:0.85;">(~${fArea}m²)</span>`;
-                        } else if (count === 2) {
-                            label = `<span>🏌️ FW ${idx + 1}</span><span style="font-size:8px; opacity:0.8;">(~${fArea}m²)</span>`;
-                        } else {
-                            label = `<span>🏌️ FW ${idx + 1}</span>`;
-                        }
-
-                        btn.style.cssText = isSelected 
-                            ? 'flex:1 1 auto; min-width:48px; background:#4ade80; color:#0f172a; border:1px solid #22c55e; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; box-shadow:0 0 6px rgba(74,222,128,0.3); transition:all 0.15s;'
-                            : 'flex:1 1 auto; min-width:48px; background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; transition:all 0.15s;';
-                        btn.innerHTML = label;
-                        btn.onclick = function() {
-                            if (typeof window.selectActiveFairway === 'function') {
-                                window.selectActiveFairway(window.currentHoleIndex, idx);
-                            }
-                        };
-                        selectorBar.appendChild(btn);
-                    });
-
-                    // If multiple fairways exist, add a quick "Delete All" button to pills bar
-                    if (count > 1) {
-                        let delAllPill = document.createElement('button');
-                        delAllPill.type = 'button';
-                        delAllPill.title = isSv ? 'Radera alla fairways på hålet' : 'Delete all fairways on hole';
-                        delAllPill.style.cssText = 'flex:0 0 auto; background:rgba(239,68,68,0.15); color:#ef4444; border:1px dashed #ef4444; border-radius:5px; padding:5px 7px; font-size:9.5px; font-weight:bold; cursor:pointer; transition:all 0.15s;';
-                        delAllPill.innerHTML = '<span>🗑️</span>';
-                        delAllPill.onclick = function() {
-                            if (typeof window.deleteAllSmartFairways === 'function') {
-                                window.deleteAllSmartFairways(window.currentHoleIndex);
-                            }
-                        };
-                        selectorBar.appendChild(delAllPill);
-                    }
-                }
-            } else {
-                if (headerRow) headerRow.style.display = 'none';
-                if (selectorBar) {
-                    selectorBar.style.display = 'none';
-                    selectorBar.innerHTML = '';
-                }
-            }
-
-            // 2. ACTIVE FAIRWAY STATE VS DRAWING / LOCKED STATE
-            let delAllBtn = document.getElementById('sf-delete-all-btn');
-            let dgClean = document.getElementById('sf-drawing-clean-ghosts');
-
-            if (activeFd && activeFd.points && activeFd.points.length >= 3) {
-                let fd = activeFd;
-                if (banner) banner.style.display = 'flex';
-                if (lockedBanner) lockedBanner.style.display = 'none';
-                if (drawingGuide) drawingGuide.style.display = 'none';
-                if (actActions) actActions.style.display = 'grid';
-                if (delAllBtn) delAllBtn.style.display = (fairways && fairways.length > 1) ? 'block' : 'none';
-                if (dgClean) dgClean.style.display = 'none';
-                if (buildClearGroup && window._smartBuilderType === 'FAIRWAY') buildClearGroup.style.display = 'none';
-                if (buildBtn && window._smartBuilderType === 'FAIRWAY') buildBtn.classList.remove('pulse-green-btn');
-
-                // Unlock studio controls
-                if (paramsEl) {
-                    paramsEl.style.opacity = '1';
-                    paramsEl.style.pointerEvents = 'auto';
-                    paramsEl.style.filter = 'none';
-                }
-                if (mowCtrl && window._smartBuilderType === 'FAIRWAY') {
-                    mowCtrl.style.opacity = '1';
-                    mowCtrl.style.pointerEvents = 'auto';
-                    mowCtrl.style.filter = 'none';
-                }
-                if (edgeCtrl && window._smartBuilderType === 'FAIRWAY') {
-                    edgeCtrl.style.opacity = '1';
-                    edgeCtrl.style.pointerEvents = 'auto';
-                    edgeCtrl.style.filter = 'none';
-                }
-
-                let area = 0;
-                if (fd.points && fd.points.length >= 3) {
-                    for (let i = 0, j = fd.points.length - 1; i < fd.points.length; j = i++) {
-                        area += (fd.points[j].x + fd.points[i].x) * (fd.points[j].z - fd.points[i].z);
-                    }
-                    area = Math.abs(area / 2);
-                }
-                let badge = document.getElementById('sf-act-status-badge');
-                if (badge) {
-                    let fwNumber = (activeIdx !== null && activeIdx !== undefined) ? (activeIdx + 1) : 1;
-                    badge.textContent = (isSv ? `✅ Aktiv: Fairway ${fwNumber} (~` : `✅ Active: Fairway ${fwNumber} (~`) + Math.round(area) + ' m²)';
-                }
-
-                if (scaleCard) scaleCard.style.display = 'block';
-                if (scaleBadge) scaleBadge.textContent = '~' + Math.round(area) + ' m²';
-
-                let diff = fd.difficulty || 'FLAT';
-                window._fairwayDifficulty = diff;
-                ['FLAT','EASY','MED','HARD'].forEach(d => {
-                    let btn = document.getElementById('sf-diff-' + d.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (d === diff) ? '#4ade80' : '#334155';
-                        btn.style.color = (d === diff) ? '#0f172a' : '#94a3b8';
-                    }
-                });
-
-                let srS = document.getElementById('sf-semirough-width');
-                let srV = document.getElementById('sf-semirough-val');
-                let srw = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
-                if (srS && document.activeElement !== srS) srS.value = srw;
-                if (srV) srV.textContent = srw.toFixed(1) + 'm';
-
-                let rCb = document.getElementById('sf-rough-cb');
-                if (rCb) rCb.checked = (fd.roughEnabled !== false);
-                let rS = document.getElementById('sf-rough-width');
-                let rV = document.getElementById('sf-rough-val');
-                let rw = fd.roughWidth !== undefined ? fd.roughWidth : 5.0;
-                if (rS && document.activeElement !== rS) rS.value = rw;
-                if (rV) rV.textContent = rw.toFixed(0) + 'm';
-
-                let esS = document.getElementById('sg-edge-sharpness');
-                let esV = document.getElementById('sg-edge-val');
-                let es = fd.edgeSharpness !== undefined ? fd.edgeSharpness : 100;
-                if (esS && document.activeElement !== esS) esS.value = es;
-                if (esV) esV.textContent = (es === 100) ? 'Sharp' : (es === 0 ? 'Soft' : es + '%');
-
-                let mp = fd.mowPattern || 'SOLID';
-                window._smartMowPattern = mp;
-                ['SOLID','STRIPES','DIAGONAL','CHECKERBOARD','DIAMOND'].forEach(function(p) {
-                    let btn = document.getElementById('sb-mow-' + p.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (p === mp) ? '#4ade80' : '#334155';
-                        btn.style.color = (p === mp) ? '#0f172a' : '#94a3b8';
-                    }
-                });
-
-                let outlineBtn = document.getElementById('sf-toggle-outline-btn');
-                if (outlineBtn) {
-                    let showOutline = (window._showFairwayOutline !== false);
-                    outlineBtn.style.background = showOutline ? '#1e293b' : 'rgba(15,23,42,0.8)';
-                    outlineBtn.style.color = showOutline ? '#38bdf8' : '#64748b';
-                    outlineBtn.style.borderColor = showOutline ? 'rgba(56,189,248,0.6)' : '#334155';
-                    outlineBtn.innerHTML = showOutline
-                        ? (typeof window.t === 'function' ? window.t('sb_fairway_outline_visible') : '👁️ Fairway-kontur: Synlig')
-                        : (typeof window.t === 'function' ? window.t('sb_fairway_outline_hidden') : '👁️‍🗨️ Fairway-kontur: Dold');
-                }
-            } else {
-                if (banner) banner.style.display = 'none';
-                if (actActions) actActions.style.display = 'none';
-                if (scaleCard) scaleCard.style.display = 'none';
-                if (lockedBanner) {
-                    lockedBanner.style.display = 'block';
-                    if (fairways && fairways.length > 0) {
-                        lockedBanner.innerHTML = `<span style="color:#38bdf8; font-size:9px; font-weight:bold;">✏️ ${isSv ? 'Ritar ny fairway... Klicka på en fairway ovan för att redigera den.' : 'Drawing new fairway... Click a fairway above to edit it.'}</span>`;
-                    } else {
-                        lockedBanner.innerHTML = `<span style="color:#94a3b8; font-size:9px;" data-i18n="sb_fairway_studio_locked_hint">🔒 ${isSv ? 'Live Studio aktiveras när fairwayen är byggd' : 'Live Studio activates once fairway is built'}</span>`;
-                    }
-                }
-                if (dgClean) dgClean.style.display = 'block';
-                if (buildClearGroup && window._smartBuilderType === 'FAIRWAY') buildClearGroup.style.display = 'flex';
-
-                // Dim studio controls when fairway is not yet built or drawing new
-                if (paramsEl) {
-                    paramsEl.style.opacity = '0.45';
-                    paramsEl.style.pointerEvents = 'none';
-                    paramsEl.style.filter = 'grayscale(0.2)';
-                }
-                if (mowCtrl && window._smartBuilderType === 'FAIRWAY') {
-                    mowCtrl.style.opacity = '0.45';
-                    mowCtrl.style.pointerEvents = 'none';
-                    mowCtrl.style.filter = 'grayscale(0.2)';
-                }
-                if (edgeCtrl && window._smartBuilderType === 'FAIRWAY') {
-                    edgeCtrl.style.opacity = '0.45';
-                    edgeCtrl.style.pointerEvents = 'none';
-                    edgeCtrl.style.filter = 'grayscale(0.2)';
-                }
-
-                // Check if spline points are being placed
-                let pts = window.smartGreenPoints || [];
-                if (pts.length >= 3) {
-                    if (drawingGuide) drawingGuide.style.display = 'none';
-                    if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
-                        buildBtn.classList.add('pulse-green-btn');
-                    }
-                } else {
-                    if (drawingGuide) drawingGuide.style.display = 'block';
-                    if (buildBtn && window._smartBuilderType === 'FAIRWAY') {
-                        buildBtn.classList.remove('pulse-green-btn');
-                    }
-                }
-
-                // Sync current values with UI
-                let srS = document.getElementById('sf-semirough-width');
-                let srV = document.getElementById('sf-semirough-val');
-                if (srS && srV) {
-                    let srw = parseFloat(srS.value) || 2.0;
-                    srV.textContent = srw.toFixed(1) + 'm';
-                }
-                let rS = document.getElementById('sf-rough-width');
-                let rV = document.getElementById('sf-rough-val');
-                if (rS && rV) {
-                    let rw = parseFloat(rS.value) || 5.0;
-                    rV.textContent = rw.toFixed(0) + 'm';
-                }
-                let diff = window._fairwayDifficulty || 'FLAT';
-                ['FLAT','EASY','MED','HARD'].forEach(d => {
-                    let btn = document.getElementById('sf-diff-' + d.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (d === diff) ? '#4ade80' : '#334155';
-                        btn.style.color = (d === diff) ? '#0f172a' : '#94a3b8';
-                    }
-                });
-                let mp = window._smartMowPattern || 'SOLID';
-                ['SOLID','STRIPES','DIAGONAL','CHECKERBOARD','DIAMOND'].forEach(function(p) {
-                    let btn = document.getElementById('sb-mow-' + p.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (p === mp) ? '#4ade80' : '#334155';
-                        btn.style.color = (p === mp) ? '#0f172a' : '#94a3b8';
-                    }
-                });
             }
         };
 
@@ -19904,8 +19777,9 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=21"></script>
-<script src="smart-builder.js?v=19"></script>
+<script src="green-studio.js?v=22"></script>
+<script src="fairway-studio.js?v=1"></script>
+<script src="smart-builder.js?v=20"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

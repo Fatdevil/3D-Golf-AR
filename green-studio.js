@@ -369,7 +369,7 @@
                 // Sync bottom hint
                 this.updateBottomHints();
 
-                // Auto-upgrade existing green to inward foregreen and clean any legacy deep rough stain
+                // Ensure existing green uses inward foregreen model
                 if (hole.greenData && !hole.greenData._inwardForegreen && typeof window.applyGreenPipeline === 'function') {
                     hole.greenData._inwardForegreen = true;
                     window.applyGreenPipeline(hole, false, true);

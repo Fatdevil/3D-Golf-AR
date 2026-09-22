@@ -1795,6 +1795,10 @@ function updateActiveFairwayOutline() {
         if (activeFairwayOutlineMesh.material) activeFairwayOutlineMesh.material.dispose();
         activeFairwayOutlineMesh = null;
     }
+    // When FairwayStudio is active, FairwayStudio manages and renders the 3D spline contour
+    if (window.FairwayStudio) {
+        return;
+    }
     if ((window.appMode && window.appMode !== 'BUILD') || 
         (window.currentTool && window.currentTool !== 'SMART_BUILDER') || 
         window._smartBuilderType !== 'FAIRWAY' || 
@@ -2121,11 +2125,7 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
         if (updateTexture && window._arcadePCtx) {
             window._arcadePCtx.save();
 
-            let sharpness = fd.edgeSharpness !== undefined ? fd.edgeSharpness : 100;
-            if (sharpness < 100) {
-                let blurPx = Math.round((100 - sharpness) * 0.06);
-                if (blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
-            }
+            let sharpness = 100; // Always SHARP system default standard
 
             function traceFairwayPath() {
                 window._arcadePCtx.beginPath();
@@ -2778,8 +2778,7 @@ window.executeSmartFairway = function() {
     let roughSlider = document.getElementById('sf-rough-width');
     let roughWidth = (roughEnabled && roughSlider) ? parseFloat(roughSlider.value) : 0.0;
 
-    let sharpSlider = document.getElementById('sg-edge-sharpness');
-    let sharpness = sharpSlider ? parseInt(sharpSlider.value) : 100;
+    let sharpness = 100; // Hardcoded SHARP system standard
 
     let margin = semiRoughWidth + (roughEnabled ? roughWidth : 0) + 12;
     let snap = window.captureFairwaySnapshot(hole, smartGreenPoints, margin);
@@ -2811,6 +2810,7 @@ window.executeSmartFairway = function() {
     updateActiveFairwayOutline();
 
     window.saveLevel();
+    if (window.FairwayStudio) window.FairwayStudio.sync();
     if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
 
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
@@ -3453,21 +3453,44 @@ window.captureGreenSnapshot = function(hole, points, margin) {
     };
 };
 
-// 1.4. Repair any legacy Deep Rough stain left around green by old bugs
-function repairStainedDeepRough(hole, gd, densePts) {
+// 1.4. Heal any accidental rectangular rough stains created around green over deep rough by legacy bugs
+function healGreenSurroundings(hole, gd, densePts) {
     if (!gd || !gd.bbox || !window._arcadePCtx) return;
     let cfg = window.CURRENT_BIOME_CONFIG || {};
     let roughHex = cfg.roughColor || '#4a782b';
     let fescueHex = cfg.fescueColor || '#2d4c1a';
 
-    let [targetR, targetG, targetB] = sbHexToRgb(roughHex);
-    let [fR, fG, fB] = sbHexToRgb(fescueHex);
+    let [targetR, targetG, targetB] = sbHexToRgb(fescueHex);
+    let [rR, rG, rB] = sbHexToRgb(roughHex);
 
     let pxMinX = gd.bbox.pxMinX;
     let pxMinY = gd.bbox.pxMinY;
     let pw = gd.bbox.pw;
     let ph = gd.bbox.ph;
     if (pw <= 0 || ph <= 0) return;
+
+    // Check if surrounding ground is Deep Rough
+    let baseColor = getBaseGroundColor(hole);
+    let isDeepRoughBase = (baseColor === fescueHex || (typeof baseColor === 'string' && baseColor.toLowerCase() === fescueHex.toLowerCase()));
+
+    // Also check boundary pixels of bbox to be 100% sure the environment is deep rough
+    if (!isDeepRoughBase) {
+        let testPts = [
+            [Math.max(0, pxMinX - 2), Math.max(0, pxMinY - 2)],
+            [Math.min(4095, pxMinX + pw + 2), Math.max(0, pxMinY - 2)],
+            [Math.max(0, pxMinX - 2), Math.min(4095, pxMinY + ph + 2)],
+            [Math.min(4095, pxMinX + pw + 2), Math.min(4095, pxMinY + ph + 2)]
+        ];
+        let deepCount = 0;
+        testPts.forEach(([tx, ty]) => {
+            let pData = window._arcadePCtx.getImageData(tx, ty, 1, 1).data;
+            let dF = (pData[0] - targetR)**2 + (pData[1] - targetG)**2 + (pData[2] - targetB)**2;
+            if (dF < 3000) deepCount++;
+        });
+        if (deepCount >= 2) isDeepRoughBase = true;
+    }
+
+    if (!isDeepRoughBase) return;
 
     function fixImageData(imgData) {
         let d = imgData.data;
@@ -3479,13 +3502,14 @@ function repairStainedDeepRough(hole, gd, densePts) {
                 let worldX = (canvasX / 4096) * window.TERRAIN_SIZE - (window.TERRAIN_SIZE / 2);
                 let worldZ = (canvasY / 4096) * window.TERRAIN_SIZE - (window.TERRAIN_SIZE / 2);
 
-                // Only repair outside the green complex (densePts)
-                if (pointInPolygon(worldX, worldZ, densePts)) continue;
+                // Do not touch inside the green polygon
+                if (densePts && pointInPolygon(worldX, worldZ, densePts)) continue;
 
                 let idx = (py * pw + px) * 4;
                 let r = d[idx], g = d[idx+1], b = d[idx+2];
-                let distFescue = (r - fR)**2 + (g - fG)**2 + (b - fB)**2;
-                if (distFescue < 3000) {
+                let distRough = (r - rR)**2 + (g - rG)**2 + (b - rB)**2;
+                // If this pixel is rough, heal it back to pristine deep rough
+                if (distRough < 2500) {
                     d[idx]   = targetR;
                     d[idx+1] = targetG;
                     d[idx+2] = targetB;
@@ -3504,6 +3528,7 @@ function repairStainedDeepRough(hole, gd, densePts) {
         window._arcadePCtx.putImageData(liveImg, pxMinX, pxMinY);
     }
 }
+window.healGreenSurroundings = healGreenSurroundings;
 
 // 1.5. Cleanly erase a green's footprint from 2D canvas texture
 window.eraseGreenTexture = function(gd, hole) {
@@ -3613,6 +3638,9 @@ window.restoreGreenBase = function(hole, restoreTexture, targetGd, isDeleting) {
 
         // Re-layer underlying fairway and bunker ONLY when green is explicitly deleted or redrawn (isDeleting === true)
         if (isDeleting && !window._isApplyingGreenPipeline) {
+            if (typeof healGreenSurroundings === 'function') {
+                healGreenSurroundings(hole, gd, densePts);
+            }
             if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
                 window.applyFairwayPipeline(hole, false, true);
             }
@@ -3648,9 +3676,9 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
         let densePts = getDenseGreenPoints(gd.points, tension);
         gd.densePts = densePts;
 
-        // 1.5. Repair any legacy Deep Rough stain outside green
-        if (updateTexture && window._arcadePCtx) {
-            repairStainedDeepRough(hole, gd, densePts);
+        // 1.5. Heal any legacy rectangular rough stains outside green over deep rough
+        if (updateTexture && window._arcadePCtx && typeof healGreenSurroundings === 'function') {
+            healGreenSurroundings(hole, gd, densePts);
         }
 
     // === PAINT PASS ===
