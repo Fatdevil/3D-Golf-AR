@@ -310,8 +310,12 @@ function updateSmartGreenPreview() {
     if(smartGreenLineMesh) { window._arcadeScene.remove(smartGreenLineMesh); smartGreenLineMesh = null; }
 
     let isGreen = (window._smartBuilderType === 'GREEN');
+    let isBunker = (window._smartBuilderType === 'BUNKER');
     if (isGreen && window.GreenStudio && !window.GreenStudio.group && window._arcadeScene) {
         window.GreenStudio.init(window._arcadeScene);
+    }
+    if (isBunker && window.BunkerStudio && !window.BunkerStudio.group && window._arcadeScene) {
+        window.BunkerStudio.init(window._arcadeScene);
     }
 
     let sMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, depthTest: false });
@@ -321,14 +325,18 @@ function updateSmartGreenPreview() {
 
     let ballGeo = (isGreen && window.GreenStudio && window.GreenStudio.geometries && window.GreenStudio.geometries.ball)
         ? window.GreenStudio.geometries.ball
-        : new THREE.SphereGeometry(0.85, 24, 24);
+        : ((isBunker && window.BunkerStudio && window.BunkerStudio.geometries && window.BunkerStudio.geometries.ball)
+            ? window.BunkerStudio.geometries.ball
+            : new THREE.SphereGeometry(0.85, 24, 24));
     let ballMat = (isGreen && window.GreenStudio && window.GreenStudio.materials && window.GreenStudio.materials.ball)
         ? window.GreenStudio.materials.ball
-        : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05, depthTest: false });
+        : ((isBunker && window.BunkerStudio && window.BunkerStudio.materials && window.BunkerStudio.materials.ball)
+            ? window.BunkerStudio.materials.ball
+            : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05, depthTest: false }));
 
     smartGreenPoints.forEach((pt, idx) => {
         let s;
-        if (isGreen) {
+        if (isGreen || isBunker) {
             s = new THREE.Mesh(ballGeo, ballMat);
             let y = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(pt.x, pt.z) : pt.y;
             s.position.set(pt.x, y + 0.85, pt.z);
@@ -338,7 +346,8 @@ function updateSmartGreenPreview() {
             if (idx === 0) {
                 let ringGeo = new THREE.RingGeometry(1.0, 1.45, 32);
                 ringGeo.rotateX(-Math.PI / 2);
-                let ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.85 });
+                let ringColor = isBunker ? 0xfbbf24 : 0x38bdf8;
+                let ringMat = new THREE.MeshBasicMaterial({ color: ringColor, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.85 });
                 let ring = new THREE.Mesh(ringGeo, ringMat);
                 ring.position.set(0, -0.78, 0);
                 ring.renderOrder = 998;
@@ -358,10 +367,10 @@ function updateSmartGreenPreview() {
     if(smartGreenPoints.length > 1) {
         let shouldClose = (smartGreenPoints.length >= 3);
         let v3Pts;
-        if (isGreen) {
+        if (isGreen || isBunker) {
             v3Pts = smartGreenPoints.map(p => {
                 let y = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(p.x, p.z) : p.y;
-                return new THREE.Vector3(p.x, y + 0.18, p.z);
+                return new THREE.Vector3(p.x, y + 0.22, p.z);
             });
         } else {
             v3Pts = smartGreenPoints.map(p => {
@@ -373,7 +382,7 @@ function updateSmartGreenPreview() {
         let curve = new THREE.CatmullRomCurve3(v3Pts, shouldClose, 'catmullrom', 0.5);
         let curvePts = curve.getPoints(Math.max(60, 30 * smartGreenPoints.length));
         let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
-        let lineColor = shouldClose ? (isGreen ? 0x4ade80 : 0xfbbf24) : (isGreen ? 0x38bdf8 : 0x4ade80);
+        let lineColor = isBunker ? 0xfbbf24 : (shouldClose ? (isGreen ? 0x4ade80 : 0xfbbf24) : (isGreen ? 0x38bdf8 : 0x4ade80));
         let lineMat = new THREE.LineBasicMaterial({ color: lineColor, linewidth: 3, depthTest: false });
         smartGreenLineMesh = new THREE.Line(lineGeo, lineMat);
         smartGreenLineMesh.renderOrder = 997;
@@ -779,6 +788,10 @@ function updateActiveBunkerOutline() {
         if (activeBunkerOutlineMesh.material) activeBunkerOutlineMesh.material.dispose();
         activeBunkerOutlineMesh = null;
     }
+    if (window.BunkerStudio) {
+        window.BunkerStudio.sync();
+        return;
+    }
     if ((window.appMode && window.appMode !== 'BUILD') || 
         (window.currentTool && window.currentTool !== 'SMART_BUILDER') || 
         window._smartBuilderType !== 'BUNKER' || 
@@ -1142,7 +1155,7 @@ window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunk
                 else window._arcadePCtx.lineTo(pxX, pxY);
             });
             window._arcadePCtx.closePath();
-            window._arcadePCtx.fillStyle = sandColor;
+            window._arcadePCtx.fillStyle = bd.sandColor || sandColor;
             window._arcadePCtx.fill();
 
             window._arcadePCtx.filter = 'none';
@@ -1169,21 +1182,37 @@ window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunk
             let gzStart = Math.max(0, Math.floor((pathMinZ - 1 + window.TERRAIN_SIZE/2) / step));
             let gzEnd = Math.min(window.TERRAIN_SEGS, Math.ceil((pathMaxZ + 1 + window.TERRAIN_SIZE/2) / step));
 
-            // Face direction: first point = face (lip side)
-            let facePt = bd.points[0];
             let cx = 0, cz = 0;
             for(let pt of bd.points) { cx += pt.x; cz += pt.z; }
             cx /= bd.points.length;
             cz /= bd.points.length;
-            let faceDx = facePt.x - cx;
-            let faceDz = facePt.z - cz;
-            let faceLen = Math.sqrt(faceDx*faceDx + faceDz*faceDz) + 0.001;
-            faceDx /= faceLen; faceDz /= faceLen;
 
             let maxDist = 0;
             for(let pt of densePts) {
                 let d = Math.sqrt((pt.x - cx)**2 + (pt.z - cz)**2);
                 if(d > maxDist) maxDist = d;
+            }
+
+            // Face direction: lip side (calculated from bd.lipAngle, bd.lipToFlag, or points[0])
+            let faceDx, faceDz, faceLen;
+            if (bd.lipToFlag && hole.flag) {
+                let fx = hole.flag.x !== undefined ? hole.flag.x : (hole.flag.position ? hole.flag.position.x : 0);
+                let fz = hole.flag.z !== undefined ? hole.flag.z : (hole.flag.position ? hole.flag.position.z : 0);
+                let dx = fx - cx, dz = fz - cz;
+                let dLen = Math.sqrt(dx*dx + dz*dz) + 0.001;
+                faceDx = dx / dLen;
+                faceDz = dz / dLen;
+                faceLen = Math.max(3.0, maxDist * 0.75);
+            } else if (bd.lipAngle !== undefined) {
+                faceDx = Math.sin(bd.lipAngle);
+                faceDz = Math.cos(bd.lipAngle);
+                faceLen = Math.max(3.0, maxDist * 0.75);
+            } else {
+                let facePt = bd.points[0];
+                faceDx = facePt.x - cx;
+                faceDz = facePt.z - cz;
+                faceLen = Math.sqrt(faceDx*faceDx + faceDz*faceDz) + 0.001;
+                faceDx /= faceLen; faceDz /= faceLen;
             }
 
             // Pass 1: Digging + Lip
@@ -1304,6 +1333,7 @@ window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunk
         window._arcadePlaneGeo.computeBoundingSphere();
     }
     if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells && window._terrainShells.quality !== 'OFF') window._terrainShells.syncHeights();
     window.snapObjectsToGround();
 
     if (wPosArray && window.rebuildWaterMask) {
@@ -2259,6 +2289,7 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
         window._arcadePlaneGeo.computeBoundingSphere();
     }
     if (window._terrainChunks) window._terrainChunks.syncAll();
+    if (window._terrainShells && window._terrainShells.quality !== 'OFF') window._terrainShells.syncHeights();
     window.snapObjectsToGround();
 
     // Re-render Smart Green on top so green always stays on top (only if not already applying green)
@@ -2368,6 +2399,7 @@ window.deleteSmartFairway = function(holeIndex, fairwayIndex) {
     if (window._terrainChunks) {
         window._terrainChunks.syncAll();
     }
+    if (window._terrainShells && window._terrainShells.quality !== 'OFF') window._terrainShells.syncHeights();
     window.snapObjectsToGround();
 
     if (window.slopeOverlayActive && typeof window.updateSlopeOverlay === 'function') window.updateSlopeOverlay();
@@ -4658,8 +4690,42 @@ window.executeSplineSmartGreen = function() {
         window._arcadePCtx.filter = 'none';
         window._arcadePCtx.restore();
         window._arcadeMapTex.needsUpdate = true;
+
+        // Synchronize roughMaskCtx directly for polygon paint
+        if (window.roughMaskCtx) {
+            let rmCtx = window.roughMaskCtx;
+            let maskColor = 'rgb(0, 0, 0)';
+            if (surface === 'rough') maskColor = 'rgb(255, 0, 0)';
+            else if (surface === 'fescue') maskColor = 'rgb(0, 255, 0)';
+            else if (surface === 'bunker') maskColor = 'rgb(0, 128, 0)';
+            else if (surface === 'semi') maskColor = 'rgb(0, 0, 255)';
+            else if (surface === 'foregreen') maskColor = 'rgb(128, 0, 0)';
+            else if (surface === 'custom') {
+                let cfg = window.CURRENT_BIOME_CONFIG || {};
+                if (color === (cfg.roughColor || '#4a782b')) maskColor = 'rgb(255, 0, 0)';
+                else if (color === (cfg.fescueColor || '#2d4c1a')) maskColor = 'rgb(0, 255, 0)';
+                else if (color === (cfg.bunkerColor || '#e0d8a4')) maskColor = 'rgb(0, 128, 0)';
+                else maskColor = 'rgb(0, 0, 0)';
+            }
+            rmCtx.save();
+            rmCtx.beginPath();
+            densePts.forEach((pt, i) => {
+                let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
+                if(i === 0) rmCtx.moveTo(pxX, pxY);
+                else rmCtx.lineTo(pxX, pxY);
+            });
+            rmCtx.closePath();
+            rmCtx.fillStyle = maskColor;
+            rmCtx.fill();
+            rmCtx.restore();
+            if (window.roughMaskTex) window.roughMaskTex.needsUpdate = true;
+        }
+
         window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
-    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+        if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+        if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+        if (window._terrainShells) window._terrainShells.refresh();
 
         // Show feedback toast
         let nameMap = {foregreen:'Foregreen', fairway:'Fairway', semi:'Semi-rough', rough:'Rough', fescue:'Deep Rough', green:'Green', bunker:'Sand', waste:'Waste', water:'Water', ob:'OB', custom:'Custom'};

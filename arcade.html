@@ -564,6 +564,7 @@
                 localStorage.setItem('golf_os_lang', lang);
             }
             if (typeof window.applyTranslations === 'function') window.applyTranslations();
+            if (typeof window.updateSculptDirBtn === 'function') window.updateSculptDirBtn();
         };
 
         function toggleMenu() {
@@ -762,7 +763,7 @@
             <button id="ipad-sculpt-btn" onclick="toggleIpadSculpt()" style="background:#4ade80; color:#0f172a; border:none; padding:8px; font-size:11px; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; width:100%;">⬆️ RAISE</button>
             
             <div id="sculpt-strength-container" style="display:flex; flex-direction:column;">
-                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Sculpt Strength</label>
+                <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; margin-top:10px;">Strength / Intensitet</label>
                 <input type="range" id="strength-slider" min="1" max="10" value="2" oninput="window.sculptStrength = parseInt(this.value) * 0.01; document.getElementById('strength-val').textContent = this.value + 'x'" style="width:140px; accent-color:#f59e0b; cursor:pointer;" title="Change strength">
                 <span id="strength-val" style="color:#f59e0b; font-size:10px; font-weight:bold;">2x</span>
             </div>
@@ -2069,7 +2070,7 @@
                 </div>
             </div>
 
-            <!-- BUNKER controls (Unified Parametric Studio) -->
+            <!-- BUNKER controls (Dedicated Parametric Bunker Studio) -->
             <div id="sb-bunker-controls" style="display:none;">
                 <!-- Multi-Bunker Header & Add Button -->
                 <div id="sbk-header-row" style="display:none; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -2077,62 +2078,228 @@
                     <button type="button" id="sbk-add-bunker-btn" onclick="window.startNewBunkerDrawing()" style="background:#0f172a; color:#fbbf24; border:1px dashed rgba(251,191,36,0.6); border-radius:5px; padding:3px 8px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px; transition:all 0.2s;" data-i18n="sb_new_bunker">➕ Ny Bunker</button>
                 </div>
 
-                <!-- Multi-Bunker Selector Pills Grid -->
+                <!-- Multi-Bunker Selector Pills Grid (Clicking lights up Yellow Outline on that bunker; camera stays untouched) -->
                 <div id="sbk-selector-bar" style="display:none; flex-wrap:wrap; gap:4px; margin-bottom:8px;"></div>
 
-                <!-- Status Banner for Active Bunker -->
-                <div id="sbk-status-banner" style="display:none; justify-content:space-between; align-items:center; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); border-radius:6px; padding:6px 8px; margin-bottom:6px;">
-                    <span id="sbk-act-status-badge" style="color:#fbbf24; font-size:10px; font-weight:bold;">✅ Aktiv Bunker</span>
-                    <span style="color:#94a3b8; font-size:8px;">Live Editor</span>
-                </div>
-
-                <!-- Drawing Guide Banner -->
-                <div id="sbk-drawing-guide" style="display:none; background:rgba(251,191,36,0.1); border:1px dashed #fbbf24; border-radius:6px; padding:6px 8px; margin-bottom:6px; text-align:center;">
-                    <div style="color:#fbbf24; font-size:9px; font-weight:bold;" data-i18n="sb_bunker_draw_min_points_hint">✏️ Klicka på marken för att rita bunkerns form (minst 3 punkter)</div>
-                </div>
-
-                <!-- Studio Locked Banner -->
-                <div id="sbk-studio-locked-banner" style="display:none; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; margin-bottom:6px; text-align:center;">
-                    <span style="color:#94a3b8; font-size:9px;" data-i18n="sb_bunker_studio_locked_hint">🔒 Live Studio aktiveras när bunkern är byggd</span>
-                </div>
-
-                <!-- Live Studio Parametric Controls -->
-                <div id="sbk-studio-params" style="transition:all 0.25s ease;">
-                    <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;" data-i18n="sb_bunker_shape">Form</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:6px;">
-                        <button id="sb-shape-bowl" onclick="setSmartBunkerShape('BOWL')" style="background:#4ade80; color:#0f172a; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">BOWL</button>
-                        <button id="sb-shape-flat" onclick="setSmartBunkerShape('FLAT')" style="background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;">FLAT</button>
-                    </div>
-
-                    <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_bunker_depth">Depth</span><span id="sb-bunker-depth-val" style="color:#f59e0b; font-weight:bold; font-size:9px;">0.8m</span></div>
-                        <input type="range" id="sb-bunker-depth" min="0.0" max="3.0" value="0.8" step="0.1" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
-                    </div>
-                    <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:6px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_bunker_lip">Lip</span><span id="sb-bunker-lip-val" style="color:#f59e0b; font-weight:bold; font-size:9px;">0.3m</span></div>
-                        <input type="range" id="sb-bunker-lip" min="0" max="1.0" value="0.3" step="0.05" style="width:100%; accent-color:#f59e0b; cursor:pointer;">
-                    </div>
-
-                    <!-- Bunker Size (Scale) Card -->
-                    <div id="sbk-scale-card" style="display:none; background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 8px; margin-bottom:6px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                            <span style="color:#94a3b8; font-size:8.5px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_scale_bunker_title">Bunker-storlek (Skala)</span>
-                            <span id="sbk-scale-area-badge" style="color:#fbbf24; font-size:9px; font-weight:bold;">~0 m²</span>
+                <!-- ========================================== -->
+                <!-- MODE 1: SKAPA BUNKER (When drawing new)   -->
+                <!-- ========================================== -->
+                <div id="sbk-panel-unbuilt" style="display:none; flex-direction:column; gap:8px;">
+                    <!-- Step 1 banner -->
+                    <div style="background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.3); border-radius:8px; padding:8px 10px;">
+                        <div style="display:flex; align-items:center; gap:5px; margin-bottom:4px;">
+                            <span style="background:#fbbf24; color:#0f172a; font-size:9px; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">1</span>
+                            <span style="color:#fbbf24; font-size:10.5px; font-weight:700;" data-i18n="gs_step_draw">Rita formen</span>
                         </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
-                            <button type="button" onclick="window.scaleSmartBunker(window.currentHoleIndex, 0.9)" style="background:#0f172a; color:#f87171; border:1px solid rgba(239,68,68,0.4); padding:6px 4px; font-size:9.5px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_scale_down">➖ Minska (-10%)</button>
-                            <button type="button" onclick="window.scaleSmartBunker(window.currentHoleIndex, 1.1)" style="background:#0f172a; color:#4ade80; border:1px solid rgba(74,222,128,0.4); padding:6px 4px; font-size:9.5px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_scale_up">➕ Öka (+10%)</button>
+                        <div style="color:#94a3b8; font-size:9px; line-height:1.4;" data-i18n="sbk_step_draw_hint">Klicka för att sätta golfbollar. Dra valfri boll för att justera formen. Högerklicka för att radera.</div>
+                    </div>
+
+                    <!-- Points counter & status indicator -->
+                    <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; text-align:center;">
+                        <div id="sbk-draw-status" style="font-size:10px; font-weight:600; color:#94a3b8;">
+                            0 punkter valda (minst 3 krävs)
                         </div>
                     </div>
 
-                    <!-- Actions for Active Bunker -->
-                    <div id="sbk-active-actions" style="display:none; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px; margin-bottom:4px;">
-                        <button type="button" onclick="window.centerCameraOnBunker()" style="background:#1e293b; color:#fbbf24; border:1px solid #fbbf24; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_find_bunker">🔍 Hitta på kartan</button>
-                        <button type="button" id="sbk-toggle-outline-btn" onclick="window.toggleBunkerOutline()" style="background:#1e293b; color:#fbbf24; border:1px solid rgba(251,191,36,0.5); padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_bunker_outline_visible">👁️ Gul kontur: Synlig</button>
-                        <button type="button" onclick="window.activateMoveBunkerMode()" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_move_bunker">✥ Flytta bunker</button>
-                        <button type="button" onclick="window.redrawSmartBunker()" style="background:#1e293b; color:#a855f7; border:1px solid #a855f7; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="sb_redraw_bunker">🔄 Ändra form</button>
-                        <button type="button" onclick="window.deleteSmartBunker()" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid #ef4444; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_delete_bunker">🗑️ Radera bunker</button>
-                        <button type="button" id="sbk-delete-all-btn" onclick="window.deleteAllSmartBunkers()" style="display:none; background:rgba(239,68,68,0.2); color:#f87171; border:1px dashed #ef4444; padding:6px 4px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer; grid-column:span 2;" data-i18n="sb_delete_all_bunkers">🗑️ Radera alla bunkrar</button>
+                    <!-- Actions: Undo point & Clear -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                        <button type="button" onclick="window.undoSmartGreenPoint()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Ångra sista punkten">
+                            ↶ <span data-i18n="gs_undo_point">Ångra punkt</span>
+                        </button>
+                        <button type="button" onclick="window.clearSmartGreen()" style="background:#1e293b; color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Börja om från början">
+                            🔄 <span data-i18n="gs_reset">Börja om</span>
+                        </button>
+                    </div>
+
+                    <!-- Primary Action Button: Create Bunker -->
+                    <button type="button" id="sbk-build-bunker-btn" onclick="window.executeSplineSmartGreen()" style="width:100%; background:linear-gradient(135deg, #fbbf24, #f59e0b); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(251,191,36,0.25); transition:all 0.2s;">
+                        🏖️ <span id="sbk-build-bunker-btn-text" data-i18n="sb_build_bunker">Skapa bunker</span>
+                    </button>
+                </div>
+
+                <!-- ========================================== -->
+                <!-- MODE 2: REDIGERA BUNKER (BUILT STUDIO)    -->
+                <!-- ========================================== -->
+                <div id="sbk-panel-built" style="display:none;">
+                    <!-- 3-Tab Workflow Bar (1. Form, 2. Profil & Vall, 3. Sand & Finish) -->
+                    <div style="display:flex; background:#0b1120; border:1px solid #1e293b; border-radius:10px; padding:3px; margin-bottom:10px; gap:4px;">
+                        <button type="button" id="sbk-tab-form" onclick="window.BunkerStudio.setTab('form')" style="flex:1; background:#fbbf24; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(251,191,36,0.35);">
+                            <span style="font-size:12px;">📐</span>
+                            <span data-i18n="sbk_tab_form">1. Form</span>
+                        </button>
+                        <button type="button" id="sbk-tab-profil" onclick="window.BunkerStudio.setTab('profil')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">⛏️</span>
+                            <span data-i18n="sbk_tab_profil">2. Profil & Vall</span>
+                        </button>
+                        <button type="button" id="sbk-tab-sand" onclick="window.BunkerStudio.setTab('sand')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">🏖️</span>
+                            <span data-i18n="sbk_tab_sand">3. Sand & Finish</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: FORM -->
+                    <div id="sbk-content-form">
+                        <!-- Contextual Tip Banner -->
+                        <div style="background:#1e293b; border-left:3px solid #fbbf24; border-radius:4px; padding:6px 8px; margin-bottom:8px;">
+                            <div style="color:#cbd5e1; font-size:9px; line-height:1.4;" data-i18n="sbk_tip_drag" data-i18n-html="true">
+                                💡 <b>Dra</b> de stora vita golfbollarna för att ändra form. <b>Klicka på den gula linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.
+                            </div>
+                        </div>
+
+                        <!-- Status & Area Badge -->
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 8px; margin-bottom:8px;">
+                            <span id="sbk-form-title-badge" style="color:#fbbf24; font-size:9.5px; font-weight:bold;" data-i18n="sbk_selected_badge">● Bunker vald</span>
+                            <span id="sbk-form-area-val" style="color:#94a3b8; font-size:9.5px; font-weight:bold;">~0 m²</span>
+                        </div>
+
+                        <!-- Form Actions: Delete Bunker / Delete All -->
+                        <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;">
+                            <button type="button" onclick="window.deleteSmartBunker()" style="width:100%; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;" data-i18n="sb_delete_bunker">🗑️ Radera denna bunker</button>
+                            <button type="button" id="sbk-delete-all-btn" onclick="window.deleteAllSmartBunkers()" style="display:none; width:100%; background:rgba(239,68,68,0.2); color:#f87171; border:1px dashed #ef4444; padding:5px 4px; font-size:9px; border-radius:6px; font-weight:700; cursor:pointer;" data-i18n="sb_delete_all_bunkers">🗑️ Radera alla bunkrar på hålet</button>
+                        </div>
+
+                        <!-- Step 1 -> Step 2 Guidance Button -->
+                        <button type="button" onclick="window.BunkerStudio.setTab('profil')" style="width:100%; background:linear-gradient(135deg, #fbbf24, #f59e0b); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(251,191,36,0.25); transition:transform 0.1s;">
+                            <span data-i18n="sbk_step2_btn">Steg 2: Justera djup & vall ➔</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 2: PROFIL & VALL -->
+                    <div id="sbk-content-profil" style="display:none;">
+                        <!-- Profil-mallar (Preset Cards) -->
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:4px;" data-i18n="sbk_models">Bunkermallar</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:8px;">
+                            <button type="button" id="sbk-preset-bowl" onclick="window.setBunkerProfilePreset('BOWL')" style="background:rgba(251,191,36,0.25); color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                <span data-i18n="sbk_preset_bowl">Skålad</span> <span style="font-size:8px; opacity:0.8;">0.8m</span>
+                            </button>
+                            <button type="button" id="sbk-preset-pot" onclick="window.setBunkerProfilePreset('POT')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                <span data-i18n="sbk_preset_pot">Pot Bunker</span> <span style="font-size:8px; opacity:0.8;">1.6m</span>
+                            </button>
+                            <button type="button" id="sbk-preset-flat" onclick="window.setBunkerProfilePreset('FLAT')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                <span data-i18n="sbk_preset_flat">Platt botten</span> <span style="font-size:8px; opacity:0.8;">0.6m</span>
+                            </button>
+                            <button type="button" id="sbk-preset-waste" onclick="window.setBunkerProfilePreset('WASTE')" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                                <span data-i18n="sbk_preset_waste">Waste Bunker</span> <span style="font-size:8px; opacity:0.8;">0.35m</span>
+                            </button>
+                        </div>
+
+                        <!-- Djup (Depth) Slider -->
+                        <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:6px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_bunker_depth">Djup</span>
+                                <span id="sb-bunker-depth-val" style="color:#fbbf24; font-weight:700; font-size:9.5px;">0.8m</span>
+                            </div>
+                            <input type="range" id="sb-bunker-depth" min="0.0" max="2.5" value="0.8" step="0.1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; let bd=window.getActiveBunker(hole); if(bd){ bd.depth=parseFloat(this.value); window.applyBunkerPipeline(hole,false,false,bd); if(window.BunkerStudio) window.BunkerStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#fbbf24; cursor:pointer;">
+                        </div>
+
+                        <!-- Vallhöjd (Lip Height) Slider -->
+                        <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:6px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_bunker_lip">Vallhöjd (Lip)</span>
+                                <span id="sb-bunker-lip-val" style="color:#fbbf24; font-weight:700; font-size:9.5px;">0.3m</span>
+                            </div>
+                            <input type="range" id="sb-bunker-lip" min="0.0" max="1.2" value="0.3" step="0.05" oninput="let hole=window.courseHoles[window.currentHoleIndex]; let bd=window.getActiveBunker(hole); if(bd){ bd.lipHeight=parseFloat(this.value); window.applyBunkerPipeline(hole,false,false,bd); if(window.BunkerStudio) window.BunkerStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#fbbf24; cursor:pointer;">
+                        </div>
+
+                        <!-- Vallriktning (Compass Rose + Mot flaggan) -->
+                        <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sbk_lip_direction">Vallriktning</span>
+                                <button type="button" id="sbk-lip-to-flag-btn" onclick="if(window.BunkerStudio) window.BunkerStudio.setLipToFlag()" style="background:#0f172a; color:#fbbf24; border:1px solid #fbbf24; border-radius:4px; padding:2px 6px; font-size:8.5px; font-weight:700; cursor:pointer;" data-i18n="sbk_lip_to_flag">
+                                    🚩 Mot flaggan
+                                </button>
+                            </div>
+
+                            <!-- Interactive Compass Rose Container -->
+                            <div style="display:flex; align-items:center; justify-content:space-around; gap:8px;">
+                                <div style="position:relative; width:68px; height:68px; cursor:pointer;" onclick="let rect=this.getBoundingClientRect(); let x=event.clientX-rect.left-34; let y=event.clientY-rect.top-34; let deg=Math.round(((Math.atan2(x,-y)*180/Math.PI)%360+360)%360); if(window.BunkerStudio) window.BunkerStudio.setLipDirection(deg);" title="Klicka för att sätta vallens riktning">
+                                    <svg width="68" height="68" viewBox="0 0 68 68">
+                                        <circle cx="34" cy="34" r="32" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+                                        <line x1="34" y1="4" x2="34" y2="10" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <line x1="34" y1="58" x2="34" y2="64" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <line x1="4" y1="34" x2="10" y2="34" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <line x1="58" y1="34" x2="64" y2="34" stroke="#94a3b8" stroke-width="1.5"/>
+                                        <text x="34" y="15" fill="#fbbf24" font-size="8" font-weight="bold" text-anchor="middle">N</text>
+                                        <text x="56" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">Ö</text>
+                                        <text x="34" y="58" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">S</text>
+                                        <text x="12" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">V</text>
+                                    </svg>
+                                    <div id="sbk-compass-needle" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; transition:transform 0.2s ease;">
+                                        <svg width="68" height="68" viewBox="0 0 68 68">
+                                            <polygon points="34,14 38,34 34,30 30,34" fill="#fbbf24"/>
+                                            <polygon points="34,54 38,34 34,30 30,34" fill="#64748b"/>
+                                            <circle cx="34" cy="34" r="3" fill="#fbbf24"/>
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                                    <div id="sbk-compass-deg" style="color:#fbbf24; font-size:11px; font-weight:800; text-align:center;">0° Nord</div>
+                                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:2px;">
+                                        <button type="button" onclick="if(window.BunkerStudio) window.BunkerStudio.setLipDirection(0)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">N</button>
+                                        <button type="button" onclick="if(window.BunkerStudio) window.BunkerStudio.setLipDirection(90)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">Ö</button>
+                                        <button type="button" onclick="if(window.BunkerStudio) window.BunkerStudio.setLipDirection(180)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">S</button>
+                                        <button type="button" onclick="if(window.BunkerStudio) window.BunkerStudio.setLipDirection(270)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">V</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reset profile button -->
+                        <div style="margin-bottom:8px;">
+                            <button type="button" onclick="window.resetBunkerProfile()" style="width:100%; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;" data-i18n="sbk_reset_profile">↺ Återställ profil</button>
+                        </div>
+
+                        <!-- Step 2 -> Step 3 Guidance Button -->
+                        <button type="button" onclick="window.BunkerStudio.setTab('sand')" style="width:100%; background:linear-gradient(135deg, #fbbf24, #f59e0b); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(251,191,36,0.25); transition:transform 0.1s;">
+                            <span data-i18n="sbk_step3_btn">Steg 3: Sandfärg & finish ➔</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 3: SAND & FINISH -->
+                    <div id="sbk-content-sand" style="display:none;">
+                        <!-- Sand Type Header -->
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:4px;" data-i18n="sbk_sand_type">Sandtyp & Färg</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:8px;">
+                            <div id="sbk-sand-augusta" onclick="window.setBunkerSandType('AUGUSTA')" style="background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 4px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="width:14px; height:14px; border-radius:50%; background:#f4f1ea; border:1px solid #94a3b8; margin:0 auto 3px;"></div>
+                                <div style="font-size:9.5px; font-weight:800; color:#cbd5e1;" data-i18n="sbk_sand_augusta">Augusta Vit</div>
+                                <div style="font-size:7.5px; color:#64748b;" data-i18n="sbk_sand_augusta_sub">Kvartssand</div>
+                            </div>
+                            <div id="sbk-sand-golden" onclick="window.setBunkerSandType('GOLDEN')" style="background:rgba(251,191,36,0.25); border:1px solid #fbbf24; border-radius:6px; padding:6px 4px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="width:14px; height:14px; border-radius:50%; background:#e0d8a4; border:1px solid #b45309; margin:0 auto 3px;"></div>
+                                <div style="font-size:9.5px; font-weight:800; color:#fbbf24;" data-i18n="sbk_sand_golden">Gyllene Sand</div>
+                                <div style="font-size:7.5px; color:#64748b;" data-i18n="sbk_sand_golden_sub">Klassisk park</div>
+                            </div>
+                            <div id="sbk-sand-links" onclick="window.setBunkerSandType('LINKS')" style="background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 4px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="width:14px; height:14px; border-radius:50%; background:#c2b396; border:1px solid #78716c; margin:0 auto 3px;"></div>
+                                <div style="font-size:9.5px; font-weight:800; color:#cbd5e1;" data-i18n="sbk_sand_links">Skotsk Links</div>
+                                <div style="font-size:7.5px; color:#64748b;" data-i18n="sbk_sand_links_sub">Gråbrun ton</div>
+                            </div>
+                            <div id="sbk-sand-coastal" onclick="window.setBunkerSandType('COASTAL')" style="background:#1e293b; border:1px solid #334155; border-radius:6px; padding:6px 4px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="width:14px; height:14px; border-radius:50%; background:#ebd5b3; border:1px solid #d97706; margin:0 auto 3px;"></div>
+                                <div style="font-size:9.5px; font-weight:800; color:#cbd5e1;" data-i18n="sbk_sand_coastal">Kust / Klit</div>
+                                <div style="font-size:7.5px; color:#64748b;" data-i18n="sbk_sand_coastal_sub">Mjuk sanddyn</div>
+                            </div>
+                        </div>
+
+                        <!-- Edge Sharpness / Sod Wall -->
+                        <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sbk_edge_title">Kantskärpa / Torvkant</span>
+                                <span id="sbk-edge-val" style="color:#fbbf24; font-weight:700; font-size:9px;">Skarp (Sod Wall)</span>
+                            </div>
+                            <input type="range" id="sbk-edge-sharpness" min="0" max="100" value="100" step="5" oninput="let hole=window.courseHoles[window.currentHoleIndex]; let bd=window.getActiveBunker(hole); if(bd){ bd.edgeSharpness=parseInt(this.value); window.applyBunkerPipeline(hole,false,true,bd); if(window.BunkerStudio) window.BunkerStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#fbbf24; cursor:pointer;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px;">
+                                <button type="button" onclick="let hole=window.courseHoles[window.currentHoleIndex]; let bd=window.getActiveBunker(hole); if(bd){ bd.edgeSharpness=100; window.applyBunkerPipeline(hole,false,true,bd); if(window.BunkerStudio) window.BunkerStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 2px; font-size:8px; font-weight:700; cursor:pointer;" data-i18n="sbk_edge_sod">Skuren torvkant</button>
+                                <button type="button" onclick="let hole=window.courseHoles[window.currentHoleIndex]; let bd=window.getActiveBunker(hole); if(bd){ bd.edgeSharpness=40; window.applyBunkerPipeline(hole,false,true,bd); if(window.BunkerStudio) window.BunkerStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 2px; font-size:8px; font-weight:700; cursor:pointer;" data-i18n="sbk_edge_soft">Mjuk sandkant</button>
+                            </div>
+                        </div>
+
+                        <!-- Finish Button -->
+                        <button type="button" onclick="if(typeof setTool==='function') setTool('INSPECT')" style="width:100%; background:linear-gradient(135deg, #fbbf24, #f59e0b); color:#0f172a; border:none; padding:9px 8px; font-size:11px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 12px rgba(251,191,36,0.3); transition:transform 0.1s;">
+                            ✔ <span data-i18n="sbk_finish_btn">Klar med bunkern!</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2399,9 +2566,28 @@
         </div> <!-- End of tab-content-TOOLS -->
 
         <script>
-        window.setGrassQuality = function(q) {
+        window.setGrassQuality = function(q, isAuto) {
+            if (!isAuto) {
+                // CODEX H1 FIX: Mark that quality was explicitly set by user so setMode() doesn't overwrite it
+                window._grassQualitySetByPlayer = true;
+                try { localStorage.setItem('golf_grass_quality', q); } catch(e) {}
+            }
             if (!window._terrainShells) return;
+
+            // When switching ON: ensure rough mask is freshly rebuilt from current canvas if dirty
+            if (q !== 'OFF') {
+                if (window._roughMaskDirty || !window.terrainBiomeData) {
+                    if (window.pCtx) window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+                    if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+                }
+            }
+
             window._terrainShells.setQuality(q);
+
+            if (q !== 'OFF' && window._terrainShells) {
+                window._terrainShells.syncHeights();
+            }
+
             // Update button states
             ['off','low','med','high'].forEach(function(k) {
                 let btn = document.getElementById('grass-q-' + k);
@@ -2421,13 +2607,20 @@
             if (!window._terrainShells) return;
             let rh = parseFloat(document.getElementById('grass-rough-height').value);
             let dh = parseFloat(document.getElementById('grass-deep-height').value);
-            window._terrainShells.roughHeight = rh / 100; // cm → meters
-            window._terrainShells.deepHeight = dh / 100;
+            let roughM = rh / 100; // cm → meters
+            let deepM = dh / 100;
             document.getElementById('grass-rough-h-val').textContent = rh + 'cm';
             document.getElementById('grass-deep-h-val').textContent = dh + 'cm';
-            // Rebuild shells with new heights
-            if (window._terrainShells.quality !== 'OFF') {
-                window._terrainShells.refresh();
+            
+            // CODEX M1 FIX: Smooth 60 FPS live shader uniforms update without disposing or rebuilding meshes
+            if (typeof window._terrainShells.setHeights === 'function') {
+                window._terrainShells.setHeights(roughM, deepM);
+            } else {
+                window._terrainShells.roughHeight = roughM;
+                window._terrainShells.deepHeight = deepM;
+                if (window._terrainShells.quality !== 'OFF') {
+                    window._terrainShells.refresh();
+                }
             }
         };
         </script>
@@ -3784,9 +3977,16 @@
             window._terrainChunks.updateLOD(autoLodSegs);
         }
 
-        // Auto-optimize 3D Grass Volumetric Shells for Mobile (cap at LOW to protect mobile GPU)
-        if (isMobileDevice && typeof window.setGrassQuality === 'function' && !window._grassQualitySetByPlayer) {
-            window.setGrassQuality('LOW');
+        // Auto-optimize 3D Grass Volumetric Shells: check localStorage first, else default to LOW on mobile
+        let savedGrassQ = null;
+        try { savedGrassQ = localStorage.getItem('golf_grass_quality'); } catch(e) {}
+        if (savedGrassQ) {
+            window._grassQualitySetByPlayer = true;
+            if (typeof window.setGrassQuality === 'function') {
+                window.setGrassQuality(savedGrassQ, true);
+            }
+        } else if (isMobileDevice && typeof window.setGrassQuality === 'function' && !window._grassQualitySetByPlayer) {
+            window.setGrassQuality('LOW', true);
         }
         
         let badge = document.getElementById('auto-lod-status-badge');
@@ -6238,8 +6438,10 @@
     window.roughMaskCanvas = document.createElement('canvas');
     window.roughMaskCanvas.width = 4096; window.roughMaskCanvas.height = 4096;
     window.roughMaskCtx = window.roughMaskCanvas.getContext('2d', { willReadFrequently: true });
-    window.roughMaskCtx.fillStyle = '#ff0000';  // Default: all rough (R=255, G=0)
+    // CODEX H2 FIX: Default to black (R=0, G=0 = no grass) so initial boot never blankets the world in grass
+    window.roughMaskCtx.fillStyle = '#000000';
     window.roughMaskCtx.fillRect(0, 0, 4096, 4096);
+    window._roughMaskDirty = true;
     window.roughMaskTex = new THREE.CanvasTexture(window.roughMaskCanvas);
     window.roughMaskTex.magFilter = THREE.NearestFilter;
     window.roughMaskTex.minFilter = THREE.NearestFilter;
@@ -6247,11 +6449,16 @@
 
     window.rebuildRoughMask = function() {
         if (!window.terrainBiomeData) return;
+        // CODEX H3 FIX: If 3D grass is OFF, skip the 16.8M pixel CPU loop and mark dirty
+        if (!window._terrainShells || window._terrainShells.quality === 'OFF') {
+            window._roughMaskDirty = true;
+            return;
+        }
+        window._roughMaskDirty = false;
+
         let mData = window.roughMaskCtx.createImageData(4096, 4096);
         let tData = window.terrainBiomeData;
         let cfg = window.CURRENT_BIOME_CONFIG || {};
-
-
 
         // Parse all 4 grass biome colors
         let rHex = cfg.roughColor || '#4a782b';
@@ -6276,8 +6483,6 @@
         let threshSF = 2500;   // semi-rough & foregreen (cleaner)
         let threshBK = 3000;   // bunker sand
 
-        console.log('🏖️ Sand reference color:', bHex, '→ RGB(', bR, bG, bB, ') thresh:', threshBK);
-
         for (let i = 0; i < tData.length; i += 4) {
             let r = tData[i], g = tData[i+1], b = tData[i+2];
 
@@ -6291,8 +6496,6 @@
             let distGreen   = (r-gR)*(r-gR) + (g-gG)*(g-gG) + (b-gB)*(b-gB);
             let distFairway = (r-wR)*(r-wR) + (g-wG)*(g-wG) + (b-wB)*(b-wB);
             let noGrass = Math.min(distGreen, distFairway);
-
-
 
             // Exclusive closest-match: only one channel per pixel
             // Grass biomes must be closer than green/fairway; sand doesn't need that check
@@ -6313,18 +6516,20 @@
         window.roughMaskCtx.putImageData(mData, 0, 0);
         window.roughMaskTex.needsUpdate = true;
 
-        // Debug: count mask distribution
-        let cR = 0, cD = 0, cS = 0, cF = 0, cB = 0, cN = 0;
-        for (let i = 0; i < mData.data.length; i += 4) {
-            if (mData.data[i] > 200) cR++;            // R=255 = rough
-            else if (mData.data[i] > 64) cF++;        // R=128 = foregreen
-            else if (mData.data[i+1] > 200) cD++;     // G=255 = deep
-            else if (mData.data[i+1] > 64) cB++;      // G=128 = sand
-            else if (mData.data[i+2] > 0) cS++;       // B=255 = semi
-            else cN++;
+        // Debug: count mask distribution (only when explicitly requested)
+        if (window._debugRoughMask) {
+            let cR = 0, cD = 0, cS = 0, cF = 0, cB = 0, cN = 0;
+            for (let i = 0; i < mData.data.length; i += 4) {
+                if (mData.data[i] > 200) cR++;            // R=255 = rough
+                else if (mData.data[i] > 64) cF++;        // R=128 = foregreen
+                else if (mData.data[i+1] > 200) cD++;     // G=255 = deep
+                else if (mData.data[i+1] > 64) cB++;      // G=128 = sand
+                else if (mData.data[i+2] > 0) cS++;       // B=255 = semi
+                else cN++;
+            }
+            let total = cR + cD + cS + cF + cB + cN;
+            console.log('🌿 RoughMask — Rough:', cR, '(' + (cR/total*100).toFixed(1) + '%) | Deep:', cD, '(' + (cD/total*100).toFixed(1) + '%) | Semi:', cS, '(' + (cS/total*100).toFixed(1) + '%) | Fore:', cF, '(' + (cF/total*100).toFixed(1) + '%) | Sand:', cB, '(' + (cB/total*100).toFixed(1) + '%) | None:', cN);
         }
-        let total = cR + cD + cS + cF + cB + cN;
-        console.log('🌿 RoughMask — Rough:', cR, '(' + (cR/total*100).toFixed(1) + '%) | Deep:', cD, '(' + (cD/total*100).toFixed(1) + '%) | Semi:', cS, '(' + (cS/total*100).toFixed(1) + '%) | Fore:', cF, '(' + (cF/total*100).toFixed(1) + '%) | Sand:', cB, '(' + (cB/total*100).toFixed(1) + '%) | None:', cN);
 
         // Update shell uniforms
         if (window._terrainShells) {
@@ -14010,6 +14215,10 @@
     
     let isSculpting = false;
     let sculptDirection = 1;
+    let activeSculptPointerId = null;
+    let strokeHasModified = false;
+    let strokePendingUndo = null;
+    let _smoothBoxBuffer = null;
     let currentTool = 'SCULPT'; 
     window.currentTool = currentTool;
     let currentBrushSize = 6.0;
@@ -14045,19 +14254,29 @@
 
 
     window.ipadSculptDir = 1;
-    window.toggleIpadSculpt = function() {
-        window.ipadSculptDir = window.ipadSculptDir === 1 ? -1 : 1;
+    window.updateSculptDirBtn = function() {
         let btn = document.getElementById('ipad-sculpt-btn');
+        if (!btn) return;
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
         if (window.ipadSculptDir === 1) {
-            btn.innerText = "⬆️ RAISE";
+            btn.innerText = isSv ? "⬆️ HÖJ" : "⬆️ RAISE";
             btn.style.background = "#4ade80"; 
             btn.style.color = "#0f172a";
+            btn.title = isSv ? "Aktivt läge: Höj mark (Klicka för att växla till Sänk)" : "Active mode: Raise ground (Click to switch to Lower)";
         } else {
-            btn.innerText = "⬇️ LOWER";
+            btn.innerText = isSv ? "⬇️ SÄNK" : "⬇️ LOWER";
             btn.style.background = "#ef4444"; 
             btn.style.color = "#fff";
+            btn.title = isSv ? "Aktivt läge: Sänk mark (Klicka för att växla till Höj)" : "Active mode: Lower ground (Click to switch to Raise)";
         }
     };
+    window.toggleIpadSculpt = function() {
+        window.ipadSculptDir = window.ipadSculptDir === 1 ? -1 : 1;
+        window.updateSculptDirBtn();
+    };
+    window.addEventListener('golf_lang_changed', function() {
+        if (typeof window.updateSculptDirBtn === 'function') window.updateSculptDirBtn();
+    });
     // Legacy compat — multiplier buttons removed, log slider handles full range
     window.setBrushMultiplier = function() { updateBrushSize(); };
 
@@ -14700,7 +14919,8 @@
         }
         
         let isModifyingClick = e.button === 0 || e.button === 2;
-        if(currentTool !== 'PAINT' && currentTool !== 'MEASURE' || isModifyingClick) { 
+        let isSculptFamily = (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'RAMP' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'WATER' || currentTool === 'PAINT');
+        if(!isSculptFamily && isModifyingClick) { 
              if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE' && currentTool !== 'SMART_BUILDER' && currentTool !== 'COLORIZE') saveUndoState(); 
         }
 
@@ -14898,13 +15118,18 @@
                         return;
                     }
                 }
-                // If a bunker is currently selected, inform user instead of adding points
+                // Delegate to BunkerStudio (supports both Mode 1 node dragging/insertion and Mode 2 built-bunker editing)
                 if(window._smartBuilderType === 'BUNKER') {
                     let curHole = courseHoles[currentHoleIndex];
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.BunkerStudio && window.BunkerStudio.onPointerDown(e, lastHitPoint, raycaster)) {
+                        controls.enabled = false;
+                        return;
+                    }
                     let hasActiveBk = curHole && (curHole.activeBunkerIndex !== null && curHole.activeBunkerIndex !== undefined) && curHole.bunkers && curHole.bunkers[curHole.activeBunkerIndex];
-                    if (hasActiveBk) {
+                    if (hasActiveBk && curHole.bunkers[curHole.activeBunkerIndex].points && curHole.bunkers[curHole.activeBunkerIndex].points.length >= 3) {
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
-                        showBuildToast(curLang === 'en' ? 'ℹ️ A Bunker is selected. Click [+ New Bunker] to add another, or adjust in the panel!' : 'ℹ️ En Bunker är vald. Klicka på [➕ Ny Bunker] för att rita en till, eller justera i panelen!', '#fbbf24');
+                        showBuildToast(curLang === 'en' ? 'ℹ️ Bunker is active. Drag golf balls, or click [+ New Bunker] to add another!' : 'ℹ️ Bunker är aktiv. Dra golfbollarna, eller klicka på [➕ Ny Bunker] för att rita en till!', '#fbbf24');
                         controls.enabled = false;
                         return;
                     }
@@ -14932,6 +15157,13 @@
                 if(window._smartBuilderType === 'FAIRWAY') {
                     raycaster.setFromCamera(mouse, camera);
                     if(window.FairwayStudio && window.FairwayStudio.onRightClick(e, lastHitPoint, raycaster)) {
+                        controls.enabled = false;
+                        return;
+                    }
+                }
+                if(window._smartBuilderType === 'BUNKER') {
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.BunkerStudio && window.BunkerStudio.onRightClick(e, lastHitPoint, raycaster)) {
                         controls.enabled = false;
                         return;
                     }
@@ -14965,15 +15197,51 @@
         } else if(currentTool === 'TEST_PUTT') {
             // Legacy handler — no longer reachable from UI
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || (currentTool === 'PAINT' && window._paintToolMode !== 'POLYGON') || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') || currentTool === 'RAMP') {
+            if (e.button !== 0 && e.button !== 2) return; // SF-08: Only Left & Right buttons mutate terrain
+            activeSculptPointerId = e.pointerId; // SF-09: Bind active pointer
+            try {
+                renderer.domElement.setPointerCapture(e.pointerId);
+            } catch(err) {}
+            
             isSculpting = true;
             controls.enabled = false; 
-            let isTouch = (e.pointerType === 'touch');
-            sculptDirection = (e.button === 2 || e.shiftKey) ? -1 
-                            : (isTouch && window.ipadSculptDir === -1) ? -1 : 1;
+            let baseDir = (window.ipadSculptDir === -1) ? -1 : 1;
+            let invert = (e.button === 2 || e.shiftKey);
+            sculptDirection = invert ? -baseDir : baseDir;
+            
+            // SF-13: Defer undo commit until first actual mutation
+            strokePendingUndo = captureEditorState();
+            strokeHasModified = false;
             
             if (currentTool === 'RAMP' && lastHitPoint) {
                 window.rampStartPt = lastHitPoint.clone();
                 window.rampSnapshotHeights = new Float32Array(planeGeo.attributes.position.array);
+            }
+            
+            // SF-04: Snapshot baseline heights for bounded procedural noise
+            if (currentTool === 'NOISE') {
+                window.strokeBaseHeights = new Float32Array(planeGeo.attributes.position.array);
+            }
+            
+            // SF-10: Stable direction tracking for Ridge
+            if (currentTool === 'RIDGE' && lastHitPoint) {
+                window.ridgeStartPt = lastHitPoint.clone();
+                window.ridgeLastKeyPoint = lastHitPoint.clone();
+                window.ridgeDir = null;
+            }
+            
+            // SF-02: Lock target height from first click for Flatten
+            if (currentTool === 'FLATTEN' && lastHitPoint) {
+                window.sculptAnchorY = lastHitPoint.y;
+                if (window.terrainFloorEnabled !== false) {
+                    let floorH = (window.terrainFloorLevel != null) ? window.terrainFloorLevel : -2.0;
+                    if (window.sculptAnchorY < floorH) window.sculptAnchorY = floorH;
+                }
+                let fHud = document.getElementById('flatten-hud');
+                if (fHud) {
+                    fHud.style.display = 'block';
+                    fHud.textContent = 'Flatten Target: ' + window.sculptAnchorY.toFixed(1) + 'm';
+                }
             }
             
             if (currentTool === 'WATER' && lastHitPoint) {
@@ -15001,85 +15269,141 @@
 
     let isMeasuring = false;
 
+    function finalizeSculptStroke(options = { save: true }) {
+        if (!isSculpting && !strokePendingUndo) return;
+        
+        isSculpting = false;
+        controls.enabled = true;
+        previousFrameHitPoint = null;
+        window._colorizeUndoSaved = false;
+        
+        if (activeSculptPointerId !== null) {
+            try {
+                renderer.domElement.releasePointerCapture(activeSculptPointerId);
+            } catch(err) {}
+            activeSculptPointerId = null;
+        }
+        
+        // Hide Flatten target HUD
+        let fHud = document.getElementById('flatten-hud');
+        if (fHud) fHud.style.display = 'none';
+        
+        window.sculptAnchorY = null;
+        window.strokeBaseHeights = null;
+        window.ridgeStartPt = null;
+        window.ridgeLastKeyPoint = null;
+        window.ridgeDir = null;
+        
+        // Rebuild instances placed during brush stroke
+        if (window._brushPlacedTypes && window._brushPlacedTypes.size > 0) {
+            window._brushPlacedTypes.forEach(type => {
+                if (typeof window.rebuildInstancePool === 'function') window.rebuildInstancePool(type);
+            });
+            window._brushPlacedTypes.clear();
+        }
+        
+        // SF-13: If stroke never mutated anything, discard pending undo without dirtying history or save state
+        if (!strokeHasModified) {
+            strokePendingUndo = null;
+            if (currentTool === 'RAMP' && window.rampSnapshotHeights) {
+                planeGeo.attributes.position.array.set(window.rampSnapshotHeights);
+                planeGeo.attributes.position.needsUpdate = true;
+                window.rampSnapshotHeights = null;
+                window.rampStartPt = null;
+            }
+            return;
+        }
+        
+        // Commit pending undo if not yet committed
+        if (strokePendingUndo) {
+            if (undoStack.length >= 20) undoStack.shift();
+            undoStack.push(strokePendingUndo);
+            redoStack.length = 0;
+            updateUndoRedoUI();
+            strokePendingUndo = null;
+            
+            let sText = document.getElementById('save-status-text');
+            let sIcon = document.getElementById('save-status-icon');
+            let sInd = document.getElementById('save-status-indicator');
+            if (sText) sText.textContent = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Ändrad' : 'Unsaved';
+            if (sIcon) sIcon.textContent = '●';
+            if (sInd) {
+                sInd.style.color = '#fbbf24';
+                sInd.style.background = 'rgba(251,191,36,0.1)';
+                sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+                sInd.title = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Osparade ändringar (Klicka för att spara direkt)' : 'Unsaved changes (Click to save now)';
+            }
+        }
+        
+        window.rampSnapshotHeights = null;
+        window.rampStartPt = null;
+        
+        if (currentTool === 'COLORIZE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH')) {
+            if (options.save) debounceSaveCourse(1500);
+        } else if (currentTool === 'PAINT') {
+            if (typeof pCtx !== 'undefined') window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+            if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+            if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+            if (window._terrainShells) window._terrainShells.refresh();
+            if (options.save) debounceSaveCourse(1500);
+        } else {
+            // SF-01: Guaranteed normals recomputation, chunk/shell sync, object snap, and save
+            planeGeo.computeVertexNormals(); 
+            planeGeo.computeBoundingBox();
+            planeGeo.computeBoundingSphere();
+            if (window._terrainChunks) window._terrainChunks.syncDirty();
+            if (window._terrainShells) window._terrainShells.syncHeights();
+            snapObjectsToGround();
+            rebuildWaterMask(true);
+            if (window.syncWaterVisual) window.syncWaterVisual();
+            window._waterNeedsFullRebuild = false;
+            if (window.slopeOverlayActive) window.updateSlopeOverlay();
+            if (window.contourLinesActive) window.updateContourLines();
+            if (window.elevationHeatmapActive) window.updateElevationHeatmap();
+            if (options.save) debounceSaveCourse(1500);
+        }
+        
+        strokeHasModified = false;
+    }
+
     window.addEventListener('pointerup', e => {
-        if(window.GreenStudio && window.GreenStudio.onPointerUp) {
+        if (activeSculptPointerId !== null && e.pointerId !== undefined && e.pointerId !== activeSculptPointerId) return;
+        if (window.GreenStudio && window.GreenStudio.onPointerUp) {
             window.GreenStudio.onPointerUp(e);
         }
-        if(window.FairwayStudio && window.FairwayStudio.onPointerUp) {
+        if (window.FairwayStudio && window.FairwayStudio.onPointerUp) {
             window.FairwayStudio.onPointerUp(e);
         }
-        if(typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
+        if (window.BunkerStudio && window.BunkerStudio.onPointerUp) {
+            window.BunkerStudio.onPointerUp(e);
+        }
+        if (typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
             activeRotatingTee = null;
             controls.enabled = true;
             saveLevel();
             return;
         }
-        if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'PAINT' || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') || currentTool === 'RAMP' || currentTool === 'SPLINE' || currentTool === 'SMART_BUILDER' || currentTool === 'COLORIZE') {
-            isSculpting = false;
-            controls.enabled = true;
-            window._colorizeUndoSaved = false; // Reset colorize undo debounce
-            
-            // Rebuild instances placed during brush stroke
-            if (window._brushPlacedTypes && window._brushPlacedTypes.size > 0) {
-                window._brushPlacedTypes.forEach(type => {
-                    if (typeof window.rebuildInstancePool === 'function') window.rebuildInstancePool(type);
-                });
-                window._brushPlacedTypes.clear();
-            }
-
-            if(currentTool === 'COLORIZE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH')) {
-                debounceSaveCourse(1500);
-            } else if(currentTool === 'PAINT') {
-                if (typeof pCtx !== 'undefined') window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
-                if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
-                if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
-                if (window._terrainShells) window._terrainShells.refresh();
-                debounceSaveCourse(1500);
-            } else {
-                planeGeo.computeVertexNormals(); 
-                planeGeo.computeBoundingBox();
-                planeGeo.computeBoundingSphere();
-                if (window._terrainChunks) window._terrainChunks.syncDirty();
-                if (window._terrainShells) window._terrainShells.syncHeights();
-                snapObjectsToGround();
-                // Rebuild water mask (visual-only to preserve the flat water mesh and smooth edges)
-                rebuildWaterMask(true);
-                if (window.syncWaterVisual) window.syncWaterVisual();
-                window._waterNeedsFullRebuild = false;
-                // Refresh terrain analysis overlays
-                if(window.slopeOverlayActive) window.updateSlopeOverlay();
-                if(window.contourLinesActive) window.updateContourLines();
-                if(window.elevationHeatmapActive) window.updateElevationHeatmap();
-                debounceSaveCourse(1500); // Debounced save so rapid clicking never stutters!
-            }
-        }
+        finalizeSculptStroke({ save: true });
     }, false);
     
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault(), false);
     
-    // Safety: release sculpting if pointer leaves canvas or window loses focus
+    // SF-01: Centralized cleanup for pointerleave, pointercancel, blur
     renderer.domElement.addEventListener('pointerleave', () => {
-        if (isSculpting) {
-            isSculpting = false;
-            controls.enabled = true;
-            previousFrameHitPoint = null;
-        }
+        finalizeSculptStroke({ save: true });
     }, false);
     
     renderer.domElement.addEventListener('pointercancel', () => {
-        isSculpting = false;
-        controls.enabled = true;
-        previousFrameHitPoint = null;
+        finalizeSculptStroke({ save: true });
     }, false);
     
     window.addEventListener('blur', () => {
-        isSculpting = false;
+        finalizeSculptStroke({ save: true });
         isMeasuring = false;
-        controls.enabled = true;
-        previousFrameHitPoint = null;
     }, false);
     
     function setMode(mode) {
+        finalizeSculptStroke({ save: true });
         if ((appMode === 'BUILD' || appMode === 'ARCHITECT') && (mode === 'PLAY' || mode === 'TEST')) {
             if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
             if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
@@ -15405,9 +15729,7 @@
         }
 
         // Reset active sculpting state to prevent phantom painting/sculpting
-        isSculpting = false;
-        controls.enabled = true;
-        previousFrameHitPoint = null;
+        finalizeSculptStroke({ save: true });
         
         // Reset brush cursor size if leaving STAMP/MTN mode (stamp alters the base geometry)
         if (currentTool === 'MTN' && toolName !== 'MTN') {
@@ -15422,9 +15744,11 @@
         if (toolName !== 'SMART_BUILDER') {
             if (window.GreenStudio) window.GreenStudio.hide();
             if (window.FairwayStudio) window.FairwayStudio.hide();
+            if (window.BunkerStudio) window.BunkerStudio.hide();
         } else if (toolName === 'SMART_BUILDER') {
             if (window._smartBuilderType === 'GREEN' && window.GreenStudio) window.GreenStudio.sync();
             else if (window._smartBuilderType === 'FAIRWAY' && window.FairwayStudio) window.FairwayStudio.sync();
+            else if (window._smartBuilderType === 'BUNKER' && window.BunkerStudio) window.BunkerStudio.sync();
         }
         
         let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'hole', 'measure', 'eraser', 'colorize', 'mtn', 'poly', 'env'];
@@ -15580,8 +15904,9 @@
         safeSetDisplay('ramp-settings', (toolName === 'RAMP') ? 'flex' : 'none');
         safeSetDisplay('noise-pattern-group', (toolName === 'NOISE') ? 'flex' : 'none');
         safeSetDisplay('water-settings-group', (toolName === 'WATER') ? 'flex' : 'none');
-        safeSetDisplay('sculpt-strength-container', (toolName === 'SCULPT') ? 'flex' : 'none');
+        safeSetDisplay('sculpt-strength-container', (toolName === 'SCULPT' || toolName === 'SMOOTH' || toolName === 'FLATTEN' || toolName === 'RIDGE') ? 'flex' : 'none');
         safeSetDisplay('ipad-sculpt-btn', (toolName === 'SCULPT' || toolName === 'RIDGE') ? 'block' : 'none');
+        if (typeof window.updateSculptDirBtn === 'function') window.updateSculptDirBtn();
 
         // Environmental panels
         safeSetDisplay('env-sun-group', (toolName === 'ENV' && window._activeEnvCategory === 'SUN') ? 'flex' : 'none');
@@ -15634,7 +15959,12 @@
         else if (toolName === 'ENV') hintHtml = "<b>Miljö & Atmosfär</b>: Justera ljus, väder, horisont och gräskvalitet";
         else if (toolName === 'BLOCK') hintHtml = "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
         else if (toolName === 'PROPS') hintHtml = "Left Click: <b>Place Prop</b><br>Right Click: <b>Remove Prop</b>";
-        else if (toolName === 'SCULPT') hintHtml = "Hold Left: <b>Raise Ground</b><br>Hold Right: <b>Lower Ground</b>";
+        else if (toolName === 'SCULPT') {
+            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+            hintHtml = isSv
+                ? "Håll Vänster: <b>Höj mark</b><br>Håll Höger / Shift: <b>Sänk mark</b> (eller växla i panelen)"
+                : "Hold Left: <b>Raise Ground</b><br>Hold Right / Shift: <b>Lower Ground</b> (or toggle in panel)";
+        }
         else if (toolName === 'SMOOTH') hintHtml = "Hold Mouse: <b>Smooth Terrain</b>";
         else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
         else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
@@ -15665,7 +15995,9 @@
                     : `Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then click Build ${typeNameEn}`;
             }
         }
-        else if (toolName === 'RIDGE') hintHtml = "Hold Mouse: <b>Draw a Tier/Ridge line across the green</b>";
+        else if (toolName === 'RIDGE') hintHtml = (window.getGolfLanguage && window.getGolfLanguage() === 'sv')
+            ? "Håll musen: <b>Dra en ås/terrass över terrängen</b>"
+            : "Hold Mouse: <b>Draw a Tier/Ridge line across terrain</b>";
         else if (toolName === 'MEASURE') hintHtml = "Click: <b>Place Line</b> (1st = start, 2nd = end) max 20<br>Right Click: <b>Cancel / Remove Nearest</b>";
         else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
         else if (toolName === 'COLORIZE') hintHtml = "Left Click/Drag: <b>Paint object with selected color</b>";
@@ -15673,7 +16005,9 @@
         else if (toolName === 'RAMP') hintHtml = "Left Drag: <b>Draw ramp</b> from start to cursor — creates linear slope";
         else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Draw spline line & select fence/wall type in panel";
         else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter trees</b> (respects biome toggle)";
-        else if (toolName === 'NOISE') hintHtml = "Hold Left: <b>Add organic bumps</b><br>Hold Right: <b>Erode terrain</b>";
+        else if (toolName === 'NOISE') hintHtml = (window.getGolfLanguage && window.getGolfLanguage() === 'sv')
+            ? "Håll Vänster: <b>Forma kupering</b><br>Håll Höger: <b>Gröp ur & erodera</b>"
+            : "Hold Left: <b>Add organic undulations</b><br>Hold Right: <b>Erode & carve hollows</b>";
         else if (toolName === 'MTN') hintHtml = "Click on mountain: <b>Auto-paint with terrain colors</b> (flood-fill detects mountain)";
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
@@ -15684,6 +16018,9 @@
         ghostBlock.visible = false;
         sculptBrushCursor.visible = false;
         ghostTree.visible = false;
+        if(toolName !== 'FLATTEN') {
+            safeSetDisplay('flatten-hud', 'none');
+        }
         if(toolName !== 'MEASURE') {
             document.getElementById('measure-hud').style.display = 'none';
             if(typeof measureLines !== 'undefined') measureLines.visible = false;
@@ -15997,6 +16334,7 @@
     let activeRotatingTee = null;
     function onMouseMove(event) {
         if(appMode !== 'BUILD') return;
+        if(isSculpting && activeSculptPointerId !== null && event.pointerId !== undefined && event.pointerId !== activeSculptPointerId) return;
         event.preventDefault();
         
         let rect = renderer.domElement.getBoundingClientRect();
@@ -16186,6 +16524,8 @@
                     window.GreenStudio.onMouseMove(event, lastHitPoint, raycaster);
                 } else if (currentTool === 'SMART_BUILDER' && window._smartBuilderType === 'FAIRWAY' && window.FairwayStudio) {
                     window.FairwayStudio.onMouseMove(event, lastHitPoint, raycaster);
+                } else if (currentTool === 'SMART_BUILDER' && window._smartBuilderType === 'BUNKER' && window.BunkerStudio) {
+                    window.BunkerStudio.onMouseMove(event, lastHitPoint, raycaster);
                 }
                 
                 if (currentTool === 'COLORIZE' && event.buttons === 1) {
@@ -16748,7 +17088,7 @@
 
 
 
-    function applySculpting() {
+    function applySculpting(dt = 0.01667) {
         if (!isSculpting || !lastHitPoint) {
             previousFrameHitPoint = null;
             return;
@@ -16760,14 +17100,23 @@
         let p1 = previousFrameHitPoint ? previousFrameHitPoint : lastHitPoint;
         let p2 = lastHitPoint;
         
+        // SF-03: Delta-time normalization factor against 60 FPS standard (16.67ms)
+        let dtScale = Math.min(Math.max((dt || 0.01667) / (1/60), 0.1), 3.0);
+        
         if (!previousFrameHitPoint) {
-            window.sculptAnchorY = p2.y;
+            if (window.sculptAnchorY === null || window.sculptAnchorY === undefined) {
+                window.sculptAnchorY = p2.y;
+                if (window.terrainFloorEnabled !== false) {
+                    let floorH = (window.terrainFloorLevel != null) ? window.terrainFloorLevel : -2.0;
+                    if (window.sculptAnchorY < floorH) window.sculptAnchorY = floorH;
+                }
+            }
             // QoL-2: Show flatten target height
             let fHud = document.getElementById('flatten-hud');
             if(fHud) {
                 if(currentTool === 'FLATTEN') {
                     fHud.style.display = 'block';
-                    fHud.textContent = 'Flatten Target: ' + p2.y.toFixed(1) + 'm';
+                    fHud.textContent = 'Flatten Target: ' + window.sculptAnchorY.toFixed(1) + 'm';
                 } else {
                     fHud.style.display = 'none';
                 }
@@ -16860,9 +17209,27 @@
                 }
             }
             if (updatePos) {
+                strokeHasModified = true;
+                if (strokePendingUndo) {
+                    if (undoStack.length >= 20) undoStack.shift();
+                    undoStack.push(strokePendingUndo);
+                    redoStack.length = 0;
+                    updateUndoRedoUI();
+                    strokePendingUndo = null;
+                    let sText = document.getElementById('save-status-text');
+                    let sIcon = document.getElementById('save-status-icon');
+                    let sInd = document.getElementById('save-status-indicator');
+                    if (sText) sText.textContent = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Ändrad' : 'Unsaved';
+                    if (sIcon) sIcon.textContent = '●';
+                    if (sInd) {
+                        sInd.style.color = '#fbbf24';
+                        sInd.style.background = 'rgba(251,191,36,0.1)';
+                        sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+                    }
+                }
                 planeGeo.attributes.position.needsUpdate = true;
                 // computeVertexNormals is intentionally omitted here to prevent severe lag.
-                // It is handled in the pointerup event listener instead.
+                // It is handled in finalizeSculptStroke instead.
                 if (window._terrainChunks) {
                     window._terrainChunks.markAllDirty(); // Ramp modifies large area from snapshot
                     window._terrainChunks.syncDirtyPositions();
@@ -16872,8 +17239,9 @@
         }
         // -------------------------------------------------------------
 
-        let radius = currentTool === 'FLATTEN' ? currentBrushSize * 1.5 : currentBrushSize;
-        let strength = (window.sculptStrength || 0.02) * sculptDirection; 
+        // SF-07: Match actual radius to visual brush cursor (1:1)
+        let radius = currentBrushSize;
+        let strength = (window.sculptStrength || 0.02) * sculptDirection * dtScale; 
         
         let updatePos = false;
         
@@ -16927,12 +17295,61 @@
             }
             pCtx.shadowBlur = 0; // Reset
             if(mapTex) mapTex.needsUpdate = true;
+
+            // REAL-TIME 3D GRASS MASK SYNC:
+            // Update roughMaskCtx simultaneously so 3D grass instantly parts/clears under the brush in 60 FPS
+            if (window.roughMaskCtx) {
+                let rmCtx = window.roughMaskCtx;
+                let sSurf = window._smartPaintSurface || 'fairway';
+                let maskColor = 'rgb(0, 0, 0)'; // default: clear grass (fairway, green, waste, water, ob)
+                if (sSurf === 'rough') {
+                    maskColor = 'rgb(255, 0, 0)'; // R=255 -> 3D rough grass
+                } else if (sSurf === 'fescue') {
+                    maskColor = 'rgb(0, 255, 0)'; // G=255 -> 3D deep rough grass
+                } else if (sSurf === 'bunker') {
+                    maskColor = 'rgb(0, 128, 0)'; // G=128 (0.502) -> discard grass in shader
+                } else if (sSurf === 'semi') {
+                    maskColor = 'rgb(0, 0, 255)'; // B=255 -> discard grass in shader
+                } else if (sSurf === 'foregreen') {
+                    maskColor = 'rgb(128, 0, 0)'; // R=128 -> discard grass in shader
+                } else if (sSurf === 'custom') {
+                    let cfg = window.CURRENT_BIOME_CONFIG || {};
+                    let hex = '#' + targetPaintColor.getHexString();
+                    if (hex === (cfg.roughColor || '#4a782b')) maskColor = 'rgb(255, 0, 0)';
+                    else if (hex === (cfg.fescueColor || '#2d4c1a')) maskColor = 'rgb(0, 255, 0)';
+                    else if (hex === (cfg.bunkerColor || '#e0d8a4')) maskColor = 'rgb(0, 128, 0)';
+                    else maskColor = 'rgb(0, 0, 0)';
+                }
+
+                rmCtx.globalCompositeOperation = 'source-over';
+                rmCtx.lineCap = (currentBrushShape === 'SQUARE' && p1.distanceTo(p2) >= 0.1) ? 'butt' : 'round';
+                rmCtx.lineJoin = 'round';
+                rmCtx.strokeStyle = maskColor;
+                rmCtx.fillStyle = maskColor;
+                rmCtx.lineWidth = cRad * 2;
+                rmCtx.beginPath();
+                if (p1.distanceTo(p2) < 0.1) {
+                    if (currentBrushShape === 'SQUARE') {
+                        let cr = cRad * 0.15;
+                        rmCtx.roundRect(pCtx2X - cRad, pCtx2Z - cRad, cRad*2, cRad*2, cr);
+                    } else {
+                        rmCtx.arc(pCtx2X, pCtx2Z, cRad, 0, Math.PI*2);
+                    }
+                    rmCtx.fill();
+                } else {
+                    rmCtx.moveTo(pCtx1X, pCtx1Z);
+                    rmCtx.lineTo(pCtx2X, pCtx2Z);
+                    rmCtx.stroke();
+                }
+                if (window.roughMaskTex) window.roughMaskTex.needsUpdate = true;
+            }
+
+            strokeHasModified = true;
+            return; // Vi skulpterar inga höjder vid ren målning!
         }
         // WATER ALPHA MASK: Do NOT paint here — deferred to after terrain dig
         // The mask is rebuilt from actual water mesh vertices after the sculpt loop,
         // so water only appears where terrain is truly below the water level.
-        
-        if (currentTool === 'PAINT') return; // Vi skulpterar inga höjder vid ren målning!
         
         let l2 = (p1.x - p2.x)*(p1.x - p2.x) + (p1.z - p2.z)*(p1.z - p2.z);
         
@@ -16954,6 +17371,58 @@
         let gzMax = Math.min(TERRAIN_SEGS, Math.ceil((maxZ + half) / step));
 
         let _smoothStride = TERRAIN_SEGS + 1;
+
+        // SF-10: Stable direction vector for Ridge across trajectory (avoids frame-to-frame mouse jitter)
+        if (currentTool === 'RIDGE') {
+            if (!window.ridgeStartPt) {
+                window.ridgeStartPt = p2.clone();
+                window.ridgeLastKeyPoint = p2.clone();
+                window.ridgeDir = null;
+            }
+            let distFromKey = p2.distanceTo(window.ridgeLastKeyPoint);
+            if (distFromKey >= 0.5) {
+                let rdx = p2.x - window.ridgeLastKeyPoint.x;
+                let rdz = p2.z - window.ridgeLastKeyPoint.z;
+                let rdlen = Math.hypot(rdx, rdz);
+                if (rdlen > 0.01) {
+                    window.ridgeDir = { x: rdx / rdlen, z: rdz / rdlen };
+                    window.ridgeLastKeyPoint = p2.clone();
+                }
+            }
+            if (!window.ridgeDir) {
+                let camDir = new THREE.Vector3();
+                camera.getWorldDirection(camDir);
+                let camLen = Math.hypot(camDir.x, camDir.z);
+                if (camLen > 0.001) {
+                    window.ridgeDir = { x: -camDir.z / camLen, z: camDir.x / camLen };
+                } else {
+                    window.ridgeDir = { x: 1, z: 0 };
+                }
+            }
+        }
+
+        // SF-05: Jacobi pre-pass copy for bounding box to ensure 100% symmetric smoothing without directional bias
+        let smoothRowMin = Math.max(0, gzMin - 1);
+        let smoothRowMax = Math.min(TERRAIN_SEGS, gzMax + 1);
+        let smoothColMin = Math.max(0, gxMin - 1);
+        let smoothColMax = Math.min(TERRAIN_SEGS, gxMax + 1);
+        let smoothBoxCols = smoothColMax - smoothColMin + 1;
+        let smoothBoxRows = smoothRowMax - smoothRowMin + 1;
+        let smoothNeeded = smoothBoxCols * smoothBoxRows;
+        
+        if (currentTool === 'SMOOTH') {
+            if (!_smoothBoxBuffer || _smoothBoxBuffer.length < smoothNeeded) {
+                _smoothBoxBuffer = new Float32Array(Math.max(smoothNeeded, 4096));
+            }
+            for (let r = 0; r < smoothBoxRows; r++) {
+                let gz = smoothRowMin + r;
+                let baseIdx = (gz * _smoothStride + smoothColMin) * 3 + 2;
+                let outOffset = r * smoothBoxCols;
+                for (let c = 0; c < smoothBoxCols; c++) {
+                    _smoothBoxBuffer[outOffset + c] = positions[baseIdx + c * 3];
+                }
+            }
+        }
 
         for (let gz = gzMin; gz <= gzMax; gz++) {
             for (let gx = gxMin; gx <= gxMax; gx++) {
@@ -16992,42 +17461,44 @@
                     positions[i*3 + 2] += strength * falloff;
                     updatePos = true;
                 } else if (currentTool === 'SMOOTH') {
-                    // Laplacian smoothing: average of 4 direct neighbors (N/S/E/W)
+                    // SF-05: Jacobi smoothing using immutable pre-pass buffer for 100% rotational symmetry
+                    let getBoxH = (z, x) => _smoothBoxBuffer[(z - smoothRowMin) * smoothBoxCols + (x - smoothColMin)];
+                    let currH = getBoxH(gz, gx);
                     let nCount = 0;
                     let nSum = 0;
                     // North
-                    if (gz > 0) { nSum += positions[((gz-1)*_smoothStride + gx)*3 + 2]; nCount++; }
+                    if (gz > 0) { nSum += getBoxH(gz - 1, gx); nCount++; }
                     // South
-                    if (gz < TERRAIN_SEGS) { nSum += positions[((gz+1)*_smoothStride + gx)*3 + 2]; nCount++; }
+                    if (gz < TERRAIN_SEGS) { nSum += getBoxH(gz + 1, gx); nCount++; }
                     // West
-                    if (gx > 0) { nSum += positions[(gz*_smoothStride + gx-1)*3 + 2]; nCount++; }
+                    if (gx > 0) { nSum += getBoxH(gz, gx - 1); nCount++; }
                     // East
-                    if (gx < TERRAIN_SEGS) { nSum += positions[(gz*_smoothStride + gx+1)*3 + 2]; nCount++; }
+                    if (gx < TERRAIN_SEGS) { nSum += getBoxH(gz, gx + 1); nCount++; }
                     if (nCount > 0) {
                         let localAvg = nSum / nCount;
-                        // Smooth intensity scales with brush size: small brush = gentle, large = aggressive
-                        let sizeBoost = Math.max(1, currentBrushSize / 6);  // 6m = baseline (1x)
-                        let smoothFactor = Math.min(0.3 * sizeBoost * falloff, 0.95);
-                        positions[i*3 + 2] += (localAvg - positions[i*3 + 2]) * smoothFactor;
+                        // SF-14: Strength-controlled smoothing scaled with brush size and dtScale
+                        let sizeBoost = Math.max(1, currentBrushSize / 6);
+                        let strVal = window.sculptStrength ? (window.sculptStrength * 15) : 0.3; // baseline 2x = 0.02 * 15 = 0.3
+                        let baseAlpha = Math.min(strVal * sizeBoost * falloff, 0.95);
+                        let smoothFactor = 1.0 - Math.pow(Math.max(0, 1.0 - baseAlpha), dtScale);
+                        smoothFactor = Math.min(Math.max(smoothFactor, 0), 0.95);
+                        positions[i*3 + 2] = currH + (localAvg - currH) * smoothFactor;
+                        updatePos = true;
                     }
-                    updatePos = true;
                 } else if (currentTool === 'NOISE') {
-                    // Golf-grade procedural noise with pattern selection + amplitude control
+                    // SF-04 & SF-06: Snapshot-based procedural noise with true max amplitude and erosion
                     let scale = window.noiseScale || 0.15;
                     let amp = window.noiseAmplitude || 1.0;
                     let noiseFn = window.noisePatterns[window.currentNoisePattern] || window.noisePatterns.PERLIN;
                     let noise = noiseFn(vx * scale, vz * scale);
-                    let targetH = positions[i*3 + 2] + (noise * amp * 0.5 * Math.sign(strength));
-                    positions[i*3 + 2] += (targetH - positions[i*3 + 2]) * 0.12 * falloff;
+                    let baseH = window.strokeBaseHeights ? window.strokeBaseHeights[i*3 + 2] : positions[i*3 + 2];
+                    // Right-click erodes / carves downward
+                    let offset = (sculptDirection === -1) ? -Math.abs(noise) * amp : noise * amp;
+                    let targetH = baseH + offset;
+                    let baseRate = 0.15 * falloff;
+                    let lerpRate = 1.0 - Math.pow(Math.max(0, 1.0 - baseRate), dtScale);
+                    positions[i*3 + 2] += (targetH - positions[i*3 + 2]) * lerpRate;
                     updatePos = true;
-                }
-
-                // === TERRAIN FLOOR: Prevent sculpting below minimum height ===
-                // Soft floor allows bunkers/mild depressions but blocks unrealistic holes
-                // Bypassed for WATER (needs to dig lakes), FLATTEN (targets specific height), RIDGE (creates valleys)
-                if (updatePos && window.terrainFloorEnabled !== false && currentTool !== 'WATER' && currentTool !== 'FLATTEN' && currentTool !== 'RIDGE') {
-                    let floorH = (window.terrainFloorLevel != null) ? window.terrainFloorLevel : -2.0;
-                    if (positions[i*3 + 2] < floorH) positions[i*3 + 2] = floorH;
                 }
 
                 if (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') {
@@ -17071,35 +17542,31 @@
                         }
                     }
                 } else if (currentTool === 'FLATTEN') {
-                    // Mjukutjämning mot just den höjden man klickade på! Perfekt för platåer och upphöjda greener.
-                    positions[i*3 + 2] += (p1.y - positions[i*3 + 2]) * 0.2 * falloff;
+                    // SF-02 & SF-14: Locked anchor height with dtScale and strength control
+                    let targetY = (window.sculptAnchorY !== null && window.sculptAnchorY !== undefined) ? window.sculptAnchorY : p2.y;
+                    let strVal = window.sculptStrength ? (window.sculptStrength * 10) : 0.2; // baseline 2x = 0.02 * 10 = 0.2
+                    let baseRate = Math.min(strVal * falloff, 0.95);
+                    let flattenRate = 1.0 - Math.pow(Math.max(0, 1.0 - baseRate), dtScale);
+                    flattenRate = Math.min(Math.max(flattenRate, 0), 0.95);
+                    positions[i*3 + 2] += (targetY - positions[i*3 + 2]) * flattenRate;
                     updatePos = true;
                 } else if (currentTool === 'RIDGE') {
                     if(wPosArray) {
                         wPosArray[i] = -99;
                         window.waterBaseZ[i] = -99;
                     }
-                    // Vektor-kalkyl tvärs över mus-dragriktningen p1 -> p2
-                    let dX = p2.x - p1.x;
-                    let dZ = p2.z - p1.z;
-                    let len = Math.sqrt(dX*dX + dZ*dZ + 1e-6);
-                    if (len > 0.001) {
-                        let nX = -dZ / len;
-                        let nZ = dX / len;
-                        
-                        // Dot Product för avstånd till centrumlinje med tecken (+/-) avgör vilken sida
-                        let dotDiff = (vx - p2.x)*nX + (vz - p2.z)*nZ;
-                        let side = Math.sign(dotDiff);
-                        let distToLine = Math.abs(dotDiff);
-                        
-                        // Bygg en skarp spine/ridge
-                        // Maximal höjdeffekt en bit bort från centrum (distToLine / 1.5)
-                        let ridgeProfile = Math.min(distToLine / 1.5, 1.0);
-                        
-                        // Pusha upp ena sidan, ner andra + sculptDirection ger möjlighet att byta håll
-                        positions[i*3 + 2] += side * (0.05 * sculptDirection) * ridgeProfile * falloff;
-                        updatePos = true;
-                    }
+                    // SF-10: Stable direction vector across trajectory
+                    let rDir = window.ridgeDir || { x: 1, z: 0 };
+                    let nX = -rDir.z;
+                    let nZ = rDir.x;
+                    let dotDiff = (vx - p2.x)*nX + (vz - p2.z)*nZ;
+                    let side = Math.sign(dotDiff);
+                    let distToLine = Math.abs(dotDiff);
+                    let ridgeProfile = Math.min(distToLine / 1.5, 1.0);
+                    let strVal = window.sculptStrength ? (window.sculptStrength * 2.5) : 0.05; // baseline 2x = 0.02 * 2.5 = 0.05
+                    let ridgeStep = strVal * sculptDirection * dtScale;
+                    positions[i*3 + 2] += side * ridgeStep * ridgeProfile * falloff;
+                    updatePos = true;
                 } else if (currentTool === 'WATER') {
                     if(sculptDirection === -1) {
                         // QoL-4: Drain mode (right-click) — raise terrain back up and clear water mask
@@ -17130,10 +17597,34 @@
                     }
                     updatePos = true;
                 }
+
+                // SF-11: Floor lock respects Flatten and Ridge; bypassed ONLY for Water lake basins
+                if (updatePos && window.terrainFloorEnabled !== false && currentTool !== 'WATER') {
+                    let floorH = (window.terrainFloorLevel != null) ? window.terrainFloorLevel : -2.0;
+                    if (positions[i*3 + 2] < floorH) positions[i*3 + 2] = floorH;
+                }
             }
         } // end gx loop
         } // end gz loop
         if (updatePos) {
+            strokeHasModified = true;
+            if (strokePendingUndo) {
+                if (undoStack.length >= 20) undoStack.shift();
+                undoStack.push(strokePendingUndo);
+                redoStack.length = 0;
+                updateUndoRedoUI();
+                strokePendingUndo = null;
+                let sText = document.getElementById('save-status-text');
+                let sIcon = document.getElementById('save-status-icon');
+                let sInd = document.getElementById('save-status-indicator');
+                if (sText) sText.textContent = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Ändrad' : 'Unsaved';
+                if (sIcon) sIcon.textContent = '●';
+                if (sInd) {
+                    sInd.style.color = '#fbbf24';
+                    sInd.style.background = 'rgba(251,191,36,0.1)';
+                    sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+                }
+            }
             planeGeo.attributes.position.needsUpdate = true;
             // Sync chunk positions (fast, normals deferred to mouseup)
             if (window._terrainChunks) {
@@ -17204,6 +17695,7 @@ window.triggerExplosion = function(x, y, z) {
         if (window.updateTracerFade) window.updateTracerFade(); // Tracer fade-out after landing
         if (window.GreenStudio && window.GreenStudio.update) window.GreenStudio.update(dt); // 3D Green Studio animation & easing
         if (window.FairwayStudio && window.FairwayStudio.update) window.FairwayStudio.update(dt); // 3D Fairway Studio animation & easing
+        if (window.BunkerStudio && window.BunkerStudio.update) window.BunkerStudio.update(dt); // 3D Bunker Studio animation & easing
 
         // --- Process Explosions ---
         if (window.activeExplosions && window.activeExplosions.length > 0) {
@@ -17832,7 +18324,7 @@ window.triggerExplosion = function(x, y, z) {
             }
         }
 
-        applySculpting();
+        applySculpting(dt);
         if (isSculpting && sculptBrushCursor && sculptBrushCursor.visible && window.getTerrainHeight) {
             sculptBrushCursor.position.y = window.getTerrainHeight(sculptBrushCursor.position.x, sculptBrushCursor.position.z) + 0.5;
         }
@@ -19248,8 +19740,13 @@ window.triggerExplosion = function(x, y, z) {
             if (typeof window.updateActiveFairwayOutline === 'function') {
                 window.updateActiveFairwayOutline();
             }
-            if (type === 'BUNKER' && typeof window.updateSBBunkerControls === 'function') {
-                window.updateSBBunkerControls();
+            if (type === 'BUNKER') {
+                if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+                if (window.BunkerStudio) {
+                    window.BunkerStudio.sync();
+                }
+            } else {
+                if (window.BunkerStudio) window.BunkerStudio.hide();
             }
             if (typeof window.updateActiveBunkerOutline === 'function') {
                 window.updateActiveBunkerOutline();
@@ -19535,250 +20032,24 @@ window.triggerExplosion = function(x, y, z) {
 
         // Synchronize Bunker Studio Panel
         window.updateSBBunkerControls = function() {
-            let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-            let bunkers = (typeof ensureHoleBunkers === 'function') ? ensureHoleBunkers(hole) : (hole && hole.bunkers ? hole.bunkers : (hole && hole.bunkerData ? [hole.bunkerData] : []));
-            let activeIdx = (hole && hole.activeBunkerIndex !== undefined) ? hole.activeBunkerIndex : null;
-            let activeBd = (bunkers && activeIdx !== null && activeIdx !== undefined && bunkers[activeIdx]) ? bunkers[activeIdx] : null;
-
-            let selectorBar = document.getElementById('sbk-selector-bar');
-            let banner = document.getElementById('sbk-status-banner');
-            let lockedBanner = document.getElementById('sbk-studio-locked-banner');
-            let drawingGuide = document.getElementById('sbk-drawing-guide');
-            let paramsEl = document.getElementById('sbk-studio-params');
-            let scaleCard = document.getElementById('sbk-scale-card');
-            let scaleBadge = document.getElementById('sbk-scale-area-badge');
-            let actActions = document.getElementById('sbk-active-actions');
-            let buildClearGroup = document.getElementById('sb-build-clear-group');
-            let buildBtn = document.getElementById('sb-build-btn');
-            let edgeCtrl = document.getElementById('sb-edge-controls');
-            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-
-            // 1. RENDER MULTI-BUNKER SELECTOR BAR & HEADER
-            let headerRow = document.getElementById('sbk-header-row');
-            let countEl = document.getElementById('sbk-count');
-            let addBtn = document.getElementById('sbk-add-bunker-btn');
-
-            if (bunkers && bunkers.length > 0) {
-                if (headerRow) headerRow.style.display = 'flex';
-                if (countEl) countEl.textContent = bunkers.length;
-
-                let isDrawingNew = (activeIdx === null);
-                if (addBtn) {
-                    addBtn.style.cssText = isDrawingNew
-                        ? 'background:rgba(251,191,36,0.25); color:#fbbf24; border:1px solid #fbbf24; border-radius:5px; padding:3px 8px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px; box-shadow:0 0 8px rgba(251,191,36,0.35);'
-                        : 'background:#0f172a; color:#fbbf24; border:1px dashed rgba(251,191,36,0.6); border-radius:5px; padding:3px 8px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px; transition:all 0.2s;';
-                    addBtn.innerHTML = `<span>➕</span> <span>${isSv ? 'Ny Bunker' : 'New Bunker'}</span>`;
+            if (window._smartBuilderType === 'BUNKER') {
+                let buildClearCtrl = document.getElementById('sb-build-clear-group');
+                if (buildClearCtrl) buildClearCtrl.style.display = 'none';
+                let sbHint = document.getElementById('sb-hint-text');
+                if (sbHint) sbHint.style.display = 'none';
+                let edgeCtrl = document.getElementById('sb-edge-controls');
+                if (edgeCtrl) edgeCtrl.style.display = 'none';
+                if (window.BunkerStudio) {
+                    window.BunkerStudio.sync();
                 }
-
-                if (selectorBar) {
-                    selectorBar.style.display = 'flex';
-                    selectorBar.innerHTML = '';
-
-                    let count = bunkers.length;
-                    bunkers.forEach((bd, idx) => {
-                        let bArea = 0;
-                        if (bd.points && bd.points.length >= 3) {
-                            for (let i = 0, j = bd.points.length - 1; i < bd.points.length; j = i++) {
-                                bArea += (bd.points[j].x + bd.points[i].x) * (bd.points[j].z - bd.points[i].z);
-                            }
-                            bArea = Math.round(Math.abs(bArea / 2));
-                        }
-                        let isSelected = (activeIdx === idx);
-                        let btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.title = `Bunker ${idx + 1} (~${bArea} m²)`;
-
-                        let label = '';
-                        if (count === 1) {
-                            label = `<span>🏖️ Bunker 1</span><span style="font-size:8px; opacity:0.85;">(~${bArea}m²)</span>`;
-                        } else if (count === 2) {
-                            label = `<span>🏖️ BK ${idx + 1}</span><span style="font-size:8px; opacity:0.8;">(~${bArea}m²)</span>`;
-                        } else {
-                            label = `<span>🏖️ BK ${idx + 1}</span>`;
-                        }
-
-                        btn.style.cssText = isSelected 
-                            ? 'flex:1 1 auto; min-width:48px; background:#fbbf24; color:#0f172a; border:1px solid #f59e0b; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; box-shadow:0 0 6px rgba(251,191,36,0.4); transition:all 0.15s;'
-                            : 'flex:1 1 auto; min-width:48px; background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; transition:all 0.15s;';
-                        btn.innerHTML = label;
-                        btn.onclick = function() {
-                            if (typeof window.selectActiveBunker === 'function') {
-                                window.selectActiveBunker(window.currentHoleIndex, idx);
-                            }
-                        };
-                        selectorBar.appendChild(btn);
-                    });
-
-                    if (count > 1) {
-                        let delAllPill = document.createElement('button');
-                        delAllPill.type = 'button';
-                        delAllPill.title = isSv ? 'Radera alla bunkrar på hålet' : 'Delete all bunkers on hole';
-                        delAllPill.style.cssText = 'flex:0 0 auto; background:rgba(239,68,68,0.15); color:#ef4444; border:1px dashed #ef4444; border-radius:5px; padding:5px 7px; font-size:9.5px; font-weight:bold; cursor:pointer; transition:all 0.15s;';
-                        delAllPill.innerHTML = '<span>🗑️</span>';
-                        delAllPill.onclick = function() {
-                            if (typeof window.deleteAllSmartBunkers === 'function') {
-                                window.deleteAllSmartBunkers(window.currentHoleIndex);
-                            }
-                        };
-                        selectorBar.appendChild(delAllPill);
-                    }
-                }
-            } else {
-                if (headerRow) headerRow.style.display = 'none';
-                if (selectorBar) {
-                    selectorBar.style.display = 'none';
-                    selectorBar.innerHTML = '';
-                }
-            }
-
-            // 2. ACTIVE BUNKER STATE VS DRAWING / LOCKED STATE
-            let delAllBtn = document.getElementById('sbk-delete-all-btn');
-
-            if (activeBd && activeBd.points && activeBd.points.length >= 3) {
-                let bd = activeBd;
-                if (banner) banner.style.display = 'flex';
-                if (lockedBanner) lockedBanner.style.display = 'none';
-                if (drawingGuide) drawingGuide.style.display = 'none';
-                if (actActions) actActions.style.display = 'grid';
-                if (delAllBtn) delAllBtn.style.display = (bunkers && bunkers.length > 1) ? 'block' : 'none';
-                if (buildClearGroup && window._smartBuilderType === 'BUNKER') buildClearGroup.style.display = 'none';
-                if (buildBtn && window._smartBuilderType === 'BUNKER') buildBtn.classList.remove('pulse-green-btn');
-
-                // Unlock studio controls
-                if (paramsEl) {
-                    paramsEl.style.opacity = '1';
-                    paramsEl.style.pointerEvents = 'auto';
-                    paramsEl.style.filter = 'none';
-                }
-                if (edgeCtrl && window._smartBuilderType === 'BUNKER') {
-                    edgeCtrl.style.opacity = '1';
-                    edgeCtrl.style.pointerEvents = 'auto';
-                    edgeCtrl.style.filter = 'none';
-                }
-
-                let area = 0;
-                if (bd.points && bd.points.length >= 3) {
-                    for (let i = 0, j = bd.points.length - 1; i < bd.points.length; j = i++) {
-                        area += (bd.points[j].x + bd.points[i].x) * (bd.points[j].z - bd.points[i].z);
-                    }
-                    area = Math.abs(area / 2);
-                }
-                let badge = document.getElementById('sbk-act-status-badge');
-                if (badge) {
-                    let bkNumber = (activeIdx !== null && activeIdx !== undefined) ? (activeIdx + 1) : 1;
-                    badge.textContent = (isSv ? `✅ Aktiv: Bunker ${bkNumber} (~` : `✅ Active: Bunker ${bkNumber} (~`) + Math.round(area) + ' m²)';
-                }
-
-                if (scaleCard) scaleCard.style.display = 'block';
-                if (scaleBadge) scaleBadge.textContent = '~' + Math.round(area) + ' m²';
-
-                let shape = bd.shape || 'BOWL';
-                window._smartBunkerShape = shape;
-                ['BOWL','FLAT'].forEach(s => {
-                    let btn = document.getElementById('sb-shape-' + s.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (s === shape) ? '#4ade80' : '#334155';
-                        btn.style.color = (s === shape) ? '#0f172a' : '#94a3b8';
-                    }
-                });
-
-                let dS = document.getElementById('sb-bunker-depth');
-                let dV = document.getElementById('sb-bunker-depth-val');
-                let depth = bd.depth !== undefined ? bd.depth : 0.8;
-                if (dS && document.activeElement !== dS) dS.value = depth;
-                if (dV) dV.textContent = depth.toFixed(1) + 'm';
-
-                let lS = document.getElementById('sb-bunker-lip');
-                let lV = document.getElementById('sb-bunker-lip-val');
-                let lip = bd.lipHeight !== undefined ? bd.lipHeight : 0.3;
-                if (lS && document.activeElement !== lS) lS.value = lip;
-                if (lV) lV.textContent = lip.toFixed(2) + 'm';
-
-                let esS = document.getElementById('sg-edge-sharpness');
-                let esV = document.getElementById('sg-edge-val');
-                let es = bd.edgeSharpness !== undefined ? bd.edgeSharpness : 100;
-                if (esS && document.activeElement !== esS) esS.value = es;
-                if (esV) esV.textContent = (es === 100) ? 'Sharp' : (es === 0 ? 'Soft' : es + '%');
-
-                let outlineBtn = document.getElementById('sbk-toggle-outline-btn');
-                if (outlineBtn) {
-                    let showOutline = (window._showBunkerOutline !== false);
-                    outlineBtn.style.background = showOutline ? '#1e293b' : 'rgba(15,23,42,0.8)';
-                    outlineBtn.style.color = showOutline ? '#fbbf24' : '#64748b';
-                    outlineBtn.style.borderColor = showOutline ? 'rgba(251,191,36,0.6)' : '#334155';
-                    outlineBtn.innerHTML = showOutline
-                        ? (typeof window.t === 'function' ? window.t('sb_bunker_outline_visible') : '👁️ Gul kontur: Synlig')
-                        : (typeof window.t === 'function' ? window.t('sb_bunker_outline_hidden') : '👁️‍🗨️ Gul kontur: Dold');
-                }
-            } else {
-                if (banner) banner.style.display = 'none';
-                if (actActions) actActions.style.display = 'none';
-                if (scaleCard) scaleCard.style.display = 'none';
-                if (lockedBanner) {
-                    lockedBanner.style.display = 'block';
-                    if (bunkers && bunkers.length > 0) {
-                        lockedBanner.innerHTML = `<span style="color:#fbbf24; font-size:9px; font-weight:bold;">✏️ ${isSv ? 'Ritar ny bunker... Klicka på en bunker ovan för att redigera den.' : 'Drawing new bunker... Click a bunker above to edit it.'}</span>`;
-                    } else {
-                        lockedBanner.innerHTML = `<span style="color:#94a3b8; font-size:9px;" data-i18n="sb_bunker_studio_locked_hint">🔒 ${isSv ? 'Live Studio aktiveras när bunkern är byggd' : 'Live Studio activates once bunker is built'}</span>`;
-                    }
-                }
-                if (buildClearGroup && window._smartBuilderType === 'BUNKER') buildClearGroup.style.display = 'flex';
-
-                // Dim studio controls when bunker is not yet built or drawing new
-                if (paramsEl) {
-                    paramsEl.style.opacity = '0.45';
-                    paramsEl.style.pointerEvents = 'none';
-                    paramsEl.style.filter = 'grayscale(0.2)';
-                }
-                if (edgeCtrl && window._smartBuilderType === 'BUNKER') {
-                    edgeCtrl.style.opacity = '0.45';
-                    edgeCtrl.style.pointerEvents = 'none';
-                    edgeCtrl.style.filter = 'grayscale(0.2)';
-                }
-
-                // Check if spline points are being placed
-                let pts = window.smartGreenPoints || [];
-                if (pts.length >= 3) {
-                    if (drawingGuide) drawingGuide.style.display = 'none';
-                    if (buildBtn && window._smartBuilderType === 'BUNKER') {
-                        buildBtn.classList.add('pulse-green-btn');
-                    }
-                } else {
-                    if (drawingGuide) drawingGuide.style.display = 'block';
-                    if (buildBtn && window._smartBuilderType === 'BUNKER') {
-                        buildBtn.classList.remove('pulse-green-btn');
-                    }
-                }
-
-                // Sync current values with UI
-                let dS = document.getElementById('sb-bunker-depth');
-                let dV = document.getElementById('sb-bunker-depth-val');
-                if (dS && dV) {
-                    let depth = parseFloat(dS.value) || 0.8;
-                    dV.textContent = depth.toFixed(1) + 'm';
-                }
-                let lS = document.getElementById('sb-bunker-lip');
-                let lV = document.getElementById('sb-bunker-lip-val');
-                if (lS && lV) {
-                    let lip = parseFloat(lS.value) || 0.3;
-                    lV.textContent = lip.toFixed(2) + 'm';
-                }
-                let shape = window._smartBunkerShape || 'BOWL';
-                ['BOWL','FLAT'].forEach(s => {
-                    let btn = document.getElementById('sb-shape-' + s.toLowerCase());
-                    if(btn) {
-                        btn.style.background = (s === shape) ? '#4ade80' : '#334155';
-                        btn.style.color = (s === shape) ? '#0f172a' : '#94a3b8';
-                    }
-                });
             }
         };
-        
 
     </script>
 
 <script src="green-studio.js?v=22"></script>
 <script src="fairway-studio.js?v=1"></script>
+<script src="bunker-studio.js?v=1"></script>
 <script src="smart-builder.js?v=20"></script>
 <script src="arcade-lm-bridge.js"></script>
 

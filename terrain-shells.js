@@ -138,8 +138,8 @@
 
             // ── Water exclusion: no 3D grass inside water bodies or on submerged banks ──
             float waterMask = texture2D(uWaterMap, vUv).r;
-            if (waterMask > 0.015) discard;
-            float shoreFade = 1.0 - smoothstep(0.0, 0.02, waterMask);
+            if (waterMask > 0.05) discard;
+            float shoreFade = 1.0 - smoothstep(0.005, 0.04, waterMask);
             if (shoreFade < 0.05) discard;
 
             // ── Biome mask: R=rough, G=deep ──
@@ -351,7 +351,8 @@
                 if (_isMobile && isPlayMode) {
                     s.mat.uniforms.uMaxDist.value = preset.maxDist * 0.6;
                 } else if (!_isMobile && !isPlayMode) {
-                    s.mat.uniforms.uMaxDist.value = 9999;  // Desktop build: no limit
+                    // CODEX M2 FIX: Desktop build scales comfortably (LOW=100m, MED=200m, HIGH=9999m)
+                    s.mat.uniforms.uMaxDist.value = this.quality === 'HIGH' ? 9999 : preset.maxDist * 1.6;
                 } else {
                     s.mat.uniforms.uMaxDist.value = preset.maxDist;
                 }
@@ -412,9 +413,11 @@
                 let oldStep = size / mSegs;
                 let gx = (worldX + half) / oldStep;
                 let gz = (worldZ + half) / oldStep;
-                gx = Math.max(0, Math.min(mSegs - 1, gx));
-                gz = Math.max(0, Math.min(mSegs - 1, gz));
-                let ix = Math.floor(gx), iz = Math.floor(gz);
+                // CODEX M5 FIX: Allow gx/gz to reach mSegs so the outer edge boundary is sampled with fx/fz = 1.0
+                gx = Math.max(0, Math.min(mSegs, gx));
+                gz = Math.max(0, Math.min(mSegs, gz));
+                let ix = Math.min(mSegs - 1, Math.floor(gx));
+                let iz = Math.min(mSegs - 1, Math.floor(gz));
                 let fx = gx - ix, fz = gz - iz;
 
                 let i00 = (iz * mStride + ix) * 3;
@@ -462,11 +465,26 @@
             this.customGeo.computeBoundingSphere();
         }
 
+        // CODEX M1 FIX: Smooth 60 FPS live shader uniforms update without rebuilding geometry or meshes
+        setHeights(roughH, deepH) {
+            this.roughHeight = roughH;
+            this.deepHeight = deepH;
+            let maxH = Math.max(roughH, deepH);
+            for (let s of this.shells) {
+                if (s.mat && s.mat.uniforms) {
+                    s.mat.uniforms.uRoughH.value = roughH;
+                    s.mat.uniforms.uDeepH.value = deepH;
+                    s.mat.uniforms.uMaxHeight.value = maxH;
+                }
+            }
+        }
+
         refresh() { this._rebuild(); }
 
         getStats() {
             let visible = 0, tris = 0;
-            let segs = window.TERRAIN_SEGS || 100;
+            // CODEX L1 FIX: Use actual shell segments instead of TERRAIN_SEGS
+            let segs = (this.customGeo && this.customGeo.parameters && this.customGeo.parameters.widthSegments) ? this.customGeo.parameters.widthSegments : 200;
             for (let s of this.shells) {
                 if (s.mesh.visible) {
                     visible++;
@@ -487,7 +505,14 @@
             this.shells = [];
 
             let preset = QUALITY[this.quality];
-            if (!preset || preset.layers === 0) return;
+            // CODEX L2 FIX: Free customGeo vertex buffer from memory when quality is OFF
+            if (!preset || preset.layers === 0) {
+                if (this.customGeo) {
+                    this.customGeo.dispose();
+                    this.customGeo = null;
+                }
+                return;
+            }
 
             this._updateColors();
             let maxH = Math.max(this.roughHeight, this.deepHeight);
