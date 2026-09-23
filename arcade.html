@@ -489,7 +489,23 @@
                 sb_waste: "Waste",
                 sb_custom: "Egen färg:",
                 sb_use_custom: "Använd egen",
-                sb_edge_hardness: "Penselns kantskärpa"
+                sb_edge_hardness: "Penselns kantskärpa",
+                sb_teebox_plural: "Tee Boxar",
+                sb_new_teebox: "➕ Ny Tee Box",
+                sb_tee_step1: "Steg 1: Siktpunkt",
+                sb_aim_required: "⚠️ Krävs",
+                sb_tee_aim_desc: "Siktpunkten anger spelriktning och vrider teemarkörerna mot fairway.",
+                sb_btn_set_aim_txt: "Sätt siktpunkt på kartan",
+                sb_aim_delete: "🗑️ Ta bort siktpunkt",
+                st_step_draw: "Rita teeboxen",
+                st_draw_hint: "Klicka för att sätta ut hörn runt tee. Dra valfri punkt för att justera formen. Högerklicka för att radera.",
+                sb_build_tee: "Skapa teebox",
+                st_form_tip: "💡 Dra de vita golfbollarna för att ändra formen. Klicka på linjen för att lägga till punkt, högerklicka för att ta bort.",
+                sb_redraw_tee: "✏️ Rita om denna teebox",
+                sb_delete_tee: "🗑️ Radera denna teebox & återställ mark",
+                st_to_step2: "Steg 2: Höjd & Teer",
+                st_to_step3: "Steg 3: Klippmönster & finish",
+                st_finish: "Klar med teeboxen!"
             },
             en: {
                 inspect: "Inspect",
@@ -539,7 +555,23 @@
                 sb_waste: "Waste",
                 sb_custom: "Custom:",
                 sb_use_custom: "Use Custom",
-                sb_edge_hardness: "Freehand Edge Hardness"
+                sb_edge_hardness: "Freehand Edge Hardness",
+                sb_teebox_plural: "Tee Boxes",
+                sb_new_teebox: "➕ New Tee Box",
+                sb_tee_step1: "Step 1: Aim Point",
+                sb_aim_required: "⚠️ Required",
+                sb_tee_aim_desc: "The aim point determines playing direction and aligns tee markers toward fairway.",
+                sb_btn_set_aim_txt: "Set Aim Point on Map",
+                sb_aim_delete: "🗑️ Remove Aim Point",
+                st_step_draw: "Draw Tee Box",
+                st_draw_hint: "Click to place corners around tee. Drag points to adjust shape. Right-click to remove.",
+                sb_build_tee: "Build Tee Box",
+                st_form_tip: "💡 Drag white golf balls to edit shape. Click outline to add point, right-click to delete.",
+                sb_redraw_tee: "✏️ Redraw this tee box",
+                sb_delete_tee: "🗑️ Delete this tee box & restore ground",
+                st_to_step2: "Step 2: Elevation & Tees",
+                st_to_step3: "Step 3: Mow Pattern & Finish",
+                st_finish: "Done with tee box!"
             }
         };
         const _external_t = (typeof window.t === 'function') ? window.t : null;
@@ -2405,19 +2437,19 @@
                                 <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_semi_rough">Semi-Rough</span>
                                 <span id="sf-semirough-val" style="color:#6b9e3d; font-weight:700; font-size:9.5px;">2.0m</span>
                             </div>
-                            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" oninput="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.semiRoughWidth=parseFloat(this.value); window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#6b9e3d; cursor:pointer;">
+                            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" oninput="let v=parseFloat(this.value); let el=document.getElementById('sf-semirough-val'); if(el) el.textContent=v.toFixed(1)+'m'; if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('semiRoughWidth', v); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="width:100%; accent-color:#6b9e3d; cursor:pointer;">
                         </div>
 
                         <!-- Rough Width & Toggle -->
                         <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:10px; border:1px solid #334155;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
                                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                                    <input type="checkbox" id="sf-rough-cb" checked onchange="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.roughEnabled=this.checked; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="accent-color:#4a782b; cursor:pointer;">
+                                    <input type="checkbox" id="sf-rough-cb" checked onchange="if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('roughEnabled', this.checked); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="accent-color:#4a782b; cursor:pointer;">
                                     <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_rough">Rough</span>
                                 </label>
                                 <span id="sf-rough-val" style="color:#4a782b; font-weight:700; font-size:9.5px;">5m</span>
                             </div>
-                            <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" oninput="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.roughWidth=parseFloat(this.value); window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#4a782b; cursor:pointer;">
+                            <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" oninput="let v=parseFloat(this.value); let el=document.getElementById('sf-rough-val'); if(el) el.textContent=v.toFixed(0)+'m'; if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('roughWidth', v); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="width:100%; accent-color:#4a782b; cursor:pointer;">
                         </div>
 
                         <!-- Terrain Waviness / Difficulty Cards -->
@@ -2490,43 +2522,236 @@
                 </div>
             </div>
 
-            <!-- TEE controls -->
+            <!-- TEE controls (Dedicated Parametric Tee Studio) -->
             <div id="sb-tee-controls" style="display:none;">
-                <!-- Steg 1: Siktpunkt (Aim Point) Card -->
-                <div id="sb-tee-aim-card" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px; margin-bottom:10px; transition:all 0.2s;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="color:#38bdf8; font-size:10px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px;" data-i18n="sb_tee_step1">Steg 1: Siktpunkt</span>
-                        <span id="sb-tee-aim-badge" style="font-size:9px; font-weight:bold; padding:2px 7px; border-radius:4px; background:#ef444420; color:#ef4444; border:1px solid #ef444450;" data-i18n="sb_aim_required">⚠️ Krävs</span>
-                    </div>
-                    <div style="color:#94a3b8; font-size:9.5px; line-height:1.35; margin-bottom:8px;" data-i18n="sb_tee_aim_desc">
-                        Siktpunkten anger spelriktning och vrider teemarkörerna mot fairway.
-                    </div>
-                    <button id="sb-btn-set-aim" type="button" onclick="activateAimMode()" style="width:100%; background:#f59e0b; color:#0f172a; border:none; padding:7px 10px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;">
-                        <span>🎯</span> <span id="sb-btn-set-aim-txt" data-i18n="sb_btn_set_aim_txt">Sätt siktpunkt på kartan</span>
-                    </button>
-                    <button id="sb-aim-clear-btn" type="button" onclick="clearCurrentHoleAimPoint()" style="width:100%; background:transparent; color:#ef4444; border:1px solid #ef444440; padding:5px 8px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; margin-top:6px; display:none;" data-i18n="sb_aim_delete">🗑️ Ta bort siktpunkt</button>
+                <!-- Multi-Tee Header & Add Button -->
+                <div id="st-header-row" style="display:none; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-size:9.5px; color:#94a3b8; font-weight:bold; letter-spacing:0.5px; text-transform:uppercase;">🟦 <span data-i18n="sb_teebox_plural">Tee Boxar</span> (<span id="st-count">0</span>)</span>
+                    <button type="button" id="st-add-tee-btn" onclick="window.startNewTeeBoxDrawing()" style="background:#0f172a; color:#38bdf8; border:1px dashed rgba(56,189,248,0.6); border-radius:5px; padding:3px 8px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px; transition:all 0.2s;" data-i18n="sb_new_teebox">➕ Ny Tee Box</button>
                 </div>
 
-                <!-- Steg 2: Teemarkörer -->
-                <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;" data-i18n="sb_tee_step2">Steg 2: Teemarkörer</div>
-                <div style="background:#1e293b; padding:8px 10px; border-radius:6px; margin-bottom:6px;">
+                <!-- Multi-Tee Selector Pills Grid -->
+                <div id="st-selector-bar" style="display:none; flex-wrap:wrap; gap:4px; margin-bottom:8px;"></div>
+
+                <!-- ========================================== -->
+                <!-- MODE 1: SKAPA TEE BOX (When drawing new) -->
+                <!-- ========================================== -->
+                <div id="st-panel-unbuilt" style="display:none; flex-direction:column; gap:8px;">
+                    <!-- Steg 1: Siktpunkt (Aim Point) Card -->
+                    <div id="sb-tee-aim-card" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px; transition:all 0.2s;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="color:#38bdf8; font-size:10px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px;" data-i18n="sb_tee_step1">Steg 1: Siktpunkt</span>
+                            <span id="st-aim-badge-unbuilt" style="font-size:9px; font-weight:bold; padding:2px 7px; border-radius:4px; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.4);" data-i18n="sb_aim_required">⚠️ Krävs</span>
+                            <span id="sb-tee-aim-badge" style="display:none;"></span>
+                        </div>
+                        <div style="color:#94a3b8; font-size:9.5px; line-height:1.35; margin-bottom:8px;" data-i18n="sb_tee_aim_desc">
+                            Siktpunkten anger spelriktning och vrider teemarkörerna mot fairway.
+                        </div>
+                        <button id="sb-btn-set-aim" type="button" onclick="activateAimMode()" style="width:100%; background:#f59e0b; color:#0f172a; border:none; padding:7px 10px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;">
+                            <span>🎯</span> <span id="st-aim-btn-txt-unbuilt" data-i18n="sb_btn_set_aim_txt">Sätt siktpunkt på kartan</span>
+                            <span id="sb-btn-set-aim-txt" style="display:none;"></span>
+                        </button>
+                        <button id="st-aim-del-unbuilt" type="button" onclick="clearCurrentHoleAimPoint()" style="width:100%; background:transparent; color:#ef4444; border:1px solid rgba(239,68,68,0.3); padding:5px 8px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; margin-top:6px; display:none;" data-i18n="sb_aim_delete">🗑️ Ta bort siktpunkt</button>
+                        <button id="sb-aim-clear-btn" style="display:none;"></button>
+                    </div>
+
+                    <!-- Step 2: Rita formen banner -->
+                    <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:8px 10px;">
+                        <div style="display:flex; align-items:center; gap:5px; margin-bottom:4px;">
+                            <span style="background:#38bdf8; color:#0f172a; font-size:9px; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">2</span>
+                            <span style="color:#38bdf8; font-size:10.5px; font-weight:700;" data-i18n="st_step_draw">Rita teeboxen</span>
+                        </div>
+                        <div style="color:#94a3b8; font-size:9px; line-height:1.4;" data-i18n="st_draw_hint">Klicka för att sätta ut hörn runt tee. Dra valfri punkt för att justera formen. Högerklicka för att radera.</div>
+                    </div>
+
+                    <!-- Points counter & status indicator -->
+                    <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; text-align:center;">
+                        <div id="st-draw-status" style="font-size:10px; font-weight:600; color:#94a3b8;">
+                            0 punkter valda (minst 3 krävs)
+                        </div>
+                    </div>
+
+                    <!-- Actions: Undo point & Clear -->
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                        <label style="display:flex; align-items:center; gap:4px; color:#ef4444; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-red" checked style="accent-color:#ef4444;">Red</label>
-                        <label style="display:flex; align-items:center; gap:4px; color:#facc15; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-yellow" checked style="accent-color:#facc15;">Yellow</label>
-                        <label style="display:flex; align-items:center; gap:4px; color:#fff; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-white" checked style="accent-color:#fff;">White</label>
-                        <label style="display:flex; align-items:center; gap:4px; color:#94a3b8; font-size:11px; font-weight:bold; cursor:pointer;"><input type="checkbox" id="st-tee-black" checked style="accent-color:#666;">Black</label>
+                        <button type="button" onclick="window.undoSmartGreenPoint()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Ångra sista punkten">
+                            ↶ <span data-i18n="gs_undo_point">Ångra punkt</span>
+                        </button>
+                        <button type="button" onclick="window.clearSmartGreen()" style="background:#1e293b; color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" title="Börja om från början">
+                            🔄 <span data-i18n="gs_reset">Börja om</span>
+                        </button>
                     </div>
+
+                    <!-- Primary Action Button: Create Tee Box -->
+                    <button type="button" id="st-build-tee-btn" onclick="window.executeSmartTee()" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0ea5e9); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(56,189,248,0.3); transition:all 0.2s;">
+                        🟦 <span id="st-build-tee-btn-text" data-i18n="sb_build_tee">Skapa teebox</span>
+                    </button>
                 </div>
-                <!-- Raised Tee -->
-                <button id="st-raised-toggle" onclick="toggleRaisedTee()" style="width:100%; background:#334155; color:#94a3b8; border:none; padding:5px 8px; border-radius:5px; font-size:10px; font-weight:bold; cursor:pointer; margin-bottom:4px; text-align:left;" data-i18n="sb_raised_tee">▶ Raised Tee (optional)</button>
-                <div id="st-raised-section" style="display:none;">
-                    <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;">Height</span><span id="st-raise-height-val" style="color:#38bdf8; font-weight:bold; font-size:9px;">0.5m</span></div>
-                        <input type="range" id="st-raise-height" min="0.1" max="3.0" value="0.5" step="0.1" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+
+                <!-- ========================================== -->
+                <!-- MODE 2: REDIGERA TEE BOX (When tee box is built) -->
+                <!-- ========================================== -->
+                <div id="st-panel-built" style="display:none;">
+                    <!-- 3-Tab Workflow Bar (1. Form, 2. Höjd & Teer, 3. Klippning) -->
+                    <div style="display:flex; background:#0b1120; border:1px solid #1e293b; border-radius:10px; padding:3px; margin-bottom:10px; gap:4px;">
+                        <button type="button" id="st-tab-form" onclick="window.TeeStudio.setTab('form')" style="flex:1; background:#38bdf8; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(56,189,248,0.35);">
+                            <span style="font-size:12px;">📐</span>
+                            <span>1. Form</span>
+                        </button>
+                        <button type="button" id="st-tab-hojd" onclick="window.TeeStudio.setTab('hojd')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">⛰️</span>
+                            <span>2. Höjd & Teer</span>
+                        </button>
+                        <button type="button" id="st-tab-klippning" onclick="window.TeeStudio.setTab('klippning')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span style="font-size:12px;">🚜</span>
+                            <span>3. Klippning</span>
+                        </button>
                     </div>
-                    <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;">Blend</span><span id="st-raise-blend-val" style="color:#38bdf8; font-weight:bold; font-size:9px;">4m</span></div>
-                        <input type="range" id="st-raise-blend" min="1" max="12" value="4" step="0.5" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+
+                    <!-- TAB 1: FORM -->
+                    <div id="st-content-form">
+                        <!-- Contextual Tip Banner -->
+                        <div style="background:#1e293b; border-left:3px solid #38bdf8; border-radius:4px; padding:6px 8px; margin-bottom:8px;">
+                            <div style="color:#cbd5e1; font-size:9px; line-height:1.4;" data-i18n="st_form_tip">
+                                💡 <b>Dra</b> de vita golfbollarna för att ändra formen. <b>Klicka på linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.
+                            </div>
+                        </div>
+
+                        <!-- Tee Area Card -->
+                        <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                            <span id="st-form-title-badge" style="color:#94a3b8; font-size:9px; font-weight:700; text-transform:uppercase;">● Tee Box 1</span>
+                            <span id="st-form-area-val" style="color:#38bdf8; font-weight:800; font-size:11px;">~0 m²</span>
+                        </div>
+
+                        <!-- Aim Point in Edit Mode Card -->
+                        <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;">🎯 Siktpunkt (Spelriktning)</span>
+                                <span id="st-aim-badge-built" style="font-size:8.5px; font-weight:bold; padding:2px 6px; border-radius:4px; background:rgba(74,222,128,0.15); color:#4ade80; border:1px solid rgba(74,222,128,0.3);">✅ Satt</span>
+                            </div>
+                            <button type="button" onclick="activateAimMode()" style="width:100%; background:#0f172a; color:#38bdf8; border:1px solid #38bdf850; padding:5px 8px; border-radius:5px; font-size:9.5px; font-weight:bold; cursor:pointer;">
+                                🎯 Justera siktpunkt på kartan
+                            </button>
+                        </div>
+
+                        <!-- Redraw & Delete Buttons -->
+                        <div style="display:grid; grid-template-columns:1fr; gap:6px; margin-bottom:8px;">
+                            <button type="button" onclick="window.redrawSmartTeeBox()" style="width:100%; background:#1e293b; color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;" data-i18n="sb_redraw_tee">
+                                ✏️ Rita om denna teebox
+                            </button>
+                            <button type="button" onclick="window.deleteSmartTeeBox()" style="width:100%; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;" data-i18n="sb_delete_tee">
+                                🗑️ Radera denna teebox & återställ mark
+                            </button>
+                        </div>
+
+                        <!-- Step 1 -> Step 2 Guidance Button -->
+                        <button type="button" onclick="window.TeeStudio.setTab('hojd')" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0ea5e9); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(56,189,248,0.25); transition:transform 0.1s;">
+                            <span data-i18n="st_to_step2">Steg 2: Höjd & Teer</span> ➔
+                        </button>
+                    </div>
+
+                    <!-- TAB 2: HÖJD & TEER -->
+                    <div id="st-content-hojd" style="display:none;">
+                        <!-- Raised Plateau Section -->
+                        <div style="background:#1e293b; padding:8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
+                            <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">⛰️ Upphöjd Tee-platå</div>
+                            <!-- Height Slider -->
+                            <div style="margin-bottom:6px;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                    <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Platåhöjd</span>
+                                    <span id="st-raise-height-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">+0.5m</span>
+                                </div>
+                                <input type="range" id="st-raise-height" min="-1.0" max="4.0" value="0.5" step="0.1" oninput="window.onTeeHeightSlider(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                            </div>
+                            <!-- Blend Slider -->
+                            <div>
+                                <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                    <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Slänt/Övergång</span>
+                                    <span id="st-raise-blend-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">4.0m</span>
+                                </div>
+                                <input type="range" id="st-raise-blend" min="1.0" max="15.0" value="4.0" step="0.5" oninput="window.onTeeBlendSlider(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                            </div>
+                        </div>
+
+                        <!-- Tee Markers Configuration -->
+                        <div style="background:#1e293b; padding:8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
+                            <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">⛳ Teemarkörer på denna box</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px;">
+                                <label style="display:flex; align-items:center; gap:5px; color:#ef4444; font-size:10.5px; font-weight:bold; cursor:pointer;">
+                                    <input type="checkbox" id="st-tee-red" checked onchange="window.onTeeColorToggle('red', this.checked)" style="accent-color:#ef4444; cursor:pointer;"> Röd (Dam/Junior)
+                                </label>
+                                <label style="display:flex; align-items:center; gap:5px; color:#facc15; font-size:10.5px; font-weight:bold; cursor:pointer;">
+                                    <input type="checkbox" id="st-tee-yellow" checked onchange="window.onTeeColorToggle('yellow', this.checked)" style="accent-color:#facc15; cursor:pointer;"> Gul (Klubb)
+                                </label>
+                                <label style="display:flex; align-items:center; gap:5px; color:#ffffff; font-size:10.5px; font-weight:bold; cursor:pointer;">
+                                    <input type="checkbox" id="st-tee-white" checked onchange="window.onTeeColorToggle('white', this.checked)" style="accent-color:#ffffff; cursor:pointer;"> Vit (Backtee)
+                                </label>
+                                <label style="display:flex; align-items:center; gap:5px; color:#94a3b8; font-size:10.5px; font-weight:bold; cursor:pointer;">
+                                    <input type="checkbox" id="st-tee-black" checked onchange="window.onTeeColorToggle('black', this.checked)" style="accent-color:#475569; cursor:pointer;"> Svart (Mästerskap)
+                                </label>
+                            </div>
+                            <button type="button" onclick="window.autoSortTeesForActiveBox()" style="width:100%; background:#0f172a; color:#38bdf8; border:1px solid #38bdf850; padding:6px 6px; font-size:9.5px; border-radius:5px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
+                                ✨ <span>Auto-rikta & placera längs spellinjen</span>
+                            </button>
+                        </div>
+
+                        <!-- Step 2 -> Step 3 Guidance Button -->
+                        <button type="button" onclick="window.TeeStudio.setTab('klippning')" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0ea5e9); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(56,189,248,0.25); transition:transform 0.1s;">
+                            <span data-i18n="st_to_step3">Steg 3: Klippmönster & finish</span> ➔
+                        </button>
+                    </div>
+
+                    <!-- TAB 3: KLIPPNING & FINISH -->
+                    <div id="st-content-klippning" style="display:none;">
+                        <!-- Mowing Pattern Header -->
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:6px;" data-i18n="sb_mow_pattern">Klippmönster</div>
+                        
+                        <!-- 4 Mowing Pattern Cards Grid -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px;">
+                            <div id="st-mow-solid" onclick="window.setTeeMowPattern('SOLID')" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">━</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_solid">Slät</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_solid_desc">Klassisk ren gräsyta</div>
+                            </div>
+                            <div id="st-mow-stripes" onclick="window.setTeeMowPattern('STRIPES')" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">≡</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_stripes">Ränder</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_stripes_desc">Klassiska linjer</div>
+                            </div>
+                            <div id="st-mow-checkerboard" onclick="window.setTeeMowPattern('CHECKERBOARD')" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">▦</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_checkerboard">Schack</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_checkerboard_desc">Prestige-rutmönster</div>
+                            </div>
+                            <div id="st-mow-diamond" onclick="window.setTeeMowPattern('DIAMOND')" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                                <div style="font-size:16px; margin-bottom:4px;">◈</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="mow_diamond">Diamant</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="mow_diamond_desc">Diagonala rutor</div>
+                            </div>
+                        </div>
+
+                        <!-- Edge Sharpness Slider -->
+                        <div style="background:#1e293b; padding:8px; border-radius:6px; margin-bottom:10px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;" data-i18n="sb_edge_sharpness">Kantskärpa</span>
+                                <span id="st-edge-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">Skarp (100%)</span>
+                            </div>
+                            <input type="range" id="st-edge-sharpness" min="0" max="100" value="100" step="5" oninput="window.onTeeEdgeSharpness(this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                        </div>
+
+                        <!-- Info Banner -->
+                        <div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:8px 10px; margin-bottom:12px;">
+                            <div style="display:flex; align-items:flex-start; gap:6px;">
+                                <span style="font-size:12px; line-height:1.2;">ℹ️</span>
+                                <div style="color:#94a3b8; font-size:8.5px; line-height:1.4;">
+                                    <b style="color:#38bdf8;">Teebox Finish:</b> Teeboxen är uppriktad mot hålets siktpunkt för en naturlig startposition och bolluppställning.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Finish Button -->
+                        <button type="button" onclick="if(typeof setTool==='function') setTool('INSPECT')" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0ea5e9); color:#0f172a; border:none; padding:9px 8px; font-size:11px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 12px rgba(56,189,248,0.3); transition:transform 0.1s;">
+                            ✔ <span data-i18n="st_finish">Klar med teeboxen!</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -10452,6 +10677,92 @@
                     margin: h.bunkerData.bbox.margin
                 } : null,
                 origHeights: h.bunkerData.origHeights ? Array.from(h.bunkerData.origHeights) : null
+            } : null),
+            teeBoxes: (h.teeBoxes && h.teeBoxes.length > 0 ? h.teeBoxes : (h.teeData ? [h.teeData] : [])).map(tb => ({
+                id: tb.id,
+                points: tb.points,
+                raised: tb.raised,
+                raiseHeight: tb.raiseHeight !== undefined ? tb.raiseHeight : 0.5,
+                blendRadius: tb.blendRadius !== undefined ? tb.blendRadius : 4.0,
+                mowPattern: tb.mowPattern || 'SOLID',
+                edgeSharpness: tb.edgeSharpness !== undefined ? tb.edgeSharpness : 100,
+                activeTees: tb.activeTees || ['black', 'white', 'yellow', 'red'],
+                baseElevation: tb.baseElevation,
+                seedOffsetX: tb.seedOffsetX,
+                seedOffsetZ: tb.seedOffsetZ,
+                bbox: tb.bbox ? {
+                    gxStart: tb.bbox.gxStart,
+                    gxEnd: tb.bbox.gxEnd,
+                    gzStart: tb.bbox.gzStart,
+                    gzEnd: tb.bbox.gzEnd,
+                    gWidth: tb.bbox.gWidth,
+                    gHeight: tb.bbox.gHeight,
+                    pxMinX: tb.bbox.pxMinX,
+                    pxMaxX: tb.bbox.pxMaxX,
+                    pxMinY: tb.bbox.pxMinY,
+                    pxMaxY: tb.bbox.pxMaxY,
+                    pw: tb.bbox.pw,
+                    ph: tb.bbox.ph,
+                    margin: tb.bbox.margin
+                } : null,
+                origHeights: tb.origHeights ? Array.from(tb.origHeights) : null
+            })),
+            teeData: (h.teeBoxes && h.teeBoxes[0]) ? {
+                id: h.teeBoxes[0].id,
+                points: h.teeBoxes[0].points,
+                raised: h.teeBoxes[0].raised,
+                raiseHeight: h.teeBoxes[0].raiseHeight !== undefined ? h.teeBoxes[0].raiseHeight : 0.5,
+                blendRadius: h.teeBoxes[0].blendRadius !== undefined ? h.teeBoxes[0].blendRadius : 4.0,
+                mowPattern: h.teeBoxes[0].mowPattern || 'SOLID',
+                edgeSharpness: h.teeBoxes[0].edgeSharpness !== undefined ? h.teeBoxes[0].edgeSharpness : 100,
+                activeTees: h.teeBoxes[0].activeTees || ['black', 'white', 'yellow', 'red'],
+                baseElevation: h.teeBoxes[0].baseElevation,
+                seedOffsetX: h.teeBoxes[0].seedOffsetX,
+                seedOffsetZ: h.teeBoxes[0].seedOffsetZ,
+                bbox: h.teeBoxes[0].bbox ? {
+                    gxStart: h.teeBoxes[0].bbox.gxStart,
+                    gxEnd: h.teeBoxes[0].bbox.gxEnd,
+                    gzStart: h.teeBoxes[0].bbox.gzStart,
+                    gzEnd: h.teeBoxes[0].bbox.gzEnd,
+                    gWidth: h.teeBoxes[0].bbox.gWidth,
+                    gHeight: h.teeBoxes[0].bbox.gHeight,
+                    pxMinX: h.teeBoxes[0].bbox.pxMinX,
+                    pxMaxX: h.teeBoxes[0].bbox.pxMaxX,
+                    pxMinY: h.teeBoxes[0].bbox.pxMinY,
+                    pxMaxY: h.teeBoxes[0].bbox.pxMaxY,
+                    pw: h.teeBoxes[0].bbox.pw,
+                    ph: h.teeBoxes[0].bbox.ph,
+                    margin: h.teeBoxes[0].bbox.margin
+                } : null,
+                origHeights: h.teeBoxes[0].origHeights ? Array.from(h.teeBoxes[0].origHeights) : null
+            } : (h.teeData ? {
+                id: h.teeData.id,
+                points: h.teeData.points,
+                raised: h.teeData.raised,
+                raiseHeight: h.teeData.raiseHeight !== undefined ? h.teeData.raiseHeight : 0.5,
+                blendRadius: h.teeData.blendRadius !== undefined ? h.teeData.blendRadius : 4.0,
+                mowPattern: h.teeData.mowPattern || 'SOLID',
+                edgeSharpness: h.teeData.edgeSharpness !== undefined ? h.teeData.edgeSharpness : 100,
+                activeTees: h.teeData.activeTees || ['black', 'white', 'yellow', 'red'],
+                baseElevation: h.teeData.baseElevation,
+                seedOffsetX: h.teeData.seedOffsetX,
+                seedOffsetZ: h.teeData.seedOffsetZ,
+                bbox: h.teeData.bbox ? {
+                    gxStart: h.teeData.bbox.gxStart,
+                    gxEnd: h.teeData.bbox.gxEnd,
+                    gzStart: h.teeData.bbox.gzStart,
+                    gzEnd: h.teeData.bbox.gzEnd,
+                    gWidth: h.teeData.bbox.gWidth,
+                    gHeight: h.teeData.bbox.gHeight,
+                    pxMinX: h.teeData.bbox.pxMinX,
+                    pxMaxX: h.teeData.bbox.pxMaxX,
+                    pxMinY: h.teeData.bbox.pxMinY,
+                    pxMaxY: h.teeData.bbox.pxMaxY,
+                    pw: h.teeData.bbox.pw,
+                    ph: h.teeData.bbox.ph,
+                    margin: h.teeData.bbox.margin
+                } : null,
+                origHeights: h.teeData.origHeights ? Array.from(h.teeData.origHeights) : null
             } : null)
         }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({
@@ -11958,7 +12269,7 @@
                 }
                 if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
                 if(h.aimMesh) { scene.remove(h.aimMesh); h.aimMesh=null; }
-                h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.fairways=[]; h.activeFairwayIndex=null; h.bunkerData=null; h.bunkers=[]; h.activeBunkerIndex=null; h.pins={};
+                h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.fairways=[]; h.activeFairwayIndex=null; h.bunkerData=null; h.bunkers=[]; h.activeBunkerIndex=null; h.teeData=null; h.teeBoxes=[]; h.activeTeeBoxIndex=null; h.pins={};
             }
             window._allFlagCloths = [];  // Clear wave animation references
             
@@ -12122,6 +12433,27 @@
                             h.bunkers = [];
                             h.activeBunkerIndex = null;
                             h.bunkerData = null;
+                        }
+                        if(hSync.teeBoxes && Array.isArray(hSync.teeBoxes) && hSync.teeBoxes.length > 0) {
+                            h.teeBoxes = hSync.teeBoxes.map(tb => {
+                                if (tb.origHeights && Array.isArray(tb.origHeights)) {
+                                    tb.origHeights = new Float32Array(tb.origHeights);
+                                }
+                                return tb;
+                            });
+                            h.activeTeeBoxIndex = 0;
+                            h.teeData = h.teeBoxes[0];
+                        } else if(hSync.teeData) {
+                            h.teeData = hSync.teeData;
+                            if (h.teeData.origHeights && Array.isArray(h.teeData.origHeights)) {
+                                h.teeData.origHeights = new Float32Array(h.teeData.origHeights);
+                            }
+                            h.teeBoxes = [h.teeData];
+                            h.activeTeeBoxIndex = 0;
+                        } else {
+                            h.teeBoxes = [];
+                            h.activeTeeBoxIndex = null;
+                            h.teeData = null;
                         }
                     }
                     if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
@@ -14424,6 +14756,9 @@
             bunkers: h.bunkers ? h.bunkers.map(b => ({ ...b, points: b.points ? b.points.map(p => ({ ...p })) : [] })) : (h.bunkerData ? [{ ...h.bunkerData, points: h.bunkerData.points ? h.bunkerData.points.map(p => ({ ...p })) : [] }] : []),
             activeBunkerIndex: h.activeBunkerIndex,
             bunkerData: h.bunkerData ? { ...h.bunkerData } : null,
+            teeBoxes: h.teeBoxes ? h.teeBoxes.map(tb => ({ ...tb, points: tb.points ? tb.points.map(p => ({ ...p })) : [] })) : (h.teeData ? [{ ...h.teeData, points: h.teeData.points ? h.teeData.points.map(p => ({ ...p })) : [] }] : []),
+            activeTeeBoxIndex: h.activeTeeBoxIndex,
+            teeData: h.teeData ? { ...h.teeData } : null,
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig ? JSON.parse(JSON.stringify(h.surroundConfig)) : null,
@@ -14571,6 +14906,9 @@
                 h.bunkers = hState.bunkers ? hState.bunkers.map(b => ({ ...b, points: b.points ? b.points.map(p => ({ ...p })) : [] })) : (hState.bunkerData ? [{ ...hState.bunkerData, points: hState.bunkerData.points ? hState.bunkerData.points.map(p => ({ ...p })) : [] }] : []);
                 h.activeBunkerIndex = hState.activeBunkerIndex !== undefined ? hState.activeBunkerIndex : (h.bunkers.length > 0 ? 0 : null);
                 h.bunkerData = h.bunkers[0] || null;
+                h.teeBoxes = hState.teeBoxes ? hState.teeBoxes.map(tb => ({ ...tb, points: tb.points ? tb.points.map(p => ({ ...p })) : [] })) : (hState.teeData ? [{ ...hState.teeData, points: hState.teeData.points ? hState.teeData.points.map(p => ({ ...p })) : [] }] : []);
+                h.activeTeeBoxIndex = hState.activeTeeBoxIndex !== undefined ? hState.activeTeeBoxIndex : (h.teeBoxes.length > 0 ? 0 : null);
+                h.teeData = h.teeBoxes[0] || null;
             }
         }
         
@@ -14582,6 +14920,7 @@
         if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
         if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
+        if (typeof window.updateSBTeeControls === 'function') window.updateSBTeeControls();
         if (window._globalGreenGridEnabled && typeof window.buildGreenGrid === 'function') {
             let h = (typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null;
             if (h && h.greenData && h.greenData.points && h.greenData.points.length >= 3) {
@@ -14659,7 +14998,21 @@
             if (e.shiftKey) {
                 if (typeof window.performRedo === 'function') window.performRedo();
             } else {
-                if (typeof window.performUndo === 'function') window.performUndo();
+                if (currentTool === 'SMART_BUILDER' && window.smartGreenPoints && window.smartGreenPoints.length === 0 && window._discardedSplineDraft && (Date.now() - window._discardedSplineDraft.timestamp < 60000)) {
+                    let d = window._discardedSplineDraft;
+                    window._discardedSplineDraft = null;
+                    if (typeof setSmartBuilderType === 'function') setSmartBuilderType(d.type);
+                    smartGreenPoints = d.points.map(p => new THREE.Vector3(p.x, p.y, p.z));
+                    window.smartGreenPoints = smartGreenPoints;
+                    window._smartShapeClosed = d.closed;
+                    if (typeof window.updateSmartGreenPreview === 'function') window.updateSmartGreenPreview();
+                    let isSv = (typeof getLang === 'function' ? getLang() : (window.currentLang || 'sv')) === 'sv';
+                    if (typeof showBuildToast === 'function') {
+                        showBuildToast(isSv ? '↩️ Återställde ritning!' : '↩️ Restored drawing!', '#4ade80');
+                    }
+                } else if (typeof window.performUndo === 'function') {
+                    window.performUndo();
+                }
             }
         } else if (e.code === 'KeyY' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
@@ -15096,7 +15449,6 @@
                     if(curHole && curHole.greenData && curHole.greenData.points && curHole.greenData.points.length >= 3) {
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
                         showBuildToast(curLang === 'en' ? 'ℹ️ Green is active. Drag golf balls, or click [✏️ Redraw green] in panel!' : 'ℹ️ Green är aktiv. Dra golfbollarna, eller klicka på [✏️ Rita om green] i panelen!', '#4ade80');
-                        controls.enabled = false;
                         return;
                     } else if(curHole && curHole.greenData && (!curHole.greenData.points || curHole.greenData.points.length < 3)) {
                         curHole.greenData = null;
@@ -15114,7 +15466,6 @@
                     if (hasActiveFw && curHole.fairways[curHole.activeFairwayIndex].points && curHole.fairways[curHole.activeFairwayIndex].points.length >= 3) {
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
                         showBuildToast(curLang === 'en' ? 'ℹ️ Fairway is active. Drag golf balls, or click [+ New Fairway] to add another!' : 'ℹ️ Fairway är aktiv. Dra golfbollarna, eller klicka på [➕ Ny Fairway] för att rita en till!', '#7db952');
-                        controls.enabled = false;
                         return;
                     }
                 }
@@ -15130,14 +15481,26 @@
                     if (hasActiveBk && curHole.bunkers[curHole.activeBunkerIndex].points && curHole.bunkers[curHole.activeBunkerIndex].points.length >= 3) {
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
                         showBuildToast(curLang === 'en' ? 'ℹ️ Bunker is active. Drag golf balls, or click [+ New Bunker] to add another!' : 'ℹ️ Bunker är aktiv. Dra golfbollarna, eller klicka på [➕ Ny Bunker] för att rita en till!', '#fbbf24');
+                        return;
+                    }
+                }
+                // Delegate to TeeStudio (supports both Mode 1 node dragging/insertion and Mode 2 built-tee editing)
+                if(window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') {
+                    let curHole = courseHoles[currentHoleIndex];
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.TeeStudio && window.TeeStudio.onPointerDown(e, lastHitPoint, raycaster)) {
                         controls.enabled = false;
+                        return;
+                    }
+                    let hasActiveTb = curHole && (curHole.activeTeeBoxIndex !== null && curHole.activeTeeBoxIndex !== undefined) && curHole.teeBoxes && curHole.teeBoxes[curHole.activeTeeBoxIndex];
+                    if (hasActiveTb && curHole.teeBoxes[curHole.activeTeeBoxIndex].points && curHole.teeBoxes[curHole.activeTeeBoxIndex].points.length >= 3) {
+                        let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
+                        showBuildToast(curLang === 'en' ? 'ℹ️ Tee box is active. Drag golf balls, or click [+ New Tee Box] to add another!' : 'ℹ️ Tee box är aktiv. Dra golfbollarna, eller klicka på [➕ Ny Tee Box] för att rita en till!', '#38bdf8');
                         return;
                     }
                 }
 
-                if(!smartAddPoint(lastHitPoint.clone())) {
-                    showBuildToast('\u26a0\ufe0f Shape cannot cross itself!', '#ef4444');
-                }
+                smartAddPoint(lastHitPoint.clone());
                 updateSmartGreenPreview();
                 if (window._smartBuilderType === 'GREEN' && typeof window.updateSBGreenControls === 'function') {
                     window.updateSBGreenControls();
@@ -15145,6 +15508,8 @@
                     window.updateSBFairwayControls();
                 } else if (window._smartBuilderType === 'BUNKER' && typeof window.updateSBBunkerControls === 'function') {
                     window.updateSBBunkerControls();
+                } else if ((window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') && typeof window.updateSBTeeControls === 'function') {
+                    window.updateSBTeeControls();
                 }
             } else if (e.button === 2) {
                 if(window._smartBuilderType === 'GREEN') {
@@ -15168,8 +15533,19 @@
                         return;
                     }
                 }
+                if(window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') {
+                    raycaster.setFromCamera(mouse, camera);
+                    if(window.TeeStudio && window.TeeStudio.onRightClick(e, lastHitPoint, raycaster)) {
+                        controls.enabled = false;
+                        return;
+                    }
+                }
                 if(smartGreenPoints.length > 0) {
-                    smartGreenPoints.pop();
+                    if (window._smartShapeClosed) {
+                        window._smartShapeClosed = false;
+                    } else {
+                        smartGreenPoints.pop();
+                    }
                     updateSmartGreenPreview();
                     if (window._smartBuilderType === 'GREEN' && typeof window.updateSBGreenControls === 'function') {
                         window.updateSBGreenControls();
@@ -15177,6 +15553,8 @@
                         window.updateSBFairwayControls();
                     } else if (window._smartBuilderType === 'BUNKER' && typeof window.updateSBBunkerControls === 'function') {
                         window.updateSBBunkerControls();
+                    } else if ((window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') && typeof window.updateSBTeeControls === 'function') {
+                        window.updateSBTeeControls();
                     }
                 }
             }
@@ -15377,6 +15755,9 @@
         if (window.BunkerStudio && window.BunkerStudio.onPointerUp) {
             window.BunkerStudio.onPointerUp(e);
         }
+        if (window.TeeStudio && window.TeeStudio.onPointerUp) {
+            window.TeeStudio.onPointerUp(e);
+        }
         if (typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
             activeRotatingTee = null;
             controls.enabled = true;
@@ -15384,6 +15765,15 @@
             return;
         }
         finalizeSculptStroke({ save: true });
+        if (typeof controls !== 'undefined' && controls) {
+            let isHoldingStudioNode = (window.FairwayStudio && (window.FairwayStudio.draggingHandleIndex >= 0 || window.FairwayStudio.draggingDrawNodeIndex >= 0)) ||
+                                      (window.GreenStudio && (window.GreenStudio.draggingHandleIndex >= 0 || window.GreenStudio.draggingDrawNodeIndex >= 0)) ||
+                                      (window.BunkerStudio && (window.BunkerStudio.draggingHandleIndex >= 0 || window.BunkerStudio.draggingDrawNodeIndex >= 0)) ||
+                                      (window.TeeStudio && (window.TeeStudio.draggingHandleIndex >= 0 || window.TeeStudio.draggingDrawNodeIndex >= 0));
+            if (!isHoldingStudioNode) {
+                controls.enabled = true;
+            }
+        }
     }, false);
     
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault(), false);
@@ -15728,6 +16118,10 @@
             toolName = 'SMART_BUILDER';
         }
 
+        if (typeof controls !== 'undefined' && controls) {
+            controls.enabled = true;
+        }
+
         // Reset active sculpting state to prevent phantom painting/sculpting
         finalizeSculptStroke({ save: true });
         
@@ -15745,10 +16139,22 @@
             if (window.GreenStudio) window.GreenStudio.hide();
             if (window.FairwayStudio) window.FairwayStudio.hide();
             if (window.BunkerStudio) window.BunkerStudio.hide();
+            if (window.TeeStudio) window.TeeStudio.hide();
+            if (window.smartGreenSpheres && window.smartGreenSpheres.length > 0) {
+                window.smartGreenSpheres.forEach(s => scene.remove(s));
+            }
+            if (window.smartGreenLineMesh) {
+                scene.remove(window.smartGreenLineMesh);
+                window.smartGreenLineMesh = null;
+            }
         } else if (toolName === 'SMART_BUILDER') {
+            if (typeof window.updateSmartGreenPreview === 'function' && window.smartGreenPoints && window.smartGreenPoints.length > 0) {
+                window.updateSmartGreenPreview();
+            }
             if (window._smartBuilderType === 'GREEN' && window.GreenStudio) window.GreenStudio.sync();
             else if (window._smartBuilderType === 'FAIRWAY' && window.FairwayStudio) window.FairwayStudio.sync();
             else if (window._smartBuilderType === 'BUNKER' && window.BunkerStudio) window.BunkerStudio.sync();
+            else if ((window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') && window.TeeStudio) window.TeeStudio.sync();
         }
         
         let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'hole', 'measure', 'eraser', 'colorize', 'mtn', 'poly', 'env'];
@@ -16160,6 +16566,9 @@
             h.bunkerData = null;
             h.bunkers = [];
             h.activeBunkerIndex = null;
+            h.teeData = null;
+            h.teeBoxes = [];
+            h.activeTeeBoxIndex = null;
             h.pins = {};
             h.par = 4;
             h.rangeLinesEnabled = false;
@@ -16285,6 +16694,7 @@
         if (typeof window.updateSBGreenControls === 'function') window.updateSBGreenControls();
         if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
         if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
+        if (typeof window.updateSBTeeControls === 'function') window.updateSBTeeControls();
         if (typeof window.updateSBHoleDisplay === 'function') window.updateSBHoleDisplay();
         if (typeof window.updateSBAimCard === 'function') window.updateSBAimCard();
         if (typeof window.updateTopbarHoleDistance === 'function') window.updateTopbarHoleDistance();
@@ -16383,16 +16793,7 @@
             }
             return;
         }
-        
-        if (currentTool === 'INSPECT') {
-            ghostBlock.visible = false;
-            ghostTree.visible = false;
-            if (sculptBrushCursor) sculptBrushCursor.visible = false;
-            if (typeof measureLines !== 'undefined') measureLines.visible = false;
-            if (window.hoverRingMesh) window.hoverRingMesh.visible = false;
-            window._hoveredPropIndex = null;
-            return;
-        }
+
 
         if (currentTool === 'BLOCK') {
             sculptBrushCursor.visible = false;
@@ -16526,6 +16927,8 @@
                     window.FairwayStudio.onMouseMove(event, lastHitPoint, raycaster);
                 } else if (currentTool === 'SMART_BUILDER' && window._smartBuilderType === 'BUNKER' && window.BunkerStudio) {
                     window.BunkerStudio.onMouseMove(event, lastHitPoint, raycaster);
+                } else if (currentTool === 'SMART_BUILDER' && (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') && window.TeeStudio) {
+                    window.TeeStudio.onMouseMove(event, lastHitPoint, raycaster);
                 }
                 
                 if (currentTool === 'COLORIZE' && event.buttons === 1) {
@@ -17696,6 +18099,7 @@ window.triggerExplosion = function(x, y, z) {
         if (window.GreenStudio && window.GreenStudio.update) window.GreenStudio.update(dt); // 3D Green Studio animation & easing
         if (window.FairwayStudio && window.FairwayStudio.update) window.FairwayStudio.update(dt); // 3D Fairway Studio animation & easing
         if (window.BunkerStudio && window.BunkerStudio.update) window.BunkerStudio.update(dt); // 3D Bunker Studio animation & easing
+        if (window.TeeStudio && window.TeeStudio.update) window.TeeStudio.update(dt); // 3D Tee Studio animation & easing
 
         // --- Process Explosions ---
         if (window.activeExplosions && window.activeExplosions.length > 0) {
@@ -19400,30 +19804,6 @@ window.triggerExplosion = function(x, y, z) {
         window.setSmartPaintSurface = setSmartPaintSurface;
         window._raisedTeeActive = false;
 
-        function toggleRaisedTee() {
-            window._raisedTeeActive = !window._raisedTeeActive;
-            var sec = document.getElementById('st-raised-section');
-            var btn = document.getElementById('st-raised-toggle');
-            if (window._raisedTeeActive) {
-                sec.style.display = 'block';
-                btn.textContent = '\u25BC Raised Tee';
-                btn.style.background = '#1e3a5f'; btn.style.color = '#38bdf8';
-            } else {
-                sec.style.display = 'none';
-                btn.textContent = '\u25B6 Raised Tee (optional)';
-                btn.style.background = '#334155'; btn.style.color = '#94a3b8';
-            }
-        }
-
-        // Slider value display for Raised Tee
-        (function() {
-            var hSlider = document.getElementById('st-raise-height');
-            var hVal = document.getElementById('st-raise-height-val');
-            if (hSlider && hVal) hSlider.oninput = function() { hVal.textContent = parseFloat(this.value).toFixed(1) + 'm'; };
-            var bSlider = document.getElementById('st-raise-blend');
-            var bVal = document.getElementById('st-raise-blend-val');
-            if (bSlider && bVal) bSlider.oninput = function() { bVal.textContent = parseFloat(this.value).toFixed(1) + 'm'; };
-        })();
 
         window._raisedGreenActive = false;
 
@@ -19579,12 +19959,28 @@ window.triggerExplosion = function(x, y, z) {
         };
 
         function setSmartBuilderType(type) {
+            let oldType = window._smartBuilderType;
+            if (oldType && oldType !== type && window.smartGreenPoints && window.smartGreenPoints.length > 0) {
+                // Preserve uncommitted spline draft across sub-tools so switching from Green to Fairway keeps the shape
+                let curHole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+                if (type === 'FAIRWAY' && curHole) {
+                    curHole.activeFairwayIndex = null;
+                } else if (type === 'BUNKER' && curHole) {
+                    curHole.activeBunkerIndex = null;
+                } else if (type === 'TEE' && curHole) {
+                    curHole.activeTeeBoxIndex = null;
+                }
+            }
+
             // Reset brush cursor size if leaving STAMP mode
             if (window._smartBuilderType === 'STAMP' && type !== 'STAMP') {
                 if (typeof updateBrushSize === 'function') updateBrushSize();
                 if (typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.visible = false;
             }
             window._smartBuilderType = type;
+            if (window.smartGreenPoints && window.smartGreenPoints.length > 0 && typeof updateSmartGreenPreview === 'function') {
+                updateSmartGreenPreview();
+            }
 
             // Highlight Level 2 Flyout buttons
             ['GREEN','BUNKER','FAIRWAY','TEE'].forEach(t => {
@@ -19613,27 +20009,17 @@ window.triggerExplosion = function(x, y, z) {
             let aimCtrl = document.getElementById('sb-aim-controls');
             if (aimCtrl) aimCtrl.style.display = 'none';
             let mowCtrl = document.getElementById('sb-mow-controls');
-            if (mowCtrl) {
-                mowCtrl.style.display = (type === 'TEE' || type === 'AIM') ? 'block' : 'none';
-                mowCtrl.style.opacity = '1';
-                mowCtrl.style.pointerEvents = 'auto';
-                mowCtrl.style.filter = 'none';
-            }
+            if (mowCtrl) mowCtrl.style.display = 'none';
             let edgeCtrl = document.getElementById('sb-edge-controls');
-            if (edgeCtrl) {
-                edgeCtrl.style.display = (type === 'BUNKER' || type === 'TEE' || type === 'AIM') ? 'block' : 'none';
-                edgeCtrl.style.opacity = '1';
-                edgeCtrl.style.pointerEvents = 'auto';
-                edgeCtrl.style.filter = 'none';
-            }
+            if (edgeCtrl) edgeCtrl.style.display = 'none';
             if (type !== 'GREEN') {
                 let bBtn = document.getElementById('sb-build-btn');
                 if (bBtn) bBtn.classList.remove('pulse-green-btn');
             }
             let buildClearCtrl = document.getElementById('sb-build-clear-group');
-            if (buildClearCtrl) buildClearCtrl.style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'AIM') ? 'none' : 'flex';
+            if (buildClearCtrl) buildClearCtrl.style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'BUNKER' || type === 'TEE' || type === 'AIM') ? 'none' : 'flex';
             let sbHint = document.getElementById('sb-hint-text');
-            if (sbHint) sbHint.style.display = (type === 'GREEN' || type === 'FAIRWAY') ? 'none' : 'block';
+            if (sbHint) sbHint.style.display = (type === 'GREEN' || type === 'FAIRWAY' || type === 'BUNKER' || type === 'TEE' || type === 'AIM') ? 'none' : 'block';
 
             // Reset mowing pattern UI state when leaving GREEN/FAIRWAY/TEE (do NOT trigger live green rebuild)
             if (type !== 'GREEN' && type !== 'FAIRWAY' && type !== 'TEE' && type !== 'AIM') {
@@ -19751,6 +20137,14 @@ window.triggerExplosion = function(x, y, z) {
             if (typeof window.updateActiveBunkerOutline === 'function') {
                 window.updateActiveBunkerOutline();
             }
+            if (type === 'TEE' || type === 'AIM') {
+                if (typeof window.updateSBTeeControls === 'function') window.updateSBTeeControls();
+                if (window.TeeStudio) {
+                    window.TeeStudio.sync();
+                }
+            } else {
+                if (window.TeeStudio) window.TeeStudio.hide();
+            }
 
             if(type === 'AIM') {
                 if(typeof clearSmartGreen === 'function') clearSmartGreen();
@@ -19772,6 +20166,9 @@ window.triggerExplosion = function(x, y, z) {
             }
             if (typeof window.updateSBBunkerControls === 'function') {
                 window.updateSBBunkerControls();
+            }
+            if (typeof window.updateSBTeeControls === 'function') {
+                window.updateSBTeeControls();
             }
         });
         function setSmartBunkerShape(shape) {
@@ -20045,11 +20442,29 @@ window.triggerExplosion = function(x, y, z) {
             }
         };
 
+        // Synchronize Tee Studio Panel
+        window.updateSBTeeControls = function() {
+            if (window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') {
+                let buildClearCtrl = document.getElementById('sb-build-clear-group');
+                if (buildClearCtrl) buildClearCtrl.style.display = 'none';
+                let sbHint = document.getElementById('sb-hint-text');
+                if (sbHint) sbHint.style.display = 'none';
+                let edgeCtrl = document.getElementById('sb-edge-controls');
+                if (edgeCtrl) edgeCtrl.style.display = 'none';
+                let mowCtrl = document.getElementById('sb-mow-controls');
+                if (mowCtrl) mowCtrl.style.display = 'none';
+                if (window.TeeStudio) {
+                    window.TeeStudio.sync();
+                }
+            }
+        };
+
     </script>
 
 <script src="green-studio.js?v=22"></script>
 <script src="fairway-studio.js?v=1"></script>
 <script src="bunker-studio.js?v=1"></script>
+<script src="tee-studio.js?v=1"></script>
 <script src="smart-builder.js?v=20"></script>
 <script src="arcade-lm-bridge.js"></script>
 

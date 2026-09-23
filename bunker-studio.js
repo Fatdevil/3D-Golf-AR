@@ -726,6 +726,16 @@
                         }
                         let ptIdx = hit ? hit.userData.pointIndex : undefined;
                         if (ptIdx !== undefined && ptIdx >= 0) {
+                            if (ptIdx === 0 && !window._smartShapeClosed && window.smartGreenPoints && window.smartGreenPoints.length >= 3) {
+                                window._smartShapeClosed = true;
+                                let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                                if (typeof window.showBuildToast === 'function') {
+                                    window.showBuildToast(isSv ? '🔒 Bunkerformen är stängd! Klicka på [Bygg Bunker] för att skapa.' : '🔒 Bunker shape closed! Click [Build Bunker] to create.', '#fbbf24');
+                                }
+                                if (typeof window.updateSmartGreenPreview === 'function') window.updateSmartGreenPreview();
+                                if (window.controls) window.controls.enabled = false;
+                                return true;
+                            }
                             this.draggingDrawNodeIndex = ptIdx;
                             if (window.controls) window.controls.enabled = false;
                             let ball = window.smartGreenSpheres[ptIdx];
@@ -894,6 +904,28 @@
                     return;
                 }
 
+                // Magnetic snap hover when >= 3 points and shape is open
+                if (window.smartGreenPoints && window.smartGreenPoints.length >= 3 && !window._smartShapeClosed && lastHitPoint) {
+                    let p0 = window.smartGreenPoints[0];
+                    let d = Math.hypot(lastHitPoint.x - p0.x, lastHitPoint.z - p0.z);
+                    let ball0 = (window.smartGreenSpheres && window.smartGreenSpheres[0]);
+                    if (d < 4.0) {
+                        window._smartSnapHover = true;
+                        if (ball0) {
+                            ball0.scale.set(1.45, 1.45, 1.45);
+                            if (ball0.material) ball0.material = this.materials.ballActive || this.materials.ballHover;
+                        }
+                        document.body.style.cursor = 'pointer';
+                    } else if (window._smartSnapHover) {
+                        window._smartSnapHover = false;
+                        if (ball0 && this.hoveredDrawNodeIndex !== 0) {
+                            ball0.scale.set(1.0, 1.0, 1.0);
+                            if (ball0.material) ball0.material = this.materials.ball;
+                        }
+                        document.body.style.cursor = 'default';
+                    }
+                }
+
                 // Hovering over draw nodes
                 if (window.smartGreenSpheres && window.smartGreenSpheres.length > 0 && raycaster) {
                     let intersects = raycaster.intersectObjects(window.smartGreenSpheres, true);
@@ -1014,8 +1046,9 @@
                 if (hole && activeBd && this._pendingRebuild) {
                     window.saveUndoState();
 
-                    // Restore base and re-capture snapshot
-                    window.restoreBunkerBase(hole, true, activeBd);
+                    // Restore base and re-capture snapshot using original pre-drag points
+                    let oldBd = { ...activeBd, points: (this.dragStartPoints || activeBd.points) };
+                    window.restoreBunkerBase(hole, true, oldBd);
                     this.dragStartPoints = null;
 
                     let snap = window.captureBunkerSnapshot(hole, activeBd.points, 15);
