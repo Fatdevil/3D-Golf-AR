@@ -4860,9 +4860,17 @@ window.moveSmartGreen = function(holeIndex, newCenterX, newCenterZ) {
     gd.origHeights = snap.origHeights;
     gd.origCanvasPixels = snap.origCanvasPixels;
 
-    if (hole.flag) {
-        hole.flag.x += dx;
-        hole.flag.z += dz;
+    // Move flag, its 3D mesh and every pin position together with the green
+    // (pins may alias each other or the flag - move each distinct object once)
+    let _moved = new Set();
+    let _shift = function(o) {
+        if (o && !_moved.has(o)) { _moved.add(o); o.x += dx; o.z += dz; }
+    };
+    _shift(hole.flag);
+    if (hole.pins) { for (let k in hole.pins) _shift(hole.pins[k]); }
+    if (hole.flagMesh && hole.flag) {
+        hole.flagMesh.position.x = hole.flag.x;
+        hole.flagMesh.position.z = hole.flag.z;
     }
 
     // Re-apply pipeline with exact same parameters

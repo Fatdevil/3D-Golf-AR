@@ -14749,7 +14749,7 @@
             aimPoint: h.aimPoint ? { ...h.aimPoint } : null,
             pins: h.pins ? JSON.parse(JSON.stringify(h.pins)) : {},
             envObjects: h.envObjects ? h.envObjects.slice() : [],
-            greenData: h.greenData ? { ...h.greenData } : null,
+            greenData: h.greenData ? { ...h.greenData, points: (h.greenData.points || []).map(p => ({ ...p })), lastBuiltPoints: h.greenData.lastBuiltPoints ? h.greenData.lastBuiltPoints.map(p => ({ ...p })) : h.greenData.lastBuiltPoints } : null,
             fairways: h.fairways ? h.fairways.map(f => ({ ...f, points: f.points ? f.points.map(p => ({ ...p })) : [] })) : (h.fairwayData ? [{ ...h.fairwayData, points: h.fairwayData.points ? h.fairwayData.points.map(p => ({ ...p })) : [] }] : []),
             activeFairwayIndex: h.activeFairwayIndex,
             fairwayData: h.fairwayData ? { ...h.fairwayData } : null,
@@ -14899,7 +14899,7 @@
                 }
                 h.envObjects = hState.envObjects ? hState.envObjects.slice() : [];
                 h.envObjects.forEach(obj => { if(obj.mesh) scene.add(obj.mesh); });
-                h.greenData = hState.greenData ? { ...hState.greenData } : null;
+                h.greenData = hState.greenData ? { ...hState.greenData, points: (hState.greenData.points || []).map(p => ({ ...p })), lastBuiltPoints: hState.greenData.lastBuiltPoints ? hState.greenData.lastBuiltPoints.map(p => ({ ...p })) : hState.greenData.lastBuiltPoints } : null;
                 h.fairways = hState.fairways ? hState.fairways.map(f => ({ ...f, points: f.points ? f.points.map(p => ({ ...p })) : [] })) : (hState.fairwayData ? [{ ...hState.fairwayData, points: hState.fairwayData.points ? hState.fairwayData.points.map(p => ({ ...p })) : [] }] : []);
                 h.activeFairwayIndex = hState.activeFairwayIndex !== undefined ? hState.activeFairwayIndex : (h.fairways.length > 0 ? 0 : null);
                 h.fairwayData = h.fairways[0] || null;
