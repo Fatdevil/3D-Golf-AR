@@ -14717,7 +14717,43 @@
         }
     }
 
-    function captureEditorState(forceFull = false) {
+    // Smart Builder edits repaint the 2D terrain canvas but cloning the whole 4096x4096 canvas for
+    // every undo step would cost 64 MB each. Instead snapshot only the pixel rectangle the current
+    // hole's builder objects (and the shape/click about to be built) can touch.
+    function computeSmartTextureRect(extra) {
+        const T = TERRAIN_SIZE;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        const add = (ax0, ay0, ax1, ay1) => {
+            if (!isFinite(ax0 + ay0 + ax1 + ay1)) return;
+            x0 = Math.min(x0, ax0); y0 = Math.min(y0, ay0); x1 = Math.max(x1, ax1); y1 = Math.max(y1, ay1);
+        };
+        const px = v => (v + T / 2) / T * 4096;
+        const addWorld = (x, z, r) => add(px(x - r), px(z - r), px(x + r), px(z + r));
+        const addObj = o => {
+            if (!o) return;
+            if (o.bbox && o.bbox.pw > 0 && o.bbox.ph > 0) add(o.bbox.pxMinX, o.bbox.pxMinY, o.bbox.pxMaxX, o.bbox.pxMaxY);
+            else if (o.points) o.points.forEach(pt => addWorld(pt.x, pt.z, 40));
+        };
+        let h = courseHoles && courseHoles[currentHoleIndex];
+        if (h) {
+            (h.fairways || []).forEach(addObj);
+            (h.bunkers || []).forEach(addObj);
+            (h.teeBoxes || []).forEach(addObj);
+            addObj(h.greenData);
+            if (h.flag) addWorld(h.flag.x, h.flag.z, 30);
+            if (h.tees) for (let k in h.tees) if (h.tees[k]) addWorld(h.tees[k].x, h.tees[k].z, 30);
+        }
+        if (window.smartGreenPoints) window.smartGreenPoints.forEach(pt => addWorld(pt.x, pt.z, 45));
+        try { if (typeof lastHitPoint !== 'undefined' && lastHitPoint) addWorld(lastHitPoint.x, lastHitPoint.z, 70); } catch (e) {}
+        if (extra) add(extra.x, extra.y, extra.x + extra.w, extra.y + extra.h);
+        if (x0 === Infinity) return null;
+        x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+        x1 = Math.min(4096, Math.ceil(x1)); y1 = Math.min(4096, Math.ceil(y1));
+        if (x1 - x0 < 1 || y1 - y0 < 1) return null;
+        return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+
+    function captureEditorState(forceFull = false, texRect = null) {
         let posCopy = new Float32Array(planeGeo.attributes.position.array);
         
         // Only clone heavy 4K textures if the current tool modifies textures (PAINT / WATER),
@@ -14730,6 +14766,14 @@
             cCopy.getContext('2d', {willReadFrequently:true}).drawImage(paintCanvas, 0, 0);
         }
         
+        let texPatch = null;
+        if (!cCopy && currentTool === 'SMART_BUILDER') {
+            let r = computeSmartTextureRect(texRect);
+            if (r) {
+                try { texPatch = Object.assign({ img: pCtx.getImageData(r.x, r.y, r.w, r.h) }, r); } catch (e) { texPatch = null; }
+            }
+        }
+
         let wPosCopy = window.waterData ? new Float32Array(window.waterData) : null;
         let needsWaterCanvas = forceFull || (currentTool === 'WATER');
         let wCanvasCopy = null;
@@ -14770,6 +14814,7 @@
             heights: posCopy, 
             wHeights: wPosCopy, 
             colorCanvas: cCopy, 
+            texPatch: texPatch,
             waterColorCanvas: wCanvasCopy, 
             blocks: blocksCopy, 
             trees: treesCopy,
@@ -14819,6 +14864,16 @@
             if (window._terrainShells) window._terrainShells.refresh();
         }
         
+        if (state.texPatch && !state.colorCanvas) {
+            pCtx.putImageData(state.texPatch.img, state.texPatch.x, state.texPatch.y);
+            mapTex.needsUpdate = true;
+            window._biomeDirty = true;
+            window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+            if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+            if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+            if (window._terrainShells) window._terrainShells.refresh();
+        }
+
         if (state.waterColorCanvas && typeof wCtx !== 'undefined') {
             wCtx.clearRect(0,0,4096,4096);
             wCtx.drawImage(state.waterColorCanvas, 0, 0);
@@ -14931,16 +14986,16 @@
 
     window.performUndo = function() {
         if (undoStack.length === 0) return;
-        redoStack.push(captureEditorState());
         let state = undoStack.pop();
+        redoStack.push(captureEditorState(false, state.texPatch));
         applyEditorState(state);
         updateUndoRedoUI();
     };
 
     window.performRedo = function() {
         if (redoStack.length === 0) return;
-        undoStack.push(captureEditorState());
         let state = redoStack.pop();
+        undoStack.push(captureEditorState(false, state.texPatch));
         applyEditorState(state);
         updateUndoRedoUI();
     };
