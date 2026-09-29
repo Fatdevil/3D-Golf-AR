@@ -2223,16 +2223,97 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
     });
 };
 
+
+// === LAYER ORDER: fairway (base) -> tee / bunker (upper) ===
+// Tee plateaus and bunker dig-outs are stored as height edits on top of a captured baseline
+// (origHeights). When a sculpted fairway is (re)applied it rewrites the terrain underneath them,
+// and their baselines contain the OLD fairway waves. To keep the layers consistent every fairway
+// height edit is bracketed by: detach (remove upper-layer edits) -> fairway edit ->
+// attach (re-capture baseline from the new terrain, re-apply the upper-layer edits, heights only).
+window._upperLayerDepth = 0;
+window._upperLayerSince = 0;
+
+window.anyFairwaySculpted = function(hole) {
+    return !!(hole && hole.fairways && hole.fairways.some(function(f) {
+        return f && (f._isSculpted || (f.difficulty && f.difficulty !== 'FLAT'));
+    }));
+};
+
+window.detachUpperLayers = function(hole) {
+    if (!hole) return;
+    // Self-heal if a previous edit threw before attach
+    if (window._upperLayerDepth > 0 && Date.now() - window._upperLayerSince > 8000) window._upperLayerDepth = 0;
+    window._upperLayerDepth++;
+    if (window._upperLayerDepth > 1) return;
+    window._upperLayerSince = Date.now();
+    ensureHoleBunkers(hole);
+    ensureHoleTeeBoxes(hole);
+    // Reverse of apply order: bunkers first, then tee boxes
+    (hole.bunkers || []).forEach(function(bd) {
+        if (bd && bd.origHeights && bd.bbox) window.restoreBunkerBase(hole, false, bd);
+    });
+    (hole.teeBoxes || []).forEach(function(tb) {
+        if (tb && tb.origHeights && tb.bbox && tb.points && tb.points.length >= 3) window.restoreTeeHeightsOnly(tb);
+    });
+};
+
+window.attachUpperLayers = function(hole) {
+    if (!hole || window._upperLayerDepth <= 0) return;
+    window._upperLayerDepth--;
+    if (window._upperLayerDepth > 0) return;
+    try {
+        ensureHoleBunkers(hole);
+        ensureHoleTeeBoxes(hole);
+        (hole.teeBoxes || []).forEach(function(tb) {
+            if (!tb || !tb.bbox || !tb.points || tb.points.length < 3) return;
+            let snap = window.captureTeeSnapshot(hole, tb.points, tb.bbox.margin || 25);
+            tb.bbox = snap.bbox;
+            tb.origHeights = snap.origHeights;
+            tb.baseElevation = snap.baseElevation;
+            window.applyTeePipeline(hole, false, false, tb, true);
+        });
+        (hole.bunkers || []).forEach(function(bd) {
+            if (!bd || !bd.bbox || !bd.points || bd.points.length < 3) return;
+            let snap = window.captureBunkerSnapshot(hole, bd.points, bd.bbox.margin || 15);
+            bd.bbox = snap.bbox;
+            bd.origHeights = snap.origHeights;
+            bd.baseElevation = snap.baseElevation;
+            window.applyBunkerPipeline(hole, false, false, bd);
+        });
+    } catch (err) {
+        console.error('[SMART BUILDER] attachUpperLayers failed:', err);
+    }
+};
+
+// Convenience: returns true when layers were detached (pass the result to endUpperLayerEdit)
+window.beginUpperLayerEdit = function(hole, force) {
+    if (!hole) return false;
+    ensureHoleBunkers(hole);
+    ensureHoleTeeBoxes(hole);
+    let hasUpper = (hole.bunkers && hole.bunkers.length > 0) || (hole.teeBoxes && hole.teeBoxes.length > 0);
+    if (!hasUpper) return false;
+    if (!force && !window.anyFairwaySculpted(hole)) return false;
+    window.detachUpperLayers(hole);
+    return true;
+};
+window.endUpperLayerEdit = function(hole, active) {
+    if (active) window.attachUpperLayers(hole);
+};
+
 // 3. Apply full fairway pipeline (Painting + Sculpting)
 window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFairway) {
     if (!hole) return;
     if (window._isApplyingFairwayPipeline) return;
     window._isApplyingFairwayPipeline = true;
+    let _layersDetached = false;
     try {
         ensureHoleFairways(hole);
         let fds = targetFairway ? [targetFairway] : (hole.fairways && hole.fairways.length > 0 ? hole.fairways : (hole.fairwayData ? [hole.fairwayData] : []));
         if (fds.length === 0) return;
         if (updateTexture === undefined) updateTexture = true;
+
+        // Lift tee/bunker height edits off the terrain while the fairway rewrites it
+        _layersDetached = window.beginUpperLayerEdit(hole);
 
         // Reset ground vertex heights to pristine baseline for targeted fairway(s)
         window.restoreFairwayBase(hole, false, targetFairway);
@@ -2428,6 +2509,7 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
     });
     } finally {
         window._isApplyingFairwayPipeline = false;
+        window.endUpperLayerEdit(hole, _layersDetached);
     }
 };
 
@@ -2486,6 +2568,7 @@ window.deleteSmartFairway = function(holeIndex, fairwayIndex) {
     window.saveUndoState();
 
     let targetFd = hole.fairways[fairwayIndex];
+    let _layers = window.beginUpperLayerEdit(hole);
     window.restoreFairwayBase(hole, true, targetFd);
     if (typeof window.eraseFairwayTexture === 'function') {
         window.eraseFairwayTexture(targetFd);
@@ -2508,6 +2591,7 @@ window.deleteSmartFairway = function(holeIndex, fairwayIndex) {
         if (typeof window.repaintBunkersTextureOnly === 'function') window.repaintBunkersTextureOnly(hole);
         if (hole.greenData && typeof window.repaintGreenTextureOnly === 'function') window.repaintGreenTextureOnly(hole);
     }
+    window.endUpperLayerEdit(hole, _layers);
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
@@ -2554,6 +2638,7 @@ window.deleteAllSmartFairways = function(holeIndex) {
     window.saveUndoState();
 
     // 1. Restore heights and erase texture for all fairways
+    let _layers = window.beginUpperLayerEdit(hole);
     hole.fairways.forEach(fd => {
         window.restoreFairwayBase(hole, true, fd);
         if (typeof window.eraseFairwayTexture === 'function') {
@@ -2564,6 +2649,8 @@ window.deleteAllSmartFairways = function(holeIndex) {
     hole.fairways = [];
     hole.fairwayData = null;
     hole.activeFairwayIndex = null;
+
+    window.endUpperLayerEdit(hole, _layers);
 
     // 2. Re-apply bunker and green textures on top if they exist
     if (typeof window.repaintBunkersTextureOnly === 'function') {
@@ -2725,6 +2812,7 @@ window.redrawSmartFairway = function(holeIndex, fairwayIndex) {
     let targetFd = hole.fairways[fairwayIndex];
     let savedPoints = targetFd.points.map(p => ({ x: p.x, y: p.y, z: p.z }));
 
+    let _layers = window.beginUpperLayerEdit(hole);
     window.restoreFairwayBase(hole, true, targetFd);
     if (typeof window.eraseFairwayTexture === 'function') {
         window.eraseFairwayTexture(targetFd);
@@ -2760,6 +2848,7 @@ window.redrawSmartFairway = function(holeIndex, fairwayIndex) {
         if (typeof window.repaintBunkersTextureOnly === 'function') window.repaintBunkersTextureOnly(hole);
         if (hole.greenData && typeof window.repaintGreenTextureOnly === 'function') window.repaintGreenTextureOnly(hole);
     }
+    window.endUpperLayerEdit(hole, _layers);
 
     smartGreenPoints = savedPoints.map(p => new THREE.Vector3(p.x, p.y || 0, p.z));
     window._smartShapeClosed = false;
@@ -2807,6 +2896,7 @@ window.scaleSmartFairway = function(holeIndex, factor, fairwayIndex) {
     }
 
     // 1. Restore pristine ground before modifying points
+    let _layers = window.beginUpperLayerEdit(hole);
     window.restoreFairwayBase(hole, true, fd);
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
@@ -2835,6 +2925,7 @@ window.scaleSmartFairway = function(holeIndex, factor, fairwayIndex) {
 
     // 4. Re-apply pipeline with exact same parameters
     window.applyFairwayPipeline(hole, false, true, fd);
+    window.endUpperLayerEdit(hole, _layers);
     updateActiveFairwayOutline();
 
     if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
@@ -2877,6 +2968,7 @@ window.moveSmartFairway = function(holeIndex, newCenterX, newCenterZ, fairwayInd
     let dz = newCenterZ - oldCz;
 
     // Restore old ground 100% clean
+    let _layers = window.beginUpperLayerEdit(hole);
     window.restoreFairwayBase(hole, true, fd);
 
     // Shift all points
@@ -2894,6 +2986,7 @@ window.moveSmartFairway = function(holeIndex, newCenterX, newCenterZ, fairwayInd
     fd.origCanvasPixels = snap.origCanvasPixels;
 
     window.applyFairwayPipeline(hole, false, true, fd);
+    window.endUpperLayerEdit(hole, _layers);
     updateActiveFairwayOutline();
 
     if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
@@ -2946,6 +3039,8 @@ window.executeSmartFairway = function() {
     let sharpness = 100; // Hardcoded SHARP system standard
 
     let margin = semiRoughWidth + (roughEnabled ? roughWidth : 0) + 12;
+    // Snapshot the fairway baseline WITHOUT tee/bunker edits (they sit above the fairway)
+    let _layers = window.beginUpperLayerEdit(hole, true);
     let snap = window.captureFairwaySnapshot(hole, smartGreenPoints, margin);
 
     let newFairway = {
@@ -2971,6 +3066,7 @@ window.executeSmartFairway = function() {
     hole.fairwayData = hole.fairways[0]; // Mirror primary for backward compatibility
 
     window.applyFairwayPipeline(hole, true, true, newFairway);
+    window.endUpperLayerEdit(hole, _layers);
     clearSmartGreen();
     updateActiveFairwayOutline();
 
@@ -3172,6 +3268,38 @@ function healTeeSurroundings(hole, tb, densePts) {
 }
 window.healTeeSurroundings = healTeeSurroundings;
 
+// Tee edits reach at most polygon + (blend slider max 15 + 2) metres
+const TEE_MAX_REACH = 17;
+
+function teeDensePts(tb) {
+    if (!tb || !tb.points || tb.points.length < 3) return null;
+    let curve = new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
+    return curve.getPoints(Math.max(160, tb.points.length * 30));
+}
+
+// Restore baseline heights ONLY where this tee box can have changed the terrain
+// (polygon + blend reach) - not the whole bbox rectangle, which used to wipe neighbouring
+// fairway / bunker edits.
+window.restoreTeeHeightsOnly = function(tb, densePts) {
+    if (!tb || !tb.origHeights || !tb.bbox || !window._arcadePlaneGeo) return false;
+    densePts = densePts || teeDensePts(tb);
+    let positions = window._arcadePlaneGeo.attributes.position.array;
+    let bb = tb.bbox;
+    let reach = Math.max(TEE_MAX_REACH, (tb.blendRadius !== undefined ? tb.blendRadius : 4) + 2);
+    for (let gz = bb.gzStart; gz <= bb.gzEnd; gz++) {
+        for (let gx = bb.gxStart; gx <= bb.gxEnd; gx++) {
+            let idx = gz * (window.TERRAIN_SEGS + 1) + gx;
+            if (densePts) {
+                let vx = positions[idx * 3], vz = -positions[idx * 3 + 1];
+                if (!pointInPolygon(vx, vz, densePts) && distToPolygon(vx, vz, densePts) > reach) continue;
+            }
+            let oi = (gz - bb.gzStart) * bb.gWidth + (gx - bb.gxStart);
+            if (oi >= 0 && oi < tb.origHeights.length) positions[idx * 3 + 2] = tb.origHeights[oi];
+        }
+    }
+    return true;
+};
+
 window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
     if (eraseTex === undefined) eraseTex = true;
     let tb = targetTeeBox || (typeof window.getActiveTeeBox === 'function' ? window.getActiveTeeBox(hole) : null);
@@ -3184,17 +3312,7 @@ window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
 
     // 1. Restore pristine baseline terrain heights
     if (tb.origHeights && tb.bbox && window._arcadePlaneGeo) {
-        let positions = window._arcadePlaneGeo.attributes.position.array;
-        let bb = tb.bbox;
-        for(let gz = bb.gzStart; gz <= bb.gzEnd; gz++) {
-            for(let gx = bb.gxStart; gx <= bb.gxEnd; gx++) {
-                let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-                let oi = (gz - bb.gzStart) * bb.gWidth + (gx - bb.gxStart);
-                if (oi >= 0 && oi < tb.origHeights.length) {
-                    positions[idx*3+2] = tb.origHeights[oi];
-                }
-            }
-        }
+        window.restoreTeeHeightsOnly(tb, densePts);
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
         window._arcadePlaneGeo.computeVertexNormals();
         window._arcadePlaneGeo.computeBoundingBox();
@@ -3241,7 +3359,7 @@ window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
     }
 };
 
-window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox) {
+window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox, heightsOnly) {
     let tb = targetTeeBox || (typeof window.getActiveTeeBox === 'function' ? window.getActiveTeeBox(hole) : null);
     if (!tb || !tb.points || tb.points.length < 3) return;
 
@@ -3331,18 +3449,9 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox)
 
     let plateauH = baseH + raiseHeight;
 
-    // Reset terrain within bounding box back to baseline origHeights before applying new elevation/blend
+    // Reset terrain (polygon + blend reach only) back to baseline origHeights before applying new elevation/blend
     if (tb.origHeights && tb.bbox) {
-        let bb = tb.bbox;
-        for(let gz = bb.gzStart; gz <= bb.gzEnd; gz++) {
-            for(let gx = bb.gxStart; gx <= bb.gxEnd; gx++) {
-                let idx = gz * (window.TERRAIN_SEGS+1) + gx;
-                let oi = (gz - bb.gzStart) * bb.gWidth + (gx - bb.gxStart);
-                if (oi >= 0 && oi < tb.origHeights.length) {
-                    positions[idx*3+2] = tb.origHeights[oi];
-                }
-            }
-        }
+        window.restoreTeeHeightsOnly(tb, densePts);
     }
 
     let bb = tb.bbox;
@@ -3378,6 +3487,9 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox)
     window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
     if (typeof window.snapObjectsToGround === 'function') window.snapObjectsToGround();
+
+    // Layer re-attach only needs the terrain edit - leave tee markers exactly where they are
+    if (heightsOnly) return;
 
     // 3. Place and orient tee markers on this tee box facing aimPoint
     let activeTees = tb.activeTees || ['black', 'white', 'yellow', 'red'];

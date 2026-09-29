@@ -578,6 +578,7 @@
 
                     if (insertIdx !== -1) {
                         window.saveUndoState();
+                        let _layers = window.beginUpperLayerEdit ? window.beginUpperLayerEdit(hole) : false;
                         let oldFd = { ...activeFd, points: activeFd.points.map(p => ({ ...p })) };
                         if (typeof window.restoreFairwayBase === 'function') {
                             window.restoreFairwayBase(hole, true, oldFd);
@@ -599,6 +600,7 @@
                         if (typeof window.applyFairwayPipeline === 'function') {
                             window.applyFairwayPipeline(hole, false, true, activeFd);
                         }
+                        if (window.endUpperLayerEdit) window.endUpperLayerEdit(hole, _layers);
                         this.rebuildHandles(hole, activeFd);
                         this.syncUIValues(hole, activeFd);
 
@@ -773,6 +775,7 @@
 
                 if (hole && activeFd && this._pendingRebuild) {
                     // Restore pristine terrain heights & canvas using dragStartPoints
+                    let _layers = window.beginUpperLayerEdit ? window.beginUpperLayerEdit(hole) : false;
                     let oldFd = { ...activeFd, points: (this.dragStartPoints || activeFd.points) };
                     if (typeof window.restoreFairwayBase === 'function') {
                         window.restoreFairwayBase(hole, true, oldFd);
@@ -792,6 +795,7 @@
                     if (typeof window.applyFairwayPipeline === 'function') {
                         window.applyFairwayPipeline(hole, false, true, activeFd);
                     }
+                    if (window.endUpperLayerEdit) window.endUpperLayerEdit(hole, _layers);
 
                     this.rebuildHandles(hole, activeFd);
                     this._pendingRebuild = false;
@@ -854,6 +858,7 @@
                     }
 
                     window.saveUndoState();
+                    let _layers = window.beginUpperLayerEdit ? window.beginUpperLayerEdit(hole) : false;
                     let oldFd = { ...activeFd, points: pts.map(p => ({ ...p })) };
                     if (typeof window.restoreFairwayBase === 'function') {
                         window.restoreFairwayBase(hole, true, oldFd);
@@ -872,6 +877,7 @@
                     if (typeof window.applyFairwayPipeline === 'function') {
                         window.applyFairwayPipeline(hole, false, true, activeFd);
                     }
+                    if (window.endUpperLayerEdit) window.endUpperLayerEdit(hole, _layers);
                     this.rebuildHandles(hole, activeFd);
                     this.syncUIValues(hole, activeFd);
 
