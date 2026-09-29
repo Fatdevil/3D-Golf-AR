@@ -1880,14 +1880,11 @@ window.ensureHoleFairways = ensureHoleFairways;
 function getActiveFairway(hole) {
     if (!hole) return null;
     ensureHoleFairways(hole);
+    // null means "drawing a new fairway" - never coerce it to 0 (same contract as getActiveBunker)
     if (hole.activeFairwayIndex === null || hole.activeFairwayIndex === undefined) {
-        if (hole.fairways && hole.fairways.length > 0) {
-            hole.activeFairwayIndex = 0;
-            return hole.fairways[0];
-        }
         return null;
     }
-    return hole.fairways[hole.activeFairwayIndex] || (hole.fairways && hole.fairways.length > 0 ? hole.fairways[0] : null);
+    return hole.fairways[hole.activeFairwayIndex] || null;
 }
 window.getActiveFairway = getActiveFairway;
 
@@ -2440,11 +2437,7 @@ window.updateLiveFairway = function(property, value) {
     if (!hole) return;
     if (typeof ensureHoleFairways === 'function') ensureHoleFairways(hole);
     let fd = (typeof getActiveFairway === 'function') ? getActiveFairway(hole) : null;
-    if (!fd && hole.fairways && hole.fairways.length > 0) {
-        hole.activeFairwayIndex = 0;
-        fd = hole.fairways[0];
-    }
-    if (!fd) return;
+    if (!fd) return; // drawing a new fairway: slider values are read at build time
 
     // If loaded from file without in-memory snapshot, capture baseline now
     if (!fd.origHeights && fd.points && typeof window.captureFairwaySnapshot === 'function') {
@@ -3005,9 +2998,10 @@ function ensureHoleTeeBoxes(hole) {
     }
     if (hole.teeBoxes.length > 0) {
         hole.teeData = hole.teeBoxes[0];
-        if (hole.activeTeeBoxIndex === undefined || hole.activeTeeBoxIndex === null) {
+        // DO NOT overwrite null! null means "drawing mode for new tee box"
+        if (hole.activeTeeBoxIndex === undefined) {
             hole.activeTeeBoxIndex = 0;
-        } else if (hole.activeTeeBoxIndex >= hole.teeBoxes.length) {
+        } else if (hole.activeTeeBoxIndex !== null && hole.activeTeeBoxIndex >= hole.teeBoxes.length) {
             hole.activeTeeBoxIndex = hole.teeBoxes.length - 1;
         }
     } else {
@@ -3021,10 +3015,8 @@ window.ensureHoleTeeBoxes = ensureHoleTeeBoxes;
 function getActiveTeeBox(hole) {
     if (!hole) return null;
     ensureHoleTeeBoxes(hole);
-    if (hole.activeTeeBoxIndex !== null && hole.activeTeeBoxIndex !== undefined && hole.teeBoxes[hole.activeTeeBoxIndex]) {
-        return hole.teeBoxes[hole.activeTeeBoxIndex];
-    }
-    return (hole.teeBoxes && hole.teeBoxes.length > 0) ? hole.teeBoxes[0] : null;
+    if (hole.activeTeeBoxIndex === null || hole.activeTeeBoxIndex === undefined) return null;
+    return hole.teeBoxes[hole.activeTeeBoxIndex] || null;
 }
 window.getActiveTeeBox = getActiveTeeBox;
 
@@ -4335,6 +4327,10 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
         let tension = (gd.tension !== undefined) ? gd.tension : 0.5;
         let densePts = getDenseGreenPoints(gd.points, tension);
         gd.densePts = densePts;
+        // Keep the inner (putting surface) polygon in sync with outline + foregreen width;
+        // a stale copy painted the putting surface at the old position/size after move/scale/drag.
+        let _fgW = gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0;
+        gd.innerDensePts = (_fgW > 0.05) ? insetPolygon(densePts, _fgW) : densePts;
 
     // === PAINT PASS ===
     if (updateTexture && window._arcadePCtx) {
