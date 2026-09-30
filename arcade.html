@@ -6627,6 +6627,18 @@
     const mapTex = new THREE.CanvasTexture(paintCanvas);
     mapTex.magFilter = THREE.LinearFilter;
     window.mapTex = mapTex;
+    // Every tool that repaints the terrain canvas flags the texture for GPU upload. Use that as the
+    // single signal that the cached JPEG used by saveLevel() is stale - Smart Builder pipelines
+    // (fairway/bunker/tee/green) never set _biomeDirty, so their paint was missing after a reload.
+    (function(tex) {
+        const d = Object.getOwnPropertyDescriptor(THREE.Texture.prototype, 'needsUpdate');
+        if (!d || !d.set) return;
+        Object.defineProperty(tex, 'needsUpdate', {
+            configurable: true,
+            get: function() { return false; },
+            set: function(v) { if (v) window._biomeDirty = true; d.set.call(this, v); }
+        });
+    })(mapTex);
     
     window.greenMaskCanvas = document.createElement('canvas');
     window.greenMaskCanvas.width = 4096; window.greenMaskCanvas.height = 4096;
