@@ -15533,8 +15533,12 @@
                 }
                 // Standard tee layout: next click places the back tee
                 if(window._smartBuilderType === 'TEE' && window._placingTeeLayout) {
-                    if(typeof window.buildStandardTeeLayout === 'function') window.buildStandardTeeLayout(lastHitPoint.x, lastHitPoint.z);
-                    window._placingTeeLayout = false;
+                    // Stays in placement mode when the click is rejected (returns false)
+                    if(typeof window.buildStandardTeeLayout === 'function') {
+                        if(window.buildStandardTeeLayout(lastHitPoint.x, lastHitPoint.z) !== false) window._placingTeeLayout = false;
+                    } else {
+                        window._placingTeeLayout = false;
+                    }
                     controls.enabled = false;
                     return;
                 }
@@ -20577,7 +20581,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=3"></script>
-<script src="smart-builder.js?v=24"></script>
+<script src="smart-builder.js?v=25"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

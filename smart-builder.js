@@ -3758,6 +3758,7 @@ window.deleteSmartTeeBox = function(boxIndex) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     if (!hole) return;
     ensureHoleTeeBoxes(hole);
+    normalizeTeeOwnership(hole); // old saves may list a colour on several boxes
     let idx = (boxIndex !== undefined && boxIndex !== null) ? boxIndex : hole.activeTeeBoxIndex;
     if (idx === null || idx === undefined || !hole.teeBoxes[idx]) return;
 
@@ -3975,24 +3976,24 @@ window.activateTeeLayoutMode = function() {
 };
 
 window.buildStandardTeeLayout = function(x, z) {
-    window._placingTeeLayout = false;
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     let target = hole && (hole.aimPoint || hole.flag);
-    if (!target) return;
+    if (!target) { window._placingTeeLayout = false; return true; }
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
     ensureHoleTeeBoxes(hole);
     normalizeTeeOwnership(hole);
     let free = freeTeeColors(hole, null);
+    // Each group keeps its own slot (back / middle / front) even when earlier groups are taken
     let groups = [['black', 'white'], ['yellow'], ['red']]
-        .map(function(g) { return g.filter(function(c) { return free.indexOf(c) >= 0; }); })
-        .filter(function(g) { return g.length > 0; });
-    if (groups.length === 0) return;
+        .map(function(g, slot) { return { slot: slot, colors: g.filter(function(c) { return free.indexOf(c) >= 0; }) }; })
+        .filter(function(g) { return g.colors.length > 0; });
+    if (groups.length === 0) return true;
 
     let dx = target.x - x, dz = target.z - z;
     let len = Math.hypot(dx, dz);
     if (len < 5) {
         window.showBuildToast(isSv ? '⚠️ För nära siktpunkten - välj en plats längre bort.' : '⚠️ Too close to the aim point - pick a spot further away.', '#ef4444');
-        return;
+        return false; // stay in placement mode so the next click retries
     }
     dx /= len; dz /= len;
     let px = -dz, pz = dx;           // perpendicular
@@ -4000,8 +4001,9 @@ window.buildStandardTeeLayout = function(x, z) {
 
     window.saveUndoState();
     window.ensureTeeAimPoint(hole);
-    groups.forEach(function(colors, i) {
-        let cx = x + dx * PITCH * i, cz = z + dz * PITCH * i;
+    groups.forEach(function(g) {
+        let colors = g.colors;
+        let cx = x + dx * PITCH * g.slot, cz = z + dz * PITCH * g.slot;
         let pts = [[-HALF_W, -HALF_D], [HALF_W, -HALF_D], [HALF_W, HALF_D], [-HALF_W, HALF_D]].map(function(o) {
             let wx = cx + px * o[0] + dx * o[1], wz = cz + pz * o[0] + dz * o[1];
             let surf = window.localGetTerrainAt ? window.localGetTerrainAt(wx, -wz) : null;
@@ -4009,6 +4011,7 @@ window.buildStandardTeeLayout = function(x, z) {
         });
         createTeeBoxFromPoints(hole, pts, colors);
     });
+    window._placingTeeLayout = false;
     hole.activeTeeBoxIndex = hole.teeBoxes.length - groups.length;
     window._teePickColors = null;
 
@@ -4018,6 +4021,7 @@ window.buildStandardTeeLayout = function(x, z) {
     window.showBuildToast(isSv ? `🟦 ${groups.length} tee-boxar skapade. Justera formen eller flytta markörerna.` : `🟦 ${groups.length} tee boxes created. Adjust the shapes or move the markers.`, '#38bdf8');
     window._smartBuildCooldown = true;
     setTimeout(function() { window._smartBuildCooldown = false; }, 500);
+    return true;
 };
 
 window.onTeeHeightSlider = function(val) {
