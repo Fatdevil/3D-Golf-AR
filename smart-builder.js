@@ -353,6 +353,9 @@ function resortTeesForAimPoint(hole) {
 // Auto-sort tees: reassign colors so Red=closest to flag, Black=furthest
 function autoSortTees(hole) {
     if (!hole.flag) return;
+    // On holes with built tee boxes every colour belongs to a box, so colours are never
+    // reshuffled across boxes here (boxes are oriented by the aim point instead).
+    if ((hole.teeBoxes || []).some(function(tb) { return tb.points && tb.points.length >= 3; })) return;
     
     let colorOrder = ['red', 'yellow', 'white', 'black'];
     let colorHex = { red: 0xef4444, yellow: 0xfacc15, white: 0xffffff, black: 0x111111 };
@@ -4000,7 +4003,9 @@ window.buildStandardTeeLayout = function(x, z) {
     }
     dx /= len; dz /= len;
     let px = -dz, pz = dx;           // perpendicular
-    const HALF_W = 4.5, HALF_D = 2.5, PITCH = 14;
+    // PITCH keeps neighbouring boxes outside each other's terrain restore reach (TEE_MAX_REACH + blend),
+    // so editing or deleting one box can never cut away another box's plateau.
+    const HALF_W = 4.5, HALF_D = 2.5, PITCH = 28;
 
     window.saveUndoState();
     window.ensureTeeAimPoint(hole);
