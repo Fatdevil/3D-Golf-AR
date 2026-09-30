@@ -15532,6 +15532,10 @@
                     return;
                 }
                 // Standard tee layout: next click places the back tee
+                if(window._placingTeeLayout && (window._smartBuilderType !== 'TEE' || window._placingTeeLayoutHole !== currentHoleIndex ||
+                    (courseHoles[currentHoleIndex] && courseHoles[currentHoleIndex].activeTeeBoxIndex != null))) {
+                    window._placingTeeLayout = false; // left the drawing context (other hole, type or box)
+                }
                 if(window._smartBuilderType === 'TEE' && window._placingTeeLayout) {
                     // Stays in placement mode when the click is rejected (returns false)
                     if(typeof window.buildStandardTeeLayout === 'function') {
@@ -20076,6 +20080,7 @@ window.triggerExplosion = function(x, y, z) {
 
         function setSmartBuilderType(type) {
             let oldType = window._smartBuilderType;
+            if (type !== 'TEE') window._placingTeeLayout = false;
             if (oldType && oldType !== type && window.smartGreenPoints && window.smartGreenPoints.length > 0) {
                 // Preserve uncommitted spline draft across sub-tools so switching from Green to Fairway keeps the shape
                 let curHole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
@@ -20581,7 +20586,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=3"></script>
-<script src="smart-builder.js?v=26"></script>
+<script src="smart-builder.js?v=27"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

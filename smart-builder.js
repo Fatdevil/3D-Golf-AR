@@ -3791,7 +3791,8 @@ window.deleteAllSmartTeeBoxes = function() {
     if (!hole || !hole.teeBoxes || hole.teeBoxes.length === 0) return;
 
     window.saveUndoState();
-    hole.teeBoxes.forEach(tb => {
+    // Newest first: later boxes' snapshots may contain earlier plateaus
+    hole.teeBoxes.slice().reverse().forEach(tb => {
         restoreTeeBase(hole, true, tb);
     });
 
@@ -3889,7 +3890,7 @@ window.ensureTeeAimPoint = function(hole) {
 };
 
 // Shared by the single-box build and the standard layout. Caller handles undo/save/UI.
-function createTeeBoxFromPoints(hole, points, colors) {
+function createTeeBoxFromPoints(hole, points, colors, deferApply) {
     ensureHoleTeeBoxes(hole);
     let snap = window.captureTeeSnapshot(hole, points, 25);
     let hSlider = document.getElementById('st-raise-height');
@@ -3910,7 +3911,7 @@ function createTeeBoxFromPoints(hole, points, colors) {
     hole.teeBoxes.push(newTeeBox);
     hole.activeTeeBoxIndex = hole.teeBoxes.length - 1;
     hole.teeData = hole.teeBoxes[0];
-    applyTeePipeline(hole, true, true, newTeeBox);
+    if (!deferApply) applyTeePipeline(hole, true, true, newTeeBox);
     return newTeeBox;
 }
 
@@ -3973,6 +3974,7 @@ window.activateTeeLayoutMode = function() {
         return;
     }
     window._placingTeeLayout = true;
+    window._placingTeeLayoutHole = window.currentHoleIndex;
     window.showBuildToast(isSv ? '📍 Klicka på kartan där bak-teen ska ligga (Esc avbryter)' : '📍 Click the map where the back tee goes (Esc cancels)', '#38bdf8');
 };
 
@@ -4010,6 +4012,8 @@ window.buildStandardTeeLayout = function(x, z) {
             let surf = window.localGetTerrainAt ? window.localGetTerrainAt(wx, -wz) : null;
             return { x: wx, y: surf ? surf.z : 0, z: wz };
         });
+        // Built in order: a later box snapshots the earlier plateaus, so building it never cuts them away.
+        // deleteAllSmartTeeBoxes restores newest-first to undo this.
         createTeeBoxFromPoints(hole, pts, colors);
     });
     window._placingTeeLayout = false;
