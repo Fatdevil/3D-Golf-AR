@@ -15617,9 +15617,7 @@
         } else if((currentTool === 'PAINT' && window._paintToolMode === 'POLYGON') || (currentTool === 'PROPS' && window._propsToolMode === 'POLYGON')) {
             if(e.button === 0 && lastHitPoint) {
                 if(typeof window.smartAddPoint === 'function') {
-                    if(!window.smartAddPoint(lastHitPoint.clone())) {
-                        showBuildToast('⚠️ Shape cannot cross itself!', '#ef4444');
-                    }
+                    window.smartAddPoint(lastHitPoint.clone()); // shows its own toast when it refuses (closed / crossing)
                     if(typeof window.updateSmartGreenPreview === 'function') window.updateSmartGreenPreview();
                 }
             } else if (e.button === 2 && typeof smartGreenPoints !== 'undefined' && smartGreenPoints.length > 0) {

@@ -472,6 +472,7 @@
                         let ptIdx = hit ? hit.userData.pointIndex : undefined;
                         if (ptIdx !== undefined && ptIdx >= 0) {
                             if (ptIdx === 0 && !window._smartShapeClosed && window.smartGreenPoints && window.smartGreenPoints.length >= 3) {
+                                if (window.polylineSelfIntersects(window.smartGreenPoints, true)) { window.warnSelfCrossing(); return true; }
                                 window._smartShapeClosed = true;
                                 let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                                 if (typeof window.showBuildToast === 'function') {
@@ -516,6 +517,7 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         let y = (typeof window.getTerrainHeight === 'function')
                             ? window.getTerrainHeight(lastHitPoint.x, lastHitPoint.z)
                             : (lastHitPoint.y || 0);
@@ -578,6 +580,7 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         window.saveUndoState();
                         let _layers = window.beginUpperLayerEdit ? window.beginUpperLayerEdit(hole) : false;
                         let oldFd = { ...activeFd, points: activeFd.points.map(p => ({ ...p })) };
@@ -632,6 +635,7 @@
                     let idx = this.draggingDrawNodeIndex;
                     if (window.smartGreenPoints && window.smartGreenPoints[idx]) {
                         let pt = window.smartGreenPoints[idx];
+                        if (window.moveWouldCross(window.smartGreenPoints, idx, lastHitPoint.x, lastHitPoint.z, !!window._smartShapeClosed)) { document.body.style.cursor = 'not-allowed'; return; }
                         pt.x = lastHitPoint.x;
                         pt.z = lastHitPoint.z;
                         let y = (typeof window.getTerrainHeight === 'function')
@@ -705,6 +709,7 @@
                     let idx = this.draggingHandleIndex;
                     let pt = activeFd.points[idx];
                     if (pt) {
+                        if (window.moveWouldCross(activeFd.points, idx, lastHitPoint.x, lastHitPoint.z, true)) { document.body.style.cursor = 'not-allowed'; return; }
                         // Undo point = state BEFORE the first movement of this drag
                         if (!this._dragUndoSaved) { this._dragUndoSaved = true; window.saveUndoState(); }
                         pt.x = lastHitPoint.x;

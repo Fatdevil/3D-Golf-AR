@@ -633,6 +633,7 @@
                         let ptIdx = hit ? hit.userData.pointIndex : undefined;
                         if (ptIdx !== undefined && ptIdx >= 0) {
                             if (ptIdx === 0 && !window._smartShapeClosed && window.smartGreenPoints && window.smartGreenPoints.length >= 3) {
+                                if (window.polylineSelfIntersects(window.smartGreenPoints, true)) { window.warnSelfCrossing(); return true; }
                                 window._smartShapeClosed = true;
                                 let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                                 if (typeof window.showBuildToast === 'function') {
@@ -676,6 +677,7 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         let y = (typeof window.getTerrainHeight === 'function')
                             ? window.getTerrainHeight(lastHitPoint.x, lastHitPoint.z)
                             : (lastHitPoint.y || 0);
@@ -733,6 +735,7 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         window.saveUndoState();
                         let oldTb = { ...activeTb, points: activeTb.points.map(p => ({ x: p.x, y: p.y, z: p.z })) };
                         if (typeof window.restoreTeeBase === 'function') window.restoreTeeBase(hole, true, oldTb);
@@ -778,6 +781,7 @@
             if (!hasBuiltTee && this.draggingDrawNodeIndex !== -1 && lastHitPoint) {
                 let pts = window.smartGreenPoints;
                 if (pts && pts[this.draggingDrawNodeIndex]) {
+                    if (window.moveWouldCross(pts, this.draggingDrawNodeIndex, lastHitPoint.x, lastHitPoint.z, !!window._smartShapeClosed)) { document.body.style.cursor = 'not-allowed'; return; }
                     pts[this.draggingDrawNodeIndex].x = lastHitPoint.x;
                     pts[this.draggingDrawNodeIndex].z = lastHitPoint.z;
                     let y = (typeof window.getTerrainHeight === 'function')
@@ -820,6 +824,7 @@
             if (hasBuiltTee && this.draggingHandleIndex !== -1 && lastHitPoint && activeTb) {
                 let pt = activeTb.points[this.draggingHandleIndex];
                 if (pt) {
+                    if (window.moveWouldCross(activeTb.points, this.draggingHandleIndex, lastHitPoint.x, lastHitPoint.z, true)) { document.body.style.cursor = 'not-allowed'; return; }
                     // Undo point = state BEFORE the first movement of this drag
                     if (!this._dragUndoSaved) { this._dragUndoSaved = true; window.saveUndoState(); }
                     pt.x = lastHitPoint.x;

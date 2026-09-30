@@ -181,6 +181,60 @@ function findNearestEdge(pts, pt) {
     return bestIdx;
 }
 
+// Does the polyline / polygon formed by the control points cross itself?
+// closed=false: open chain (drawing), closed=true: polygon incl. closing segment.
+function polylineSelfIntersects(pts, closed) {
+    let n = pts ? pts.length : 0;
+    if (n < 4) return false; // a triangle (or less) can not cross itself
+    let segs = closed ? n : n - 1;
+    for (let i = 0; i < segs; i++) {
+        let a = pts[i], b = pts[(i + 1) % n];
+        for (let j = i + 2; j < segs; j++) {
+            if (closed && i === 0 && j === n - 1) continue; // adjacent through the closing segment
+            let c = pts[j], d = pts[(j + 1) % n];
+            if (segmentsIntersect(a.x, a.z, b.x, b.z, c.x, c.z, d.x, d.z)) return true;
+        }
+    }
+    return false;
+}
+window.polylineSelfIntersects = polylineSelfIntersects;
+
+let _lastCrossWarn = 0;
+window.warnSelfCrossing = function() {
+    if (Date.now() - _lastCrossWarn < 1200) return;
+    _lastCrossWarn = Date.now();
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    if (typeof window.showBuildToast === 'function') {
+        window.showBuildToast(isSv ? '⚠️ Formen får inte korsa sig själv' : '⚠️ The shape must not cross itself', '#f59e0b');
+    }
+};
+
+// Would moving control point idx to (x,z) create a crossing that was not there before?
+// (a shape that already crosses is left free to move so the user can fix it)
+window.moveWouldCross = function(pts, idx, x, z, closed) {
+    if (!pts || !pts[idx]) return false;
+    if (polylineSelfIntersects(pts, closed)) return false;
+    let test = pts.map(p => ({ x: p.x, z: p.z }));
+    test[idx] = { x: x, z: z };
+    return polylineSelfIntersects(test, closed);
+};
+
+// Would inserting a new control point at (x,z) before index insertIdx create a crossing?
+window.insertWouldCross = function(pts, insertIdx, x, z) {
+    if (!pts) return false;
+    let closed = pts.length >= 3;
+    if (polylineSelfIntersects(pts, closed)) return false;
+    let test = pts.map(p => ({ x: p.x, z: p.z }));
+    test.splice(insertIdx, 0, { x: x, z: z });
+    return polylineSelfIntersects(test, closed);
+};
+
+// Called by the build buttons: refuse to build a self-crossing outline
+window.validateSmartShape = function(pts) {
+    if (polylineSelfIntersects(pts, true)) { window.warnSelfCrossing(); return false; }
+    return true;
+};
+
 // Smart point placement: append point, with magnetic snapping to close the shape
 function smartAddPoint(pt) {
     if(window._smartShapeClosed) {
@@ -196,6 +250,7 @@ function smartAddPoint(pt) {
         let first = smartGreenPoints[0];
         let dist = Math.hypot(pt.x - first.x, pt.z - first.z);
         if(dist < 4.0) {
+            if (polylineSelfIntersects(smartGreenPoints, true)) { window.warnSelfCrossing(); return false; }
             window._smartShapeClosed = true;
             let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
             if (typeof window.showBuildToast === 'function') {
@@ -204,6 +259,13 @@ function smartAddPoint(pt) {
             if (typeof window.updateSmartGreenPreview === 'function') window.updateSmartGreenPreview();
             return true;
         }
+    }
+
+    // Refuse a point whose new segment would cross the outline drawn so far
+    if (smartGreenPoints.length >= 3 && !polylineSelfIntersects(smartGreenPoints, false) &&
+        polylineSelfIntersects(smartGreenPoints.concat([pt]), false)) {
+        window.warnSelfCrossing();
+        return false;
     }
 
     smartGreenPoints.push(pt);
@@ -1825,6 +1887,7 @@ window.executeSmartBunker = function() {
         window.showBuildToast(isSv ? '⚠️ Rita minst 3 punkter för att bygga bunker!' : '⚠️ Draw at least 3 points to build bunker!', '#ef4444');
         return;
     }
+    if (!window.validateSmartShape(smartGreenPoints)) return;
     window._smartShapeClosed = true;
     window.saveUndoState();
 
@@ -3079,6 +3142,7 @@ window.executeSmartFairway = function() {
         window.showBuildToast(isSv ? '⚠️ Rita minst 3 punkter för att bygga fairway!' : '⚠️ Draw at least 3 points to build fairway!', '#ef4444');
         return;
     }
+    if (!window.validateSmartShape(smartGreenPoints)) return;
     window._smartShapeClosed = true;
     window.saveUndoState();
 
@@ -3709,6 +3773,7 @@ window.executeSmartTee = function() {
         window.showBuildToast(isSv ? '⚠️ Sätt ut minst 3 punkter för att skapa tee-boxen!' : '⚠️ Place at least 3 points to create the tee box!', '#ef4444');
         return;
     }
+    if (!window.validateSmartShape(smartGreenPoints)) return;
     window._smartShapeClosed = true;
 
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
@@ -5189,6 +5254,7 @@ window.executeSplineSmartGreen = function() {
         }
         return;
     }
+    if (!window.validateSmartShape(smartGreenPoints)) return;
     window._smartShapeClosed = true;
     window.saveUndoState();
 
