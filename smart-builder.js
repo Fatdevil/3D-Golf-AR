@@ -181,6 +181,26 @@ function findNearestEdge(pts, pt) {
     return bestIdx;
 }
 
+// Snap / pick radii that scale with the size of the shape being drawn. A fixed 4 m snap radius
+// made it impossible to place a 4th corner on a small bunker (it closed the shape instead).
+function smartShapeExtent(pts) {
+    if (!pts || pts.length < 2) return 0;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let q of pts) {
+        if (q.x < minX) minX = q.x; if (q.x > maxX) maxX = q.x;
+        if (q.z < minZ) minZ = q.z; if (q.z > maxZ) maxZ = q.z;
+    }
+    return Math.max(maxX - minX, maxZ - minZ);
+}
+// distance to the first point that closes the shape (1.2 m .. 4 m)
+window.smartSnapRadius = function(pts) {
+    return Math.max(1.2, Math.min(4.0, smartShapeExtent(pts) * 0.15));
+};
+// distance to an outline segment that inserts a point instead of adding one (0.8 m .. 2.5 m)
+window.smartInsertRadius = function(pts) {
+    return Math.max(0.8, Math.min(2.5, smartShapeExtent(pts) * 0.10));
+};
+
 // Does the polyline / polygon formed by the control points cross itself?
 // closed=false: open chain (drawing), closed=true: polygon incl. closing segment.
 function polylineSelfIntersects(pts, closed) {
@@ -249,7 +269,7 @@ function smartAddPoint(pt) {
     if(smartGreenPoints.length >= 3) {
         let first = smartGreenPoints[0];
         let dist = Math.hypot(pt.x - first.x, pt.z - first.z);
-        if(dist < 4.0) {
+        if(dist < window.smartSnapRadius(smartGreenPoints)) {
             if (polylineSelfIntersects(smartGreenPoints, true)) { window.warnSelfCrossing(); return false; }
             window._smartShapeClosed = true;
             let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');

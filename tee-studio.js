@@ -661,7 +661,7 @@
                     let pts = window.smartGreenPoints;
                     let minEdgeDist = Infinity;
                     let insertIdx = -1;
-                    let maxThreshold = 2.5;
+                    let maxThreshold = window.smartInsertRadius(pts);
                     let isClosed = (pts.length >= 3);
                     let segCount = isClosed ? pts.length : pts.length - 1;
 
@@ -721,7 +721,7 @@
                     let pts = activeTb.points;
                     let minEdgeDist = Infinity;
                     let insertIdx = -1;
-                    let maxThreshold = 2.5;
+                    let maxThreshold = window.smartInsertRadius(pts);
 
                     for (let i = 0; i < pts.length; i++) {
                         let next = (i + 1) % pts.length;
@@ -803,7 +803,7 @@
                 let p0 = window.smartGreenPoints[0];
                 let d = Math.hypot(lastHitPoint.x - p0.x, lastHitPoint.z - p0.z);
                 let ball0 = (window.smartGreenSpheres && window.smartGreenSpheres[0]);
-                if (d < 4.0) {
+                if (d < window.smartSnapRadius(window.smartGreenPoints)) {
                     window._smartSnapHover = true;
                     if (ball0) {
                         ball0.scale.set(1.45, 1.45, 1.45);
