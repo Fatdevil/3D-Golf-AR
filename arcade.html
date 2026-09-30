@@ -6636,9 +6636,26 @@
         Object.defineProperty(tex, 'needsUpdate', {
             configurable: true,
             get: function() { return false; },
-            set: function(v) { if (v) window._biomeDirty = true; d.set.call(this, v); }
+            set: function(v) { if (v) { window._biomeDirty = true; if (window.invalidateBiomeData) window.invalidateBiomeData(); } d.set.call(this, v); }
         });
     })(mapTex);
+
+    // window.terrainBiomeData (RGBA copy of the 4096x4096 terrain canvas, ~67 MB) used to be re-read
+    // with getImageData after EVERY texture edit (~55 ms each, several times per operation). It is now
+    // read lazily: edits only mark it stale and the next reader (rough mask, lie detection, ...) pays once.
+    // It stays undefined until first assigned/invalidated(force), as before, so boot logic is unchanged.
+    (function() {
+        let data, stale = false;
+        Object.defineProperty(window, 'terrainBiomeData', {
+            configurable: true, enumerable: true,
+            get: function() {
+                if (stale && window.pCtx) { data = window.pCtx.getImageData(0, 0, 4096, 4096).data; stale = false; }
+                return data;
+            },
+            set: function(v) { data = v; stale = false; }
+        });
+        window.invalidateBiomeData = function(force) { if (force || data !== undefined) stale = true; };
+    })();
     
     window.greenMaskCanvas = document.createElement('canvas');
     window.greenMaskCanvas.width = 4096; window.greenMaskCanvas.height = 4096;
@@ -6720,7 +6737,19 @@
         let threshSF = 2500;   // semi-rough & foregreen (cleaner)
         let threshBK = 3000;   // bunker sand
 
+        // Big flat areas repeat the same colour: reuse the previous classification when the pixel colour
+        // is unchanged (was ~570 ms, a full 7-distance test for all 16.8 M pixels)
+        const LE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+        const src32 = LE ? new Uint32Array(tData.buffer, tData.byteOffset, tData.length >> 2) : null;
+        const dst32 = LE ? new Uint32Array(mData.data.buffer) : null;
+        let lastC = -1, lastOut = 0;
+
         for (let i = 0; i < tData.length; i += 4) {
+            if (LE) {
+                const c = src32[i >> 2];
+                if (c === lastC) { dst32[i >> 2] = lastOut; continue; }
+                lastC = c;
+            }
             let r = tData[i], g = tData[i+1], b = tData[i+2];
 
             let distRough = (r-rR)*(r-rR) + (g-rG)*(g-rG) + (b-rB)*(b-rB);
@@ -6749,6 +6778,7 @@
             mData.data[i + 1] = bestType === 1 ? 255 : (bestType === 4 ? 128 : 0);
             mData.data[i + 2] = bestType === 2 ? 255 : 0;
             mData.data[i + 3] = 255;  // Alpha always opaque
+            if (LE) lastOut = dst32[i >> 2];
         }
         window.roughMaskCtx.putImageData(mData, 0, 0);
         window.roughMaskTex.needsUpdate = true;

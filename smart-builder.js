@@ -1066,7 +1066,7 @@ window.repaintAllTextures = function(hole, syncBiome) {
     window.repaintUpperTextures(hole);
     if (syncBiome !== false) {
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        window.invalidateBiomeData(true);
         if (typeof window.debounceRebuildRoughMask === 'function') window.debounceRebuildRoughMask(200);
         else if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
     }
@@ -1453,7 +1453,7 @@ window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunk
 
     if (updateTexture && window._arcadeMapTex) {
         window._arcadeMapTex.needsUpdate = true;
-        if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        if (window._arcadePCtx) window.invalidateBiomeData(true);
         if (typeof window.debounceRebuildRoughMask === 'function') {
             window.debounceRebuildRoughMask(500);
         } else if (typeof window.rebuildRoughMask === 'function') {
@@ -1463,7 +1463,7 @@ window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunk
 
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -1608,13 +1608,13 @@ window.deleteSmartBunker = function(holeIndex, bunkerIndex) {
     }
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (window._arcadePCtx) window.invalidateBiomeData(true);
     if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
     if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
 
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -1668,13 +1668,13 @@ window.deleteAllSmartBunkers = function(holeIndex) {
     }
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (window._arcadePCtx) window.invalidateBiomeData(true);
     if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
     if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
 
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -1711,7 +1711,7 @@ window.redrawSmartBunker = function(holeIndex, bunkerIndex) {
     }
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (window._arcadePCtx) window.invalidateBiomeData(true);
     if (typeof window.debounceRebuildRoughMask === 'function') {
         window.debounceRebuildRoughMask(50);
     } else if (typeof window.rebuildRoughMask === 'function') {
@@ -1721,7 +1721,7 @@ window.redrawSmartBunker = function(holeIndex, bunkerIndex) {
 
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -1796,7 +1796,7 @@ window.scaleSmartBunker = function(holeIndex, factor, bunkerIndex) {
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -2627,7 +2627,7 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
 
     if (updateTexture && window._arcadeMapTex) {
         window._arcadeMapTex.needsUpdate = true;
-        if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        if (window._arcadePCtx) window.invalidateBiomeData(true);
         if (typeof window.debounceRebuildRoughMask === 'function') {
             window.debounceRebuildRoughMask(500);
         } else if (typeof window.rebuildRoughMask === 'function') {
@@ -2643,7 +2643,7 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
     if (needsGeometrySync) {
         if (window._arcadePlaneGeo) {
             window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-            window._arcadePlaneGeo.computeVertexNormals();
+            if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
             window._arcadePlaneGeo.computeBoundingBox();
             window._arcadePlaneGeo.computeBoundingSphere();
         }
@@ -2749,13 +2749,13 @@ window.deleteSmartFairway = function(holeIndex, fairwayIndex) {
     window.endUpperLayerEdit(hole, _layers);
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (window._arcadePCtx) window.invalidateBiomeData(true);
     if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
     if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
 
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -2812,14 +2812,14 @@ window.deleteAllSmartFairways = function(holeIndex) {
 
     // 3. Sync textures and masks
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (window._arcadePCtx) window.invalidateBiomeData(true);
     if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
     if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
 
     // 4. Sync geometry
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -2933,7 +2933,7 @@ window.cleanGhostFairways = function(holeIndex) {
     window.repaintUpperTextures(hole);
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (window._arcadePCtx) window.invalidateBiomeData(true);
     if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
     if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
 
@@ -2964,13 +2964,13 @@ window.redrawSmartFairway = function(holeIndex, fairwayIndex) {
     }
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-    if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+    if (window._arcadePCtx) window.invalidateBiomeData(true);
     if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
     if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
 
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -3045,7 +3045,7 @@ window.scaleSmartFairway = function(holeIndex, factor, fairwayIndex) {
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -3455,7 +3455,7 @@ window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
     if (tb.origHeights && tb.bbox && window._arcadePlaneGeo) {
         window.restoreTeeHeightsOnly(tb, densePts);
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
         if (window._terrainChunks) window._terrainChunks.syncAll();
@@ -3467,7 +3467,7 @@ window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
         restoreSurfaceFootprint(tb, hole, densePts || teeDensePts(tb), '_teeSnapCanvas');
 
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        window.invalidateBiomeData(true);
         if (typeof window.debounceRebuildRoughMask === 'function') {
             window.debounceRebuildRoughMask(50);
         } else if (typeof window.rebuildRoughMask === 'function') {
@@ -3542,7 +3542,7 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox,
         restoreSurfaceFootprint(tb, hole, teeDensePts(tb), '_teeSnapCanvas');
         window.repaintAllTextures(hole, false);
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        window.invalidateBiomeData(true);
         if (typeof window.debounceRebuildRoughMask === 'function') {
             window.debounceRebuildRoughMask(400);
         } else if (typeof window.rebuildRoughMask === 'function') {
@@ -3614,7 +3614,7 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox,
     }
 
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-    window._arcadePlaneGeo.computeVertexNormals();
+    if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
@@ -4417,7 +4417,7 @@ window.restoreGreenBase = function(hole, restoreTexture, targetGd, isDeleting) {
         }
 
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
         if (window._terrainChunks) {
@@ -4464,7 +4464,7 @@ window.restoreGreenBase = function(hole, restoreTexture, targetGd, isDeleting) {
         }
 
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        window.invalidateBiomeData(true);
         // Defer rough mask rebuild so it fires AFTER repaintGreenTextureOnly has finished painting.
         // Calling rebuildRoughMask() here immediately (before repaint) would cause 3D-grass to flash
         // over the green area for the duration of the debounce.
@@ -4585,7 +4585,7 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
         window.repaintGreenTextureOnly(hole);
 
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
-        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        window.invalidateBiomeData(true);
         if (typeof window.debounceRebuildRoughMask === 'function') {
             window.debounceRebuildRoughMask(500);
         } else if (typeof window.rebuildRoughMask === 'function') {
@@ -4783,7 +4783,7 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
 
     // Sync mesh geometry
     window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-    window._arcadePlaneGeo.computeVertexNormals();
+    if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
     window._arcadePlaneGeo.computeBoundingBox();
     window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
@@ -4930,7 +4930,7 @@ window.deleteSmartGreen = function(holeIndex) {
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -4974,7 +4974,7 @@ window.redrawSmartGreen = function(holeIndex) {
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -5036,7 +5036,7 @@ window.scaleSmartGreen = function(holeIndex, factor) {
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -5101,7 +5101,7 @@ window.moveSmartGreen = function(holeIndex, newCenterX, newCenterZ) {
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePlaneGeo) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     }
@@ -5546,7 +5546,7 @@ window.executeSplineSmartGreen = function() {
             if (window.roughMaskTex) window.roughMaskTex.needsUpdate = true;
         }
 
-        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        window.invalidateBiomeData(true);
         if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
         if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
         if (window._terrainShells) window._terrainShells.refresh();
@@ -5895,7 +5895,7 @@ window.executeSplineSmartGreen = function() {
 
         // Update terrain
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
@@ -6055,7 +6055,7 @@ window.executeRidgeMountain = function() {
     
     if (modified) {
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
@@ -6203,7 +6203,7 @@ window.executeSplineMountain = function() {
 
         // Uppdatera geometri
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;
-        window._arcadePlaneGeo.computeVertexNormals();
+        if (!window._terrainChunks) window._arcadePlaneGeo.computeVertexNormals(); // syncAll() recomputes them
         window._arcadePlaneGeo.computeBoundingBox();
         window._arcadePlaneGeo.computeBoundingSphere();
     if (window._terrainChunks) window._terrainChunks.syncAll();
