@@ -39,6 +39,7 @@
             // Interaction state
             this.hoveredHandleIndex = -1;
             this.draggingHandleIndex = -1;
+            this._dragUndoSaved = false;
             this.dragStartPoints = null;
 
             // Mode 1 draw node editing state (before tee box is built)
@@ -632,6 +633,7 @@
                         let ptIdx = hit ? hit.userData.pointIndex : undefined;
                         if (ptIdx !== undefined && ptIdx >= 0) {
                             if (ptIdx === 0 && !window._smartShapeClosed && window.smartGreenPoints && window.smartGreenPoints.length >= 3) {
+                                if (window.polylineSelfIntersects(window.smartGreenPoints, true)) { window.warnSelfCrossing(); return true; }
                                 window._smartShapeClosed = true;
                                 let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                                 if (typeof window.showBuildToast === 'function') {
@@ -659,7 +661,7 @@
                     let pts = window.smartGreenPoints;
                     let minEdgeDist = Infinity;
                     let insertIdx = -1;
-                    let maxThreshold = 2.5;
+                    let maxThreshold = window.smartInsertRadius(pts);
                     let isClosed = (pts.length >= 3);
                     let segCount = isClosed ? pts.length : pts.length - 1;
 
@@ -675,6 +677,7 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         let y = (typeof window.getTerrainHeight === 'function')
                             ? window.getTerrainHeight(lastHitPoint.x, lastHitPoint.z)
                             : (lastHitPoint.y || 0);
@@ -718,7 +721,7 @@
                     let pts = activeTb.points;
                     let minEdgeDist = Infinity;
                     let insertIdx = -1;
-                    let maxThreshold = 2.5;
+                    let maxThreshold = window.smartInsertRadius(pts);
 
                     for (let i = 0; i < pts.length; i++) {
                         let next = (i + 1) % pts.length;
@@ -732,6 +735,7 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         window.saveUndoState();
                         let oldTb = { ...activeTb, points: activeTb.points.map(p => ({ x: p.x, y: p.y, z: p.z })) };
                         if (typeof window.restoreTeeBase === 'function') window.restoreTeeBase(hole, true, oldTb);
@@ -777,6 +781,7 @@
             if (!hasBuiltTee && this.draggingDrawNodeIndex !== -1 && lastHitPoint) {
                 let pts = window.smartGreenPoints;
                 if (pts && pts[this.draggingDrawNodeIndex]) {
+                    if (window.moveWouldCross(pts, this.draggingDrawNodeIndex, lastHitPoint.x, lastHitPoint.z, !!window._smartShapeClosed)) { document.body.style.cursor = 'not-allowed'; return; }
                     pts[this.draggingDrawNodeIndex].x = lastHitPoint.x;
                     pts[this.draggingDrawNodeIndex].z = lastHitPoint.z;
                     let y = (typeof window.getTerrainHeight === 'function')
@@ -798,7 +803,7 @@
                 let p0 = window.smartGreenPoints[0];
                 let d = Math.hypot(lastHitPoint.x - p0.x, lastHitPoint.z - p0.z);
                 let ball0 = (window.smartGreenSpheres && window.smartGreenSpheres[0]);
-                if (d < 4.0) {
+                if (d < window.smartSnapRadius(window.smartGreenPoints)) {
                     window._smartSnapHover = true;
                     if (ball0) {
                         ball0.scale.set(1.45, 1.45, 1.45);
@@ -819,6 +824,9 @@
             if (hasBuiltTee && this.draggingHandleIndex !== -1 && lastHitPoint && activeTb) {
                 let pt = activeTb.points[this.draggingHandleIndex];
                 if (pt) {
+                    if (window.moveWouldCross(activeTb.points, this.draggingHandleIndex, lastHitPoint.x, lastHitPoint.z, true)) { document.body.style.cursor = 'not-allowed'; return; }
+                    // Undo point = state BEFORE the first movement of this drag
+                    if (!this._dragUndoSaved) { this._dragUndoSaved = true; window.saveUndoState(); }
                     pt.x = lastHitPoint.x;
                     pt.z = lastHitPoint.z;
                     let y = (typeof window.getTerrainHeight === 'function')
@@ -887,6 +895,7 @@
                     mesh.scale.set(1, 1, 1);
                 }
                 this.draggingHandleIndex = -1;
+                this._dragUndoSaved = false;
                 if (window.controls) window.controls.enabled = true;
                 document.body.style.cursor = 'default';
 

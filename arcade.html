@@ -6627,6 +6627,35 @@
     const mapTex = new THREE.CanvasTexture(paintCanvas);
     mapTex.magFilter = THREE.LinearFilter;
     window.mapTex = mapTex;
+    // Every tool that repaints the terrain canvas flags the texture for GPU upload. Use that as the
+    // single signal that the cached JPEG used by saveLevel() is stale - Smart Builder pipelines
+    // (fairway/bunker/tee/green) never set _biomeDirty, so their paint was missing after a reload.
+    (function(tex) {
+        const d = Object.getOwnPropertyDescriptor(THREE.Texture.prototype, 'needsUpdate');
+        if (!d || !d.set) return;
+        Object.defineProperty(tex, 'needsUpdate', {
+            configurable: true,
+            get: function() { return false; },
+            set: function(v) { if (v) { window._biomeDirty = true; if (window.invalidateBiomeData) window.invalidateBiomeData(); } d.set.call(this, v); }
+        });
+    })(mapTex);
+
+    // window.terrainBiomeData (RGBA copy of the 4096x4096 terrain canvas, ~67 MB) used to be re-read
+    // with getImageData after EVERY texture edit (~55 ms each, several times per operation). It is now
+    // read lazily: edits only mark it stale and the next reader (rough mask, lie detection, ...) pays once.
+    // It stays undefined until first assigned/invalidated(force), as before, so boot logic is unchanged.
+    (function() {
+        let data, stale = false;
+        Object.defineProperty(window, 'terrainBiomeData', {
+            configurable: true, enumerable: true,
+            get: function() {
+                if (stale && window.pCtx) { data = window.pCtx.getImageData(0, 0, 4096, 4096).data; stale = false; }
+                return data;
+            },
+            set: function(v) { data = v; stale = false; }
+        });
+        window.invalidateBiomeData = function(force) { if (force || data !== undefined) stale = true; };
+    })();
     
     window.greenMaskCanvas = document.createElement('canvas');
     window.greenMaskCanvas.width = 4096; window.greenMaskCanvas.height = 4096;
@@ -6708,7 +6737,19 @@
         let threshSF = 2500;   // semi-rough & foregreen (cleaner)
         let threshBK = 3000;   // bunker sand
 
+        // Big flat areas repeat the same colour: reuse the previous classification when the pixel colour
+        // is unchanged (was ~570 ms, a full 7-distance test for all 16.8 M pixels)
+        const LE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+        const src32 = LE ? new Uint32Array(tData.buffer, tData.byteOffset, tData.length >> 2) : null;
+        const dst32 = LE ? new Uint32Array(mData.data.buffer) : null;
+        let lastC = -1, lastOut = 0;
+
         for (let i = 0; i < tData.length; i += 4) {
+            if (LE) {
+                const c = src32[i >> 2];
+                if (c === lastC) { dst32[i >> 2] = lastOut; continue; }
+                lastC = c;
+            }
             let r = tData[i], g = tData[i+1], b = tData[i+2];
 
             let distRough = (r-rR)*(r-rR) + (g-rG)*(g-rG) + (b-rB)*(b-rB);
@@ -6737,6 +6778,7 @@
             mData.data[i + 1] = bestType === 1 ? 255 : (bestType === 4 ? 128 : 0);
             mData.data[i + 2] = bestType === 2 ? 255 : 0;
             mData.data[i + 3] = 255;  // Alpha always opaque
+            if (LE) lastOut = dst32[i >> 2];
         }
         window.roughMaskCtx.putImageData(mData, 0, 0);
         window.roughMaskTex.needsUpdate = true;
@@ -14717,7 +14759,43 @@
         }
     }
 
-    function captureEditorState(forceFull = false) {
+    // Smart Builder edits repaint the 2D terrain canvas but cloning the whole 4096x4096 canvas for
+    // every undo step would cost 64 MB each. Instead snapshot only the pixel rectangle the current
+    // hole's builder objects (and the shape/click about to be built) can touch.
+    function computeSmartTextureRect(extra) {
+        const T = TERRAIN_SIZE;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        const add = (ax0, ay0, ax1, ay1) => {
+            if (!isFinite(ax0 + ay0 + ax1 + ay1)) return;
+            x0 = Math.min(x0, ax0); y0 = Math.min(y0, ay0); x1 = Math.max(x1, ax1); y1 = Math.max(y1, ay1);
+        };
+        const px = v => (v + T / 2) / T * 4096;
+        const addWorld = (x, z, r) => add(px(x - r), px(z - r), px(x + r), px(z + r));
+        const addObj = o => {
+            if (!o) return;
+            if (o.bbox && o.bbox.pw > 0 && o.bbox.ph > 0) add(o.bbox.pxMinX, o.bbox.pxMinY, o.bbox.pxMaxX, o.bbox.pxMaxY);
+            else if (o.points) o.points.forEach(pt => addWorld(pt.x, pt.z, 40));
+        };
+        let h = courseHoles && courseHoles[currentHoleIndex];
+        if (h) {
+            (h.fairways || []).forEach(addObj);
+            (h.bunkers || []).forEach(addObj);
+            (h.teeBoxes || []).forEach(addObj);
+            addObj(h.greenData);
+            if (h.flag) addWorld(h.flag.x, h.flag.z, 30);
+            if (h.tees) for (let k in h.tees) if (h.tees[k]) addWorld(h.tees[k].x, h.tees[k].z, 30);
+        }
+        if (window.smartGreenPoints) window.smartGreenPoints.forEach(pt => addWorld(pt.x, pt.z, 45));
+        try { if (typeof lastHitPoint !== 'undefined' && lastHitPoint) addWorld(lastHitPoint.x, lastHitPoint.z, 70); } catch (e) {}
+        if (extra) add(extra.x, extra.y, extra.x + extra.w, extra.y + extra.h);
+        if (x0 === Infinity) return null;
+        x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+        x1 = Math.min(4096, Math.ceil(x1)); y1 = Math.min(4096, Math.ceil(y1));
+        if (x1 - x0 < 1 || y1 - y0 < 1) return null;
+        return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+
+    function captureEditorState(forceFull = false, texRect = null) {
         let posCopy = new Float32Array(planeGeo.attributes.position.array);
         
         // Only clone heavy 4K textures if the current tool modifies textures (PAINT / WATER),
@@ -14730,6 +14808,16 @@
             cCopy.getContext('2d', {willReadFrequently:true}).drawImage(paintCanvas, 0, 0);
         }
         
+        let texPatch = null;
+        // texRect is set when undo/redo captures the opposite state of one that carries a patch: capture
+        // the same area even if the user has switched to another tool in the meantime.
+        if (!cCopy && (currentTool === 'SMART_BUILDER' || texRect)) {
+            let r = computeSmartTextureRect(texRect);
+            if (r) {
+                try { texPatch = Object.assign({ img: pCtx.getImageData(r.x, r.y, r.w, r.h) }, r); } catch (e) { texPatch = null; }
+            }
+        }
+
         let wPosCopy = window.waterData ? new Float32Array(window.waterData) : null;
         let needsWaterCanvas = forceFull || (currentTool === 'WATER');
         let wCanvasCopy = null;
@@ -14749,7 +14837,7 @@
             aimPoint: h.aimPoint ? { ...h.aimPoint } : null,
             pins: h.pins ? JSON.parse(JSON.stringify(h.pins)) : {},
             envObjects: h.envObjects ? h.envObjects.slice() : [],
-            greenData: h.greenData ? { ...h.greenData } : null,
+            greenData: h.greenData ? { ...h.greenData, points: (h.greenData.points || []).map(p => ({ ...p })), lastBuiltPoints: h.greenData.lastBuiltPoints ? h.greenData.lastBuiltPoints.map(p => ({ ...p })) : h.greenData.lastBuiltPoints } : null,
             fairways: h.fairways ? h.fairways.map(f => ({ ...f, points: f.points ? f.points.map(p => ({ ...p })) : [] })) : (h.fairwayData ? [{ ...h.fairwayData, points: h.fairwayData.points ? h.fairwayData.points.map(p => ({ ...p })) : [] }] : []),
             activeFairwayIndex: h.activeFairwayIndex,
             fairwayData: h.fairwayData ? { ...h.fairwayData } : null,
@@ -14770,6 +14858,7 @@
             heights: posCopy, 
             wHeights: wPosCopy, 
             colorCanvas: cCopy, 
+            texPatch: texPatch,
             waterColorCanvas: wCanvasCopy, 
             blocks: blocksCopy, 
             trees: treesCopy,
@@ -14819,6 +14908,16 @@
             if (window._terrainShells) window._terrainShells.refresh();
         }
         
+        if (state.texPatch && !state.colorCanvas) {
+            pCtx.putImageData(state.texPatch.img, state.texPatch.x, state.texPatch.y);
+            mapTex.needsUpdate = true;
+            window._biomeDirty = true;
+            window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+            if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+            if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+            if (window._terrainShells) window._terrainShells.refresh();
+        }
+
         if (state.waterColorCanvas && typeof wCtx !== 'undefined') {
             wCtx.clearRect(0,0,4096,4096);
             wCtx.drawImage(state.waterColorCanvas, 0, 0);
@@ -14899,7 +14998,7 @@
                 }
                 h.envObjects = hState.envObjects ? hState.envObjects.slice() : [];
                 h.envObjects.forEach(obj => { if(obj.mesh) scene.add(obj.mesh); });
-                h.greenData = hState.greenData ? { ...hState.greenData } : null;
+                h.greenData = hState.greenData ? { ...hState.greenData, points: (hState.greenData.points || []).map(p => ({ ...p })), lastBuiltPoints: hState.greenData.lastBuiltPoints ? hState.greenData.lastBuiltPoints.map(p => ({ ...p })) : hState.greenData.lastBuiltPoints } : null;
                 h.fairways = hState.fairways ? hState.fairways.map(f => ({ ...f, points: f.points ? f.points.map(p => ({ ...p })) : [] })) : (hState.fairwayData ? [{ ...hState.fairwayData, points: hState.fairwayData.points ? hState.fairwayData.points.map(p => ({ ...p })) : [] }] : []);
                 h.activeFairwayIndex = hState.activeFairwayIndex !== undefined ? hState.activeFairwayIndex : (h.fairways.length > 0 ? 0 : null);
                 h.fairwayData = h.fairways[0] || null;
@@ -14931,16 +15030,16 @@
 
     window.performUndo = function() {
         if (undoStack.length === 0) return;
-        redoStack.push(captureEditorState());
         let state = undoStack.pop();
+        redoStack.push(captureEditorState(false, state.texPatch));
         applyEditorState(state);
         updateUndoRedoUI();
     };
 
     window.performRedo = function() {
         if (redoStack.length === 0) return;
-        undoStack.push(captureEditorState());
         let state = redoStack.pop();
+        undoStack.push(captureEditorState(false, state.texPatch));
         applyEditorState(state);
         updateUndoRedoUI();
     };
@@ -15562,9 +15661,7 @@
         } else if((currentTool === 'PAINT' && window._paintToolMode === 'POLYGON') || (currentTool === 'PROPS' && window._propsToolMode === 'POLYGON')) {
             if(e.button === 0 && lastHitPoint) {
                 if(typeof window.smartAddPoint === 'function') {
-                    if(!window.smartAddPoint(lastHitPoint.clone())) {
-                        showBuildToast('⚠️ Shape cannot cross itself!', '#ef4444');
-                    }
+                    window.smartAddPoint(lastHitPoint.clone()); // shows its own toast when it refuses (closed / crossing)
                     if(typeof window.updateSmartGreenPreview === 'function') window.updateSmartGreenPreview();
                 }
             } else if (e.button === 2 && typeof smartGreenPoints !== 'undefined' && smartGreenPoints.length > 0) {
@@ -20461,11 +20558,11 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=22"></script>
-<script src="fairway-studio.js?v=1"></script>
-<script src="bunker-studio.js?v=1"></script>
-<script src="tee-studio.js?v=1"></script>
-<script src="smart-builder.js?v=20"></script>
+<script src="green-studio.js?v=23"></script>
+<script src="fairway-studio.js?v=2"></script>
+<script src="bunker-studio.js?v=2"></script>
+<script src="tee-studio.js?v=2"></script>
+<script src="smart-builder.js?v=21"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

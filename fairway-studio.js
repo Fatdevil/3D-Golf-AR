@@ -38,6 +38,7 @@
             // Interaction state
             this.hoveredHandleIndex = -1;
             this.draggingHandleIndex = -1;
+            this._dragUndoSaved = false;
             this.dragStartPoints = null;
 
             // Mode 1 draw node editing state (before fairway is built)
@@ -471,6 +472,7 @@
                         let ptIdx = hit ? hit.userData.pointIndex : undefined;
                         if (ptIdx !== undefined && ptIdx >= 0) {
                             if (ptIdx === 0 && !window._smartShapeClosed && window.smartGreenPoints && window.smartGreenPoints.length >= 3) {
+                                if (window.polylineSelfIntersects(window.smartGreenPoints, true)) { window.warnSelfCrossing(); return true; }
                                 window._smartShapeClosed = true;
                                 let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                                 if (typeof window.showBuildToast === 'function') {
@@ -498,7 +500,7 @@
                     let pts = window.smartGreenPoints;
                     let minEdgeDist = Infinity;
                     let insertIdx = -1;
-                    let maxThreshold = 2.5; // within 2.5m of line
+                    let maxThreshold = window.smartInsertRadius(pts); // within 2.5m of line
                     let isClosed = (pts.length >= 3);
                     let segCount = isClosed ? pts.length : pts.length - 1;
 
@@ -515,6 +517,7 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         let y = (typeof window.getTerrainHeight === 'function')
                             ? window.getTerrainHeight(lastHitPoint.x, lastHitPoint.z)
                             : (lastHitPoint.y || 0);
@@ -562,7 +565,7 @@
                     let pts = activeFd.points;
                     let minEdgeDist = Infinity;
                     let insertIdx = -1;
-                    let maxThreshold = 2.5;
+                    let maxThreshold = window.smartInsertRadius(pts);
 
                     for (let i = 0; i < pts.length; i++) {
                         let next = (i + 1) % pts.length;
@@ -577,7 +580,9 @@
                     }
 
                     if (insertIdx !== -1) {
+                        if (window.insertWouldCross(pts, insertIdx, lastHitPoint.x, lastHitPoint.z)) { window.warnSelfCrossing(); return true; }
                         window.saveUndoState();
+                        let _layers = window.beginUpperLayerEdit ? window.beginUpperLayerEdit(hole) : false;
                         let oldFd = { ...activeFd, points: activeFd.points.map(p => ({ ...p })) };
                         if (typeof window.restoreFairwayBase === 'function') {
                             window.restoreFairwayBase(hole, true, oldFd);
@@ -599,6 +604,7 @@
                         if (typeof window.applyFairwayPipeline === 'function') {
                             window.applyFairwayPipeline(hole, false, true, activeFd);
                         }
+                        if (window.endUpperLayerEdit) window.endUpperLayerEdit(hole, _layers);
                         this.rebuildHandles(hole, activeFd);
                         this.syncUIValues(hole, activeFd);
 
@@ -629,6 +635,7 @@
                     let idx = this.draggingDrawNodeIndex;
                     if (window.smartGreenPoints && window.smartGreenPoints[idx]) {
                         let pt = window.smartGreenPoints[idx];
+                        if (window.moveWouldCross(window.smartGreenPoints, idx, lastHitPoint.x, lastHitPoint.z, !!window._smartShapeClosed)) { document.body.style.cursor = 'not-allowed'; return; }
                         pt.x = lastHitPoint.x;
                         pt.z = lastHitPoint.z;
                         let y = (typeof window.getTerrainHeight === 'function')
@@ -653,7 +660,7 @@
                     let p0 = window.smartGreenPoints[0];
                     let d = Math.hypot(lastHitPoint.x - p0.x, lastHitPoint.z - p0.z);
                     let ball0 = (window.smartGreenSpheres && window.smartGreenSpheres[0]);
-                    if (d < 4.0) {
+                    if (d < window.smartSnapRadius(window.smartGreenPoints)) {
                         window._smartSnapHover = true;
                         if (ball0) {
                             ball0.scale.set(1.45, 1.45, 1.45);
@@ -702,6 +709,9 @@
                     let idx = this.draggingHandleIndex;
                     let pt = activeFd.points[idx];
                     if (pt) {
+                        if (window.moveWouldCross(activeFd.points, idx, lastHitPoint.x, lastHitPoint.z, true)) { document.body.style.cursor = 'not-allowed'; return; }
+                        // Undo point = state BEFORE the first movement of this drag
+                        if (!this._dragUndoSaved) { this._dragUndoSaved = true; window.saveUndoState(); }
                         pt.x = lastHitPoint.x;
                         pt.z = lastHitPoint.z;
 
@@ -767,12 +777,14 @@
                     mesh.scale.set(1.0, 1.0, 1.0);
                 }
                 this.draggingHandleIndex = -1;
+                this._dragUndoSaved = false;
 
                 let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
                 let activeFd = (typeof window.getActiveFairway === 'function') ? window.getActiveFairway(hole) : null;
 
                 if (hole && activeFd && this._pendingRebuild) {
                     // Restore pristine terrain heights & canvas using dragStartPoints
+                    let _layers = window.beginUpperLayerEdit ? window.beginUpperLayerEdit(hole) : false;
                     let oldFd = { ...activeFd, points: (this.dragStartPoints || activeFd.points) };
                     if (typeof window.restoreFairwayBase === 'function') {
                         window.restoreFairwayBase(hole, true, oldFd);
@@ -792,6 +804,7 @@
                     if (typeof window.applyFairwayPipeline === 'function') {
                         window.applyFairwayPipeline(hole, false, true, activeFd);
                     }
+                    if (window.endUpperLayerEdit) window.endUpperLayerEdit(hole, _layers);
 
                     this.rebuildHandles(hole, activeFd);
                     this._pendingRebuild = false;
@@ -854,6 +867,7 @@
                     }
 
                     window.saveUndoState();
+                    let _layers = window.beginUpperLayerEdit ? window.beginUpperLayerEdit(hole) : false;
                     let oldFd = { ...activeFd, points: pts.map(p => ({ ...p })) };
                     if (typeof window.restoreFairwayBase === 'function') {
                         window.restoreFairwayBase(hole, true, oldFd);
@@ -872,6 +886,7 @@
                     if (typeof window.applyFairwayPipeline === 'function') {
                         window.applyFairwayPipeline(hole, false, true, activeFd);
                     }
+                    if (window.endUpperLayerEdit) window.endUpperLayerEdit(hole, _layers);
                     this.rebuildHandles(hole, activeFd);
                     this.syncUIValues(hole, activeFd);
 
