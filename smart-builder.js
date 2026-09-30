@@ -5450,6 +5450,7 @@ window.moveSmartGreen = function(holeIndex, newCenterX, newCenterZ) {
 
     // Re-apply pipeline with exact same parameters
     window.applyGreenPipeline(hole, false, true);
+    if (window.autoAssignTeeColors) window.autoAssignTeeColors(hole); // flag moved with the green
 
     if (window.GreenStudio) window.GreenStudio.sync();
     window.saveLevel();
