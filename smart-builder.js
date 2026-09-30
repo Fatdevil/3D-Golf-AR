@@ -353,11 +353,14 @@ function resortTeesForAimPoint(hole) {
 // Auto-sort tees: reassign colors so Red=closest to flag, Black=furthest
 function autoSortTees(hole) {
     if (!hole.flag) return;
-    // On holes with built tee boxes every colour belongs to a box, so colours are never
-    // reshuffled across boxes here (boxes are oriented by the aim point instead).
-    if ((hole.teeBoxes || []).some(function(tb) { return tb.points && tb.points.length >= 3; })) return;
-    
-    let colorOrder = ['red', 'yellow', 'white', 'black'];
+    // Colours owned by a built tee box are never reshuffled here (boxes are oriented by the aim point);
+    // only loose, separately placed markers are sorted by distance to the flag.
+    normalizeTeeOwnership(hole);
+    let ownedColors = {};
+    (hole.teeBoxes || []).forEach(function(tb) {
+        if (tb.points && tb.points.length >= 3) (tb.activeTees || []).forEach(function(c) { ownedColors[c] = true; });
+    });
+    let colorOrder = ['red', 'yellow', 'white', 'black'].filter(function(c) { return !ownedColors[c]; });
     let colorHex = { red: 0xef4444, yellow: 0xfacc15, white: 0xffffff, black: 0x111111 };
     let colorEmoji = { red: '🔴', yellow: '🟡', white: '⚪', black: '⬛' };
     
