@@ -39,6 +39,7 @@
             // Interaction state
             this.hoveredHandleIndex = -1;
             this.draggingHandleIndex = -1;
+            this._dragUndoSaved = false;
             this.dragStartPoints = null;
 
             // Mode 1 draw node editing state (before tee box is built)
@@ -819,6 +820,8 @@
             if (hasBuiltTee && this.draggingHandleIndex !== -1 && lastHitPoint && activeTb) {
                 let pt = activeTb.points[this.draggingHandleIndex];
                 if (pt) {
+                    // Undo point = state BEFORE the first movement of this drag
+                    if (!this._dragUndoSaved) { this._dragUndoSaved = true; window.saveUndoState(); }
                     pt.x = lastHitPoint.x;
                     pt.z = lastHitPoint.z;
                     let y = (typeof window.getTerrainHeight === 'function')
@@ -887,6 +890,7 @@
                     mesh.scale.set(1, 1, 1);
                 }
                 this.draggingHandleIndex = -1;
+                this._dragUndoSaved = false;
                 if (window.controls) window.controls.enabled = true;
                 document.body.style.cursor = 'default';
 

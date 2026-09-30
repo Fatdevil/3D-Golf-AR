@@ -41,6 +41,7 @@
             // Interaction state
             this.hoveredHandleIndex = -1;
             this.draggingHandleIndex = -1;
+            this._dragUndoSaved = false;
             this.dragStartPoints = null;
             this.draggingArrow = false;
             this.hoveredArrow = false;
@@ -1002,6 +1003,8 @@
                 let idx = this.draggingHandleIndex;
                 let pt = hole.greenData.points[idx];
                 if (pt) {
+                    // Undo point = state BEFORE the first movement of this drag
+                    if (!this._dragUndoSaved) { this._dragUndoSaved = true; window.saveUndoState(); }
                     pt.x = lastHitPoint.x;
                     pt.z = lastHitPoint.z;
 
@@ -1079,6 +1082,7 @@
                     mesh.scale.set(1.0, 1.0, 1.0);
                 }
                 this.draggingHandleIndex = -1;
+                this._dragUndoSaved = false;
 
                 // Re-sculpt terrain & repaint 2D canvas on drop
                 let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];

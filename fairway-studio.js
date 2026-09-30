@@ -38,6 +38,7 @@
             // Interaction state
             this.hoveredHandleIndex = -1;
             this.draggingHandleIndex = -1;
+            this._dragUndoSaved = false;
             this.dragStartPoints = null;
 
             // Mode 1 draw node editing state (before fairway is built)
@@ -704,6 +705,8 @@
                     let idx = this.draggingHandleIndex;
                     let pt = activeFd.points[idx];
                     if (pt) {
+                        // Undo point = state BEFORE the first movement of this drag
+                        if (!this._dragUndoSaved) { this._dragUndoSaved = true; window.saveUndoState(); }
                         pt.x = lastHitPoint.x;
                         pt.z = lastHitPoint.z;
 
@@ -769,6 +772,7 @@
                     mesh.scale.set(1.0, 1.0, 1.0);
                 }
                 this.draggingHandleIndex = -1;
+                this._dragUndoSaved = false;
 
                 let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
                 let activeFd = (typeof window.getActiveFairway === 'function') ? window.getActiveFairway(hole) : null;
