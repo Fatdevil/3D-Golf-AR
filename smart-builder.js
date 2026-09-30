@@ -3256,8 +3256,7 @@ window.startNewTeeBoxDrawing = function() {
 
 window.captureTeeSnapshot = function(hole, points, margin) {
     margin = Math.max(25, margin || 25);
-    let curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
-    let densePts = curve.getPoints(Math.max(100, points.length * 20));
+    let densePts = getDenseGreenPoints(points); // same spline as the studio outline (catmullrom 0.5)
     let pathMinX = Infinity, pathMaxX = -Infinity, pathMinZ = Infinity, pathMaxZ = -Infinity;
     for(let pt of densePts) {
         if(pt.x < pathMinX) pathMinX = pt.x;
@@ -3323,9 +3322,7 @@ window.captureTeeSnapshot = function(hole, points, margin) {
 window.eraseTeeTexture = function(tb, hole) {
     if (!tb || !tb.points || !window._arcadePCtx) return;
     if (tb._footprintRestored) { tb._footprintRestored = false; return; }
-    let curve = new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
-    let numSamples = Math.max(160, tb.points.length * 30);
-    let densePts = curve.getPoints(numSamples);
+    let densePts = teeDensePts(tb);
     if (!densePts || densePts.length < 3) return;
 
     let baseGroundColor = getBaseGroundColor(hole);
@@ -3399,8 +3396,9 @@ const TEE_MAX_REACH = 17;
 
 function teeDensePts(tb) {
     if (!tb || !tb.points || tb.points.length < 3) return null;
-    let curve = new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
-    return curve.getPoints(Math.max(160, tb.points.length * 30));
+    // Same spline the Tee Studio draws (catmullrom, tension 0.5) so the painted/sculpted surface
+    // follows the outline the user sees. (Default 'centripetal' cut corners differently.)
+    return getDenseGreenPoints(tb.points, 0.5);
 }
 
 // Restore baseline heights ONLY where this tee box can have changed the terrain
@@ -3431,10 +3429,7 @@ window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
     let tb = targetTeeBox || (typeof window.getActiveTeeBox === 'function' ? window.getActiveTeeBox(hole) : null);
     if (!tb) return;
 
-    let curve = (tb.points && tb.points.length >= 3)
-        ? new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true)
-        : null;
-    let densePts = curve ? curve.getPoints(Math.max(160, tb.points.length * 30)) : null;
+    let densePts = teeDensePts(tb);
 
     // 1. Restore pristine baseline terrain heights
     if (tb.origHeights && tb.bbox && window._arcadePlaneGeo) {
@@ -3466,8 +3461,7 @@ function paintTeeTexture(tb) {
     if (!tb || !tb.points || tb.points.length < 3 || !window._arcadePCtx) return;
     let cfg = window.CURRENT_BIOME_CONFIG || {};
     let teeColor = cfg.teeColor || '#7cb54c';
-    let curve = new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
-    let densePts = curve.getPoints(Math.max(160, tb.points.length * 30));
+    let densePts = teeDensePts(tb);
     let mowPattern = tb.mowPattern || 'SOLID';
     let edgeSharpness = tb.edgeSharpness !== undefined ? tb.edgeSharpness : 100;
     let ctx = window._arcadePCtx;
@@ -3507,9 +3501,7 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox,
     let cfg = window.CURRENT_BIOME_CONFIG || {};
     let teeColor = cfg.teeColor || '#7cb54c';
 
-    let curve = new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
-    let numSamples = Math.max(160, tb.points.length * 30);
-    let densePts = curve.getPoints(numSamples);
+    let densePts = teeDensePts(tb);
 
     let raiseHeight = tb.raiseHeight !== undefined ? tb.raiseHeight : 0.5;
     let blendRadius = tb.blendRadius !== undefined ? tb.blendRadius : 4.0;
@@ -5457,9 +5449,8 @@ window.executeSplineSmartGreen = function() {
         }
 
         // Build closed curve from points
-        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
-        let numSamples = Math.max(200, smartGreenPoints.length * 40);
-        let densePts = curve.getPoints(numSamples);
+        // same spline as the drawing preview (catmullrom, tension 0.5)
+        let densePts = getDenseGreenPoints(smartGreenPoints, 0.5);
 
         // Paint onto terrain canvas
         window._arcadePCtx.save();
@@ -5544,9 +5535,8 @@ window.executeSplineSmartGreen = function() {
         window.saveUndoState();
 
         // Build closed curve from points
-        let curve = new THREE.CatmullRomCurve3(smartGreenPoints, true);
-        let numSamples = Math.max(200, smartGreenPoints.length * 40);
-        let densePts = curve.getPoints(numSamples);
+        // same spline as the drawing preview (catmullrom, tension 0.5)
+        let densePts = getDenseGreenPoints(smartGreenPoints, 0.5);
 
         // Find bounding box
         let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
