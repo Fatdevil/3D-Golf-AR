@@ -366,9 +366,11 @@
                         btn.type = 'button';
                         btn.title = `Tee Box ${idx + 1} (~${tArea} m²)`;
 
-                        let label = (count === 1)
-                            ? `<span>🟦 Tee 1</span><span style="font-size:8px; opacity:0.85;">(~${tArea}m²)</span>`
-                            : `<span>🟦 Tee ${idx + 1}</span><span style="font-size:8px; opacity:0.8;">(~${tArea}m²)</span>`;
+                        let colNames = { black: isSv ? 'Svart' : 'Black', white: isSv ? 'Vit' : 'White', yellow: isSv ? 'Gul' : 'Yellow', red: isSv ? 'Röd' : 'Red' };
+                        let colDots = { black: '⬛', white: '⚪', yellow: '🟡', red: '🔴' };
+                        let own = ['black', 'white', 'yellow', 'red'].filter(c => (tb.activeTees || []).indexOf(c) >= 0);
+                        let name = own.length ? own.map(c => colDots[c] + ' ' + colNames[c]).join(' ') : `🟦 Tee ${idx + 1}`;
+                        let label = `<span>${name}</span><span style="font-size:8px; opacity:0.8;">(~${tArea}m²)</span>`;
 
                         btn.style.cssText = isSelected 
                             ? 'flex:1 1 auto; min-width:48px; background:#38bdf8; color:#0f172a; border:1px solid #0284c7; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; box-shadow:0 0 8px rgba(56,189,248,0.4); transition:all 0.15s;'
@@ -755,6 +757,7 @@
 
                         if (typeof window.applyTeePipeline === 'function') {
                             window.applyTeePipeline(hole, false, true, activeTb);
+                        if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(hole);
                         }
                         this.rebuildHandles(hole, activeTb);
 
@@ -921,6 +924,7 @@
                     }
                     if (typeof window.applyTeePipeline === 'function') {
                         window.applyTeePipeline(hole, false, true, activeTb);
+                        if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(hole);
                     }
                     this.rebuildHandles(hole, activeTb);
                     if (typeof window.debounceSaveCourse === 'function') {
@@ -971,6 +975,7 @@
 
                         if (typeof window.applyTeePipeline === 'function') {
                             window.applyTeePipeline(hole, false, true, activeTb);
+                        if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(hole);
                         }
                         this.rebuildHandles(hole, activeTb);
 

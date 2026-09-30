@@ -2691,6 +2691,7 @@
                                     <input type="checkbox" id="st-tee-black" checked onchange="window.onTeeColorToggle('black', this.checked)" style="accent-color:#475569; cursor:pointer;"> Svart (Mästerskap)
                                 </label>
                             </div>
+                            <button type="button" onclick="window.setTeeAutoColors(true)" style="width:100%; background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:6px 6px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer; margin-bottom:6px;">🎨 Automatiska färger (efter avstånd)</button>
                             <button type="button" onclick="window.autoSortTeesForActiveBox()" style="width:100%; background:#0f172a; color:#38bdf8; border:1px solid #38bdf850; padding:6px 6px; font-size:9.5px; border-radius:5px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
                                 ✨ <span>Auto-rikta & placera längs spellinjen</span>
                             </button>
@@ -10722,6 +10723,7 @@
                 } : null,
                 origHeights: h.bunkerData.origHeights ? Array.from(h.bunkerData.origHeights) : null
             } : null),
+            teeManualColors: h.teeManualColors,
             teeBoxes: (h.teeBoxes && h.teeBoxes.length > 0 ? h.teeBoxes : (h.teeData ? [h.teeData] : [])).map(tb => ({
                 id: tb.id,
                 points: tb.points,
@@ -12478,6 +12480,7 @@
                             h.activeBunkerIndex = null;
                             h.bunkerData = null;
                         }
+                        if(hSync.teeManualColors !== undefined) h.teeManualColors = hSync.teeManualColors;
                         if(hSync.teeBoxes && Array.isArray(hSync.teeBoxes) && hSync.teeBoxes.length > 0) {
                             h.teeBoxes = hSync.teeBoxes.map(tb => {
                                 if (tb.origHeights && Array.isArray(tb.origHeights)) {
@@ -14848,6 +14851,7 @@
             bunkerData: h.bunkerData ? { ...h.bunkerData } : null,
             teeBoxes: h.teeBoxes ? h.teeBoxes.map(tb => ({ ...tb, points: tb.points ? tb.points.map(p => ({ ...p })) : [] })) : (h.teeData ? [{ ...h.teeData, points: h.teeData.points ? h.teeData.points.map(p => ({ ...p })) : [] }] : []),
             activeTeeBoxIndex: h.activeTeeBoxIndex,
+            teeManualColors: h.teeManualColors,
             teeData: h.teeData ? { ...h.teeData } : null,
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
@@ -15009,6 +15013,7 @@
                 h.bunkerData = h.bunkers[0] || null;
                 h.teeBoxes = hState.teeBoxes ? hState.teeBoxes.map(tb => ({ ...tb, points: tb.points ? tb.points.map(p => ({ ...p })) : [] })) : (hState.teeData ? [{ ...hState.teeData, points: hState.teeData.points ? hState.teeData.points.map(p => ({ ...p })) : [] }] : []);
                 h.activeTeeBoxIndex = hState.activeTeeBoxIndex !== undefined ? hState.activeTeeBoxIndex : (h.teeBoxes.length > 0 ? 0 : null);
+                h.teeManualColors = hState.teeManualColors;
                 h.teeData = h.teeBoxes[0] || null;
             }
         }
@@ -20586,8 +20591,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="green-studio.js?v=23"></script>
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
-<script src="tee-studio.js?v=3"></script>
-<script src="smart-builder.js?v=30"></script>
+<script src="tee-studio.js?v=4"></script>
+<script src="smart-builder.js?v=31"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
