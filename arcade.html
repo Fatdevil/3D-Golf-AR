@@ -2691,6 +2691,7 @@
                                     <input type="checkbox" id="st-tee-black" checked onchange="window.onTeeColorToggle('black', this.checked)" style="accent-color:#475569; cursor:pointer;"> Svart (Mästerskap)
                                 </label>
                             </div>
+                            <button type="button" onclick="window.setTeeAutoColors(true)" style="width:100%; background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:6px 6px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer; margin-bottom:6px;">🎨 Automatiska färger (efter avstånd)</button>
                             <button type="button" onclick="window.autoSortTeesForActiveBox()" style="width:100%; background:#0f172a; color:#38bdf8; border:1px solid #38bdf850; padding:6px 6px; font-size:9.5px; border-radius:5px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
                                 ✨ <span>Auto-rikta & placera längs spellinjen</span>
                             </button>
@@ -10050,6 +10051,7 @@
             hole.aimMesh = null;
         }
         hole.aimPoint = null;
+        if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(hole); // ranking now uses the flag
         saveLevel();
         showBuildToast('🗑️ Aim Point för Hål ' + (targetHoleIdx + 1) + ' är borttagen', '#4ade80');
         if (typeof updateSBHoleDisplay === 'function') updateSBHoleDisplay();
@@ -10722,6 +10724,7 @@
                 } : null,
                 origHeights: h.bunkerData.origHeights ? Array.from(h.bunkerData.origHeights) : null
             } : null),
+            teeManualColors: h.teeManualColors,
             teeBoxes: (h.teeBoxes && h.teeBoxes.length > 0 ? h.teeBoxes : (h.teeData ? [h.teeData] : [])).map(tb => ({
                 id: tb.id,
                 points: tb.points,
@@ -12313,7 +12316,7 @@
                 }
                 if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
                 if(h.aimMesh) { scene.remove(h.aimMesh); h.aimMesh=null; }
-                h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.fairways=[]; h.activeFairwayIndex=null; h.bunkerData=null; h.bunkers=[]; h.activeBunkerIndex=null; h.teeData=null; h.teeBoxes=[]; h.activeTeeBoxIndex=null; h.pins={};
+                h.teeManualColors=undefined; h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.fairways=[]; h.activeFairwayIndex=null; h.bunkerData=null; h.bunkers=[]; h.activeBunkerIndex=null; h.teeData=null; h.teeBoxes=[]; h.activeTeeBoxIndex=null; h.pins={};
             }
             window._allFlagCloths = [];  // Clear wave animation references
             
@@ -12478,6 +12481,7 @@
                             h.activeBunkerIndex = null;
                             h.bunkerData = null;
                         }
+                        h.teeManualColors = hSync.teeManualColors; // absent in legacy saves -> stays undefined (manual)
                         if(hSync.teeBoxes && Array.isArray(hSync.teeBoxes) && hSync.teeBoxes.length > 0) {
                             h.teeBoxes = hSync.teeBoxes.map(tb => {
                                 if (tb.origHeights && Array.isArray(tb.origHeights)) {
@@ -14848,6 +14852,7 @@
             bunkerData: h.bunkerData ? { ...h.bunkerData } : null,
             teeBoxes: h.teeBoxes ? h.teeBoxes.map(tb => ({ ...tb, points: tb.points ? tb.points.map(p => ({ ...p })) : [] })) : (h.teeData ? [{ ...h.teeData, points: h.teeData.points ? h.teeData.points.map(p => ({ ...p })) : [] }] : []),
             activeTeeBoxIndex: h.activeTeeBoxIndex,
+            teeManualColors: h.teeManualColors,
             teeData: h.teeData ? { ...h.teeData } : null,
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
@@ -15009,6 +15014,7 @@
                 h.bunkerData = h.bunkers[0] || null;
                 h.teeBoxes = hState.teeBoxes ? hState.teeBoxes.map(tb => ({ ...tb, points: tb.points ? tb.points.map(p => ({ ...p })) : [] })) : (hState.teeData ? [{ ...hState.teeData, points: hState.teeData.points ? hState.teeData.points.map(p => ({ ...p })) : [] }] : []);
                 h.activeTeeBoxIndex = hState.activeTeeBoxIndex !== undefined ? hState.activeTeeBoxIndex : (h.teeBoxes.length > 0 ? 0 : null);
+                h.teeManualColors = hState.teeManualColors;
                 h.teeData = h.teeBoxes[0] || null;
             }
         }
@@ -15473,6 +15479,7 @@
                             let ch = courseHoles[closestIdx];
                             if (ch.aimMesh) { scene.remove(ch.aimMesh); ch.aimMesh = null; }
                             ch.aimPoint = null;
+                            if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(ch);
                             saveLevel();
                             showBuildToast('🗑️ Aim Point för Hål ' + (closestIdx + 1) + ' är borttagen', '#4ade80');
                             if (currentHoleIndex !== closestIdx) window.changeHoleTo(closestIdx);
@@ -15515,6 +15522,7 @@
                         hole.pins.easy = { ...hole.flag };
                         hole.pins.medium = { ...hole.flag };
                         hole.pins.hard = { ...hole.flag };
+                        if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(hole); // ranking follows the flag
                         saveLevel();
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
                         showBuildToast(curLang === 'en' ? '⛳ Flag repositioned!' : '⛳ Flagga flyttad!', '#4ade80');
@@ -16684,6 +16692,7 @@
             h.teeData = null;
             h.teeBoxes = [];
             h.activeTeeBoxIndex = null;
+            h.teeManualColors = undefined;
             h.pins = {};
             h.par = 4;
             h.rangeLinesEnabled = false;
@@ -20586,8 +20595,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="green-studio.js?v=23"></script>
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
-<script src="tee-studio.js?v=3"></script>
-<script src="smart-builder.js?v=30"></script>
+<script src="tee-studio.js?v=4"></script>
+<script src="smart-builder.js?v=33"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
