@@ -4614,12 +4614,27 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
             let fz = hole.flag.z !== undefined ? hole.flag.z : hole.flag.position.z;
             tiltDirX = fx - polyCentX;
             tiltDirZ = fz - polyCentZ;
+            // A flag within ~1.5 m of the centroid (the default placement) gives no meaningful
+            // direction: before, tilt was 0 (flag exactly at the centroid) or pointed in a random
+            // direction that flipped with every centimetre the flag moved.
+            if (Math.hypot(tiltDirX, tiltDirZ) < 1.5) { tiltDirX = 0; tiltDirZ = 0; }
         } else if (gd.tiltAngle !== undefined) {
             tiltDirX = Math.sin(gd.tiltAngle);
             tiltDirZ = Math.cos(gd.tiltAngle);
         } else if (gd.tiltAim && hole.aimPoint) {
             tiltDirX = hole.aimPoint.x - polyCentX;
             tiltDirZ = hole.aimPoint.z - polyCentZ;
+        }
+        // Fallback: slope up towards the back of the green (direction tee -> green), the usual
+        // back-to-front slope, so a freshly built green is not perfectly flat.
+        if (Math.hypot(tiltDirX, tiltDirZ) < 1e-6) {
+            if (gd.tiltAngle !== undefined) {
+                tiltDirX = Math.sin(gd.tiltAngle);
+                tiltDirZ = Math.cos(gd.tiltAngle);
+            } else if (hole.tees) {
+                let tee = hole.tees.black || hole.tees.white || hole.tees.yellow || hole.tees.red;
+                if (tee) { tiltDirX = polyCentX - tee.x; tiltDirZ = polyCentZ - tee.z; }
+            }
         }
         let len = Math.sqrt(tiltDirX * tiltDirX + tiltDirZ * tiltDirZ);
         if (len > 0) { tiltDirX /= len; tiltDirZ /= len; }
