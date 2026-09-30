@@ -2537,6 +2537,8 @@
                 <!-- MODE 1: SKAPA TEE BOX (When drawing new) -->
                 <!-- ========================================== -->
                 <div id="st-panel-unbuilt" style="display:none; flex-direction:column; gap:8px;">
+                    <!-- Tee colours for the next box -->
+                    <div id="st-pick-card" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px;"></div>
                     <!-- Steg 1: Siktpunkt (Aim Point) Card -->
                     <div id="sb-tee-aim-card" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px; transition:all 0.2s;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -15117,6 +15119,7 @@
             e.preventDefault();
             if (typeof window.performRedo === 'function') window.performRedo();
         } else if (e.key === 'Escape') {
+            if (window._placingTeeLayout) { window._placingTeeLayout = false; }
             if (window._movingGreenMode || window._movingFlagMode || window._movingFairwayMode || window._movingBunkerMode) {
                 window._movingGreenMode = false;
                 window._movingFlagMode = false;
@@ -15525,6 +15528,13 @@
                     if(typeof window.moveSmartFairway === 'function') {
                         window.moveSmartFairway(currentHoleIndex, lastHitPoint.x, lastHitPoint.z);
                     }
+                    controls.enabled = false;
+                    return;
+                }
+                // Standard tee layout: next click places the back tee
+                if(window._smartBuilderType === 'TEE' && window._placingTeeLayout) {
+                    if(typeof window.buildStandardTeeLayout === 'function') window.buildStandardTeeLayout(lastHitPoint.x, lastHitPoint.z);
+                    window._placingTeeLayout = false;
                     controls.enabled = false;
                     return;
                 }
@@ -20008,6 +20018,11 @@ window.triggerExplosion = function(x, y, z) {
                     aimBadge.style.background = '#22c55e20';
                     aimBadge.style.color = '#4ade80';
                     aimBadge.style.borderColor = '#22c55e50';
+                } else if (hole && hole.flag) {
+                    aimBadge.textContent = (curLang === 'en') ? '✓ Auto from flag' : '✓ Auto från flaggan';
+                    aimBadge.style.background = '#38bdf820';
+                    aimBadge.style.color = '#38bdf8';
+                    aimBadge.style.borderColor = '#38bdf850';
                 } else {
                     aimBadge.textContent = (curLang === 'en') ? '⚠️ Required' : '⚠️ Krävs';
                     aimBadge.style.background = '#ef444420';
@@ -20561,8 +20576,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="green-studio.js?v=23"></script>
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
-<script src="tee-studio.js?v=2"></script>
-<script src="smart-builder.js?v=22"></script>
+<script src="tee-studio.js?v=3"></script>
+<script src="smart-builder.js?v=23"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

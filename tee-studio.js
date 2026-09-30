@@ -510,6 +510,7 @@
                 if (modeBuilt) modeBuilt.style.display = 'none';
 
                 this.updateBottomHints();
+                if (typeof window.renderTeePickCard === 'function') window.renderTeePickCard();
 
                 let pts = window.smartGreenPoints || [];
                 let drawStatusEl = document.getElementById('st-draw-status');
@@ -576,10 +577,11 @@
                     badgeUnbuilt.style.color = '#4ade80';
                     badgeUnbuilt.style.borderColor = 'rgba(74,222,128,0.4)';
                 } else {
-                    badgeUnbuilt.textContent = isSv ? '⚠️ Krävs' : '⚠️ Required';
-                    badgeUnbuilt.style.background = 'rgba(239,68,68,0.15)';
-                    badgeUnbuilt.style.color = '#ef4444';
-                    badgeUnbuilt.style.borderColor = 'rgba(239,68,68,0.4)';
+                    let viaFlag = !!(hole && hole.flag);
+                    badgeUnbuilt.textContent = viaFlag ? (isSv ? '✓ Auto från flaggan' : '✓ Auto from flag') : (isSv ? '⚠️ Krävs' : '⚠️ Required');
+                    badgeUnbuilt.style.background = viaFlag ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)';
+                    badgeUnbuilt.style.color = viaFlag ? '#38bdf8' : '#ef4444';
+                    badgeUnbuilt.style.borderColor = viaFlag ? 'rgba(56,189,248,0.4)' : 'rgba(239,68,68,0.4)';
                 }
             }
 
