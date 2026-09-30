@@ -297,46 +297,70 @@ function resortTeesForAimPoint(hole) {
     if (!hole.aimPoint) return;
     let ap = hole.aimPoint;
     let orderedKeys = ['red','yellow','white','black'];
-    let existingTees = [];
-    for(let k of orderedKeys) {
-        if(hole.tees[k] && hole.teeMeshes[k]) existingTees.push(k);
-    }
-    if(existingTees.length >= 2) {
-        let positions = existingTees.map(k => ({x: hole.tees[k].x, y: hole.tees[k].y, z: hole.tees[k].z}));
-        positions.sort(function(a, b) {
-            let da = (a.x-ap.x)*(a.x-ap.x) + (a.z-ap.z)*(a.z-ap.z);
-            let db = (b.x-ap.x)*(b.x-ap.x) + (b.z-ap.z)*(b.z-ap.z);
-            return da - db;
-        });
-        for(let i = 0; i < existingTees.length; i++) {
-            let k = existingTees[i];
-            let pos = positions[i];
-            let rot = Math.atan2(ap.x - pos.x, ap.z - pos.z);
-            hole.tees[k].x = pos.x; hole.tees[k].y = pos.y; hole.tees[k].z = pos.z;
+    let colorEmoji = { red: '🔴', yellow: '🟡', white: '⚪', black: '⬛' };
+    if (!hole.tees || !hole.teeMeshes) return;
+    normalizeTeeOwnership(hole); // old saves may list one colour on several boxes
+
+    // Markers are only swapped inside the tee box that owns their colour, so a marker
+    // never jumps into another box. Colours that no box owns (old saves) form one group.
+    let owned = {};
+    let groups = [];
+    (hole.teeBoxes || []).forEach(function(tb) {
+        let cols = orderedKeys.filter(function(k) { return (tb.activeTees || []).indexOf(k) >= 0; });
+        cols.forEach(function(k) { owned[k] = true; });
+        if (cols.length > 0) groups.push(cols);
+    });
+    let loose = orderedKeys.filter(function(k) { return !owned[k]; });
+    if (loose.length > 0) groups.push(loose);
+
+    let touched = [];
+    groups.forEach(function(cols) {
+        let existingTees = cols.filter(function(k) { return hole.tees[k] && hole.teeMeshes[k]; });
+        if (existingTees.length >= 2) {
+            let positions = existingTees.map(k => ({x: hole.tees[k].x, y: hole.tees[k].y, z: hole.tees[k].z}));
+            positions.sort(function(a, b) {
+                let da = (a.x-ap.x)*(a.x-ap.x) + (a.z-ap.z)*(a.z-ap.z);
+                let db = (b.x-ap.x)*(b.x-ap.x) + (b.z-ap.z)*(b.z-ap.z);
+                return da - db;
+            });
+            for(let i = 0; i < existingTees.length; i++) {
+                let k = existingTees[i];
+                let pos = positions[i];
+                let rot = Math.atan2(ap.x - pos.x, ap.z - pos.z);
+                hole.tees[k].x = pos.x; hole.tees[k].y = pos.y; hole.tees[k].z = pos.z;
+                hole.tees[k].rot = rot;
+                hole.teeMeshes[k].position.set(pos.x, pos.y, pos.z);
+                hole.teeMeshes[k].rotation.y = rot;
+            }
+        } else if(existingTees.length === 1) {
+            let k = existingTees[0];
+            let rot = Math.atan2(ap.x - hole.tees[k].x, ap.z - hole.tees[k].z);
             hole.tees[k].rot = rot;
-            hole.teeMeshes[k].position.set(pos.x, pos.y, pos.z);
             hole.teeMeshes[k].rotation.y = rot;
         }
-        let colorEmoji = { red: '🔴', yellow: '🟡', white: '⚪', black: '⬛' };
-        let distText = existingTees.map(function(k) {
+        touched = touched.concat(existingTees);
+    });
+    if (touched.length >= 2) {
+        let distText = orderedKeys.filter(function(k) { return touched.indexOf(k) >= 0; }).map(function(k) {
             let dx = hole.tees[k].x - ap.x;
             let dz = hole.tees[k].z - ap.z;
             return colorEmoji[k] + ' ' + Math.round(Math.sqrt(dx*dx + dz*dz)) + 'm';
         }).join('  ');
         window.showBuildToast('🔄 Tees sorted: ' + distText, '#a855f7');
-    } else if(existingTees.length === 1) {
-        let k = existingTees[0];
-        let rot = Math.atan2(ap.x - hole.tees[k].x, ap.z - hole.tees[k].z);
-        hole.tees[k].rot = rot;
-        hole.teeMeshes[k].rotation.y = rot;
     }
 }
 
 // Auto-sort tees: reassign colors so Red=closest to flag, Black=furthest
 function autoSortTees(hole) {
     if (!hole.flag) return;
-    
-    let colorOrder = ['red', 'yellow', 'white', 'black'];
+    // Colours owned by a built tee box are never reshuffled here (boxes are oriented by the aim point);
+    // only loose, separately placed markers are sorted by distance to the flag.
+    normalizeTeeOwnership(hole);
+    let ownedColors = {};
+    (hole.teeBoxes || []).forEach(function(tb) {
+        if (tb.points && tb.points.length >= 3) (tb.activeTees || []).forEach(function(c) { ownedColors[c] = true; });
+    });
+    let colorOrder = ['red', 'yellow', 'white', 'black'].filter(function(c) { return !ownedColors[c]; });
     let colorHex = { red: 0xef4444, yellow: 0xfacc15, white: 0xffffff, black: 0x111111 };
     let colorEmoji = { red: '🔴', yellow: '🟡', white: '⚪', black: '⬛' };
     
@@ -3514,6 +3538,51 @@ window.repaintTeeTextureOnly = function(hole) {
     (hole.teeBoxes || []).forEach(paintTeeTexture);
 };
 
+// Tee marker colours are unique per hole (hole.tees is keyed by colour), so each colour
+// belongs to exactly one tee box. Earlier boxes win when old saves list a colour twice.
+const TEE_COLOR_ORDER = ['black', 'white', 'yellow', 'red'];
+function normalizeTeeOwnership(hole) {
+    let seen = {};
+    (hole.teeBoxes || []).forEach(function(tb) {
+        let cur = tb.activeTees || TEE_COLOR_ORDER;
+        let keep = cur.filter(function(c) { return !seen[c]; });
+        keep.forEach(function(c) { seen[c] = true; });
+        if (!tb.activeTees || keep.length !== cur.length) tb.activeTees = keep;
+    });
+}
+window.normalizeTeeOwnership = normalizeTeeOwnership;
+
+function freeTeeColors(hole, exceptTb) {
+    let taken = {};
+    (hole.teeBoxes || []).forEach(function(tb) {
+        if (tb !== exceptTb) (tb.activeTees || []).forEach(function(c) { taken[c] = true; });
+    });
+    return TEE_COLOR_ORDER.filter(function(c) { return !taken[c]; });
+}
+window.freeTeeColors = freeTeeColors;
+
+function teeBoxOwning(hole, color, exceptTb) {
+    return (hole.teeBoxes || []).find(function(tb) { return tb !== exceptTb && (tb.activeTees || []).indexOf(color) >= 0; }) || null;
+}
+
+// A marker placed by hand (Hole tool) changes owner: the colour leaves whichever box had it and
+// joins the box whose surface it now stands on (or stays loose if it is on no box).
+window.assignTeeMarkerOwnership = function(hole, color, x, z) {
+    if (TEE_COLOR_ORDER.indexOf(color) < 0) return;
+    let boxes = hole.teeBoxes || [];
+    let target = boxes.find(function(tb) { return tb.points && tb.points.length >= 3 && pointInPolygon(x, z, teeDensePts(tb)); }) || null;
+    boxes.forEach(function(tb) {
+        if ((tb.activeTees || []).indexOf(color) >= 0 && tb !== target) tb.activeTees = tb.activeTees.filter(function(c) { return c !== color; });
+    });
+    if (target && (target.activeTees || []).indexOf(color) < 0) target.activeTees = (target.activeTees || []).concat([color]);
+};
+
+function removeTeeMarker(hole, color) {
+    if (hole.teeMeshes && hole.teeMeshes[color]) window._arcadeScene.remove(hole.teeMeshes[color]);
+    if (hole.teeMeshes) hole.teeMeshes[color] = null;
+    if (hole.tees) hole.tees[color] = null;
+}
+
 window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox, heightsOnly) {
     let tb = targetTeeBox || (typeof window.getActiveTeeBox === 'function' ? window.getActiveTeeBox(hole) : null);
     if (!tb || !tb.points || tb.points.length < 3) return;
@@ -3623,24 +3692,21 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox,
     // Layer re-attach only needs the terrain edit - leave tee markers exactly where they are
     if (heightsOnly) return;
 
-    // 3. Place and orient tee markers on this tee box facing aimPoint
-    let activeTees = tb.activeTees || ['black', 'white', 'yellow', 'red'];
+    // 3. Place and orient this box's tee markers facing the aim point.
+    // Each colour belongs to one box; a marker that already stands inside this box
+    // (e.g. dragged by hand) keeps its place instead of snapping back to the default slot.
+    normalizeTeeOwnership(hole);
+    let activeTees = tb.activeTees || [];
     let colorMap = { black: 0x111111, white: 0xffffff, yellow: 0xfacc15, red: 0xef4444 };
-    let order = ['black', 'white', 'yellow', 'red'];
     let teesToPlace = [];
-    for(let col of order) {
+    for(let col of TEE_COLOR_ORDER) {
         if (activeTees.includes(col)) teesToPlace.push({ type: col, color: colorMap[col] });
     }
 
-    // Remove any markers from hole that belong to this box if unselected
-    ['red','yellow','white','black'].forEach(tt => {
-        if (!activeTees.includes(tt) && hole.tees && hole.tees[tt]) {
-            let isInside = pointInPolygon(hole.tees[tt].x, hole.tees[tt].z, densePts);
-            if (isInside) {
-                if (hole.teeMeshes && hole.teeMeshes[tt]) window._arcadeScene.remove(hole.teeMeshes[tt]);
-                hole.teeMeshes[tt] = null;
-                hole.tees[tt] = null;
-            }
+    // Remove markers of colours this box no longer has (unless another box owns them)
+    TEE_COLOR_ORDER.forEach(tt => {
+        if (!activeTees.includes(tt) && hole.tees && hole.tees[tt] && !teeBoxOwning(hole, tt, tb)) {
+            if (pointInPolygon(hole.tees[tt].x, hole.tees[tt].z, densePts)) removeTeeMarker(hole, tt);
         }
     });
 
@@ -3695,6 +3761,10 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox,
         for(let i = 0; i < teesToPlace.length; i++) {
             let t = teesToPlace[i];
             let pos = teePositions[i];
+            let cur = hole.tees[t.type];
+            if (cur && !window._teeResetMarkers && pointInPolygon(cur.x, cur.z, densePts)) {
+                pos = { x: cur.x, y: plateauH, z: cur.z };
+            }
             if (hole.teeMeshes[t.type]) window._arcadeScene.remove(hole.teeMeshes[t.type]);
             hole.tees[t.type] = { x: pos.x, y: pos.y, z: pos.z, rot: teeRot };
             hole.teeMeshes[t.type] = window.createTeeObject(pos.x, pos.y, pos.z, t.color);
@@ -3707,22 +3777,20 @@ window.deleteSmartTeeBox = function(boxIndex) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     if (!hole) return;
     ensureHoleTeeBoxes(hole);
+    normalizeTeeOwnership(hole); // old saves may list a colour on several boxes
     let idx = (boxIndex !== undefined && boxIndex !== null) ? boxIndex : hole.activeTeeBoxIndex;
     if (idx === null || idx === undefined || !hole.teeBoxes[idx]) return;
 
     window.saveUndoState();
     let targetTb = hole.teeBoxes[idx];
 
-    if (targetTb.points && hole.tees) {
-        let densePts = targetTb.points;
-        ['red','yellow','white','black'].forEach(tt => {
-            if (hole.tees[tt]) {
-                let inside = (typeof window.pointInPolygon === 'function') && window.pointInPolygon(hole.tees[tt].x, hole.tees[tt].z, densePts);
-                if (inside) {
-                    if (hole.teeMeshes && hole.teeMeshes[tt]) window._arcadeScene.remove(hole.teeMeshes[tt]);
-                    hole.teeMeshes[tt] = null;
-                    hole.tees[tt] = null;
-                }
+    (targetTb.activeTees || []).forEach(function(tt) { removeTeeMarker(hole, tt); });
+    // Loose markers (placed by hand, owned by no remaining box) standing on the deleted surface go too
+    if (targetTb.points && targetTb.points.length >= 3) {
+        let gone = teeDensePts(targetTb);
+        TEE_COLOR_ORDER.forEach(function(tt) {
+            if (hole.tees && hole.tees[tt] && !teeBoxOwning(hole, tt, targetTb) && pointInPolygon(hole.tees[tt].x, hole.tees[tt].z, gone)) {
+                removeTeeMarker(hole, tt);
             }
         });
     }
@@ -3750,7 +3818,8 @@ window.deleteAllSmartTeeBoxes = function() {
     if (!hole || !hole.teeBoxes || hole.teeBoxes.length === 0) return;
 
     window.saveUndoState();
-    hole.teeBoxes.forEach(tb => {
+    // Newest first: later boxes' snapshots may contain earlier plateaus
+    hole.teeBoxes.slice().reverse().forEach(tb => {
         restoreTeeBase(hole, true, tb);
     });
 
@@ -3779,9 +3848,103 @@ window.redrawSmartTeeBox = function() {
     window.startNewTeeBoxDrawing();
 };
 
+// Tee colours the user has picked for the next box (only colours no other box uses count)
+const TEE_PICK_DEFAULT_ORDER = ['yellow', 'white', 'red', 'black'];
+window._teePickColors = null;
+window.getTeePickColors = function(hole) {
+    let free = freeTeeColors(hole, null);
+    let pick = (window._teePickColors || []).filter(function(c) { return free.indexOf(c) >= 0; });
+    if (pick.length === 0 && window._teePickColors === null) {
+        let first = TEE_PICK_DEFAULT_ORDER.find(function(c) { return free.indexOf(c) >= 0; });
+        pick = first ? [first] : [];
+    }
+    return TEE_COLOR_ORDER.filter(function(c) { return pick.indexOf(c) >= 0; });
+};
+window.toggleTeePick = function(color) {
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole || freeTeeColors(hole, null).indexOf(color) < 0) return;
+    let pick = window.getTeePickColors(hole);
+    window._teePickColors = pick.indexOf(color) >= 0 ? pick.filter(function(c) { return c !== color; }) : pick.concat([color]);
+    window.renderTeePickCard();
+};
+
+window.renderTeePickCard = function() {
+    let host = document.getElementById('st-pick-card');
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!host || !hole) return;
+    ensureHoleTeeBoxes(hole);
+    normalizeTeeOwnership(hole);
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    let pick = window.getTeePickColors(hole);
+    let names = isSv ? { black: 'Svart', white: 'Vit', yellow: 'Gul', red: 'Röd' } : { black: 'Black', white: 'White', yellow: 'Yellow', red: 'Red' };
+    let dot = { black: '#111827', white: '#ffffff', yellow: '#facc15', red: '#ef4444' };
+    let chips = TEE_COLOR_ORDER.map(function(c) {
+        let owner = teeBoxOwning(hole, c, null);
+        let on = pick.indexOf(c) >= 0;
+        let label = names[c] + (owner ? ' · Box ' + (hole.teeBoxes.indexOf(owner) + 1) : '');
+        let st = 'display:flex; align-items:center; gap:5px; padding:5px 8px; border-radius:6px; font-size:10.5px; font-weight:700; border:1px solid ' +
+            (owner ? '#334155' : (on ? '#38bdf8' : '#475569')) + '; background:' + (on ? 'rgba(56,189,248,0.18)' : '#0f172a') +
+            '; color:' + (owner ? '#64748b' : '#e2e8f0') + '; cursor:' + (owner ? 'not-allowed' : 'pointer') + '; opacity:' + (owner ? '0.6' : '1') + ';';
+        return '<button type="button" ' + (owner ? 'disabled ' : '') + 'onclick="window.toggleTeePick(\'' + c + '\')" style="' + st + '">' +
+            '<span style="width:10px; height:10px; border-radius:50%; background:' + dot[c] + '; border:1px solid #64748b;"></span>' + label + (on ? ' ✓' : '') + '</button>';
+    }).join('');
+    let free = freeTeeColors(hole, null);
+    let hint = free.length === 0
+        ? (isSv ? 'Alla färger används. Kryssa en färg på en befintlig box för att flytta den.' : 'All colours are in use. Tick a colour on an existing box to move it.')
+        : (isSv ? 'Välj vilka markörer den nya boxen ska ha. Varje färg får bara finnas på en box.' : 'Choose the markers the new box gets. Each colour can live on one box only.');
+    let layoutBtn = free.length > 0
+        ? '<button type="button" onclick="window.activateTeeLayoutMode()" style="width:100%; margin-top:8px; background:#0f172a; color:#38bdf8; border:1px solid rgba(56,189,248,0.5); padding:7px 8px; border-radius:6px; font-size:10.5px; font-weight:700; cursor:pointer;">✨ ' +
+          (isSv ? 'Skapa standardtees (klicka ut bak-tee)' : 'Create standard tees (click the back tee)') + '</button>'
+        : '';
+    host.innerHTML =
+        '<div style="color:#38bdf8; font-size:10px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">' + (isSv ? 'Vilken tee?' : 'Which tee?') + '</div>' +
+        '<div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px;">' + chips + '</div>' +
+        '<div style="color:#94a3b8; font-size:9.5px; line-height:1.35;">' + hint + '</div>' + layoutBtn;
+};
+
+// Aim point falls back to the flag so the tee flow never stalls on step one
+window.ensureTeeAimPoint = function(hole) {
+    if (hole.aimPoint) return true;
+    if (!hole.flag) return false;
+    let surf = window.localGetTerrainAt ? window.localGetTerrainAt(hole.flag.x, -hole.flag.z) : null;
+    let ay = surf ? surf.z : (hole.flag.y || 0);
+    hole.aimPoint = { x: hole.flag.x, y: ay, z: hole.flag.z };
+    if (hole.aimMesh && window._arcadeScene) window._arcadeScene.remove(hole.aimMesh);
+    if (typeof window.createAimPointMarker === 'function') {
+        hole.aimMesh = window.createAimPointMarker(hole.aimPoint.x, ay, hole.aimPoint.z, window.currentHoleIndex + 1);
+    }
+    return true;
+};
+
+// Shared by the single-box build and the standard layout. Caller handles undo/save/UI.
+function createTeeBoxFromPoints(hole, points, colors, deferApply) {
+    ensureHoleTeeBoxes(hole);
+    let snap = window.captureTeeSnapshot(hole, points, 25);
+    let hSlider = document.getElementById('st-raise-height');
+    let bSlider = document.getElementById('st-raise-blend');
+    let newTeeBox = {
+        id: 'tb_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+        points: points.map(p => ({ x: p.x, y: p.y, z: p.z })),
+        raiseHeight: hSlider ? parseFloat(hSlider.value) : 0.5,
+        blendRadius: bSlider ? parseFloat(bSlider.value) : 4.0,
+        mowPattern: window._smartMowPattern || 'SOLID',
+        edgeSharpness: 100,
+        activeTees: colors.slice(),
+        baseElevation: snap.baseElevation,
+        bbox: snap.bbox,
+        origHeights: snap.origHeights,
+        origCanvasPixels: snap.origCanvasPixels
+    };
+    hole.teeBoxes.push(newTeeBox);
+    hole.activeTeeBoxIndex = hole.teeBoxes.length - 1;
+    hole.teeData = hole.teeBoxes[0];
+    if (!deferApply) applyTeePipeline(hole, true, true, newTeeBox);
+    return newTeeBox;
+}
+
 window.executeSmartTee = function() {
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
     if (!smartGreenPoints || smartGreenPoints.length < 3) {
-        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
         window.showBuildToast(isSv ? '⚠️ Sätt ut minst 3 punkter för att skapa tee-boxen!' : '⚠️ Place at least 3 points to create the tee box!', '#ef4444');
         return;
     }
@@ -3790,51 +3953,26 @@ window.executeSmartTee = function() {
 
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     if (!hole) return;
+    ensureHoleTeeBoxes(hole);
+    normalizeTeeOwnership(hole);
 
-    // Check Aim Point
-    if (!hole.aimPoint) {
-        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-        window.showBuildToast(isSv ? '🎯 Sätt siktpunkt först! Klicka på "Sätt siktpunkt" i Tee-panelen.' : '🎯 Set Aim Point first! Click "Set Aim Point" in the Tee panel.', '#ef4444');
+    // Aim point: the flag is used automatically (inside the undo boundary), otherwise ask for one
+    if (!hole.aimPoint && !hole.flag) {
+        window.showBuildToast(isSv ? '🎯 Sätt en flagga eller siktpunkt först! Klicka på "Sätt siktpunkt" i Tee-panelen.' : '🎯 Place a flag or set an Aim Point first! Click "Set Aim Point" in the Tee panel.', '#ef4444');
         if (typeof window.activateAimMode === 'function') window.activateAimMode();
         return;
     }
 
+    let colors = window.getTeePickColors(hole);
+    if (colors.length === 0 && freeTeeColors(hole, null).length > 0) {
+        window.showBuildToast(isSv ? '⚠️ Välj minst en teefärg för boxen.' : '⚠️ Pick at least one tee colour for the box.', '#ef4444');
+        return;
+    }
+
     window.saveUndoState();
-    ensureHoleTeeBoxes(hole);
-
-    let snap = window.captureTeeSnapshot(hole, smartGreenPoints, 25);
-    let hSlider = document.getElementById('st-raise-height');
-    let bSlider = document.getElementById('st-raise-blend');
-    let raiseH = hSlider ? parseFloat(hSlider.value) : 0.5;
-    let blendR = bSlider ? parseFloat(bSlider.value) : 4.0;
-    let mowP = window._smartMowPattern || 'SOLID';
-
-    let activeTees = [];
-    ['black', 'white', 'yellow', 'red'].forEach(c => {
-        let cb = document.getElementById('st-tee-' + c);
-        if (!cb || cb.checked) activeTees.push(c);
-    });
-    if (activeTees.length === 0) activeTees = ['yellow', 'red'];
-
-    let newTeeBox = {
-        id: 'tb_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
-        points: smartGreenPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
-        raiseHeight: raiseH,
-        blendRadius: blendR,
-        mowPattern: mowP,
-        edgeSharpness: 100,
-        activeTees: activeTees,
-        baseElevation: snap.baseElevation,
-        bbox: snap.bbox,
-        origHeights: snap.origHeights,
-        origCanvasPixels: snap.origCanvasPixels
-    };
-
-    hole.teeBoxes.push(newTeeBox);
-    hole.activeTeeBoxIndex = hole.teeBoxes.length - 1;
-    hole.teeData = hole.teeBoxes[0];
-
-    applyTeePipeline(hole, true, true, newTeeBox);
+    window.ensureTeeAimPoint(hole);
+    createTeeBoxFromPoints(hole, smartGreenPoints, colors);
+    window._teePickColors = null;
 
     clearSmartGreen();
     window.saveLevel();
@@ -3844,12 +3982,80 @@ window.executeSmartTee = function() {
         window.TeeStudio.sync();
     }
 
-    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
     let tbNum = hole.teeBoxes.length;
     window.showBuildToast(isSv ? `🟦 Tee Box ${tbNum} skapad! Dra de vita golfbollarna för att justera formen.` : `🟦 Tee Box ${tbNum} created! Drag white golf balls to adjust shape.`, '#38bdf8');
 
     window._smartBuildCooldown = true;
     setTimeout(function() { window._smartBuildCooldown = false; }, 500);
+};
+
+// Standard layout: back tee (black+white), middle (yellow), front (red) in a row towards the aim point.
+// Only colours that are still free are used. The user clicks where the back tee goes.
+window.activateTeeLayoutMode = function() {
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (!hole) return;
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    if (!hole.aimPoint && !hole.flag) {
+        window.showBuildToast(isSv ? '🎯 Sätt en flagga eller siktpunkt först.' : '🎯 Place a flag or set an Aim Point first.', '#ef4444');
+        if (typeof window.activateAimMode === 'function') window.activateAimMode();
+        return;
+    }
+    window._placingTeeLayout = true;
+    window._placingTeeLayoutHole = window.currentHoleIndex;
+    window.showBuildToast(isSv ? '📍 Klicka på kartan där bak-teen ska ligga (Esc avbryter)' : '📍 Click the map where the back tee goes (Esc cancels)', '#38bdf8');
+};
+
+window.buildStandardTeeLayout = function(x, z) {
+    let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    let target = hole && (hole.aimPoint || hole.flag);
+    if (!target) { window._placingTeeLayout = false; return true; }
+    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    ensureHoleTeeBoxes(hole);
+    normalizeTeeOwnership(hole);
+    let free = freeTeeColors(hole, null);
+    // Each group keeps its own slot (back / middle / front) even when earlier groups are taken
+    let groups = [['black', 'white'], ['yellow'], ['red']]
+        .map(function(g, slot) { return { slot: slot, colors: g.filter(function(c) { return free.indexOf(c) >= 0; }) }; })
+        .filter(function(g) { return g.colors.length > 0; });
+    if (groups.length === 0) return true;
+
+    let dx = target.x - x, dz = target.z - z;
+    let len = Math.hypot(dx, dz);
+    if (len < 5) {
+        window.showBuildToast(isSv ? '⚠️ För nära siktpunkten - välj en plats längre bort.' : '⚠️ Too close to the aim point - pick a spot further away.', '#ef4444');
+        return false; // stay in placement mode so the next click retries
+    }
+    dx /= len; dz /= len;
+    let px = -dz, pz = dx;           // perpendicular
+    // PITCH keeps neighbouring boxes outside each other's terrain restore reach (TEE_MAX_REACH + blend),
+    // so editing or deleting one box can never cut away another box's plateau.
+    const HALF_W = 4.5, HALF_D = 2.5, PITCH = 28;
+
+    window.saveUndoState();
+    window.ensureTeeAimPoint(hole);
+    groups.forEach(function(g) {
+        let colors = g.colors;
+        let cx = x + dx * PITCH * g.slot, cz = z + dz * PITCH * g.slot;
+        let pts = [[-HALF_W, -HALF_D], [HALF_W, -HALF_D], [HALF_W, HALF_D], [-HALF_W, HALF_D]].map(function(o) {
+            let wx = cx + px * o[0] + dx * o[1], wz = cz + pz * o[0] + dz * o[1];
+            let surf = window.localGetTerrainAt ? window.localGetTerrainAt(wx, -wz) : null;
+            return { x: wx, y: surf ? surf.z : 0, z: wz };
+        });
+        // Built in order: a later box snapshots the earlier plateaus, so building it never cuts them away.
+        // deleteAllSmartTeeBoxes restores newest-first to undo this.
+        createTeeBoxFromPoints(hole, pts, colors);
+    });
+    window._placingTeeLayout = false;
+    hole.activeTeeBoxIndex = hole.teeBoxes.length - groups.length;
+    window._teePickColors = null;
+
+    clearSmartGreen();
+    window.saveLevel();
+    if (window.TeeStudio) window.TeeStudio.sync();
+    window.showBuildToast(isSv ? `🟦 ${groups.length} tee-boxar skapade. Justera formen eller flytta markörerna.` : `🟦 ${groups.length} tee boxes created. Adjust the shapes or move the markers.`, '#38bdf8');
+    window._smartBuildCooldown = true;
+    setTimeout(function() { window._smartBuildCooldown = false; }, 500);
+    return true;
 };
 
 window.onTeeHeightSlider = function(val) {
@@ -3880,11 +4086,20 @@ window.onTeeColorToggle = function(color, checked) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     let tb = getActiveTeeBox(hole);
     if (!tb) return;
-    if (!tb.activeTees) tb.activeTees = [];
+    let cur = tb.activeTees || [];
     if (checked) {
-        if (!tb.activeTees.includes(color)) tb.activeTees.push(color);
+        // A colour lives on one box only: ticking it here moves it from the box that had it
+        let other = teeBoxOwning(hole, color, tb);
+        if (other) {
+            other.activeTees = other.activeTees.filter(c => c !== color);
+            removeTeeMarker(hole, color);
+            let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+            let n = hole.teeBoxes.indexOf(other) + 1;
+            window.showBuildToast(isSv ? `↪ Färgen flyttades från Tee Box ${n}` : `↪ Colour moved from Tee Box ${n}`, '#38bdf8');
+        }
+        if (!cur.includes(color)) tb.activeTees = cur.concat([color]);
     } else {
-        tb.activeTees = tb.activeTees.filter(c => c !== color);
+        tb.activeTees = cur.filter(c => c !== color);
     }
     applyTeePipeline(hole, false, false, tb);
     if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
@@ -3916,7 +4131,8 @@ window.autoSortTeesForActiveBox = function() {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     let tb = getActiveTeeBox(hole);
     if (!tb) return;
-    applyTeePipeline(hole, false, false, tb);
+    window._teeResetMarkers = true;
+    try { applyTeePipeline(hole, false, false, tb); } finally { window._teeResetMarkers = false; }
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
     window.showBuildToast(isSv ? '🔄 Teer sorterade och uppriktade mot siktpunkten!' : '🔄 Tees sorted & aligned towards aim point!', '#38bdf8');
 };
