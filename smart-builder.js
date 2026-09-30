@@ -299,6 +299,7 @@ function resortTeesForAimPoint(hole) {
     let orderedKeys = ['red','yellow','white','black'];
     let colorEmoji = { red: '🔴', yellow: '🟡', white: '⚪', black: '⬛' };
     if (!hole.tees || !hole.teeMeshes) return;
+    normalizeTeeOwnership(hole); // old saves may list one colour on several boxes
 
     // Markers are only swapped inside the tee box that owns their colour, so a marker
     // never jumps into another box. Colours that no box owns (old saves) form one group.
