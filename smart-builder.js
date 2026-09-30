@@ -930,6 +930,66 @@ window.startNewBunkerDrawing = function(holeIndex) {
     window.showBuildToast(isSv ? `✏️ Klicka på marken för att rita Bunker ${nextNum} (minst 3 punkter)` : `✏️ Click on ground to shape Bunker ${nextNum} (min 3 points)`, '#fbbf24');
 };
 
+// === SOFT-EDGE AWARE TEXTURE RESTORE (bunker + tee) ===
+// A blurred (edgeSharpness < 100) fill spreads a halo outside the outline. Restoring only the
+// interior of the outline left that halo behind after move / reshape / delete.
+function softEdgeMargin(sharpness) {
+    let blurPx = (sharpness !== undefined && sharpness < 100) ? Math.round((100 - sharpness) * 0.06) : 0;
+    return 0.6 + blurPx * 3 * (window.TERRAIN_SIZE / 4096);
+}
+
+// obj: bunker / tee box (uses obj._paint = { poly, margin } = what was last painted).
+// Puts the original pixels back under the whole painted footprint. Returns true when exact.
+function restoreSurfaceFootprint(obj, hole, fallbackPoly, snapCanvasKey) {
+    if (!obj || !window._arcadePCtx) return false;
+    let fp = (obj._paint && obj._paint.poly && obj._paint.poly.length >= 3)
+        ? obj._paint : { poly: fallbackPoly, margin: softEdgeMargin(obj.edgeSharpness) };
+    if (!fp.poly || fp.poly.length < 3) return false;
+    let region = offsetPolygon(fp.poly, fp.margin);
+    let ctx = window._arcadePCtx;
+    let S = window.TERRAIN_SIZE;
+    ctx.save();
+    ctx.filter = 'none';
+    ctx.beginPath();
+    region.forEach((pt, i) => {
+        let pxX = ((pt.x + S / 2) / S) * 4096;
+        let pxY = ((pt.z + S / 2) / S) * 4096;
+        if (i === 0) ctx.moveTo(pxX, pxY); else ctx.lineTo(pxX, pxY);
+    });
+    ctx.closePath();
+    let exact = false;
+    if (obj.origCanvasPixels && obj.bbox && obj.bbox.pw > 0 && obj.bbox.ph > 0) {
+        if (!window[snapCanvasKey]) window[snapCanvasKey] = document.createElement('canvas');
+        window[snapCanvasKey].width = obj.bbox.pw;
+        window[snapCanvasKey].height = obj.bbox.ph;
+        window[snapCanvasKey].getContext('2d').putImageData(obj.origCanvasPixels, 0, 0);
+        ctx.clip();
+        ctx.drawImage(window[snapCanvasKey], obj.bbox.pxMinX, obj.bbox.pxMinY);
+        exact = true;
+    } else {
+        ctx.fillStyle = getBaseGroundColor(hole);
+        ctx.fill();
+    }
+    ctx.restore();
+    obj._footprintRestored = exact;
+    return exact;
+}
+
+// Repaint every texture layer of the hole in stacking order: fairways, tee boxes, bunkers, green.
+// Call after a restore/removal so neighbours that overlapped the restored area are painted back.
+window.repaintAllTextures = function(hole, syncBiome) {
+    if (!hole || !window._arcadePCtx) return;
+    ensureHoleFairways(hole);
+    (hole.fairways || []).forEach(fd => paintFairwayTexture(fd));
+    window.repaintUpperTextures(hole);
+    if (syncBiome !== false) {
+        if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
+        window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
+        if (typeof window.debounceRebuildRoughMask === 'function') window.debounceRebuildRoughMask(200);
+        else if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+    }
+};
+
 // 1. Capture baseline snapshot of natural terrain & canvas before bunker is built
 window.captureBunkerSnapshot = function(hole, points, margin) {
     margin = Math.max(15, margin || 15);
@@ -1027,6 +1087,8 @@ window.getBaseGroundColor = getBaseGroundColor;
 // 1.5. Cleanly erase a bunker's footprint from 2D canvas texture
 window.eraseBunkerTexture = function(bd, hole) {
     if (!bd || !bd.points || !window._arcadePCtx) return;
+    // exact original pixels were already put back - do not flatten them with the base colour
+    if (bd._footprintRestored) { bd._footprintRestored = false; return; }
     let densePts = (typeof getDenseBunkerPoints === 'function') ? getDenseBunkerPoints(bd.points) : bd.points;
     if (!densePts || densePts.length < 3) return;
 
@@ -1086,29 +1148,7 @@ window.restoreBunkerBase = function(hole, restoreTexture, targetBunker) {
         }
 
         if (restoreTexture) {
-            if (bd.origCanvasPixels && densePts && window._arcadePCtx && bd.bbox.pw > 0 && bd.bbox.ph > 0) {
-                let ctx = window._arcadePCtx;
-                if (!window._bunkerSnapCanvas) window._bunkerSnapCanvas = document.createElement('canvas');
-                window._bunkerSnapCanvas.width = bd.bbox.pw;
-                window._bunkerSnapCanvas.height = bd.bbox.ph;
-                let bCtx = window._bunkerSnapCanvas.getContext('2d');
-                bCtx.putImageData(bd.origCanvasPixels, 0, 0);
-
-                ctx.save();
-                ctx.beginPath();
-                densePts.forEach((pt, i) => {
-                    let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                    let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                    if (i === 0) ctx.moveTo(pxX, pxY);
-                    else ctx.lineTo(pxX, pxY);
-                });
-                ctx.closePath();
-                ctx.clip();
-                ctx.drawImage(window._bunkerSnapCanvas, bd.bbox.pxMinX, bd.bbox.pxMinY);
-                ctx.restore();
-            } else if (typeof window.eraseBunkerTexture === 'function') {
-                window.eraseBunkerTexture(bd, hole);
-            }
+            restoreSurfaceFootprint(bd, hole, densePts || getDenseBunkerPoints(bd.points), '_bunkerSnapCanvas');
         }
     });
 };
@@ -1163,34 +1203,17 @@ window.applyBunkerPipeline = function(hole, isInitial, updateTexture, targetBunk
         return minDist;
     }
 
+    // === PAINT PASS === (old footprint incl. soft-edge halo removed, then the whole stack repainted)
+    if (updateTexture && window._arcadePCtx) {
+        bds.forEach(bd => {
+            if (bd && bd.points && bd.points.length >= 3) restoreSurfaceFootprint(bd, hole, getDenseBunkerPoints(bd.points), '_bunkerSnapCanvas');
+        });
+        window.repaintAllTextures(hole, false);
+    }
+
     bds.forEach(bd => {
         if (!bd || !bd.points || bd.points.length < 3) return;
         let densePts = getDenseBunkerPoints(bd.points);
-
-        // === PAINT PASS ===
-        if (updateTexture && window._arcadePCtx) {
-            window._arcadePCtx.save();
-
-            let sharpness = bd.edgeSharpness !== undefined ? bd.edgeSharpness : 100;
-            if (sharpness < 100) {
-                let blurPx = Math.round((100 - sharpness) * 0.06);
-                if (blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
-            }
-
-            window._arcadePCtx.beginPath();
-            densePts.forEach((pt, i) => {
-                let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-                else window._arcadePCtx.lineTo(pxX, pxY);
-            });
-            window._arcadePCtx.closePath();
-            window._arcadePCtx.fillStyle = bd.sandColor || sandColor;
-            window._arcadePCtx.fill();
-
-            window._arcadePCtx.filter = 'none';
-            window._arcadePCtx.restore();
-        }
 
         // === SCULPT PASS ===
         if (positions) {
@@ -1417,6 +1440,7 @@ window.repaintBunkersTextureOnly = function(hole) {
 
         ctx.filter = 'none';
         ctx.restore();
+        bd._paint = { poly: densePts, margin: softEdgeMargin(sharpness) };
     });
 };
 
@@ -1434,6 +1458,9 @@ window.updateLiveBunker = function(property, value) {
         bd.origCanvasPixels = snap.origCanvasPixels;
         if (bd.baseElevation === undefined) bd.baseElevation = snap.baseElevation;
     }
+
+    // remember what is currently painted (old sharpness/outline) so the pipeline can remove the old halo
+    if (!bd._paint && bd.points && bd.points.length >= 3) bd._paint = { poly: getDenseBunkerPoints(bd.points), margin: softEdgeMargin(bd.edgeSharpness) };
 
     bd[property] = value;
 
@@ -1485,6 +1512,7 @@ window.deleteSmartBunker = function(holeIndex, bunkerIndex) {
         hole.activeBunkerIndex = null;
         hole.bunkerData = null;
     }
+    window.repaintAllTextures(hole);
 
     // Re-apply remaining elements so everything is cleanly layered
     if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
@@ -1548,6 +1576,7 @@ window.deleteAllSmartBunkers = function(holeIndex) {
     hole.bunkers = [];
     hole.bunkerData = null;
     hole.activeBunkerIndex = null;
+    window.repaintAllTextures(hole);
 
     if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
         window.applyFairwayPipeline(hole, false, true);
@@ -1623,6 +1652,7 @@ window.redrawSmartBunker = function(holeIndex, bunkerIndex) {
         hole.bunkerData = null;
     }
     hole.activeBunkerIndex = null;
+    window.repaintAllTextures(hole);
 
     if (hole.fairways && hole.fairways.length > 0 && typeof window.applyFairwayPipeline === 'function') {
         window.applyFairwayPipeline(hole, false, true);
@@ -3228,6 +3258,7 @@ window.captureTeeSnapshot = function(hole, points, margin) {
 // Cleanly erase a tee's footprint from 2D canvas texture
 window.eraseTeeTexture = function(tb, hole) {
     if (!tb || !tb.points || !window._arcadePCtx) return;
+    if (tb._footprintRestored) { tb._footprintRestored = false; return; }
     let curve = new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
     let numSamples = Math.max(160, tb.points.length * 30);
     let densePts = curve.getPoints(numSamples);
@@ -3354,31 +3385,7 @@ window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
 
     // 2. Restore 2D canvas texture: cleanly erase tee footprint or restore clipped snapshot
     if (eraseTex && window._arcadePCtx) {
-        if (tb.origCanvasPixels && densePts && tb.bbox && tb.bbox.pw > 0 && tb.bbox.ph > 0) {
-            let ctx = window._arcadePCtx;
-            if (!window._teeSnapCanvas) {
-                window._teeSnapCanvas = document.createElement('canvas');
-            }
-            window._teeSnapCanvas.width = tb.bbox.pw;
-            window._teeSnapCanvas.height = tb.bbox.ph;
-            let tCtx = window._teeSnapCanvas.getContext('2d');
-            tCtx.putImageData(tb.origCanvasPixels, 0, 0);
-
-            ctx.save();
-            ctx.beginPath();
-            densePts.forEach((pt, i) => {
-                let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                if (i === 0) ctx.moveTo(pxX, pxY);
-                else ctx.lineTo(pxX, pxY);
-            });
-            ctx.closePath();
-            ctx.clip(); // ONLY restore pixels INSIDE the tee polygon!
-            ctx.drawImage(window._teeSnapCanvas, tb.bbox.pxMinX, tb.bbox.pxMinY);
-            ctx.restore();
-        } else if (typeof window.eraseTeeTexture === 'function') {
-            window.eraseTeeTexture(tb, hole);
-        }
+        restoreSurfaceFootprint(tb, hole, densePts || teeDensePts(tb), '_teeSnapCanvas');
 
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
         window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
@@ -3419,6 +3426,7 @@ function paintTeeTexture(tb) {
     }
     ctx.filter = 'none';
     ctx.restore();
+    tb._paint = { poly: densePts, margin: softEdgeMargin(edgeSharpness) };
 }
 
 // Texture only (no geometry): used to keep tee boxes on top of fairway paint
@@ -3455,7 +3463,8 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox,
 
     // 1. Texture painting
     if (updateTexture && window._arcadePCtx) {
-        paintTeeTexture(tb);
+        restoreSurfaceFootprint(tb, hole, teeDensePts(tb), '_teeSnapCanvas');
+        window.repaintAllTextures(hole, false);
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
         window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
         if (typeof window.debounceRebuildRoughMask === 'function') {
@@ -3652,6 +3661,7 @@ window.deleteSmartTeeBox = function(boxIndex) {
         hole.activeTeeBoxIndex = null;
         hole.teeData = null;
     }
+    window.repaintAllTextures(hole);
 
     if (window.TeeStudio) window.TeeStudio.sync();
     window.saveLevel();
@@ -3677,6 +3687,7 @@ window.deleteAllSmartTeeBoxes = function() {
     hole.teeBoxes = [];
     hole.activeTeeBoxIndex = null;
     hole.teeData = null;
+    window.repaintAllTextures(hole);
 
     if (window.TeeStudio) window.TeeStudio.sync();
     window.saveLevel();
@@ -3816,6 +3827,7 @@ window.onTeeEdgeSharpness = function(val) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     let tb = getActiveTeeBox(hole);
     if (!tb) return;
+    if (!tb._paint && tb.points && tb.points.length >= 3) tb._paint = { poly: teeDensePts(tb), margin: softEdgeMargin(tb.edgeSharpness) };
     tb.edgeSharpness = parseInt(val);
     let valEl = document.getElementById('st-edge-val');
     if (valEl) valEl.textContent = (tb.edgeSharpness === 100) ? 'Skarp (100%)' : (tb.edgeSharpness === 0 ? 'Mjuk (0%)' : tb.edgeSharpness + '%');
