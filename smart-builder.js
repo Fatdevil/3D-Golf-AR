@@ -2107,6 +2107,9 @@ window.captureFairwaySnapshot = function(hole, points, margin) {
 // 1.5. Cleanly erase a fairway's footprint
 window.eraseFairwayTexture = function(fd, hole) {
     if (!fd || !fd.points || !window._arcadePCtx) return;
+    // The exact original pixels were already put back by restoreFairwayFootprint - erasing with a
+    // flat base colour afterwards would only destroy them again.
+    if (fd.origCanvasPixels && fd.bbox && fd._footprintRestored) { fd._footprintRestored = false; return; }
     let densePts = (typeof getDenseFairwayPoints === 'function') ? getDenseFairwayPoints(fd.points) : fd.points;
     if (!densePts || densePts.length < 3) return;
 
@@ -2131,6 +2134,50 @@ window.eraseFairwayTexture = function(fd, hole) {
     ctx.fillStyle = baseGroundColor;
     ctx.fill();
 
+    ctx.restore();
+};
+
+// Footprint of what the fairway pipeline last PAINTED: outline + ring (semi-rough + rough) width.
+// Falls back to the current outline/widths when nothing has been painted yet in this session.
+function fairwayFootprint(fd) {
+    if (fd._paint && fd._paint.poly && fd._paint.poly.length >= 3) return fd._paint;
+    let semi = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
+    let rough = (fd.roughEnabled !== false) ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
+    return { poly: getDenseFairwayPoints(fd.points), ring: rough > 0 ? semi + rough : semi };
+}
+
+// Put back the ORIGINAL pixels under everything this fairway painted (outline + rough/semi ring).
+// Restoring only the inside of the outline left the rings behind as "ghosts" after reshaping,
+// moving or narrowing them.
+window.restoreFairwayFootprint = function(fd, hole) {
+    if (!fd || !fd.points || fd.points.length < 3 || !window._arcadePCtx) return;
+    let fp = fairwayFootprint(fd);
+    if (!fp.poly || fp.poly.length < 3) return;
+    let region = offsetPolygon(fp.poly, fp.ring + 0.6);
+    let ctx = window._arcadePCtx;
+    let S = window.TERRAIN_SIZE;
+    ctx.save();
+    ctx.filter = 'none';
+    ctx.beginPath();
+    region.forEach((pt, i) => {
+        let pxX = ((pt.x + S / 2) / S) * 4096;
+        let pxY = ((pt.z + S / 2) / S) * 4096;
+        if (i === 0) ctx.moveTo(pxX, pxY); else ctx.lineTo(pxX, pxY);
+    });
+    ctx.closePath();
+    if (fd.origCanvasPixels && fd.bbox && fd.bbox.pw > 0 && fd.bbox.ph > 0) {
+        if (!window._fairwaySnapCanvas) window._fairwaySnapCanvas = document.createElement('canvas');
+        window._fairwaySnapCanvas.width = fd.bbox.pw;
+        window._fairwaySnapCanvas.height = fd.bbox.ph;
+        window._fairwaySnapCanvas.getContext('2d').putImageData(fd.origCanvasPixels, 0, 0);
+        ctx.clip();
+        ctx.drawImage(window._fairwaySnapCanvas, fd.bbox.pxMinX, fd.bbox.pxMinY);
+        fd._footprintRestored = true;
+    } else {
+        // No snapshot (course reloaded from file): best effort - flat base colour
+        ctx.fillStyle = getBaseGroundColor(hole);
+        ctx.fill();
+    }
     ctx.restore();
 };
 
@@ -2194,35 +2241,81 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
             }
         }
 
-        // Restore 2D canvas texture: restore clipped pixels or paint base ground color
+        // Restore 2D canvas texture: original pixels under the whole painted footprint (outline + ring)
         if (restoreTexture) {
-            if (fd.origCanvasPixels && densePts && window._arcadePCtx && fd.bbox.pw > 0 && fd.bbox.ph > 0) {
-                let ctx = window._arcadePCtx;
-                if (!window._fairwaySnapCanvas) window._fairwaySnapCanvas = document.createElement('canvas');
-                window._fairwaySnapCanvas.width = fd.bbox.pw;
-                window._fairwaySnapCanvas.height = fd.bbox.ph;
-                let fCtx = window._fairwaySnapCanvas.getContext('2d');
-                fCtx.putImageData(fd.origCanvasPixels, 0, 0);
-
-                ctx.save();
-                ctx.beginPath();
-                densePts.forEach((pt, i) => {
-                    let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                    let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
-                    if (i === 0) ctx.moveTo(pxX, pxY);
-                    else ctx.lineTo(pxX, pxY);
-                });
-                ctx.closePath();
-                ctx.clip();
-                ctx.drawImage(window._fairwaySnapCanvas, fd.bbox.pxMinX, fd.bbox.pxMinY);
-                ctx.restore();
-            } else if (typeof window.eraseFairwayTexture === 'function') {
-                window.eraseFairwayTexture(fd, hole);
-            }
+            window.restoreFairwayFootprint(fd, hole);
         }
     });
 };
 
+
+// Paint one fairway (rough ring, semi-rough ring, fill, mowing pattern) and remember its footprint
+function paintFairwayTexture(fd) {
+    if (!fd || !fd.points || fd.points.length < 3 || !window._arcadePCtx) return;
+    let ctx = window._arcadePCtx;
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let fairwayColor = cfg.fairwayColor || '#7db952';
+    let semiRoughColor = cfg.semiColor || '#6b9e3d';
+    let roughColor = cfg.roughColor || '#4a782b';
+    let densePts = getDenseFairwayPoints(fd.points);
+    let S = window.TERRAIN_SIZE;
+
+    ctx.save();
+    function traceFairwayPath() {
+        ctx.beginPath();
+        densePts.forEach((pt, i) => {
+            let pxX = ((pt.x + (S / 2)) / S) * 4096;
+            let pxY = ((pt.z + (S / 2)) / S) * 4096;
+            if (i === 0) ctx.moveTo(pxX, pxY);
+            else ctx.lineTo(pxX, pxY);
+        });
+        ctx.closePath();
+    }
+
+    let semiRoughWidth = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
+    let roughEnabled = (fd.roughEnabled !== false);
+    let roughWidth = roughEnabled ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
+
+    if (roughWidth > 0) {
+        traceFairwayPath();
+        ctx.lineWidth = (semiRoughWidth + roughWidth) * 2 * (4096 / S);
+        ctx.strokeStyle = roughColor;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        ctx.fillStyle = roughColor;
+        ctx.fill();
+    }
+    if (semiRoughWidth > 0) {
+        traceFairwayPath();
+        ctx.lineWidth = semiRoughWidth * 2 * (4096 / S);
+        ctx.strokeStyle = semiRoughColor;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        ctx.fillStyle = semiRoughColor;
+        ctx.fill();
+    }
+    traceFairwayPath();
+    ctx.fillStyle = fairwayColor;
+    ctx.fill();
+
+    let mowPattern = fd.mowPattern || 'SOLID';
+    if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
+        paintMowingPattern(ctx, densePts, fairwayColor, mowPattern);
+    }
+    ctx.filter = 'none';
+    ctx.restore();
+
+    fd._paint = { poly: densePts, ring: roughWidth > 0 ? semiRoughWidth + roughWidth : semiRoughWidth };
+}
+window.paintFairwayTexture = paintFairwayTexture;
+
+// Everything that is stacked ON TOP of the fairways on the 2D canvas, in order.
+window.repaintUpperTextures = function(hole) {
+    if (!hole) return;
+    if (typeof window.repaintTeeTextureOnly === 'function') window.repaintTeeTextureOnly(hole);
+    if (typeof window.repaintBunkersTextureOnly === 'function') window.repaintBunkersTextureOnly(hole);
+    if (hole.greenData && typeof window.repaintGreenTextureOnly === 'function') window.repaintGreenTextureOnly(hole);
+};
 
 // === LAYER ORDER: fairway (base) -> tee / bunker (upper) ===
 // Tee plateaus and bunker dig-outs are stored as height edits on top of a captured baseline
@@ -2323,67 +2416,18 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
     let semiRoughColor = cfg.semiColor || '#6b9e3d';
     let roughColor = cfg.roughColor || '#4a782b';
 
+    // === PAINT PASS ===
+    // 1) put the original pixels back under each targeted fairway's previous footprint
+    // 2) paint all fairways of the hole in index order (stable stacking where they overlap)
+    if (updateTexture && window._arcadePCtx) {
+        fds.forEach(fd => { if (fd && fd.points && fd.points.length >= 3) window.restoreFairwayFootprint(fd, hole); });
+        let allFds = (hole.fairways && targetFairway && hole.fairways.indexOf(targetFairway) >= 0) ? hole.fairways : fds;
+        allFds.forEach(fd => paintFairwayTexture(fd));
+    }
+
     fds.forEach(fd => {
         if (!fd || !fd.points || fd.points.length < 3) return;
         let densePts = getDenseFairwayPoints(fd.points);
-
-        // === PAINT PASS ===
-        if (updateTexture && window._arcadePCtx) {
-            window._arcadePCtx.save();
-
-            let sharpness = 100; // Always SHARP system default standard
-
-            function traceFairwayPath() {
-                window._arcadePCtx.beginPath();
-                densePts.forEach((pt, i) => {
-                    let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-                    let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-                    if (i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-                    else window._arcadePCtx.lineTo(pxX, pxY);
-                });
-                window._arcadePCtx.closePath();
-            }
-
-            let semiRoughWidth = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
-            let roughEnabled = (fd.roughEnabled !== false);
-            let roughWidth = roughEnabled ? (fd.roughWidth !== undefined ? fd.roughWidth : 5.0) : 0;
-
-            // Draw rough ring (outermost)
-            if (roughWidth > 0) {
-                traceFairwayPath();
-                window._arcadePCtx.lineWidth = (semiRoughWidth + roughWidth) * 2 * (4096 / window.TERRAIN_SIZE);
-                window._arcadePCtx.strokeStyle = roughColor;
-                window._arcadePCtx.lineJoin = 'round';
-                window._arcadePCtx.stroke();
-                window._arcadePCtx.fillStyle = roughColor;
-                window._arcadePCtx.fill();
-            }
-
-            // Draw semi-rough ring
-            if (semiRoughWidth > 0) {
-                traceFairwayPath();
-                window._arcadePCtx.lineWidth = semiRoughWidth * 2 * (4096 / window.TERRAIN_SIZE);
-                window._arcadePCtx.strokeStyle = semiRoughColor;
-                window._arcadePCtx.lineJoin = 'round';
-                window._arcadePCtx.stroke();
-                window._arcadePCtx.fillStyle = semiRoughColor;
-                window._arcadePCtx.fill();
-            }
-
-            // Draw fairway fill
-            traceFairwayPath();
-            window._arcadePCtx.fillStyle = fairwayColor;
-            window._arcadePCtx.fill();
-
-            // Mowing pattern overlay
-            let mowPattern = fd.mowPattern || 'SOLID';
-            if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
-                paintMowingPattern(window._arcadePCtx, densePts, fairwayColor, mowPattern);
-            }
-
-            window._arcadePCtx.filter = 'none';
-            window._arcadePCtx.restore();
-        }
 
         // === SCULPT PASS ===
         let difficulty = fd.difficulty || 'FLAT';
@@ -2465,13 +2509,8 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
         }
     });
 
-    // Re-render Bunkers & Smart Green texture on top so they always stay on top of fairway on 2D canvas
-    if (updateTexture && typeof window.repaintBunkersTextureOnly === 'function') {
-        window.repaintBunkersTextureOnly(hole);
-    }
-    if (updateTexture && hole.greenData && typeof window.repaintGreenTextureOnly === 'function') {
-        window.repaintGreenTextureOnly(hole);
-    }
+    // Re-render Tee, Bunkers & Smart Green texture on top so they always stay on top of fairway on 2D canvas
+    if (updateTexture) window.repaintUpperTextures(hole);
 
     if (updateTexture && window._arcadeMapTex) {
         window._arcadeMapTex.needsUpdate = true;
@@ -2529,6 +2568,10 @@ window.updateLiveFairway = function(property, value) {
         fd.origCanvasPixels = snap.origCanvasPixels;
         if (fd.baseElevation === undefined) fd.baseElevation = snap.baseElevation;
     }
+
+    // Remember what is CURRENTLY painted (old widths / outline) before the property changes, so the
+    // pipeline can remove the old ring instead of leaving it behind (course reloaded from file).
+    if (!fd._paint && fd.points && fd.points.length >= 3) fd._paint = fairwayFootprint(fd);
 
     fd[property] = value;
 
@@ -2588,8 +2631,7 @@ window.deleteSmartFairway = function(holeIndex, fairwayIndex) {
     if (hole.fairways.length > 0) {
         window.applyFairwayPipeline(hole, false, true);
     } else {
-        if (typeof window.repaintBunkersTextureOnly === 'function') window.repaintBunkersTextureOnly(hole);
-        if (hole.greenData && typeof window.repaintGreenTextureOnly === 'function') window.repaintGreenTextureOnly(hole);
+        window.repaintUpperTextures(hole);
     }
     window.endUpperLayerEdit(hole, _layers);
 
@@ -2653,12 +2695,7 @@ window.deleteAllSmartFairways = function(holeIndex) {
     window.endUpperLayerEdit(hole, _layers);
 
     // 2. Re-apply bunker and green textures on top if they exist
-    if (typeof window.repaintBunkersTextureOnly === 'function') {
-        window.repaintBunkersTextureOnly(hole);
-    }
-    if (hole.greenData && typeof window.repaintGreenTextureOnly === 'function') {
-        window.repaintGreenTextureOnly(hole);
-    }
+    window.repaintUpperTextures(hole);
 
     // 3. Sync textures and masks
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
@@ -2780,12 +2817,7 @@ window.cleanGhostFairways = function(holeIndex) {
         window.applyFairwayPipeline(hole, false, true);
     }
     // Re-apply bunkers and green on top
-    if (typeof window.repaintBunkersTextureOnly === 'function') {
-        window.repaintBunkersTextureOnly(hole);
-    }
-    if (hole.greenData && typeof window.repaintGreenTextureOnly === 'function') {
-        window.repaintGreenTextureOnly(hole);
-    }
+    window.repaintUpperTextures(hole);
 
     if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
     if (window._arcadePCtx) window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
@@ -2845,8 +2877,7 @@ window.redrawSmartFairway = function(holeIndex, fairwayIndex) {
     if (hole.fairways.length > 0) {
         window.applyFairwayPipeline(hole, false, true);
     } else {
-        if (typeof window.repaintBunkersTextureOnly === 'function') window.repaintBunkersTextureOnly(hole);
-        if (hole.greenData && typeof window.repaintGreenTextureOnly === 'function') window.repaintGreenTextureOnly(hole);
+        window.repaintUpperTextures(hole);
     }
     window.endUpperLayerEdit(hole, _layers);
 
@@ -3359,6 +3390,44 @@ window.restoreTeeBase = function(hole, eraseTex, targetTeeBox) {
     }
 };
 
+// Paint one tee box surface (fill + mowing pattern) onto the terrain canvas
+function paintTeeTexture(tb) {
+    if (!tb || !tb.points || tb.points.length < 3 || !window._arcadePCtx) return;
+    let cfg = window.CURRENT_BIOME_CONFIG || {};
+    let teeColor = cfg.teeColor || '#7cb54c';
+    let curve = new THREE.CatmullRomCurve3(tb.points.map(p => new THREE.Vector3(p.x, p.y || 0, p.z)), true);
+    let densePts = curve.getPoints(Math.max(160, tb.points.length * 30));
+    let mowPattern = tb.mowPattern || 'SOLID';
+    let edgeSharpness = tb.edgeSharpness !== undefined ? tb.edgeSharpness : 100;
+    let ctx = window._arcadePCtx;
+    ctx.save();
+    if (edgeSharpness < 100) {
+        let blurPx = Math.round((100 - edgeSharpness) * 0.06);
+        if (blurPx > 0) ctx.filter = 'blur(' + blurPx + 'px)';
+    }
+    ctx.beginPath();
+    densePts.forEach((pt, i) => {
+        let pxX = ((pt.x + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        let pxY = ((pt.z + (window.TERRAIN_SIZE / 2)) / window.TERRAIN_SIZE) * 4096;
+        if (i === 0) ctx.moveTo(pxX, pxY); else ctx.lineTo(pxX, pxY);
+    });
+    ctx.closePath();
+    ctx.fillStyle = teeColor;
+    ctx.fill();
+    if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
+        paintMowingPattern(ctx, densePts, teeColor, mowPattern);
+    }
+    ctx.filter = 'none';
+    ctx.restore();
+}
+
+// Texture only (no geometry): used to keep tee boxes on top of fairway paint
+window.repaintTeeTextureOnly = function(hole) {
+    if (!hole) return;
+    ensureHoleTeeBoxes(hole);
+    (hole.teeBoxes || []).forEach(paintTeeTexture);
+};
+
 window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox, heightsOnly) {
     let tb = targetTeeBox || (typeof window.getActiveTeeBox === 'function' ? window.getActiveTeeBox(hole) : null);
     if (!tb || !tb.points || tb.points.length < 3) return;
@@ -3386,29 +3455,7 @@ window.applyTeePipeline = function(hole, isInitial, updateTexture, targetTeeBox,
 
     // 1. Texture painting
     if (updateTexture && window._arcadePCtx) {
-        window._arcadePCtx.save();
-        if (edgeSharpness < 100) {
-            let blurPx = Math.round((100 - edgeSharpness) * 0.06);
-            if (blurPx > 0) window._arcadePCtx.filter = 'blur(' + blurPx + 'px)';
-        }
-
-        window._arcadePCtx.beginPath();
-        densePts.forEach((pt, i) => {
-            let pxX = ((pt.x + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            let pxY = ((pt.z + (window.TERRAIN_SIZE/2)) / window.TERRAIN_SIZE) * 4096;
-            if(i === 0) window._arcadePCtx.moveTo(pxX, pxY);
-            else window._arcadePCtx.lineTo(pxX, pxY);
-        });
-        window._arcadePCtx.closePath();
-        window._arcadePCtx.fillStyle = teeColor;
-        window._arcadePCtx.fill();
-
-        if (mowPattern !== 'SOLID' && typeof paintMowingPattern === 'function') {
-            paintMowingPattern(window._arcadePCtx, densePts, teeColor, mowPattern);
-        }
-
-        window._arcadePCtx.filter = 'none';
-        window._arcadePCtx.restore();
+        paintTeeTexture(tb);
         if (window._arcadeMapTex) window._arcadeMapTex.needsUpdate = true;
         window.terrainBiomeData = window._arcadePCtx.getImageData(0, 0, 4096, 4096).data;
         if (typeof window.debounceRebuildRoughMask === 'function') {
