@@ -14809,7 +14809,9 @@
         }
         
         let texPatch = null;
-        if (!cCopy && currentTool === 'SMART_BUILDER') {
+        // texRect is set when undo/redo captures the opposite state of one that carries a patch: capture
+        // the same area even if the user has switched to another tool in the meantime.
+        if (!cCopy && (currentTool === 'SMART_BUILDER' || texRect)) {
             let r = computeSmartTextureRect(texRect);
             if (r) {
                 try { texPatch = Object.assign({ img: pCtx.getImageData(r.x, r.y, r.w, r.h) }, r); } catch (e) { texPatch = null; }
