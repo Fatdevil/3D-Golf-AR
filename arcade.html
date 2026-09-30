@@ -10051,6 +10051,7 @@
             hole.aimMesh = null;
         }
         hole.aimPoint = null;
+        if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(hole); // ranking now uses the flag
         saveLevel();
         showBuildToast('🗑️ Aim Point för Hål ' + (targetHoleIdx + 1) + ' är borttagen', '#4ade80');
         if (typeof updateSBHoleDisplay === 'function') updateSBHoleDisplay();
@@ -15478,6 +15479,7 @@
                             let ch = courseHoles[closestIdx];
                             if (ch.aimMesh) { scene.remove(ch.aimMesh); ch.aimMesh = null; }
                             ch.aimPoint = null;
+                            if (typeof window.autoAssignTeeColors === 'function') window.autoAssignTeeColors(ch);
                             saveLevel();
                             showBuildToast('🗑️ Aim Point för Hål ' + (closestIdx + 1) + ' är borttagen', '#4ade80');
                             if (currentHoleIndex !== closestIdx) window.changeHoleTo(closestIdx);
@@ -20593,7 +20595,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=31"></script>
+<script src="smart-builder.js?v=32"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

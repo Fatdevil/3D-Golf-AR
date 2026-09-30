@@ -3637,6 +3637,8 @@ function teeBoxOwning(hole, color, exceptTb) {
 // joins the box whose surface it now stands on (or stays loose if it is on no box).
 window.assignTeeMarkerOwnership = function(hole, color, x, z) {
     if (TEE_COLOR_ORDER.indexOf(color) < 0) return;
+    // Placing a marker by hand is an explicit colour choice: stop recolouring this hole automatically
+    if (hole.teeManualColors === false) hole.teeManualColors = true;
     let boxes = hole.teeBoxes || [];
     let target = boxes.find(function(tb) { return tb.points && tb.points.length >= 3 && pointInPolygon(x, z, teeDensePts(tb)); }) || null;
     boxes.forEach(function(tb) {
