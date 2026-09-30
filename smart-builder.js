@@ -3565,6 +3565,18 @@ function teeBoxOwning(hole, color, exceptTb) {
     return (hole.teeBoxes || []).find(function(tb) { return tb !== exceptTb && (tb.activeTees || []).indexOf(color) >= 0; }) || null;
 }
 
+// A marker placed by hand (Hole tool) changes owner: the colour leaves whichever box had it and
+// joins the box whose surface it now stands on (or stays loose if it is on no box).
+window.assignTeeMarkerOwnership = function(hole, color, x, z) {
+    if (TEE_COLOR_ORDER.indexOf(color) < 0) return;
+    let boxes = hole.teeBoxes || [];
+    let target = boxes.find(function(tb) { return tb.points && tb.points.length >= 3 && pointInPolygon(x, z, teeDensePts(tb)); }) || null;
+    boxes.forEach(function(tb) {
+        if ((tb.activeTees || []).indexOf(color) >= 0 && tb !== target) tb.activeTees = tb.activeTees.filter(function(c) { return c !== color; });
+    });
+    if (target && (target.activeTees || []).indexOf(color) < 0) target.activeTees = (target.activeTees || []).concat([color]);
+};
+
 function removeTeeMarker(hole, color) {
     if (hole.teeMeshes && hole.teeMeshes[color]) window._arcadeScene.remove(hole.teeMeshes[color]);
     if (hole.teeMeshes) hole.teeMeshes[color] = null;
@@ -3773,6 +3785,15 @@ window.deleteSmartTeeBox = function(boxIndex) {
     let targetTb = hole.teeBoxes[idx];
 
     (targetTb.activeTees || []).forEach(function(tt) { removeTeeMarker(hole, tt); });
+    // Loose markers (placed by hand, owned by no remaining box) standing on the deleted surface go too
+    if (targetTb.points && targetTb.points.length >= 3) {
+        let gone = teeDensePts(targetTb);
+        TEE_COLOR_ORDER.forEach(function(tt) {
+            if (hole.tees && hole.tees[tt] && !teeBoxOwning(hole, tt, targetTb) && pointInPolygon(hole.tees[tt].x, hole.tees[tt].z, gone)) {
+                removeTeeMarker(hole, tt);
+            }
+        });
+    }
 
     restoreTeeBase(hole, true, targetTb);
 

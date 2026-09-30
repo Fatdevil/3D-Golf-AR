@@ -17226,6 +17226,7 @@
                 let teeType = currentHoleAction.replace('TEE_', '').toLowerCase();
                 if (hole.teeMeshes[teeType]) scene.remove(hole.teeMeshes[teeType]);
                 hole.tees[teeType] = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z, rot: 0 };
+                if (teeType !== 'range' && typeof window.assignTeeMarkerOwnership === 'function') window.assignTeeMarkerOwnership(hole, teeType, lastHitPoint.x, lastHitPoint.z);
                 
                 if(teeType === 'range') {
                     // Start range tee facing AWAY from camera (Math.PI = 180°)
@@ -20586,7 +20587,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=3"></script>
-<script src="smart-builder.js?v=29"></script>
+<script src="smart-builder.js?v=30"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
