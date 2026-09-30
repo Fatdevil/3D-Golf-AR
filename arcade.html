@@ -12315,7 +12315,7 @@
                 }
                 if(h.flagMesh) { scene.remove(h.flagMesh); h.flagMesh=null; }
                 if(h.aimMesh) { scene.remove(h.aimMesh); h.aimMesh=null; }
-                h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.fairways=[]; h.activeFairwayIndex=null; h.bunkerData=null; h.bunkers=[]; h.activeBunkerIndex=null; h.teeData=null; h.teeBoxes=[]; h.activeTeeBoxIndex=null; h.pins={};
+                h.teeManualColors=undefined; h.tees={red:null,yellow:null,white:null,black:null,range:null}; h.flag=null; h.aimPoint=null; h.greenData=null; h.fairwayData=null; h.fairways=[]; h.activeFairwayIndex=null; h.bunkerData=null; h.bunkers=[]; h.activeBunkerIndex=null; h.teeData=null; h.teeBoxes=[]; h.activeTeeBoxIndex=null; h.pins={};
             }
             window._allFlagCloths = [];  // Clear wave animation references
             
@@ -12480,7 +12480,7 @@
                             h.activeBunkerIndex = null;
                             h.bunkerData = null;
                         }
-                        if(hSync.teeManualColors !== undefined) h.teeManualColors = hSync.teeManualColors;
+                        h.teeManualColors = hSync.teeManualColors; // absent in legacy saves -> stays undefined (manual)
                         if(hSync.teeBoxes && Array.isArray(hSync.teeBoxes) && hSync.teeBoxes.length > 0) {
                             h.teeBoxes = hSync.teeBoxes.map(tb => {
                                 if (tb.origHeights && Array.isArray(tb.origHeights)) {
@@ -16689,6 +16689,7 @@
             h.teeData = null;
             h.teeBoxes = [];
             h.activeTeeBoxIndex = null;
+            h.teeManualColors = undefined;
             h.pins = {};
             h.par = 4;
             h.rangeLinesEnabled = false;
