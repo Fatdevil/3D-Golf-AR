@@ -41,6 +41,8 @@
             // Interaction state
             this.hoveredHandleIndex = -1;
             this.draggingHandleIndex = -1;
+            this.draggingWhole = null;     // {sx, sz, cx, cz} while the centre ring is dragged
+            this.moveHandle = null;
             this._dragUndoSaved = false;
             this.dragStartPoints = null;
             this.draggingArrow = false;
@@ -302,8 +304,8 @@
 
             if (this.activeTab === 'form') {
                 th.innerHTML = isSv
-                    ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort"
-                    : "💡 <b>Drag golf balls</b> to adjust shape<br>Click line to add point • Right-click ball to remove";
+                    ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen • <b>Dra ringen</b> för att flytta hela greenen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort"
+                    : "💡 <b>Drag golf balls</b> to adjust shape • <b>Drag the ring</b> to move the whole green<br>Click line to add point • Right-click ball to remove";
             } else if (this.activeTab === 'lutning') {
                 th.innerHTML = isSv
                     ? "💡 <b>Välj hur brant</b> och åt vilket håll greenen lutar, eller dra pilen i 3D<br>Golfbollarna kan dras för att anpassa formen samtidigt"
@@ -349,8 +351,8 @@
             let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
             if (tipEl) {
                 tipEl.innerHTML = isSv
-                    ? '💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Klicka på linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.'
-                    : '💡 <b>Drag</b> golf balls to shape. <b>Click spline</b> to add point, <b>right-click</b> to delete point.';
+                    ? '💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Dra ringen i mitten</b> för att flytta hela greenen. <b>Klicka på linjen</b> för ny punkt, <b>högerklicka</b> för att ta bort.'
+                    : '💡 <b>Drag</b> golf balls to shape. <b>Drag the centre ring</b> to move the whole green. <b>Click spline</b> to add a point, <b>right-click</b> to delete one.';
             }
             this.updateVisibility();
         }
@@ -505,6 +507,9 @@
             if (this.splineMesh) {
                 this.splineMesh.visible = (this.activeTab === 'form' || this.activeTab === 'lutning');
             }
+            if (this.moveHandle) {
+                this.moveHandle.visible = (this.activeTab === 'form');
+            }
 
             // Arrow visibility
             if (this.arrowGroup) {
@@ -527,6 +532,10 @@
                 this.group.remove(m);
             }
             this.handleMeshes = [];
+            if (this.moveHandle) {
+                this.group.remove(this.moveHandle);
+                this.moveHandle = null;
+            }
             if (this.splineMesh) {
                 this.group.remove(this.splineMesh);
                 this.splineMesh = null;
@@ -570,6 +579,30 @@
                 this.group.add(ballMesh);
                 this.handleMeshes.push(ballMesh);
             });
+
+            // Centre ring: drag it to move the whole green (flag and pins follow)
+            if (!this.geometries.moveRing) {
+                this.geometries.moveRing = new THREE.TorusGeometry(1.6, 0.24, 10, 36);
+                this.geometries.moveCore = new THREE.SphereGeometry(0.4, 16, 16);
+                this.materials.move = new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0e7490, emissiveIntensity: 0.7, roughness: 0.4 });
+            }
+            let cx = 0, cz = 0;
+            pts.forEach(p => { cx += p.x; cz += p.z; });
+            cx /= pts.length; cz /= pts.length;
+            let cy = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(cx, cz) : 0;
+            let ring = new THREE.Mesh(this.geometries.moveRing, this.materials.move);
+            ring.rotation.x = Math.PI / 2;
+            let core = new THREE.Mesh(this.geometries.moveCore, this.materials.move);
+            let mh = new THREE.Group();
+            mh.add(ring);
+            mh.add(core);
+            mh.position.set(cx, cy + 0.7, cz);
+            mh.renderOrder = 999;
+            mh.children.forEach(c => { c.renderOrder = 999; c.userData = { moveWhole: true }; });
+            mh.userData = { moveWhole: true, cx: cx, cz: cz };
+            mh.visible = (this.activeTab === 'form');
+            this.group.add(mh);
+            this.moveHandle = mh;
 
             this.updateVisibility();
         }
@@ -855,6 +888,16 @@
             // ========================================================
             if (!hole || !hole.greenData) return false;
 
+            // Centre ring: start moving the whole green
+            if (this.activeTab === 'form' && this.moveHandle && this.moveHandle.visible && raycaster && lastHitPoint) {
+                if (raycaster.intersectObject(this.moveHandle, true).length > 0) {
+                    this.draggingWhole = { sx: lastHitPoint.x, sz: lastHitPoint.z, cx: this.moveHandle.userData.cx, cz: this.moveHandle.userData.cz, dx: 0, dz: 0 };
+                    if (window.controls) window.controls.enabled = false;
+                    document.body.style.cursor = 'grabbing';
+                    return true;
+                }
+            }
+
             // Check if clicking golf ball handle
             if ((this.activeTab === 'form' || this.activeTab === 'lutning') && this.handleMeshes.length > 0) {
                 let intersects = raycaster.intersectObjects(this.handleMeshes);
@@ -1053,6 +1096,17 @@
                 return;
             }
 
+            // 1b. Dragging the whole green: the studio group slides as a ghost, the terrain is rebuilt on drop
+            if (this.draggingWhole) {
+                if (lastHitPoint) {
+                    let w = this.draggingWhole;
+                    w.dx = lastHitPoint.x - w.sx;
+                    w.dz = lastHitPoint.z - w.sz;
+                    this.group.position.set(w.dx, 0, w.dz);
+                }
+                return;
+            }
+
             // 2. Dragging slope arrow tip
             if (this.draggingArrow && lastHitPoint) {
                 let cx = this.arrowGroup.position.x;
@@ -1063,6 +1117,19 @@
                 let deg = Math.round(((angle * 180 / Math.PI) % 360 + 360) % 360);
                 this.setTiltDirection(deg);
                 return;
+            }
+
+            // 3a. Hovering the centre ring
+            if (this.activeTab === 'form' && this.moveHandle && this.moveHandle.visible && raycaster) {
+                let overRing = raycaster.intersectObject(this.moveHandle, true).length > 0;
+                if (overRing) {
+                    document.body.style.cursor = 'move';
+                    this._ringHover = true;
+                    return;
+                } else if (this._ringHover) {
+                    this._ringHover = false;
+                    document.body.style.cursor = 'default';
+                }
             }
 
             // 3. Hovering over handles
@@ -1086,7 +1153,20 @@
         }
 
         onPointerUp(e) {
-            let wasDragging = (this.draggingHandleIndex >= 0 || this.draggingArrow || this.draggingDrawNodeIndex >= 0);
+            let wasDragging = (this.draggingHandleIndex >= 0 || this.draggingArrow || this.draggingDrawNodeIndex >= 0 || !!this.draggingWhole);
+
+            // Dropped the centre ring: move the green (flag, pins and terrain follow) unless it barely moved
+            if (this.draggingWhole) {
+                let w = this.draggingWhole;
+                this.draggingWhole = null;
+                this.group.position.set(0, 0, 0);
+                if (window.controls) window.controls.enabled = true;
+                document.body.style.cursor = 'default';
+                if (Math.hypot(w.dx, w.dz) >= 0.5 && typeof window.moveSmartGreen === 'function') {
+                    window.moveSmartGreen(window.currentHoleIndex, w.cx + w.dx, w.cz + w.dz);
+                }
+                return;
+            }
 
             // Mode 1: Finished dragging a draw node
             if (this.draggingDrawNodeIndex >= 0) {
