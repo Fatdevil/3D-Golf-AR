@@ -15888,6 +15888,11 @@
         if (window.TeeStudio && window.TeeStudio.onPointerUp) {
             window.TeeStudio.onPointerUp(e);
         }
+        // Another pointer was released while the green is still being dragged by its own pointer:
+        // the studios above re-enable the camera, so keep it off until the dragging pointer ends
+        if (window.GreenStudio && window.GreenStudio.draggingWhole && typeof controls !== 'undefined' && controls) {
+            controls.enabled = false;
+        }
         if (typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
             activeRotatingTee = null;
             controls.enabled = true;
@@ -15897,7 +15902,7 @@
         finalizeSculptStroke({ save: true });
         if (typeof controls !== 'undefined' && controls) {
             let isHoldingStudioNode = (window.FairwayStudio && (window.FairwayStudio.draggingHandleIndex >= 0 || window.FairwayStudio.draggingDrawNodeIndex >= 0)) ||
-                                      (window.GreenStudio && (window.GreenStudio.draggingHandleIndex >= 0 || window.GreenStudio.draggingDrawNodeIndex >= 0)) ||
+                                      (window.GreenStudio && (window.GreenStudio.draggingHandleIndex >= 0 || window.GreenStudio.draggingDrawNodeIndex >= 0 || !!window.GreenStudio.draggingWhole)) ||
                                       (window.BunkerStudio && (window.BunkerStudio.draggingHandleIndex >= 0 || window.BunkerStudio.draggingDrawNodeIndex >= 0)) ||
                                       (window.TeeStudio && (window.TeeStudio.draggingHandleIndex >= 0 || window.TeeStudio.draggingDrawNodeIndex >= 0));
             if (!isHoldingStudioNode) {
