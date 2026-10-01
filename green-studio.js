@@ -481,6 +481,7 @@
         }
 
         hide() {
+            this.cancelWholeDrag();   // leaving the studio mid-drag must not commit a move later
             if (this.group) this.group.visible = false;
             this.clearHandles();
             let isPlaying = (typeof playState !== 'undefined' && playState === 'ROUND_IDLE');
@@ -891,7 +892,7 @@
             // Centre ring: start moving the whole green
             if (this.activeTab === 'form' && this.moveHandle && this.moveHandle.visible && raycaster && lastHitPoint) {
                 if (raycaster.intersectObject(this.moveHandle, true).length > 0) {
-                    this.draggingWhole = { sx: lastHitPoint.x, sz: lastHitPoint.z, cx: this.moveHandle.userData.cx, cz: this.moveHandle.userData.cz, dx: 0, dz: 0 };
+                    this.draggingWhole = { sx: lastHitPoint.x, sz: lastHitPoint.z, cx: this.moveHandle.userData.cx, cz: this.moveHandle.userData.cz, dx: 0, dz: 0, hole: window.currentHoleIndex };
                     if (window.controls) window.controls.enabled = false;
                     document.body.style.cursor = 'grabbing';
                     return true;
@@ -1171,8 +1172,10 @@
                 this.group.position.set(0, 0, 0);
                 if (window.controls) window.controls.enabled = true;
                 document.body.style.cursor = 'default';
-                if (Math.hypot(w.dx, w.dz) >= 0.5 && typeof window.moveSmartGreen === 'function') {
-                    window.moveSmartGreen(window.currentHoleIndex, w.cx + w.dx, w.cz + w.dz);
+                let curTool = window.currentTool || (typeof currentTool !== 'undefined' ? currentTool : null);
+                let sameContext = (curTool === 'SMART_BUILDER' && window._smartBuilderType === 'GREEN' && w.hole === window.currentHoleIndex);
+                if (sameContext && Math.hypot(w.dx, w.dz) >= 0.5 && typeof window.moveSmartGreen === 'function') {
+                    window.moveSmartGreen(w.hole, w.cx + w.dx, w.cz + w.dz);
                 }
                 return;
             }
