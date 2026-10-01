@@ -3989,31 +3989,32 @@ window.renderTeePickCard = function() {
         '<div style="color:#94a3b8; font-size:9.5px; line-height:1.35;">' + hint + '</div>' + layoutBtn;
 };
 
-// Aim point falls back to the flag so the tee flow never stalls on step one
+// Where the aim point would go if none is set: flag, else the middle of the first fairway. Read-only.
+window.deriveTeeAim = function(hole) {
+    if (hole.aimPoint) return hole.aimPoint;
+    if (hole.flag) {
+        let surf = window.localGetTerrainAt ? window.localGetTerrainAt(hole.flag.x, -hole.flag.z) : null;
+        return { x: hole.flag.x, y: surf ? surf.z : (hole.flag.y || 0), z: hole.flag.z };
+    }
+    let fw = (hole.fairways || []).find(function(f) { return f && f.points && f.points.length >= 3; });
+    if (!fw) return null;
+    let fx = 0, fz = 0;
+    fw.points.forEach(function(p) { fx += p.x; fz += p.z; });
+    fx /= fw.points.length; fz /= fw.points.length;
+    let fs = window.localGetTerrainAt ? window.localGetTerrainAt(fx, -fz) : null;
+    return { x: fx, y: fs ? fs.z : 0, z: fz };
+};
+
+// Aim point falls back to the flag (or the fairway) so the tee flow never stalls on step one.
+// Mutates the hole: call it inside the undo boundary.
 window.ensureTeeAimPoint = function(hole) {
     if (hole.aimPoint) return true;
-    if (!hole.flag) {
-        // Fairway-first: aim at the middle of the fairway until a flag exists
-        let fw = (hole.fairways || []).find(function(f) { return f && f.points && f.points.length >= 3; });
-        if (!fw) return false;
-        let fx = 0, fz = 0;
-        fw.points.forEach(function(p) { fx += p.x; fz += p.z; });
-        fx /= fw.points.length; fz /= fw.points.length;
-        let fs = window.localGetTerrainAt ? window.localGetTerrainAt(fx, -fz) : null;
-        let fy = fs ? fs.z : 0;
-        hole.aimPoint = { x: fx, y: fy, z: fz };
-        if (hole.aimMesh && window._arcadeScene) window._arcadeScene.remove(hole.aimMesh);
-        if (typeof window.createAimPointMarker === 'function') {
-            hole.aimMesh = window.createAimPointMarker(fx, fy, fz, window.currentHoleIndex + 1);
-        }
-        return true;
-    }
-    let surf = window.localGetTerrainAt ? window.localGetTerrainAt(hole.flag.x, -hole.flag.z) : null;
-    let ay = surf ? surf.z : (hole.flag.y || 0);
-    hole.aimPoint = { x: hole.flag.x, y: ay, z: hole.flag.z };
+    let aim = window.deriveTeeAim(hole);
+    if (!aim) return false;
+    hole.aimPoint = { x: aim.x, y: aim.y, z: aim.z };
     if (hole.aimMesh && window._arcadeScene) window._arcadeScene.remove(hole.aimMesh);
     if (typeof window.createAimPointMarker === 'function') {
-        hole.aimMesh = window.createAimPointMarker(hole.aimPoint.x, ay, hole.aimPoint.z, window.currentHoleIndex + 1);
+        hole.aimMesh = window.createAimPointMarker(aim.x, aim.y, aim.z, window.currentHoleIndex + 1);
     }
     return true;
 };
@@ -4113,8 +4114,7 @@ window.activateTeeLayoutMode = function() {
 
 window.buildStandardTeeLayout = function(x, z) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-    if (hole) window.ensureTeeAimPoint(hole);   // fairway-first: derive the aim point before reading the target
-    let target = hole && (hole.aimPoint || hole.flag);
+    let target = hole && (hole.aimPoint || hole.flag || window.deriveTeeAim(hole));   // read-only until placement succeeds
     if (!target) { window._placingTeeLayout = false; return true; }
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
     ensureHoleTeeBoxes(hole);
