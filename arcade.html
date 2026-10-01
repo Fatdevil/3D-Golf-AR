@@ -15914,10 +15914,12 @@
     }, false);
     
     renderer.domElement.addEventListener('pointercancel', () => {
+        if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag();
         finalizeSculptStroke({ save: true });
     }, false);
     
     window.addEventListener('blur', () => {
+        if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag();
         finalizeSculptStroke({ save: true });
         isMeasuring = false;
     }, false);
@@ -20601,7 +20603,7 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=27"></script>
+<script src="green-studio.js?v=28"></script>
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>

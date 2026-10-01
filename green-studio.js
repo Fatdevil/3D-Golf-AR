@@ -1152,6 +1152,15 @@
             }
         }
 
+        // Pointer cancelled or window lost focus mid-drag: drop the ghost without moving the green
+        cancelWholeDrag() {
+            if (!this.draggingWhole) return;
+            this.draggingWhole = null;
+            if (this.group) this.group.position.set(0, 0, 0);
+            if (window.controls) window.controls.enabled = true;
+            document.body.style.cursor = 'default';
+        }
+
         onPointerUp(e) {
             let wasDragging = (this.draggingHandleIndex >= 0 || this.draggingArrow || this.draggingDrawNodeIndex >= 0 || !!this.draggingWhole);
 
