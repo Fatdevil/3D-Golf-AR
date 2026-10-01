@@ -1887,7 +1887,7 @@
                         <!-- Contextual Tip Banner -->
                         <div style="background:#1e293b; border-left:3px solid #4ade80; border-radius:4px; padding:6px 8px; margin-bottom:8px;">
                             <div id="gs-form-tip-text" style="color:#cbd5e1; font-size:9px; line-height:1.4;">
-                                💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Klicka på linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.
+                                💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Dra ringen i mitten</b> för att flytta hela greenen. <b>Klicka på linjen</b> för ny punkt, <b>högerklicka</b> för att ta bort.
                             </div>
                         </div>
 
@@ -15888,6 +15888,11 @@
         if (window.TeeStudio && window.TeeStudio.onPointerUp) {
             window.TeeStudio.onPointerUp(e);
         }
+        // Another pointer was released while the green is still being dragged by its own pointer:
+        // the studios above re-enable the camera, so keep it off until the dragging pointer ends
+        if (window.GreenStudio && window.GreenStudio.draggingWhole && typeof controls !== 'undefined' && controls) {
+            controls.enabled = false;
+        }
         if (typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
             activeRotatingTee = null;
             controls.enabled = true;
@@ -15897,7 +15902,7 @@
         finalizeSculptStroke({ save: true });
         if (typeof controls !== 'undefined' && controls) {
             let isHoldingStudioNode = (window.FairwayStudio && (window.FairwayStudio.draggingHandleIndex >= 0 || window.FairwayStudio.draggingDrawNodeIndex >= 0)) ||
-                                      (window.GreenStudio && (window.GreenStudio.draggingHandleIndex >= 0 || window.GreenStudio.draggingDrawNodeIndex >= 0)) ||
+                                      (window.GreenStudio && (window.GreenStudio.draggingHandleIndex >= 0 || window.GreenStudio.draggingDrawNodeIndex >= 0 || !!window.GreenStudio.draggingWhole)) ||
                                       (window.BunkerStudio && (window.BunkerStudio.draggingHandleIndex >= 0 || window.BunkerStudio.draggingDrawNodeIndex >= 0)) ||
                                       (window.TeeStudio && (window.TeeStudio.draggingHandleIndex >= 0 || window.TeeStudio.draggingDrawNodeIndex >= 0));
             if (!isHoldingStudioNode) {
@@ -15913,11 +15918,13 @@
         finalizeSculptStroke({ save: true });
     }, false);
     
-    renderer.domElement.addEventListener('pointercancel', () => {
+    renderer.domElement.addEventListener('pointercancel', (e) => {
+        if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag(e);
         finalizeSculptStroke({ save: true });
     }, false);
     
     window.addEventListener('blur', () => {
+        if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag();
         finalizeSculptStroke({ save: true });
         isMeasuring = false;
     }, false);
@@ -20601,7 +20608,7 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=26"></script>
+<script src="green-studio.js?v=31"></script>
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
