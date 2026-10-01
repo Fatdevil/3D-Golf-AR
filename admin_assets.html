@@ -1121,6 +1121,8 @@
             let theme = course.theme_data;
             if (typeof theme === 'string') { try { theme = JSON.parse(theme); } catch (e) { theme = null; } }
             const biomeName = theme && (theme.biomeId || theme.biome);
+            // start from the form's default world so a previous course's choice never lingers
+            document.getElementById('promote-world').selectedIndex = 0;
             if (biomeName) {
                 const b = String(biomeName).toLowerCase();
                 const worldKey = b.includes('desert') ? 'desert' : (b.includes('moon') ? 'moon' : 'grass');
