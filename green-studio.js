@@ -181,8 +181,9 @@
         // TAB & MODE CONTROLS
         // ====================================================================
         setTab(tabName) {
-            this.activeTab = tabName;
             this._visitedTabs = this._visitedTabs || {};
+            if (this.activeTab) this._visitedTabs[this.activeTab] = true;   // the tab being left counts as visited (Form is shown without setTab)
+            this.activeTab = tabName;
             this._visitedTabs[tabName] = true;
             ['form', 'lutning', 'klippning'].forEach(t => {
                 let chk = document.getElementById('gs-tabchk-' + t);
