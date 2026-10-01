@@ -182,6 +182,12 @@
         // ====================================================================
         setTab(tabName) {
             this.activeTab = tabName;
+            this._visitedTabs = this._visitedTabs || {};
+            this._visitedTabs[tabName] = true;
+            ['form', 'lutning', 'klippning'].forEach(t => {
+                let chk = document.getElementById('gs-tabchk-' + t);
+                if (chk) chk.textContent = (t !== tabName && this._visitedTabs[t]) ? ' ✓' : '';
+            });
 
             ['form', 'lutning', 'klippning'].forEach(t => {
                 let tabBtn = document.getElementById('gs-tab-' + t);
@@ -284,12 +290,12 @@
                     : "💡 <b>Drag golf balls</b> to adjust shape<br>Click line to add point • Right-click ball to remove";
             } else if (this.activeTab === 'lutning') {
                 th.innerHTML = isSv
-                    ? "💡 <b>Justera lutning och slänt</b> med reglagen eller dra pilen i 3D<br>Golfbollarna kan dras för att anpassa formen samtidigt"
-                    : "💡 <b>Adjust slope & elevation</b> with controls or drag the 3D arrow<br>Golf balls can also be dragged to shape simultaneously";
+                    ? "💡 <b>Välj hur brant</b> och åt vilket håll greenen lutar, eller dra pilen i 3D<br>Golfbollarna kan dras för att anpassa formen samtidigt"
+                    : "💡 <b>Pick how steep</b> and which way the green tilts, or drag the 3D arrow<br>Golf balls can also be dragged to shape simultaneously";
             } else if (this.activeTab === 'klippning') {
                 th.innerHTML = isSv
-                    ? "💡 <b>Välj klippmönster</b> och rullhastighet (stimpmeter) för greenen"
-                    : "💡 <b>Select mowing pattern</b> and stimpmeter roll speed for the green";
+                    ? "💡 <b>Välj gräsmönster</b> för greenen"
+                    : "💡 <b>Pick a grass pattern</b> for the green";
             }
             if (typeof window.updateBottomHUDLayout === 'function') {
                 window.updateBottomHUDLayout();
