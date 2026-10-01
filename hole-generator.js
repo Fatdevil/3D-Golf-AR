@@ -275,6 +275,8 @@
             (h.bunkers || []).forEach(function (b) { add(b && b.points); });
             (h.teeBoxes || []).forEach(function (t) { add(t && t.points); });
             if (h.flag) out.push(h.flag);
+            if (h.tees) for (let k in h.tees) { if (h.tees[k]) out.push(h.tees[k]); }   // loose / legacy tee markers
+            if (h.aimPoint) out.push(h.aimPoint);
         });
         return out;
     }
@@ -322,7 +324,7 @@
     function holeIsEmpty(hole) {
         let has = function (arr) { return (arr || []).some(function (o) { return o && o.points && o.points.length >= 3; }); };
         return !(hole.tees && (hole.tees.red || hole.tees.yellow || hole.tees.white || hole.tees.black)) &&
-            !hole.flag && !hole.greenData && !has(hole.fairways) && !has(hole.bunkers) && !has(hole.teeBoxes);
+            !hole.flag && !hole.aimPoint && !hole.greenData && !has(hole.fairways) && !has(hole.bunkers) && !has(hole.teeBoxes);
     }
 
     function surfaceY(x, z) {

@@ -6606,7 +6606,7 @@ window.executeSplineMountain = function() {
         let name = { tee: 'Tee', green: 'Green', fairway: 'Fairway', bunker: 'Bunker' };
         let next = !b.tee ? 'tee' : (!b.green ? 'green' : ((par >= 4 && !b.fairway && !sk) ? 'fairway' : null));
         let html = '';
-        if (!b.tee && !b.green && !b.fairway && !b.bunker && typeof window.generateRandomHole === 'function') {
+        if (!b.tee && !b.green && !b.fairway && !b.bunker && window.HoleGenerator && window.HoleGenerator.holeIsEmpty(hole)) {
             html += '<button type="button" onclick="generateRandomHole()" style="width:100%; margin-bottom:8px; background:linear-gradient(90deg,#a855f7,#6366f1); color:#fff; border:none; border-radius:6px; padding:7px 8px; font-weight:bold; font-size:12px; cursor:pointer;">🎲 ' + tr('hg_button', 'Slumpa ett hål') + ' (Par ' + Math.max(3, Math.min(5, par)) + ')</button>' +
                 '<div style="color:#64748b; font-size:10px; margin-bottom:8px;">' + tr('hg_hint', 'Appen lägger ut tee, fairway, green och bunkrar – du ändrar sedan som du vill.') + '</div>';
         }
