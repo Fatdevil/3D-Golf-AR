@@ -27,13 +27,14 @@
     const RULES = {
         3: { len: [105, 175], fairway: false, greenSide: [2, 3], fwBunkers: [0, 0], doglegChance: 0 },
         4: { len: [300, 400], fairway: true, greenSide: [1, 3], fwBunkers: [0, 2], doglegChance: 0.5 },
-        5: { len: [450, 540], fairway: true, greenSide: [1, 3], fwBunkers: [0, 2], doglegChance: 0.6 }
+        5: { len: [450, 540], fairway: true, greenSide: [1, 3], fwBunkers: [0, 2], doglegChance: 0.6 },
+        6: { len: [545, 600], fairway: true, greenSide: [1, 3], fwBunkers: [1, 2], doglegChance: 0.85 }
     };
     const FAIRWAY_START = 80;     // the tee layout spans ~56 m forward of the back tee
     const MAP_HALF = 300;
     const MAP_MARGIN = 25;
 
-    function clampPar(par) { return par <= 3 ? 3 : (par >= 5 ? 5 : 4); }
+    function clampPar(par) { return par <= 3 ? 3 : (par >= 6 ? 6 : par); }
 
     // ---- polygon helpers ----------------------------------------------------
     function segsCross(a, b, c, d) {
@@ -119,7 +120,7 @@
         if (R.fairway) {
             fwS0 = FAIRWAY_START;
             fwS1 = L - rg - 4;
-            let w0 = range(rng, par === 5 ? 38 : 34, par === 5 ? 50 : 46);
+            let w0 = range(rng, par >= 5 ? 38 : 34, par >= 5 ? 50 : 46);
             let samples = [];
             let n = Math.max(6, Math.round((fwS1 - fwS0) / 25));
             for (let i = 0; i <= n; i++) samples.push(fwS0 + (fwS1 - fwS0) * i / n);
@@ -187,7 +188,7 @@
             let nFw = Math.round(range(rng, R.fwBunkers[0] - 0.49, R.fwBunkers[1] + 0.49));
             for (let k = 0; k < nFw; k++) {
                 for (let tries = 0; tries < 12; tries++) {
-                    let s = range(rng, fwS0 + 40, Math.min(fwS1 - 70, fwS0 + 40 + (par === 5 ? 190 : 150)));
+                    let s = range(rng, fwS0 + 40, Math.min(fwS1 - 70, fwS0 + 40 + (par >= 5 ? 190 : 150)));
                     if (s <= fwS0 + 40) continue;
                     let c = pathAt(path, s);
                     let nrm = { f: -c.dir.l, l: c.dir.f };
@@ -241,6 +242,20 @@
         let c = Math.cos(heading), s = Math.sin(heading);
         return { x: origin.x + pt.f * c - pt.l * s, z: origin.z + pt.f * s + pt.l * c };
     }
+    // Footprints of the standard 3-box tee layout (matches buildStandardTeeLayout: 9 x 5 m boxes, 28 m apart, toward the aim)
+    function teeBoxes(plan, W) {
+        let target = plan.aim || plan.greenCenter;
+        let dx = target.f - plan.tee.f, dz = target.l - plan.tee.l, len = Math.hypot(dx, dz) || 1;
+        dx /= len; dz /= len;
+        let px = -dz, pz = dx, boxes = [];
+        for (let slot = 0; slot < 3; slot++) {
+            let cf = plan.tee.f + dx * 28 * slot, cl = plan.tee.l + dz * 28 * slot;
+            boxes.push([[-4.5, -2.5], [4.5, -2.5], [4.5, 2.5], [-4.5, 2.5]].map(function (o) {
+                return W({ f: cf + px * o[0] + dx * o[1], l: cl + pz * o[0] + dz * o[1] });
+            }));
+        }
+        return boxes;
+    }
     function worldPlan(plan, origin, heading) {
         let W = function (p) { return toWorld(p, origin, heading); };
         return {
@@ -249,6 +264,7 @@
             fairway: plan.fairway ? plan.fairway.map(W) : null,
             bunkers: plan.bunkers.map(function (b) { return b.pts.map(W); }),
             aim: plan.aim ? W(plan.aim) : null,
+            teeBoxes: teeBoxes(plan, W),
             centerline: (function () {
                 let pts = [];
                 for (let s = 0; s <= plan.length; s += 20) pts.push(W(pathAt(plan.path, s)));
@@ -261,6 +277,7 @@
         let all = wp.green.concat(wp.centerline);
         if (wp.fairway) all = all.concat(wp.fairway);
         wp.bunkers.forEach(function (b) { all = all.concat(b); });
+        (wp.teeBoxes || []).forEach(function (t) { all = all.concat(t); });
         return all;
     }
 
@@ -296,6 +313,7 @@
         let list = [wp.green];
         if (wp.fairway) list.push(wp.fairway);
         wp.bunkers.forEach(function (b) { list.push(b); });
+        (wp.teeBoxes || []).forEach(function (t) { list.push(t); });
         return list;
     }
     // Everything the hole covers: centre line, outlines and interiors
