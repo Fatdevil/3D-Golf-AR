@@ -264,44 +264,113 @@
         return all;
     }
 
-    // Points belonging to other holes (for keeping clear of them)
-    function otherHolePoints(holes, currentIndex) {
+    // ---- dense sampling (world x/z) so thin hazards and sparse polygons cannot slip between vertices
+    function densify(pts, step, closed) {
         let out = [];
-        (holes || []).forEach(function (h, i) {
-            if (!h || i === currentIndex) return;
-            let add = function (arr) { (arr || []).forEach(function (p) { if (p) out.push(p); }); };
-            if (h.greenData) add(h.greenData.points);
-            (h.fairways || []).forEach(function (f) { add(f && f.points); });
-            (h.bunkers || []).forEach(function (b) { add(b && b.points); });
-            (h.teeBoxes || []).forEach(function (t) { add(t && t.points); });
-            if (h.flag) out.push(h.flag);
-            if (h.tees) for (let k in h.tees) { if (h.tees[k]) out.push(h.tees[k]); }   // loose / legacy tee markers
-            if (h.aimPoint) out.push(h.aimPoint);
+        let n = pts.length;
+        for (let i = 0; i < (closed ? n : n - 1); i++) {
+            let a = pts[i], b = pts[(i + 1) % n];
+            let len = Math.hypot(b.x - a.x, b.z - a.z);
+            let k = Math.max(1, Math.ceil(len / step));
+            for (let j = 0; j < k; j++) out.push({ x: a.x + (b.x - a.x) * j / k, z: a.z + (b.z - a.z) * j / k });
+        }
+        if (!closed && n) out.push({ x: pts[n - 1].x, z: pts[n - 1].z });
+        return out;
+    }
+    function inPoly(x, z, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            let xi = poly[i].x, zi = poly[i].z, xj = poly[j].x, zj = poly[j].z;
+            if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) inside = !inside;
+        }
+        return inside;
+    }
+    function interior(poly, step) {
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        poly.forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+        let out = [];
+        for (let x = x0 + step / 2; x < x1; x += step) for (let z = z0 + step / 2; z < z1; z += step) if (inPoly(x, z, poly)) out.push({ x: x, z: z });
+        return out;
+    }
+    function polys(wp) {
+        let list = [wp.green];
+        if (wp.fairway) list.push(wp.fairway);
+        wp.bunkers.forEach(function (b) { list.push(b); });
+        return list;
+    }
+    // Everything the hole covers: centre line, outlines and interiors
+    function coverage(wp, edgeStep, fillStep) {
+        let out = densify(wp.centerline, edgeStep, false);
+        polys(wp).forEach(function (poly) {
+            out = out.concat(densify(poly, edgeStep, true));
+            if (fillStep) out = out.concat(interior(poly, fillStep));
         });
         return out;
     }
 
+    // Other holes: loose points (flags, markers) and polygons (kept apart so interiors can be tested)
+    function otherHoles(holes, currentIndex) {
+        let points = [], polygons = [];
+        (holes || []).forEach(function (h, i) {
+            if (!h || i === currentIndex) return;
+            let addPoly = function (o) { if (o && o.points && o.points.length >= 3) polygons.push(o.points); };
+            addPoly(h.greenData);
+            (h.fairways || []).forEach(addPoly);
+            (h.bunkers || []).forEach(addPoly);
+            (h.teeBoxes || []).forEach(addPoly);
+            if (h.flag) points.push(h.flag);
+            if (h.tees) for (let k in h.tees) { if (h.tees[k]) points.push(h.tees[k]); }   // loose / legacy tee markers
+            if (h.aimPoint) points.push(h.aimPoint);
+        });
+        return { points: points, polygons: polygons };
+    }
+
+    const CLEARANCE = 55;
+    function tooCloseToOthers(wp, others) {
+        if (!others) return false;
+        let pts = others.points || [], polygons = others.polygons || [];
+        if (!pts.length && !polygons.length) return false;
+        let mine = coverage(wp, 10, 0);
+        let c2 = CLEARANCE * CLEARANCE;
+        // bounding box of this hole, grown by the clearance, to skip distant polygons quickly
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        mine.forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+        x0 -= CLEARANCE; x1 += CLEARANCE; z0 -= CLEARANCE; z1 += CLEARANCE;
+        let near = function (q) { return q.x >= x0 && q.x <= x1 && q.z >= z0 && q.z <= z1; };
+        let hitPoint = function (q) { return mine.some(function (p) { let dx = p.x - q.x, dz = p.z - q.z; return dx * dx + dz * dz < c2; }); };
+        if (pts.filter(near).some(hitPoint)) return true;
+        for (let k = 0; k < polygons.length; k++) {
+            let poly = polygons[k];
+            if (!poly.some(near)) {
+                // no vertex nearby, but a long edge may still cross: test the polygon's own edges too
+                let xs = poly.map(function (q) { return q.x; }), zs = poly.map(function (q) { return q.z; });
+                if (Math.max.apply(null, xs) < x0 || Math.min.apply(null, xs) > x1 || Math.max.apply(null, zs) < z0 || Math.min.apply(null, zs) > z1) continue;
+            }
+            if (densify(poly, 10, true).some(hitPoint)) return true;
+            if (mine.some(function (p) { return inPoly(p.x, p.z, poly); })) return true;
+        }
+        return false;
+    }
+
     // Find a seed-determined spot on the map where the whole hole fits.
-    // env: { isWater(x,z), others: [{x,z}], half }
+    // env: { isWater(x,z), others: {points, polygons} (or a flat [{x,z}] list), half }
     function place(plan, rng, env) {
         let half = (env && env.half) || MAP_HALF;
         let limit = half - MAP_MARGIN;
+        let others = env && env.others;
+        if (Array.isArray(others)) others = { points: others, polygons: [] };
         for (let attempt = 0; attempt < 400; attempt++) {
             let origin = { x: range(rng, -limit, limit), z: range(rng, -limit, limit) };
             let heading = range(rng, 0, Math.PI * 2);
             let wp = worldPlan(plan, origin, heading);
-            let pts = footprint(wp);
-            let ok = pts.every(function (p) { return Math.abs(p.x) <= limit && Math.abs(p.z) <= limit; });
+            let ok = footprint(wp).every(function (p) { return Math.abs(p.x) <= limit && Math.abs(p.z) <= limit; });
             if (!ok) continue;
-            if (env && env.others && env.others.length) {
-                let clear = 55;
-                let c2 = clear * clear;
-                let near = wp.centerline.concat(wp.green).some(function (p) {
-                    return env.others.some(function (q) { let dx = p.x - q.x, dz = p.z - q.z; return dx * dx + dz * dz < c2; });
-                });
-                if (near) continue;
+            if (tooCloseToOthers(wp, others)) continue;
+            if (env && env.isWater) {
+                // sample at the water grid's resolution so a creek as narrow as one cell cannot slip between samples
+                let ws = env.waterStep || 2;
+                if (coverage(wp, ws, ws).some(function (p) { return env.isWater(p.x, p.z); })) continue;
             }
-            if (env && env.isWater && pts.some(function (p) { return env.isWater(p.x, p.z); })) continue;
             return { world: wp, origin: origin, heading: heading, attempts: attempt + 1 };
         }
         return null;
@@ -372,7 +441,8 @@
         let waterLevel = (root.waterTableLevel != null) ? root.waterTableLevel : -0.5;
         let env = {
             half: half,
-            others: otherHolePoints(root.courseHoles, root.currentHoleIndex),
+            others: otherHoles(root.courseHoles, root.currentHoleIndex),
+            waterStep: Math.min(3, (root.TERRAIN_SIZE || 600) / (root.TERRAIN_SEGS || 300)),
             isWater: function (x, z) { return surfaceY(x, z) < waterLevel + 0.15; }
         };
         let res = generatePlan({ par: par, seed: opts.seed }, env);
@@ -415,7 +485,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty
+        generatePlan: generatePlan, place: place, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     if (typeof module !== 'undefined' && module.exports) module.exports = root.HoleGenerator;
