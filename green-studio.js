@@ -892,7 +892,7 @@
             // Centre ring: start moving the whole green
             if (this.activeTab === 'form' && this.moveHandle && this.moveHandle.visible && raycaster && lastHitPoint) {
                 if (raycaster.intersectObject(this.moveHandle, true).length > 0) {
-                    this.draggingWhole = { sx: lastHitPoint.x, sz: lastHitPoint.z, cx: this.moveHandle.userData.cx, cz: this.moveHandle.userData.cz, dx: 0, dz: 0, hole: window.currentHoleIndex };
+                    this.draggingWhole = { sx: lastHitPoint.x, sz: lastHitPoint.z, cx: this.moveHandle.userData.cx, cz: this.moveHandle.userData.cz, dx: 0, dz: 0, hole: window.currentHoleIndex, pointerId: (e && e.pointerId !== undefined) ? e.pointerId : null };
                     if (window.controls) window.controls.enabled = false;
                     document.body.style.cursor = 'grabbing';
                     return true;
@@ -1099,7 +1099,7 @@
 
             // 1b. Dragging the whole green: the studio group slides as a ghost, the terrain is rebuilt on drop
             if (this.draggingWhole) {
-                if (lastHitPoint) {
+                if (lastHitPoint && this._isDragPointer(e)) {
                     let w = this.draggingWhole;
                     w.dx = lastHitPoint.x - w.sx;
                     w.dz = lastHitPoint.z - w.sz;
@@ -1154,8 +1154,16 @@
         }
 
         // Pointer cancelled or window lost focus mid-drag: drop the ghost without moving the green
-        cancelWholeDrag() {
+        // True when the event belongs to the pointer that started the whole-green drag (or carries no pointer id)
+        _isDragPointer(e) {
+            let w = this.draggingWhole;
+            if (!w || w.pointerId === null || w.pointerId === undefined) return true;
+            return !e || e.pointerId === undefined || e.pointerId === w.pointerId;
+        }
+
+        cancelWholeDrag(e) {
             if (!this.draggingWhole) return;
+            if (e && !this._isDragPointer(e)) return;
             this.draggingWhole = null;
             if (this.group) this.group.position.set(0, 0, 0);
             if (window.controls) window.controls.enabled = true;
@@ -1167,6 +1175,7 @@
 
             // Dropped the centre ring: move the green (flag, pins and terrain follow) unless it barely moved
             if (this.draggingWhole) {
+                if (!this._isDragPointer(e)) return;   // another finger/pointer: ignore until the dragging one ends
                 let w = this.draggingWhole;
                 this.draggingWhole = null;
                 this.group.position.set(0, 0, 0);

@@ -15913,8 +15913,8 @@
         finalizeSculptStroke({ save: true });
     }, false);
     
-    renderer.domElement.addEventListener('pointercancel', () => {
-        if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag();
+    renderer.domElement.addEventListener('pointercancel', (e) => {
+        if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag(e);
         finalizeSculptStroke({ save: true });
     }, false);
     
@@ -20603,7 +20603,7 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=29"></script>
+<script src="green-studio.js?v=30"></script>
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
