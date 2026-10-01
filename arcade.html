@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=6"></script>
+<script src="i18n.js?v=7"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -742,10 +742,11 @@
         <!-- HOLES FLYOUT STRIP -->
         <div id="flyout-holes-strip" class="flyout-strip" style="display:none;">
             <div class="flyout-header" style="display:flex; align-items:center; gap:6px;"><img src="icons/hole_3d.png" style="width:16px; height:16px; object-fit:contain;" alt=""><span data-i18n="flyout_holes_header">Hålbyggare</span></div>
-            <button id="flyout-hole-green" class="flyout-btn active" onclick="selectHoleComponent('GREEN', this)"><span>⛳</span> <span data-i18n="sb_type_green">Green</span></button>
-            <button id="flyout-hole-fairway" class="flyout-btn" onclick="selectHoleComponent('FAIRWAY', this)"><span>🏌️</span> <span data-i18n="sb_type_fairway">Fairway</span></button>
-            <button id="flyout-hole-bunker" class="flyout-btn" onclick="selectHoleComponent('BUNKER', this)"><span>🏖️</span> <span data-i18n="sb_type_bunker">Bunker</span></button>
-            <button id="flyout-hole-tee" class="flyout-btn" onclick="selectHoleComponent('TEE', this)"><span>🟦</span> <span data-i18n="sb_type_tee">Tee</span></button>
+            <button id="flyout-hole-tee" class="flyout-btn" onclick="selectHoleComponent('TEE', this)"><span>🟦</span> <span data-i18n="sb_type_tee">Tee</span><span id="hm-mark-tee" class="hm-mark" style="margin-left:auto; padding-left:8px; font-size:12px; font-weight:900;"></span></button>
+            <button id="flyout-hole-green" class="flyout-btn" onclick="selectHoleComponent('GREEN', this)"><span>⛳</span> <span data-i18n="sb_type_green">Green</span><span id="hm-mark-green" class="hm-mark" style="margin-left:auto; padding-left:8px; font-size:12px; font-weight:900;"></span></button>
+            <button id="flyout-hole-fairway" class="flyout-btn" onclick="selectHoleComponent('FAIRWAY', this)"><span>🏌️</span> <span data-i18n="sb_type_fairway">Fairway</span><span id="hm-mark-fairway" class="hm-mark" style="margin-left:auto; padding-left:8px; font-size:12px; font-weight:900;"></span></button>
+            <button id="flyout-hole-bunker" class="flyout-btn" onclick="selectHoleComponent('BUNKER', this)"><span>🏖️</span> <span data-i18n="sb_type_bunker">Bunker</span><span id="hm-mark-bunker" class="hm-mark" style="margin-left:auto; padding-left:8px; font-size:12px; font-weight:900;"></span></button>
+            <div id="hole-next-card" style="margin:6px 4px 2px; padding:8px; background:#1e293b; border:1px solid #334155; border-radius:8px; font-size:11px; color:#cbd5e1; line-height:1.4;"></div>
         </div>
 
         <!-- ENVIRONMENT FLYOUT STRIP -->
@@ -1417,7 +1418,8 @@
             color: #0f172a;
             border-color: #38bdf8;
         }
-        </style>
+                .flyout-btn.active .hm-mark { color: #0f172a !important; }
+    </style>
 
 
         <!-- PAINT Tool Panel (Freehand & Polygon) -->
@@ -20120,6 +20122,7 @@ window.triggerExplosion = function(x, y, z) {
                 if (typeof sculptBrushCursor !== 'undefined') sculptBrushCursor.visible = false;
             }
             window._smartBuilderType = type;
+            if (typeof window.updateHoleMenu === 'function') window.updateHoleMenu(true);
             if (window.smartGreenPoints && window.smartGreenPoints.length > 0 && typeof updateSmartGreenPreview === 'function') {
                 updateSmartGreenPreview();
             }
@@ -20609,7 +20612,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=33"></script>
+<script src="smart-builder.js?v=34"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
