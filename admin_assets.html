@@ -1109,15 +1109,26 @@
             const course = await res.json();
             studioSelectedCourse = course;
 
-            const slug = (course.name || 'plate').toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 30);
+            // åäö -> aao so Swedish names give a readable slug
+            const slug = (course.name || 'plate').toLowerCase()
+                .replace(/[åä]/g, 'a').replace(/ö/g, 'o')
+                .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 30) || 'plate';
             document.getElementById('promote-id').value = `${slug}_plate`;
             document.getElementById('promote-name-en').value = course.name || '';
             document.getElementById('promote-name-sv').value = course.name || '';
 
-            if (course.theme_data && course.theme_data.biome) {
-                const b = course.theme_data.biome.toLowerCase();
-                if (b.includes('desert')) document.getElementById('promote-world').value = 'desert';
-                else if (b.includes('moon')) document.getElementById('promote-world').value = 'moon';
+            // The builder saves the biome as theme_data.biomeId (older data may use .biome)
+            let theme = course.theme_data;
+            if (typeof theme === 'string') { try { theme = JSON.parse(theme); } catch (e) { theme = null; } }
+            const biomeName = theme && (theme.biomeId || theme.biome);
+            // start from the form's default world so a previous course's choice never lingers
+            document.getElementById('promote-world').selectedIndex = 0;
+            if (biomeName) {
+                const b = String(biomeName).toLowerCase();
+                const worldKey = b.includes('desert') ? 'desert' : (b.includes('moon') ? 'moon' : 'grass');
+                const worldSel = document.getElementById('promote-world');
+                // only pick worlds the form offers (the moon is hidden for now)
+                if ([...worldSel.options].some(o => o.value === worldKey)) worldSel.value = worldKey;
             }
 
             if (course.cover_image) {
