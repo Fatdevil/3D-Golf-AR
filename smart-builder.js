@@ -4113,6 +4113,7 @@ window.activateTeeLayoutMode = function() {
 
 window.buildStandardTeeLayout = function(x, z) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+    if (hole) window.ensureTeeAimPoint(hole);   // fairway-first: derive the aim point before reading the target
     let target = hole && (hole.aimPoint || hole.flag);
     if (!target) { window._placingTeeLayout = false; return true; }
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
@@ -5167,6 +5168,8 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
         hole.pins.easy = { ...hole.flag };
         hole.pins.medium = { ...hole.flag };
         hole.pins.hard = { ...hole.flag };
+        // Fairway-first holes: tee colours were ranked against a stand-in aim point, rank them against the new flag
+        if (window.autoAssignTeeColors) window.autoAssignTeeColors(hole);
     } else {
         let cy = (typeof window.getTerrainHeight === 'function')
             ? window.getTerrainHeight(hole.flag.x, hole.flag.z)
