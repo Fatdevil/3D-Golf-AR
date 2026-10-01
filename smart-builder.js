@@ -3565,7 +3565,8 @@ window.autoAssignTeeColors = function(hole) {
     let boxes = (hole.teeBoxes || []).filter(function(tb) { return tb.points && tb.points.length >= 3; });
     if (boxes.length === 0) return false;
 
-    let tgt = hole.aimPoint || hole.flag;
+    // Rank by distance to the flag (same rule as publish validation); the aim point only stands in until a flag exists
+    let tgt = hole.flag || hole.aimPoint;
     let ranked = boxes.map(function(tb, i) {
         let cx = 0, cz = 0;
         tb.points.forEach(function(p) { cx += p.x; cz += p.z; });
@@ -3988,16 +3989,32 @@ window.renderTeePickCard = function() {
         '<div style="color:#94a3b8; font-size:9.5px; line-height:1.35;">' + hint + '</div>' + layoutBtn;
 };
 
-// Aim point falls back to the flag so the tee flow never stalls on step one
+// Where the aim point would go if none is set: flag, else the middle of the first fairway. Read-only.
+window.deriveTeeAim = function(hole) {
+    if (hole.aimPoint) return hole.aimPoint;
+    if (hole.flag) {
+        let surf = window.localGetTerrainAt ? window.localGetTerrainAt(hole.flag.x, -hole.flag.z) : null;
+        return { x: hole.flag.x, y: surf ? surf.z : (hole.flag.y || 0), z: hole.flag.z };
+    }
+    let fw = (hole.fairways || []).find(function(f) { return f && f.points && f.points.length >= 3; });
+    if (!fw) return null;
+    let fx = 0, fz = 0;
+    fw.points.forEach(function(p) { fx += p.x; fz += p.z; });
+    fx /= fw.points.length; fz /= fw.points.length;
+    let fs = window.localGetTerrainAt ? window.localGetTerrainAt(fx, -fz) : null;
+    return { x: fx, y: fs ? fs.z : 0, z: fz };
+};
+
+// Aim point falls back to the flag (or the fairway) so the tee flow never stalls on step one.
+// Mutates the hole: call it inside the undo boundary.
 window.ensureTeeAimPoint = function(hole) {
     if (hole.aimPoint) return true;
-    if (!hole.flag) return false;
-    let surf = window.localGetTerrainAt ? window.localGetTerrainAt(hole.flag.x, -hole.flag.z) : null;
-    let ay = surf ? surf.z : (hole.flag.y || 0);
-    hole.aimPoint = { x: hole.flag.x, y: ay, z: hole.flag.z };
+    let aim = window.deriveTeeAim(hole);
+    if (!aim) return false;
+    hole.aimPoint = { x: aim.x, y: aim.y, z: aim.z };
     if (hole.aimMesh && window._arcadeScene) window._arcadeScene.remove(hole.aimMesh);
     if (typeof window.createAimPointMarker === 'function') {
-        hole.aimMesh = window.createAimPointMarker(hole.aimPoint.x, ay, hole.aimPoint.z, window.currentHoleIndex + 1);
+        hole.aimMesh = window.createAimPointMarker(aim.x, aim.y, aim.z, window.currentHoleIndex + 1);
     }
     return true;
 };
@@ -4046,7 +4063,8 @@ window.executeSmartTee = function() {
     normalizeTeeOwnership(hole);
 
     // Aim point: the flag is used automatically (inside the undo boundary), otherwise ask for one
-    if (!hole.aimPoint && !hole.flag) {
+    let fwAim = (hole.fairways || []).some(function(f) { return f && f.points && f.points.length >= 3; });
+    if (!hole.aimPoint && !hole.flag && !fwAim) {
         window.showBuildToast(isSv ? '🎯 Sätt en flagga eller siktpunkt först! Klicka på "Sätt siktpunkt" i Tee-panelen.' : '🎯 Place a flag or set an Aim Point first! Click "Set Aim Point" in the Tee panel.', '#ef4444');
         if (typeof window.activateAimMode === 'function') window.activateAimMode();
         return;
@@ -4084,7 +4102,7 @@ window.activateTeeLayoutMode = function() {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     if (!hole) return;
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-    if (!hole.aimPoint && !hole.flag) {
+    if (!hole.aimPoint && !hole.flag && !(hole.fairways || []).some(function(f) { return f && f.points && f.points.length >= 3; })) {
         window.showBuildToast(isSv ? '🎯 Sätt en flagga eller siktpunkt först.' : '🎯 Place a flag or set an Aim Point first.', '#ef4444');
         if (typeof window.activateAimMode === 'function') window.activateAimMode();
         return;
@@ -4096,7 +4114,7 @@ window.activateTeeLayoutMode = function() {
 
 window.buildStandardTeeLayout = function(x, z) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-    let target = hole && (hole.aimPoint || hole.flag);
+    let target = hole && (hole.aimPoint || hole.flag || window.deriveTeeAim(hole));   // read-only until placement succeeds
     if (!target) { window._placingTeeLayout = false; return true; }
     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
     ensureHoleTeeBoxes(hole);
@@ -5150,6 +5168,8 @@ window.applyGreenPipeline = function(hole, isInitial, updateTexture) {
         hole.pins.easy = { ...hole.flag };
         hole.pins.medium = { ...hole.flag };
         hole.pins.hard = { ...hole.flag };
+        // Fairway-first holes: tee colours were ranked against a stand-in aim point, rank them against the new flag
+        if (window.autoAssignTeeColors) window.autoAssignTeeColors(hole);
     } else {
         let cy = (typeof window.getTerrainHeight === 'function')
             ? window.getTerrainHeight(hole.flag.x, hole.flag.z)
@@ -6533,4 +6553,81 @@ window.executeSplineMountain = function() {
         if (window.showBuildToast) window.showBuildToast('⛰️ Mountain built!', '#38bdf8');
         if (typeof window.saveLevel === 'function') window.saveLevel();
     };
+})();
+
+
+// ---- Hålbyggare menu: status marks + "Next" suggestion (guides, never blocks) ----
+(function() {
+    let skipped = new WeakSet();   // holes where the user chose to skip the fairway (this session)
+    let lastSig = '';
+
+    function tr(key, fb) { return (window.t && window.t(key) !== key) ? window.t(key) : fb; }
+    function built(hole) {
+        let has = function(arr) { return (arr || []).some(function(o) { return o && o.points && o.points.length >= 3; }); };
+        return {
+            tee: !!(hole.tees && (hole.tees.red || hole.tees.yellow || hole.tees.white || hole.tees.black)),
+            green: !!(hole.flag || hole.greenData),
+            fairway: has(hole.fairways),
+            bunker: has(hole.bunkers)
+        };
+    }
+
+    window.updateHoleMenu = function(force) {
+        let strip = document.getElementById('flyout-holes-strip');
+        let card = document.getElementById('hole-next-card');
+        if (!strip || !card || !window.courseHoles) return;
+        if (!force && strip.style.display === 'none') return;
+        let hole = window.courseHoles[window.currentHoleIndex];
+        if (!hole) return;
+        let b = built(hole), par = hole.par || 4;
+        let lang = (window.getGolfLanguage && window.getGolfLanguage()) || 'sv';
+        let sk = skipped.has(hole);
+        let sig = [lang, window.currentHoleIndex, par, sk, b.tee, b.green, b.fairway, b.bunker].join('|');
+        if (!force && sig === lastSig) return;
+        lastSig = sig;
+
+        // required (tee, green) / recommended (fairway on par 4-5) / optional
+        let marks = {
+            tee: b.tee ? 'done' : 'need',
+            green: b.green ? 'done' : 'need',
+            fairway: b.fairway ? 'done' : (par >= 4 && !sk ? 'need' : 'opt'),
+            bunker: b.bunker ? 'done' : 'opt'
+        };
+        let sym = { done: ['✓', '#4ade80'], need: ['●', '#f59e0b'], opt: ['○', '#64748b'] };
+        let titles = { done: tr('hm_built', 'Byggd'), need: tr('hm_needed', 'Behövs'), opt: tr('hm_optional', 'Valfri') };
+        ['tee', 'green', 'fairway', 'bunker'].forEach(function(k) {
+            let el = document.getElementById('hm-mark-' + k);
+            if (!el) return;
+            el.textContent = sym[marks[k]][0];
+            el.style.color = sym[marks[k]][1];
+            el.title = titles[marks[k]];
+        });
+
+        let name = { tee: 'Tee', green: 'Green', fairway: 'Fairway', bunker: 'Bunker' };
+        let next = !b.tee ? 'tee' : (!b.green ? 'green' : ((par >= 4 && !b.fairway && !sk) ? 'fairway' : null));
+        let html = '';
+        if (next) {
+            html += '<div style="color:#94a3b8;">' + tr('hm_next', 'Nästa:') + ' <b style="color:#f1f5f9;">' + name[next] + '</b>' +
+                (next === 'fairway' ? ' <span style="color:#64748b;">(' + tr('hm_recommended', 'rekommenderas') + ')</span>' : '') + '</div>' +
+                '<div style="display:flex; gap:6px; margin-top:6px;">' +
+                '<button type="button" onclick="selectHoleComponent(\'' + next.toUpperCase() + '\')" style="flex:1; background:#38bdf8; color:#0f172a; border:none; border-radius:6px; padding:5px 8px; font-weight:bold; font-size:11px; cursor:pointer;">' + tr('hm_add', 'Bygg') + '</button>' +
+                (next === 'fairway' ? '<button type="button" onclick="skipHoleFairway()" style="background:transparent; color:#94a3b8; border:1px solid #475569; border-radius:6px; padding:5px 8px; font-size:11px; cursor:pointer;">' + tr('hm_skip', 'Hoppa över') + '</button>' : '') +
+                '</div>';
+        } else {
+            html += '<div style="color:#4ade80; font-weight:bold;">' + tr('hm_ready', '✓ Hålet är klart – lägg gärna till bunkrar') + '</div>';
+        }
+        if (par === 3 && !b.fairway) {
+            html += '<div style="color:#64748b; margin-top:5px; font-size:10px;">' + tr('hm_par3_note', 'Många par 3 har ingen fairway.') + '</div>';
+        }
+        card.innerHTML = html;
+    };
+
+    window.skipHoleFairway = function() {
+        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        if (!hole) return;
+        skipped.add(hole);
+        window.updateHoleMenu(true);
+    };
+
+    setInterval(function() { window.updateHoleMenu(false); }, 700);
 })();

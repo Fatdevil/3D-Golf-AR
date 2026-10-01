@@ -206,6 +206,15 @@
             "spline_clear": "❌ Clear drawn line",
 
             // Hole Builder (Smart Builder)
+            "hm_next": "Next:",
+            "hm_add": "Build",
+            "hm_skip": "Skip",
+            "hm_built": "Built",
+            "hm_needed": "Needed",
+            "hm_optional": "Optional",
+            "hm_recommended": "recommended",
+            "hm_ready": "✓ Hole is ready – add bunkers if you like",
+            "hm_par3_note": "Many par 3s have no fairway.",
             "flyout_holes_header": "Hole Builder",
             "sb_type_green": "Green",
             "sb_type_fairway": "Fairway",
@@ -589,6 +598,15 @@
             "spline_clear": "❌ Rensa ritad linje",
 
             // Hole Builder (Smart Builder)
+            "hm_next": "Nästa:",
+            "hm_add": "Bygg",
+            "hm_skip": "Hoppa över",
+            "hm_built": "Byggd",
+            "hm_needed": "Behövs",
+            "hm_optional": "Valfri",
+            "hm_recommended": "rekommenderas",
+            "hm_ready": "✓ Hålet är klart – lägg gärna till bunkrar",
+            "hm_par3_note": "Många par 3 har ingen fairway.",
             "flyout_holes_header": "Hålbyggare",
             "sb_type_green": "Green",
             "sb_type_fairway": "Fairway",
