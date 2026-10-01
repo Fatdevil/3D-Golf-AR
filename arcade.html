@@ -20105,16 +20105,13 @@ window.triggerExplosion = function(x, y, z) {
         function setSmartBuilderType(type) {
             let oldType = window._smartBuilderType;
             if (type !== 'TEE') window._placingTeeLayout = false;
-            if (oldType && oldType !== type && window.smartGreenPoints && window.smartGreenPoints.length > 0) {
-                // Preserve uncommitted spline draft across sub-tools so switching from Green to Fairway keeps the shape
-                let curHole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
-                if (type === 'FAIRWAY' && curHole) {
-                    curHole.activeFairwayIndex = null;
-                } else if (type === 'BUNKER' && curHole) {
-                    curHole.activeBunkerIndex = null;
-                } else if (type === 'TEE' && curHole) {
-                    curHole.activeTeeBoxIndex = null;
-                }
+            // Switching builder tool throws away an unbuilt draft, so points never leak from one tool into another
+            // (Tee and its aim-point mode count as the same tool)
+            let sameGroup = (oldType === type) || ((oldType === 'TEE' || oldType === 'AIM') && (type === 'TEE' || type === 'AIM'));
+            if (oldType && !sameGroup && window.smartGreenPoints && window.smartGreenPoints.length > 0) {
+                if (typeof clearSmartGreen === 'function') clearSmartGreen();
+                let curLangDraft = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
+                if (typeof showBuildToast === 'function') showBuildToast(curLangDraft === 'en' ? '🧹 Unbuilt points cleared' : '🧹 Ej byggda punkter rensades', '#94a3b8');
             }
 
             // Reset brush cursor size if leaving STAMP mode
