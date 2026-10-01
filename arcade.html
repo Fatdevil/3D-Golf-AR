@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=4"></script>
+<script src="i18n.js?v=6"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -1792,7 +1792,7 @@
             <!-- Dynamic Contextual Header -->
             <div id="sb-context-header" style="color:#4ade80; font-size:12px; font-weight:bold; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(74,222,128,0.25); padding-bottom:6px;">
                 <span id="sb-context-icon" style="font-size:14px;">⛳</span>
-                <span id="sb-context-title" data-i18n="sb_green_header">Green & Klippning</span>
+                <span id="sb-context-title" data-i18n="sb_green_header">Din green</span>
             </div>
             
             <!-- Compact Hole & Par selector row (Hidden in Green Studio - top bar handles hole & par) -->
@@ -1870,15 +1870,15 @@
                     <div style="display:flex; background:#0b1120; border:1px solid #1e293b; border-radius:10px; padding:3px; margin-bottom:10px; gap:4px;">
                         <button type="button" id="gs-tab-form" onclick="window.GreenStudio.setTab('form')" style="flex:1; background:#4ade80; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(74,222,128,0.3);">
                             <span style="font-size:12px;">📐</span>
-                            <span>1. Form</span>
+                            <span><span data-i18n="gs_tab_shape">1. Form</span><span id="gs-tabchk-form"></span></span>
                         </button>
                         <button type="button" id="gs-tab-lutning" onclick="window.GreenStudio.setTab('lutning')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
                             <span style="font-size:12px;">⛰️</span>
-                            <span>2. Lutning</span>
+                            <span><span data-i18n="gs_tab_slope">2. Sluttning</span><span id="gs-tabchk-lutning"></span></span>
                         </button>
                         <button type="button" id="gs-tab-klippning" onclick="window.GreenStudio.setTab('klippning')" style="flex:1; background:transparent; color:#94a3b8; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px;">
                             <span style="font-size:12px;">🚜</span>
-                            <span>3. Klippning</span>
+                            <span><span data-i18n="gs_tab_grass">3. Gräs</span><span id="gs-tabchk-klippning"></span></span>
                         </button>
                     </div>
 
@@ -1894,7 +1894,7 @@
                         <!-- Foregreen-bredd -->
                         <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Foregreen-bredd</span>
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="gs_edge_label">Kant runt green</span>
                                 <span id="gs-foregreen-val" style="color:#4ade80; font-weight:700; font-size:9.5px;">1.00m</span>
                             </div>
                             <input type="range" id="gs-foregreen-slider" min="0" max="3" value="1.0" step="0.25" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.foregreenWidth = parseFloat(this.value); window.applyGreenPipeline(hole, false, true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#4ade80; cursor:pointer;">
@@ -1902,40 +1902,41 @@
 
                         <!-- Form Tab Actions Footer -->
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:6px;">
-                            <button type="button" onclick="window.activateMoveFlagMode()" style="background:#1e293b; color:#fbbf24; border:1px solid rgba(251,191,36,0.5); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;">🎯 Flytta flagga</button>
-                            <button type="button" onclick="window.redrawSmartGreen()" style="background:#1e293b; color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;" title="Ändra formen på greenen">✏️ Rita om green</button>
+                            <button type="button" onclick="window.activateMoveFlagMode()" style="background:#1e293b; color:#fbbf24; border:1px solid rgba(251,191,36,0.5); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;">🎯 <span data-i18n="gs_move_flag">Flytta flagga</span></button>
+                            <button type="button" onclick="window.redrawSmartGreen()" style="background:#1e293b; color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;" title="Ändra formen på greenen">✏️ <span data-i18n="gs_redraw_green">Rita om green</span></button>
                         </div>
-                        <button type="button" onclick="window.deleteSmartGreen()" style="width:100%; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.4); padding:6px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer; margin-bottom:8px;">🗑️ Radera green & återställ mark</button>
 
                         <!-- Step 1 -> Step 2 Guidance Button -->
                         <button type="button" onclick="window.GreenStudio.setTab('lutning')" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0284c7); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(56,189,248,0.25); transition:transform 0.1s;">
-                            <span>Steg 2: Justera lutning & höjd</span> ➔
+                            <span data-i18n="gs_next_slope">Nästa: Sluttning</span> ➔
                         </button>
+                        <!-- Destructive action: small and out of the way (confirm dialog is in deleteSmartGreen) -->
+                        <button type="button" onclick="window.deleteSmartGreen()" style="width:100%; background:transparent; color:#f87171; border:none; padding:10px 4px 2px; font-size:9.5px; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:2px; opacity:0.8;">🗑️ <span data-i18n="gs_delete_green">Radera green…</span></button>
                     </div>
 
                     <!-- TAB 2: LUTNING -->
                     <div id="gs-content-lutning" style="display:none;">
                         <!-- Lutningsmallar (Slope Preset Cards) -->
-                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">Lutningsmallar</div>
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:4px;" data-i18n="gs_slope_presets">Hur brant?</div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:8px;">
                             <button type="button" id="gs-slope-card-flat" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='FLAT'; h.greenData.tiltPct=0.005; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
-                                Platt <span style="font-size:8px; opacity:0.8;">0.5%</span>
+                                <span data-i18n="gs_slope_flat">Platt</span> <span style="font-size:8px; opacity:0.8;">0.5%</span>
                             </button>
                             <button type="button" id="gs-slope-card-easy" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='EASY'; h.greenData.tiltPct=0.015; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
-                                Lätt <span style="font-size:8px; opacity:0.8;">1.5%</span>
+                                <span data-i18n="gs_slope_easy">Lätt</span> <span style="font-size:8px; opacity:0.8;">1.5%</span>
                             </button>
                             <button type="button" id="gs-slope-card-med" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='MED'; h.greenData.tiltPct=0.025; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
-                                Medel <span style="font-size:8px; opacity:0.8;">2.5%</span>
+                                <span data-i18n="gs_slope_med">Medel</span> <span style="font-size:8px; opacity:0.8;">2.5%</span>
                             </button>
                             <button type="button" id="gs-slope-card-hard" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.difficulty='HARD'; h.greenData.tiltPct=0.04; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
-                                Svår <span style="font-size:8px; opacity:0.8;">4.0%</span>
+                                <span data-i18n="gs_slope_hard">Svår</span> <span style="font-size:8px; opacity:0.8;">4.0%</span>
                             </button>
                         </div>
 
                         <!-- Lutning % Slider -->
                         <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Lutning %</span>
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="gs_tilt_label">Hur mycket lutar den?</span>
                                 <span id="gs-tilt-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">2.0%</span>
                             </div>
                             <input type="range" id="gs-tilt-slider" min="0.5" max="5.0" value="2.0" step="0.1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.tiltPct = parseFloat(this.value)/100; window.applyGreenPipeline(hole, false, false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
@@ -1944,10 +1945,10 @@
                         <!-- Riktning (Compass Rose + Mot flaggan) -->
                         <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:8px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Riktning</span>
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="gs_dir_label">Åt vilket håll?</span>
                                 <label style="display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; color:#38bdf8; cursor:pointer;">
                                     <input type="checkbox" id="gs-tilt-to-flag-cb" checked onchange="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.tiltToFlag=this.checked; window.applyGreenPipeline(h,false,false); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="accent-color:#38bdf8; cursor:pointer;">
-                                    Mot flaggan
+                                    <span data-i18n="gs_toward_flag">Mot flaggan</span>
                                 </label>
                             </div>
 
@@ -1963,10 +1964,10 @@
                                         <line x1="4" y1="34" x2="10" y2="34" stroke="#94a3b8" stroke-width="1.5"/>
                                         <line x1="58" y1="34" x2="64" y2="34" stroke="#94a3b8" stroke-width="1.5"/>
                                         <!-- Cardinal labels -->
-                                        <text x="34" y="15" fill="#38bdf8" font-size="8" font-weight="bold" text-anchor="middle">N</text>
-                                        <text x="56" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">Ö</text>
-                                        <text x="34" y="58" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">S</text>
-                                        <text x="12" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle">V</text>
+                                        <text x="34" y="15" fill="#38bdf8" font-size="8" font-weight="bold" text-anchor="middle" data-i18n="gs_dir_n">N</text>
+                                        <text x="56" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle" data-i18n="gs_dir_e">Ö</text>
+                                        <text x="34" y="58" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle" data-i18n="gs_dir_s">S</text>
+                                        <text x="12" y="37" fill="#94a3b8" font-size="8" font-weight="bold" text-anchor="middle" data-i18n="gs_dir_w">V</text>
                                     </svg>
                                     <!-- Rotating needle -->
                                     <div id="gs-compass-needle" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; transition:transform 0.2s ease;">
@@ -1982,19 +1983,22 @@
                                 <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
                                     <div id="gs-compass-deg" style="color:#38bdf8; font-size:11px; font-weight:800; text-align:center;">135° Sydost</div>
                                     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:2px;">
-                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(0)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">N</button>
-                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(90)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">Ö</button>
-                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(180)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">S</button>
-                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(270)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;">V</button>
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(0)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;" data-i18n="gs_dir_n">N</button>
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(90)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;" data-i18n="gs_dir_e">Ö</button>
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(180)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;" data-i18n="gs_dir_s">S</button>
+                                        <button type="button" onclick="if(window.GreenStudio) window.GreenStudio.setTiltDirection(270)" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:3px 0; font-size:8px; font-weight:700; cursor:pointer;" data-i18n="gs_dir_w">V</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                        <details id="gs-advanced" style="margin-bottom:8px;">
+                            <summary style="cursor:pointer; color:#94a3b8; font-size:10px; font-weight:700; padding:6px 8px; background:#1e293b; border:1px solid #334155; border-radius:6px; list-style:none;" data-i18n="gs_advanced">⚙️ Avancerat</summary>
+                            <div style="margin-top:8px;">
                         <!-- Greenens höjd slider -->
                         <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                                <span style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Green-höjd</span>
+                                <span style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="gs_height">Green-höjd</span>
                                 <span id="gs-elev-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">+0.0m</span>
                             </div>
                             <input type="range" id="gs-elev-slider" min="-2.0" max="4.0" value="0.0" step="0.1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.elevationOffset=parseFloat(this.value); window.applyGreenPipeline(hole, false, true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
@@ -2003,7 +2007,7 @@
                         <!-- Mjuk övergång / Slänt slider -->
                         <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                                <span style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Mjuk övergång (Slänt)</span>
+                                <span style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="gs_blend">Mjuk övergång (Slänt)</span>
                                 <span id="gs-blend-val" style="color:#38bdf8; font-weight:700; font-size:9.5px;">8m</span>
                             </div>
                             <input type="range" id="gs-blend-slider" min="3" max="18" value="8" step="1" oninput="let hole=window.courseHoles[window.currentHoleIndex]; if(hole&&hole.greenData){ hole.greenData.blendDistance = parseFloat(this.value); window.applyGreenPipeline(hole, false, true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
@@ -2011,76 +2015,79 @@
 
                         <!-- 3D Rutnät, Fallinjer & Heatmap Visualisering -->
                         <div style="background:#1e293b; border-radius:6px; padding:8px 8px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; border:1px solid #334155;">
-                            <div style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;">Greenläsning i 3D (GSPro & TrackMan)</div>
+                            <div style="color:#38bdf8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="gs_read3d">Greenläsning i 3D (GSPro & TrackMan)</div>
                             
                             <!-- 3-lägesväljare: Av / Gridd & Bollar / Heatmap -->
                             <div style="display:flex; gap:3px; background:rgba(15,23,42,0.6); padding:3px; border-radius:6px; border:1px solid #334155;">
-                                <button type="button" id="gs-slope-mode-off" onclick="window.cycleGreenSlopeMode('OFF')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Inget rutnät eller heatmap">Av</button>
-                                <button type="button" id="gs-slope-mode-grid" onclick="window.cycleGreenSlopeMode('GRID')" style="flex:1.3; background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="2m rutnät med linjeföljande rörliga pärlor">⚡ Gridd & Bollar</button>
+                                <button type="button" id="gs-slope-mode-off" onclick="window.cycleGreenSlopeMode('OFF')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Inget rutnät eller heatmap" data-i18n="gs_mode_off">Av</button>
+                                <button type="button" id="gs-slope-mode-grid" onclick="window.cycleGreenSlopeMode('GRID')" style="flex:1.3; background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="2m rutnät med linjeföljande rörliga pärlor" data-i18n="gs_mode_grid">⚡ Gridd & Bollar</button>
                                 <button type="button" id="gs-slope-mode-heatmap" onclick="window.cycleGreenSlopeMode('HEATMAP')" style="flex:1.1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:5px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Fullständig färggradient över greenytan utan bollar">🌈 Heatmap</button>
                             </div>
 
                             <!-- Rutnät Täckning: Hela komplexet vs Endast green -->
                             <div id="gs-grid-coverage-box" style="display:flex; flex-direction:column; gap:3px; background:rgba(15,23,42,0.6); padding:5px 6px; border-radius:5px; border:1px solid #334155;">
-                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Täckning</span>
+                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;" data-i18n="gs_cov">Täckning</span>
                                 <div style="display:flex; gap:4px;">
-                                    <button type="button" id="gs-grid-cov-all" onclick="window.setGreenGridCoverage('ALL')" style="flex:1; background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck hela greenen inklusive foregreen (TrackMan & GSPro standard)">Hela komplexet</button>
-                                    <button type="button" id="gs-grid-cov-green" onclick="window.setGreenGridCoverage('GREEN_ONLY')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck enbart puttytan">Endast green</button>
+                                    <button type="button" id="gs-grid-cov-all" onclick="window.setGreenGridCoverage('ALL')" style="flex:1; background:rgba(56,189,248,0.25); color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck hela greenen inklusive foregreen (TrackMan & GSPro standard)" data-i18n="gs_cov_all">Hela komplexet</button>
+                                    <button type="button" id="gs-grid-cov-green" onclick="window.setGreenGridCoverage('GREEN_ONLY')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Täck enbart puttytan" data-i18n="gs_cov_green">Endast green</button>
                                 </div>
                             </div>
 
                             <!-- Rutnät Färgkodning: TrackMan Heatmap vs Vit -->
                             <div id="gs-grid-style-box" style="display:flex; flex-direction:column; gap:3px; background:rgba(15,23,42,0.6); padding:5px 6px; border-radius:5px; border:1px solid #334155;">
-                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;">Rutnätsstil (vid gridd-läge)</span>
+                                <span style="color:#94a3b8; font-size:8px; font-weight:700; text-transform:uppercase;" data-i18n="gs_style">Rutnätsstil (vid gridd-läge)</span>
                                 <div style="display:flex; gap:4px;">
-                                    <button type="button" id="gs-grid-style-heatmap" onclick="window.setGreenGridStyle('HEATMAP')" style="flex:1; background:rgba(74,222,128,0.25); color:#4ade80; border:1px solid #4ade80; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="TrackMan färgkarta: Blå=Platt, Gul=Lätt, Orange=Medel, Röd=Brant">⚡ TrackMan Färg</button>
-                                    <button type="button" id="gs-grid-style-white" onclick="window.setGreenGridStyle('WHITE')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Klassisk vit trådmodell">Klassiskt Vit</button>
+                                    <button type="button" id="gs-grid-style-heatmap" onclick="window.setGreenGridStyle('HEATMAP')" style="flex:1; background:rgba(74,222,128,0.25); color:#4ade80; border:1px solid #4ade80; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="TrackMan färgkarta: Blå=Platt, Gul=Lätt, Orange=Medel, Röd=Brant" data-i18n="gs_style_heat">⚡ TrackMan Färg</button>
+                                    <button type="button" id="gs-grid-style-white" onclick="window.setGreenGridStyle('WHITE')" style="flex:1; background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 2px; font-size:8.5px; font-weight:700; cursor:pointer;" title="Klassisk vit trådmodell" data-i18n="gs_style_white">Klassiskt Vit</button>
                                 </div>
                             </div>
 
                             <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                                <span style="color:#94a3b8; font-size:9px; font-weight:600;">〰️ Visa höjdkurvor (10cm)</span>
+                                <span style="color:#94a3b8; font-size:9px; font-weight:600;" data-i18n="gs_contours">〰️ Visa höjdkurvor (10cm)</span>
                                 <input type="checkbox" id="gs-show-contours-cb" onchange="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.showContours=this.checked; if(window.GreenStudio) window.GreenStudio.sync(); }" style="accent-color:#38bdf8; cursor:pointer;">
                             </label>
                         </div>
 
+                        </div>
+                        </details>
+
                         <!-- Lutning Footer: Reset -->
                         <div style="margin-bottom:8px;">
-                            <button type="button" onclick="window.resetGreenSlope()" style="width:100%; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:7px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;">↺ Återställ lutning & höjd</button>
+                            <button type="button" onclick="window.resetGreenSlope()" style="width:100%; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:7px 4px; font-size:9.5px; border-radius:6px; font-weight:700; cursor:pointer;"><span data-i18n="gs_reset_slope">↺ Återställ lutning & höjd</span></button>
                         </div>
 
                         <!-- Step 2 -> Step 3 Guidance Button -->
                         <button type="button" onclick="window.GreenStudio.setTab('klippning')" style="width:100%; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(74,222,128,0.25); transition:transform 0.1s;">
-                            <span>Steg 3: Klippmönster & hastighet</span> ➔
+                            <span data-i18n="gs_next_grass">Nästa: Gräsmönster</span> ➔
                         </button>
                     </div>
 
                     <!-- TAB 3: KLIPPNING & FINISH -->
                     <div id="gs-content-klippning" style="display:none;">
                         <!-- Mowing Pattern Header -->
-                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">Klippmönster</div>
+                        <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:6px;" data-i18n="gs_grass_header">Gräsmönster</div>
                         
                         <!-- 4 Mowing Pattern Cards Grid -->
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">
                             <div id="gs-mow-solid" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='SOLID'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
                                 <div style="font-size:16px; margin-bottom:4px;">━</div>
-                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Slät</div>
-                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Klassisk ren gräsyta</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="gs_mow_solid">Slät</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="gs_mow_solid_d">Klassisk ren gräsyta</div>
                             </div>
                             <div id="gs-mow-stripes" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='STRIPES'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
                                 <div style="font-size:16px; margin-bottom:4px;">≡</div>
-                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Ränder</div>
-                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Klassiska linjer</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="gs_mow_stripes">Ränder</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="gs_mow_stripes_d">Klassiska linjer</div>
                             </div>
                             <div id="gs-mow-checkerboard" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='CHECKERBOARD'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
                                 <div style="font-size:16px; margin-bottom:4px;">▦</div>
-                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Schack</div>
-                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Prestige-rutmönster</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="gs_mow_check">Schack</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="gs_mow_check_d">Prestige-rutmönster</div>
                             </div>
                             <div id="gs-mow-diamond" onclick="let h=window.courseHoles[window.currentHoleIndex]; if(h&&h.greenData){ h.greenData.mowPattern='DIAMOND'; window.applyGreenPipeline(h,false,true); if(window.GreenStudio) window.GreenStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.2s;">
                                 <div style="font-size:16px; margin-bottom:4px;">◈</div>
-                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;">Diamant</div>
-                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;">Diagonala rutor</div>
+                                <div style="font-size:10px; font-weight:800; color:#cbd5e1;" data-i18n="gs_mow_diamond">Diamant</div>
+                                <div style="font-size:7.5px; color:#64748b; margin-top:2px;" data-i18n="gs_mow_diamond_d">Diagonala rutor</div>
                             </div>
                         </div>
 
@@ -2089,14 +2096,14 @@
                             <div style="display:flex; align-items:flex-start; gap:6px;">
                                 <span style="font-size:12px; line-height:1.2;">ℹ️</span>
                                 <div style="color:#94a3b8; font-size:8.5px; line-height:1.4;">
-                                    <b style="color:#38bdf8;">Spelförhållanden:</b> Greenhastighet (Stimp) och fasthet bestäms inför varje matchstart för hela banan.
+                                    <b style="color:#38bdf8;" data-i18n="gs_conditions_title">Spelförhållanden:</b> <span data-i18n="gs_conditions_text">Greenhastighet (Stimp) och fasthet bestäms inför varje matchstart för hela banan.</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Finish Button -->
                         <button type="button" onclick="if(typeof setTool==='function') setTool('INSPECT')" style="width:100%; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; border:none; padding:9px 8px; font-size:11px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 12px rgba(74,222,128,0.3); transition:transform 0.1s;">
-                            ✔ <span>Klar med greenen!</span>
+                            ✔ <span data-i18n="gs_finish">Klar med greenen!</span>
                         </button>
                     </div>
                 </div>
@@ -20166,7 +20173,7 @@ window.triggerExplosion = function(x, y, z) {
 
             // Dynamic Contextual Header & Colors
             const config = {
-                GREEN: { icon: '⛳', titleKey: 'sb_green_header', title: 'Green & Klippning', color: '#4ade80', btnKey: 'sb_build_green', btnDefault: '⛳ Build Green', btnBg: 'linear-gradient(135deg, #4ade80, #22c55e)' },
+                GREEN: { icon: '⛳', titleKey: 'sb_green_header', title: 'Din green', color: '#4ade80', btnKey: 'sb_build_green', btnDefault: '⛳ Build Green', btnBg: 'linear-gradient(135deg, #4ade80, #22c55e)' },
                 FAIRWAY: { icon: '🏌️', titleKey: 'sb_fairway_header', title: 'Fairway & Rough', color: '#7db952', btnKey: 'sb_build_fairway', btnDefault: '🏌️ Build Fairway', btnBg: 'linear-gradient(135deg, #7db952, #6b9e3d)' },
                 BUNKER: { icon: '🏖️', titleKey: 'sb_bunker_header', title: 'Bunker & Sand', color: '#f59e0b', btnKey: 'sb_build_bunker', btnDefault: '🏖️ Build Bunker', btnBg: 'linear-gradient(135deg, #f59e0b, #d97706)' },
                 TEE: { icon: '🟦', titleKey: 'sb_tee_header', title: 'Tee Box & Markörer', color: '#38bdf8', btnKey: 'sb_build_tee', btnDefault: '🟦 Build Tee Box', btnBg: 'linear-gradient(135deg, #38bdf8, #0ea5e9)' },
@@ -20182,6 +20189,8 @@ window.triggerExplosion = function(x, y, z) {
                 let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
                 if (window.i18n && window.i18n[curLang] && window.i18n[curLang][cfg.titleKey]) {
                     titleEl.textContent = window.i18n[curLang][cfg.titleKey];
+                } else if (typeof window.t === 'function' && window.t(cfg.titleKey) !== cfg.titleKey) {
+                    titleEl.textContent = window.t(cfg.titleKey);   // i18n.js dictionary
                 } else {
                     titleEl.textContent = cfg.title;
                 }
@@ -20592,7 +20601,7 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=23"></script>
+<script src="green-studio.js?v=26"></script>
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
