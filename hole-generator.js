@@ -308,6 +308,30 @@
         return out;
     }
 
+    // Lazy version of coverage(): stops at the first point where pred() is true, nothing is materialised
+    function anyCovered(wp, edgeStep, fillStep, pred) {
+        let edge = function (a, b) {
+            let k = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / edgeStep));
+            for (let j = 0; j <= k; j++) if (pred(a.x + (b.x - a.x) * j / k, a.z + (b.z - a.z) * j / k)) return true;
+            return false;
+        };
+        let line = wp.centerline;
+        for (let i = 0; i < line.length - 1; i++) if (edge(line[i], line[i + 1])) return true;
+        let list = polys(wp);
+        for (let q = 0; q < list.length; q++) {
+            let poly = list[q];
+            for (let i = 0; i < poly.length; i++) if (edge(poly[i], poly[(i + 1) % poly.length])) return true;
+            if (fillStep) {
+                let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+                poly.forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+                for (let x = x0 + fillStep / 2; x < x1; x += fillStep)
+                    for (let z = z0 + fillStep / 2; z < z1; z += fillStep)
+                        if (inPoly(x, z, poly) && pred(x, z)) return true;
+            }
+        }
+        return false;
+    }
+
     // Other holes: loose points (flags, markers) and polygons (kept apart so interiors can be tested)
     function otherHoles(holes, currentIndex) {
         let points = [], polygons = [];
@@ -367,9 +391,11 @@
             if (!ok) continue;
             if (tooCloseToOthers(wp, others)) continue;
             if (env && env.isWater) {
-                // sample at the water grid's resolution so a creek as narrow as one cell cannot slip between samples
+                // coarse pass first (cheap, rejects most wet spots), then a pass at the water grid's resolution
+                // so a creek as narrow as one cell cannot slip between samples
                 let ws = env.waterStep || 2;
-                if (coverage(wp, ws, ws).some(function (p) { return env.isWater(p.x, p.z); })) continue;
+                if (anyCovered(wp, 6, 12, env.isWater)) continue;
+                if (anyCovered(wp, ws, ws, env.isWater)) continue;
             }
             return { world: wp, origin: origin, heading: heading, attempts: attempt + 1 };
         }
@@ -438,12 +464,12 @@
         }
         let par = clampPar(opts.par != null ? opts.par : (hole.par || 4));
         let half = (root.TERRAIN_SIZE || 600) / 2;
-        let waterLevel = (root.waterTableLevel != null) ? root.waterTableLevel : -0.5;
         let env = {
             half: half,
             others: otherHoles(root.courseHoles, root.currentHoleIndex),
             waterStep: Math.min(3, (root.TERRAIN_SIZE || 600) / (root.TERRAIN_SEGS || 300)),
-            isWater: function (x, z) { return surfaceY(x, z) < waterLevel + 0.15; }
+            // the terrain lookup already knows painted water and per-cell water levels
+            isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; }
         };
         let res = generatePlan({ par: par, seed: opts.seed }, env);
         if (!res) {
@@ -485,7 +511,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty
+        generatePlan: generatePlan, place: place, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     if (typeof module !== 'undefined' && module.exports) module.exports = root.HoleGenerator;
