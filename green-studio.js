@@ -589,15 +589,17 @@
             }
             let cx = 0, cz = 0;
             pts.forEach(p => { cx += p.x; cz += p.z; });
-            cx /= pts.length; cz /= pts.length;
-            let cy = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(cx, cz) : 0;
+            cx /= pts.length; cz /= pts.length;      // arithmetic centre: what moveSmartGreen expects
+            // The ring itself must sit on the putting surface, so concave greens use a guaranteed interior point
+            let hp = this._interiorPoint(pts, cx, cz);
+            let cy = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(hp.x, hp.z) : 0;
             let ring = new THREE.Mesh(this.geometries.moveRing, this.materials.move);
             ring.rotation.x = Math.PI / 2;
             let core = new THREE.Mesh(this.geometries.moveCore, this.materials.move);
             let mh = new THREE.Group();
             mh.add(ring);
             mh.add(core);
-            mh.position.set(cx, cy + 0.7, cz);
+            mh.position.set(hp.x, cy + 0.7, hp.z);
             mh.renderOrder = 999;
             mh.children.forEach(c => { c.renderOrder = 999; c.userData = { moveWhole: true }; });
             mh.userData = { moveWhole: true, cx: cx, cz: cz };
@@ -606,6 +608,26 @@
             this.moveHandle = mh;
 
             this.updateVisibility();
+        }
+
+        // Point well inside the outline: the centre if it is inside, else the deepest point of a coarse grid search
+        _interiorPoint(pts, cx, cz) {
+            let dense = (typeof window.getDenseGreenPoints === 'function') ? window.getDenseGreenPoints(pts, 0.5) : pts;
+            if (!dense || dense.length < 3 || typeof window.pointInPolygon !== 'function') return { x: cx, z: cz };
+            if (window.pointInPolygon(cx, cz, dense)) return { x: cx, z: cz };
+            let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+            dense.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z); });
+            let best = null, bestD = -1;
+            const N = 24;
+            for (let i = 0; i <= N; i++) {
+                for (let j = 0; j <= N; j++) {
+                    let x = minX + (maxX - minX) * i / N, z = minZ + (maxZ - minZ) * j / N;
+                    if (!window.pointInPolygon(x, z, dense)) continue;
+                    let d = (typeof window.distToPolygon === 'function') ? window.distToPolygon(x, z, dense) : 0;
+                    if (d > bestD) { bestD = d; best = { x: x, z: z }; }
+                }
+            }
+            return best || { x: cx, z: cz };
         }
 
         updateSplineOnly(hole) {
@@ -891,7 +913,10 @@
 
             // Centre ring: start moving the whole green
             if (this.activeTab === 'form' && this.moveHandle && this.moveHandle.visible && raycaster && lastHitPoint) {
-                if (raycaster.intersectObject(this.moveHandle, true).length > 0) {
+                let ringHits = raycaster.intersectObject(this.moveHandle, true);
+                let ballHits = this.handleMeshes.length ? raycaster.intersectObjects(this.handleMeshes) : [];
+                // a golf ball in front of the ring wins, so boundary points stay draggable
+                if (ringHits.length > 0 && (ballHits.length === 0 || ringHits[0].distance <= ballHits[0].distance)) {
                     this.draggingWhole = { sx: lastHitPoint.x, sz: lastHitPoint.z, cx: this.moveHandle.userData.cx, cz: this.moveHandle.userData.cz, dx: 0, dz: 0, hole: window.currentHoleIndex, pointerId: (e && e.pointerId !== undefined) ? e.pointerId : null };
                     if (window.controls) window.controls.enabled = false;
                     document.body.style.cursor = 'grabbing';
@@ -1122,7 +1147,9 @@
 
             // 3a. Hovering the centre ring
             if (this.activeTab === 'form' && this.moveHandle && this.moveHandle.visible && raycaster) {
-                let overRing = raycaster.intersectObject(this.moveHandle, true).length > 0;
+                let ringHits2 = raycaster.intersectObject(this.moveHandle, true);
+                let ballHits2 = this.handleMeshes.length ? raycaster.intersectObjects(this.handleMeshes) : [];
+                let overRing = ringHits2.length > 0 && (ballHits2.length === 0 || ringHits2[0].distance <= ballHits2[0].distance);
                 if (overRing) {
                     document.body.style.cursor = 'move';
                     this._ringHover = true;
