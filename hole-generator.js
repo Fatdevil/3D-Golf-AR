@@ -517,6 +517,13 @@
             }
             if (typeof root.setSmartBuilderType === 'function') root.setSmartBuilderType('TEE');
             root.buildStandardTeeLayout(wp.tee.x, wp.tee.z);
+        } catch (e) {
+            // keep the single undo step so the user can remove whatever was built before the failure
+            root.saveUndoState = realSave;
+            if (typeof console !== 'undefined') console.error('Slumpa hål failed', e);
+            toast(t('hg_error', '⚠️ Något gick fel när hålet byggdes. Tryck Ångra och försök igen.'), '#ef4444');
+            if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
+            return null;
         } finally {
             root.saveUndoState = realSave;
         }
@@ -532,5 +539,10 @@
         generatePlan: generatePlan, place: place, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
+    // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
+    root.generateRandomHoleWithProgress = function () {
+        toast(t('hg_busy', '⏳ Bygger hålet…'), '#a855f7');
+        setTimeout(function () { generate({}); }, 80);
+    };
     if (typeof module !== 'undefined' && module.exports) module.exports = root.HoleGenerator;
 })(typeof window !== 'undefined' ? window : globalThis);
