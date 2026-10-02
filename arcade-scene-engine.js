@@ -97,7 +97,7 @@
             scene.fog.color.setRGB(p.fogColor[0]/255, p.fogColor[1]/255, p.fogColor[2]/255);
             scene.fog.near = p.fogNear / fogMult;
             let baseFogFar = p.fogFar / fogMult;
-            let sceneryMaxDist = window._sceneryMaxRadius || 0;
+            let sceneryMaxDist = (typeof window.getSceneryMaxRadius === 'function') ? window.getSceneryMaxRadius() : (window._sceneryMaxRadius || 0);
             scene.fog.far = Math.max(baseFogFar, sceneryMaxDist * 1.3);
 
             // 3. Ambient light

@@ -6612,6 +6612,7 @@ window.executeSplineMountain = function() {
         if (!b.tee && !b.green && !b.fairway && !b.bunker && window.HoleGenerator && window.HoleGenerator.holeIsEmpty(hole)) {
             html += '<button type="button" onclick="generateRandomHoleWithProgress()" style="width:100%; margin-bottom:8px; background:linear-gradient(90deg,#a855f7,#6366f1); color:#fff; border:none; border-radius:6px; padding:7px 8px; font-weight:bold; font-size:12px; cursor:pointer;">🎲 ' + tr('hg_button', 'Slumpa ett hål') + ' (Par ' + Math.max(3, Math.min(6, par)) + ')</button>' +
                 '<button type="button" onclick="openHoleBlueprint()" style="width:100%; margin-bottom:6px; background:#1e293b; color:#e2e8f0; border:1px solid #6366f1; border-radius:6px; padding:7px 8px; font-weight:bold; font-size:12px; cursor:pointer;">🗺️ ' + tr('bp_button', 'Placera på karta') + '</button>' +
+                '<button type="button" onclick="openBackdropMap()" style="width:100%; margin-bottom:6px; background:#1e293b; color:#e2e8f0; border:1px solid #f59e0b; border-radius:6px; padding:7px 8px; font-weight:bold; font-size:12px; cursor:pointer;">' + tr('bd_button', '🏔️ Bakgrund (berg, hav, båtar)') + '</button>' +
                 '<div style="color:#64748b; font-size:10px; margin-bottom:6px;">' + tr('hg_hint', 'Appen lägger ut tee, fairway, green och bunkrar – du ändrar sedan som du vill.') + '</div>' +
                 hgAdvancedHtml(par);
         }

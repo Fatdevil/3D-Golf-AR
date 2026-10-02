@@ -535,5 +535,5 @@
     }
 
     root.openHoleBlueprint = open;
-    root.HoleBlueprint = { open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
+    root.HoleBlueprint = { renderTerrain: renderTerrain, open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
 })(typeof window !== 'undefined' ? window : globalThis);
