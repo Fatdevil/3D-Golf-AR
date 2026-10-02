@@ -16122,6 +16122,7 @@
             playState = 'ROUND_IDLE';
             window.activePlayerId = 'tester';
             window.activePlayerIndex = 0; // BUG-08 FIX: Set activePlayerIndex
+            window._courseTested = true; // the next-step guide: a playtest really started
             window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true, scores: Array(MAX_HOLES).fill(null), scoreVsPar: Array(MAX_HOLES).fill(null), holedOut: false, prevPos: null } ];
             
             // BUG-06 FIX: Set pinMesh from current hole's flag
@@ -20648,8 +20649,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="smart-builder.js?v=44"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
-<script src="backdrop.js?v=9"></script>
-<script src="guide.js?v=5"></script>
+<script src="backdrop.js?v=10"></script>
+<script src="guide.js?v=6"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

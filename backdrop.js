@@ -242,6 +242,7 @@
         if (!sel || typeof root.updateSurroundColors !== 'function') return;
         undoPoint();
         sel.value = key;
+        root._surroundTouched = true;   // the next-step guide counts the surroundings as started
         root.updateSurroundColors();   // reads the four selects, saves on every hole of the plate and recolours the scene
         B.surround = surroundPicture();
         refreshEdges();

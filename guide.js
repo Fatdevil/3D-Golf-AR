@@ -11,7 +11,7 @@
 
     const NATURE_COUNT = 15;      // placed objects before "add nature" counts as done
     const KEY = 'golfGuideHidden';
-    let host = null, listOpen = false, hidden = false, lastSig = '', played = false;
+    let host = null, listOpen = false, hidden = false, lastSig = '';
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
     function click(id) { const b = document.getElementById(id); if (b) b.click(); }
@@ -21,10 +21,21 @@
     function writeHidden(v) { try { localStorage.setItem(KEY, v ? '1' : '0'); } catch (e) { /* storage may be blocked */ } }
 
     // ---- the state of the course -----------------------------------------------------------------------------
-    // Same test as the playtest gate in setMode(): a tee and a flag
+    // The playtest gate in setMode() needs a tee and a flag; publishing also needs the tees in distance order
+    // (red closest to the flag, then yellow, white, black). A hole is only "playable" here when both hold.
+    const TEE_ORDER = ['red', 'yellow', 'white', 'black'];
+    function teesInOrder(h) {
+        const d = {};
+        TEE_ORDER.forEach(function (k) { if (h.tees[k]) d[k] = Math.hypot(h.tees[k].x - h.flag.x, h.tees[k].z - h.flag.z); });
+        const keys = Object.keys(d);
+        for (let a = 0; a < keys.length; a++) for (let b = a + 1; b < keys.length; b++) {
+            if (TEE_ORDER.indexOf(keys[a]) < TEE_ORDER.indexOf(keys[b]) && d[keys[a]] > d[keys[b]]) return false;
+        }
+        return true;
+    }
     function isPlayable(h) {
         const t = h && h.tees;
-        return !!(h && h.flag && t && (t.yellow || t.white || t.red || t.black));
+        return !!(h && h.flag && t && (t.yellow || t.white || t.red || t.black)) && teesInOrder(h);
     }
     function holeCount() {
         const HG = root.HoleGenerator, holes = root.courseHoles || [];
@@ -37,10 +48,13 @@
         // publishing needs Hole 1 to be playable, so the step is not done before it is
         return { built: built, total: total, partial: partial, first: isPlayable(holes[0]) };
     }
+    // Surroundings count as built when a big figure stands outside the plate, an edge was changed on the backdrop
+    // map, or an edge uses something other than the two start values (rough, deep rough)
     function hasSurroundings() {
+        if (root._surroundTouched) return true;
         if (typeof root.getSceneryMaxRadius === 'function' && root.getSceneryMaxRadius() > 0) return true;
         const c = root.surroundConfig;
-        return !!c && ['N', 'E', 'S', 'W'].some(function (k) { return c[k] && c[k] !== 'roughColor'; });
+        return !!c && ['N', 'E', 'S', 'W'].some(function (k) { return c[k] && c[k] !== 'roughColor' && c[k] !== 'fescueColor'; });
     }
     function natureCount() { return (root.placedTrees || []).length; }
 
@@ -58,7 +72,7 @@
             { id: 'nature', done: natureCount() >= NATURE_COUNT, optional: true,
               label: tr('g_nature', 'Lägg till natur'), info: tr('g_optional', 'valfritt'), button: tr('g_open', 'Öppna'),
               run: function () { if (typeof root.setTool === 'function') root.setTool('PROPS'); } },
-            { id: 'play', done: played,
+            { id: 'play', done: !!root._courseTested,
               label: tr('g_test', 'Testspela banan'), info: '', button: tr('g_test_short', 'Testspela'),
               run: function () { click('btn-mode-play'); } },
             { id: 'publish', done: false,
@@ -100,7 +114,6 @@
     function render() {
         if (!host) return;
         const mode = typeof root.getAppMode === 'function' ? root.getAppMode() : 'BUILD';
-        if (mode === 'TEST' && !played && root.activePlayerId === 'tester') { played = true; lastSig = ''; }   // a playtest was entered: publishing is next
         const overlay = document.getElementById('bp-overlay') || document.getElementById('bd-overlay');
         host.style.display = (mode === 'BUILD' && !overlay && !isRange()) ? 'block' : 'none';
         if (host.style.display === 'none') return;
