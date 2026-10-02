@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=23"></script>
+<script src="i18n.js?v=24"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -382,7 +382,7 @@
         
         <!-- RIGHT: Testspela, Publicera & Hub -->
         <div class="top-right">
-            <button id="btn-mode-play" class="sys-btn" onclick="setMode('TEST')" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 18px; font-size:13px; font-weight:800; border-radius:10px; box-shadow:0 4px 15px rgba(16,185,129,0.4); display:inline-flex; align-items:center; gap:6px; transition:transform 0.1s;" title="Testspela banan direkt (Sparar automatiskt)">▶ <span data-i18n="ed_test_course">Testspela</span></button>
+            <button id="btn-mode-play" class="sys-btn" onclick="saveAndPlay()" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 18px; font-size:13px; font-weight:800; border-radius:10px; box-shadow:0 4px 15px rgba(16,185,129,0.4); display:inline-flex; align-items:center; gap:6px; transition:transform 0.1s;" title="Sparar banan och startar spelet">▶ <span data-i18n="ed_save_play">Spara &amp; spela</span></button>
             <button id="btn-publish" class="sys-btn" onclick="document.getElementById('publish-modal').style.display='flex'; if(window.updatePublishPreview) updatePublishPreview();" style="border-color:#334155; color:#94a3b8; font-size:12px; padding:7px 12px; border-radius:10px;" title="Dela eller publicera bana">📤 <span data-i18n="ed_publish">Publicera...</span></button>
             <a href="arcade_hub.html" class="sys-btn" style="text-decoration:none; font-size:15px; padding:7px 11px; border-radius:10px; border-color:#334155; color:#94a3b8;" title="Tillbaka till Hub">🏠</a>
         </div>
@@ -457,6 +457,7 @@
                 redo: "Gör om",
                 test_course: "Testspela",
                 ed_test_course: "Testspela",
+                ed_save_play: "Spara & spela",
                 ed_build_mode: "Bygg",
                 ed_publish: "Publicera",
                 save: "Spara",
@@ -523,6 +524,7 @@
                 redo: "Redo",
                 test_course: "Test Course",
                 ed_test_course: "Test Course",
+                ed_save_play: "Save & play",
                 ed_build_mode: "Build",
                 ed_publish: "Publish",
                 save: "Save",
@@ -3175,7 +3177,10 @@
                     <h2 style="color:#fff; margin:0; font-weight:800; font-size:22px; letter-spacing:0.5px;">⛳ <span style="color:#38bdf8;">ROUND SETUP</span></h2>
                     <div id="setup-course-info" style="color:#64748b; font-size:12px; margin-top:4px; font-weight:500;"></div>
                 </div>
-                <button onclick="window.location.href='arcade_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button id="setup-edit-btn" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + (new URLSearchParams(window.location.search)).get('edit')" style="display:none; background:#0284c7; color:#fff; border:none; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">🔨 <span data-i18n="sp_back_edit">Tillbaka till bygget</span></button>
+                    <button onclick="window.location.href='arcade_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
+                </div>
             </div>
 
             <!-- 3-COLUMN BODY -->
@@ -11135,6 +11140,29 @@
         publishCourse({ isDraft: true, overwrite: hasExistingDraft });
     };
 
+    // ── Save & play: the course is saved as a draft and played from that copy (what a player will see) ──
+    window.saveAndPlay = async function () {
+        if (window._savingForPlay) return;
+        const tr = (k, fb) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : fb;
+        let ok = courseHoles.some(h => h && h.flag && h.tees && (h.tees.yellow || h.tees.white || h.tees.red || h.tees.black));
+        if (!ok) { showBuildToast(tr('sp_need_hole', 'Lägg ut minst ett hål med tee och flagga först'), '#ef4444'); return; }
+        const btn = document.getElementById('btn-mode-play');
+        const label = btn ? btn.innerHTML : '';
+        window._savingForPlay = true;
+        if (btn) btn.innerHTML = '⏳ ' + tr('sp_saving', 'Sparar...');
+        let saved = false;
+        try { saved = await publishCourse({ isDraft: true, overwrite: !!currentEditCode }); } catch (e) { saved = false; }
+        window._savingForPlay = false;
+        if (!saved || !currentEditCode) {
+            if (btn) btn.innerHTML = label;
+            showBuildToast(tr('sp_failed', 'Det gick inte att spara banan. Försök igen.'), '#ef4444');
+            return;
+        }
+        try { localStorage.setItem('golfPlayed_' + currentEditCode, '1'); } catch (e) {}
+        window.hasUnsavedChanges = false;
+        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&edit=' + currentEditCode;
+    };
+
     // ── Preview: populate stats when modal opens ──
     window.updatePublishPreview = function() {
         let playable = (typeof courseHoles !== 'undefined') ? courseHoles.filter(h => h.flag && h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black)) : [];
@@ -11306,6 +11334,7 @@
                 
                 stat.style.color = '#4ade80';
                 stat.innerHTML = "Saved! Your link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
+                return true;
             } else {
                 showError("Failed: " + data.error);
             }
@@ -12189,6 +12218,7 @@
         let courseCode = params.get('course');
         let editCode = params.get('edit');
         let autoRun = params.get('autorun');
+        { const eb = document.getElementById('setup-edit-btn'); if (eb && editCode) eb.style.display = 'inline-block'; } // a saved draft can be taken back to the builder
         let collectionId = params.get('collection');
         let plateIndex = parseInt(params.get('plate') || '0');
         
@@ -15966,29 +15996,7 @@
         isMeasuring = false;
     }, false);
     
-    // cheap fingerprint of everything a playtest depends on; the next-step guide compares it with the one taken at test time
-    window.getCourseSignature = function () {
-        const r = (v) => Math.round((v || 0) * 10);
-        const parts = [];
-        (courseHoles || []).forEach(function (h) {
-            if (!h) { parts.push('-'); return; }
-            const t = h.tees || {};
-            parts.push(['yellow', 'white', 'red', 'black', 'range'].map(function (k) { return t[k] ? r(t[k].x) + ',' + r(t[k].z) : ''; }).join('|') +
-                '/' + (h.flag ? r(h.flag.x) + ',' + r(h.flag.z) : ''));
-        });
-        parts.push(JSON.stringify(window.surroundConfig || {}), 'rev' + (window._editRev || 0));
-        (window.placedTrees || []).forEach(function (o) { if (o) parts.push(o.type + r(o.x) + ',' + r(o.z) + ',' + r(o.scale)); });
-        try {
-            const pos = planeGeo.attributes.position.array;
-            for (let i = 2; i < pos.length; i += 3 * 61) parts.push(r(pos[i]));
-            const w = window.waterData;
-            if (w) for (let i = 0; i < w.length; i += 61) parts.push(r(w[i]));
-        } catch (e) { /* terrain not ready */ }
-        let hsh = 0;
-        const str = parts.join(';');
-        for (let i = 0; i < str.length; i++) hsh = (hsh * 31 + str.charCodeAt(i)) | 0;
-        return hsh + ':' + str.length;
-    };
+    window.getEditCode = function () { return currentEditCode; };
     window.getAppMode = function () { return appMode; };
     function setMode(mode) {
         finalizeSculptStroke({ save: true });
@@ -16039,9 +16047,11 @@
         
         if (btnPlay) {
             btnPlay.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'none' : 'inline-flex';
-            let testText = (typeof window.t === 'function' ? window.t('ed_test_course') : 'Testspela');
+            // a course is played from its saved copy; only the driving range is still tried out right here
+            let rangeEditor = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
+            let testText = (typeof window.t === 'function' ? window.t(rangeEditor ? 'ed_test_course' : 'ed_save_play') : (rangeEditor ? 'Testspela' : 'Spara & spela'));
             btnPlay.innerHTML = '▶ ' + testText;
-            btnPlay.onclick = () => setMode('TEST');
+            btnPlay.onclick = rangeEditor ? () => setMode('TEST') : () => window.saveAndPlay();
             btnPlay.style.background = 'linear-gradient(135deg, #10b981, #059669)';
             btnPlay.style.color = '#fff';
             btnPlay.style.border = 'none';
@@ -16175,7 +16185,6 @@
             let isRangeTee = tee && courseHoles[0].tees.range && tee === courseHoles[0].tees.range;
             
             if(tee) {
-                window._courseTested = window.getCourseSignature(); // the next-step guide: this exact course really was test-played
                 window.ballPos.x = tee.x; window.ballPos.y = tee.y + 0.2; window.ballPos.z = tee.z;
                 window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
                 window.ballMesh.visible = true;
@@ -20679,7 +20688,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=11"></script>
+<script src="guide.js?v=12"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
