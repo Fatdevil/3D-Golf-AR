@@ -505,6 +505,54 @@
         return false;
     }
 
+    // Fences, walls, hedges and OB stakes drawn as lines (stored per hole in envObjects[].collisionData)
+    function segCross(a, b, c, d) {
+        function o(p, q, r) { return (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x); }
+        return (o(a, b, c) > 0) !== (o(a, b, d) > 0) && (o(c, d, a) > 0) !== (o(c, d, b) > 0);
+    }
+    function segSegDist(a, b, c, d) {
+        if (segCross(a, b, c, d)) return 0;
+        return Math.min(distToSegment(a.x, a.z, c, d), distToSegment(b.x, b.z, c, d), distToSegment(c.x, c.z, a, b), distToSegment(d.x, d.z, a, b));
+    }
+    const WALL_MARGIN = 1.5;      // m of clear ground beside a fence or wall
+    const STAKE_GAP = 30;         // stakes further apart than this are separate markers, not a boundary line
+    function collectWalls() {
+        let out = [];
+        (root.courseHoles || []).forEach(function (h) {
+            ((h && h.envObjects) || []).forEach(function (o) {
+                let pts = o && o.collisionData;
+                if (!pts || pts.length < 2) return;
+                for (let i = 0; i < pts.length - 1; i++) {
+                    let p = pts[i], q = pts[i + 1];
+                    if (typeof p.x !== 'number' || typeof q.x !== 'number') continue;
+                    if (o.type === 'OB_STAKES' && Math.hypot(p.x - q.x, p.z - q.z) > STAKE_GAP) continue;
+                    out.push({ a: { x: p.x, z: p.z }, b: { x: q.x, z: q.z } });
+                }
+            });
+        });
+        return out;
+    }
+    function wallsBlock(wp, walls, parts) {
+        if (!walls || !walls.length) return false;
+        let list = partPolygons(wp, parts), corridor = !wp.fairway;
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        footprint(wp).forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+        let reach = WALL_MARGIN + (corridor ? ROUTE_HALF_WIDTH : 0);
+        for (let k = 0; k < walls.length; k++) {
+            let w = walls[k];
+            if (Math.max(w.a.x, w.b.x) < x0 - reach || Math.min(w.a.x, w.b.x) > x1 + reach || Math.max(w.a.z, w.b.z) < z0 - reach || Math.min(w.a.z, w.b.z) > z1 + reach) continue;
+            for (let q = 0; q < list.length; q++) {
+                let poly = list[q];
+                if (inPoly(w.a.x, w.a.z, poly) || inPoly(w.b.x, w.b.z, poly)) return true;
+                for (let i = 0; i < poly.length; i++) if (segSegDist(w.a, w.b, poly[i], poly[(i + 1) % poly.length]) < WALL_MARGIN) return true;
+            }
+            if (corridor) {
+                for (let i = 0; i < wp.centerline.length - 1; i++) if (segSegDist(w.a, w.b, wp.centerline[i], wp.centerline[i + 1]) < ROUTE_HALF_WIDTH) return true;
+            }
+        }
+        return false;
+    }
+
     // What a placed hole occupies, in the form tooCloseToOthers() takes: outlines plus the route as loose points
     function obstaclesOf(wp) {
         return { polygons: polys(wp), points: densify(wp.centerline, 20, false) };
@@ -526,7 +574,7 @@
             let ws = env.waterStep || 2;
             if (anyCovered(wp, 6, 12, env.isWater) || anyCovered(wp, ws, ws, env.isWater)) return fail('water');
         }
-        if (env && env.objects && objectsBlock(wp, env.objects, env.parts)) return fail('object');
+        if (env && ((env.objects && objectsBlock(wp, env.objects, env.parts)) || (env.walls && wallsBlock(wp, env.walls, env.parts)))) return fail('object');
         if (env && env.heightAt) {
             let sc = scoreSite(wp, env);
             if (!sc.ok) return { ok: false, reasons: sc.reasons, world: wp };
@@ -717,6 +765,8 @@
             out.push({ x: o.x, z: o.z, r: Math.max(0.4, Math.min(60, r)) });
         });
         (root.buildingBlocks || []).forEach(function (b) {
+            // a block hit during a playtest is deactivated and taken out of the scene, but stays in the array
+            if (!b || b.active === false || (b.mesh && b.mesh.parent === null)) return;
             let p = b && b.mesh && b.mesh.position;
             if (p && typeof p.x === 'number' && typeof p.z === 'number') out.push({ x: p.x, z: p.z, r: (b.radius || BLOCK_RADIUS) });
         });
@@ -733,6 +783,7 @@
             isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; },
             heightAt: root.localGetTerrainAt ? surfaceY : null,
             objects: collectObjects(),
+            walls: collectWalls(),
             parts: normalizeParts(parts)
         };
         if (o && o.diag) env.diag = {};
@@ -832,7 +883,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, collectObjects: collectObjects, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)

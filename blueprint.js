@@ -162,6 +162,9 @@
             ctx.fillStyle = big ? 'rgba(120,113,108,0.85)' : 'rgba(21,94,52,0.75)'; ctx.fill();
             ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(15,23,42,0.6)'; ctx.stroke();
         });
+        // fences, walls and OB lines
+        ctx.strokeStyle = 'rgba(146,64,14,0.95)'; ctx.lineWidth = 2.5;
+        (S.baseEnv.walls || []).forEach(function (w) { ctx.beginPath(); ctx.moveTo(cx(w.a.x), cz(w.a.z)); ctx.lineTo(cx(w.b.x), cz(w.b.z)); ctx.stroke(); });
         // the walk from each green to the next tee
         ctx.setLineDash([3, 7]); ctx.strokeStyle = 'rgba(250,204,21,0.85)'; ctx.lineWidth = 2;
         for (let i = 0; i < S.sketches.length - 1; i++) {
