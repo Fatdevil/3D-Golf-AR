@@ -155,6 +155,13 @@
         ctx.fillStyle = 'rgba(255,255,255,0.40)'; ctx.strokeStyle = 'rgba(255,255,255,0.8)';
         (others.polygons || []).forEach(function (poly) { polyPath(ctx, poly); ctx.fill(); ctx.stroke(); });
         (others.points || []).forEach(function (p) { ctx.beginPath(); ctx.arc(cx(p.x), cz(p.z), 3, 0, 7); ctx.fill(); });
+        // trees, rocks and buildings on the plate (holes keep clear of them)
+        (S.baseEnv.objects || []).forEach(function (o) {
+            const big = o.r >= 4, rr = Math.max(2, o.r / S.size * C);
+            ctx.beginPath(); ctx.arc(cx(o.x), cz(o.z), rr, 0, 7);
+            ctx.fillStyle = big ? 'rgba(120,113,108,0.85)' : 'rgba(21,94,52,0.75)'; ctx.fill();
+            ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(15,23,42,0.6)'; ctx.stroke();
+        });
         // the walk from each green to the next tee
         ctx.setLineDash([3, 7]); ctx.strokeStyle = 'rgba(250,204,21,0.85)'; ctx.lineWidth = 2;
         for (let i = 0; i < S.sketches.length - 1; i++) {
@@ -172,6 +179,7 @@
         if (r === 'bounds') return tr('bp_r_bounds', 'Utanför banan');
         if (r === 'close') return tr('bp_r_close', 'För nära ett annat hål');
         if (r === 'water') return tr('bp_r_water', 'Vatten i vägen');
+        if (r === 'object') return tr('bp_r_object', 'Träd eller byggnad i vägen');
         if (/_range$/.test(r)) return tr('bp_r_range', 'För ojämn mark');
         return tr('bp_r_slope', 'För brant');
     }
