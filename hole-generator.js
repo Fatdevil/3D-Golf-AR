@@ -408,6 +408,13 @@
         return { ok: reasons.length === 0, reasons: reasons };
     }
 
+    // Why did placement fail? Out-of-bounds tries are cheap and common for long holes anywhere on the map,
+    // so "too hilly" is only the answer when steep rejections are the biggest real cause and a visible share of all tries
+    function failedBecauseSteep(diag) {
+        let d = diag || {}, steep = d.steep || 0;
+        return steep > 0 && steep > (d.water || 0) && steep > (d.close || 0) && steep >= 0.05 * (d.bounds || 0);
+    }
+
     // Other holes: loose points (flags, markers) and polygons (kept apart so interiors can be tested)
     function otherHoles(holes, currentIndex) {
         let points = [], polygons = [];
@@ -609,7 +616,7 @@
         };
         let res = generatePlan({ par: par, seed: opts.seed }, env);
         if (!res) {
-            if ((env.diag.steep || 0) > (env.diag.water || 0) && (env.diag.steep || 0) > (env.diag.close || 0)) {
+            if (failedBecauseSteep(env.diag)) {
                 toast(t('hg_fail_steep', '⚠️ Marken är för kuperad för ett helt hål. Prova en plattare plats eller slumpa färre delar.'), '#ef4444');
                 return null;
             }
@@ -669,7 +676,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, scoreSite: scoreSite, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
