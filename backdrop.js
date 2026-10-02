@@ -405,7 +405,8 @@
 
         const HG = root.HoleGenerator;
         let others = null;
-        try { others = HG && HG.siteEnv ? HG.siteEnv(null).others : null; } catch (err) { others = null; }
+        // every hole counts here, the one being edited too (siteEnv leaves the current hole out)
+        try { others = HG && HG.otherHoles ? HG.otherHoles(root.courseHoles, -1) : null; } catch (err) { others = null; }
         if (Array.isArray(others)) others = { points: others, polygons: [] };
         B = {
             dom: { overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
