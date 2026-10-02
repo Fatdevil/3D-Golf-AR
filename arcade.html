@@ -10946,6 +10946,7 @@
 
     // Debounced course saver: coalesces rapid operations (e.g. sculpt strokes) so UI never stutters
     window.debounceSaveCourse = function(delay = 1500) {
+        window._editRev = (window._editRev || 0) + 1; // the next-step guide: the course changed since any playtest
         window.hasUnsavedChanges = true;
         let sText = document.getElementById('save-status-text');
         let sIcon = document.getElementById('save-status-icon');
@@ -20678,7 +20679,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=10"></script>
+<script src="guide.js?v=11"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
