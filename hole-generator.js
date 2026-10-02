@@ -461,31 +461,78 @@
         return false;
     }
 
+    function normOthers(others) {
+        return Array.isArray(others) ? { points: others, polygons: [] } : others;
+    }
+    // Can this plan stand at origin (its tee) pointing along `heading`? Cheapest checks first.
+    // env: { isWater(x,z), others, half, heightAt, parts }. reasons: 'bounds' | 'close' | 'water' | '<part>_slope|range'
+    function evaluateSite(plan, origin, heading, env) {
+        let limit = ((env && env.half) || MAP_HALF) - MAP_MARGIN;
+        let wp = worldPlan(plan, origin, heading);
+        let fail = function (r) { return { ok: false, reasons: [r], world: wp }; };
+        if (!footprint(wp).every(function (p) { return Math.abs(p.x) <= limit && Math.abs(p.z) <= limit; })) return fail('bounds');
+        if (tooCloseToOthers(wp, normOthers(env && env.others))) return fail('close');
+        if (env && env.isWater) {
+            // coarse pass first (cheap, rejects most wet spots), then a pass at the water grid's resolution
+            // so a creek as narrow as one cell cannot slip between samples
+            let ws = env.waterStep || 2;
+            if (anyCovered(wp, 6, 12, env.isWater) || anyCovered(wp, ws, ws, env.isWater)) return fail('water');
+        }
+        if (env && env.heightAt) {
+            let sc = scoreSite(wp, env);
+            if (!sc.ok) return { ok: false, reasons: sc.reasons, world: wp };
+        }
+        return { ok: true, reasons: [], world: wp };
+    }
+
     // Find a seed-determined spot on the map where the whole hole fits.
-    // env: { isWater(x,z), others: {points, polygons} (or a flat [{x,z}] list), half }
     function place(plan, rng, env) {
-        let half = (env && env.half) || MAP_HALF;
-        let limit = half - MAP_MARGIN;
-        let others = env && env.others;
-        if (Array.isArray(others)) others = { points: others, polygons: [] };
+        let limit = ((env && env.half) || MAP_HALF) - MAP_MARGIN;
         let diag = env && env.diag;
         let bump = function (k) { if (diag) diag[k] = (diag[k] || 0) + 1; };
         for (let attempt = 0; attempt < 400; attempt++) {
             let origin = { x: range(rng, -limit, limit), z: range(rng, -limit, limit) };
             let heading = range(rng, 0, Math.PI * 2);
-            let wp = worldPlan(plan, origin, heading);
-            let ok = footprint(wp).every(function (p) { return Math.abs(p.x) <= limit && Math.abs(p.z) <= limit; });
-            if (!ok) { bump('bounds'); continue; }
-            if (tooCloseToOthers(wp, others)) { bump('close'); continue; }
-            if (env && env.isWater) {
-                // coarse pass first (cheap, rejects most wet spots), then a pass at the water grid's resolution
-                // so a creek as narrow as one cell cannot slip between samples
-                let ws = env.waterStep || 2;
-                if (anyCovered(wp, 6, 12, env.isWater)) { bump('water'); continue; }
-                if (anyCovered(wp, ws, ws, env.isWater)) { bump('water'); continue; }
+            let ev = evaluateSite(plan, origin, heading, env);
+            if (!ev.ok) { bump(/_(slope|range)$/.test(ev.reasons[0]) ? 'steep' : ev.reasons[0]); continue; }
+            return { world: ev.world, origin: origin, heading: heading, attempts: attempt + 1 };
+        }
+        return null;
+    }
+
+    // The shape for a seed: same seed, same hole shape (what a blueprint sketch stores)
+    function planFor(par, seed) {
+        let rng = mulberry32(seed);
+        let plan = null;
+        for (let k = 0; k < 30; k++) {
+            plan = buildPlan(par, rng);
+            if (!validatePlan(plan).length) return plan;
+        }
+        return plan;
+    }
+
+    // Closest legal spot to a starting position: rings outward, same heading first, then a few turns.
+    // Returns { origin, heading, world } or null (time budget in ms, default 1500)
+    function nearestValidSite(plan, origin, heading, env, budget) {
+        let t0 = Date.now(), limit = budget || 1500;
+        let tryAt = function (x, z, h) {
+            let o = { x: x, z: z };
+            let ev = evaluateSite(plan, o, h, env);
+            return ev.ok ? { origin: o, heading: h, world: ev.world } : null;
+        };
+        let turns = [0, 0.5, -0.5, 1.0, -1.0];
+        for (let ti = 0; ti < turns.length; ti++) {
+            let h = heading + turns[ti];
+            let step = ti === 0 ? 6 : 12;
+            for (let r = 0; r <= 140; r += step) {
+                let n = r === 0 ? 1 : Math.max(8, Math.round(r / 5));
+                for (let i = 0; i < n; i++) {
+                    let ang = (i / n) * Math.PI * 2;
+                    let hit = tryAt(origin.x + Math.cos(ang) * r, origin.z + Math.sin(ang) * r, h);
+                    if (hit) return hit;
+                    if (Date.now() - t0 > limit) return null;
+                }
             }
-            if (env && env.heightAt && !scoreSite(wp, env).ok) { bump('steep'); continue; }
-            return { world: wp, origin: origin, heading: heading, attempts: attempt + 1 };
         }
         return null;
     }
@@ -590,6 +637,21 @@
     };
     if (typeof setInterval === 'function' && typeof window !== 'undefined') setInterval(refreshPlannedGreenMarker, 700);
 
+    // The environment a hole is placed in: terrain water/height, other holes, map size
+    function siteEnv(parts, o) {
+        let env = {
+            half: (root.TERRAIN_SIZE || 600) / 2,
+            others: otherHoles(root.courseHoles, root.currentHoleIndex),
+            waterStep: Math.min(3, (root.TERRAIN_SIZE || 600) / (root.TERRAIN_SEGS || 300)),
+            // the terrain lookup already knows painted water and per-cell water levels
+            isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; },
+            heightAt: root.localGetTerrainAt ? surfaceY : null,
+            parts: normalizeParts(parts)
+        };
+        if (o && o.diag) env.diag = {};
+        return env;
+    }
+
     function generate(opts) {
         opts = opts || {};
         let parts = normalizeParts(opts.parts);
@@ -605,18 +667,21 @@
         }
         hole.plannedGreen = null;   // the hole is empty here; any older plan is stale
         let par = clampPar(opts.par != null ? opts.par : (hole.par || 4));
-        let half = (root.TERRAIN_SIZE || 600) / 2;
-        let env = {
-            half: half,
-            others: otherHoles(root.courseHoles, root.currentHoleIndex),
-            waterStep: Math.min(3, (root.TERRAIN_SIZE || 600) / (root.TERRAIN_SEGS || 300)),
-            // the terrain lookup already knows painted water and per-cell water levels
-            isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; },
-            heightAt: root.localGetTerrainAt ? surfaceY : null,
-            parts: parts,
-            diag: {}
-        };
-        let res = generatePlan({ par: par, seed: opts.seed }, env);
+        let env = siteEnv(parts, { diag: true });
+        let res;
+        if (opts.placement && opts.seed != null) {
+            // a blueprint sketch: the user already chose the spot, we only re-check it
+            let plan = planFor(par, opts.seed);
+            let pl = opts.placement;
+            let ev = evaluateSite(plan, { x: pl.x, z: pl.z }, pl.heading || 0, env);
+            res = ev.ok ? { seed: opts.seed, plan: plan, placed: { world: ev.world, origin: { x: pl.x, z: pl.z }, heading: pl.heading || 0 } } : null;
+            if (!res) {
+                toast(t('bp_site_bad', '⚠️ Platsen fungerar inte längre. Öppna kartan och flytta hålet.'), '#ef4444');
+                return null;
+            }
+        } else {
+            res = generatePlan({ par: par, seed: opts.seed }, env);
+        }
         if (!res) {
             if (failedBecauseSteep(env.diag)) {
                 toast(t('hg_fail_steep', '⚠️ Marken är för kuperad för ett helt hål. Prova en plattare plats eller slumpa färre delar.'), '#ef4444');
@@ -678,7 +743,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
