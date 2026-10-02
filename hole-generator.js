@@ -30,6 +30,14 @@
         5: { len: [450, 540], fairway: true, greenSide: [1, 3], fwBunkers: [0, 2], doglegChance: 0.6 },
         6: { len: [545, 600], fairway: true, greenSide: [1, 3], fwBunkers: [1, 2], doglegChance: 0.85 }
     };
+    // Terrain limits per part: slope = rise/run (0.06 = 6 %), range = highest - lowest point inside the part (m)
+    // soft: share of the part allowed to be steeper than `soft` (the rest must stay under `max`)
+    const SLOPE = {
+        green:   { max: 0.06, range: 1.5 },
+        tee:     { max: 0.08, range: 2 },
+        bunker:  { max: 0.25, range: 6 },
+        fairway: { max: 0.18, soft: 0.10, softShare: 0.15 }
+    };
     const FAIRWAY_START = 80;     // the tee layout spans ~56 m forward of the back tee
     const MAP_HALF = 300;
     const MAP_MARGIN = 25;
@@ -352,6 +360,63 @@
         return false;
     }
 
+    // ---- terrain slope ------------------------------------------------------
+    function slopeAt(h, x, z) {
+        let d = 3;
+        let gx = (h(x + d, z) - h(x - d, z)) / (2 * d), gz = (h(x, z + d) - h(x, z - d)) / (2 * d);
+        return Math.hypot(gx, gz);
+    }
+    // Measure one polygon: returns null when it is within `lim`, else a short reason
+    function checkArea(poly, step, h, lim) {
+        let pts = interior(poly, step).concat(densify(poly, step, true));
+        let hi = -Infinity, lo = Infinity, steep = 0;
+        for (let i = 0; i < pts.length; i++) {
+            let y = h(pts[i].x, pts[i].z), sl = slopeAt(h, pts[i].x, pts[i].z);
+            if (y > hi) hi = y;
+            if (y < lo) lo = y;
+            if (sl > lim.max) return 'slope';
+            if (lim.soft && sl > lim.soft) steep++;
+        }
+        if (lim.range && hi - lo > lim.range) return 'range';
+        if (lim.soft && pts.length && steep / pts.length > lim.softShare) return 'slope';
+        return null;
+    }
+    // Is the terrain under this placed hole flat enough? env.heightAt(x, z) gives ground height.
+    // Returns { ok, reasons: ['green_slope', ...] } - reasons also tell a future blueprint view why a spot is red.
+    function scoreSite(wp, env) {
+        let h = env && env.heightAt;
+        if (!h) return { ok: true, reasons: [] };
+        // only the parts that will be built count (env.parts; default: all)
+        let parts = (env && env.parts) || normalizeParts(null);
+        let withFairway = !!(wp.fairway && parts.fairway);
+        // cheap first look: the centre line every ~20 m (most hilly spots fail here without any polygon sampling)
+        if (withFairway) {
+            for (let i = 0; i < wp.centerline.length; i++) {
+                let c = wp.centerline[i];
+                // only where the fairway actually lies (the line also runs under the tee and green)
+                if (inPoly(c.x, c.z, wp.fairway) && slopeAt(h, c.x, c.z) > SLOPE.fairway.max) return { ok: false, reasons: ['fairway_slope'] };
+            }
+        }
+        let reasons = [];
+        let test = function (name, poly, step, lim) { if (!reasons.length) { let r = checkArea(poly, step, h, lim); if (r) reasons.push(name + '_' + r); } };
+        if (parts.green) test('green', wp.green, 3, SLOPE.green);
+        if (parts.tee) (wp.teeBoxes || []).forEach(function (b) { test('tee', b, 3, SLOPE.tee); });
+        wp.bunkers.forEach(function (b, i) {
+            let kind = wp.bunkerKinds && wp.bunkerKinds[i];
+            if ((kind === 'green' && !parts.greenBunkers) || (kind === 'fairway' && !parts.fairwayBunkers)) return;
+            test('bunker', b, 4, SLOPE.bunker);
+        });
+        if (withFairway) test('fairway', wp.fairway, 5, SLOPE.fairway);
+        return { ok: reasons.length === 0, reasons: reasons };
+    }
+
+    // Why did placement fail? Out-of-bounds tries are cheap and common for long holes anywhere on the map,
+    // so "too hilly" is only the answer when steep rejections are the biggest real cause and a visible share of all tries
+    function failedBecauseSteep(diag) {
+        let d = diag || {}, steep = d.steep || 0;
+        return steep > 0 && steep > (d.water || 0) && steep > (d.close || 0) && steep >= 0.05 * (d.bounds || 0);
+    }
+
     // Other holes: loose points (flags, markers) and polygons (kept apart so interiors can be tested)
     function otherHoles(holes, currentIndex) {
         let points = [], polygons = [];
@@ -403,20 +468,23 @@
         let limit = half - MAP_MARGIN;
         let others = env && env.others;
         if (Array.isArray(others)) others = { points: others, polygons: [] };
+        let diag = env && env.diag;
+        let bump = function (k) { if (diag) diag[k] = (diag[k] || 0) + 1; };
         for (let attempt = 0; attempt < 400; attempt++) {
             let origin = { x: range(rng, -limit, limit), z: range(rng, -limit, limit) };
             let heading = range(rng, 0, Math.PI * 2);
             let wp = worldPlan(plan, origin, heading);
             let ok = footprint(wp).every(function (p) { return Math.abs(p.x) <= limit && Math.abs(p.z) <= limit; });
-            if (!ok) continue;
-            if (tooCloseToOthers(wp, others)) continue;
+            if (!ok) { bump('bounds'); continue; }
+            if (tooCloseToOthers(wp, others)) { bump('close'); continue; }
             if (env && env.isWater) {
                 // coarse pass first (cheap, rejects most wet spots), then a pass at the water grid's resolution
                 // so a creek as narrow as one cell cannot slip between samples
                 let ws = env.waterStep || 2;
-                if (anyCovered(wp, 6, 12, env.isWater)) continue;
-                if (anyCovered(wp, ws, ws, env.isWater)) continue;
+                if (anyCovered(wp, 6, 12, env.isWater)) { bump('water'); continue; }
+                if (anyCovered(wp, ws, ws, env.isWater)) { bump('water'); continue; }
             }
+            if (env && env.heightAt && !scoreSite(wp, env).ok) { bump('steep'); continue; }
             return { world: wp, origin: origin, heading: heading, attempts: attempt + 1 };
         }
         return null;
@@ -543,10 +611,17 @@
             others: otherHoles(root.courseHoles, root.currentHoleIndex),
             waterStep: Math.min(3, (root.TERRAIN_SIZE || 600) / (root.TERRAIN_SEGS || 300)),
             // the terrain lookup already knows painted water and per-cell water levels
-            isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; }
+            isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; },
+            heightAt: root.localGetTerrainAt ? surfaceY : null,
+            parts: parts,
+            diag: {}
         };
         let res = generatePlan({ par: par, seed: opts.seed }, env);
         if (!res) {
+            if (failedBecauseSteep(env.diag)) {
+                toast(t('hg_fail_steep', '⚠️ Marken är för kuperad för ett helt hål. Prova en plattare plats eller slumpa färre delar.'), '#ef4444');
+                return null;
+            }
             toast(t('hg_fail', '⚠️ Hittade ingen ledig plats för ett helt hål. Försök igen.'), '#ef4444');
             return null;
         }
@@ -603,7 +678,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
