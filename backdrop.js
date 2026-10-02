@@ -48,6 +48,10 @@
         return Math.min(far, FOG_LIMIT);
     }
     root.getSceneryMaxRadius = sceneryMaxRadius;
+    // a big figure (shelf size or more) really stands outside the plate
+    root.hasOuterScenery = function () {
+        return (root.placedTrees || []).some(function (o) { return o && outsidePlate(o) && heightOf(o) >= SHELF_MIN; });
+    };
     let lastFog = 0;
     function refreshFog() {
         const r = Math.round(sceneryMaxRadius());
@@ -242,6 +246,7 @@
         if (!sel || typeof root.updateSurroundColors !== 'function') return;
         undoPoint();
         sel.value = key;
+        root._surroundTouched = true;   // the next-step guide counts the surroundings as started
         root.updateSurroundColors();   // reads the four selects, saves on every hole of the plate and recolours the scene
         B.surround = surroundPicture();
         refreshEdges();
