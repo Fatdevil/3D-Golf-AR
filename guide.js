@@ -11,11 +11,13 @@
 
     const NATURE_COUNT = 15;      // placed objects before "add nature" counts as done
     const KEY = 'golfGuideHidden';
-    let host = null, listOpen = false, hidden = false, lastSig = '';
+    let host = null, listOpen = false, hidden = false, lastSig = '', played = false;
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
     function click(id) { const b = document.getElementById(id); if (b) b.click(); }
     function readHidden() { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } }
+    // A driving range has no holes to place, so the course guide stays out of its way
+    function isRange() { return root._isRangeMode || new URLSearchParams(root.location.search).get('mode') === 'range'; }
     function writeHidden(v) { try { localStorage.setItem(KEY, v ? '1' : '0'); } catch (e) { /* storage may be blocked */ } }
 
     // ---- the state of the course -----------------------------------------------------------------------------
@@ -47,7 +49,7 @@
             { id: 'nature', done: natureCount() >= NATURE_COUNT, optional: true,
               label: tr('g_nature', 'Lägg till natur'), info: tr('g_optional', 'valfritt'), button: tr('g_open', 'Öppna'),
               run: function () { if (typeof root.setTool === 'function') root.setTool('PROPS'); } },
-            { id: 'play', done: false,
+            { id: 'play', done: played,
               label: tr('g_test', 'Testspela banan'), info: '', button: tr('g_test_short', 'Testspela'),
               run: function () { click('btn-mode-play'); } },
             { id: 'publish', done: false,
@@ -81,8 +83,9 @@
     function render() {
         if (!host) return;
         const mode = typeof root.getAppMode === 'function' ? root.getAppMode() : 'BUILD';
+        if (mode === 'TEST' && !played) { played = true; lastSig = ''; }   // a playtest was entered: publishing is next
         const overlay = document.getElementById('bp-overlay') || document.getElementById('bd-overlay');
-        host.style.display = (mode === 'BUILD' && !overlay) ? 'block' : 'none';
+        host.style.display = (mode === 'BUILD' && !overlay && !isRange()) ? 'block' : 'none';
         if (host.style.display === 'none') return;
         const list = steps(), next = nextStep(list);
         const sig = [hidden, listOpen, next.id, list.map(function (s) { return s.done + s.info; }).join('|'), root.getGolfLanguage ? root.getGolfLanguage() : ''].join('#');
