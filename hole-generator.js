@@ -461,6 +461,103 @@
         return false;
     }
 
+    // ---- placed objects (trees, rocks, buildings): a hole must not be built through them -------------------
+    function distToSegment(px, pz, a, b) {
+        let dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz;
+        let t = l2 ? Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.z) * dz) / l2)) : 0;
+        return Math.hypot(px - (a.x + dx * t), pz - (a.z + dz * t));
+    }
+    function circleTouchesPolygon(c, r, poly) {
+        if (inPoly(c.x, c.z, poly)) return true;
+        for (let i = 0; i < poly.length; i++) if (distToSegment(c.x, c.z, poly[i], poly[(i + 1) % poly.length]) < r) return true;
+        return false;
+    }
+    // Only the parts that will be built count (parts: see normalizeParts); a par-3 shape has no fairway, so its
+    // straight route from tee to green is kept clear instead (a trunk on that line would block every shot)
+    function partPolygons(wp, parts) {
+        let p = parts || normalizeParts(null), list = [];
+        if (p.green) list.push(wp.green);
+        if (wp.fairway && p.fairway) list.push(wp.fairway);
+        if (p.tee) (wp.teeBoxes || []).forEach(function (t) { list.push(t); });
+        wp.bunkers.forEach(function (b, i) {
+            let kind = wp.bunkerKinds && wp.bunkerKinds[i];
+            if ((kind === 'green' && !p.greenBunkers) || (kind === 'fairway' && !p.fairwayBunkers)) return;
+            list.push(b);
+        });
+        return list;
+    }
+    // The route only matters when both ends of a fairway-less hole are built
+    function needsRoute(wp, parts) {
+        let p = parts || normalizeParts(null);
+        return !wp.fairway && !!p.tee && !!p.green;
+    }
+    const OBJECT_MARGIN = 2;      // m of clear ground around a trunk, rock or wall
+    const ROUTE_HALF_WIDTH = 3;   // m kept clear on each side of a par-3 route
+    function objectsBlock(wp, objects, parts) {
+        if (!objects || !objects.length) return false;
+        let list = partPolygons(wp, parts);
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        footprint(wp).forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+        let corridor = needsRoute(wp, parts);
+        for (let k = 0; k < objects.length; k++) {
+            let o = objects[k], reach = o.r + OBJECT_MARGIN + (corridor ? ROUTE_HALF_WIDTH : 0);
+            if (o.x < x0 - reach || o.x > x1 + reach || o.z < z0 - reach || o.z > z1 + reach) continue;
+            for (let q = 0; q < list.length; q++) if (circleTouchesPolygon(o, o.r + OBJECT_MARGIN, list[q])) return true;
+            if (corridor) {
+                for (let i = 0; i < wp.centerline.length - 1; i++) if (distToSegment(o.x, o.z, wp.centerline[i], wp.centerline[i + 1]) < o.r + ROUTE_HALF_WIDTH) return true;
+            }
+        }
+        return false;
+    }
+
+    // Fences, walls, hedges and OB stakes drawn as lines (stored per hole in envObjects[].collisionData)
+    function segCross(a, b, c, d) {
+        function o(p, q, r) { return (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x); }
+        return (o(a, b, c) > 0) !== (o(a, b, d) > 0) && (o(c, d, a) > 0) !== (o(c, d, b) > 0);
+    }
+    function segSegDist(a, b, c, d) {
+        if (segCross(a, b, c, d)) return 0;
+        return Math.min(distToSegment(a.x, a.z, c, d), distToSegment(b.x, b.z, c, d), distToSegment(c.x, c.z, a, b), distToSegment(d.x, d.z, a, b));
+    }
+    const WALL_MARGIN = 1.5;      // m of clear ground beside a fence or wall
+    const STAKE_GAP = 30;         // stakes further apart than this are separate markers, not a boundary line
+    function collectWalls() {
+        let out = [];
+        (root.courseHoles || []).forEach(function (h) {
+            ((h && h.envObjects) || []).forEach(function (o) {
+                let pts = o && o.collisionData;
+                if (!pts || pts.length < 2) return;
+                for (let i = 0; i < pts.length - 1; i++) {
+                    let p = pts[i], q = pts[i + 1];
+                    if (typeof p.x !== 'number' || typeof q.x !== 'number') continue;
+                    if (o.type === 'OB_STAKES' && Math.hypot(p.x - q.x, p.z - q.z) > STAKE_GAP) continue;
+                    out.push({ a: { x: p.x, z: p.z }, b: { x: q.x, z: q.z } });
+                }
+            });
+        });
+        return out;
+    }
+    function wallsBlock(wp, walls, parts) {
+        if (!walls || !walls.length) return false;
+        let list = partPolygons(wp, parts), corridor = needsRoute(wp, parts);
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        footprint(wp).forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+        let reach = WALL_MARGIN + (corridor ? ROUTE_HALF_WIDTH : 0);
+        for (let k = 0; k < walls.length; k++) {
+            let w = walls[k];
+            if (Math.max(w.a.x, w.b.x) < x0 - reach || Math.min(w.a.x, w.b.x) > x1 + reach || Math.max(w.a.z, w.b.z) < z0 - reach || Math.min(w.a.z, w.b.z) > z1 + reach) continue;
+            for (let q = 0; q < list.length; q++) {
+                let poly = list[q];
+                if (inPoly(w.a.x, w.a.z, poly) || inPoly(w.b.x, w.b.z, poly)) return true;
+                for (let i = 0; i < poly.length; i++) if (segSegDist(w.a, w.b, poly[i], poly[(i + 1) % poly.length]) < WALL_MARGIN) return true;
+            }
+            if (corridor) {
+                for (let i = 0; i < wp.centerline.length - 1; i++) if (segSegDist(w.a, w.b, wp.centerline[i], wp.centerline[i + 1]) < ROUTE_HALF_WIDTH) return true;
+            }
+        }
+        return false;
+    }
+
     // What a placed hole occupies, in the form tooCloseToOthers() takes: outlines plus the route as loose points
     function obstaclesOf(wp) {
         return { polygons: polys(wp), points: densify(wp.centerline, 20, false) };
@@ -482,6 +579,7 @@
             let ws = env.waterStep || 2;
             if (anyCovered(wp, 6, 12, env.isWater) || anyCovered(wp, ws, ws, env.isWater)) return fail('water');
         }
+        if (env && ((env.objects && objectsBlock(wp, env.objects, env.parts)) || (env.walls && wallsBlock(wp, env.walls, env.parts)))) return fail('object');
         if (env && env.heightAt) {
             let sc = scoreSite(wp, env);
             if (!sc.ok) return { ok: false, reasons: sc.reasons, world: wp };
@@ -641,7 +739,46 @@
     };
     if (typeof setInterval === 'function' && typeof window !== 'undefined') setInterval(refreshPlannedGreenMarker, 700);
 
-    // The environment a hole is placed in: terrain water/height, other holes, map size
+    // Footprints of everything placed on the plate (trees, rocks, buildings): { x, z, r } in metres.
+    // Radius comes from the asset's physics (what the ball collides with); big things (architecture, rocks,
+    // landscape) are never smaller than half their height, so a clubhouse without tuned physics still counts.
+    // the asset library's building and terrain-like categories (see the PROPS/architecture filter in arcade.html)
+    const BIG_SUBCATS = ['BLOCKS', 'ARCHITECTURE', 'STRUCTURES', 'PROPS', 'ROCKS', 'LANDSCAPE'];
+    // Footprint radius (m) of one asset at scale 1, remembered per type: switching asset presets removes the
+    // registry entry while the prop stays on the plate, so the first sighting (placement or load) is kept.
+    const unitFootprint = {};
+    function footprintAtUnitScale(def) {
+        let ph = def.physics || {}, r;
+        if (ph.type === 'tree') r = Math.max(ph.trunkRadius || 0, 0.4);
+        else if (ph.radius) r = ph.radius;
+        else r = 2;
+        if (BIG_SUBCATS.indexOf(def.subcat) >= 0) r = Math.max(r, 0.5 * (def.targetHeight || 0));
+        return r;
+    }
+    function rememberFootprint(type) {
+        let def = root.ASSET_REGISTRY && root.ASSET_REGISTRY[type];
+        if (def) unitFootprint[type] = footprintAtUnitScale(def);
+    }
+    const BLOCK_RADIUS = 2.5;   // the Building Block tool's 3 x 4 x 3 m boxes
+    function collectObjects() {
+        let list = root.placedTrees || [], out = [];
+        list.forEach(function (o) {
+            if (!o || typeof o.x !== 'number' || typeof o.z !== 'number') return;
+            rememberFootprint(o.type);
+            let unit = unitFootprint[o.type];
+            let r = (typeof unit === 'number' ? unit : 2) * (o.scale || 1);
+            out.push({ x: o.x, z: o.z, r: Math.max(0.4, Math.min(60, r)) });
+        });
+        (root.buildingBlocks || []).forEach(function (b) {
+            // a block hit during a playtest is deactivated and taken out of the scene, but stays in the array
+            if (!b || b.active === false || (b.mesh && b.mesh.parent === null)) return;
+            let p = b && b.mesh && b.mesh.position;
+            if (p && typeof p.x === 'number' && typeof p.z === 'number') out.push({ x: p.x, z: p.z, r: (b.radius || BLOCK_RADIUS) });
+        });
+        return out;
+    }
+
+    // The environment a hole is placed in: terrain water/height, other holes, placed objects, map size
     function siteEnv(parts, o) {
         let env = {
             half: (root.TERRAIN_SIZE || 600) / 2,
@@ -650,6 +787,8 @@
             // the terrain lookup already knows painted water and per-cell water levels
             isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; },
             heightAt: root.localGetTerrainAt ? surfaceY : null,
+            objects: collectObjects(),
+            walls: collectWalls(),
             parts: normalizeParts(parts)
         };
         if (o && o.diag) env.diag = {};
@@ -749,7 +888,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)

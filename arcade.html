@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=14"></script>
+<script src="i18n.js?v=15"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -9831,6 +9831,9 @@
             window.loadPolyAsset(type);
         }
 
+        // The hole generator needs this prop's footprint even after a preset switch drops its registry entry
+        if (window.HoleGenerator && window.HoleGenerator.rememberFootprint) window.HoleGenerator.rememberFootprint(type);
+
         // Push data
         window.placedTrees.push({ 
             type: type, 
@@ -9928,6 +9931,7 @@
     }
 
     const targets = [];
+    window.buildingBlocks = targets;   // same array (only ever mutated in place); the hole generator treats blocks as obstacles
     
     function createTargetAbsolute(x, y, z, colStr) {
         let exists = targets.find(t => t.mesh && t.mesh.position.x === x 
@@ -20617,8 +20621,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
 <script src="smart-builder.js?v=42"></script>
-<script src="hole-generator.js?v=17"></script>
-<script src="blueprint.js?v=14"></script>
+<script src="hole-generator.js?v=22"></script>
+<script src="blueprint.js?v=16"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
