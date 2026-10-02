@@ -21,12 +21,20 @@
     function writeHidden(v) { try { localStorage.setItem(KEY, v ? '1' : '0'); } catch (e) { /* storage may be blocked */ } }
 
     // ---- the state of the course -----------------------------------------------------------------------------
+    // Same test as the playtest gate in setMode(): a tee and a flag
+    function isPlayable(h) {
+        const t = h && h.tees;
+        return !!(h && h.flag && t && (t.yellow || t.white || t.red || t.black));
+    }
     function holeCount() {
         const HG = root.HoleGenerator, holes = root.courseHoles || [];
         const total = Math.min(root.MAX_HOLES || 3, holes.length);
-        let built = 0;
-        for (let i = 0; i < total; i++) if (HG && holes[i] && !HG.holeIsEmpty(holes[i])) built++;
-        return { built: built, total: total };
+        let built = 0, partial = -1;
+        for (let i = 0; i < total; i++) {
+            if (isPlayable(holes[i])) built++;
+            else if (HG && holes[i] && !HG.holeIsEmpty(holes[i]) && partial < 0) partial = i;
+        }
+        return { built: built, total: total, partial: partial };
     }
     function hasSurroundings() {
         if (typeof root.getSceneryMaxRadius === 'function' && root.getSceneryMaxRadius() > 0) return true;
@@ -39,10 +47,10 @@
         const h = holeCount();
         return [
             { id: 'holes', done: h.built >= 1, optionalMore: h.built >= 1 && h.built < h.total,
-              label: tr('g_holes', 'Placera hålen'),
+              label: (!h.built && h.partial >= 0) ? tr('g_finish_hole', 'Slutför hålet (tee, green och flagga)') : tr('g_holes', 'Placera hålen'),
               info: h.built ? tr('g_holes_n', '{n} av {m} hål byggda').replace('{n}', h.built).replace('{m}', h.total) : '',
               button: h.built ? tr('g_add_hole', 'Nästa hål') : tr('g_open', 'Öppna'),
-              run: placeHole },
+              run: (!h.built && h.partial >= 0) ? function () { finishHole(h.partial); } : placeHole },
             { id: 'surround', done: hasSurroundings(),
               label: tr('g_surround', 'Bygg omgivningen'), info: '', button: tr('g_open', 'Öppna'),
               run: function () { if (typeof root.openBackdropMap === 'function') root.openBackdropMap(); } },
@@ -61,6 +69,12 @@
     function nextStep(list) {
         for (let i = 0; i < list.length; i++) if (!list[i].done && !list[i].optional) return list[i];
         return list[list.length - 1];
+    }
+
+    // A hole that has some parts but no tee and flag yet: go to it with the hole tool
+    function finishHole(idx) {
+        if (idx !== root.currentHoleIndex && typeof root.changeHoleTo === 'function') root.changeHoleTo(idx);
+        if (typeof root.setTool === 'function') root.setTool('SMART_BUILDER');
     }
 
     // The first empty hole (the current one if it is empty), then the map for it
