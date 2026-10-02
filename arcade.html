@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=19"></script>
+<script src="i18n.js?v=20"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -871,14 +871,15 @@
 
         <!-- Terrain Auto-Paint Preset (shown for MTN tool) -->
         <div id="terrain-paint-group" class="prop-panel" style="display:none; flex-direction:column; gap:6px; width:220px; box-sizing:border-box;">
+            <div data-i18n="mtn_intro" style="color:#94a3b8; font-size:10px; line-height:1.35;">Bygg berg i två steg: rita formen på marken och tryck Bygg. Färga sedan berget med Färga.</div>
             <div style="display:flex; gap:4px; margin-bottom:6px;">
-                <button id="mtn-mode-spline" onclick="setMtnMode('SPLINE')" style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">⛰️ PLATEAU</button>
-                <button id="mtn-mode-ridge" onclick="setMtnMode('RIDGE')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;">🏔️ RIDGE</button>
-                <button id="mtn-mode-stamp" onclick="setMtnMode('STAMP')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🔨 STAMP</button>
-                <button id="mtn-mode-paint" onclick="setMtnMode('PAINT')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;">🎨 AUTO-PAINT</button>
+                <button id="mtn-mode-spline" onclick="setMtnMode('SPLINE')" style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="mtn_tab_hill">⛰️ Kulle</button>
+                <button id="mtn-mode-ridge" onclick="setMtnMode('RIDGE')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 2px; font-size:9px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="mtn_tab_ridge">🏔️ Bergsrygg</button>
+                <button id="mtn-mode-stamp" onclick="setMtnMode('STAMP')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="mtn_tab_stamp">🔨 Stämpel</button>
+                <button id="mtn-mode-paint" onclick="setMtnMode('PAINT')" style="flex:1; background:#334155; color:#94a3b8; border:none; padding:6px 4px; font-size:10px; border-radius:5px; font-weight:bold; cursor:pointer;" data-i18n="mtn_tab_paint">🎨 Färga</button>
             </div>
             <div id="mtn-paint-content">
-            <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🏔️ Terrain Colors</label>
+            <label data-i18n="mtn_colors" style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">🏔️ Bergsfärger</label>
             <input type="hidden" id="terrain-paint-preset" value="NORDIC">
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
                 <!-- NORDIC -->
@@ -889,7 +890,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#656059;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#95908A;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌲 Nordisk</div>
+                    <div data-i18n="mtn_p_nordic" style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌲 Nordisk</div>
                 </div>
                 <!-- ALPINE -->
                 <div class="terrain-style-card" data-preset="ALPINE" onclick="window._selectTerrainPreset('ALPINE', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -899,7 +900,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#706860;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#C0B8A8;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏔️ Alpin</div>
+                    <div data-i18n="mtn_p_alpine" style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏔️ Alpin</div>
                 </div>
                 <!-- DESERT -->
                 <div class="terrain-style-card" data-preset="DESERT" onclick="window._selectTerrainPreset('DESERT', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -909,7 +910,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#8B7355;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#D4C4A0;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏜️ Öken</div>
+                    <div data-i18n="mtn_p_desert" style="color:#e2e8f0; font-size:10px; font-weight:bold;">🏜️ Öken</div>
                 </div>
                 <!-- VOLCANO -->
                 <div class="terrain-style-card" data-preset="VOLCANO" onclick="window._selectTerrainPreset('VOLCANO', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -919,7 +920,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#2D2825;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#5A5550;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌋 Vulkan</div>
+                    <div data-i18n="mtn_p_volcano" style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌋 Vulkan</div>
                 </div>
                 <!-- FOREST -->
                 <div class="terrain-style-card" data-preset="FOREST" onclick="window._selectTerrainPreset('FOREST', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -929,7 +930,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#1E3618;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#90A872;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌲 Grönskande kulle</div>
+                    <div data-i18n="mtn_p_forest" style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌲 Grönskande kulle</div>
                 </div>
                 <!-- HEATHER -->
                 <div class="terrain-style-card" data-preset="HEATHER" onclick="window._selectTerrainPreset('HEATHER', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -939,7 +940,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#323D25;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#9E8394;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🪻 Ljung & Hed</div>
+                    <div data-i18n="mtn_p_heather" style="color:#e2e8f0; font-size:10px; font-weight:bold;">🪻 Ljung & Hed</div>
                 </div>
                 <!-- JUNGLE -->
                 <div class="terrain-style-card" data-preset="JUNGLE" onclick="window._selectTerrainPreset('JUNGLE', this)" style="cursor:pointer; padding:6px; border-radius:6px; border:2px solid #334155; background:#1e293b; text-align:center;">
@@ -949,7 +950,7 @@
                         <span style="width:14px;height:14px;border-radius:3px;background:#0E250A;display:inline-block;" title="Cliff"></span>
                         <span style="width:14px;height:14px;border-radius:3px;background:#85AD42;display:inline-block;" title="Peak"></span>
                     </div>
-                    <div style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌴 Djungel</div>
+                    <div data-i18n="mtn_p_jungle" style="color:#e2e8f0; font-size:10px; font-weight:bold;">🌴 Djungel</div>
                 </div>
             </div>
             <script>
@@ -964,35 +965,35 @@
             </script>
             <div style="margin-top:6px;">
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between;">
-                    ⛰️ Peak Coverage
+                    <span data-i18n="mtn_peak">⛰️ Toppar</span>
                     <span id="mtn-peak-val" style="color:#e2e8f0;">55%</span>
                 </label>
                 <input type="range" id="mtn-peak-slider" min="0" max="100" value="55" step="5"
                     oninput="window._mtnPeakRatio = (100 - this.value) / 100; document.getElementById('mtn-peak-val').textContent = this.value + '%';"
                     style="width:100%; accent-color:#4ade80; cursor:pointer; margin-top:2px;" title="How much of the mountain gets the light peak color">
                 <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px; margin-top:-2px;">
-                    <span>More rock</span>
-                    <span>More peak</span>
+                    <span data-i18n="mtn_more_rock">Mer sten</span>
+                    <span data-i18n="mtn_more_peak">Mer topp</span>
                 </div>
             </div>
             <div style="margin-top:4px;">
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between;">
-                    🌊 Edge Roughness
+                    <span data-i18n="mtn_rough">🌊 Ojämn kant</span>
                     <span id="mtn-rough-val" style="color:#e2e8f0;">5m</span>
                 </label>
                 <input type="range" id="mtn-rough-slider" min="0" max="15" value="5" step="1"
                     oninput="window._mtnEdgeRoughness = parseFloat(this.value); document.getElementById('mtn-rough-val').textContent = this.value + 'm';"
                     style="width:100%; accent-color:#f59e0b; cursor:pointer; margin-top:2px;" title="How jagged the color transitions are">
                 <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px; margin-top:-2px;">
-                    <span>Clean</span>
-                    <span>Ragged</span>
+                    <span data-i18n="mtn_clean">Ren</span>
+                    <span data-i18n="mtn_ragged">Ojämn</span>
                 </div>
             </div>
             </div> <!-- End mtn-paint-content -->
             <div id="mtn-stamp-content" style="display:none;"></div>
             <div id="mtn-spline-content" style="display:none; flex-direction:column; gap:6px;">
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between;">
-                    🏔️ Mountain Height
+                    <span data-i18n="mtn_height">🏔️ Bergets höjd</span>
                     <span id="mtn-spline-height-val" style="color:#e2e8f0;">25m</span>
                 </label>
                 <input type="range" id="mtn-spline-height" min="2" max="290" value="25" step="1"
@@ -1000,39 +1001,48 @@
                     style="width:100%; accent-color:#38bdf8; cursor:pointer; margin-top:2px;" title="Height of the mountain's highest point">
                 
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between; margin-top:4px;">
-                    ⚡ Jaggedness
+                    <span data-i18n="mtn_jagged">⚡ Skrovlighet</span>
                     <span id="mtn-spline-jagged-val" style="color:#e2e8f0;">50%</span>
                 </label>
                 <input type="range" id="mtn-spline-jagged" min="0" max="100" value="50" step="5"
                     oninput="document.getElementById('mtn-spline-jagged-val').textContent = this.value + '%';"
                     style="width:100%; accent-color:#38bdf8; cursor:pointer; margin-top:2px;" title="Control how rough or smooth the mountain surface is">
                 <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px; margin-top:-2px; margin-bottom:4px;">
-                    <span>Smooth & Round</span>
-                    <span>Rough & Jagged</span>
+                    <span data-i18n="mtn_smooth">Mjukt och runt</span>
+                    <span data-i18n="mtn_rough_jagged">Skrovligt och vasst</span>
                 </div>
                 
                 <div style="display:flex; gap:6px; margin-top:8px;">
                     <button onclick="if(window._mtnToolMode === 'RIDGE' && typeof window.executeRidgeMountain === 'function') window.executeRidgeMountain(); else if (typeof window.executeSplineMountain === 'function') window.executeSplineMountain();" 
                             style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:8px 6px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
-                        ⛰️ Build Mountain
+                        <span data-i18n="mtn_build">⛰️ Bygg berg</span>
                     </button>
                     <button onclick="if(typeof window.clearSpline === 'function') window.clearSpline();" 
                             style="background:#ef4444; color:#ffffff; border:none; padding:8px 10px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer;" 
                             title="Clear line">
-                        ❌ Clear
+                        <span data-i18n="mtn_clear">❌ Rensa</span>
                     </button>
                 </div>
                 
                 
                 <div id="mtn-help-plateau" style="color:#64748b; font-size:9px; line-height:1.3; margin-top:8px; padding:6px; background:#1e293b; border-radius:5px; border:1px dashed #334155;">
-                    💡 <b>Plateau:</b> Left-click to draw a closed shape (at least 3 points). The hill is built inside the shape. Right-click to undo last point.
+                    <span data-i18n="mtn_help_hill" data-i18n-html="true">💡 <b>Kulle:</b> Klicka för att rita en sluten form (minst 3 punkter). Kullen byggs inuti formen. Högerklick tar bort sista punkten. Nära plattans kant sänks berget mjukt mot noll.</span>
                 </div>
                 <div id="mtn-help-ridge" style="display:none; color:#64748b; font-size:9px; line-height:1.3; margin-top:8px; padding:6px; background:#1e293b; border-radius:5px; border:1px dashed #f59e0b44;">
-                    💡 <b>Ridge:</b> Left-click to draw an open path (at least 2 points). A mountain ridge rises along the line. Right-click to undo last point.
+                    <span data-i18n="mtn_help_ridge" data-i18n-html="true">💡 <b>Bergsrygg:</b> Klicka för att rita en linje (minst 2 punkter). Ryggen reser sig längs linjen. Högerklick tar bort sista punkten. Nära plattans kant sänks berget mjukt mot noll.</span>
                 </div>
             </div>
             <script>
                 window._mtnToolMode = 'SPLINE';
+                // The hint line under the canvas follows the active Berg mode
+                window.mtnHintHtml = function () {
+                    const t = function (k, fb) { return (window.t && window.t(k) !== k) ? window.t(k) : fb; };
+                    const m = window._mtnToolMode;
+                    if (m === 'RIDGE') return t('mtn_hint_ridge', 'Klicka: <b>rita linjen</b> · Högerklick: ta bort sista punkten · Tryck <b>Bygg berg</b>');
+                    if (m === 'STAMP') return t('mtn_hint_stamp', 'Klicka på marken: <b>fånga eller klistra in en terrängstämpel</b>');
+                    if (m === 'PAINT') return t('mtn_hint_paint', 'Klicka på ett berg: <b>färgas automatiskt med vald stil</b>');
+                    return t('mtn_hint_hill', 'Klicka: <b>rita formen</b> · Högerklick: ta bort sista punkten · Tryck <b>Bygg berg</b>');
+                };
                 function setMtnMode(mode) {
                     window._mtnToolMode = mode;
                     document.getElementById('mtn-mode-paint').style.background = mode === 'PAINT' ? '#4ade80' : '#334155';
@@ -1052,6 +1062,9 @@
                     if (typeof window.clearSpline === 'function') {
                         window.clearSpline();
                     }
+                    // update the hint line while the Berg panel is the one showing
+                    let grp = document.getElementById('terrain-paint-group'), hints = document.getElementById('tool-hints');
+                    if (grp && hints && grp.style.display !== 'none') hints.innerHTML = window.mtnHintHtml();
                     
                     // Om vi byter från STAMP till PAINT måste penseln återställas
                     if (mode === 'PAINT' && typeof window.updateBrushSize === 'function') {
@@ -16565,7 +16578,7 @@
         else if (toolName === 'NOISE') hintHtml = (window.getGolfLanguage && window.getGolfLanguage() === 'sv')
             ? "Håll Vänster: <b>Forma kupering</b><br>Håll Höger: <b>Gröp ur & erodera</b>"
             : "Hold Left: <b>Add organic undulations</b><br>Hold Right: <b>Erode & carve hollows</b>";
-        else if (toolName === 'MTN') hintHtml = "Click on mountain: <b>Auto-paint with terrain colors</b> (flood-fill detects mountain)";
+        else if (toolName === 'MTN') hintHtml = (typeof window.mtnHintHtml === 'function') ? window.mtnHintHtml() : '';
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
         if (typeof window.updateBottomHUDLayout === 'function') {
@@ -20624,7 +20637,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=43"></script>
+<script src="smart-builder.js?v=44"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=9"></script>

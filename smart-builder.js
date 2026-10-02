@@ -6292,14 +6292,26 @@ window.executeSplineSmartGreen = function() {
     }
 
     
+// Berg tool helpers: translated text, and a fade that brings a mountain smoothly down to zero at the plate edge
+// (outside the plate the ground is a flat plane, so a raised edge would be a vertical wall)
+function _mtnT(key, fb) { return (window.t && window.t(key) !== key) ? window.t(key) : fb; }
+function _mtnEdgeFade(x, z, height) {
+    const half = (window.TERRAIN_SIZE || 600) / 2;
+    const d = Math.min(half - Math.abs(x), half - Math.abs(z));
+    const reach = Math.max(30, Math.min(150, Math.abs(height) * 1.5));
+    const t = Math.max(0, Math.min(1, d / reach));
+    return t * t * (3 - 2 * t);
+}
+window.mountainEdgeFade = _mtnEdgeFade;
+
 window.executeRidgeMountain = function() {
     if (!window.splinePoints || window.splinePoints.length < 2) {
-        if (window.showBuildToast) window.showBuildToast('Requires at least 2 points', '#ef4444');
+        if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_need2', '⚠️ Rita minst 2 punkter för en bergsrygg!'), '#ef4444');
         return;
     }
     
     window.saveUndoState();
-    if (window.showBuildToast) window.showBuildToast('Building mountain ridge...', '#38bdf8');
+    if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_building_ridge', '⏳ Bygger bergsryggen…'), '#38bdf8');
     
     // Read height from the MTN spline height slider (shared with Plateau mode)
     let targetHeight = parseFloat(document.getElementById('mtn-spline-height').value) || 25.0;
@@ -6378,7 +6390,7 @@ window.executeRidgeMountain = function() {
                 
                 // Taper noise at edges, apply jagged multiplier
                 let noiseMod = noiseVal * targetHeight * 0.25 * baseFalloff * jaggedMultiplier;
-                let newH = origH + (targetHeight * baseFalloff) + noiseMod;
+                let newH = origH + ((targetHeight * baseFalloff) + noiseMod) * _mtnEdgeFade(vx, vz, targetHeight);
                 
                 positions[idx * 3 + 2] = newH; // Write to height (localZ)
                 modified = true;
@@ -6405,16 +6417,16 @@ window.executeRidgeMountain = function() {
         window.clearSpline();
     }
     
-    if (window.showBuildToast) window.showBuildToast('🏔️ Ridge built!', '#38bdf8');
+    if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_ridge_done', '🏔️ Bergsrygg byggd!'), '#38bdf8');
     if (typeof window.saveLevel === 'function') window.saveLevel();
 };
 
 window.executeSplineMountain = function() {
         if (!window.splinePoints || window.splinePoints.length < 3) {
             if (window.showBuildToast) {
-                window.showBuildToast('⚠️ Draw at least 3 points to create a mountain!', '#f59e0b');
+                window.showBuildToast(_mtnT('mtn_need3', '⚠️ Rita minst 3 punkter för en kulle!'), '#f59e0b');
             } else {
-                alert('Draw at least 3 points to create a mountain!');
+                alert(_mtnT('mtn_need3', 'Rita minst 3 punkter för en kulle!'));
             }
             return;
         }
@@ -6508,7 +6520,7 @@ window.executeSplineMountain = function() {
         }
 
         if (insideVertices.length === 0 || maxD === 0) {
-            if (window.showBuildToast) window.showBuildToast('⚠️ No terrain found inside the shape!', '#f59e0b');
+            if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_none_inside', '⚠️ Ingen mark hittades inuti formen!'), '#f59e0b');
             return;
         }
 
@@ -6530,7 +6542,7 @@ window.executeSplineMountain = function() {
             let noiseVal = fbm(v.x * 0.1, v.z * 0.1, 3, 2.0, 0.5) * (mtnHeight * 0.15) * jaggedMultiplier;
             
             // Slutlig höjdändring
-            let targetH = v.origH + (mtnHeight + noiseVal) * falloff;
+            let targetH = v.origH + (mtnHeight + noiseVal) * falloff * _mtnEdgeFade(v.x, v.z, mtnHeight);
             positions[v.idx * 3 + 2] = targetH;
         });
 
@@ -6550,7 +6562,7 @@ window.executeSplineMountain = function() {
             window.clearSpline();
         }
 
-        if (window.showBuildToast) window.showBuildToast('⛰️ Mountain built!', '#38bdf8');
+        if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_hill_done', '⛰️ Kulle byggd!'), '#38bdf8');
         if (typeof window.saveLevel === 'function') window.saveLevel();
     };
 })();
