@@ -75,6 +75,10 @@
         const s = S.sketches[i];
         s.ev = root.HoleGenerator.evaluateSite(s.plan, s.origin, s.heading, envFor(i));
     }
+    // A sketch that moved may have made room for (or taken room from) the others: refresh their cached results
+    function revalidateOthers(except) {
+        S.sketches.forEach(function (s, j) { if (j !== except && s.ev) evaluate(j); });
+    }
     function makeSketch(par) {
         const seed = Math.floor(Math.random() * 1e9);
         return { par: par, seed: seed, plan: root.HoleGenerator.planFor(par, seed), origin: { x: 0, z: 0 }, heading: 0, ev: null };
@@ -244,12 +248,14 @@
                 evaluate(i);
                 flashNote(tr('bp_none', 'Ingen ledig plats här – flytta hålet'), true);
             }
+            revalidateOthers(i);
             refreshUi();
         }, 30);
     }
     function settle(i) {
         evaluate(i);
-        if (!S.sketches[i].ev.ok) snapToValid(i, true); else refreshUi();
+        if (!S.sketches[i].ev.ok) snapToValid(i, true);
+        else { revalidateOthers(i); refreshUi(); }
     }
     function newShape() {
         const s = cur();
@@ -268,36 +274,47 @@
         settle(S.sel);
     }
     // Find a good starting spot for sketch i: random tries first, then the closest legal spot around a few
-    // anchor points, and finally another shape (a crowded map may only have room for a smaller one)
-    function findSpot(i) {
-        const HG = root.HoleGenerator, s = S.sketches[i], env = envFor(i), t0 = Date.now();
-        const lim = S.half * 0.55, anchors = [[0, 0], [-lim, -lim], [lim, -lim], [-lim, lim], [lim, lim]];
-        for (let round = 0; round < 3; round++) {
-            const res = HG.place(s.plan, HG.mulberry32((s.seed ^ 0x5bd1e995) >>> 0), env);
-            if (res) return { origin: { x: res.origin.x, z: res.origin.z }, heading: res.heading };
-            for (let k = 0; k < anchors.length; k++) {
-                const nv = HG.nearestValidSite(s.plan, { x: anchors[k][0], z: anchors[k][1] }, 0, env, 500);
-                if (nv) return { origin: nv.origin, heading: nv.heading };
-            }
-            if (Date.now() - t0 > 6000) break;
-            s.seed = Math.floor(Math.random() * 1e9);
-            s.plan = HG.planFor(s.par, s.seed);
-        }
-        return null;
-    }
+    // anchor points, and finally another shape (a crowded map may only have room for a smaller one).
+    // Each step runs in its own timer tick (the page stays responsive and the map can be closed) and the
+    // whole search shares one deadline.
     function suggest(i) {
+        const HG = root.HoleGenerator, s = S.sketches[i];
+        const lim = S.half * 0.55, anchors = [[0, 0], [-lim, -lim], [lim, -lim], [-lim, lim], [lim, lim]];
+        const deadline = Date.now() + 7000, token = ++S.findToken;
+        let round = 0, step = -1;
         S.busy = true; refreshUi();
-        setTimeout(function () {
-            if (!S) return;
-            const s = S.sketches[i];
-            const spot = findSpot(i);
+        const finish = function (spot) {
             S.busy = false;
             if (spot) { s.origin = spot.origin; s.heading = spot.heading; }
             else { s.origin = { x: -s.plan.length / 2, z: 0 }; s.heading = 0; }
             evaluate(i);
+            revalidateOthers(i);
             if (!spot) flashNote(tr('bp_none', 'Ingen ledig plats här – flytta hålet'), true);
             refreshUi();
-        }, 40);
+        };
+        const tick = function () {
+            if (!S || token !== S.findToken) return;
+            const env = envFor(i);
+            let spot = null;
+            if (step < 0) {
+                const res = HG.place(s.plan, HG.mulberry32((s.seed ^ 0x5bd1e995) >>> 0), env);
+                if (res) spot = { origin: { x: res.origin.x, z: res.origin.z }, heading: res.heading };
+            } else {
+                const nv = HG.nearestValidSite(s.plan, { x: anchors[step][0], z: anchors[step][1] }, 0, env, clamp(deadline - Date.now(), 50, 500));
+                if (nv) spot = { origin: nv.origin, heading: nv.heading };
+            }
+            if (spot) return finish(spot);
+            if (Date.now() > deadline) return finish(null);
+            step++;
+            if (step >= anchors.length) {
+                if (++round >= 3) return finish(null);
+                step = -1;
+                s.seed = Math.floor(Math.random() * 1e9);
+                s.plan = HG.planFor(s.par, s.seed);
+            }
+            setTimeout(tick, 0);
+        };
+        setTimeout(tick, 40);
     }
     function addHole() {
         if (S.busy || S.sketches.length >= S.holes.length) return;
@@ -310,6 +327,7 @@
         if (S.busy || S.sketches.length < 2) return;
         S.sketches.splice(S.sel, 1);
         S.sel = clamp(S.sel, 0, S.sketches.length - 1);
+        S.sketches.forEach(function (s, j) { evaluate(j); });
         refreshUi();
     }
     function moveHole(dir) {
@@ -485,7 +503,7 @@
             dom: { overlay: overlay, status: status, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, half: half, size: half * 2, mPerPx: half * 2 / C,
             baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
-            drag: null, busy: false, snapToken: 0, raf: 0, note: null, noteBad: false, handles: null
+            drag: null, busy: false, snapToken: 0, findToken: 0, raf: 0, note: null, noteBad: false, handles: null
         };
         const env = HG.siteEnv(root._hgParts || null);
         env.others = Array.isArray(env.others) ? { points: env.others, polygons: [] } : (env.others || { points: [], polygons: [] });
@@ -502,5 +520,5 @@
     }
 
     root.openHoleBlueprint = open;
-    root.HoleBlueprint = { open: open, close: close, state: function () { return S; }, build: build, addHole: addHole };
+    root.HoleBlueprint = { open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
 })(typeof window !== 'undefined' ? window : globalThis);
