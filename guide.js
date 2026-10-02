@@ -46,11 +46,11 @@
     function steps() {
         const h = holeCount();
         return [
-            { id: 'holes', done: h.built >= 1, optionalMore: h.built >= 1 && h.built < h.total,
-              label: (!h.built && h.partial >= 0) ? tr('g_finish_hole', 'Slutför hålet (tee, green och flagga)') : tr('g_holes', 'Placera hålen'),
+            { id: 'holes', done: h.built >= 1 && h.partial < 0, optionalMore: h.built >= 1 && h.built < h.total,
+              label: (h.partial >= 0) ? tr('g_finish_hole', 'Slutför hålet (tee, green och flagga)') : tr('g_holes', 'Placera hålen'),
               info: h.built ? tr('g_holes_n', '{n} av {m} hål byggda').replace('{n}', h.built).replace('{m}', h.total) : '',
-              button: h.built ? tr('g_add_hole', 'Nästa hål') : tr('g_open', 'Öppna'),
-              run: (!h.built && h.partial >= 0) ? function () { finishHole(h.partial); } : placeHole },
+              button: (h.partial >= 0) ? tr('g_open', 'Öppna') : (h.built ? tr('g_add_hole', 'Nästa hål') : tr('g_open', 'Öppna')),
+              run: (h.partial >= 0) ? function () { finishHole(h.partial); } : placeHole },
             { id: 'surround', done: hasSurroundings(),
               label: tr('g_surround', 'Bygg omgivningen'), info: '', button: tr('g_open', 'Öppna'),
               run: function () { if (typeof root.openBackdropMap === 'function') root.openBackdropMap(); } },
@@ -97,7 +97,7 @@
     function render() {
         if (!host) return;
         const mode = typeof root.getAppMode === 'function' ? root.getAppMode() : 'BUILD';
-        if (mode === 'TEST' && !played) { played = true; lastSig = ''; }   // a playtest was entered: publishing is next
+        if (mode === 'TEST' && !played && root.activePlayerId === 'tester') { played = true; lastSig = ''; }   // a playtest was entered: publishing is next
         const overlay = document.getElementById('bp-overlay') || document.getElementById('bd-overlay');
         host.style.display = (mode === 'BUILD' && !overlay && !isRange()) ? 'block' : 'none';
         if (host.style.display === 'none') return;

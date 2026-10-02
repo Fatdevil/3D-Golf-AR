@@ -16112,6 +16112,8 @@
                 document.body.appendChild(toast);
                 setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s'; }, 2500);
                 setTimeout(() => toast.remove(), 3000);
+                // appMode was already switched above, so put the builder (and its buttons) back in BUILD
+                setMode('BUILD');
                 return; // Stay in BUILD mode
             }
             
@@ -20647,7 +20649,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=9"></script>
-<script src="guide.js?v=3"></script>
+<script src="guide.js?v=4"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
