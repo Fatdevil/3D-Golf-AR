@@ -48,6 +48,10 @@
         return Math.min(far, FOG_LIMIT);
     }
     root.getSceneryMaxRadius = sceneryMaxRadius;
+    // a big figure (shelf size or more) really stands outside the plate
+    root.hasOuterScenery = function () {
+        return (root.placedTrees || []).some(function (o) { return o && outsidePlate(o) && heightOf(o) >= SHELF_MIN; });
+    };
     let lastFog = 0;
     function refreshFog() {
         const r = Math.round(sceneryMaxRadius());

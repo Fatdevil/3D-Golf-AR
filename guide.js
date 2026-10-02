@@ -52,7 +52,7 @@
     // map, or an edge uses something other than the two start values (rough, deep rough)
     function hasSurroundings() {
         if (root._surroundTouched) return true;
-        if (typeof root.getSceneryMaxRadius === 'function' && root.getSceneryMaxRadius() > 0) return true;
+        if (typeof root.hasOuterScenery === 'function' && root.hasOuterScenery()) return true;
         const c = root.surroundConfig;
         return !!c && ['N', 'E', 'S', 'W'].some(function (k) { return c[k] && c[k] !== 'roughColor' && c[k] !== 'fescueColor'; });
     }
@@ -76,7 +76,7 @@
             { id: 'nature', done: natureCount() >= NATURE_COUNT, optional: true,
               label: tr('g_nature', 'Lägg till natur'), info: tr('g_optional', 'valfritt'), button: tr('g_open', 'Öppna'),
               run: function () { if (typeof root.setTool === 'function') root.setTool('PROPS'); } },
-            { id: 'play', done: !!root._courseTested,
+            { id: 'play', done: !!root._courseTested && root._courseTested === (root.getCourseSignature && root.getCourseSignature()),
               label: tr('g_test', 'Testspela banan'), info: '', button: tr('g_test_short', 'Testspela'),
               run: function () { click('btn-mode-play'); } },
             { id: 'publish', done: false,

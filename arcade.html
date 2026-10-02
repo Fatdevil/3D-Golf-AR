@@ -15961,6 +15961,28 @@
         isMeasuring = false;
     }, false);
     
+    // cheap fingerprint of everything a playtest depends on; the next-step guide compares it with the one taken at test time
+    window.getCourseSignature = function () {
+        const r = (v) => Math.round((v || 0) * 10);
+        const parts = [];
+        (courseHoles || []).forEach(function (h) {
+            if (!h) { parts.push('-'); return; }
+            const t = h.tees || {};
+            parts.push(['yellow', 'white', 'red', 'black', 'range'].map(function (k) { return t[k] ? r(t[k].x) + ',' + r(t[k].z) : ''; }).join('|') +
+                '/' + (h.flag ? r(h.flag.x) + ',' + r(h.flag.z) : ''));
+        });
+        (window.placedTrees || []).forEach(function (o) { if (o) parts.push(o.type + r(o.x) + ',' + r(o.z) + ',' + r(o.scale)); });
+        try {
+            const pos = planeGeo.attributes.position.array;
+            for (let i = 2; i < pos.length; i += 3 * 61) parts.push(r(pos[i]));
+            const w = window.waterData;
+            if (w) for (let i = 0; i < w.length; i += 61) parts.push(r(w[i]));
+        } catch (e) { /* terrain not ready */ }
+        let hsh = 0;
+        const str = parts.join(';');
+        for (let i = 0; i < str.length; i++) hsh = (hsh * 31 + str.charCodeAt(i)) | 0;
+        return hsh + ':' + str.length;
+    };
     window.getAppMode = function () { return appMode; };
     function setMode(mode) {
         finalizeSculptStroke({ save: true });
@@ -16122,7 +16144,6 @@
             playState = 'ROUND_IDLE';
             window.activePlayerId = 'tester';
             window.activePlayerIndex = 0; // BUG-08 FIX: Set activePlayerIndex
-            window._courseTested = true; // the next-step guide: a playtest really started
             window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true, scores: Array(MAX_HOLES).fill(null), scoreVsPar: Array(MAX_HOLES).fill(null), holedOut: false, prevPos: null } ];
             
             // BUG-06 FIX: Set pinMesh from current hole's flag
@@ -16144,10 +16165,11 @@
             if (mmC) mmC.style.display = 'block';
             
             // Find tee — support range tees as fallback
-            let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red || courseHoles[0].tees.range) : null;
+            let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red || courseHoles[0].tees.white || courseHoles[0].tees.black || courseHoles[0].tees.range) : null;
             let isRangeTee = tee && courseHoles[0].tees.range && tee === courseHoles[0].tees.range;
             
             if(tee) {
+                window._courseTested = window.getCourseSignature(); // the next-step guide: this exact course really was test-played
                 window.ballPos.x = tee.x; window.ballPos.y = tee.y + 0.2; window.ballPos.z = tee.z;
                 window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
                 window.ballMesh.visible = true;
@@ -20649,8 +20671,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="smart-builder.js?v=44"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
-<script src="backdrop.js?v=10"></script>
-<script src="guide.js?v=7"></script>
+<script src="backdrop.js?v=11"></script>
+<script src="guide.js?v=8"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
