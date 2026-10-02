@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=17"></script>
+<script src="i18n.js?v=18"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -7396,7 +7396,8 @@
             
             // Save to course data
             if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
-                courseHoles[currentHoleIndex].surroundConfig = Object.assign({}, window.surroundConfig);
+                // the surroundings belong to the whole plate, so every hole on it keeps the same setting
+                courseHoles.forEach(function (h) { if (h) h.surroundConfig = Object.assign({}, window.surroundConfig); });
                 if (typeof saveLevel === 'function') saveLevel();
             }
         }
@@ -7453,24 +7454,23 @@
         let hole = courseHoles[currentHoleIndex];
         if (window.surroundPlane) window.surroundPlane.visible = true; // Always visible now
         
-        if(hole && hole.surroundConfig) {
-            window.surroundConfig = Object.assign({}, hole.surroundConfig);
-        } else if(hole && hole.surrounding) {
+        // One setting for the whole plate: take the first hole that has one (older courses stored it per hole)
+        let plateCfg = null;
+        for (let i = 0; i < courseHoles.length && !plateCfg; i++) if (courseHoles[i] && courseHoles[i].surroundConfig) plateCfg = courseHoles[i].surroundConfig;
+        let legacyHole = null;
+        for (let i = 0; i < courseHoles.length && !legacyHole; i++) if (courseHoles[i] && courseHoles[i].surrounding) legacyHole = courseHoles[i];
+        if(plateCfg) {
+            window.surroundConfig = Object.assign({}, plateCfg);
+        } else if(legacyHole) {
             // Legacy migration
-            let p = hole.surrounding.preset;
+            let p = legacyHole.surrounding.preset;
             let mapKey = 'fescueColor';
             if (p === 'OCEAN' || p === 'LAKE') mapKey = 'oceanColor';
             else if (p === 'SAND') mapKey = 'wasteColor';
             
             window.surroundConfig = { N: mapKey, E: mapKey, S: mapKey, W: mapKey };
         } else {
-            // No saved config — inherit from previous hole or use default
-            let prevIdx = currentHoleIndex - 1;
-            if (prevIdx >= 0 && courseHoles[prevIdx] && courseHoles[prevIdx].surroundConfig) {
-                window.surroundConfig = Object.assign({}, courseHoles[prevIdx].surroundConfig);
-            } else {
-                window.surroundConfig = { N: 'roughColor', E: 'roughColor', S: 'roughColor', W: 'roughColor' };
-            }
+            window.surroundConfig = { N: 'roughColor', E: 'roughColor', S: 'roughColor', W: 'roughColor' };
         }
         
         // Update UI — ground color dropdowns only
