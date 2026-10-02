@@ -461,6 +461,10 @@
         return false;
     }
 
+    // What a placed hole occupies, in the form tooCloseToOthers() takes: outlines plus the route as loose points
+    function obstaclesOf(wp) {
+        return { polygons: polys(wp), points: densify(wp.centerline, 20, false) };
+    }
     function normOthers(others) {
         return Array.isArray(others) ? { points: others, polygons: [] } : others;
     }
@@ -745,7 +749,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
