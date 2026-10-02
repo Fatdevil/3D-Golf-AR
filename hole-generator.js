@@ -691,16 +691,34 @@
     // landscape) are never smaller than half their height, so a clubhouse without tuned physics still counts.
     // the asset library's building and terrain-like categories (see the PROPS/architecture filter in arcade.html)
     const BIG_SUBCATS = ['BLOCKS', 'ARCHITECTURE', 'STRUCTURES', 'PROPS', 'ROCKS', 'LANDSCAPE'];
+    // Footprint radius (m) of one asset at scale 1, remembered per type: switching asset presets removes the
+    // registry entry while the prop stays on the plate, so the first sighting (placement or load) is kept.
+    const unitFootprint = {};
+    function footprintAtUnitScale(def) {
+        let ph = def.physics || {}, r;
+        if (ph.type === 'tree') r = Math.max(ph.trunkRadius || 0, 0.4);
+        else if (ph.radius) r = ph.radius;
+        else r = 2;
+        if (BIG_SUBCATS.indexOf(def.subcat) >= 0) r = Math.max(r, 0.5 * (def.targetHeight || 0));
+        return r;
+    }
+    function rememberFootprint(type) {
+        let def = root.ASSET_REGISTRY && root.ASSET_REGISTRY[type];
+        if (def) unitFootprint[type] = footprintAtUnitScale(def);
+    }
+    const BLOCK_RADIUS = 2.5;   // the Building Block tool's 3 x 4 x 3 m boxes
     function collectObjects() {
-        let list = root.placedTrees || [], reg = root.ASSET_REGISTRY || {}, out = [];
+        let list = root.placedTrees || [], out = [];
         list.forEach(function (o) {
             if (!o || typeof o.x !== 'number' || typeof o.z !== 'number') return;
-            let def = reg[o.type] || {}, ph = def.physics || {}, sc = o.scale || 1, r;
-            if (ph.type === 'tree') r = Math.max(ph.trunkRadius || 0, 0.4) * sc;
-            else if (ph.radius) r = ph.radius * sc;
-            else r = 2 * sc;
-            if (BIG_SUBCATS.indexOf(def.subcat) >= 0) r = Math.max(r, 0.5 * (def.targetHeight || 0) * sc);
+            rememberFootprint(o.type);
+            let unit = unitFootprint[o.type];
+            let r = (typeof unit === 'number' ? unit : 2) * (o.scale || 1);
             out.push({ x: o.x, z: o.z, r: Math.max(0.4, Math.min(60, r)) });
+        });
+        (root.buildingBlocks || []).forEach(function (b) {
+            let p = b && b.mesh && b.mesh.position;
+            if (p && typeof p.x === 'number' && typeof p.z === 'number') out.push({ x: p.x, z: p.z, r: (b.radius || BLOCK_RADIUS) });
         });
         return out;
     }
@@ -814,7 +832,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, collectObjects: collectObjects, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, collectObjects: collectObjects, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
