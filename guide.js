@@ -2,8 +2,8 @@
  * Next-step guide: one small chip in the builder that always says what to do next and does it with one tap.
  * The steps follow the way a plate is built: place the holes, build the surroundings, add nature, then test and
  * publish. Everything it opens already exists (Placera på karta, Bakgrund, the Props tool); the guide only decides
- * what is worth suggesting now, from the state of the course. A tap on the arrow lists all steps; the cross hides
- * the guide down to a small compass that brings it back.
+ * what is worth suggesting now, from the state of the course. A tap on the arrow lists all steps; "Dölj guiden"
+ * shrinks it to a small compass that brings it back.
  */
 (function (root) {
     'use strict';
@@ -56,7 +56,11 @@
         const c = root.surroundConfig;
         return !!c && ['N', 'E', 'S', 'W'].some(function (k) { return c[k] && c[k] !== 'roughColor' && c[k] !== 'fescueColor'; });
     }
-    function natureCount() { return (root.placedTrees || []).length; }
+    // objects on the plate itself (figures standing outside it belong to the surroundings step)
+    function natureCount() {
+        const half = (root.TERRAIN_SIZE || 600) / 2;
+        return (root.placedTrees || []).filter(function (o) { return o && Math.abs(o.x) <= half && Math.abs(o.z) <= half; }).length;
+    }
 
     function steps() {
         const h = holeCount();
@@ -137,7 +141,7 @@
         main.type = 'button';
         main.textContent = '🧭 ' + (next.id === 'holes' && next.done ? tr('g_add_hole', 'Nästa hål') : next.label) + ' ›';
         main.style.cssText = chipStyle('min-height:36px; padding:0 14px; border-radius:18px; font-size:13px; background:linear-gradient(90deg,#0ea5e9,#6366f1); box-shadow:0 2px 10px rgba(0,0,0,0.35); max-width:62vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;');
-        main.onclick = function () { next.run(); };
+        main.onclick = function () { nextStep(steps()).run(); };   // fresh state, not the one drawn a moment ago
         const more = document.createElement('button');
         more.type = 'button'; more.textContent = listOpen ? '▴' : '▾';
         more.title = tr('g_all_steps', 'Alla steg');
@@ -161,7 +165,10 @@
             const go = document.createElement('button');
             go.type = 'button'; go.textContent = s.button;
             go.style.cssText = chipStyle('min-height:28px; padding:0 10px; border-radius:14px; font-size:11px; background:#1e293b; border:1px solid #475569;');
-            go.onclick = function () { s.run(); };
+            go.onclick = function () {
+                const fresh = steps().filter(function (x) { return x.id === s.id; })[0];
+                (fresh || s).run();
+            };
             r.appendChild(mark); r.appendChild(txt); r.appendChild(go);
             panel.appendChild(r);
         });
