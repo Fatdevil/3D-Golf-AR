@@ -154,7 +154,7 @@
         const out = [];
         Object.keys(root.ASSET_REGISTRY || {}).forEach(function (type) {
             const d = root.ASSET_REGISTRY[type];
-            if (!d || type.indexOf('POLY_') === 0) return;
+            if (!d) return;
             const h = d.targetHeight || 0;
             if (B.showAll ? true : h >= SHELF_MIN) out.push({ type: type, def: d, h: h });
         });
