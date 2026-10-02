@@ -486,6 +486,11 @@
         });
         return list;
     }
+    // The route only matters when both ends of a fairway-less hole are built
+    function needsRoute(wp, parts) {
+        let p = parts || normalizeParts(null);
+        return !wp.fairway && !!p.tee && !!p.green;
+    }
     const OBJECT_MARGIN = 2;      // m of clear ground around a trunk, rock or wall
     const ROUTE_HALF_WIDTH = 3;   // m kept clear on each side of a par-3 route
     function objectsBlock(wp, objects, parts) {
@@ -493,7 +498,7 @@
         let list = partPolygons(wp, parts);
         let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
         footprint(wp).forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
-        let corridor = !wp.fairway;
+        let corridor = needsRoute(wp, parts);
         for (let k = 0; k < objects.length; k++) {
             let o = objects[k], reach = o.r + OBJECT_MARGIN + (corridor ? ROUTE_HALF_WIDTH : 0);
             if (o.x < x0 - reach || o.x > x1 + reach || o.z < z0 - reach || o.z > z1 + reach) continue;
@@ -534,7 +539,7 @@
     }
     function wallsBlock(wp, walls, parts) {
         if (!walls || !walls.length) return false;
-        let list = partPolygons(wp, parts), corridor = !wp.fairway;
+        let list = partPolygons(wp, parts), corridor = needsRoute(wp, parts);
         let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
         footprint(wp).forEach(function (p) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
         let reach = WALL_MARGIN + (corridor ? ROUTE_HALF_WIDTH : 0);
