@@ -59,21 +59,25 @@
     setInterval(function () { (root.placedTrees || []).forEach(function (o) { if (o) remember(o.type); }); refreshFog(); }, 2000);
 
     // ---- the picture ---------------------------------------------------------------------------------------
+    // The colour a surround choice has in the scene (same lookup as updateSurroundColors)
+    const EDGE_CHOICES = ['roughColor', 'fescueColor', 'wasteColor', 'waterColor', 'oceanColor', 'horizonColor', 'skyColor'];
+    function edgeRgb(key) {
+        const biome = root.CURRENT_BIOME_CONFIG || {};
+        if (key === 'NONE') key = 'skyColor';
+        let hex = biome[key];
+        if (!hex && key === 'oceanColor') hex = biome.waterColor || '#1e3a5f';
+        if (!hex && key === 'horizonColor') hex = '#ffffff';
+        if (!hex && key === 'skyColor') hex = '#87ceeb';
+        if (!hex) hex = '#2d4c1a';
+        const n = parseInt(String(hex).replace('#', ''), 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function edgeLabel(key) { return tr('surr_opt_' + String(key).replace('Color', ''), key); }
+
     // The same four-way blend the real surround uses, drawn small and stretched
     function surroundPicture() {
         const cfg = root.surroundConfig || { N: 'roughColor', E: 'roughColor', S: 'roughColor', W: 'roughColor' };
-        const biome = root.CURRENT_BIOME_CONFIG || {};
-        function col(key) {
-            if (key === 'NONE') key = 'skyColor';
-            let hex = biome[key];
-            if (!hex && key === 'oceanColor') hex = biome.waterColor || '#1e3a5f';
-            if (!hex && key === 'horizonColor') hex = '#ffffff';
-            if (!hex && key === 'skyColor') hex = '#87ceeb';
-            if (!hex) hex = '#2d4c1a';
-            const n = parseInt(String(hex).replace('#', ''), 16);
-            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-        }
-        const cN = col(cfg.N), cE = col(cfg.E), cS = col(cfg.S), cW = col(cfg.W);
+        const col = edgeRgb, cN = col(cfg.N), cE = col(cfg.E), cS = col(cfg.S), cW = col(cfg.W);
         const power = root.surroundMat && root.surroundMat.userData && root.surroundMat.userData.blendPower ? root.surroundMat.userData.blendPower.value : 1.5;
         const N = 48, off = document.createElement('canvas');
         off.width = N; off.height = N;
@@ -144,10 +148,6 @@
         });
         ctx.fillStyle = 'rgba(248,250,252,0.85)'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(tr('bd_plate', 'Banan'), C / 2, C / 2);
-        // compass
-        ctx.fillStyle = 'rgba(248,250,252,0.9)'; ctx.font = 'bold 13px sans-serif';
-        ctx.fillText('N', C / 2, 11); ctx.fillText('S', C / 2, C - 11);
-        ctx.fillText(tr('bd_dir_w', 'V'), 11, C / 2); ctx.fillText(tr('bd_dir_e', 'Ö'), C - 11, C / 2);
     }
 
     // ---- shelf & buttons -----------------------------------------------------------------------------------
@@ -190,13 +190,14 @@
             hh.style.cssText = 'color:#94a3b8;';
             hh.textContent = Math.round(a.h) + ' m';
             b.appendChild(pic); b.appendChild(nm); b.appendChild(hh);
-            b.onclick = function () { B.shelfType = on ? null : a.type; B.sel = null; refresh(); };
+            b.onclick = function () { B.shelfType = on ? null : a.type; B.sel = null; B.edge = null; refresh(); };
             box.appendChild(b);
         });
     }
     function enable(btn, on) { btn.disabled = !on; btn.style.opacity = on ? '1' : '0.4'; btn.style.cursor = on ? 'pointer' : 'not-allowed'; }
     function refresh() {
         if (!B) return;
+        refreshEdges();
         buildShelf();
         const has = !!B.sel;
         [B.dom.bigger, B.dom.smaller, B.dom.higher, B.dom.lower, B.dom.turnL, B.dom.turnR, B.dom.del].forEach(function (b) { enable(b, has); });
@@ -206,6 +207,46 @@
         draw();
     }
     function say(text) { B.dom.status.textContent = text; }
+
+    // ---- edge buttons: pick what meets the eye on each side of the plate -----------------------------------
+    const SIDES = ['N', 'E', 'S', 'W'];
+    function sideName(side) { return side === 'W' ? tr('bd_dir_w', 'V') : (side === 'E' ? tr('bd_dir_e', 'Ö') : side); }
+    function emojiOf(key) { const m = String(edgeLabel(key)).match(/^\S+/); return m ? m[0] : ''; }
+    function refreshEdges() {
+        if (!B) return;
+        const cfg = root.surroundConfig || {};
+        SIDES.forEach(function (side) {
+            const chip = B.dom.edge[side], c = edgeRgb(cfg[side]);
+            const on = B.edge === side;
+            chip.style.background = 'rgb(' + c.map(Math.round).join(',') + ')';
+            chip.style.borderColor = on ? '#facc15' : 'rgba(15,23,42,0.85)';
+            chip.style.boxShadow = on ? '0 0 0 2px #facc15' : 'none';
+            chip.textContent = sideName(side) + ' ' + emojiOf(cfg[side]);
+        });
+        const box = B.dom.choices;
+        box.style.display = B.edge ? 'flex' : 'none';
+        box.textContent = '';
+        if (!B.edge) return;
+        EDGE_CHOICES.forEach(function (key) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            const on = cfg[B.edge] === key, c = edgeRgb(key);
+            b.textContent = edgeLabel(key);
+            b.style.cssText = 'flex:1 1 30%; min-height:36px; padding:0 6px; border-radius:10px; font-size:12px; font-weight:bold; cursor:pointer; color:#f8fafc; text-shadow:0 1px 2px rgba(0,0,0,0.9); border:2px solid ' + (on ? '#facc15' : 'rgba(15,23,42,0.85)') + '; background:rgb(' + c.map(Math.round).join(',') + ');';
+            b.onclick = function () { setEdge(B.edge, key); };
+            box.appendChild(b);
+        });
+    }
+    function setEdge(side, key) {
+        const sel = document.getElementById('surr-' + side);
+        if (!sel || typeof root.updateSurroundColors !== 'function') return;
+        undoPoint();
+        sel.value = key;
+        root.updateSurroundColors();   // reads the four selects, saves on every hole of the plate and recolours the scene
+        B.surround = surroundPicture();
+        refreshEdges();
+        refresh();
+    }
 
     // ---- editing -------------------------------------------------------------------------------------------
     // Undo and redo rebuild every placed object, so a selection can point at one that no longer exists
@@ -348,6 +389,8 @@
         let others = null;
         try { others = HG && HG.otherHoles ? HG.otherHoles(root.courseHoles, -1) : null; } catch (err) { others = null; }
         B.others = others;
+        // undo/redo restore the saved surround on the holes; bring the live setting, the dropdowns and the scene in line
+        if (typeof root.restoreSurrounding === 'function') root.restoreSurrounding();
         B.surround = surroundPicture();
         if (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) B.plate = root.HoleBlueprint.renderTerrain(plateHalf());
         dropStaleSelection();
@@ -421,7 +464,22 @@
         del.title = tr('bd_delete', 'Ta bort figuren');
         [smaller, bigger, turnL, turnR, lower, higher, del].forEach(function (b) { row.appendChild(b); });
         const done = btn('✓ ' + tr('bd_done', 'Klar'), close, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:48px;');
-        [head, canvas, filters, shelf, row, done].forEach(function (el) { overlay.appendChild(el); });
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative; width:' + C + 'px; height:' + C + 'px; flex:none;';
+        wrap.appendChild(canvas);
+        const edgeChips = {};
+        const pos = { N: 'top:8px; left:50%; transform:translateX(-50%);', S: 'bottom:8px; left:50%; transform:translateX(-50%);', W: 'left:8px; top:50%; transform:translateY(-50%);', E: 'right:8px; top:50%; transform:translateY(-50%);' };
+        SIDES.forEach(function (side) {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.style.cssText = 'position:absolute; ' + pos[side] + ' min-width:52px; min-height:34px; padding:0 8px; border-radius:17px; font-size:13px; font-weight:bold; color:#f8fafc; text-shadow:0 1px 2px rgba(0,0,0,0.9); border:2px solid rgba(15,23,42,0.85); cursor:pointer;';
+            chip.onclick = function () { B.edge = B.edge === side ? null : side; B.sel = null; B.shelfType = null; refreshEdges(); refresh(); };
+            wrap.appendChild(chip);
+            edgeChips[side] = chip;
+        });
+        const choices = document.createElement('div');
+        choices.style.cssText = 'width:' + C + 'px; display:none; flex-wrap:wrap; gap:6px; flex:none;';
+        [head, wrap, choices, filters, shelf, row, done].forEach(function (el) { overlay.appendChild(el); });
         document.body.appendChild(overlay);
 
         const HG = root.HoleGenerator;
@@ -430,8 +488,8 @@
         try { others = HG && HG.otherHoles ? HG.otherHoles(root.courseHoles, -1) : null; } catch (err) { others = null; }
         if (Array.isArray(others)) others = { points: others, polygons: [] };
         B = {
-            dom: { overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
-            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, showAll: false, drag: null, raf: 0, others: others
+            dom: { edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
+            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();
         B.plate = (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) ? root.HoleBlueprint.renderTerrain(plateHalf()) : document.createElement('canvas');
@@ -457,6 +515,7 @@
         canvas.addEventListener('pointermove', onMove);
         canvas.addEventListener('pointerup', onUp);
         canvas.addEventListener('pointercancel', onUp);
+        refreshEdges();
         refresh();
     }
 
