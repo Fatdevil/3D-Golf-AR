@@ -302,9 +302,9 @@
 
         const overlay = document.createElement('div');
         overlay.id = 'bp-overlay';
-        overlay.style.cssText = 'position:fixed; inset:0; z-index:100000; background:#020617; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:8px; box-sizing:border-box; overflow-y:auto; transition:opacity .35s, transform .35s; touch-action:none; user-select:none; -webkit-user-select:none;';
+        overlay.style.cssText = 'position:fixed; inset:0; z-index:100000; background:#020617; display:flex; flex-direction:column; align-items:center; gap:8px; padding:8px; box-sizing:border-box; overflow-y:auto; transition:opacity .35s, transform .35s; touch-action:pan-y; user-select:none; -webkit-user-select:none;';
         const head = document.createElement('div');
-        head.style.cssText = 'width:' + C + 'px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:#f1f5f9;';
+        head.style.cssText = 'margin-top:auto; width:' + C + 'px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:#f1f5f9;';
         head.innerHTML = '<b style="font-size:16px;">🗺️ ' + tr('bp_title', 'Planera hålet') + '</b>';
         const status = document.createElement('div');
         status.style.cssText = 'flex:1; text-align:center; padding:6px 8px; border-radius:8px; font-size:13px; font-weight:bold;';
@@ -332,7 +332,7 @@
         const right = btn('⟳', function () { if (!S.busy) turn(Math.PI / 12); });
         left.title = tr('bp_turn_l', 'Vrid åt vänster'); right.title = tr('bp_turn_r', 'Vrid åt höger');
         bar.appendChild(reroll); bar.appendChild(left); bar.appendChild(right);
-        const build_ = btn('⛳ ' + tr('bp_build', 'Bygg hålet'), build, 'width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
+        const build_ = btn('⛳ ' + tr('bp_build', 'Bygg hålet'), build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
         overlay.appendChild(head); overlay.appendChild(help); overlay.appendChild(canvas); overlay.appendChild(bar); overlay.appendChild(build_);
         document.body.appendChild(overlay);
