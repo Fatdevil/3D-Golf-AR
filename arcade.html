@@ -14783,6 +14783,9 @@
     };
 
     const undoStack = [];
+    // every editing step (sculpt, paint, water, objects, undo, redo) passes the undo stack: count them for the playtest fingerprint
+    window._editRev = 0;
+    (function () { const push = undoStack.push; undoStack.push = function () { window._editRev++; return push.apply(this, arguments); }; })();
     const redoStack = [];
 
     function updateUndoRedoUI() {
@@ -15077,6 +15080,7 @@
 
     window.performUndo = function() {
         if (undoStack.length === 0) return;
+        window._editRev++;
         let state = undoStack.pop();
         redoStack.push(captureEditorState(false, state.texPatch));
         applyEditorState(state);
@@ -15971,7 +15975,7 @@
             parts.push(['yellow', 'white', 'red', 'black', 'range'].map(function (k) { return t[k] ? r(t[k].x) + ',' + r(t[k].z) : ''; }).join('|') +
                 '/' + (h.flag ? r(h.flag.x) + ',' + r(h.flag.z) : ''));
         });
-        parts.push(JSON.stringify(window.surroundConfig || {}));
+        parts.push(JSON.stringify(window.surroundConfig || {}), 'rev' + (window._editRev || 0));
         (window.placedTrees || []).forEach(function (o) { if (o) parts.push(o.type + r(o.x) + ',' + r(o.z) + ',' + r(o.scale)); });
         try {
             const pos = planeGeo.attributes.position.array;
@@ -16731,6 +16735,7 @@
     }
     
     async function executeClear() {
+        window._surroundTouched = false; // the backdrop is back to its defaults
         if (typeof saveUndoState === 'function') saveUndoState(true);
 
         targets.forEach(t => scene.remove(t.mesh));
@@ -20673,7 +20678,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=9"></script>
+<script src="guide.js?v=10"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
