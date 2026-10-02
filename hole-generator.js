@@ -386,16 +386,25 @@
     function scoreSite(wp, env) {
         let h = env && env.heightAt;
         if (!h) return { ok: true, reasons: [] };
+        // only the parts that will be built count (env.parts; default: all)
+        let parts = (env && env.parts) || normalizeParts(null);
+        let withFairway = !!(wp.fairway && parts.fairway);
         // cheap first look: the centre line every ~20 m (most hilly spots fail here without any polygon sampling)
-        for (let i = 0; i < wp.centerline.length; i++) {
-            if (slopeAt(h, wp.centerline[i].x, wp.centerline[i].z) > SLOPE.fairway.max) return { ok: false, reasons: ['fairway_slope'] };
+        if (withFairway) {
+            for (let i = 0; i < wp.centerline.length; i++) {
+                if (slopeAt(h, wp.centerline[i].x, wp.centerline[i].z) > SLOPE.fairway.max) return { ok: false, reasons: ['fairway_slope'] };
+            }
         }
         let reasons = [];
-        let test = function (name, poly, step, lim) { let r = checkArea(poly, step, h, lim); if (r) reasons.push(name + '_' + r); };
-        test('green', wp.green, 3, SLOPE.green);
-        if (!reasons.length) (wp.teeBoxes || []).forEach(function (b) { if (!reasons.length) test('tee', b, 3, SLOPE.tee); });
-        if (!reasons.length) wp.bunkers.forEach(function (b) { if (!reasons.length) test('bunker', b, 4, SLOPE.bunker); });
-        if (!reasons.length && wp.fairway) test('fairway', wp.fairway, 5, SLOPE.fairway);
+        let test = function (name, poly, step, lim) { if (!reasons.length) { let r = checkArea(poly, step, h, lim); if (r) reasons.push(name + '_' + r); } };
+        if (parts.green) test('green', wp.green, 3, SLOPE.green);
+        if (parts.tee) (wp.teeBoxes || []).forEach(function (b) { test('tee', b, 3, SLOPE.tee); });
+        wp.bunkers.forEach(function (b, i) {
+            let kind = wp.bunkerKinds && wp.bunkerKinds[i];
+            if ((kind === 'green' && !parts.greenBunkers) || (kind === 'fairway' && !parts.fairwayBunkers)) return;
+            test('bunker', b, 4, SLOPE.bunker);
+        });
+        if (withFairway) test('fairway', wp.fairway, 5, SLOPE.fairway);
         return { ok: reasons.length === 0, reasons: reasons };
     }
 
@@ -595,6 +604,7 @@
             // the terrain lookup already knows painted water and per-cell water levels
             isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; },
             heightAt: root.localGetTerrainAt ? surfaceY : null,
+            parts: parts,
             diag: {}
         };
         let res = generatePlan({ par: par, seed: opts.seed }, env);
