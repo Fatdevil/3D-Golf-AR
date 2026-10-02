@@ -697,6 +697,8 @@
         root.smartGreenPoints = footprint(wp).map(function (p) { return { x: p.x, y: 0, z: p.z }; });
         root.saveUndoState();
         root.smartGreenPoints = [];
+        // a par chosen on the blueprint is part of this one undoable action (the snapshot above still holds the old par)
+        if (opts.syncPar && hole.par !== par && typeof root.changeHolePar === 'function') root.changeHolePar(par - hole.par);
         let realSave = root.saveUndoState;
         root.saveUndoState = function () { };
         try {

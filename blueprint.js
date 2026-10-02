@@ -266,12 +266,10 @@
     function build() {
         if (!S || !S.ev || !S.ev.ok || S.busy) return;
         const par = S.par, seed = S.seed, placement = { x: S.origin.x, z: S.origin.z, heading: S.heading };
-        const hole = root.courseHoles && root.courseHoles[root.currentHoleIndex];
         close(true);
-        if (hole && hole.par !== par && typeof root.changeHolePar === 'function') root.changeHolePar(par - hole.par);
         toast(tr('hg_busy', '⏳ Bygger hålet…'), '#a855f7');
         const parts = root._hgParts || null;
-        setTimeout(function () { root.HoleGenerator.generate({ par: par, seed: seed, parts: parts, placement: placement }); }, 80);
+        setTimeout(function () { root.HoleGenerator.generate({ par: par, seed: seed, parts: parts, placement: placement, syncPar: true }); }, 80);
     }
 
     // ---- open / close ------------------------------------------------------------------------------------
