@@ -34,7 +34,8 @@
             if (isPlayable(holes[i])) built++;
             else if (HG && holes[i] && !HG.holeIsEmpty(holes[i]) && partial < 0) partial = i;
         }
-        return { built: built, total: total, partial: partial };
+        // publishing needs Hole 1 to be playable, so the step is not done before it is
+        return { built: built, total: total, partial: partial, first: isPlayable(holes[0]) };
     }
     function hasSurroundings() {
         if (typeof root.getSceneryMaxRadius === 'function' && root.getSceneryMaxRadius() > 0) return true;
@@ -46,7 +47,7 @@
     function steps() {
         const h = holeCount();
         return [
-            { id: 'holes', done: h.built >= 1 && h.partial < 0, optionalMore: h.built >= 1 && h.built < h.total,
+            { id: 'holes', done: h.first && h.partial < 0, optionalMore: h.built >= 1 && h.built < h.total,
               label: (h.partial >= 0) ? tr('g_finish_hole', 'Slutför hålet (tee, green och flagga)') : tr('g_holes', 'Placera hålen'),
               info: h.built ? tr('g_holes_n', '{n} av {m} hål byggda').replace('{n}', h.built).replace('{m}', h.total) : '',
               button: (h.partial >= 0) ? tr('g_open', 'Öppna') : (h.built ? tr('g_add_hole', 'Nästa hål') : tr('g_open', 'Öppna')),
@@ -83,7 +84,9 @@
         if (!HG || typeof root.openHoleBlueprint !== 'function') return;
         const total = Math.min(root.MAX_HOLES || 3, holes.length);
         let idx = -1;
-        if (holes[root.currentHoleIndex] && HG.holeIsEmpty(holes[root.currentHoleIndex]) && root.currentHoleIndex < total) idx = root.currentHoleIndex;
+        // Hole 1 first: a course cannot be published without it
+        if (holes[0] && HG.holeIsEmpty(holes[0])) idx = 0;
+        else if (holes[root.currentHoleIndex] && HG.holeIsEmpty(holes[root.currentHoleIndex]) && root.currentHoleIndex < total) idx = root.currentHoleIndex;
         for (let i = 0; idx < 0 && i < total; i++) if (HG.holeIsEmpty(holes[i])) idx = i;
         if (idx < 0) { if (typeof root.showBuildToast === 'function') root.showBuildToast(tr('g_all_holes', '✅ Alla hålen på plattan är byggda.'), '#4ade80'); return; }
         if (idx !== root.currentHoleIndex && typeof root.changeHoleTo === 'function') root.changeHoleTo(idx);
