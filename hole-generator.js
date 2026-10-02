@@ -689,6 +689,8 @@
     // Footprints of everything placed on the plate (trees, rocks, buildings): { x, z, r } in metres.
     // Radius comes from the asset's physics (what the ball collides with); big things (architecture, rocks,
     // landscape) are never smaller than half their height, so a clubhouse without tuned physics still counts.
+    // the asset library's building and terrain-like categories (see the PROPS/architecture filter in arcade.html)
+    const BIG_SUBCATS = ['BLOCKS', 'ARCHITECTURE', 'STRUCTURES', 'PROPS', 'ROCKS', 'LANDSCAPE'];
     function collectObjects() {
         let list = root.placedTrees || [], reg = root.ASSET_REGISTRY || {}, out = [];
         list.forEach(function (o) {
@@ -697,7 +699,7 @@
             if (ph.type === 'tree') r = Math.max(ph.trunkRadius || 0, 0.4) * sc;
             else if (ph.radius) r = ph.radius * sc;
             else r = 2 * sc;
-            if (def.subcat === 'BLOCKS' || def.subcat === 'ROCKS' || def.subcat === 'LANDSCAPE') r = Math.max(r, 0.5 * (def.targetHeight || 0) * sc);
+            if (BIG_SUBCATS.indexOf(def.subcat) >= 0) r = Math.max(r, 0.5 * (def.targetHeight || 0) * sc);
             out.push({ x: o.x, z: o.z, r: Math.max(0.4, Math.min(60, r)) });
         });
         return out;
