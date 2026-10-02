@@ -205,6 +205,10 @@
     function say(text) { B.dom.status.textContent = text; }
 
     // ---- editing -------------------------------------------------------------------------------------------
+    // Undo and redo rebuild every placed object, so a selection can point at one that no longer exists
+    function dropStaleSelection() {
+        if (B && B.sel && (root.placedTrees || []).indexOf(B.sel) < 0) { B.sel = null; B.drag = null; }
+    }
     function undoPoint() { if (typeof root.saveUndoState === 'function') root.saveUndoState(); }
     let saveTimer = 0;
     function persist() {
@@ -240,6 +244,7 @@
         persist();
     }
     function change(fn) {
+        dropStaleSelection();
         if (!B || !B.sel) return;
         undoPoint();
         fn(B.sel);
@@ -289,6 +294,7 @@
     function onDown(e) {
         if (!B) return;
         e.preventDefault();
+        dropStaleSelection();
         const p = toWorld(e), o = hit(p);
         if (o) {
             B.sel = o; B.shelfType = null;
@@ -338,7 +344,7 @@
         if (!B) return;
         const el = B.dom.overlay;
         window.removeEventListener('keydown', B.keyHandler, true);
-        cancelAnimationFrame(B.raf);
+        cancelAnimationFrame(B.raf); clearInterval(B.timer);
         B = null;
         el.remove();
         refreshFog();
@@ -387,7 +393,7 @@
         const turnR = btn('⟳', function () { change(function (o) { o.rot = (o.rot || 0) + Math.PI / 12; }); });
         const lower = btn('⬇', function () { change(function (o) { o.yOffset = (o.yOffset || 0) - Math.max(1, Math.round(heightOf(o) * 0.03)); }); });
         const higher = btn('⬆', function () { change(function (o) { o.yOffset = (o.yOffset || 0) + Math.max(1, Math.round(heightOf(o) * 0.03)); }); });
-        const del = btn('🗑️', function () { if (B.sel) { remove(B.sel); refresh(); } });
+        const del = btn('🗑️', function () { dropStaleSelection(); if (B.sel) { remove(B.sel); refresh(); } });
         smaller.title = tr('bd_smaller', 'Mindre'); bigger.title = tr('bd_bigger', 'Större');
         turnL.title = tr('bd_turn', 'Vrid'); turnR.title = tr('bd_turn', 'Vrid');
         lower.title = tr('bd_lower', 'Sänk ner i marken'); higher.title = tr('bd_higher', 'Höj');
@@ -407,6 +413,8 @@
         };
         B.surround = surroundPicture();
         B.plate = (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) ? root.HoleBlueprint.renderTerrain(plateHalf()) : document.createElement('canvas');
+        // Ctrl+Z / Ctrl+Y reach the editor's own undo while the map is open; keep the picture in step with it
+        B.timer = setInterval(function () { if (!B) return; const had = B.sel; dropStaleSelection(); if (had && !B.sel) refresh(); else draw(); }, 500);
         B.keyHandler = function (e) { if (e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'Escape') close(); e.stopImmediatePropagation(); };
         window.addEventListener('keydown', B.keyHandler, true);
         canvas.addEventListener('pointerdown', onDown);
