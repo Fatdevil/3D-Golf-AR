@@ -1043,6 +1043,11 @@
                     if (m === 'PAINT') return t('mtn_hint_paint', 'Klicka på ett berg: <b>färgas automatiskt med vald stil</b>');
                     return t('mtn_hint_hill', 'Klicka: <b>rita formen</b> · Högerklick: ta bort sista punkten · Tryck <b>Bygg berg</b>');
                 };
+                // the hint line is built in code, so it is refreshed here when the language is switched
+                window.addEventListener('golf_lang_changed', function () {
+                    let grp = document.getElementById('terrain-paint-group'), hints = document.getElementById('tool-hints');
+                    if (grp && hints && grp.style.display !== 'none') hints.innerHTML = window.mtnHintHtml();
+                });
                 function setMtnMode(mode) {
                     window._mtnToolMode = mode;
                     document.getElementById('mtn-mode-paint').style.background = mode === 'PAINT' ? '#4ade80' : '#334155';
