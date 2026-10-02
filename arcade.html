@@ -15971,6 +15971,7 @@
             parts.push(['yellow', 'white', 'red', 'black', 'range'].map(function (k) { return t[k] ? r(t[k].x) + ',' + r(t[k].z) : ''; }).join('|') +
                 '/' + (h.flag ? r(h.flag.x) + ',' + r(h.flag.z) : ''));
         });
+        parts.push(JSON.stringify(window.surroundConfig || {}));
         (window.placedTrees || []).forEach(function (o) { if (o) parts.push(o.type + r(o.x) + ',' + r(o.z) + ',' + r(o.scale)); });
         try {
             const pos = planeGeo.attributes.position.array;
@@ -20672,7 +20673,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=8"></script>
+<script src="guide.js?v=9"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
