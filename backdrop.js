@@ -146,7 +146,8 @@
         ctx.fillText(tr('bd_plate', 'Banan'), C / 2, C / 2);
         // compass
         ctx.fillStyle = 'rgba(248,250,252,0.9)'; ctx.font = 'bold 13px sans-serif';
-        ctx.fillText('N', C / 2, 11); ctx.fillText('S', C / 2, C - 11); ctx.fillText('V', 11, C / 2); ctx.fillText('Ö', C - 11, C / 2);
+        ctx.fillText('N', C / 2, 11); ctx.fillText('S', C / 2, C - 11);
+        ctx.fillText(tr('bd_dir_w', 'V'), 11, C / 2); ctx.fillText(tr('bd_dir_e', 'Ö'), C - 11, C / 2);
     }
 
     // ---- shelf & buttons -----------------------------------------------------------------------------------
@@ -165,6 +166,8 @@
         const box = B.dom.shelf;
         box.textContent = '';
         const list = shelfAssets();
+        // a figure the active filter hides must not stay selected without anything showing it
+        if (B.shelfType && !list.some(function (a) { return a.type === B.shelfType; })) B.shelfType = null;
         if (!list.length) {
             const m = document.createElement('div');
             m.style.cssText = 'color:#94a3b8; font-size:12px; padding:8px; line-height:1.35;';
