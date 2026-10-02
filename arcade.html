@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=9"></script>
+<script src="i18n.js?v=10"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -10542,6 +10542,7 @@
             tees: h.tees,
             flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
             aimPoint: h.aimPoint ? {x: h.aimPoint.x, y: h.aimPoint.y, z: h.aimPoint.z} : null,
+            plannedGreen: h.plannedGreen ? {x: h.plannedGreen.x, z: h.plannedGreen.z, r: h.plannedGreen.r} : null,
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null,
@@ -12438,6 +12439,7 @@
                             h.flag = hSync.flag;
                             h.flagMesh = createFlagObject(h.flag.x, h.flag.y, h.flag.z);
                         }
+                        h.plannedGreen = hSync.plannedGreen ? { x: hSync.plannedGreen.x, z: hSync.plannedGreen.z, r: hSync.plannedGreen.r } : null;
                         if(hSync.aimPoint) {
                             h.aimPoint = { x: hSync.aimPoint.x, y: hSync.aimPoint.y, z: hSync.aimPoint.z };
                             h.aimMesh = createAimPointMarker(h.aimPoint.x, h.aimPoint.y, h.aimPoint.z, i + 1);
@@ -14850,6 +14852,7 @@
             tees: JSON.parse(JSON.stringify(h.tees || {})),
             flag: h.flag ? JSON.parse(JSON.stringify(h.flag)) : null,
             aimPoint: h.aimPoint ? { ...h.aimPoint } : null,
+            plannedGreen: h.plannedGreen ? { ...h.plannedGreen } : null,
             pins: h.pins ? JSON.parse(JSON.stringify(h.pins)) : {},
             envObjects: h.envObjects ? h.envObjects.slice() : [],
             greenData: h.greenData ? { ...h.greenData, points: (h.greenData.points || []).map(p => ({ ...p })), lastBuiltPoints: h.greenData.lastBuiltPoints ? h.greenData.lastBuiltPoints.map(p => ({ ...p })) : h.greenData.lastBuiltPoints } : null,
@@ -14998,6 +15001,7 @@
                 
                 h.par = hState.par !== undefined ? hState.par : 4;
                 h.aimPoint = hState.aimPoint ? JSON.parse(JSON.stringify(hState.aimPoint)) : null;
+                h.plannedGreen = hState.plannedGreen ? { ...hState.plannedGreen } : null;
                 if(h.aimMesh) { scene.remove(h.aimMesh); h.aimMesh = null; }
                 if(h.aimPoint && typeof createAimPointMarker === 'function') {
                     h.aimMesh = createAimPointMarker(h.aimPoint.x, h.aimPoint.y, h.aimPoint.z, i + 1);
@@ -20612,8 +20616,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=40"></script>
-<script src="hole-generator.js?v=8"></script>
+<script src="smart-builder.js?v=41"></script>
+<script src="hole-generator.js?v=11"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

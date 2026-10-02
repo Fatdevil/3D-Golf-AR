@@ -6582,7 +6582,10 @@ window.executeSplineMountain = function() {
         let b = built(hole), par = hole.par || 4;
         let lang = (window.getGolfLanguage && window.getGolfLanguage()) || 'sv';
         let sk = skipped.has(hole);
-        let sig = [lang, window.currentHoleIndex, par, sk, b.tee, b.green, b.fairway, b.bunker].join('|');
+        let planned = !!(window.hasPlannedGreen && window.hasPlannedGreen());
+        let hp = window._hgParts || {};
+        let sig = [lang, window.currentHoleIndex, par, sk, b.tee, b.green, b.fairway, b.bunker, !!hole.aimPoint, planned,
+            hp.tee, hp.fairway, hp.green, hp.greenBunkers, hp.fairwayBunkers].join('|');
         if (!force && sig === lastSig) return;
         lastSig = sig;
 
@@ -6608,7 +6611,11 @@ window.executeSplineMountain = function() {
         let html = '';
         if (!b.tee && !b.green && !b.fairway && !b.bunker && window.HoleGenerator && window.HoleGenerator.holeIsEmpty(hole)) {
             html += '<button type="button" onclick="generateRandomHoleWithProgress()" style="width:100%; margin-bottom:8px; background:linear-gradient(90deg,#a855f7,#6366f1); color:#fff; border:none; border-radius:6px; padding:7px 8px; font-weight:bold; font-size:12px; cursor:pointer;">🎲 ' + tr('hg_button', 'Slumpa ett hål') + ' (Par ' + Math.max(3, Math.min(6, par)) + ')</button>' +
-                '<div style="color:#64748b; font-size:10px; margin-bottom:8px;">' + tr('hg_hint', 'Appen lägger ut tee, fairway, green och bunkrar – du ändrar sedan som du vill.') + '</div>';
+                '<div style="color:#64748b; font-size:10px; margin-bottom:6px;">' + tr('hg_hint', 'Appen lägger ut tee, fairway, green och bunkrar – du ändrar sedan som du vill.') + '</div>' +
+                hgAdvancedHtml(par);
+        }
+        if (planned) {
+            html += '<div style="color:#38bdf8; font-size:10.5px; margin-bottom:8px; line-height:1.35;">🔵 ' + tr('hg_planned', 'Den blå ringen visar var greenen planerades. Bygg höjd eller vatten först och sedan greenen där.') + '</div>';
         }
         if (next) {
             html += '<div style="color:#94a3b8;">' + tr('hm_next', 'Nästa:') + ' <b style="color:#f1f5f9;">' + name[next] + '</b>' +
@@ -6624,6 +6631,33 @@ window.executeSplineMountain = function() {
             html += '<div style="color:#64748b; margin-top:5px; font-size:10px;">' + tr('hm_par3_note', 'Många par 3 har ingen fairway.') + '</div>';
         }
         card.innerHTML = html;
+    };
+
+    // "What should be randomised?" (advanced): everything on by default, dependent parts follow their parent
+    function hgAdvancedHtml(par) {
+        let P = window.HoleGenerator ? window.HoleGenerator.normalizeParts(window._hgParts) : {};
+        let noFw = par <= 3;   // par 3 has no fairway, so neither fairway nor fairway bunkers exist
+        let rows = [
+            ['tee', 'Tee', 0, false], ['fairway', 'Fairway', 0, noFw], ['green', 'Green', 0, false],
+            ['greenBunkers', tr('hg_p_gbunk', 'Greenbunkrar'), 1, !P.green], ['fairwayBunkers', tr('hg_p_fbunk', 'Fairwaybunkrar'), 1, noFw || !P.fairway]
+        ];
+        let h = '<details ' + (window._hgAdvOpen ? 'open ' : '') + 'ontoggle="window._hgAdvOpen=this.open" style="margin-bottom:8px;">' +
+            '<summary style="cursor:pointer; color:#94a3b8; font-size:10px;">⚙️ ' + tr('hg_adv', 'Avancerat – vad ska slumpas?') + '</summary><div style="margin-top:5px;">';
+        rows.forEach(function(r) {
+            let on = !!P[r[0]] && !r[3];
+            h += '<label style="display:flex; align-items:center; gap:6px; padding:2px 0 2px ' + (r[2] ? 16 : 0) + 'px; font-size:11px; color:' + (r[3] ? '#475569' : '#cbd5e1') + ';">' +
+                '<input type="checkbox" ' + (on ? 'checked ' : '') + (r[3] ? 'disabled ' : '') + 'onchange="hgTogglePart(\'' + r[0] + '\', this.checked)"> ' + r[1] + '</label>';
+        });
+        return h + '</div></details>';
+    }
+    window.hgTogglePart = function(key, on) {
+        let P = window.HoleGenerator ? window.HoleGenerator.normalizeParts(window._hgParts) : {};
+        P[key] = on;
+        // a dependent part is switched on again together with its parent
+        if (key === 'green') P.greenBunkers = on;
+        if (key === 'fairway') P.fairwayBunkers = on;
+        window._hgParts = P;
+        window.updateHoleMenu(true);
     };
 
     window.skipHoleFairway = function() {

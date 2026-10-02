@@ -263,6 +263,8 @@
             tee: W(plan.tee), green: plan.green.map(W), greenCenter: W(plan.greenCenter),
             fairway: plan.fairway ? plan.fairway.map(W) : null,
             bunkers: plan.bunkers.map(function (b) { return b.pts.map(W); }),
+            bunkerKinds: plan.bunkers.map(function (b) { return b.kind; }),
+            greenReach: plan.greenReach,
             aim: plan.aim ? W(plan.aim) : null,
             teeBoxes: teeBoxes(plan, W),
             centerline: (function () {
@@ -472,14 +474,68 @@
         } catch (e) { /* camera is a nicety */ }
     }
 
+    // Which parts to build. Anything missing counts as wanted; dependent parts follow their parent.
+    const PART_KEYS = ['tee', 'fairway', 'green', 'greenBunkers', 'fairwayBunkers'];
+    function normalizeParts(parts) {
+        let p = {};
+        PART_KEYS.forEach(function (k) { p[k] = !parts || parts[k] !== false; });
+        if (!p.green) p.greenBunkers = false;
+        if (!p.fairway) p.fairwayBunkers = false;
+        return p;
+    }
+
+    // ---- "planned green" ring: shows where the green was planned when the user left it out ----
+    function ringMesh() {
+        if (root._plannedGreenMarker) return root._plannedGreenMarker;
+        if (typeof THREE === 'undefined' || !root._arcadeScene) return null;
+        let g = new THREE.Group();
+        let ring = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 56), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthTest: false }));
+        let fill = new THREE.Mesh(new THREE.CircleGeometry(0.88, 56), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthTest: false }));
+        [ring, fill].forEach(function (m) { m.rotation.x = -Math.PI / 2; m.renderOrder = 998; m.raycast = function () { }; g.add(m); });
+        g.raycast = function () { };
+        g.visible = false;
+        root._arcadeScene.add(g);
+        root._plannedGreenMarker = g;
+        return g;
+    }
+    function builtSomething(hole) {
+        let has = function (arr) { return (arr || []).some(function (o) { return o && o.points && o.points.length >= 3; }); };
+        return has(hole.fairways) || has(hole.bunkers) || has(hole.teeBoxes);
+    }
+    function refreshPlannedGreenMarker() {
+        let hole = root.courseHoles && root.courseHoles[root.currentHoleIndex];
+        // an emptied hole (e.g. after Undo) forgets where its green was planned
+        if (hole && hole.plannedGreen && !hole.greenData && !hole.flag && !builtSomething(hole)) hole.plannedGreen = null;
+        let show = !!(hole && hole.plannedGreen && !hole.greenData && !hole.flag && builtSomething(hole));
+        if (!show) { if (root._plannedGreenMarker) root._plannedGreenMarker.visible = false; return false; }
+        let m = ringMesh();
+        if (!m) return false;
+        let pg = hole.plannedGreen;
+        m.position.set(pg.x, surfaceY(pg.x, pg.z) + 0.6, pg.z);
+        m.scale.set(pg.r, pg.r, pg.r);
+        m.visible = true;
+        return true;
+    }
+    root.hasPlannedGreen = function () {
+        let hole = root.courseHoles && root.courseHoles[root.currentHoleIndex];
+        return !!(hole && hole.plannedGreen && !hole.greenData && !hole.flag && builtSomething(hole));
+    };
+    if (typeof setInterval === 'function' && typeof window !== 'undefined') setInterval(refreshPlannedGreenMarker, 700);
+
     function generate(opts) {
         opts = opts || {};
+        let parts = normalizeParts(opts.parts);
         let hole = root.courseHoles && root.courseHoles[root.currentHoleIndex];
         if (!hole) return null;
         if (!holeIsEmpty(hole)) {
             toast(t('hg_not_empty', '⚠️ Hålet har redan delar. Gå till ett tomt hål för att slumpa.'), '#f59e0b');
             return null;
         }
+        if (!PART_KEYS.some(function (k) { return parts[k]; })) {
+            toast(t('hg_pick_one', '⚠️ Välj minst en del att slumpa.'), '#f59e0b');
+            return null;
+        }
+        hole.plannedGreen = null;   // the hole is empty here; any older plan is stale
         let par = clampPar(opts.par != null ? opts.par : (hole.par || 4));
         let half = (root.TERRAIN_SIZE || 600) / 2;
         let env = {
@@ -504,19 +560,29 @@
         let realSave = root.saveUndoState;
         root.saveUndoState = function () { };
         try {
-            if (wp.fairway) buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); });
-            buildShape('GREEN', wp.green, function () { root.executeSplineSmartGreen(); });
-            wp.bunkers.forEach(function (b) { buildShape('BUNKER', b, function () { root.executeSmartBunker(); }); });
-            if (wp.aim) {
-                let ay = surfaceY(wp.aim.x, wp.aim.z);
-                hole.aimPoint = { x: wp.aim.x, y: ay, z: wp.aim.z };
-                if (hole.aimMesh && root._arcadeScene) root._arcadeScene.remove(hole.aimMesh);
-                if (typeof root.createAimPointMarker === 'function') {
-                    hole.aimMesh = root.createAimPointMarker(wp.aim.x, ay, wp.aim.z, root.currentHoleIndex + 1);
+            if (wp.fairway && parts.fairway) buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); });
+            if (parts.green) buildShape('GREEN', wp.green, function () { root.executeSplineSmartGreen(); });
+            wp.bunkers.forEach(function (b, i) {
+                let kind = wp.bunkerKinds[i];
+                if ((kind === 'green' && !parts.greenBunkers) || (kind === 'fairway' && !parts.fairwayBunkers)) return;
+                buildShape('BUNKER', b, function () { root.executeSmartBunker(); });
+            });
+            if (parts.tee) {
+                // aim: the knee on doglegs; without a green or a fairway to derive it from, the planned green
+                let aim = wp.aim || ((!parts.green && !(parts.fairway && wp.fairway)) ? wp.greenCenter : null);
+                if (aim) {
+                    let ay = surfaceY(aim.x, aim.z);
+                    hole.aimPoint = { x: aim.x, y: ay, z: aim.z };
+                    if (hole.aimMesh && root._arcadeScene) root._arcadeScene.remove(hole.aimMesh);
+                    if (typeof root.createAimPointMarker === 'function') {
+                        hole.aimMesh = root.createAimPointMarker(aim.x, ay, aim.z, root.currentHoleIndex + 1);
+                    }
                 }
+                if (typeof root.setSmartBuilderType === 'function') root.setSmartBuilderType('TEE');
+                root.buildStandardTeeLayout(wp.tee.x, wp.tee.z);
             }
-            if (typeof root.setSmartBuilderType === 'function') root.setSmartBuilderType('TEE');
-            root.buildStandardTeeLayout(wp.tee.x, wp.tee.z);
+            // green left out: remember where it was planned so the user can build it there
+            hole.plannedGreen = parts.green ? null : { x: wp.greenCenter.x, z: wp.greenCenter.z, r: Math.max(12, wp.greenReach || 15) };
         } catch (e) {
             // keep the single undo step so the user can remove whatever was built before the failure
             root.saveUndoState = realSave;
@@ -529,6 +595,7 @@
         }
         if (typeof root.saveLevel === 'function') root.saveLevel();
         if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
+        refreshPlannedGreenMarker();
         focusCamera(wp);
         toast(t('hg_done', '🎲 Hål slumpat! Ändra fritt – Ångra tar bort hela hålet.') + ' (#' + res.seed + ')', '#4ade80');
         return { seed: res.seed, plan: res.plan, world: wp };
@@ -536,13 +603,14 @@
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty
+        generatePlan: generatePlan, place: place, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
     root.generateRandomHoleWithProgress = function () {
         toast(t('hg_busy', '⏳ Bygger hålet…'), '#a855f7');
-        setTimeout(function () { generate({}); }, 80);
+        let parts = root._hgParts || null;
+        setTimeout(function () { generate({ parts: parts }); }, 80);
     };
     if (typeof module !== 'undefined' && module.exports) module.exports = root.HoleGenerator;
 })(typeof window !== 'undefined' ? window : globalThis);
