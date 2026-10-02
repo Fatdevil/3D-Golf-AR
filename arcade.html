@@ -7457,11 +7457,13 @@
         // One setting for the whole plate: take the first hole that has one (older courses stored it per hole)
         let plateCfg = null;
         for (let i = 0; i < courseHoles.length && !plateCfg; i++) if (courseHoles[i] && courseHoles[i].surroundConfig) plateCfg = courseHoles[i].surroundConfig;
+        let legacyHole = null;
+        for (let i = 0; i < courseHoles.length && !legacyHole; i++) if (courseHoles[i] && courseHoles[i].surrounding) legacyHole = courseHoles[i];
         if(plateCfg) {
             window.surroundConfig = Object.assign({}, plateCfg);
-        } else if(hole && hole.surrounding) {
+        } else if(legacyHole) {
             // Legacy migration
-            let p = hole.surrounding.preset;
+            let p = legacyHole.surrounding.preset;
             let mapKey = 'fescueColor';
             if (p === 'OCEAN' || p === 'LAKE') mapKey = 'oceanColor';
             else if (p === 'SAND') mapKey = 'wasteColor';
