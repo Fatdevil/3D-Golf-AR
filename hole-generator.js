@@ -392,7 +392,9 @@
         // cheap first look: the centre line every ~20 m (most hilly spots fail here without any polygon sampling)
         if (withFairway) {
             for (let i = 0; i < wp.centerline.length; i++) {
-                if (slopeAt(h, wp.centerline[i].x, wp.centerline[i].z) > SLOPE.fairway.max) return { ok: false, reasons: ['fairway_slope'] };
+                let c = wp.centerline[i];
+                // only where the fairway actually lies (the line also runs under the tee and green)
+                if (inPoly(c.x, c.z, wp.fairway) && slopeAt(h, c.x, c.z) > SLOPE.fairway.max) return { ok: false, reasons: ['fairway_slope'] };
             }
         }
         let reasons = [];
