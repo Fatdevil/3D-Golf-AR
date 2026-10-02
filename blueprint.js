@@ -211,7 +211,9 @@
         const n = S.sketches.length;
         S.dom.build.textContent = '⛳ ' + (n > 1 ? tr('bp_build_n', 'Bygg {n} hål').replace('{n}', n) : tr('bp_build', 'Bygg hålet'));
         enable(S.dom.build, allOk);
+        const hasPar6 = S.sketches.some(function (s) { return s.par === 6; });
         S.dom.parBtns.forEach(function (b) {
+            if (b.dataset.par === '6') b.style.display = hasPar6 ? '' : 'none';   // par 6 is only offered when a hole already has it
             const on = Number(b.dataset.par) === cur().par;
             b.style.background = on ? '#38bdf8' : '#1e293b';
             b.style.color = on ? '#0f172a' : '#e2e8f0';
@@ -318,7 +320,9 @@
     }
     function addHole() {
         if (S.busy || S.sketches.length >= S.holes.length) return;
-        S.sketches.push(makeSketch(4));
+        // keep the par the target hole already has (building syncs the hole to its sketch's par)
+        const target = root.courseHoles && root.courseHoles[S.holes[S.sketches.length]];
+        S.sketches.push(makeSketch(clamp((target && target.par) || 4, 3, 6)));
         S.sel = S.sketches.length - 1;
         S.note = null; S.noteBad = false;
         suggest(S.sel);
@@ -475,7 +479,7 @@
         canvas.style.cssText = 'position:relative !important; top:auto !important; left:auto !important; width:' + C + 'px !important; height:' + C + 'px !important; flex:none; border-radius:12px; border:2px solid #334155; touch-action:none; cursor:grab; background:#0f172a !important;';
         const row1 = document.createElement('div');
         row1.style.cssText = 'width:' + C + 'px; display:flex; gap:6px; align-items:center; justify-content:center;';
-        const parBtns = [3, 4, 5].concat(par === 6 ? [6] : []).map(function (n) {
+        const parBtns = [3, 4, 5, 6].map(function (n) {
             const b = btn('Par ' + n, function () { if (!S.busy) setPar(n); }, 'flex:1;');
             b.dataset.par = n;
             row1.appendChild(b);
