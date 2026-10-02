@@ -21,17 +21,29 @@
     function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
     function reg(type) { return (root.ASSET_REGISTRY && root.ASSET_REGISTRY[type]) || null; }
     function plateHalf() { return (root.TERRAIN_SIZE || 600) / 2; }
-    function heightOf(o) { const d = reg(o.type); return d ? (d.targetHeight || 10) * (o.scale || 1) : 0; }
+    // Heights are remembered per type: switching asset presets empties the registry, but the figures stay in the course
+    const knownHeight = {};
+    function remember(type) { const d = reg(type); if (d && d.targetHeight) knownHeight[type] = d.targetHeight; }
+    function heightOf(o) {
+        remember(o.type);
+        const h = knownHeight[o.type];
+        return h ? h * (o.scale || 1) : 0;
+    }
+    function outsidePlate(o) { const half = plateHalf(); return Math.abs(o.x) > half || Math.abs(o.z) > half; }
     // Rough half-width of a figure: mountains are wider than they are tall, so this errs a little large
     function radiusOf(o) { return 0.6 * heightOf(o); }
 
     // ---- fog: far figures must stay visible at dawn and dusk -------------------------------------------
     // arcade-scene-engine.js reads this when it sets the fog, so the fog ends beyond the farthest big figure.
+    // Fog is measured from the camera, which can stand anywhere on the plate: use the farthest plate corner
     function sceneryMaxRadius() {
+        const half = plateHalf();
         let far = 0;
         (root.placedTrees || []).forEach(function (o) {
-            if (!o || heightOf(o) < BACKDROP_MIN) return;
-            far = Math.max(far, Math.hypot(o.x, o.z) + 0.5 * heightOf(o));
+            if (!o) return;
+            const h = heightOf(o);
+            if (h < SHELF_MIN || !(h >= BACKDROP_MIN || outsidePlate(o))) return;
+            far = Math.max(far, Math.hypot(Math.abs(o.x) + half, Math.abs(o.z) + half) + 0.5 * h);
         });
         return Math.min(far, FOG_LIMIT);
     }
@@ -44,7 +56,7 @@
         if (typeof root.setTimeOfDay === 'function' && root.currentTimeOfDay != null) root.setTimeOfDay(root.currentTimeOfDay);
     }
     // courses are loaded by several different paths, so look now and then instead of hooking each one
-    setInterval(refreshFog, 2000);
+    setInterval(function () { (root.placedTrees || []).forEach(function (o) { if (o) remember(o.type); }); refreshFog(); }, 2000);
 
     // ---- the picture ---------------------------------------------------------------------------------------
     // The same four-way blend the real surround uses, drawn small and stretched
@@ -82,9 +94,13 @@
     function cz(z) { return (z + VIEW) / (2 * VIEW) * B.C; }
     function mToPx(m) { return m / (2 * VIEW) * B.C; }
 
-    // Figures shown on the map: everything from SHELF_MIN up (trees and bushes are too small to draw)
+    // Figures shown on the map: big ones, and anything outside the plate (trees and bushes on the plate are too small to draw)
     function mapObjects() {
-        return (root.placedTrees || []).filter(function (o) { return o && heightOf(o) >= SHELF_MIN; });
+        return (root.placedTrees || []).filter(function (o) {
+            if (!o) return false;
+            const h = heightOf(o);
+            return h >= SHELF_MIN || (outsidePlate(o) && h > 0);
+        });
     }
     function minPickPx() { return 16; }
 
@@ -110,7 +126,7 @@
         });
         // figures
         mapObjects().forEach(function (o) {
-            const big = heightOf(o) >= BACKDROP_MIN, rr = Math.max(5, mToPx(radiusOf(o))), sel = o === B.sel;
+            const big = heightOf(o) >= BACKDROP_MIN, rr = Math.max(heightOf(o) >= SHELF_MIN ? 5 : 3, mToPx(radiusOf(o))), sel = o === B.sel;
             ctx.beginPath(); ctx.arc(cx(o.x), cz(o.z), rr, 0, 7);
             ctx.fillStyle = big ? 'rgba(120,113,108,0.65)' : 'rgba(56,189,248,0.7)'; ctx.fill();
             ctx.lineWidth = sel ? 3 : 1.2; ctx.strokeStyle = sel ? '#facc15' : 'rgba(15,23,42,0.8)'; ctx.stroke();
