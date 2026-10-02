@@ -3178,7 +3178,7 @@
                     <div id="setup-course-info" style="color:#64748b; font-size:12px; margin-top:4px; font-weight:500;"></div>
                 </div>
                 <div style="display:flex; gap:8px; align-items:center;">
-                    <button id="setup-edit-btn" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + (new URLSearchParams(window.location.search)).get('edit')" style="display:none; background:#0284c7; color:#fff; border:none; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">🔨 <span data-i18n="sp_back_edit">Tillbaka till bygget</span></button>
+                    <button id="setup-edit-btn" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + (function (q) { return q.get('from') || q.get('edit'); })(new URLSearchParams(window.location.search))" style="display:none; background:#0284c7; color:#fff; border:none; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">🔨 <span data-i18n="sp_back_edit">Tillbaka till bygget</span></button>
                     <button onclick="window.location.href='arcade_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
                 </div>
             </div>
@@ -11150,17 +11150,27 @@
         const label = btn ? btn.innerHTML : '';
         window._savingForPlay = true;
         if (btn) btn.innerHTML = '⏳ ' + tr('sp_saving', 'Sparar...');
+        // a published course is never overwritten by playing it: its edits go to a separate draft copy that is reused each time
+        const origCode = currentEditCode;
+        const published = !!origCode && !!window._editIsPublished;
+        if (published) { try { currentEditCode = localStorage.getItem('golfPlayCopy_' + origCode) || null; } catch (e) { currentEditCode = null; } }
         let saved = false;
         try { saved = await publishCourse({ isDraft: true, overwrite: !!currentEditCode }); } catch (e) { saved = false; }
+        const playCode = currentEditCode;
+        if (published) {
+            currentEditCode = origCode;
+            window._editIsPublished = true; // publishCourse's own bookkeeping must not turn the original into a draft
+            if (saved && playCode) { try { localStorage.setItem('golfPlayCopy_' + origCode, playCode); } catch (e) {} }
+        }
         window._savingForPlay = false;
-        if (!saved || !currentEditCode) {
+        if (!saved || !playCode) {
             if (btn) btn.innerHTML = label;
             showBuildToast(tr('sp_failed', 'Det gick inte att spara banan. Försök igen.'), '#ef4444');
             return;
         }
         try { localStorage.setItem('golfPlayed_' + currentEditCode, '1'); } catch (e) {}
         window.hasUnsavedChanges = false;
-        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&edit=' + currentEditCode;
+        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&edit=' + playCode + (published ? '&from=' + origCode : '');
     };
 
     // ── Preview: populate stats when modal opens ──
@@ -11321,6 +11331,7 @@
             let data = await ArcadeAPI.saveCourse(payload);
             if(data.success) {
                 currentEditCode = data.share_code;
+                window._editIsPublished = !options.isDraft;
                 window.hasUnsavedChanges = false;
                 
                 if (options.isDraft) {
@@ -12310,6 +12321,7 @@
                         } catch(e) { console.warn('Collection load failed:', e); }
                     }
                     if (editCode) {
+                        window._editIsPublished = data.is_draft !== true;
                         currentEditCode = data.share_code; 
                         if(document.getElementById('course-name-input')) document.getElementById('course-name-input').value = data.name;
                         if(document.getElementById('author-name-input')) document.getElementById('author-name-input').value = data.author;
@@ -20688,7 +20700,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=12"></script>
+<script src="guide.js?v=13"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

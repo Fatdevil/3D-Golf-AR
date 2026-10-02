@@ -64,7 +64,8 @@
 
     // The course is played from its saved copy, so "played" is remembered per saved draft and lasts until the course is edited
     const loadedAt = Date.now();
-    let revBase = null;
+    let revBase = null, touched = false;
+    ['pointerdown', 'keydown'].forEach(function (ev) { root.addEventListener(ev, function () { if (Date.now() - loadedAt < 5000) touched = true; }, true); });
     function playedCurrent() {
         const code = typeof root.getEditCode === 'function' ? root.getEditCode() : null;
         if (!code) return false;
@@ -72,7 +73,9 @@
         try { on = localStorage.getItem('golfPlayed_' + code) === '1'; } catch (e) {}
         if (!on) return false;
         const rev = root._editRev || 0;
-        if (Date.now() - loadedAt < 5000 || revBase === null) { revBase = rev; return true; }   // loading the course counts as no edit
+        // loading the course bumps the counter without being an edit; once the user has touched anything, that baseline stays put
+        if (!touched && (Date.now() - loadedAt < 5000 || revBase === null)) { revBase = rev; return true; }
+        if (revBase === null) revBase = rev;
         if (rev !== revBase) { try { localStorage.removeItem('golfPlayed_' + code); } catch (e) {} return false; }
         return true;
     }
