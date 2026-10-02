@@ -298,12 +298,12 @@
         const p = toWorld(e), o = hit(p);
         if (o) {
             B.sel = o; B.shelfType = null;
-            undoPoint();
-            B.drag = { dx: o.x - p.x, dz: o.z - p.z };
+            // the undo snapshot waits for the first real movement, so merely selecting a figure keeps the redo history
+            B.drag = { dx: o.x - p.x, dz: o.z - p.z, px: p.px, py: p.py, snapped: false };
             say(tr('bd_placed', 'Utlagd. Dra i den för att flytta.'));
         } else if (B.shelfType) {
             const n = place(p.x, p.z);
-            B.drag = { dx: n.x - p.x, dz: n.z - p.z };
+            B.drag = { dx: n.x - p.x, dz: n.z - p.z, snapped: true };
             say(tr('bd_placed', 'Utlagd. Dra i den för att flytta.'));
         } else {
             B.sel = null;
@@ -316,6 +316,11 @@
         if (!B || !B.drag || !B.sel) return;
         e.preventDefault();
         const p = toWorld(e), o = B.sel;
+        if (!B.drag.snapped) {
+            if (B.drag.px !== undefined && Math.hypot(p.px - B.drag.px, p.py - B.drag.py) < 4) return;
+            undoPoint();
+            B.drag.snapped = true;
+        }
         o.x = clamp(p.x + B.drag.dx, -VIEW, VIEW); o.z = clamp(p.z + B.drag.dz, -VIEW, VIEW);
         o.y = groundAt(o.x, o.z);
         if (!B.raf) B.raf = requestAnimationFrame(function () {
@@ -327,9 +332,22 @@
     }
     function onUp() {
         if (!B || !B.drag) return;
+        const moved = B.drag.snapped;
         B.drag = null;
-        if (B.sel) rebuild(B.sel.type);
-        persist();
+        if (moved && B.sel) { rebuild(B.sel.type); persist(); }
+        refresh();
+    }
+
+    // Terrain, holes and surround colours may have changed (undo/redo): take the pictures again
+    function resnap() {
+        if (!B) return;
+        const HG = root.HoleGenerator;
+        let others = null;
+        try { others = HG && HG.otherHoles ? HG.otherHoles(root.courseHoles, -1) : null; } catch (err) { others = null; }
+        B.others = others;
+        B.surround = surroundPicture();
+        if (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) B.plate = root.HoleBlueprint.renderTerrain(plateHalf());
+        dropStaleSelection();
         refresh();
     }
 
@@ -416,7 +434,21 @@
         B.plate = (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) ? root.HoleBlueprint.renderTerrain(plateHalf()) : document.createElement('canvas');
         // Ctrl+Z / Ctrl+Y reach the editor's own undo while the map is open; keep the picture in step with it
         B.timer = setInterval(function () { if (!B) return; const had = B.sel; dropStaleSelection(); if (had && !B.sel) refresh(); else draw(); }, 500);
-        B.keyHandler = function (e) { if (e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'Escape') close(); e.stopImmediatePropagation(); };
+        B.keyHandler = function (e) {
+            if (e.ctrlKey || e.metaKey) {
+                // undo / redo run here so the map can take a fresh picture of the course afterwards
+                if (e.code === 'KeyZ' || e.code === 'KeyY') {
+                    e.preventDefault(); e.stopImmediatePropagation();
+                    const redo = e.code === 'KeyY' || e.shiftKey, fn = redo ? root.performRedo : root.performUndo;
+                    if (typeof fn === 'function') fn();
+                    setTimeout(resnap, 500);
+                }
+                return;
+            }
+            if (e.altKey) return;
+            if (e.key === 'Escape') close();
+            e.stopImmediatePropagation();
+        };
         window.addEventListener('keydown', B.keyHandler, true);
         canvas.addEventListener('pointerdown', onDown);
         canvas.addEventListener('pointermove', onMove);
