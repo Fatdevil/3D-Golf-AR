@@ -7,7 +7,7 @@
     <meta name="description" content="Select your world and choose from a rich catalog of terrain layouts to start building.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="i18n.js"></script>
+    <script src="i18n.js?v=31"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -141,6 +141,16 @@
             border-radius: 12px;
             border: 1px solid rgba(56, 189, 248, 0.3);
         }
+
+        /* Mood quick start */
+        .mood-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 30px; }
+        .mood-card { background: rgba(15,23,42,0.65); border: 2px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px 10px; cursor: pointer; text-align: center; transition: all 0.15s; }
+        .mood-card:hover { border-color: rgba(250,204,21,0.5); transform: translateY(-2px); }
+        .mood-card.active { border-color: #facc15; background: rgba(250,204,21,0.12); box-shadow: 0 0 0 2px rgba(250,204,21,0.35); }
+        .mood-icon { font-size: 34px; line-height: 1.1; }
+        .mood-name { font-weight: 800; font-size: 15px; margin-top: 6px; color: #f8fafc; }
+        .mood-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+        @media (max-width: 860px) { .mood-row { grid-template-columns: repeat(2, 1fr); } }
 
         /* ═══════════════════════════════════════════════════════════ */
         /*  ROW 1: 2 WORLDS (Grassland & Desert)                       */
@@ -631,6 +641,37 @@
         <p data-i18n="nc_subtitle">Select your world, then choose a terrain layout to start building.</p>
     </div>
 
+    <!-- 0. MOOD QUICK START -->
+    <div class="section-header">
+        <div class="section-title">
+            <span>✨</span>
+            <span data-i18n="nc_mood">QUICK START: PICK A MOOD</span>
+        </div>
+        <div class="section-sub" data-i18n="nc_mood_sub">One tap sets the world, the ground, the season and the scenery around the plate. You can still change everything below.</div>
+    </div>
+    <div class="mood-row" id="mood-row">
+        <div class="mood-card" data-mood="forest" onclick="selectMood('forest', this)">
+            <div class="mood-icon">🌲</div>
+            <div class="mood-name" data-i18n="mood_forest">Forest</div>
+            <div class="mood-sub" data-i18n="mood_forest_sub">Soft hills, deep woods</div>
+        </div>
+        <div class="mood-card" data-mood="sea" onclick="selectMood('sea', this)">
+            <div class="mood-icon">🌊</div>
+            <div class="mood-name" data-i18n="mood_sea">By the sea</div>
+            <div class="mood-sub" data-i18n="mood_sea_sub">Coast with the ocean around</div>
+        </div>
+        <div class="mood-card" data-mood="mountain" onclick="selectMood('mountain', this)">
+            <div class="mood-icon">⛰️</div>
+            <div class="mood-name" data-i18n="mood_mountain">Mountains</div>
+            <div class="mood-sub" data-i18n="mood_mountain_sub">Highland with peaks on the horizon</div>
+        </div>
+        <div class="mood-card" data-mood="desert" onclick="selectMood('desert', this)">
+            <div class="mood-icon">🏜️</div>
+            <div class="mood-name" data-i18n="mood_desert">Desert</div>
+            <div class="mood-sub" data-i18n="mood_desert_sub">Dunes and sand all around</div>
+        </div>
+    </div>
+
     <!-- 1. SELECT WORLD / BIOME (3 Worlds on 1 Row) -->
     <div class="section-header">
         <div class="section-title">
@@ -835,8 +876,38 @@
     let activeWorld = 'grass';
     let activeVariant = 'flat';
     let activeSeason = 'GLOBAL';
+    let activeMood = null;   // set by a mood card; picking another world or terrain plate below clears it (a different season keeps it)
+
+    // A mood = world + terrain plate + season (+ icon and name for the summary); the scenery around the plate is applied by the builder (see &mood= in launchBuilder)
+    const MOODS = {
+        forest:   { world: 'grass',  variant: 'hills',    season: 'GLOBAL', icon: '🌲', name: 'Forest' },
+        sea:      { world: 'grass',  variant: 'coastal',  season: 'GLOBAL', icon: '🌊', name: 'By the sea' },
+        mountain: { world: 'grass',  variant: 'highland', season: 'GLOBAL', icon: '⛰️', name: 'Mountains' },
+        desert:   { world: 'desert', variant: 'dunes',    season: 'DESERT', icon: '🏜️', name: 'Desert' }
+    };
+    function selectMood(key, el) {
+        const m = MOODS[key];
+        if (!m) return;
+        // set the state directly and draw once (the click handlers below clear the mood, which a mood must not do to itself)
+        activeWorld = m.world;
+        activeVariant = m.variant;
+        activeSeason = m.season;
+        activeMood = key;
+        document.querySelectorAll('.world-card').forEach(c => c.classList.toggle('active', c.dataset.world === m.world));
+        document.querySelectorAll('.mood-card').forEach(c => c.classList.toggle('active', c === el));
+        renderVariants();
+        renderSeasons();
+        updateSummary();
+    }
+    function clearMood() {
+        if (!activeMood) return;
+        activeMood = null;
+        document.querySelectorAll('.mood-card').forEach(c => c.classList.remove('active'));
+        updateVariantBadge();
+    }
 
     function selectWorld(worldKey, el) {
+        clearMood();
         activeWorld = worldKey;
         document.querySelectorAll('.world-card').forEach(c => c.classList.remove('active'));
         if (el) el.classList.add('active');
@@ -858,6 +929,7 @@
     }
 
     function selectVariant(varId, el) {
+        clearMood();
         activeVariant = varId;
         document.querySelectorAll('.variant-card').forEach(c => c.classList.remove('active'));
         if (el) el.classList.add('active');
@@ -865,23 +937,36 @@
     }
 
     function selectSeason(seasonId, el) {
+        // a different season keeps the mood: the mood is the world, the terrain and the scenery, the season is only a starting value
         activeSeason = seasonId;
         document.querySelectorAll('.season-card').forEach(c => c.classList.remove('active'));
         if (el) el.classList.add('active');
         updateSummary();
     }
 
-    function renderVariants() {
+    // The line above the terrain cards: how many layouts there are, or (after a mood tap) where the terrain comes from
+    function updateVariantBadge() {
         const variants = CATALOG[activeWorld] || [];
-        const gallery = document.getElementById('variant-gallery');
         const badge = document.getElementById('layout-count-badge');
         const lang = (window.GolfI18n && window.GolfI18n.getLang()) || 'en';
-        
-        if (badge) {
+        if (badge && activeMood) {
+            // a mood's terrain is a built-in plate that is not one of the cards: say so instead of showing nothing selected
+            const mk = 'mood_' + activeMood, mn = (window.t && window.t(mk) !== mk) ? window.t(mk) : MOODS[activeMood].name;
+            const tpl = (window.t && window.t('nc_mood_terrain') !== 'nc_mood_terrain') ? window.t('nc_mood_terrain') : 'Terrain from the mood: {m}';
+            badge.textContent = '✓ ' + tpl.replace('{m}', MOODS[activeMood].icon + ' ' + mn);
+        } else if (badge) {
             badge.textContent = (lang === 'sv')
                 ? `${variants.length} Layout${variants.length === 1 ? '' : 'er'} tillgängliga`
                 : `${variants.length} Layout${variants.length === 1 ? '' : 's'} Available`;
         }
+    }
+
+    function renderVariants() {
+        const variants = CATALOG[activeWorld] || [];
+        const gallery = document.getElementById('variant-gallery');
+        const lang = (window.GolfI18n && window.GolfI18n.getLang()) || 'en';
+        
+        updateVariantBadge();
 
         let html = '';
         variants.forEach(v => {
@@ -978,7 +1063,10 @@
         const seasonEl = document.getElementById('summary-season-tag');
 
         if (worldEl) worldEl.textContent = worldNames[activeWorld] || activeWorld;
-        if (varEl && currentVarObj) {
+        if (varEl && activeMood) {
+            const m = MOODS[activeMood], k = 'mood_' + activeMood;
+            varEl.textContent = m.icon + ' ' + ((window.t && window.t(k) !== k) ? window.t(k) : m.name);
+        } else if (varEl && currentVarObj) {
             varEl.textContent = (lang === 'sv' && currentVarObj.name_sv) ? currentVarObj.name_sv : (currentVarObj.name_en || currentVarObj.name || currentVarObj.id);
         }
 
@@ -1007,7 +1095,7 @@
             moon: 'MOON'
         };
         const biome = biomeMap[activeWorld] || 'GLOBAL';
-        const url = `arcade.html?v=${Date.now()}&autorun=new_build&world=${activeWorld}&variant=${activeVariant}&template_id=${activeVariant}&template=${activeVariant}&biome=${biome}&season=${activeSeason}`;
+        const url = `arcade.html?v=${Date.now()}&autorun=new_build&world=${activeWorld}&variant=${activeVariant}&template_id=${activeVariant}&template=${activeVariant}&biome=${biome}&season=${activeSeason}${activeMood ? '&mood=' + activeMood : ''}`;
         window.location.href = url;
     }
 
@@ -1046,7 +1134,7 @@
                     });
 
                     const currentVariants = CATALOG[activeWorld] || [];
-                    if (!currentVariants.some(v => v.id === activeVariant) && currentVariants.length > 0) {
+                    if (!activeMood && !currentVariants.some(v => v.id === activeVariant) && currentVariants.length > 0) {
                         activeVariant = currentVariants[0].id;
                     }
                     renderVariants();
