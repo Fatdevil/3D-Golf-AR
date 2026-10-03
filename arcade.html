@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=29"></script>
+<script src="i18n.js?v=30"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -12332,6 +12332,23 @@
             
             if (biome && typeof window.changeBiome === 'function') {
                 window.changeBiome(biome);
+            }
+            
+            // a mood from the new-course page also decides what meets the eye on each side of the plate
+            const mood = params.get('mood');
+            const MOOD_EDGES = {
+                forest:   { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' },
+                sea:      { N: 'horizonColor', E: 'oceanColor', S: 'oceanColor', W: 'oceanColor' },
+                mountain: { N: 'horizonColor', E: 'horizonColor', S: 'horizonColor', W: 'horizonColor' },
+                desert:   { N: 'horizonColor', E: 'wasteColor', S: 'wasteColor', W: 'wasteColor' }
+            };
+            if (mood && MOOD_EDGES[mood] && typeof window.updateSurroundColors === 'function') {
+                ['N', 'E', 'S', 'W'].forEach(function (side) {
+                    const sel = document.getElementById('surr-' + side);
+                    if (sel) sel.value = MOOD_EDGES[mood][side];
+                });
+                window._surroundTouched = true;   // the next-step guide counts the surroundings as started
+                window.updateSurroundColors();
             }
             
             setMode('BUILD');
