@@ -10545,6 +10545,7 @@
             
             // SF-13: Defer undo commit until first actual mutation
             strokePendingUndo = captureEditorState();
+            window._strokePreHeights = strokePendingUndo.heights; // the undo state is committed on the first mutation, keep the terrain-before copy
             strokeHasModified = false;
             
             if (currentTool === 'RAMP' && lastHitPoint) {
@@ -10639,6 +10640,7 @@
         // SF-13: If stroke never mutated anything, discard pending undo without dirtying history or save state
         if (!strokeHasModified) {
             strokePendingUndo = null;
+            window._strokePreHeights = null;
             if (currentTool === 'RAMP' && window.rampSnapshotHeights) {
                 planeGeo.attributes.position.array.set(window.rampSnapshotHeights);
                 planeGeo.attributes.position.needsUpdate = true;
@@ -10648,6 +10650,10 @@
             return;
         }
         
+        // Terrain before this stroke - used below to re-flatten greens/tees
+        const preStrokeHeights = window._strokePreHeights || (strokePendingUndo ? strokePendingUndo.heights : null);
+        window._strokePreHeights = null;
+
         // Commit pending undo if not yet committed
         if (strokePendingUndo) {
             if (undoStack.length >= 20) undoStack.shift();
@@ -10681,6 +10687,14 @@
             if (window._terrainShells) window._terrainShells.refresh();
             if (options.save) debounceSaveCourse(1500);
         } else {
+            // Greens and tee boxes follow the ground: bake the stroke into their baseline and flatten them again
+            if (typeof window.reanchorStudiosAfterSculpt === 'function' && preStrokeHeights) {
+                try {
+                    if (window.reanchorStudiosAfterSculpt(preStrokeHeights) > 0 && typeof showBuildToast === 'function') {
+                        showBuildToast((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Green/tee planades om efter sculpt' : 'Green/tee re-flattened after sculpt', '#4ade80');
+                    }
+                } catch (err) { console.error('[reanchor]', err); }
+            }
             // SF-01: Guaranteed normals recomputation, chunk/shell sync, object snap, and save
             planeGeo.computeVertexNormals(); 
             planeGeo.computeBoundingBox();
@@ -15649,6 +15663,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
 <script src="smart-builder.js?v=50"></script>
+<script src="studio-reanchor.js?v=1"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>

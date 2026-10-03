@@ -260,3 +260,10 @@ Det stora inbyggda skriptet i `arcade.html` delas upp i egna filer, ett område 
 - Verktyg: `python3 tools/split-script.py cut NAMN.js --start ... --end ...` flyttar ett radintervall; `python3 tools/split-script.py verify origin/main` bevisar att allt lagt tillbaka är byte-identiskt med förra versionen.
 - Skydd: `npm run smoke` (se `tests/README.md`) fångar saknade filer, nya sidfel och förlorade globaler.
 
+
+## Green och tee följer marken efter sculpt (2026-10)
+`studio-reanchor.js` (`window.reanchorStudiosAfterSculpt(preHeights)`), anropas från `finalizeSculptStroke` när ett höjdpenseldrag släpps.
+- Green och tee lagras som "orörd mark (`origHeights`) + utplaning". Ett sculpt-drag ändrar den färdiga ytan, så att bara köra om pipelinen hade återställt gamla `origHeights` och raderat draget.
+- Efter draget läggs höjdskillnaden (marken före draget sparas i `window._strokePreHeights` vid pointerdown) in i `origHeights`, `baseElevation` flyttas med medelskillnaden under ytan, och `applyGreenPipeline` / `applyTeePipeline(..., heightsOnly)` körs om. Resultat: platt yta på den nya marknivån, kullen finns kvar runt omkring.
+- `origHeights` ersätts alltid med en NY array (undo-tillstånden pekar på den gamla), så ångra/gör om stämmer.
+- Fairway och bunkrar berörs inte än (fairway ska mjukas, inte plattas ut).

@@ -116,6 +116,35 @@ function serve() {
     try { ser = JSON.stringify(window.serializeHolesFull()); } catch (e) { ser = null; }
     check('serializeHolesFull gives JSON for the course', ser && ser.length > 100, ser ? ser.length + ' chars' : 'failed');
     check('load, leaderboard and rules functions are defined', ['loadLevel', 'importCourseHash', 'showLeaderboard', 'submitRoundResult', 'takeMulligan', 'startLateralDrop', 'buildGreenGrid', 'setWaterType', 'closeLibrary'].every(function (n) { return typeof (0, eval)('typeof ' + n + " === 'undefined' ? undefined : " + n) === 'function'; }));
+
+    // sculpt re-anchor: a hill raised under a green and a tee box must be flattened again at the new height, the hill must survive around them
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[1] || courseHoles[0];
+      const ring = function (cx, cz, rx, rz) { const a = []; for (let k = 0; k < 8; k++) a.push({ x: cx + rx * Math.cos(k / 8 * 6.283), y: 0, z: cz + rz * Math.sin(k / 8 * 6.283) }); return a; };
+      const gp = ring(60, 40, 12, 9);
+      const gs = window.captureGreenSnapshot(hh, gp, 25);
+      hh.greenData = { points: gp, baseElevation: gs.baseElevation, bbox: gs.bbox, origHeights: gs.origHeights, origCanvasPixels: gs.origCanvasPixels, difficulty: 'FLAT', elevationOffset: 0, blendDistance: 8, tiltPct: 0, tiltAim: false, tiltToFlag: false, stimp: 10, firmness: 'NORMAL', tension: 0.5, mowPattern: 'SOLID', foregreenWidth: 1, edgeSharpness: 100, seedOffsetX: 0, seedOffsetZ: 0 };
+      window.applyGreenPipeline(hh, false, false);
+      const tp = ring(-60, 40, 5, 4);
+      const ts = window.captureTeeSnapshot(hh, tp, 25);
+      hh.teeBoxes = [{ id: 'tb_t', points: tp, raiseHeight: 0.5, blendRadius: 4, mowPattern: 'SOLID', edgeSharpness: 100, activeTees: [], baseElevation: ts.baseElevation, bbox: ts.bbox, origHeights: ts.origHeights, origCanvasPixels: ts.origCanvasPixels }];
+      hh.teeData = hh.teeBoxes[0];
+      window.applyTeePipeline(hh, false, false, hh.teeBoxes[0], true);
+      const spread = function (cx, cz, rx, rz) { let lo = 1e9, hi = -1e9; for (let a = -4; a <= 4; a++) for (let b = -4; b <= 4; b++) { if (a * a + b * b > 9) continue; const y = window.getTerrainHeight(cx + a * rx / 5, cz + b * rz / 5); lo = Math.min(lo, y); hi = Math.max(hi, y); } return hi - lo; };
+      const pre = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 3 * Math.exp(-((x - 62) * (x - 62) + (z - 38) * (z - 38)) / 392) + 2 * Math.exp(-((x + 58) * (x + 58) + (z - 40) * (z - 40)) / 98); }
+      const bumpy = spread(60, 40, 12, 9);
+      const fixed = window.reanchorStudiosAfterSculpt(pre);
+      check('sculpt under green and tee: both re-flattened', fixed === 2, 'fixed ' + fixed);
+      check('green is flat again after sculpt (was ' + bumpy.toFixed(2) + ' m)', bumpy > 0.5 && spread(60, 40, 12, 9) < 0.08, spread(60, 40, 12, 9).toFixed(3) + ' m');
+      check('tee is flat again after sculpt', spread(-60, 40, 5, 4) < 0.03, spread(-60, 40, 5, 4).toFixed(3) + ' m');
+      check('green follows the raised ground', hh.greenData.baseElevation > 2, hh.greenData.baseElevation.toFixed(2) + ' m');
+      check('hill outside the green is kept', Math.abs(window.getTerrainHeight(90, 40) - 3 * Math.exp(-((90 - 62) ** 2 + 4) / 392)) < 0.05);
+      check('old baseline array is left alone (undo)', gs.origHeights.every(function (v) { return Math.abs(v) < 1e-6; }));
+      check('no change means no work', window.reanchorStudiosAfterSculpt(new Float32Array(p)) === 0);
+    })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 
