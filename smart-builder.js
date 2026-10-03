@@ -6312,6 +6312,25 @@ function _mtnEdgeFade(x, z, height) {
 }
 window.mountainEdgeFade = _mtnEdgeFade;
 
+// Ridge helpers shared by the preview and the builder, so what you see is what you get:
+// the line is the same smooth curve in both, and the width comes from the height in one place
+window.mtnRidgeWidth = function(height) { return Math.max(8, Math.min(120, Math.abs(height) * 1.2)); };
+// Height added at a point of the ridge: the cosine profile plus natural noise (scaled by roughness), faded toward the plate edge.
+// The preview calls this too, so the pole shows the height that is really built.
+window.mtnRidgeHeightAt = function(x, z, height, jag, falloff) {
+    const fbm = window.fbm || function() { return 0; };
+    let noise = fbm(x * 0.08, z * 0.08, 3, 2.0, 0.5) * 0.6 + fbm(x * 0.2, z * 0.2, 2, 2.0, 0.5) * 0.3;
+    return (height * falloff + noise * height * 0.25 * falloff * jag) * _mtnEdgeFade(x, z, height);
+};
+window.mtnRidgeCurve = function(points) {
+    if (!points || points.length < 2) return [];
+    if (points.length === 2) return points.map(p => ({ x: p.x, z: p.z }));
+    const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p.x, 0, p.z)), false);
+    const half = (window.TERRAIN_SIZE || 600) / 2 - 1;
+    return curve.getPoints(Math.min(400, 24 * points.length)).map(p => ({
+        x: Math.max(-half, Math.min(half, p.x)), z: Math.max(-half, Math.min(half, p.z)) }));
+};
+
 window.executeRidgeMountain = function() {
     if (!window.splinePoints || window.splinePoints.length < 2) {
         if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_need2', '⚠️ Rita minst 2 punkter för en bergsrygg!'), '#ef4444');
@@ -6331,9 +6350,9 @@ window.executeRidgeMountain = function() {
         jaggedMultiplier = parseFloat(jaggedSlider.value) / 50.0;
     }
     
-    // Auto width: slope ratio 1:1.2 for steep ridge profile
-    let ridgeWidth = Math.abs(targetHeight) * 1.2;
-    if (ridgeWidth < 8) ridgeWidth = 8;
+    // Auto width: slope ratio 1:1.2 for steep ridge profile (capped so a giant ridge does not swallow the plate)
+    let ridgeWidth = window.mtnRidgeWidth(targetHeight);
+    const ridgeLine = window.mtnRidgeCurve(window.splinePoints);
     
     // Use correct terrain geometry reference
     const positions = window._arcadePlaneGeo.attributes.position.array;
@@ -6358,7 +6377,7 @@ window.executeRidgeMountain = function() {
     
     // Find bounding box of spline to limit vertex iteration
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    window.splinePoints.forEach(pt => {
+    ridgeLine.forEach(pt => {
         if (pt.x < minX) minX = pt.x;
         if (pt.x > maxX) maxX = pt.x;
         if (pt.z < minZ) minZ = pt.z;
@@ -6374,33 +6393,35 @@ window.executeRidgeMountain = function() {
     // positions[idx*3]   = X (world X)
     // positions[idx*3+1] = Y (world -Z)
     // positions[idx*3+2] = Z (world Y = height!)
+    // Distance to the line for every vertex in the area: each segment only visits the vertices near it
+    // (instead of every vertex checking every segment, which is slow for a long ridge)
+    const gW = gxMax - gxMin + 1, gH = gzMax - gzMin + 1;
+    const dist = new Float32Array(gW * gH).fill(Infinity);
+    for (let j = 0; j < ridgeLine.length - 1; j++) {
+        const v = ridgeLine[j], w = ridgeLine[j + 1];
+        const sx0 = Math.max(gxMin, Math.floor((Math.min(v.x, w.x) - ridgeWidth + size / 2) / step));
+        const sx1 = Math.min(gxMax, Math.ceil((Math.max(v.x, w.x) + ridgeWidth + size / 2) / step));
+        const sz0 = Math.max(gzMin, Math.floor((Math.min(v.z, w.z) - ridgeWidth + size / 2) / step));
+        const sz1 = Math.min(gzMax, Math.ceil((Math.max(v.z, w.z) + ridgeWidth + size / 2) / step));
+        for (let gz = sz0; gz <= sz1; gz++) {
+            for (let gx = sx0; gx <= sx1; gx++) {
+                const k = (gz - gzMin) * gW + (gx - gxMin), idx = gz * stride + gx;
+                const d = distToSegment(positions[idx * 3], -positions[idx * 3 + 1], v, w);
+                if (d < dist[k]) dist[k] = d;
+            }
+        }
+    }
     for (let gz = gzMin; gz <= gzMax; gz++) {
         for (let gx = gxMin; gx <= gxMax; gx++) {
             let idx = gz * stride + gx;
             let vx = positions[idx * 3];       // world X
             let vz = -positions[idx * 3 + 1];  // world Z = -localY
             let origH = positions[idx * 3 + 2]; // height = localZ
-            
-            // Find minimum distance to any spline segment
-            let minDist = Infinity;
-            for (let j = 0; j < window.splinePoints.length - 1; j++) {
-                let d = distToSegment(vx, vz, window.splinePoints[j], window.splinePoints[j + 1]);
-                if (d < minDist) minDist = d;
-            }
-            
+            let minDist = dist[(gz - gzMin) * gW + (gx - gxMin)];
+
             if (minDist < ridgeWidth) {
-                let nDist = minDist / ridgeWidth;
-                let baseFalloff = (Math.cos(nDist * Math.PI) + 1) * 0.5; // Cosine falloff 1→0
-                
-                // FBM noise for natural variation, scaled by jaggedness
-                let noiseVal = fbm(vx * 0.08, vz * 0.08, 3, 2.0, 0.5) * 0.6;
-                noiseVal += fbm(vx * 0.2, vz * 0.2, 2, 2.0, 0.5) * 0.3;
-                
-                // Taper noise at edges, apply jagged multiplier
-                let noiseMod = noiseVal * targetHeight * 0.25 * baseFalloff * jaggedMultiplier;
-                let newH = origH + ((targetHeight * baseFalloff) + noiseMod) * _mtnEdgeFade(vx, vz, targetHeight);
-                
-                positions[idx * 3 + 2] = newH; // Write to height (localZ)
+                let baseFalloff = (Math.cos(minDist / ridgeWidth * Math.PI) + 1) * 0.5; // Cosine falloff 1→0
+                positions[idx * 3 + 2] = origH + window.mtnRidgeHeightAt(vx, vz, targetHeight, jaggedMultiplier, baseFalloff); // Write to height (localZ)
                 modified = true;
             }
         }

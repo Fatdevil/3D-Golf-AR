@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=26"></script>
+<script src="i18n.js?v=27"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -17778,7 +17778,9 @@
             
             let closedCurve = isMtnSpline && !isMtnRidge;
             let curve = new THREE.CatmullRomCurve3(pts, closedCurve);
-            let curvePts = curve.getPoints(50 * pts.length);
+            let curvePts = (isMtnRidge && window.mtnRidgeCurve)
+                ? window.mtnRidgeCurve(splinePoints).map(p => new THREE.Vector3(p.x, 0, p.z)) // exactly the line the builder follows
+                : curve.getPoints(50 * pts.length);
             curvePts.forEach(cp => {
                 let surf = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(cp.x, -cp.z) : null;
                 if (surf) cp.y = surf.z + 0.4;
@@ -17859,7 +17861,47 @@
                 } catch (err) { console.warn('Hill preview failed', err); }
             }
         }
-        if (!(isMtnSpline && !isMtnRidge && splinePoints.length >= 3)) {
+        // Ridge preview: the width it will get (see-through strip), a pole at the middle with the real height and a size line
+        if (isMtnRidge && splinePoints.length >= 2 && window.mtnRidgeCurve) {
+            try {
+                const line = window.mtnRidgeCurve(splinePoints);
+                const rawH = parseFloat((document.getElementById('mtn-spline-height') || {}).value) || 25;
+                const w = window.mtnRidgeWidth(rawH);
+                const gnd = (x, z) => { const s = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(x, -z) : null; return s ? s.z : 0; };
+                let top = -Infinity, len = 0;
+                line.forEach((p, i) => { top = Math.max(top, gnd(p.x, p.z)); if (i) len += Math.hypot(p.x - line[i - 1].x, p.z - line[i - 1].z); });
+                const verts = [], idx = [];
+                line.forEach((p, i) => {
+                    const a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)];
+                    let dx = b.x - a.x, dz = b.z - a.z; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+                    verts.push(p.x - dz * w, top + 0.2, p.z + dx * w, p.x + dz * w, top + 0.2, p.z - dx * w);
+                    if (i) { const k = (i - 1) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+                });
+                const fillGeo = new THREE.BufferGeometry();
+                fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+                fillGeo.setIndex(idx);
+                splineFillMesh = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.2, depthTest: false, side: THREE.DoubleSide }));
+                splineFillMesh.renderOrder = 997;
+                scene.add(splineFillMesh);
+                // pole at the middle of the line, with the height the builder gives there (edge fade included)
+                let acc = 0, mid = line[0];
+                for (let i = 1; i < line.length; i++) { acc += Math.hypot(line[i].x - line[i - 1].x, line[i].z - line[i - 1].z); if (acc >= len / 2) { mid = line[i]; break; } }
+                const jagV = parseFloat((document.getElementById('mtn-spline-jagged') || {}).value);
+                const hh = Math.max(0, window.mtnRidgeHeightAt(mid.x, mid.z, rawH, isNaN(jagV) ? 1 : jagV / 50, 1)), gy = gnd(mid.x, mid.z);
+                splinePoleGroup = new THREE.Group();
+                const poleLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(mid.x, gy, mid.z), new THREE.Vector3(mid.x, gy + hh, mid.z)]), new THREE.LineBasicMaterial({ color: 0xfacc15, depthTest: false }));
+                const cap = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.8, hh * 0.025), 10, 10), new THREE.MeshBasicMaterial({ color: 0xfacc15, depthTest: false }));
+                cap.position.set(mid.x, gy + hh, mid.z);
+                poleLine.renderOrder = 998; cap.renderOrder = 998;
+                splinePoleGroup.add(poleLine); splinePoleGroup.add(cap);
+                scene.add(splinePoleGroup);
+                const info = document.getElementById('mtn-hill-info');
+                if (info) {
+                    const tpl = (typeof window.t === 'function' && window.t('mtn_ridge_info') !== 'mtn_ridge_info') ? window.t('mtn_ridge_info') : 'Ca {l} m lång · {w} m bred · {h} m hög';
+                    info.textContent = tpl.replace('{l}', Math.round(len)).replace('{w}', Math.round(w * 2)).replace('{h}', Math.round(hh));
+                }
+            } catch (err) { console.warn('Ridge preview failed', err); }
+        } else if (!(isMtnSpline && !isMtnRidge && splinePoints.length >= 3)) {
             let info = document.getElementById('mtn-hill-info'); if (info) info.textContent = '';
         }
 
@@ -20887,7 +20929,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=45"></script>
+<script src="smart-builder.js?v=47"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>
