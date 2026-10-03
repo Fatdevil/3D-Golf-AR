@@ -132,7 +132,7 @@ const SwingEngine = (function() {
         // PUTT special case
         if (clubKey === 'PUTT') {
             // power scales the whole roll: 100 % = to the hole and a little past it
-            const targetDist  = (Math.max(0.5, distToHoleM) + PUTT_OVERROLL_M) * effectivePower;
+            const targetDist  = (Math.max(0.02, distToHoleM) + PUTT_OVERROLL_M) * effectivePower;
             const puttSpeedMph = puttForceToSpeed(targetDist, stimp);
             return {
                 ballSpeedMph:   Math.min(puttSpeedMph, club.maxSpeed),
