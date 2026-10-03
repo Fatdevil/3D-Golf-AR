@@ -12300,6 +12300,7 @@
                     savedStr = data;
                     isCloud = true;
                     // Store course metadata for Round Setup header
+                    window._loadedUpdatedAt = data.updated_at ? String(data.updated_at) : null; // which saved revision this page shows
                     window._loadedIsDraft = data.is_draft === true; // an unpublished draft is a builder preview: its rounds never count
                     window._loadedCourseName = data.name || null;
                     window._loadedCourseAuthor = data.author || null;
@@ -12919,7 +12920,7 @@
     window.commitSettingsAndStart = function() {
         if (window.setupPlayers.length === 0) return;
         // the next-step guide: a saved draft counts as played once its round really starts
-        try { const c = (new URLSearchParams(window.location.search)).get('edit'); if (c) localStorage.setItem('golfPlayed_' + c, '1'); } catch (e) {}
+        try { const c = (new URLSearchParams(window.location.search)).get('edit'); if (c && window._loadedUpdatedAt) localStorage.setItem('golfPlayed_' + c, window._loadedUpdatedAt); } catch (e) {}
         
         const inputs = document.getElementById('roster-list').querySelectorAll('input[type="text"]');
         inputs.forEach((inp, idx) => {
@@ -20705,7 +20706,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=14"></script>
+<script src="guide.js?v=15"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

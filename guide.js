@@ -69,8 +69,9 @@
     function playedCurrent() {
         const code = typeof root.getEditCode === 'function' ? root.getEditCode() : null;
         if (!code) return false;
+        // the marker holds the saved revision that was played; a draft overwritten elsewhere has another one
         let on = false;
-        try { on = localStorage.getItem('golfPlayed_' + code) === '1'; } catch (e) {}
+        try { const m = localStorage.getItem('golfPlayed_' + code); on = !!m && m === root._loadedUpdatedAt; } catch (e) {}
         if (!on) return false;
         const rev = root._editRev || 0;
         // loading the course bumps the counter without being an edit; once the user has touched anything, that baseline stays put
