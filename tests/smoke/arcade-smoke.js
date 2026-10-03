@@ -62,7 +62,9 @@ function serve() {
   await ctx.route(/^https:\/\/(?!cdn)/, function (r) { r.abort(); });
   const page = await ctx.newPage();
   const errors = [];
+  const missing = [];
   page.on('pageerror', function (e) { errors.push(e.message.slice(0, 120)); });
+  page.on('response', function (r) { const u = new URL(r.url()); if (u.origin === base && r.status() >= 400 && !u.pathname.startsWith('/api/')) missing.push(r.status() + ' ' + u.pathname); });
   await page.goto(base + '/arcade.html?autorun=new_build&mode=range', { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(7000);
 
@@ -124,6 +126,7 @@ function serve() {
   let failed = 0;
   function report(ok, msg) { console.log((ok ? 'PASS  ' : 'FAIL  ') + msg); if (!ok) failed++; }
   checks.forEach(function (c) { report(c.ok, c.name + (c.detail ? '  ' + c.detail : '')); });
+  report(missing.length === 0, 'every local file loads' + (missing.length ? ': ' + missing.join(', ') : ''));
   if (!base0) { report(false, 'no baseline (run with --update)'); }
   else {
     const newErr = result.errors.filter(function (e) { return base0.errors.indexOf(e) < 0; });
