@@ -10436,6 +10436,7 @@
         let p = courseHoles[currentHoleIndex].par + dir;
         if(p < 3) p = 3; if(p > 6) p = 6;
         courseHoles[currentHoleIndex].par = p;
+        window._editRev = (window._editRev || 0) + 1; // the next-step guide: scoring changed
         let parEl = document.getElementById('hole-ui-par');
         if(parEl) parEl.innerText = "Par " + p;
         let sbPar = document.getElementById('sb-par-display');
@@ -10553,6 +10554,26 @@
             else { memBar.style.background = "#4ade80"; memCur.style.color = "#4ade80"; }
         }
     }
+    // fences, walls, hedges and OB stakes drawn as paths: only the path is saved, the meshes are rebuilt when the course opens
+    window.serializeEnvObjects = function (h) {
+        return (h && h.envObjects ? h.envObjects : []).filter(o => o && o.type && o.splineData && o.splineData.length >= 2)
+            .map(o => ({ type: o.type, splineData: o.splineData.map(p => ({ x: p.x, y: p.y, z: p.z })) }));
+    };
+    window.restoreEnvObjects = function (h, saved) {
+        (h.envObjects || []).forEach(o => { if (o && o.mesh) scene.remove(o.mesh); });
+        h.envObjects = [];
+        if (!Array.isArray(saved) || typeof window.buildFenceMesh !== 'function') return;
+        saved.forEach(eo => {
+            try {
+                const pts = eo.splineData.map(p => new THREE.Vector3(p.x, p.y, p.z));
+                if (pts.length < 2) return;
+                const mesh = window.buildFenceMesh(eo.type, pts);
+                scene.add(mesh);
+                h.envObjects.push({ id: Math.random().toString(36).substr(2, 9), type: eo.type, mesh: mesh, splineData: eo.splineData, collisionData: mesh.userData.collisionPts || [] });
+            } catch (e) { console.warn('Could not rebuild path object', e); }
+        });
+    };
+
     // every hole with all of its editable definitions (greens, fairways, bunkers, tee boxes): what the builder needs to open it again
     window.serializeHolesFull = function () {
         return courseHoles.map(h => ({
@@ -10564,6 +10585,7 @@
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null,
+            envObjects: window.serializeEnvObjects(h),
             greenData: h.greenData ? {
                 points: h.greenData.points,
                 difficulty: h.greenData.difficulty,
@@ -11290,7 +11312,8 @@
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
-            surroundConfig: h.surroundConfig || null
+            surroundConfig: h.surroundConfig || null,
+            envObjects: window.serializeEnvObjects(h)
         }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];
         
@@ -12592,6 +12615,8 @@
                             h.activeTeeBoxIndex = null;
                             h.teeData = null;
                         }
+                        // path objects are rebuilt after the terrain below has been applied (hedges follow the ground)
+                        setTimeout(() => window.restoreEnvObjects(h, hSync.envObjects), 0);
                     }
                     if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
                 }
@@ -20712,7 +20737,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=16"></script>
+<script src="guide.js?v=17"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
