@@ -11170,7 +11170,6 @@
             showBuildToast(tr('sp_failed', 'Det gick inte att spara banan. Försök igen.'), '#ef4444');
             return;
         }
-        try { localStorage.setItem('golfPlayed_' + playCode, '1'); } catch (e) {}
         window.hasUnsavedChanges = false;
         window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&edit=' + playCode;
     };
@@ -12918,6 +12917,8 @@
 
     window.commitSettingsAndStart = function() {
         if (window.setupPlayers.length === 0) return;
+        // the next-step guide: a saved draft counts as played once its round really starts
+        try { const c = (new URLSearchParams(window.location.search)).get('edit'); if (c) localStorage.setItem('golfPlayed_' + c, '1'); } catch (e) {}
         
         const inputs = document.getElementById('roster-list').querySelectorAll('input[type="text"]');
         inputs.forEach((inp, idx) => {
