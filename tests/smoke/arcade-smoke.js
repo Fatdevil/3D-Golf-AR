@@ -1,5 +1,5 @@
 // Browser smoke test for arcade.html. Guards the big inline script against accidental changes while it is being split up.
-//   npm --prefix tests install        (once)
+//   npm --prefix tests install && npm --prefix tests run setup    (once: libraries, then Chromium)
 //   npm run smoke                     compare with the saved baseline
 //   npm run smoke -- --update         rewrite the baseline (only when a change is intended)
 // Needs a Chromium: set CHROMIUM_PATH, or it uses /opt/pw-browsers/chromium-*/chrome-linux/chrome, or Playwright's own.
@@ -52,7 +52,8 @@ function serve() {
 (async function () {
   const srv = await serve();
   const base = 'http://127.0.0.1:' + srv.address().port;
-  const browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  let browser;
+  try { browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }); } catch (e) { console.error('Could not start Chromium: ' + e.message.split('\n')[0] + '\nRun: npm --prefix tests run setup   (or set CHROMIUM_PATH)'); srv.close(); process.exit(2); }
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
   await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
     const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
