@@ -9032,11 +9032,11 @@
             mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(precise, 3));
             mesh.computeLineDistances();
         };
-        // wait out the turn change (about 200 ms, longer after a holed player), then do it when the browser is idle
+        // wait out the turn change (200 ms, 1000 ms after a holed player), then do it when the browser is idle
         setTimeout(function () {
             if (typeof requestIdleCallback === 'function') requestIdleCallback(refine, { timeout: 1500 });
             else refine();
-        }, 700);
+        }, 1300);   // past the longest turn change (1000 ms after a holed player)
     };
     
     // The break line is a putt played with the real physics: the pace a player would give a putt to this hole (distance + the
@@ -13284,7 +13284,7 @@
         
         // Rebuild break line if on green
         let _lieSurf = localGetTerrainAt(p.lie.x, -p.lie.z);
-        if (_lieSurf && _lieSurf.type === 'GREEN') { window.buildBreakLine(); }
+        if (_lieSurf && _lieSurf.type === 'GREEN' && !p.holedOut) { window.buildBreakLine(); }   // a holed-out player is leaving; whoever is up next gets a line in switchTurnTo
         else { window.clearBreakLine(); }
 
         if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
