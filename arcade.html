@@ -9978,6 +9978,12 @@
     const targets = [];
     window.buildingBlocks = targets;   // same array (only ever mutated in place); the hole generator treats blocks as obstacles
     
+    // blocks the test ball has hit are taken out of the scene: put them back (they were never removed from the saved course)
+    window.restoreTargets = function () {
+        targets.forEach(t => {
+            if (!t.active && t.mesh) { t.active = true; if (!t.mesh.parent) scene.add(t.mesh); }
+        });
+    };
     function createTargetAbsolute(x, y, z, colStr) {
         let exists = targets.find(t => t.mesh && t.mesh.position.x === x 
             && Math.abs(t.mesh.position.y - y) < 0.1 && t.mesh.position.z === z);
@@ -16227,6 +16233,7 @@
         let pb = document.getElementById('player-banner');
         if (pb) pb.style.top = mode === 'PLAY' ? '20px' : '70px';
         
+        if (mode === 'BUILD' || mode === 'TEST') window.restoreTargets();
         if (mode === 'BUILD') {
             playState = 'BUILDING'; // Nollställ playState från tidigare test-rundor
             window.aimTarget = null; // Rensa eventuella gamla sikten
@@ -16286,8 +16293,15 @@
             if (mmC) mmC.style.display = 'block';
             
             // Find tee — support range tees as fallback
-            let tee = (courseHoles[0] && courseHoles[0].tees) ? (courseHoles[0].tees.yellow || courseHoles[0].tees.red || courseHoles[0].tees.white || courseHoles[0].tees.black || courseHoles[0].tees.range) : null;
-            let isRangeTee = tee && courseHoles[0].tees.range && tee === courseHoles[0].tees.range;
+            // the tee of the hole being tested (a range may be on any hole), the first hole with a tee otherwise
+            const teeOf = (h) => (h && h.tees) ? (h.tees.yellow || h.tees.red || h.tees.white || h.tees.black || h.tees.range) : null;
+            const isRangeCourse = !!window._isRangeMode || (new URLSearchParams(window.location.search)).get('mode') === 'range';
+            let teeHole = null;
+            if (isRangeCourse) teeHole = courseHoles.find(h => h && h.tees && h.tees.range) || null;
+            if (!teeHole && teeOf(courseHoles[currentHoleIndex])) teeHole = courseHoles[currentHoleIndex];
+            if (!teeHole) teeHole = courseHoles.find(h => teeOf(h)) || null;
+            let tee = teeHole ? ((isRangeCourse && teeHole.tees.range) ? teeHole.tees.range : teeOf(teeHole)) : null;
+            let isRangeTee = tee && teeHole.tees.range && tee === teeHole.tees.range;
             
             if(tee) {
                 window.ballPos.x = tee.x; window.ballPos.y = tee.y + 0.2; window.ballPos.z = tee.z;
