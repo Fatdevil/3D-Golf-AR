@@ -1,6 +1,6 @@
 /*
  * Next-step guide: one small chip in the builder that always says what to do next and does it with one tap.
- * The steps follow the way a plate is built: place the holes, build the surroundings, add nature, then test and
+ * The steps follow the way a plate is built: place the holes, build the surroundings, add nature, then save and play and
  * publish. Everything it opens already exists (Placera på karta, Bakgrund, the Props tool); the guide only decides
  * what is worth suggesting now, from the state of the course. A tap on the arrow lists all steps; "Dölj guiden"
  * shrinks it to a small compass that brings it back.
@@ -62,6 +62,29 @@
         return (root.placedTrees || []).filter(function (o) { return o && Math.abs(o.x) <= half && Math.abs(o.z) <= half; }).length;
     }
 
+    // The course is played from its saved copy, so "played" is remembered per saved draft and lasts until the course is edited
+    const loadedAt = Date.now();
+    let revBase = null, touched = false;
+    ['pointerdown', 'keydown'].forEach(function (ev) { root.addEventListener(ev, function () { if (Date.now() - loadedAt < 5000) touched = true; }, true); });
+    // the revision as it stood when the course had loaded; sampled from the start, whatever else is still loading
+    function trackRev() {
+        const rev = root._editRev || 0;
+        if (revBase === null || (!touched && Date.now() - loadedAt < 5000)) revBase = rev;
+    }
+    function playedCurrent() {
+        const code = typeof root.getEditCode === 'function' ? root.getEditCode() : null;
+        if (!code) return false;
+        // the marker holds the saved revision that was played; a draft overwritten elsewhere has another one
+        let on = false;
+        try { const m = localStorage.getItem('golfPlayed_' + code); on = !!m && m === root._loadedUpdatedAt; } catch (e) {}
+        if (!on) return false;
+        const rev = root._editRev || 0;
+        // loading the course bumps the counter without being an edit; once the user has touched anything, that baseline stays put
+        trackRev();
+        if (rev !== revBase) { try { localStorage.removeItem('golfPlayed_' + code); } catch (e) {} return false; }
+        return true;
+    }
+
     function steps() {
         const h = holeCount();
         return [
@@ -76,8 +99,8 @@
             { id: 'nature', done: natureCount() >= NATURE_COUNT, optional: true,
               label: tr('g_nature', 'Lägg till natur'), info: tr('g_optional', 'valfritt'), button: tr('g_open', 'Öppna'),
               run: function () { if (typeof root.setTool === 'function') root.setTool('PROPS'); } },
-            { id: 'play', done: !!root._courseTested && root._courseTested === (root.getCourseSignature && root.getCourseSignature()),
-              label: tr('g_test', 'Testspela banan'), info: '', button: tr('g_test_short', 'Testspela'),
+            { id: 'play', done: playedCurrent(),
+              label: tr('g_save_play', 'Spara & spela banan'), info: '', button: tr('g_save_play_short', 'Spara & spela'),
               run: function () { click('btn-mode-play'); } },
             { id: 'publish', done: false,
               label: tr('g_publish', 'Publicera'), info: '', button: tr('g_publish', 'Publicera'),
@@ -116,6 +139,7 @@
         return 'border:none; cursor:pointer; font-weight:bold; color:#f1f5f9; ' + (extra || '');
     }
     function render() {
+        trackRev();
         if (!host) return;
         const mode = typeof root.getAppMode === 'function' ? root.getAppMode() : 'BUILD';
         const overlay = document.getElementById('bp-overlay') || document.getElementById('bd-overlay');

@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=23"></script>
+<script src="i18n.js?v=24"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -382,7 +382,7 @@
         
         <!-- RIGHT: Testspela, Publicera & Hub -->
         <div class="top-right">
-            <button id="btn-mode-play" class="sys-btn" onclick="setMode('TEST')" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 18px; font-size:13px; font-weight:800; border-radius:10px; box-shadow:0 4px 15px rgba(16,185,129,0.4); display:inline-flex; align-items:center; gap:6px; transition:transform 0.1s;" title="Testspela banan direkt (Sparar automatiskt)">▶ <span data-i18n="ed_test_course">Testspela</span></button>
+            <button id="btn-mode-play" class="sys-btn" onclick="saveAndPlay()" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 18px; font-size:13px; font-weight:800; border-radius:10px; box-shadow:0 4px 15px rgba(16,185,129,0.4); display:inline-flex; align-items:center; gap:6px; transition:transform 0.1s;" title="Sparar banan och startar spelet">▶ <span data-i18n="ed_save_play">Spara &amp; spela</span></button>
             <button id="btn-publish" class="sys-btn" onclick="document.getElementById('publish-modal').style.display='flex'; if(window.updatePublishPreview) updatePublishPreview();" style="border-color:#334155; color:#94a3b8; font-size:12px; padding:7px 12px; border-radius:10px;" title="Dela eller publicera bana">📤 <span data-i18n="ed_publish">Publicera...</span></button>
             <a href="arcade_hub.html" class="sys-btn" style="text-decoration:none; font-size:15px; padding:7px 11px; border-radius:10px; border-color:#334155; color:#94a3b8;" title="Tillbaka till Hub">🏠</a>
         </div>
@@ -457,6 +457,7 @@
                 redo: "Gör om",
                 test_course: "Testspela",
                 ed_test_course: "Testspela",
+                ed_save_play: "Spara & spela",
                 ed_build_mode: "Bygg",
                 ed_publish: "Publicera",
                 save: "Spara",
@@ -523,6 +524,7 @@
                 redo: "Redo",
                 test_course: "Test Course",
                 ed_test_course: "Test Course",
+                ed_save_play: "Save & play",
                 ed_build_mode: "Build",
                 ed_publish: "Publish",
                 save: "Save",
@@ -1672,7 +1674,7 @@
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:4px;">
                 <div>
                     <div data-i18n="env_surround_north" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Norr (N)</div>
-                    <select id="surr-N" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-N" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -1685,7 +1687,7 @@
                 </div>
                 <div>
                     <div data-i18n="env_surround_east" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Öster (E)</div>
-                    <select id="surr-E" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-E" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -1698,7 +1700,7 @@
                 </div>
                 <div>
                     <div data-i18n="env_surround_south" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Söder (S)</div>
-                    <select id="surr-S" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-S" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -1711,7 +1713,7 @@
                 </div>
                 <div>
                     <div data-i18n="env_surround_west" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Väster (W)</div>
-                    <select id="surr-W" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-W" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -3175,7 +3177,10 @@
                     <h2 style="color:#fff; margin:0; font-weight:800; font-size:22px; letter-spacing:0.5px;">⛳ <span style="color:#38bdf8;">ROUND SETUP</span></h2>
                     <div id="setup-course-info" style="color:#64748b; font-size:12px; margin-top:4px; font-weight:500;"></div>
                 </div>
-                <button onclick="window.location.href='arcade_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button id="setup-edit-btn" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + (new URLSearchParams(window.location.search)).get('edit')" style="display:none; background:#0284c7; color:#fff; border:none; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">🔨 <span data-i18n="sp_back_edit">Tillbaka till bygget</span></button>
+                    <button onclick="window.location.href='arcade_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
+                </div>
             </div>
 
             <!-- 3-COLUMN BODY -->
@@ -7416,7 +7421,7 @@
             if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
                 // the surroundings belong to the whole plate, so every hole on it keeps the same setting
                 courseHoles.forEach(function (h) { if (h) h.surroundConfig = Object.assign({}, window.surroundConfig); });
-                if (typeof saveLevel === 'function') saveLevel();
+                if (typeof saveLevel === 'function') saveLevel(false, true); // the dropdowns and the backdrop map count the edit themselves
             }
         }
         
@@ -10430,6 +10435,7 @@
         let p = courseHoles[currentHoleIndex].par + dir;
         if(p < 3) p = 3; if(p > 6) p = 6;
         courseHoles[currentHoleIndex].par = p;
+        window._editRev = (window._editRev || 0) + 1; // the next-step guide: scoring changed
         let parEl = document.getElementById('hole-ui-par');
         if(parEl) parEl.innerText = "Par " + p;
         let sbPar = document.getElementById('sb-par-display');
@@ -10547,23 +10553,29 @@
             else { memBar.style.background = "#4ade80"; memCur.style.color = "#4ade80"; }
         }
     }
-    async function saveLevel(isAuto = false) {
-        let sText = document.getElementById('save-status-text');
-        let sIcon = document.getElementById('save-status-icon');
-        let sInd = document.getElementById('save-status-indicator');
-        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+    // fences, walls, hedges and OB stakes drawn as paths: only the path is saved, the meshes are rebuilt when the course opens
+    window.serializeEnvObjects = function (h) {
+        return (h && h.envObjects ? h.envObjects : []).filter(o => o && o.type && o.splineData && o.splineData.length >= 2)
+            .map(o => ({ type: o.type, splineData: o.splineData.map(p => ({ x: p.x, y: p.y, z: p.z })) }));
+    };
+    window.restoreEnvObjects = function (h, saved) {
+        (h.envObjects || []).forEach(o => { if (o && o.mesh) scene.remove(o.mesh); });
+        h.envObjects = [];
+        if (!Array.isArray(saved) || typeof window.buildFenceMesh !== 'function') return;
+        saved.forEach(eo => {
+            try {
+                const pts = eo.splineData.map(p => new THREE.Vector3(p.x, p.y, p.z));
+                if (pts.length < 2) return;
+                const mesh = window.buildFenceMesh(eo.type, pts);
+                scene.add(mesh);
+                h.envObjects.push({ id: Math.random().toString(36).substr(2, 9), type: eo.type, mesh: mesh, splineData: eo.splineData, collisionData: mesh.userData.collisionPts || [] });
+            } catch (e) { console.warn('Could not rebuild path object', e); }
+        });
+    };
 
-        if (sText) sText.textContent = isSv ? 'Sparar' : 'Saving';
-        if (sIcon) sIcon.textContent = '⏳';
-        if (sInd) {
-            sInd.style.color = '#fbbf24';
-            sInd.style.background = 'rgba(251,191,36,0.12)';
-            sInd.style.borderColor = 'rgba(251,191,36,0.3)';
-            sInd.title = isSv ? 'Sparar banan...' : 'Saving course...';
-        }
-
-        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
-        let dumpHoles = courseHoles.map(h => ({
+    // every hole with all of its editable definitions (greens, fairways, bunkers, tee boxes): what the builder needs to open it again
+    window.serializeHolesFull = function () {
+        return courseHoles.map(h => ({
             par: h.par, 
             tees: h.tees,
             flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
@@ -10572,6 +10584,7 @@
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null,
+            envObjects: window.serializeEnvObjects(h),
             greenData: h.greenData ? {
                 points: h.greenData.points,
                 difficulty: h.greenData.difficulty,
@@ -10848,6 +10861,26 @@
                 origHeights: h.teeData.origHeights ? Array.from(h.teeData.origHeights) : null
             } : null)
         }));
+    };
+
+    async function saveLevel(isAuto = false, noEdit = false) {
+        if (!isAuto && !noEdit) window._editRev = (window._editRev || 0) + 1; // the next-step guide: a direct save (panorama, quick save) means the course changed
+        let sText = document.getElementById('save-status-text');
+        let sIcon = document.getElementById('save-status-icon');
+        let sInd = document.getElementById('save-status-indicator');
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+
+        if (sText) sText.textContent = isSv ? 'Sparar' : 'Saving';
+        if (sIcon) sIcon.textContent = '⏳';
+        if (sInd) {
+            sInd.style.color = '#fbbf24';
+            sInd.style.background = 'rgba(251,191,36,0.12)';
+            sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+            sInd.title = isSv ? 'Sparar banan...' : 'Saving course...';
+        }
+
+        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
+        let dumpHoles = window.serializeHolesFull();
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({
             type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0
         })) : [];
@@ -10941,7 +10974,7 @@
     }
     window.saveLevel = saveLevel;
     window.saveQuickDraft = function(isAuto) {
-        return saveLevel(isAuto);
+        return saveLevel(isAuto, true); // saving the course as it is does not change it
     };
 
     // Debounced course saver: coalesces rapid operations (e.g. sculpt strokes) so UI never stutters
@@ -11135,6 +11168,38 @@
         publishCourse({ isDraft: true, overwrite: hasExistingDraft });
     };
 
+    // ── Save & play: the course is saved as a draft and played from that copy (what a player will see) ──
+    window.saveAndPlay = async function () {
+        if (window._savingForPlay) return;
+        const tr = (k, fb) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : fb;
+        let ok = courseHoles.some(h => h && h.flag && h.tees && (h.tees.yellow || h.tees.white || h.tees.red || h.tees.black));
+        if (!ok) { showBuildToast(tr('sp_need_hole', 'Lägg ut minst ett hål med tee och flagga först'), '#ef4444'); return; }
+        const btn = document.getElementById('btn-mode-play');
+        const label = btn ? btn.innerHTML : '';
+        window._savingForPlay = true;
+        if (btn) btn.innerHTML = '⏳ ' + tr('sp_saving', 'Sparar...');
+        // a published course is never overwritten by playing it: its edits go to a separate draft copy that is reused each time
+        const origCode = currentEditCode;
+        const published = !!origCode && !!window._editIsPublished;
+        if (published) { try { currentEditCode = localStorage.getItem('golfPlayCopy_' + origCode) || null; } catch (e) { currentEditCode = null; } }
+        let saved = false;
+        try { saved = await publishCourse({ isDraft: true, overwrite: !!currentEditCode }); } catch (e) { saved = false; }
+        const playCode = currentEditCode;
+        if (published) {
+            currentEditCode = origCode;
+            window._editIsPublished = true; // publishCourse's own bookkeeping must not turn the original into a draft
+            if (saved && playCode) { try { localStorage.setItem('golfPlayCopy_' + origCode, playCode); } catch (e) {} }
+        }
+        window._savingForPlay = false;
+        if (!saved || !playCode) {
+            if (btn) btn.innerHTML = label;
+            showBuildToast(tr('sp_failed', 'Det gick inte att spara banan. Försök igen.'), '#ef4444');
+            return;
+        }
+        window.hasUnsavedChanges = false;
+        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&edit=' + playCode;
+    };
+
     // ── Preview: populate stats when modal opens ──
     window.updatePublishPreview = function() {
         let playable = (typeof courseHoles !== 'undefined') ? courseHoles.filter(h => h.flag && h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black)) : [];
@@ -11241,11 +11306,13 @@
         }
         
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
-        let dumpHoles = courseHoles.map(h => ({
+        // a draft is opened in the builder again, so it keeps every editable definition; a published course only needs what is played
+        let dumpHoles = options.isDraft ? window.serializeHolesFull() : courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
-            surroundConfig: h.surroundConfig || null
+            surroundConfig: h.surroundConfig || null,
+            envObjects: window.serializeEnvObjects(h)
         }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];
         
@@ -11293,6 +11360,7 @@
             let data = await ArcadeAPI.saveCourse(payload);
             if(data.success) {
                 currentEditCode = data.share_code;
+                window._editIsPublished = !options.isDraft;
                 window.hasUnsavedChanges = false;
                 
                 if (options.isDraft) {
@@ -11306,6 +11374,7 @@
                 
                 stat.style.color = '#4ade80';
                 stat.innerHTML = "Saved! Your link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
+                return true;
             } else {
                 showError("Failed: " + data.error);
             }
@@ -12189,6 +12258,7 @@
         let courseCode = params.get('course');
         let editCode = params.get('edit');
         let autoRun = params.get('autorun');
+        { const eb = document.getElementById('setup-edit-btn'); if (eb && editCode) eb.style.display = 'inline-block'; } // a saved draft can be taken back to the builder
         let collectionId = params.get('collection');
         let plateIndex = parseInt(params.get('plate') || '0');
         
@@ -12258,6 +12328,8 @@
                     savedStr = data;
                     isCloud = true;
                     // Store course metadata for Round Setup header
+                    window._loadedUpdatedAt = String(data.updated_at || data.created_at || 'none'); // which saved revision this page shows
+                    window._loadedIsDraft = data.is_draft === true; // an unpublished draft is a builder preview: its rounds never count
                     window._loadedCourseName = data.name || null;
                     window._loadedCourseAuthor = data.author || null;
                     window._loadedCourseHoles = data.hole_count || null;
@@ -12280,6 +12352,7 @@
                         } catch(e) { console.warn('Collection load failed:', e); }
                     }
                     if (editCode) {
+                        window._editIsPublished = data.is_draft !== true;
                         currentEditCode = data.share_code; 
                         if(document.getElementById('course-name-input')) document.getElementById('course-name-input').value = data.name;
                         if(document.getElementById('author-name-input')) document.getElementById('author-name-input').value = data.author;
@@ -12541,6 +12614,8 @@
                             h.activeTeeBoxIndex = null;
                             h.teeData = null;
                         }
+                        // path objects are rebuilt after the terrain below has been applied (hedges follow the ground)
+                        setTimeout(() => window.restoreEnvObjects(h, hSync.envObjects), 0);
                     }
                     if(document.getElementById('hole-ui-par')) { document.getElementById('hole-ui-par').innerText = "Par " + courseHoles[currentHoleIndex].par; }
                 }
@@ -12874,6 +12949,8 @@
 
     window.commitSettingsAndStart = function() {
         if (window.setupPlayers.length === 0) return;
+        // the next-step guide: a saved draft counts as played once its round really starts
+        try { const c = (new URLSearchParams(window.location.search)).get('edit'); if (c && window._loadedUpdatedAt) localStorage.setItem('golfPlayed_' + c, window._loadedUpdatedAt); } catch (e) {}
         
         const inputs = document.getElementById('roster-list').querySelectorAll('input[type="text"]');
         inputs.forEach((inp, idx) => {
@@ -13625,6 +13702,7 @@
     // === LEADERBOARD SYSTEM ===
     
     async function submitRoundResult() {
+        if (window._loadedIsDraft) { console.log('Draft preview — skipping leaderboard submit'); return; }
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course') || params.get('edit') || currentEditCode;
         if (!courseCode) { console.log('No course code — skipping leaderboard submit'); return; }
@@ -15966,29 +16044,7 @@
         isMeasuring = false;
     }, false);
     
-    // cheap fingerprint of everything a playtest depends on; the next-step guide compares it with the one taken at test time
-    window.getCourseSignature = function () {
-        const r = (v) => Math.round((v || 0) * 10);
-        const parts = [];
-        (courseHoles || []).forEach(function (h) {
-            if (!h) { parts.push('-'); return; }
-            const t = h.tees || {};
-            parts.push(['yellow', 'white', 'red', 'black', 'range'].map(function (k) { return t[k] ? r(t[k].x) + ',' + r(t[k].z) : ''; }).join('|') +
-                '/' + (h.flag ? r(h.flag.x) + ',' + r(h.flag.z) : ''));
-        });
-        parts.push(JSON.stringify(window.surroundConfig || {}), 'rev' + (window._editRev || 0));
-        (window.placedTrees || []).forEach(function (o) { if (o) parts.push(o.type + r(o.x) + ',' + r(o.z) + ',' + r(o.scale)); });
-        try {
-            const pos = planeGeo.attributes.position.array;
-            for (let i = 2; i < pos.length; i += 3 * 61) parts.push(r(pos[i]));
-            const w = window.waterData;
-            if (w) for (let i = 0; i < w.length; i += 61) parts.push(r(w[i]));
-        } catch (e) { /* terrain not ready */ }
-        let hsh = 0;
-        const str = parts.join(';');
-        for (let i = 0; i < str.length; i++) hsh = (hsh * 31 + str.charCodeAt(i)) | 0;
-        return hsh + ':' + str.length;
-    };
+    window.getEditCode = function () { return currentEditCode; };
     window.getAppMode = function () { return appMode; };
     function setMode(mode) {
         finalizeSculptStroke({ save: true });
@@ -16039,9 +16095,11 @@
         
         if (btnPlay) {
             btnPlay.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'none' : 'inline-flex';
-            let testText = (typeof window.t === 'function' ? window.t('ed_test_course') : 'Testspela');
+            // a course is played from its saved copy; only the driving range is still tried out right here
+            let rangeEditor = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
+            let testText = (typeof window.t === 'function' ? window.t(rangeEditor ? 'ed_test_course' : 'ed_save_play') : (rangeEditor ? 'Testspela' : 'Spara & spela'));
             btnPlay.innerHTML = '▶ ' + testText;
-            btnPlay.onclick = () => setMode('TEST');
+            btnPlay.onclick = rangeEditor ? () => setMode('TEST') : () => window.saveAndPlay();
             btnPlay.style.background = 'linear-gradient(135deg, #10b981, #059669)';
             btnPlay.style.color = '#fff';
             btnPlay.style.border = 'none';
@@ -16175,7 +16233,6 @@
             let isRangeTee = tee && courseHoles[0].tees.range && tee === courseHoles[0].tees.range;
             
             if(tee) {
-                window._courseTested = window.getCourseSignature(); // the next-step guide: this exact course really was test-played
                 window.ballPos.x = tee.x; window.ballPos.y = tee.y + 0.2; window.ballPos.z = tee.z;
                 window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
                 window.ballMesh.visible = true;
@@ -20678,8 +20735,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="smart-builder.js?v=44"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
-<script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=11"></script>
+<script src="backdrop.js?v=12"></script>
+<script src="guide.js?v=18"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

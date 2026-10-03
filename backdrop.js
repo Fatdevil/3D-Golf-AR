@@ -247,6 +247,7 @@
         undoPoint();
         sel.value = key;
         root._surroundTouched = true;   // the next-step guide counts the surroundings as started
+        root._editRev = (root._editRev || 0) + 1;   // the next-step guide: an edit, not a restore
         root.updateSurroundColors();   // reads the four selects, saves on every hole of the plate and recolours the scene
         B.surround = surroundPicture();
         refreshEdges();
