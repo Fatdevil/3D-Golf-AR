@@ -17971,7 +17971,7 @@
     };
     // Move a dot by dragging it, and draw a ridge freehand by dragging on empty ground
     window.addEventListener('pointermove', function (e) {
-        if (!(e.buttons & 1)) { window._splineDrag = null; window._freeStroke = null; return; } // button already up (cancelled/lost): drop any stale drag
+        if (!(e.buttons & 1)) { if (window._splineDrag || window._freeStroke) finishSplineDrag(); return; } // button already up (cancelled/lost): drop any stale drag
         if (!lastHitPoint) return;
         const sd = window._splineDrag, fs = window._freeStroke;
         if (sd && splinePoints[sd.i]) {
@@ -17994,21 +17994,21 @@
             updateSplinePreview();
         }
     }, false);
-    const dropSplineDrag = () => { window._splineDrag = null; window._freeStroke = null; hillDrag = null; };
-    window.addEventListener('pointercancel', dropSplineDrag, false);
-    window.addEventListener('blur', dropSplineDrag, false);
-    window.addEventListener('pointerup', function () {
+    // the end of a drag (release, cancel or lost focus): a dot dropped on top of a neighbour becomes one dot instead of making a kink
+    const finishSplineDrag = () => {
         const sd = window._splineDrag;
-        window._splineDrag = null; window._freeStroke = null;
+        window._splineDrag = null; window._freeStroke = null; hillDrag = null;
         if (sd && splinePoints[sd.i]) {
-            // dropped on top of a neighbour: they become one dot instead of making a kink
             const a = splinePoints[sd.i];
             for (let j = 0; j < splinePoints.length; j++) {
                 if (j !== sd.i && Math.hypot(splinePoints[j].x - a.x, splinePoints[j].z - a.z) < 4) { splinePoints.splice(sd.i, 1); break; }
             }
             updateSplinePreview();
         }
-    }, false);
+    };
+    window.addEventListener('pointercancel', finishSplineDrag, false);
+    window.addEventListener('blur', finishSplineDrag, false);
+    window.addEventListener('pointerup', finishSplineDrag, false);
 
 
 
@@ -20996,7 +20996,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=48"></script>
+<script src="smart-builder.js?v=49"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>

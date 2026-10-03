@@ -6340,14 +6340,15 @@ window.mtnSimplifyStroke = function(pts, tol, minGap, maxPts) {
         if (mi >= 0 && md > tol) { keep[mi] = true; stack.push([a, mi], [mi, b]); }
     }
     let out = pts.filter((_, i) => keep[i]);
-    // too close together: drop (keep the last dot, it is where the finger is)
+    // too close together: drop any dot that is near one already kept (also earlier ones, so a stroke that doubles back makes no loop);
+    // the last dot is where the finger is, so it wins over the dots just before it
     const spaced = [out[0]];
+    const near = (u, v) => Math.hypot(u.x - v.x, u.z - v.z) < minGap;
     for (let i = 1; i < out.length; i++) {
-        const q = out[i], last = spaced[spaced.length - 1];
-        if (Math.hypot(q.x - last.x, q.z - last.z) >= minGap || i === out.length - 1) {
-            if (i === out.length - 1 && spaced.length > 1 && Math.hypot(q.x - last.x, q.z - last.z) < minGap) spaced.pop();
-            spaced.push(q);
-        }
+        const q = out[i];
+        if (i < out.length - 1) { if (!spaced.some(k => near(k, q))) spaced.push(q); continue; }
+        while (spaced.length > 1 && near(spaced[spaced.length - 1], q)) spaced.pop();
+        if (!near(spaced[0], q) || spaced.length > 1) { if (!spaced.some(k => near(k, q))) spaced.push(q); }
     }
     out = spaced;
     // still too many: keep an even selection that includes both ends
