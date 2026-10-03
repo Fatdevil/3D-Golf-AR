@@ -19469,8 +19469,9 @@ window.triggerExplosion = function(x, y, z) {
                     playState = 'ROUND_IDLE';
                     
                     // RANGE MODE: Reset ball to tee after each shot
-                    if (window._isRangeMode && courseHoles[0] && courseHoles[0].tees && courseHoles[0].tees.range) {
-                        let rangeTee = courseHoles[0].tees.range;
+                    const rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
+                    if (rangeHole) {
+                        let rangeTee = rangeHole.tees.range;
                         window.ballPos.x = rangeTee.x;
                         window.ballPos.y = rangeTee.y + 0.2;
                         window.ballPos.z = rangeTee.z;
