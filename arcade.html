@@ -17978,6 +17978,7 @@
             const half = window.TERRAIN_SIZE / 2;
             splinePoints[sd.i].x = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.x));
             splinePoints[sd.i].z = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.z));
+            splinePoints[sd.i].y = lastHitPoint.y; // keep the height of the ground under the dot (fence length, posts)
             updateSplinePreview();
         } else if (fs && currentTool === 'MTN' && window._mtnToolMode === 'RIDGE') {
             if (!fs.moved && Math.hypot(e.clientX - fs.px, e.clientY - fs.py) < 8) return;
@@ -17985,7 +17986,9 @@
             const last = fs.pts[fs.pts.length - 1];
             if (Math.hypot(lastHitPoint.x - last.x, lastHitPoint.z - last.z) < 2) return;
             fs.pts.push(lastHitPoint.clone());
-            const simple = window.mtnSimplifyStroke(fs.pts, 3, 12, Math.max(2, 14 - fs.base.length));
+            // dots that would land on top of an earlier dot of the ridge are left out (no kinks or loops)
+            const simple = window.mtnSimplifyStroke(fs.pts, 3, 12, Math.max(2, 14 - fs.base.length))
+                .filter(q => !fs.base.some(b => Math.hypot(b.x - q.x, b.z - q.z) < 4));
             splinePoints.length = 0;
             fs.base.concat(simple).forEach(q => splinePoints.push(q));
             updateSplinePreview();
