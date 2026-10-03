@@ -13,7 +13,7 @@
 
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="i18n.js?v=31"></script>
-<script src="physics.js?v=7"></script>
+<script src="physics.js?v=8"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
 <script src="arcade-api-service.js"></script>
@@ -3872,99 +3872,113 @@
         }
     };
 
+    // Relief by dropping: the player places the ball inside a circle (two club lengths) around a reference point, not nearer the hole than
+    // that point, and never in water or out of bounds. Used for the water hazard drop (reference = where the ball entered the water) and for an
+    // unplayable ball (reference = where the ball lies). onDone runs once the drop is confirmed.
+    const DROP_RADIUS = 2.5;   // two club lengths, in metres
+    window.startLateralDrop = function(ref, label, doneText) {
+        let p = window.players[window.activePlayerIndex];
+        let hole = courseHoles[playingHoleIndex];
+        let flag = hole ? hole.flag : null;
+        let btnCam = document.getElementById('btn-cam-mode');
+        const popup = (text, color, ms) => {
+            let pop = document.getElementById('score-popup');
+            pop.innerText = text; pop.style.color = color; pop.style.opacity = '1';
+            pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
+            if (ms) setTimeout(() => { pop.style.opacity = '0'; }, ms);
+        };
+
+        // camera to the reference point, free camera so the player can move the aim point
+        let h = 0.3;
+        if (typeof localGetTerrainAt === 'function') {
+            let surf = localGetTerrainAt(ref.x, -ref.z);
+            if (surf) h = surf.z + 0.1;
+        }
+        window.ballMesh.position.set(ref.x, h, ref.z);
+        window.camFollowMode = 'FREE';
+        if (btnCam) { btnCam.innerText = '🎥 DROP MODE'; btnCam.style.background = '#3b82f6'; }
+        camera.position.set(ref.x, h + 8, ref.z + 12);
+        controls.target.set(ref.x, h, ref.z);
+        controls.enabled = true;
+        controls.update();
+
+        // the drop circle
+        if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); }
+        let circGeo = new THREE.BufferGeometry();
+        let pts = [];
+        for (let a = 0; a <= 64; a++) {
+            let angle = (a / 64) * Math.PI * 2;
+            let cx = ref.x + Math.cos(angle) * DROP_RADIUS;
+            let cz = ref.z + Math.sin(angle) * DROP_RADIUS;
+            let ch = 0.3;
+            if (typeof localGetTerrainAt === 'function') {
+                let cs = localGetTerrainAt(cx, -cz);
+                if (cs) ch = cs.z + 0.15;
+            }
+            pts.push(cx, ch, cz);
+        }
+        circGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        window._dropZoneCircle = new THREE.Line(circGeo, new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 }));
+        window._dropZoneCircle.name = 'dropZoneCircle';
+        scene.add(window._dropZoneCircle);
+
+        // confirm button with the same checks for both kinds of drop
+        let tools = document.getElementById('play-tools');
+        let existingConfirm = document.getElementById('btn-confirm-drop');
+        if (existingConfirm) existingConfirm.remove();
+        let confirmBtn = document.createElement('button');
+        confirmBtn.id = 'btn-confirm-drop';
+        confirmBtn.innerText = '✅ CONFIRM DROP';
+        confirmBtn.style.cssText = 'background:#10b981; color:#fff; padding:10px 20px; font-weight:900; border:none; border-radius:8px; cursor:pointer; font-size:13px;';
+        confirmBtn.onclick = function () {
+            let dropX = controls.target.x;
+            let dropZ = controls.target.z;
+            if (Math.hypot(dropX - ref.x, dropZ - ref.z) > DROP_RADIUS + 0.05) {
+                popup('❌ Too far away! Max 2 club lengths (inside the blue circle).', '#ef4444', 2000);
+                return;
+            }
+            if (flag && Math.hypot(dropX - flag.x, dropZ - flag.z) < Math.hypot(ref.x - flag.x, ref.z - flag.z) - 0.5) {
+                popup('❌ Cannot drop closer to the hole!', '#ef4444', 2000);
+                return;
+            }
+            let dropSurf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(dropX, -dropZ) : null;
+            if (dropSurf && (dropSurf.type === 'WATER' || dropSurf.type === 'OB')) {
+                popup('❌ Cannot drop in ' + dropSurf.type + '!', '#ef4444', 2000);
+                return;
+            }
+            let dh = dropSurf ? dropSurf.z + 0.1 : 0.3;
+            window.ballMesh.position.set(dropX, dh, dropZ);
+            if (window.ballMesh.velocity) window.ballMesh.velocity.set(0, 0, 0);
+            if (window.ballMesh.angularVelocity) window.ballMesh.angularVelocity.set(0, 0, 0);
+            window.ballPos.x = dropX; window.ballPos.y = dh; window.ballPos.z = dropZ;
+            p.lie = {x: dropX, y: dh, z: dropZ};
+            p.prevPos = {x: dropX, y: dh, z: dropZ};
+            if (window.resetAimTarget) window.resetAimTarget();
+            if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); window._dropZoneCircle = null; }
+            window.camFollowMode = 'AUTO';
+            if (btnCam) { btnCam.innerText = '🎥 AUTO'; btnCam.style.background = '#4f46e5'; }
+            camera.position.set(dropX, dh + 4, dropZ + 10);
+            controls.target.copy(window.ballMesh.position);
+            controls.update();
+            this.remove();
+            popup(doneText, '#3b82f6', 0);
+            setTimeout(() => { document.getElementById('score-popup').style.opacity = '0'; evaluateNextTurn(); }, 1500);
+        };
+        if (tools) tools.insertBefore(confirmBtn, tools.firstChild);
+        popup('📍 Place the drop inside the blue circle, not closer to the hole', '#3b82f6', 0);
+    };
+
+    // Unplayable ball: +1 penalty and a drop within two club lengths of where the ball lies, not nearer the hole
     window.takePenaltyDrop = function() {
         if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
         if (playState !== 'ROUND_IDLE') return;
-
         let p = window.players[window.activePlayerIndex];
-        if (p) {
-            if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
-            
-            p.penaltyStrokes++;
-            document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
-            if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
-
-            let pop = document.getElementById('score-popup');
-            if(pop) {
-                pop.innerText = "PENALTY DROP (+1)";
-                pop.style.color = "#ef4444";
-                pop.style.opacity = '1';
-                pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
-                setTimeout(() => { pop.style.opacity = '0'; pop.style.color = "#fcd34d"; }, 2500);
-            }
-            
-            window.camFollowMode = 'FREE';
-            let btnCam = document.getElementById('btn-cam-mode');
-            if(btnCam) {
-                btnCam.innerText = '🎥 FREE CAM';
-                btnCam.style.background = '#ec4899';
-            }
-            controls.enabled = true;
-            controls.update();
-            
-            let tools = document.getElementById('play-tools');
-            let confirmBtn = document.getElementById('btn-confirm-drop');
-            if (!confirmBtn) {
-                confirmBtn = document.createElement('button');
-                confirmBtn.id = 'btn-confirm-drop';
-                confirmBtn.innerText = '✅ CONFIRM DROP HERE';
-                confirmBtn.style.background = '#10b981';
-                confirmBtn.style.color = '#fff';
-                confirmBtn.style.padding = '8px 15px';
-                confirmBtn.style.fontWeight = 'bold';
-                confirmBtn.style.border = 'none';
-                confirmBtn.style.borderRadius = '6px';
-                confirmBtn.style.cursor = 'pointer';
-                confirmBtn.onclick = function() {
-                    let dropX = controls.target.x;
-                    let dropZ = controls.target.z;
-                    let h = 0.3;
-                    if(typeof localGetTerrainAt === 'function') {
-                        let surf = localGetTerrainAt(dropX, -dropZ);
-                        if(surf) h = surf.z + 0.1;
-                    }
-                    // Validate: not closer to hole
-                    let hole = courseHoles[playingHoleIndex];
-                    let flag = hole ? hole.flag : null;
-                    if (flag) {
-                        let dropToFlag = Math.hypot(dropX - flag.x, dropZ - flag.z);
-                        let prevToFlag = Math.hypot(p.lie.x - flag.x, p.lie.z - flag.z);
-                        if (dropToFlag < prevToFlag - 0.5) {
-                            let vPop = document.getElementById('score-popup');
-                            vPop.innerText = '❌ Cannot drop closer to the hole!';
-                            vPop.style.color = '#ef4444'; vPop.style.opacity = '1';
-                            setTimeout(() => { vPop.style.opacity = '0'; }, 2000);
-                            return;
-                        }
-                    }
-                    window.ballMesh.position.set(dropX, h, dropZ);
-                    window.ballMesh.velocity.set(0,0,0);
-                    window.ballMesh.angularVelocity.set(0,0,0);
-                    
-                    p.lie = {x: dropX, y: h, z: dropZ};
-                    p.prevPos = {x: dropX, y: h, z: dropZ}; 
-                    
-                    if(window.resetAimTarget) window.resetAimTarget();
-                    
-                    // BUG-C04 FIX: Use AUTO instead of non-existent BROADCAST mode
-                    window.camFollowMode = 'AUTO';
-                    let btnCamRef = document.getElementById('btn-cam-mode');
-                    if(btnCamRef) {
-                        btnCamRef.innerText = '🎥 AUTO';
-                        btnCamRef.style.background = '#4f46e5';
-                    }
-                    camera.position.set(dropX, h + 4, dropZ + 10);
-                    controls.target.copy(window.ballMesh.position);
-                    controls.update();
-                    
-                    this.remove();
-                    
-                    // BUG-M04 FIX: Evaluate next turn after drop confirmed
-                    evaluateNextTurn();
-                };
-                tools.insertBefore(confirmBtn, tools.firstChild);
-            }
-        }
+        if (!p || !p.lie) return;
+        if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
+        p.penaltyStrokes++;
+        document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
+        if (typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+        window.startLateralDrop({ x: p.lie.x, z: p.lie.z }, 'PENALTY DROP', '📍 Penalty drop (+1) — play on');
     };
 
     // === RULES ENGINE ===
@@ -4014,146 +4028,15 @@
     
     window.penaltyDecisionDrop = function() {
         document.getElementById('penalty-decision-modal').style.display = 'none';
-        let p = window.players[window.activePlayerIndex];
         let entry = window._penaltyEntryPoint;
-        let hole = courseHoles[playingHoleIndex];
-        let flag = hole ? hole.flag : null;
-        
         if (!entry) {
             // Fallback to rehit
             window.penaltyDecisionRehit();
             return;
         }
-        
-        // Move camera to entry point area
-        let h = 0.3;
-        if (typeof localGetTerrainAt === 'function') {
-            let surf = localGetTerrainAt(entry.x, -entry.z);
-            if (surf) h = surf.z + 0.1;
-        }
-        window.ballMesh.position.set(entry.x, h, entry.z);
-        
-        // Switch to FREE CAM for drop placement
-        window.camFollowMode = 'FREE';
-        let btnCam = document.getElementById('btn-cam-mode');
-        if (btnCam) { btnCam.innerText = '🎥 DROP MODE'; btnCam.style.background = '#3b82f6'; }
-        camera.position.set(entry.x, h + 8, entry.z + 12);
-        controls.target.set(entry.x, h, entry.z);
-        controls.enabled = true;
-        controls.update();
-        
-        // Show lateral drop zone circle (2 club lengths = ~2.5m)
-        if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); }
-        let dropRadius = 2.5;
-        let circGeo = new THREE.BufferGeometry();
-        let pts = [];
-        for (let a = 0; a <= 64; a++) {
-            let angle = (a / 64) * Math.PI * 2;
-            let cx = entry.x + Math.cos(angle) * dropRadius;
-            let cz = entry.z + Math.sin(angle) * dropRadius;
-            let ch = 0.3;
-            if (typeof localGetTerrainAt === 'function') {
-                let cs = localGetTerrainAt(cx, -cz);
-                if (cs) ch = cs.z + 0.15;
-            }
-            pts.push(cx, ch, cz);
-        }
-        circGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-        let circMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 });
-        window._dropZoneCircle = new THREE.Line(circGeo, circMat);
-        window._dropZoneCircle.name = 'dropZoneCircle';
-        scene.add(window._dropZoneCircle);
-        
-        // Show confirm button with validation
-        let tools = document.getElementById('play-tools');
-        let existingConfirm = document.getElementById('btn-confirm-drop');
-        if (existingConfirm) existingConfirm.remove();
-        
-        let confirmBtn = document.createElement('button');
-        confirmBtn.id = 'btn-confirm-drop';
-        confirmBtn.innerText = '✅ CONFIRM DROP';
-        confirmBtn.style.cssText = 'background:#10b981; color:#fff; padding:10px 20px; font-weight:900; border:none; border-radius:8px; cursor:pointer; font-size:13px;';
-        confirmBtn.onclick = function() {
-            let dropX = controls.target.x;
-            let dropZ = controls.target.z;
-            
-            // Validate: within 2 club lengths of entry
-            let distFromEntry = Math.hypot(dropX - entry.x, dropZ - entry.z);
-            if (distFromEntry > 3.0) {
-                let pop = document.getElementById('score-popup');
-                pop.innerText = '❌ Too far from water entry! Max 2 club lengths.';
-                pop.style.color = '#ef4444';
-                pop.style.opacity = '1';
-                setTimeout(() => { pop.style.opacity = '0'; }, 2000);
-                return;
-            }
-            
-            // Validate: not closer to hole
-            if (flag) {
-                let dropToFlag = Math.hypot(dropX - flag.x, dropZ - flag.z);
-                let entryToFlag = Math.hypot(entry.x - flag.x, entry.z - flag.z);
-                if (dropToFlag < entryToFlag - 0.5) {
-                    let pop = document.getElementById('score-popup');
-                    pop.innerText = '❌ Cannot drop closer to the hole!';
-                    pop.style.color = '#ef4444';
-                    pop.style.opacity = '1';
-                    setTimeout(() => { pop.style.opacity = '0'; }, 2000);
-                    return;
-                }
-            }
-            
-            // Validate: not in water/OB
-            let dropSurf = null;
-            if (typeof localGetTerrainAt === 'function') dropSurf = localGetTerrainAt(dropX, -dropZ);
-            if (dropSurf && (dropSurf.type === 'WATER' || dropSurf.type === 'OB')) {
-                let pop = document.getElementById('score-popup');
-                pop.innerText = '❌ Cannot drop in ' + dropSurf.type + '!';
-                pop.style.color = '#ef4444';
-                pop.style.opacity = '1';
-                setTimeout(() => { pop.style.opacity = '0'; }, 2000);
-                return;
-            }
-            
-            // Valid drop!
-            let dh = 0.3;
-            if (dropSurf) dh = dropSurf.z + 0.1;
-            window.ballMesh.position.set(dropX, dh, dropZ);
-            window.ballMesh.velocity.set(0, 0, 0);
-            window.ballMesh.angularVelocity.set(0, 0, 0);
-            window.ballPos.x = dropX;
-            window.ballPos.y = dh;
-            window.ballPos.z = dropZ;
-            
-            p.lie = {x: dropX, y: dh, z: dropZ};
-            p.prevPos = {x: dropX, y: dh, z: dropZ};
-            
-            if (window.resetAimTarget) window.resetAimTarget();
-            
-            // Cleanup
-            if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); window._dropZoneCircle = null; }
-            // BUG-C04 FIX: Use AUTO instead of non-existent BROADCAST mode
-            window.camFollowMode = 'AUTO';
-            if (btnCam) { btnCam.innerText = '🎥 AUTO'; btnCam.style.background = '#4f46e5'; }
-            camera.position.set(dropX, dh + 4, dropZ + 10);
-            controls.target.copy(window.ballMesh.position);
-            controls.update();
-            
-            this.remove();
-            
-            let pop = document.getElementById('score-popup');
-            pop.innerText = '📍 Lateral Drop — Play On';
-            pop.style.color = '#3b82f6';
-            pop.style.opacity = '1';
-            setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
-        };
-        if (tools) tools.insertBefore(confirmBtn, tools.firstChild);
-        
-        let pop = document.getElementById('score-popup');
-        pop.innerText = '📍 Place drop within blue circle, not closer to hole';
-        pop.style.color = '#3b82f6';
-        pop.style.opacity = '1';
+        window.startLateralDrop({ x: entry.x, z: entry.z }, 'LATERAL DROP', '📍 Lateral Drop — Play On');
     };
-    
+
     // Rehit button (+1 penalty, back to previous)
     window.takeRehit = function() {
         if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
@@ -14610,6 +14493,8 @@
                 if (!window.placedTrees) return null;
                 let threeX = x;
                 let threeZ = -y;
+                // heights below are measured from the ground under the ball, so obstacles also work on raised ground
+                z = z - physicsTerrainAt(x, y).z;
                 
                 for(let i=0; i<window.placedTrees.length; i++) {
                     let obj = window.placedTrees[i];
@@ -14662,8 +14547,12 @@
                 }
                 
                 // === SPLINE OBJECTS COLLISION (Fences, Walls, OB Stakes) ===
-                if (window.courseHoles && window.courseHoles[window.currentHoleIndex] && window.courseHoles[window.currentHoleIndex].envObjects) {
-                    let envObjs = window.courseHoles[window.currentHoleIndex].envObjects;
+                // every hole of the plate stands in the same world, so the fences, walls and stakes of all of them are in the way
+                // (not only those of the hole the builder happened to have selected)
+                if (window.courseHoles) {
+                  for (let hi = 0; hi < window.courseHoles.length; hi++) {
+                    let envObjs = window.courseHoles[hi] && window.courseHoles[hi].envObjects;
+                    if (!envObjs) continue;
                     for(let i=0; i<envObjs.length; i++) {
                         let obj = envObjs[i];
                         if (!obj.collisionData || obj.collisionData.length < 2) continue;
@@ -14692,7 +14581,7 @@
                                     let nzThree = -dz / dist;
                                     let sX = p.x + nxThree * (radius + 0.05);
                                     let sZ = p.z + nzThree * (radius + 0.05);
-                                    return { type: obj.type, height: height, n: [nxThree, -nzThree, 0], safePos: [sX, -sZ] };
+                                    return { type: obj.type, solid: true, height: height, n: [nxThree, -nzThree, 0], safePos: [sX, -sZ] };
                                 }
                             }
                         } else {
@@ -14724,13 +14613,14 @@
                                     let nzThree = distZ / dist;
                                     let sX = projX + nxThree * (radius + 0.05);
                                     let sZ = projZ + nzThree * (radius + 0.05);
-                                    return { type: obj.type, height: height, n: [nxThree, -nzThree, 0], safePos: [sX, -sZ] };
+                                    return { type: obj.type, solid: true, height: height, n: [nxThree, -nzThree, 0], safePos: [sX, -sZ] };
                                 }
                             }
                         }
                     }
                 }
                 
+                  }
                 return null; 
             },
             hasTreeCollision: function(x, y, z) { return false; },
@@ -19602,13 +19492,15 @@ window.triggerExplosion = function(x, y, z) {
                             
                             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
                             
-                            // Find water entry point (last dry position in flight)
+                            // Where the ball last crossed the edge of the water: walk the flight back from where it ended until it is over dry ground
+                            // (a ball that flew over the edge counts as having crossed it there). path points are in physics order (x, forward y, height).
                             let entryPoint = null;
-                            if (flightData && flightData.positions) {
-                                for (let fi = flightData.positions.length - 1; fi >= 0; fi--) {
-                                    let fp = flightData.positions[fi];
-                                    let fSurf = localGetTerrainAt(fp.x, -fp.z);
-                                    if (fSurf && fSurf.type !== 'WATER') { entryPoint = {x: fp.x, y: fp.y, z: fp.z}; break; }
+                            if (flightData && flightData.path && flightData.path.length) {
+                                const path = flightData.path;
+                                for (let fi = path.length - 1; fi >= 0; fi -= 2) {
+                                    let fp = path[fi];
+                                    let fSurf = localGetTerrainAt(fp.x, fp.y);
+                                    if (fSurf && fSurf.type !== 'WATER') { entryPoint = {x: fp.x, y: fSurf.z, z: -fp.y}; break; }
                                 }
                             }
                             if (!entryPoint) entryPoint = p.teePosition || p.lie;

@@ -500,10 +500,14 @@ window.GolfPhysics = (function() {
             
             // Kolla luft-kollisioner (Träd) innan vi flyttar oss
             // SPAWN IMMUNITY: Give the ball 0.2s to escape a bad lie or tree trunk
-            if (t > 0.20 && envCtx && envCtx.checkCollisionCallback && state.phase === "flight") {
+            // Hårda hinder (sten, kaktus, trädstam, staket, murar, OB-pinnar) stoppar också en boll som studsar eller rullar, inte bara en flygande.
+            const inAir = state.phase === "flight";
+            const onGround = state.phase === "bounce" || state.phase === "roll" || state.phase === "skid";
+            if (t > 0.20 && envCtx && envCtx.checkCollisionCallback && (inAir || onGround)) {
                 let terrain = envCtx.checkCollisionCallback(state.pos[0], state.pos[1], state.pos[2]);
-                if (terrain) {
-                    if (terrain.type === 'ROCK' || terrain.type === 'CACTUS' || terrain.part === 'TRUNK') {
+                const isSolid = terrain && (terrain.solid || terrain.type === 'ROCK' || terrain.type === 'CACTUS' || terrain.part === 'TRUNK');
+                if (terrain && (inAir || isSolid)) {
+                    if (isSolid) {
                         // Solid krock!
                         console.log(`🏌️‍♂️🪨 SOLID KROCK! Bollen träffade ett hårt objekt (${terrain.type} ${terrain.part || ''})`);
                         
