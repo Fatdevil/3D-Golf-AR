@@ -66,13 +66,20 @@ function serve() {
   await page.goto(base + '/arcade.html?autorun=new_build&mode=range', { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(7000);
 
-  const snap = await page.evaluate(function () {
+  // keys the browser itself puts on window: taken from a blank page so the baseline holds only what arcade.html adds
+  const blank = await ctx.newPage();
+  await blank.goto('about:blank');
+  const builtin = await blank.evaluate(function () { return Object.keys(window); });
+  await blank.close();
+
+  const snap = await page.evaluate(function (builtin) {
     const lex = ['scene', 'camera', 'renderer', 'controls', 'courseHoles', 'playState', 'playingHoleIndex', 'appMode', 'currentTool', 'planeGeo', 'TERRAIN_SIZE', 'MAX_HOLES', 'currentHoleIndex'];
     const lexical = {};
     lex.forEach(function (n) { try { lexical[n] = typeof (0, eval)(n); } catch (e) { lexical[n] = 'missing'; } });
-    const keys = Object.keys(window).filter(function (k) { return !/^(webkit|on[a-z]|__|\d)/.test(k) && !/^_?debug/i.test(k); }).sort();
+    const skip = {}; builtin.forEach(function (k) { skip[k] = 1; });
+    const keys = Object.keys(window).filter(function (k) { return !skip[k] && !/^(webkit|on[a-z]|__|\d)/.test(k) && !/^_?debug/i.test(k); }).sort();
     return { windowKeys: keys.map(function (k) { return k + ':' + typeof window[k]; }), lexical: lexical };
-  });
+  }, builtin);
 
   let checks;
   try { checks = await page.evaluate(async function () {

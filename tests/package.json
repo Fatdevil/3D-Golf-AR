@@ -3,9 +3,9 @@
   "private": true,
   "description": "Browser smoke test dependencies. Kept apart from the root package.json so Railway does not install them. Setup: npm --prefix tests install && npm --prefix tests run setup",
   "devDependencies": {
-    "pako": "^2.1.0",
-    "playwright-core": "^1.63.0",
-    "three": "^0.128.0"
+    "pako": "2.1.0",
+    "playwright-core": "1.63.0",
+    "three": "0.128.0"
   },
   "scripts": {
     "setup": "playwright-core install chromium"
