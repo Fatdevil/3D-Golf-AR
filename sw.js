@@ -3,7 +3,7 @@
 // - Images, models, fonts and the CDN libraries: cache first (big, rarely changing); refreshed in the background.
 // - API calls (any origin) and everything that is not a GET: never touched.
 const VERSION = 'golfos-v2';
-const PAGES = ['/', '/hub.html', '/arcade_hub.html', '/arcade_mobile_hub.html', '/arcade.html', '/courses.html', '/new_course.html'];
+const PAGES = ['/', '/hub.html', '/arcade_hub.html', '/arcade_mobile_hub.html', '/arcade_mobile.html', '/arcade.html', '/build.html', '/courses.html', '/new_course.html'];
 const EXTRA = ['/manifest.json', '/pwa/icon-192.png', '/pwa/icon-512.png'];
 const HEAVY = /\.(png|jpe?g|webp|gif|svg|glb|gltf|hdr|mp3|ogg|wav|woff2?|ttf)$/i;
 // the only other origins whose files are cached: the libraries and fonts the pages load
