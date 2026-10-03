@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=28"></script>
+<script src="i18n.js?v=29"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -17886,6 +17886,14 @@
                     if (info) {
                         let tpl = (typeof window.t === 'function' && window.t('mtn_hill_info') !== 'mtn_hill_info') ? window.t('mtn_hill_info') : 'Ca {w} × {d} m stor · {h} m hög';
                         info.textContent = tpl.replace('{w}', Math.round(maxX - minX)).replace('{d}', Math.round(maxZ - minZ)).replace('{h}', Math.round(hh));
+                        // height against the distance from the peak to the nearest edge: above 1 the slope is steeper than 45 degrees (a spike)
+                        // if even the finest search found no point inside, the shape is only a few metres wide: count it as thin (half the grid spacing)
+                        const steep = hh / Math.max(bestD >= 0 ? bestD : 3, 0.5) > 1.0;
+                        if (steep) {
+                            const w = (typeof window.t === 'function' && window.t('mtn_steep') !== 'mtn_steep') ? window.t('mtn_steep') : '⚠️ Mycket brant! Gör kullen bredare eller lägre.';
+                            info.textContent += '  ' + w;
+                        }
+                        info.style.color = steep ? '#f87171' : '#facc15';
                     }
                 } catch (err) { console.warn('Hill preview failed', err); }
             }
@@ -17927,11 +17935,11 @@
                 const info = document.getElementById('mtn-hill-info');
                 if (info) {
                     const tpl = (typeof window.t === 'function' && window.t('mtn_ridge_info') !== 'mtn_ridge_info') ? window.t('mtn_ridge_info') : 'Ca {l} m lång · {w} m bred · {h} m hög';
-                    info.textContent = tpl.replace('{l}', Math.round(len)).replace('{w}', Math.round(w * 2)).replace('{h}', Math.round(hh));
+                    info.style.color = '#facc15'; info.textContent = tpl.replace('{l}', Math.round(len)).replace('{w}', Math.round(w * 2)).replace('{h}', Math.round(hh));
                 }
             } catch (err) { console.warn('Ridge preview failed', err); }
         } else if (!(isMtnSpline && !isMtnRidge && splinePoints.length >= 3)) {
-            let info = document.getElementById('mtn-hill-info'); if (info) info.textContent = '';
+            let info = document.getElementById('mtn-hill-info'); if (info) { info.textContent = ''; info.style.color = '#facc15'; }
         }
 
         let pnl = document.getElementById('spline-action-panel');
