@@ -14466,14 +14466,14 @@
                 const f = r.path[r.path.length - 1];
                 return Math.hypot(f.x - cfg.startPos[0], f.y - cfg.startPos[1]);
             };
-            let v = Math.max(1, Math.min(maxMph, cfg.ballSpeedMph));
+            let v = Math.max(0.2, Math.min(maxMph, cfg.ballSpeedMph));
             let best = v, bestErr = Infinity;
             for (let i = 0; i < 6; i++) {
                 const d = rollOf(v);
                 const err = Math.abs(d - targetDistM);
                 if (err < bestErr) { bestErr = err; best = v; }   // keep the closest one: a bumpy start can make the search wobble
                 if (err <= 0.03 * targetDistM + 0.02) break;
-                v = Math.max(1, Math.min(maxMph, v * Math.sqrt(targetDistM / Math.max(d, 0.05))));
+                v = Math.max(0.2, Math.min(maxMph, v * Math.sqrt(targetDistM / Math.max(d, 0.05))));
                 if (v >= maxMph && d < targetDistM) { best = v; break; }   // cannot be hit any harder
             }
             return best;
