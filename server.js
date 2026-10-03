@@ -492,9 +492,11 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         
         // Get current course version + hole_count for sanity check
         const courseResult = await pool.query(
-            'SELECT version, hole_count, owner_id FROM courses WHERE share_code = $1', [code]
+            'SELECT version, hole_count, owner_id, is_draft FROM courses WHERE share_code = $1', [code]
         );
         if (courseResult.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+        // an unpublished draft is a builder preview: its rounds never reach the leaderboard, handicap or play counts
+        if (courseResult.rows[0].is_draft === true) return res.json({ success: true, skipped: 'draft' });
         
         const course = courseResult.rows[0];
         const courseVersion = course.version || 1;

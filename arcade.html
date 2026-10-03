@@ -12300,6 +12300,7 @@
                     savedStr = data;
                     isCloud = true;
                     // Store course metadata for Round Setup header
+                    window._loadedIsDraft = data.is_draft === true; // an unpublished draft is a builder preview: its rounds never count
                     window._loadedCourseName = data.name || null;
                     window._loadedCourseAuthor = data.author || null;
                     window._loadedCourseHoles = data.hole_count || null;
@@ -13670,6 +13671,7 @@
     // === LEADERBOARD SYSTEM ===
     
     async function submitRoundResult() {
+        if (window._loadedIsDraft) { console.log('Draft preview — skipping leaderboard submit'); return; }
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course') || params.get('edit') || currentEditCode;
         if (!courseCode) { console.log('No course code — skipping leaderboard submit'); return; }
