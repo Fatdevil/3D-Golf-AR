@@ -74,12 +74,12 @@ const SwingEngine = (function() {
     // puttForceToSpeed — a first guess of the ball speed for a putt that should roll targetDistMeters.
     // The real speed is worked out against the actual green (slope, stimp) by window.calibratePuttSpeed
     // when the shot is fired; this is the fallback and the starting point for that search.
-    // mu comes from physics.js so both sides use the same stimp formula; the factor 1.41 is what the physics'
-    // first ground contact costs a putt (a sliding ball starts to roll at 5/7 of its speed).
+    // mu comes from physics.js so both sides use the same stimp formula. A putt starts rolling at once in the physics,
+    // so the ball rolls v^2 / (2 mu g).
     // -----------------------------------------------------------
     function puttForceToSpeed(targetDistMeters, stimp) {
         const mu   = (window.GolfPhysics && window.GolfPhysics.greenMu) ? window.GolfPhysics.greenMu(stimp) : 0.56 / stimp;
-        const v0ms = Math.sqrt(2 * mu * 9.81 * targetDistMeters) * 1.41;
+        const v0ms = Math.sqrt(2 * mu * 9.81 * targetDistMeters);
         return v0ms / 0.44704;                            // m/s → mph
     }
     // 100 % power rolls the ball to the hole plus this much past it (about 17 inches, the pace a putt should die at)

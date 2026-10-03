@@ -28,6 +28,12 @@ window.GolfPhysics = (function() {
         return 0.056 * (10.0 / s);
     }
 
+    // En nästan horisontell markträff är en putt (eller en boll som redan rullar): putterns loft och slagets friktion ger bollen
+    // framåtrullande spinn direkt, så den börjar rulla utan studs, spin-bite och glidfas. Annars förlorar en putt ca hälften av sin sträcka.
+    // Måttet är farten rakt in i marken, inte infallsvinkeln: en långsam putt faller någon centimeter och får en brant vinkel ändå.
+    const ROLL_START_MAX_VERTICAL = 1.0;  // m/s rakt in i marken
+    const ROLL_START_MAX_SPEED = 12.0;    // m/s totalt (ca 27 mph)
+
     // Hjälpfunktioner för miljö och vektorer
     function calculateAirDensity(altFeet, tempC) {
         // Trackman gillar Referens: 0 fot, 25°C -> RHO ≈ 1.184
@@ -696,6 +702,11 @@ window.GolfPhysics = (function() {
                     incidenceAngleDeg = 90.0 - Math.acos(Math.abs(vDotN_impact) / vMagImpact) * (180.0/Math.PI);
                 }
                 
+                let rollsAtOnce = (state.phase === "flight" || state.phase === "bounce")
+                    && Math.abs(vDotN_impact) < ROLL_START_MAX_VERTICAL
+                    && vMagImpact < ROLL_START_MAX_SPEED
+                    && impactTerrainType !== 'SAND' && impactTerrainType !== 'WATER' && impactTerrainType !== 'OB';
+
                 let baseCor = GROUND.restitution;
                 let cFriction = GROUND.bounceFriction;
                 let cRollingDecel = GROUND.rollingDecel;
@@ -821,6 +832,7 @@ window.GolfPhysics = (function() {
                         vecScale(vPerp, -cRestitution),  // Normal forces push out
                         vecScale(vTan, e_t)              // Angle-dependent tangential restitution
                     );
+                    if (rollsAtOnce) bounceVel = [...vTan]; // rullar direkt: ingen studs, farten längs marken behålls
 
                     // Fysiskt korrekt spin-bite på lutningar inspirerat av Penner
                     // Green firmness affects grip: SOFT grips more (spin bites deeper)
@@ -835,8 +847,8 @@ window.GolfPhysics = (function() {
                     let vContactX = V[0] - (state.spin[1] * RADIUS);
                     
                     // Energi överförs mellan translation (spinoff) och rotation (bite)
-                    let deltaVY = -(vContactY) / 3.5 * GRIP;
-                    let deltaVX = -(vContactX) / 3.5 * GRIP;
+                    let deltaVY = rollsAtOnce ? 0 : -(vContactY) / 3.5 * GRIP;
+                    let deltaVX = rollsAtOnce ? 0 : -(vContactX) / 3.5 * GRIP;
 
                     bounceVel[1] += deltaVY;
                     bounceVel[0] += deltaVX;
@@ -855,12 +867,16 @@ window.GolfPhysics = (function() {
                         else if (firmness === 'FIRM') spinDamp = 0.78; // Less spin retained
                     }
                     state.spin = vecScale(state.spin, spinDamp);
+                    if (rollsAtOnce) {
+                        // framåtrullande spinn som matchar farten (kontaktpunkten står still): ingen extra broms av spinn
+                        state.spin = [-vTan[1] / RADIUS, vTan[0] / RADIUS, 0];
+                    }
                     
                     // Är studsen för mjuk uppåt längs ytan? => Rullfas
                     let bounceZMag = vecMag(vecScale(vPerp, -cRestitution));
-                    if (bounceZMag < GROUND.minBounceVerticalSpeed || impactTerrainType === 'SAND') {
+                    if (rollsAtOnce || bounceZMag < GROUND.minBounceVerticalSpeed || impactTerrainType === 'SAND') {
                         // Greener genererar mer skid eftersom kinetisk gräsfriktion måste överkommas först
-                        if (impactTerrainType === 'GREEN') {
+                        if (impactTerrainType === 'GREEN' && !rollsAtOnce) {
                             state.phase = "skid"; 
                         } else {
                             state.phase = "roll";
