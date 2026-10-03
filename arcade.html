@@ -13550,13 +13550,15 @@
         
         // Count actual playable holes (with tee + flag)
         let maxHoles = 0;
+        let playableIdx = [];
         for (let i = 0; i < MAX_HOLES; i++) {
             let h = courseHoles[i];
             if (h && h.flag && h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black)) {
+                playableIdx.push(i);
                 maxHoles = i + 1; // Track highest hole index that's playable
             }
         }
-        if (maxHoles === 0) maxHoles = MAX_HOLES; // Fallback
+        if (maxHoles === 0) { maxHoles = MAX_HOLES; for (let i = 0; i < MAX_HOLES; i++) playableIdx.push(i); } // Fallback
         
         let htmlMode = '';
         
@@ -13620,18 +13622,24 @@
             let pl = players[pi];
             if (pl.hcp === null || pl.hcp === undefined) continue;
             
-            let playingHcp = Math.round(pl.hcp); // Simplified playing HCP
+            // Playing HCP scaled to the number of holes played (a 3-hole plate gets 3/18 of the strokes)
+            let playingHcp = Math.round(pl.hcp * Math.min(1, playableIdx.length / 18));
+            // Rank the holes by stroke index so the strokes land on the hardest holes of THIS course
+            let siRank = [];
+            {
+                let order = [];
+                for (const k of playableIdx) order.push({ k: k, si: courseStrokeIndex ? (courseStrokeIndex[k] || 99) : (k + 1) });
+                order.sort((a, b) => a.si - b.si || a.k - b.k);
+                order.forEach((o, r) => { siRank[o.k] = r + 1; });
+            }
             let trNet = '<tr style="color:#a78bfa; font-size:11px; border-bottom:1px solid #1e293b;"><td style="color:#a78bfa">' + (pl.name || 'P'+(pi+1)) + ' NET</td>';
             let netOut = 0, netIn = 0, hasNetOut = false, hasNetIn = false;
             
             for(let i=0; i<maxHoles; i++) {
                 let gross = (pl.scores && pl.scores[i] !== null && pl.scores[i] !== undefined) ? pl.scores[i] : null;
                 if (gross !== null) {
-                    // Give 1 stroke on holes where SI <= playing HCP
-                    let si = courseStrokeIndex ? (courseStrokeIndex[i] || 99) : (i+1);
-                    let strokes = si <= playingHcp ? 1 : 0;
-                    // Second round of strokes if HCP > num holes
-                    if (playingHcp > maxHoles && si <= (playingHcp - maxHoles)) strokes++;
+                    // Whole laps of strokes, remainder on the lowest-ranked (hardest) holes
+                    let strokes = Math.floor(playingHcp / playableIdx.length) + (siRank[i] <= (playingHcp % playableIdx.length) ? 1 : 0);
                     let net = gross - strokes;
                     let par = courseHoles[i] ? (courseHoles[i].par || 4) : 4;
                     let netColor = net < par ? '#a78bfa' : (net > par ? '#f472b6' : '#e2e8f0');
@@ -13649,6 +13657,20 @@
         tbody.innerHTML = htmlMode;
     }
     
+    // Tour-pro putting odds (percent) by distance in feet, interpolated from PGA Tour make / 3-putt rates
+    function tourProPuttOdds(ft) {
+        const T = [[0,100,0],[3,96,0],[5,77,0.3],[8,50,0.8],[10,39,1],[15,22,1.8],[20,14,2.5],[30,7,4.5],[40,4,7],[60,2,12],[100,1,20]];
+        if (ft <= 0) return { p1: 100, p3: 0 };
+        for (let i = 1; i < T.length; i++) {
+            if (ft <= T[i][0]) {
+                const t = (ft - T[i-1][0]) / (T[i][0] - T[i-1][0]);
+                return { p1: T[i-1][1] + (T[i][1] - T[i-1][1]) * t, p3: T[i-1][2] + (T[i][2] - T[i-1][2]) * t };
+            }
+        }
+        return { p1: 1, p3: 20 };
+    }
+    window.tourProPuttOdds = tourProPuttOdds;
+
     // === LEADERBOARD SYSTEM ===
     
     async function submitRoundResult() {
@@ -19630,13 +19652,13 @@ window.triggerExplosion = function(x, y, z) {
                             pop.innerText = `GIMME! (${distFt.toFixed(1)} ft) - 1 Putt`;
                             pop.style.opacity = '1';
                             window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
-                        } else if (!shouldConcede && (isGreen || (lieSurface && (lieSurface.type === 'FAIRWAY' || lieSurface.type === 'SEMI-ROUGH') && distToPin < 5.0)) && mode !== 'OFF') {
+                        } else if (!shouldConcede && (isGreen || (lieSurface && (lieSurface.type === 'FOREGREEN' || lieSurface.type === 'FAIRWAY' || lieSurface.type === 'SEMI-ROUGH') && distToPin < 5.0)) && mode !== 'OFF') {
                             // BUG-P03 FIX: Auto-putt only from GREEN or close fringe (within 5m), not from rough/sand at 20m
                             let putts = 2;
                             if (mode === 'TOUR_PRO') {
                                 // Tour Pro Probability Math (BUG-P08 FIX: realistic 3-putt)
-                                let p1 = Math.max(0, 100 - (distFt * 6.2)); // 10ft = ~38% chance
-                                let p3 = distFt > 30 ? (distFt - 30) * 0.15 : 0; // BUG-P08: Realistic ~5% at 60ft
+                                const pr = window.tourProPuttOdds(distFt);
+                                let p1 = pr.p1, p3 = pr.p3;
                                 let rand = Math.random() * 100;
                                 if (rand < p1) putts = 1;
                                 else if (rand > (100 - p3)) putts = 3;
