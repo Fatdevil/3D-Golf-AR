@@ -9023,6 +9023,9 @@
         const mesh = window.breakGuideMesh;
         const refine = function () {
             if (window.breakGuideMesh !== mesh || typeof window.puttBreakPath !== 'function') return;
+            // a player who has finished the hole (gimme, auto-putt, concede) or a shot already under way: nothing left to plan
+            const ap = window.players && window.players[window.activePlayerIndex];
+            if ((ap && ap.holedOut) || playState !== 'ROUND_IDLE') return;
             const bp = window.ballMesh.position;
             if (Math.abs(bp.x - ballX) > 0.01 || Math.abs(bp.z - ballZ) > 0.01) return;
             const precise = window.puttBreakPath(ballX, ballZ, hole);
@@ -13218,6 +13221,7 @@
         window.ballMesh.velocity = new THREE.Vector3(0,0,0);
         window.ballMesh.angularVelocity = new THREE.Vector3(0,0,0);
         
+        if (window.ballPos && window.ballPos.copy) window.ballPos.copy(window.ballMesh.position);   // green visuals (and the guide line) follow this position
         // the break line belongs to the player who is up now (it was built for whoever landed last)
         if (lieSurfForSink && lieSurfForSink.type === 'GREEN' && typeof window.buildBreakLine === 'function') window.buildBreakLine();
         else if (typeof window.clearBreakLine === 'function') window.clearBreakLine();
