@@ -8302,6 +8302,7 @@
     window.greenGridForHoleIndex = -1; // Track which hole the grid was built for
     const BEAD_ACTIVATION_DISTANCE = 45; // meters (~50 yards) from flag
     window.breakLineMesh = null;
+    window.breakGuideMesh = null;   // the planned (physics) line; the manual aim line above has its own slot
     window._studioShowGrid = true;    // Studio Steg 2 3D Grid toggle (default ON)
     window._studioShowBeads = true;   // Studio Steg 2 Slope Beads toggle (default ON)
     window._globalGreenBeadsEnabled = true; // Global slope toggle beads (default ON)
@@ -9012,20 +9013,20 @@
             depthTest: false
         });
         
-        window.breakLineMesh = new THREE.Line(geo, mat);
-        window.breakLineMesh.computeLineDistances();
-        window.breakLineMesh.name = 'breakLine';
-        window.breakLineMesh.renderOrder = 2;
-        scene.add(window.breakLineMesh);
+        window.breakGuideMesh = new THREE.Line(geo, mat);
+        window.breakGuideMesh.computeLineDistances();
+        window.breakGuideMesh.name = 'breakLine';
+        window.breakGuideMesh.renderOrder = 2;
+        scene.add(window.breakGuideMesh);
 
         // ~100 simulated putts: run after the turn has moved on, and drop the result if the ball or the line has changed meanwhile
-        const mesh = window.breakLineMesh;
+        const mesh = window.breakGuideMesh;
         const refine = function () {
-            if (window.breakLineMesh !== mesh || typeof window.puttBreakPath !== 'function') return;
+            if (window.breakGuideMesh !== mesh || typeof window.puttBreakPath !== 'function') return;
             const bp = window.ballMesh.position;
             if (Math.abs(bp.x - ballX) > 0.01 || Math.abs(bp.z - ballZ) > 0.01) return;
             const precise = window.puttBreakPath(ballX, ballZ, hole);
-            if (!precise || window.breakLineMesh !== mesh) return;
+            if (!precise || window.breakGuideMesh !== mesh) return;
             mesh.geometry.dispose();
             mesh.geometry = new THREE.BufferGeometry();
             mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(precise, 3));
@@ -9120,6 +9121,12 @@
     };
 
     window.clearBreakLine = function() {
+        if (window.breakGuideMesh) {
+            scene.remove(window.breakGuideMesh);
+            window.breakGuideMesh.geometry.dispose();
+            window.breakGuideMesh.material.dispose();
+            window.breakGuideMesh = null;
+        }
         if (window.breakLineMesh) {
             scene.remove(window.breakLineMesh);
         }
