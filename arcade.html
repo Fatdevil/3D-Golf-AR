@@ -8958,7 +8958,9 @@
         if (!ballSurf || ballSurf.type !== 'GREEN') return;
         
         let steps = 60;
-        let pts = [];
+        let pts = (typeof window.puttBreakPath === 'function') ? window.puttBreakPath(ballX, ballZ, hole) : null;
+        if (!pts) {
+        pts = [];
         
         let dx = flagX - ballX;
         let dz = flagZ - ballZ;
@@ -8995,6 +8997,7 @@
                 simZ += (dirZ + deflectZ) * stepSize;
             }
         }
+        }
         
         // Build THREE.js line
         let geo = new THREE.BufferGeometry();
@@ -9016,6 +9019,81 @@
         scene.add(window.breakLineMesh);
     };
     
+    // The break line is a putt played with the real physics: the pace a player would give a putt to this hole (distance + the
+    // usual overroll), aimed so that it is the line that drops in (or, on a very hard break, passes closest). Returns three.js
+    // points [x,y,z,...] along the rolling ball, or null when the physics is not available.
+    window.puttBreakPath = function (ballX, ballZ, hole) {
+        if (!window.GolfPhysics || typeof physicsTerrainAt !== 'function') return null;
+        const cupZ = hole.flagMesh ? hole.flagMesh.position.y : (physicsTerrainAt(hole.flag.x, -hole.flag.z).z);
+        const cup = [hole.flag.x, -hole.flag.z, cupZ];
+        const start = [ballX, -ballZ, physicsTerrainAt(ballX, -ballZ).z + 0.022];
+        const dist = Math.hypot(cup[0] - start[0], cup[1] - start[1]);
+        const baseAz = Math.atan2(cup[0] - start[0], cup[1] - start[1]) * 180 / Math.PI;
+        window.GREEN_STIMP = (window.matchSettings && window.matchSettings.greenStimp) ? window.matchSettings.greenStimp : 10.0;
+        const env = { getTerrainAt: physicsTerrainAt, wind: [0, 0, 0], cupPositionLocal: cup };
+        const quiet = console.log; console.log = function () {};
+        try {
+            const cfgAt = function (azOff) {
+                return { startPos: start, ballSpeedMph: 3, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0,
+                         azimDeg: baseAz + azOff, isLiveData: false, isTeeShot: false };
+            };
+            // pace: for every aim, the speed that takes the ball (distance + overroll) from where it started, as a player
+            // sizes up the putt by distance; the last pace is the first guess for the next aim
+            let v = window.calibratePuttSpeed(cfgAt(0), dist + 0.45, 22);
+            const run = function (azOff) {
+                const c = cfgAt(azOff); c.ballSpeedMph = v;
+                v = c.ballSpeedMph = window.calibratePuttSpeed(c, dist + 0.45, 22);
+                const r = window.GolfPhysics.simulateFlight(c, env);
+                let closest = Infinity;
+                for (const p of r.path) closest = Math.min(closest, Math.hypot(p.x - cup[0], p.y - cup[1]));
+                const last = r.path[r.path.length - 1];
+                const holed = !!(r.metrics && r.metrics.holed);
+                return { az: azOff, r: r, closest: closest, holed: !!holed, rest: Math.hypot(last.x - cup[0], last.y - cup[1]) };
+            };
+            // signed miss at the closest pass: which side of the cup the ball goes, so the aim can be bracketed and bisected
+            const side = function (t) {
+                let bi = 0, bd = Infinity;
+                t.r.path.forEach(function (p, i) { const d = Math.hypot(p.x - cup[0], p.y - cup[1]); if (d < bd) { bd = d; bi = i; } });
+                const p = t.r.path[bi];
+                const cross = (p.x - start[0]) * (cup[1] - start[1]) - (p.y - start[1]) * (cup[0] - start[0]);
+                return cross >= 0 ? 1 : -1;
+            };
+            let trials = [];
+            const probe = function (a) { const t = run(a); t.side = side(t); trials.push(t); return t; };
+            for (let a = -30; a <= 30; a += 7.5) probe(a);
+            const better = function (a, b) { return a.closest !== b.closest ? a.closest < b.closest : a.rest < b.rest; };
+            let best = trials[0];
+            for (const t of trials) if (better(t, best)) best = t;
+            // narrow in on the aim where the ball switches from passing on one side to the other
+            trials.sort(function (a, b) { return a.az - b.az; });
+            let lo = null, hi = null;
+            for (let i = 0; i + 1 < trials.length; i++) {
+                if (trials[i].side !== trials[i + 1].side && (!lo || Math.abs(trials[i].az + trials[i + 1].az) < Math.abs(lo.az + hi.az))) { lo = trials[i]; hi = trials[i + 1]; }
+            }
+            if (lo) {
+                for (let k = 0; k < 8; k++) {
+                    const t = probe((lo.az + hi.az) / 2);
+                    if (t.side === lo.side) lo = t; else hi = t;
+                    if (better(t, best)) best = t;
+                }
+            }
+            // when several aims drop in, take the middle of them: the line with the most margin
+            const holes = trials.filter(function (t) { return t.holed; }).sort(function (a, b) { return a.az - b.az; });
+            if (holes.length) best = holes[Math.floor(holes.length / 2)];
+            window._breakLineInfo = { aimOffsetDeg: best.az, speedMph: v, holed: best.holed, closestM: best.closest, trials: trials.length };
+            // the path up to the cup, or to the closest point when it misses
+            let pts = [], stride = Math.max(1, Math.floor(best.r.path.length / 120));
+            const path = best.r.path;
+            for (let i = 0; i < path.length; i += stride) pts.push(path[i].x, path[i].z + 0.04, -path[i].y);
+            const l = path[path.length - 1]; pts.push(l.x, l.z + 0.04, -l.y);
+            return pts.length >= 6 ? pts : null;
+        } catch (e) {
+            return null;
+        } finally {
+            console.log = quiet;
+        }
+    };
+
     window.clearBreakLine = function() {
         if (window.breakLineMesh) {
             scene.remove(window.breakLineMesh);
