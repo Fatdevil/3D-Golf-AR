@@ -111,6 +111,11 @@ function serve() {
     // tour pro odds
     const o3 = window.tourProPuttOdds(3), o10 = window.tourProPuttOdds(10), o60 = window.tourProPuttOdds(60);
     check('tourProPuttOdds follows the tour table', o3.p1 > 90 && o10.p1 > 35 && o10.p1 < 45 && o60.p1 < 5 && o60.p3 > 8, JSON.stringify([o3, o10, o60]));
+    // saving: the whole course serialises to JSON, and the pieces moved out of the big script are in place
+    let ser = null;
+    try { ser = JSON.stringify(window.serializeHolesFull()); } catch (e) { ser = null; }
+    check('serializeHolesFull gives JSON for the course', ser && ser.length > 100, ser ? ser.length + ' chars' : 'failed');
+    check('load, leaderboard and rules functions are defined', ['loadLevel', 'importCourseHash', 'showLeaderboard', 'submitRoundResult', 'takeMulligan', 'startLateralDrop', 'buildGreenGrid', 'setWaterType', 'closeLibrary'].every(function (n) { return typeof (0, eval)('typeof ' + n + " === 'undefined' ? undefined : " + n) === 'function'; }));
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 
