@@ -6184,6 +6184,12 @@ window.executeSplineSmartGreen = function() {
         let halfGrid = Math.floor(stamp.gridSize / 2);
         let cosR = Math.cos(-rotation);
         let sinR = Math.sin(-rotation);
+        // outside the plate the ground is a flat plane, so a stamp that reaches the edge would end in a wall:
+        // fade it to zero toward the plate edge, the same way the Berg tool does
+        let stampPeak = 0;
+        for (let i = 0; i < stamp.heights.length; i++) { let hv = stamp.heights[i]; if (hv != null && Math.abs(hv) > stampPeak) stampPeak = Math.abs(hv); }
+        stampPeak *= amplitude;
+        let halfSize = window.TERRAIN_SIZE / 2;
 
         for (let dz = -scaledRadius; dz <= scaledRadius; dz++) {
             for (let dx = -scaledRadius; dx <= scaledRadius; dx++) {
@@ -6222,7 +6228,9 @@ window.executeSplineSmartGreen = function() {
                 }
 
                 let idx = gz * stride + gx;
-                positions[idx * 3 + 2] += h * amplitude * falloff;
+                let edgeFade = (typeof window.mountainEdgeFade === 'function')
+                    ? window.mountainEdgeFade(gx * step - halfSize, gz * step - halfSize, stampPeak) : 1.0;
+                positions[idx * 3 + 2] += h * amplitude * falloff * edgeFade;
             }
         }
 
