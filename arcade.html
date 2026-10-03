@@ -17736,11 +17736,19 @@
 
     function updateSplinePreview() {
         // Rensa gamla sfärer och mesh
-        splineSpheres.forEach(s => scene.remove(s));
+        // this runs on every pointer move while a round hill is dragged, so the old preview's GPU resources are freed each time
+        const freePreview = (obj) => {
+            scene.remove(obj);
+            obj.traverse(o => {
+                if (o.geometry) o.geometry.dispose();
+                if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+            });
+        };
+        splineSpheres.forEach(freePreview);
         splineSpheres = [];
-        if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
-        if(splineFillMesh) { scene.remove(splineFillMesh); splineFillMesh.geometry.dispose(); splineFillMesh = null; }
-        if(splinePoleGroup) { scene.remove(splinePoleGroup); splinePoleGroup = null; }
+        if(splineLineMesh) { freePreview(splineLineMesh); splineLineMesh = null; }
+        if(splineFillMesh) { freePreview(splineFillMesh); splineFillMesh = null; }
+        if(splinePoleGroup) { freePreview(splinePoleGroup); splinePoleGroup = null; }
 
         let isMtnSpline = (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'));
         let isMtnRidge = (currentTool === 'MTN' && window._mtnToolMode === 'RIDGE');
