@@ -4203,11 +4203,6 @@
     window.customModels = {};
     window.ASSET_REGISTRY = {}; // All assets loaded dynamically from cloud via fetchCloudAssets()
     
-    window.setNatureCategory = function(cat) {
-        // Category filtering removed — kept for backward compat
-        window.currentNatureCategory = cat;
-    };
-
 
     window.CLOUD_BIOMES = {};
     
@@ -4391,10 +4386,6 @@
             g: parseInt(result[2], 16),
             b: parseInt(result[3], 16)
         } : null;
-    }
-
-    function colorMatch(r1, g1, b1, r2, g2, b2) {
-        return Math.abs(r1 - r2) < 5 && Math.abs(g1 - g2) < 5 && Math.abs(b1 - b2) < 5;
     }
 
     window.recolorTerrain = function(oldConfig, newConfig) {
@@ -5067,11 +5058,6 @@
     window._librarySelectedCloudKey = null;
 
     // --- Library open/close ---
-    window.openLibrary = function() {
-        document.getElementById('poly-library-panel').style.display = 'flex';
-        switchLibraryTab(window._lastLibraryTab || 'POLY');
-        loadPresetDropdowns();
-    };
 
     window.closeLibrary = function() {
         document.getElementById('poly-library-panel').style.display = 'none';
@@ -5333,90 +5319,6 @@
         });
     }
 
-    window.onPresetSelectChange = async function(presetId) {
-        window._activePresetId = presetId;
-        
-        if (presetId === '_backpack') {
-            // Backpack: keep current ASSET_REGISTRY as-is
-            return;
-        }
-        
-        const preset = (window._userPresets || []).find(p => p.id === presetId);
-        if (!preset) return;
-        
-        // Fetch cloud assets cache if it is null (e.g. after a page reload, before Library is opened)
-        if (!window._cloudAssetsCache) {
-            try {
-                window._cloudAssetsCache = await ArcadeAPI.getAssets();
-            } catch(e) {
-                console.error("Failed to prefetch cloud assets for preset:", e);
-            }
-        }
-        
-        // Clear ASSET_REGISTRY (only poly/cloud, keep internal state)
-        Object.keys(window.ASSET_REGISTRY).forEach(key => {
-            delete window.ASSET_REGISTRY[key];
-        });
-        
-        // Load preset assets into ASSET_REGISTRY
-        const assets = preset.assets || [];
-        for (const a of assets) {
-            if (a.source === 'poly') {
-                // Register poly asset metadata (GLB lazy-loads on placement)
-                window.ASSET_REGISTRY[a.key] = {
-                    icon: '🍕', cat: 'nature',
-                    subcat: a.subcat || 'LANDSCAPE',
-                    isCloud: false, isPoly: true, polyId: a.polyId,
-                    file: `/api/poly/glb/${a.polyId}`, // Register GLB file path for placement loading!
-                    thumbnail: a.thumbnail || null,
-                    targetHeight: a.targetHeight || 4.0,
-                    yOffset: a.yOffset !== undefined ? a.yOffset : 0,
-                    brightness: a.brightness !== undefined ? a.brightness : 1.0,
-                    physics: a.physics || { type: 'sphere', radius: 1.0 },
-                    biomes: a.biomes || ['GLOBAL']
-                };
-            } else if (a.source === 'cloud') {
-                // Fetch cloud asset metadata
-                const cloudAsset = (window._cloudAssetsCache || []).find(ca => ca.id === a.cloudId);
-                if (cloudAsset) {
-                    const conf = typeof cloudAsset.config === 'string' ? JSON.parse(cloudAsset.config) : (cloudAsset.config || {});
-                    window.ASSET_REGISTRY[a.key] = {
-                        icon: cloudAsset.icon || '☁️', cat: 'nature',
-                        subcat: cloudAsset.subcategory || a.subcat || 'TREES',
-                        isCloud: true, cloudId: a.cloudId,
-                        thumbnail: a.thumbnail || conf.thumbnail || null,
-                        targetHeight: a.targetHeight || conf.targetHeight || 10.0,
-                        yOffset: a.yOffset !== undefined ? a.yOffset : (conf.yOffset !== undefined ? conf.yOffset : 0.0),
-                        brightness: a.brightness !== undefined ? a.brightness : (conf.brightness !== undefined ? conf.brightness : 0.0),
-                        physics: a.physics || conf.physics || { type: 'sphere', radius: 1.0 },
-                        biomes: a.biomes || conf.biomes || ['GLOBAL']
-                    };
-                } else {
-                    // Robust fallback: Register using properties saved directly on the preset asset
-                    window.ASSET_REGISTRY[a.key] = {
-                        icon: '☁️', cat: 'nature',
-                        subcat: a.subcat || 'TREES',
-                        isCloud: true, cloudId: a.cloudId,
-                        thumbnail: a.thumbnail || null,
-                        targetHeight: a.targetHeight || 10.0,
-                        yOffset: a.yOffset !== undefined ? a.yOffset : 0.0,
-                        brightness: a.brightness !== undefined ? a.brightness : 0.0,
-                        physics: a.physics || { type: 'sphere', radius: 1.0 },
-                        biomes: a.biomes || ['GLOBAL']
-                    };
-                }
-            }
-        }
-        
-        window.currentNatureType = null;
-        window.selectedNatureTypes = [];
-        window.buildNatureUI();
-        
-        if (window.showBuildToast) {
-            window.showBuildToast(`📋 Preset "${preset.name}" loaded (${assets.length} assets)`, '#38bdf8');
-        }
-    };
-
     async function addAssetToPreset(presetId, assetData) {
         const preset = (window._userPresets || []).find(p => p.id === presetId);
         if (!preset) return;
@@ -5434,23 +5336,6 @@
             console.error('Failed to save preset:', e);
         }
     }
-
-    window.promptNewPreset = async function() {
-        const name = prompt('Name your new preset:');
-        if (!name || !name.trim()) return;
-        try {
-            const result = await ArcadeAPI.saveAssetPreset({ name: name.trim(), assets: [] });
-            if (result.success) {
-                await loadPresets();
-                window._activePresetId = result.id;
-                const dd = document.getElementById('props-preset-select');
-                if (dd) dd.value = result.id;
-                if (window.showBuildToast) window.showBuildToast(`📋 Preset "${name.trim()}" created!`, '#4ade80');
-            }
-        } catch(e) {
-            console.error('Failed to create preset:', e);
-        }
-    };
 
     window.promptNewPresetFromLibrary = async function() {
         const name = prompt('Name your new preset:');
@@ -7205,61 +7090,6 @@
     scene.add(panoCylMesh);
     window.panoramaName = null;
     
-    window.loadPanorama = function(input) {
-        if(!input.files || !input.files[0]) return;
-        let file = input.files[0];
-        let name = file.name.replace(/\.[^.]+$/, ''); // Strip extension
-        
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            let img = new Image();
-            img.onload = function() {
-                let tex = new THREE.Texture(img);
-                tex.needsUpdate = true;
-                tex.wrapS = THREE.RepeatWrapping;
-                
-                // Calculate how many times to tile the image horizontally to prevent stretching
-                let imgAspect = img.width / img.height;
-                let cylCircumference = 2 * Math.PI * 2000; // panoRadius is 2000
-                let cylHeight = 600; // panoHeight is 600
-                let idealWidth = cylHeight * imgAspect;
-                let repeats = Math.max(1, Math.round(cylCircumference / idealWidth));
-                tex.repeat.set(repeats, 1);
-                
-                tex.minFilter = THREE.LinearFilter; // No mipmaps — keeps it sharp
-                tex.magFilter = THREE.LinearFilter;
-                tex.generateMipmaps = false;
-                tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Max quality at angles
-                
-                panoCylMat.map = tex;
-                panoCylMat.opacity = 0.85;
-                panoCylMat.transparent = true;
-                panoCylMat.needsUpdate = true;
-                panoCylMesh.visible = true;
-                
-                window.panoramaName = name;
-                let nameEl = document.getElementById('panorama-name');
-                if(nameEl) nameEl.textContent = '✅ ' + name;
-                
-                // Save panorama data to level (high quality for sharp rendering)
-                let saveCanvas = document.createElement('canvas');
-                let maxW = 4096;
-                let scale = Math.min(1, maxW / img.width);
-                saveCanvas.width = img.width * scale;
-                saveCanvas.height = img.height * scale;
-                saveCanvas.getContext('2d').drawImage(img, 0, 0, saveCanvas.width, saveCanvas.height);
-                
-                courseHoles[currentHoleIndex].panorama = {
-                    name: name,
-                    data: saveCanvas.toDataURL('image/jpeg', 0.9)
-                };
-                saveLevel();
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    };
-    
     window.removePanorama = function() {
         panoCylMat.map = null;
         panoCylMat.opacity = 0;
@@ -7378,9 +7208,6 @@
     // --- 3D SCENERY ENGINE REMOVED ---
     // Scenery objects are now placed directly via the Nature tool.
     window.sceneryGroup = null;
-    window.debouncedUpdateScenery = function() {};
-    window.updateSurroundScenery = function() {};
-    window.populateSceneryDropdowns = function() {};
     
     window.restoreSurrounding = function() {
         let hole = courseHoles[currentHoleIndex];
@@ -7415,20 +7242,6 @@
         }
         
         window.updateSurroundColors();
-    };
-    
-    window.togglePanel = function(id, labelEl) {
-        let el = document.getElementById(id);
-        let chevron = labelEl.querySelector('.chevron');
-        if (!el || !chevron) return;
-        
-        if (el.style.display === 'none') {
-            el.style.display = 'flex';
-            chevron.innerHTML = '▼';
-        } else {
-            el.style.display = 'none';
-            chevron.innerHTML = '◀';
-        }
     };
     
     window.switchRightTab = function(tabName) {
@@ -9453,26 +9266,6 @@
         }
     };
     
-    window.toggleTeeRangeRings = function() {
-        window._builderShowRings = !window._builderShowRings;
-        if (window.terrainShaderUniforms) {
-            window.terrainShaderUniforms.uShowRings.value = (appMode === 'BUILD' && window._builderShowRings) ? 1.0 : 0.0;
-            if (typeof window.updateTerrainGridUniforms === 'function') window.updateTerrainGridUniforms();
-        }
-        let btn = document.getElementById('rings-btn-label');
-        let btnEl = document.getElementById('btn-rings-toggle');
-        if (window._builderShowRings) {
-            if (btn) btn.textContent = 'RINGS: ON';
-            if (btnEl) { btnEl.style.borderColor = '#fbbf24'; btnEl.style.color = '#fbbf24'; }
-            showBuildToast('🎯 Tee Range Rings: ON (100, 150, 200, 250, 300m)', '#fbbf24');
-        } else {
-            if (btn) btn.textContent = 'RINGS: OFF';
-            if (btnEl) { btnEl.style.borderColor = '#475569'; btnEl.style.color = '#94a3b8'; }
-            showBuildToast('🎯 Tee Range Rings: OFF', '#94a3b8');
-        }
-        if (typeof window.updateRangeRingLabels === 'function') window.updateRangeRingLabels();
-    };
-    
     window.updateTerrainGridUniforms = function() {
         if (!window.terrainShaderUniforms) return;
         if (typeof courseHoles === 'undefined' || !courseHoles[currentHoleIndex]) return;
@@ -10496,56 +10289,6 @@
         if(activeBtn) activeBtn.classList.add('active');
         if(typeof window.updateTopbarHoleDistance === 'function') window.updateTopbarHoleDistance();
         if(typeof window.updateTerrainGridUniforms === 'function') window.updateTerrainGridUniforms();
-    };
-    
-    window.showScorecard = function() {
-        let tbody = document.getElementById('scorecard-tbody');
-        tbody.innerHTML = "";
-        
-        let outPar = 0;
-        let outLen = 0;
-        let inPar = 0;
-        let inLen = 0;
-        
-        let cHtml = "<tr style='border-bottom:1px solid #334155;'><td style='color:#94a3b8; font-weight:normal; padding:10px;'>PAR</td>";
-        let cBlack = "<tr><td style='color:#fff; background:#111; padding:5px; border-right:1px solid #334155;'>BLACK</td>";
-        let cWhite = "<tr><td style='color:#0f172a; background:#e2e8f0; padding:5px; border-right:1px solid #334155;'>WHITE</td>";
-        let cYellow = "<tr><td style='color:#0f172a; background:#facc15; padding:5px; border-right:1px solid #334155;'>YELLOW</td>";
-        let cRed = "<tr><td style='color:#fff; background:#ef4444; padding:5px; border-right:1px solid #334155;'>RED</td>";
-        
-        let sumBlack=0, sumWhite=0, sumYellow=0, sumRed=0;
-        
-        for(let i=0; i<9; i++) {
-            let h = courseHoles[i];
-            outPar += h.par;
-            cHtml += "<td style='padding:10px; color:#fff; border-right:1px solid #334155;'>" + h.par + "</td>";
-            
-            let blk='-', wht='-', yel='-', red='-';
-            if(h.flag) {
-                if(h.tees.black) { blk = Math.round(Math.hypot(h.flag.x-h.tees.black.x, h.flag.z-h.tees.black.z)); sumBlack+=blk; }
-                if(h.tees.white) { wht = Math.round(Math.hypot(h.flag.x-h.tees.white.x, h.flag.z-h.tees.white.z)); sumWhite+=wht; }
-                if(h.tees.yellow) { yel = Math.round(Math.hypot(h.flag.x-h.tees.yellow.x, h.flag.z-h.tees.yellow.z)); sumYellow+=yel; }
-                if(h.tees.red) { red = Math.round(Math.hypot(h.flag.x-h.tees.red.x, h.flag.z-h.tees.red.z)); sumRed+=red; }
-            }
-            cBlack += "<td style='border-right:1px solid #334155;'>"+blk+"</td>"; 
-            cWhite += "<td style='border-right:1px solid #334155;'>"+wht+"</td>"; 
-            cYellow += "<td style='border-right:1px solid #334155;'>"+yel+"</td>"; 
-            cRed += "<td style='border-right:1px solid #334155;'>"+red+"</td>";
-        }
-        
-        cHtml += "<td style='padding:10px; color:#fbbf24;'>" + outPar + "</td></tr>";
-        cBlack += "<td style='color:#fbbf24;'>"+sumBlack+"</td></tr>";
-        cWhite += "<td style='color:#fbbf24;'>"+sumWhite+"</td></tr>";
-        cYellow += "<td style='color:#fbbf24;'>"+sumYellow+"</td></tr>";
-        cRed += "<td style='color:#fbbf24;'>"+sumRed+"</td></tr>";
-        
-        tbody.innerHTML += cHtml + cBlack + cWhite + cYellow + cRed;
-        // Mid-round scorecard view: show close, hide end-round buttons
-        let endBtns = document.getElementById('scorecard-endround-btns');
-        if (endBtns) endBtns.style.display = 'none';
-        let closeBtn = document.getElementById('scorecard-footer');
-        if (closeBtn) closeBtn.style.display = 'flex';
-        document.getElementById('scorecard-modal').style.display = 'flex';
     };
     
     window.hasUnsavedChanges = false;
@@ -14924,8 +14667,6 @@
     window.addEventListener('golf_lang_changed', function() {
         if (typeof window.updateSculptDirBtn === 'function') window.updateSculptDirBtn();
     });
-    // Legacy compat — multiplier buttons removed, log slider handles full range
-    window.setBrushMultiplier = function() { updateBrushSize(); };
 
     window.updateBrushSize = function() {
         let slider = document.getElementById('brush-slider');
@@ -15003,15 +14744,6 @@
         window.currentBrushHardness = parseInt(val) / 100;
     };
     
-    window.toggleRetroFilter = function() {
-        let isRetro = document.getElementById('retro-filter-cb') ? document.getElementById('retro-filter-cb').checked : false;
-        if (typeof mapTex !== 'undefined') {
-            mapTex.magFilter = isRetro ? THREE.NearestFilter : THREE.LinearFilter;
-            mapTex.minFilter = isRetro ? THREE.NearestFilter : THREE.LinearFilter;
-            mapTex.needsUpdate = true;
-        }
-    };
-
     const undoStack = [];
     // every editing step (sculpt, paint, water, objects, undo, redo) passes the undo stack: count them for the playtest fingerprint
     window._editRev = 0;
@@ -15365,8 +15097,6 @@
     window.addEventListener('pointermove', onMouseMove, false);
     
     let moveDir = null;
-    window.startMove = function(dir) { moveDir = dir; };
-    window.stopMove = function() { moveDir = null; };
     
     window.addEventListener('keydown', e => {
         if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -16529,21 +16259,6 @@
     }
 
     window.greenDifficulty = 'FLAT';
-    function setGreenDiff(diff) {
-        window.greenDifficulty = diff;
-        document.getElementById('green-btn-flat').style.background = diff === 'FLAT' ? '#fbbf24' : '#334155';
-        document.getElementById('green-btn-flat').style.color = diff === 'FLAT' ? '#0f172a' : '#94a3b8';
-        document.getElementById('green-btn-easy').style.background = diff === 'EASY' ? '#fbbf24' : '#334155';
-        document.getElementById('green-btn-easy').style.color = diff === 'EASY' ? '#0f172a' : '#94a3b8';
-        document.getElementById('green-btn-med').style.background = diff === 'MED' ? '#fbbf24' : '#334155';
-        document.getElementById('green-btn-med').style.color = diff === 'MED' ? '#0f172a' : '#94a3b8';
-        // BUG-02 FIX: green-btn-hard safely handled (element may not exist)
-        let hardBtn = document.getElementById('green-btn-hard');
-        if (hardBtn) {
-            hardBtn.style.background = diff === 'HARD' ? '#fbbf24' : '#334155';
-            hardBtn.style.color = diff === 'HARD' ? '#0f172a' : '#94a3b8';
-        }
-    }
 
     function setTool(toolName) {
         let isRangeModeActive = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
@@ -16959,10 +16674,6 @@
         window.updateNatureUIActiveStates();
     };
 
-    function clearMyBlocks() {
-        document.getElementById('confirm-modal').style.display = 'flex';
-    }
-    
     function closeConfirmModal() {
         document.getElementById('confirm-modal').style.display = 'none';
     }
@@ -20353,11 +20064,6 @@ window.triggerExplosion = function(x, y, z) {
         }
     });
 
-
-    // === DIRECT PLAYTEST (Mario Maker Flow) ===
-    window.testCourse = function() {
-        if (typeof setMode === 'function') setMode('TEST');
-    };
 
     // Auto-save every 60 seconds if changes were made
     setInterval(() => {
