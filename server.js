@@ -1513,7 +1513,8 @@ app.get('/api/poly/glb/:id', async (req, res) => {
 // --- SERVING STATIC FILES (För Railway Deploy) ---
 // Disable cache for HTML files during development
 app.use((req, res, next) => {
-    if (req.path.endsWith('.html') || req.path === '/') {
+    // the service worker and manifest must always be fetched fresh, or an update would never reach the phones
+    if (req.path.endsWith('.html') || req.path === '/' || req.path === '/sw.js' || req.path === '/manifest.json' || req.path === '/pwa.js') {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
     }
