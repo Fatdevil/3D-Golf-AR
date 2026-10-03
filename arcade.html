@@ -12336,16 +12336,17 @@
             
             // a mood from the new-course page also decides what meets the eye on each side of the plate
             const mood = params.get('mood');
+            // N is the far horizon, the other three sides share one colour
             const MOOD_EDGES = {
-                forest:   { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' },
-                sea:      { N: 'horizonColor', E: 'oceanColor', S: 'oceanColor', W: 'oceanColor' },
-                mountain: { N: 'horizonColor', E: 'horizonColor', S: 'horizonColor', W: 'horizonColor' },
-                desert:   { N: 'horizonColor', E: 'wasteColor', S: 'wasteColor', W: 'wasteColor' }
+                forest:   { N: 'fescueColor',  rest: 'fescueColor' },
+                sea:      { N: 'horizonColor', rest: 'oceanColor' },
+                mountain: { N: 'horizonColor', rest: 'horizonColor' },
+                desert:   { N: 'horizonColor', rest: 'wasteColor' }
             };
-            if (mood && MOOD_EDGES[mood] && typeof window.updateSurroundColors === 'function') {
+            if (mood && Object.prototype.hasOwnProperty.call(MOOD_EDGES, mood) && typeof window.updateSurroundColors === 'function') {
                 ['N', 'E', 'S', 'W'].forEach(function (side) {
                     const sel = document.getElementById('surr-' + side);
-                    if (sel) sel.value = MOOD_EDGES[mood][side];
+                    if (sel) sel.value = side === 'N' ? MOOD_EDGES[mood].N : MOOD_EDGES[mood].rest;
                 });
                 window._surroundTouched = true;   // the next-step guide counts the surroundings as started
                 window.updateSurroundColors();

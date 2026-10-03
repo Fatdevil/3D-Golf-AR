@@ -876,37 +876,37 @@
     let activeWorld = 'grass';
     let activeVariant = 'flat';
     let activeSeason = 'GLOBAL';
-    let moodApplying = false;
     let activeMood = null;   // set by a mood card; any manual choice below clears it
 
-    // A mood = world + terrain plate + season; the scenery around the plate is applied by the builder (see &mood= in launchBuilder)
+    // A mood = world + terrain plate + season (+ icon and name for the summary); the scenery around the plate is applied by the builder (see &mood= in launchBuilder)
     const MOODS = {
-        forest:   { world: 'grass',  variant: 'hills',   season: 'GLOBAL' },
-        sea:      { world: 'grass',  variant: 'coastal', season: 'GLOBAL' },
-        mountain: { world: 'grass',  variant: 'highland', season: 'GLOBAL' },
-        desert:   { world: 'desert', variant: 'dunes',   season: 'DESERT' }
+        forest:   { world: 'grass',  variant: 'hills',    season: 'GLOBAL', icon: '🌲', name: 'Forest' },
+        sea:      { world: 'grass',  variant: 'coastal',  season: 'GLOBAL', icon: '🌊', name: 'By the sea' },
+        mountain: { world: 'grass',  variant: 'highland', season: 'GLOBAL', icon: '⛰️', name: 'Mountains' },
+        desert:   { world: 'desert', variant: 'dunes',    season: 'DESERT', icon: '🏜️', name: 'Desert' }
     };
     function selectMood(key, el) {
         const m = MOODS[key];
         if (!m) return;
-        moodApplying = true;
-        selectWorld(m.world, document.querySelector('.world-card[data-world="' + m.world + '"]'));
-        moodApplying = false;
+        // set the state directly and draw once (the click handlers below clear the mood, which a mood must not do to itself)
+        activeWorld = m.world;
         activeVariant = m.variant;
         activeSeason = m.season;
         activeMood = key;
+        document.querySelectorAll('.world-card').forEach(c => c.classList.toggle('active', c.dataset.world === m.world));
         document.querySelectorAll('.mood-card').forEach(c => c.classList.toggle('active', c === el));
-        document.querySelectorAll('.variant-card, .season-card').forEach(c => c.classList.remove('active'));
+        renderVariants();
         renderSeasons();
         updateSummary();
     }
     function clearMood() {
+        if (!activeMood) return;
         activeMood = null;
         document.querySelectorAll('.mood-card').forEach(c => c.classList.remove('active'));
     }
 
     function selectWorld(worldKey, el) {
-        if (!moodApplying) clearMood();
+        clearMood();
         activeWorld = worldKey;
         document.querySelectorAll('.world-card').forEach(c => c.classList.remove('active'));
         if (el) el.classList.add('active');
@@ -928,7 +928,7 @@
     }
 
     function selectVariant(varId, el) {
-        if (!moodApplying) clearMood();
+        clearMood();
         activeVariant = varId;
         document.querySelectorAll('.variant-card').forEach(c => c.classList.remove('active'));
         if (el) el.classList.add('active');
@@ -936,7 +936,7 @@
     }
 
     function selectSeason(seasonId, el) {
-        if (!moodApplying) clearMood();
+        clearMood();
         activeSeason = seasonId;
         document.querySelectorAll('.season-card').forEach(c => c.classList.remove('active'));
         if (el) el.classList.add('active');
@@ -1051,10 +1051,8 @@
 
         if (worldEl) worldEl.textContent = worldNames[activeWorld] || activeWorld;
         if (varEl && activeMood) {
-            const icons = { forest: '🌲', sea: '🌊', mountain: '⛰️', desert: '🏜️' };
-            const fb = { forest: 'Forest', sea: 'By the sea', mountain: 'Mountains', desert: 'Desert' };
-            const k = 'mood_' + (activeMood === 'sea' ? 'sea' : activeMood);
-            varEl.textContent = icons[activeMood] + ' ' + ((window.t && window.t(k) !== k) ? window.t(k) : fb[activeMood]);
+            const m = MOODS[activeMood], k = 'mood_' + activeMood;
+            varEl.textContent = m.icon + ' ' + ((window.t && window.t(k) !== k) ? window.t(k) : m.name);
         } else if (varEl && currentVarObj) {
             varEl.textContent = (lang === 'sv' && currentVarObj.name_sv) ? currentVarObj.name_sv : (currentVarObj.name_en || currentVarObj.name || currentVarObj.id);
         }
