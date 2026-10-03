@@ -3178,7 +3178,7 @@
                     <div id="setup-course-info" style="color:#64748b; font-size:12px; margin-top:4px; font-weight:500;"></div>
                 </div>
                 <div style="display:flex; gap:8px; align-items:center;">
-                    <button id="setup-edit-btn" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + (function (q) { return q.get('from') || q.get('edit'); })(new URLSearchParams(window.location.search))" style="display:none; background:#0284c7; color:#fff; border:none; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">🔨 <span data-i18n="sp_back_edit">Tillbaka till bygget</span></button>
+                    <button id="setup-edit-btn" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + (new URLSearchParams(window.location.search)).get('edit')" style="display:none; background:#0284c7; color:#fff; border:none; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">🔨 <span data-i18n="sp_back_edit">Tillbaka till bygget</span></button>
                     <button onclick="window.location.href='arcade_hub.html'" style="background:transparent; color:#64748b; border:1px solid #334155; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.color='#fff';this.style.borderColor='#475569'" onmouseout="this.style.color='#64748b';this.style.borderColor='#334155'">← Back to Hub</button>
                 </div>
             </div>
@@ -7407,6 +7407,7 @@
     window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' };
 
     window.updateSurroundColors = function() {
+        window._editRev = (window._editRev || 0) + 1; // the next-step guide: the backdrop is part of what was played
         if(!window.surroundMat || !window.CURRENT_BIOME_CONFIG) return;
         
         let elN = document.getElementById('surr-N');
@@ -11168,9 +11169,9 @@
             showBuildToast(tr('sp_failed', 'Det gick inte att spara banan. Försök igen.'), '#ef4444');
             return;
         }
-        try { localStorage.setItem('golfPlayed_' + currentEditCode, '1'); } catch (e) {}
+        try { localStorage.setItem('golfPlayed_' + playCode, '1'); } catch (e) {}
         window.hasUnsavedChanges = false;
-        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&edit=' + playCode + (published ? '&from=' + origCode : '');
+        window.location.href = 'arcade.html?v=' + Date.now() + '&autorun=setup&edit=' + playCode;
     };
 
     // ── Preview: populate stats when modal opens ──
@@ -20700,7 +20701,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=13"></script>
+<script src="guide.js?v=14"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
