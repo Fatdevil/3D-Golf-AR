@@ -6322,6 +6322,42 @@ window.mtnRidgeHeightAt = function(x, z, height, jag, falloff) {
     let noise = fbm(x * 0.08, z * 0.08, 3, 2.0, 0.5) * 0.6 + fbm(x * 0.2, z * 0.2, 2, 2.0, 0.5) * 0.3;
     return (height * falloff + noise * height * 0.25 * falloff * jag) * _mtnEdgeFade(x, z, height);
 };
+// Turn a hand-drawn stroke into a few control dots: Douglas-Peucker simplification, then dots closer than minGap are dropped
+window.mtnSimplifyStroke = function(pts, tol, minGap, maxPts) {
+    if (pts.length <= 1) return pts.slice();
+    const keep = new Array(pts.length).fill(false);
+    keep[0] = keep[pts.length - 1] = true;
+    const stack = [[0, pts.length - 1]];
+    while (stack.length) {
+        const [a, b] = stack.pop();
+        const A = pts[a], B = pts[b], dx = B.x - A.x, dz = B.z - A.z, l2 = dx * dx + dz * dz;
+        let md = 0, mi = -1;
+        for (let i = a + 1; i < b; i++) {
+            let t = l2 ? ((pts[i].x - A.x) * dx + (pts[i].z - A.z) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t));
+            const d = Math.hypot(pts[i].x - (A.x + t * dx), pts[i].z - (A.z + t * dz));
+            if (d > md) { md = d; mi = i; }
+        }
+        if (mi >= 0 && md > tol) { keep[mi] = true; stack.push([a, mi], [mi, b]); }
+    }
+    let out = pts.filter((_, i) => keep[i]);
+    // too close together: drop any dot that is near one already kept (also earlier ones, so a stroke that doubles back makes no loop);
+    // the last dot is where the finger is, so it wins over the dots just before it
+    const spaced = [out[0]];
+    const near = (u, v) => Math.hypot(u.x - v.x, u.z - v.z) < minGap;
+    for (let i = 1; i < out.length; i++) {
+        const q = out[i];
+        if (i < out.length - 1) { if (!spaced.some(k => near(k, q))) spaced.push(q); continue; }
+        while (spaced.length > 1 && near(spaced[spaced.length - 1], q)) spaced.pop();
+        if (!near(spaced[0], q) || spaced.length > 1) { if (!spaced.some(k => near(k, q))) spaced.push(q); }
+    }
+    out = spaced;
+    // still too many: keep an even selection that includes both ends
+    while (maxPts >= 2 && out.length > maxPts) {
+        const step = (out.length - 1) / (maxPts - 1);
+        out = Array.from({ length: maxPts }, (_, i) => out[Math.round(i * step)]);
+    }
+    return out;
+};
 window.mtnRidgeCurve = function(points) {
     if (!points || points.length < 2) return [];
     if (points.length === 2) return points.map(p => ({ x: p.x, z: p.z }));

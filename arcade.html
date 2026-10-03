@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=27"></script>
+<script src="i18n.js?v=28"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -1038,7 +1038,7 @@
                     <span data-i18n="mtn_help_hill" data-i18n-html="true">💡 <b>Kulle:</b> Klicka för att rita en sluten form (minst 3 punkter). Kullen byggs inuti formen. Högerklick tar bort sista punkten. Nära plattans kant sänks berget mjukt mot noll.</span>
                 </div>
                 <div id="mtn-help-ridge" style="display:none; color:#64748b; font-size:9px; line-height:1.3; margin-top:8px; padding:6px; background:#1e293b; border-radius:5px; border:1px dashed #f59e0b44;">
-                    <span data-i18n="mtn_help_ridge" data-i18n-html="true">💡 <b>Bergsrygg:</b> Klicka för att rita en linje (minst 2 punkter). Ryggen reser sig längs linjen. Högerklick tar bort sista punkten. Nära plattans kant sänks berget mjukt mot noll.</span>
+                    <span data-i18n="mtn_help_ridge" data-i18n-html="true">💡 <b>Bergsrygg:</b> Klicka för att sätta ut punkter, eller håll nere och dra för att rita fritt (minst 2 punkter). Dra i en prick för att flytta den, högerklicka på en prick för att ta bort den. Ryggen reser sig längs linjen. Nära plattans kant sänks berget mjukt mot noll.</span>
                 </div>
             </div>
             <script>
@@ -1053,7 +1053,7 @@
                 window.mtnHintHtml = function () {
                     const t = function (k, fb) { return (window.t && window.t(k) !== k) ? window.t(k) : fb; };
                     const m = window._mtnToolMode;
-                    if (m === 'RIDGE') return t('mtn_hint_ridge', 'Klicka: <b>rita linjen</b> · Högerklick: ta bort sista punkten · Tryck <b>Bygg berg</b>');
+                    if (m === 'RIDGE') return t('mtn_hint_ridge', 'Klicka eller dra: <b>rita linjen</b> · Dra en prick: flytta · Högerklick på prick: ta bort · Tryck <b>Bygg berg</b>');
                     if (m === 'STAMP') return t('mtn_hint_stamp', 'Klicka på marken: <b>fånga eller klistra in en terrängstämpel</b>');
                     if (m === 'PAINT') return t('mtn_hint_paint', 'Klicka på ett berg: <b>färgas automatiskt med vald stil</b>');
                     return t('mtn_hint_hill', 'Klicka: <b>rita formen</b> · Högerklick: ta bort sista punkten · Tryck <b>Bygg berg</b>');
@@ -15585,8 +15585,21 @@
                 }
             }
         } else if(currentTool === 'SPLINE' || (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'))) {
-            if(e.button === 0 && lastHitPoint) {
-                splinePoints.push(lastHitPoint.clone());
+            window._splineDrag = null; window._freeStroke = null;
+            const picked = (window.pickSplinePoint && splinePoints.length) ? window.pickSplinePoint(e.clientX, e.clientY, e.pointerType === 'touch' ? 24 : 14) : -1;
+            if(e.button === 0 && picked >= 0) {
+                window._splineDrag = { i: picked }; // grab a dot to move it
+            } else if(e.button === 0 && lastHitPoint) {
+                // a dot very close to an existing one would only make a kink: skip it
+                const tooClose = splinePoints.some(q => Math.hypot(q.x - lastHitPoint.x, q.z - lastHitPoint.z) < 4);
+                if (!tooClose) splinePoints.push(lastHitPoint.clone());
+                // on a ridge, keep the button down and drag to draw freehand from this point
+                if (!tooClose && currentTool === 'MTN' && window._mtnToolMode === 'RIDGE') {
+                    window._freeStroke = { base: splinePoints.slice(0, splinePoints.length - 1), pts: [lastHitPoint.clone()], px: e.clientX, py: e.clientY, moved: false };
+                }
+                updateSplinePreview();
+            } else if (e.button === 2 && picked >= 0) {
+                splinePoints.splice(picked, 1); // right-click on a dot removes just that dot
                 updateSplinePreview();
             } else if (e.button === 2 && splinePoints.length > 0) {
                 splinePoints.pop();
@@ -17942,6 +17955,60 @@
         updateSplinePreview();
     }, false);
     window.addEventListener('pointerup', function () { hillDrag = null; }, false);
+
+    // Which dot is under the pointer (screen pixels, so it works at any zoom)? -1 if none
+    window.pickSplinePoint = function (cx, cy, radiusPx) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        let best = -1, bestD = radiusPx;
+        splinePoints.forEach((pt, i) => {
+            const surf = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(pt.x, -pt.z) : null;
+            const v = new THREE.Vector3(pt.x, (surf ? surf.z : pt.y) + 0.6, pt.z).project(camera);
+            if (v.z > 1) return; // behind the camera
+            const d = Math.hypot((v.x * 0.5 + 0.5) * rect.width + rect.left - cx, (-v.y * 0.5 + 0.5) * rect.height + rect.top - cy);
+            if (d < bestD) { bestD = d; best = i; }
+        });
+        return best;
+    };
+    // Move a dot by dragging it, and draw a ridge freehand by dragging on empty ground
+    window.addEventListener('pointermove', function (e) {
+        if (!(e.buttons & 1)) { if (window._splineDrag || window._freeStroke) finishSplineDrag(); return; } // button already up (cancelled/lost): drop any stale drag
+        if (!lastHitPoint) return;
+        const sd = window._splineDrag, fs = window._freeStroke;
+        if (sd && splinePoints[sd.i]) {
+            const half = window.TERRAIN_SIZE / 2;
+            splinePoints[sd.i].x = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.x));
+            splinePoints[sd.i].z = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.z));
+            splinePoints[sd.i].y = lastHitPoint.y; // keep the height of the ground under the dot (fence length, posts)
+            updateSplinePreview();
+        } else if (fs && currentTool === 'MTN' && window._mtnToolMode === 'RIDGE') {
+            if (!fs.moved && Math.hypot(e.clientX - fs.px, e.clientY - fs.py) < 8) return;
+            fs.moved = true;
+            const last = fs.pts[fs.pts.length - 1];
+            if (Math.hypot(lastHitPoint.x - last.x, lastHitPoint.z - last.z) < 2) return;
+            fs.pts.push(lastHitPoint.clone());
+            // dots that would land on top of an earlier dot of the ridge are left out (no kinks or loops)
+            const simple = window.mtnSimplifyStroke(fs.pts, 3, 12, Math.max(2, 14 - fs.base.length))
+                .filter(q => !fs.base.some(b => Math.hypot(b.x - q.x, b.z - q.z) < 4));
+            splinePoints.length = 0;
+            fs.base.concat(simple).forEach(q => splinePoints.push(q));
+            updateSplinePreview();
+        }
+    }, false);
+    // the end of a drag (release, cancel or lost focus): a dot dropped on top of a neighbour becomes one dot instead of making a kink
+    const finishSplineDrag = () => {
+        const sd = window._splineDrag;
+        window._splineDrag = null; window._freeStroke = null; hillDrag = null;
+        if (sd && splinePoints[sd.i]) {
+            const a = splinePoints[sd.i];
+            for (let j = 0; j < splinePoints.length; j++) {
+                if (j !== sd.i && Math.hypot(splinePoints[j].x - a.x, splinePoints[j].z - a.z) < 4) { splinePoints.splice(sd.i, 1); break; }
+            }
+            updateSplinePreview();
+        }
+    };
+    window.addEventListener('pointercancel', finishSplineDrag, false);
+    window.addEventListener('blur', finishSplineDrag, false);
+    window.addEventListener('pointerup', finishSplineDrag, false);
 
 
 
@@ -20929,7 +20996,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=47"></script>
+<script src="smart-builder.js?v=50"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>
