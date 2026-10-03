@@ -13211,6 +13211,10 @@
         window.ballMesh.velocity = new THREE.Vector3(0,0,0);
         window.ballMesh.angularVelocity = new THREE.Vector3(0,0,0);
         
+        // the break line belongs to the player who is up now (it was built for whoever landed last)
+        if (lieSurfForSink && lieSurfForSink.type === 'GREEN' && typeof window.buildBreakLine === 'function') window.buildBreakLine();
+        else if (typeof window.clearBreakLine === 'function') window.clearBreakLine();
+
         let hole = courseHoles[playingHoleIndex];
         let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         window.aimTarget = fv.clone();
