@@ -6324,7 +6324,7 @@ window.mtnRidgeHeightAt = function(x, z, height, jag, falloff) {
 };
 // Turn a hand-drawn stroke into a few control dots: Douglas-Peucker simplification, then dots closer than minGap are dropped
 window.mtnSimplifyStroke = function(pts, tol, minGap, maxPts) {
-    if (pts.length <= 2) return pts.slice();
+    if (pts.length <= 1) return pts.slice();
     const keep = new Array(pts.length).fill(false);
     keep[0] = keep[pts.length - 1] = true;
     const stack = [[0, pts.length - 1]];
