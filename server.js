@@ -800,8 +800,8 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index, cover_image) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index, cover_image, updated_at) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 

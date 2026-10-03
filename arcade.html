@@ -12306,7 +12306,7 @@
                     savedStr = data;
                     isCloud = true;
                     // Store course metadata for Round Setup header
-                    window._loadedUpdatedAt = data.updated_at ? String(data.updated_at) : null; // which saved revision this page shows
+                    window._loadedUpdatedAt = String(data.updated_at || data.created_at || 'none'); // which saved revision this page shows
                     window._loadedIsDraft = data.is_draft === true; // an unpublished draft is a builder preview: its rounds never count
                     window._loadedCourseName = data.name || null;
                     window._loadedCourseAuthor = data.author || null;
