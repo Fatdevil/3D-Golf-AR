@@ -876,7 +876,7 @@
     let activeWorld = 'grass';
     let activeVariant = 'flat';
     let activeSeason = 'GLOBAL';
-    let activeMood = null;   // set by a mood card; any manual choice below clears it
+    let activeMood = null;   // set by a mood card; picking another world or terrain plate below clears it (a different season keeps it)
 
     // A mood = world + terrain plate + season (+ icon and name for the summary); the scenery around the plate is applied by the builder (see &mood= in launchBuilder)
     const MOODS = {
@@ -937,7 +937,7 @@
     }
 
     function selectSeason(seasonId, el) {
-        clearMood();
+        // a different season keeps the mood: the mood is the world, the terrain and the scenery, the season is only a starting value
         activeSeason = seasonId;
         document.querySelectorAll('.season-card').forEach(c => c.classList.remove('active'));
         if (el) el.classList.add('active');
