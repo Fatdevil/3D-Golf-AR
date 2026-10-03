@@ -1,7 +1,7 @@
 /**
  * Physics Engine Validation Script
  * Tests carry, total, roll, and apex for three reference scenarios
- * Run: node test_physics.js
+ * Run: node tests/test_physics.js
  */
 
 // Load physics engine (force fresh by recreating window)
@@ -10,7 +10,7 @@ global.window = {
     matchSettings: { greenFirmness: 'NORMAL' }
 };
 const path = require('path');
-const physPath = path.resolve(__dirname, 'physics.js');
+const physPath = path.resolve(__dirname, '..', 'physics.js');
 delete require.cache[physPath];
 delete global.window.GolfPhysics;
 require(physPath);

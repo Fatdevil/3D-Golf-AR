@@ -1,13 +1,13 @@
 const fs = require('fs');
 global.window = {};
 
-const pcode = fs.readFileSync('physics.js', 'utf8');
+const pcode = fs.readFileSync(require('path').join(__dirname, '..', '..', 'physics.js'), 'utf8');
 eval(pcode);
 
 // Fake envCtx to mock rough lie calculation inside physics.js
 // physics.js uses checkCollisionCallback and others. But rough penalty triggers via state.type in some versions,
 // or via envCtx.lieSurface. Let's see what physics.js actually expects.
-const pcodeText = fs.readFileSync('physics.js', 'utf8');
+const pcodeText = fs.readFileSync(require('path').join(__dirname, '..', '..', 'physics.js'), 'utf8');
 
 // The simulation function takes launchData and envCtx
 let envCtx = { checkCollisionCallback: function(){return {type:ROUGH};}, 
