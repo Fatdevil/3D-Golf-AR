@@ -251,3 +251,6 @@ biomes (id, name, config)
 - Express.js (backend)
 - WebSocket (Launch Monitor-brygga)
 - Vanilla JS (inga frameworks i frontend)
+
+## Städning (2026-10)
+Borttaget ur roten, finns kvar i git-historiken: gamla sidor (`arcade_clean`, `arcade_golden_backup_*`, `live_*`, `minigolf_backup`), engångsskript (`patch_*`, `fix_*`, `debug*`, `find*`, `check*`, `temp*`, `test_script_*`), `animate.js`, `count_lines.ps1` samt oanvända sprites/texturer/panoramabilder. `arcade.html` är fortfarande enda källan för bygg- och spelläget.
