@@ -254,3 +254,9 @@ biomes (id, name, config)
 
 ## Städning (2026-10)
 Borttaget ur roten, finns kvar i git-historiken: gamla sidor (`arcade_clean`, `arcade_golden_backup_*`, `live_*`, `minigolf_backup`), engångsskript (`patch_*`, `fix_*`, `debug*`, `find*`, `check*`, `temp*`, `test_script_*`), `animate.js`, `count_lines.ps1` samt oanvända sprites/texturer/panoramabilder. `arcade.html` är fortfarande enda källan för bygg- och spelläget.
+
+### Uppdelning av arcade.html (pågår)
+Det stora inbyggda skriptet i `arcade.html` delas upp i egna filer, ett område i taget. Koden flyttas oförändrad och körs på exakt samma plats i ordningen (vanliga `<script src>`, så toppnivå-`let`/`const` delas fortfarande mellan filerna). Delfiler hittills: `arcade-biomes.js` (biom-data), `arcade-biome-tints.js` (trädtoner), `arcade-putt-odds.js` (Tour Pro-odds), `arcade-green-viz.js` (greenens rutnät/heatmap och breaklinje), `arcade-water.js` (vatten).
+- Verktyg: `python3 tools/split-script.py cut NAMN.js --start ... --end ...` flyttar ett radintervall; `python3 tools/split-script.py verify origin/main` bevisar att allt lagt tillbaka är byte-identiskt med förra versionen.
+- Skydd: `npm run smoke` (se `tests/README.md`) fångar saknade filer, nya sidfel och förlorade globaler.
+
