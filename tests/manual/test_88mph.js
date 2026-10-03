@@ -4,7 +4,7 @@ const fs = require('fs');
 global.window = {};
 
 // Load physics engine and patch the bug in memory!
-let physicsCode = fs.readFileSync('physics.js', 'utf8');
+let physicsCode = fs.readFileSync(require('path').join(__dirname, '..', '..', 'physics.js'), 'utf8');
 physicsCode = physicsCode.replace("let impactTerrainType = 'FAIRWAY';", "let impactTerrainType = tInfo.type || 'FAIRWAY';");
 eval(physicsCode);
 const simulateFlight = window.GolfPhysics.simulateFlight;

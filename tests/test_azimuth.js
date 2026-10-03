@@ -5,7 +5,7 @@
  */
 
 global.window = { GREEN_STIMP: 10.0, matchSettings: { greenFirmness: 'NORMAL' } };
-require('./physics.js');
+require('../physics.js');
 const { simulateFlight } = window.GolfPhysics;
 
 const flatEnv = {

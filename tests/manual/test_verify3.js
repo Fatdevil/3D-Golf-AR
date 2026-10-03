@@ -2,7 +2,7 @@ const fs = require('fs');
 global.window = {};
 global.console = console;
 
-const physicsCode = fs.readFileSync('physics.js', 'utf8');
+const physicsCode = fs.readFileSync(require('path').join(__dirname, '..', '..', 'physics.js'), 'utf8');
 eval(physicsCode);
 
 const launchConfig = {

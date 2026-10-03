@@ -5,7 +5,7 @@ global.window = {};
 global.console = console;
 
 // Läs in physics.js och evalutera den
-const physicsCode = fs.readFileSync('physics.js', 'utf8');
+const physicsCode = fs.readFileSync(require('path').join(__dirname, '..', '..', 'physics.js'), 'utf8');
 eval(physicsCode);
 
 const launchConfig = {

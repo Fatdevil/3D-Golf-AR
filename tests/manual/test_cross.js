@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const pcode = fs.readFileSync('physics.js', 'utf8');
+const pcode = fs.readFileSync(require('path').join(__dirname, '..', '..', 'physics.js'), 'utf8');
 const modifiedPcode = pcode.replace(
     'let fLift = vecScale(magnusDir, fLiftMag);',
     'let fLift = vecScale(magnusDir, fLiftMag); if (typeof state === "undefined") return; if (state.time === undefined) { state.time = 0; } state.time++; if (state.time === 200) console.log("MAGX:", magnusDir[0], "sZ:", state.spin[2], "sY:", state.spin[1], "vZ:", vRel[2], "vY:", vRel[1]);'
