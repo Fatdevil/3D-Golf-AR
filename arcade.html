@@ -10554,6 +10554,7 @@
         }
     }
     async function saveLevel(isAuto = false) {
+        if (!isAuto) window._editRev = (window._editRev || 0) + 1; // the next-step guide: a direct save (panorama, quick save) means the course changed
         let sText = document.getElementById('save-status-text');
         let sIcon = document.getElementById('save-status-icon');
         let sInd = document.getElementById('save-status-indicator');
