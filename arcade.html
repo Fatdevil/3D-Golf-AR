@@ -14365,7 +14365,12 @@
     // The roll is roughly proportional to speed squared, so a few corrections of the speed are enough.
     window.calibratePuttSpeed = function (startPos, azimDeg, targetDistM, guessMph, maxMph) {
         if (!window.GolfPhysics || typeof window.localGetTerrainAt !== 'function') return guessMph;
-        const env = { getTerrainAt: function (px, py) { return window.localGetTerrainAt(px, py); }, wind: [0, 0, 0] };
+        // localGetTerrainAt gives the normal in three.js order (x, z, up); the physics wants (x, y, up) with y = -z, so the middle sign flips,
+        // exactly as the shot's own terrain callback does
+        const env = { getTerrainAt: function (px, py) {
+            const t = window.localGetTerrainAt(px, py);
+            return { z: t.z, normal: [t.normal[0], -t.normal[1], t.normal[2]], type: t.type };
+        }, wind: [0, 0, 0] };
         const quiet = console.log; console.log = function () {};   // the physics logs every shot in detail
         try {
             const rollOf = function (mph) {
@@ -14374,13 +14379,16 @@
                 return Math.hypot(f.x - startPos[0], f.y - startPos[1]);
             };
             let v = Math.max(1, Math.min(maxMph, guessMph));
+            let best = v, bestErr = Infinity;
             for (let i = 0; i < 6; i++) {
                 const d = rollOf(v);
-                if (Math.abs(d - targetDistM) <= 0.03 * targetDistM + 0.02) break;
+                const err = Math.abs(d - targetDistM);
+                if (err < bestErr) { bestErr = err; best = v; }   // keep the closest one: a bumpy start can make the search wobble
+                if (err <= 0.03 * targetDistM + 0.02) break;
                 v = Math.max(1, Math.min(maxMph, v * Math.sqrt(targetDistM / Math.max(d, 0.05))));
-                if (v >= maxMph && d < targetDistM) break;   // cannot be hit any harder
+                if (v >= maxMph && d < targetDistM) { best = v; break; }   // cannot be hit any harder
             }
-            return v;
+            return best;
         } catch (e) {
             return guessMph;
         } finally {
