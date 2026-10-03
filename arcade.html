@@ -8958,7 +8958,7 @@
         if (!ballSurf || ballSurf.type !== 'GREEN') return;
         
         let steps = 60;
-        let pts = (typeof window.puttBreakPath === 'function') ? window.puttBreakPath(ballX, ballZ, hole) : null;
+        let pts = null;   // the quick estimate is drawn at once; the physics line replaces it a moment later
         if (!pts) {
         pts = [];
         
@@ -9017,6 +9017,20 @@
         window.breakLineMesh.name = 'breakLine';
         window.breakLineMesh.renderOrder = 2;
         scene.add(window.breakLineMesh);
+
+        // ~100 simulated putts: run after the turn has moved on, and drop the result if the ball or the line has changed meanwhile
+        const mesh = window.breakLineMesh;
+        setTimeout(function () {
+            if (window.breakLineMesh !== mesh || typeof window.puttBreakPath !== 'function') return;
+            const bp = window.ballMesh.position;
+            if (Math.abs(bp.x - ballX) > 0.01 || Math.abs(bp.z - ballZ) > 0.01) return;
+            const precise = window.puttBreakPath(ballX, ballZ, hole);
+            if (!precise || window.breakLineMesh !== mesh) return;
+            mesh.geometry.dispose();
+            mesh.geometry = new THREE.BufferGeometry();
+            mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(precise, 3));
+            mesh.computeLineDistances();
+        }, 60);
     };
     
     // The break line is a putt played with the real physics: the pace a player would give a putt to this hole (distance + the
@@ -9060,7 +9074,7 @@
             };
             let trials = [];
             const probe = function (a) { const t = run(a); t.side = side(t); trials.push(t); return t; };
-            for (let a = -30; a <= 30; a += 7.5) probe(a);
+            for (let a = -30; a <= 30; a += 10) probe(a);
             const better = function (a, b) { return a.closest !== b.closest ? a.closest < b.closest : a.rest < b.rest; };
             let best = trials[0];
             for (const t of trials) if (better(t, best)) best = t;
@@ -9071,7 +9085,7 @@
                 if (trials[i].side !== trials[i + 1].side && (!lo || Math.abs(trials[i].az + trials[i + 1].az) < Math.abs(lo.az + hi.az))) { lo = trials[i]; hi = trials[i + 1]; }
             }
             if (lo) {
-                for (let k = 0; k < 8; k++) {
+                for (let k = 0; k < 7; k++) {
                     const t = probe((lo.az + hi.az) / 2);
                     if (t.side === lo.side) lo = t; else hi = t;
                     if (better(t, best)) best = t;
@@ -9084,8 +9098,14 @@
             // the path up to the cup, or to the closest point when it misses
             let pts = [], stride = Math.max(1, Math.floor(best.r.path.length / 120));
             const path = best.r.path;
-            for (let i = 0; i < path.length; i += stride) pts.push(path[i].x, path[i].z + 0.04, -path[i].y);
-            const l = path[path.length - 1]; pts.push(l.x, l.z + 0.04, -l.y);
+            // a ball that misses is shown only up to where it passes the cup
+            let endI = path.length - 1;
+            if (!best.holed) {
+                let bd = Infinity;
+                path.forEach(function (p, i) { const d = Math.hypot(p.x - cup[0], p.y - cup[1]); if (d < bd) { bd = d; endI = i; } });
+            }
+            for (let i = 0; i < endI; i += stride) pts.push(path[i].x, path[i].z + 0.04, -path[i].y);
+            const l = path[endI]; pts.push(l.x, l.z + 0.04, -l.y);
             return pts.length >= 6 ? pts : null;
         } catch (e) {
             return null;
