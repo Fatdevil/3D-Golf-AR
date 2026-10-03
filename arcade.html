@@ -17887,7 +17887,8 @@
                         let tpl = (typeof window.t === 'function' && window.t('mtn_hill_info') !== 'mtn_hill_info') ? window.t('mtn_hill_info') : 'Ca {w} × {d} m stor · {h} m hög';
                         info.textContent = tpl.replace('{w}', Math.round(maxX - minX)).replace('{d}', Math.round(maxZ - minZ)).replace('{h}', Math.round(hh));
                         // height against the distance from the peak to the nearest edge: above 1 the slope is steeper than 45 degrees (a spike)
-                        const steep = bestD > 0 && hh / bestD > 1.0;
+                        // if even the finest search found no point inside, the shape is only a few metres wide: count it as thin (half the grid spacing)
+                        const steep = hh / Math.max(bestD >= 0 ? bestD : 3, 0.5) > 1.0;
                         if (steep) {
                             const w = (typeof window.t === 'function' && window.t('mtn_steep') !== 'mtn_steep') ? window.t('mtn_steep') : '⚠️ Mycket brant! Gör kullen bredare eller lägre.';
                             info.textContent += '  ' + w;
