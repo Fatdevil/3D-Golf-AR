@@ -13550,13 +13550,15 @@
         
         // Count actual playable holes (with tee + flag)
         let maxHoles = 0;
+        let playableIdx = [];
         for (let i = 0; i < MAX_HOLES; i++) {
             let h = courseHoles[i];
             if (h && h.flag && h.tees && (h.tees.red || h.tees.yellow || h.tees.white || h.tees.black)) {
+                playableIdx.push(i);
                 maxHoles = i + 1; // Track highest hole index that's playable
             }
         }
-        if (maxHoles === 0) maxHoles = MAX_HOLES; // Fallback
+        if (maxHoles === 0) { maxHoles = MAX_HOLES; for (let i = 0; i < MAX_HOLES; i++) playableIdx.push(i); } // Fallback
         
         let htmlMode = '';
         
@@ -13621,12 +13623,12 @@
             if (pl.hcp === null || pl.hcp === undefined) continue;
             
             // Playing HCP scaled to the number of holes played (a 3-hole plate gets 3/18 of the strokes)
-            let playingHcp = Math.round(pl.hcp * Math.min(1, maxHoles / 18));
+            let playingHcp = Math.round(pl.hcp * Math.min(1, playableIdx.length / 18));
             // Rank the holes by stroke index so the strokes land on the hardest holes of THIS course
             let siRank = [];
             {
                 let order = [];
-                for (let k = 0; k < maxHoles; k++) order.push({ k: k, si: courseStrokeIndex ? (courseStrokeIndex[k] || 99) : (k + 1) });
+                for (const k of playableIdx) order.push({ k: k, si: courseStrokeIndex ? (courseStrokeIndex[k] || 99) : (k + 1) });
                 order.sort((a, b) => a.si - b.si || a.k - b.k);
                 order.forEach((o, r) => { siRank[o.k] = r + 1; });
             }
@@ -13637,7 +13639,7 @@
                 let gross = (pl.scores && pl.scores[i] !== null && pl.scores[i] !== undefined) ? pl.scores[i] : null;
                 if (gross !== null) {
                     // Whole laps of strokes, remainder on the lowest-ranked (hardest) holes
-                    let strokes = Math.floor(playingHcp / maxHoles) + (siRank[i] <= (playingHcp % maxHoles) ? 1 : 0);
+                    let strokes = Math.floor(playingHcp / playableIdx.length) + (siRank[i] <= (playingHcp % playableIdx.length) ? 1 : 0);
                     let net = gross - strokes;
                     let par = courseHoles[i] ? (courseHoles[i].par || 4) : 4;
                     let netColor = net < par ? '#a78bfa' : (net > par ? '#f472b6' : '#e2e8f0');
