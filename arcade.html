@@ -13,12 +13,12 @@
 
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="i18n.js?v=31"></script>
-<script src="physics.js?v=4"></script>
+<script src="physics.js?v=5"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js"></script>
-<script src="arcade-swing-engine.js"></script>
+<script src="arcade-swing-engine.js?v=2"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=7"></script>
 <script src="terrain-chunks.js?v=7"></script>
@@ -14347,7 +14347,7 @@
                 // Use the currently selected club from SwingEngine
                 clubGuess = document.querySelector('.club-btn.selected')?.dataset?.club || 'I7';
             }
-            if (data.ballSpeedMph < 15) clubGuess = 'PUTT';
+            if (data.ballSpeedMph < 15 || data.puttTargetDistM) clubGuess = 'PUTT';
             else if (data.ballSpeedMph > 150) clubGuess = 'DRIVER';
             window.AudioEngine.playSwing(clubGuess);
             setTimeout(() => window.AudioEngine.playImpact(clubGuess), 180);
@@ -14359,6 +14359,34 @@
     window.triggerRealShot = triggerRealShot;
 
     window.shotStartPos = null;
+
+    // Ball speed (mph) that makes a putt roll targetDistM on the green under the ball: the same physics as the shot itself
+    // (slope, stimp, the first ground contact), so power means the same distance uphill, downhill and at any stimp.
+    // The roll is roughly proportional to speed squared, so a few corrections of the speed are enough.
+    window.calibratePuttSpeed = function (startPos, azimDeg, targetDistM, guessMph, maxMph) {
+        if (!window.GolfPhysics || typeof window.localGetTerrainAt !== 'function') return guessMph;
+        const env = { getTerrainAt: function (px, py) { return window.localGetTerrainAt(px, py); }, wind: [0, 0, 0] };
+        const quiet = console.log; console.log = function () {};   // the physics logs every shot in detail
+        try {
+            const rollOf = function (mph) {
+                const r = window.GolfPhysics.simulateFlight({ ballSpeedMph: mph, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: azimDeg, startPos: startPos, isLiveData: true }, env);
+                const f = r.path[r.path.length - 1];
+                return Math.hypot(f.x - startPos[0], f.y - startPos[1]);
+            };
+            let v = Math.max(1, Math.min(maxMph, guessMph));
+            for (let i = 0; i < 6; i++) {
+                const d = rollOf(v);
+                if (Math.abs(d - targetDistM) <= 0.03 * targetDistM + 0.02) break;
+                v = Math.max(1, Math.min(maxMph, v * Math.sqrt(targetDistM / Math.max(d, 0.05))));
+                if (v >= maxMph && d < targetDistM) break;   // cannot be hit any harder
+            }
+            return v;
+        } catch (e) {
+            return guessMph;
+        } finally {
+            console.log = quiet;
+        }
+    };
 
     function executeArcadeShot(data) {
         if (window.camFollowMode === 'AUTO') {
@@ -14423,6 +14451,11 @@
             let dX = window.aimTarget.x - window.ballMesh.position.x;
             let dZ = window.aimTarget.z - window.ballMesh.position.z;
             aimOffsetDeg = Math.atan2(dX, -dZ) * 180 / Math.PI;
+        }
+
+        // a putt from the swing meter carries the distance it should roll: turn it into the speed that does it on this green
+        if (data.puttTargetDistM) {
+            data.ballSpeedMph = window.calibratePuttSpeed(startPos, (data.azimDeg || 0) + aimOffsetDeg, data.puttTargetDistM, data.ballSpeedMph, 22);
         }
 
         var launchConfig = {

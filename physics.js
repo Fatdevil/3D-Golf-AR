@@ -21,6 +21,13 @@ window.GolfPhysics = (function() {
         stopSpeed: 0.05 // Sänkt från 0.50. 0.50 kapade av rullningen alldeles för tidigt (~1.1 mph). 0.05 låter bollen rulla ut naturligt.
     };
 
+    // Rullfriktion på green ur stimp (Werner & Greig): en boll som släpps med 1,83 m/s rullar stimp fot, a = v^2/(2d) => mu = 0,056 vid stimp 10.
+    // Delas med swing-motorn så att puttkraften och rullningen räknar på samma sätt. Stimp begränsas till 6-14.
+    function greenMu(stimp) {
+        let s = Math.max(6, Math.min(14, stimp || 10));
+        return 0.056 * (10.0 / s);
+    }
+
     // Hjälpfunktioner för miljö och vektorer
     function calculateAirDensity(altFeet, tempC) {
         // Trackman gillar Referens: 0 fot, 25°C -> RHO ≈ 1.184
@@ -125,9 +132,7 @@ window.GolfPhysics = (function() {
             if (state.terrainType === 'GREEN' && typeof window !== 'undefined' && window.GREEN_STIMP) {
                 // Werner & Greig empirisk ekvation + USGA Fysik korrektion (a = mu * g)
                 // Stimp 10 (feet) kräver acceleration på ~0.55m/s^2, vilket ger mu = 0.056
-                let stimp = window.GREEN_STIMP;
-                if (stimp < 6) stimp = 6; if (stimp > 14) stimp = 14;
-                mu = 0.056 * (10.0 / stimp); // Spot-on Trackman/USGA matematik
+                mu = greenMu(window.GREEN_STIMP); // Spot-on Trackman/USGA matematik
             } else {
                 // Omvandla den inkodade rullbromsen (rollingDecel) tillbaka till ett mu-värde för kompatibilitet.
                 let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
@@ -1034,6 +1039,7 @@ window.GolfPhysics = (function() {
     }
 
     return {
-        simulateFlight: simulateFlight
+        simulateFlight: simulateFlight,
+        greenMu: greenMu
     };
 })();
