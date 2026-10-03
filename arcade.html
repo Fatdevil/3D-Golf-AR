@@ -9020,7 +9020,7 @@
 
         // ~100 simulated putts: run after the turn has moved on, and drop the result if the ball or the line has changed meanwhile
         const mesh = window.breakLineMesh;
-        setTimeout(function () {
+        const refine = function () {
             if (window.breakLineMesh !== mesh || typeof window.puttBreakPath !== 'function') return;
             const bp = window.ballMesh.position;
             if (Math.abs(bp.x - ballX) > 0.01 || Math.abs(bp.z - ballZ) > 0.01) return;
@@ -9030,7 +9030,12 @@
             mesh.geometry = new THREE.BufferGeometry();
             mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(precise, 3));
             mesh.computeLineDistances();
-        }, 60);
+        };
+        // wait out the turn change (about 200 ms, longer after a holed player), then do it when the browser is idle
+        setTimeout(function () {
+            if (typeof requestIdleCallback === 'function') requestIdleCallback(refine, { timeout: 1500 });
+            else refine();
+        }, 700);
     };
     
     // The break line is a putt played with the real physics: the pace a player would give a putt to this hole (distance + the
