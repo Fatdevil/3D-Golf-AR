@@ -33,6 +33,10 @@ window.GolfPhysics = (function() {
     // Måttet är farten rakt in i marken, inte infallsvinkeln: en långsam putt faller någon centimeter och får en brant vinkel ändå.
     const ROLL_START_MAX_VERTICAL = 1.0;  // m/s rakt in i marken
     const ROLL_START_MAX_SPEED = 12.0;    // m/s totalt (ca 27 mph)
+    // Bara slag som lanseras som putt: nästan ingen loft, nästan ingen spinn och låg fart. En lågt flygande chip med backspin behåller
+    // vanlig studs- och spinnfysik.
+    const PUTT_MAX_LAUNCH_DEG = 4;
+    const PUTT_MAX_SPIN_RPM = 800;
 
     // Hjälpfunktioner för miljö och vektorer
     function calculateAirDensity(altFeet, tempC) {
@@ -350,6 +354,9 @@ window.GolfPhysics = (function() {
             }
         }
         
+        // Är detta ett putt-slag? (avgörs av hur bollen lämnar klubban, inte av hur den landar)
+        const isPuttLaunch = vla <= PUTT_MAX_LAUNCH_DEG && baseSpinRpm <= PUTT_MAX_SPIN_RPM && (baseSpeedMph * 0.44704) < ROLL_START_MAX_SPEED;
+
         let speedMS = (baseSpeedMph * speedMult) * 0.44704; // mph -> m/s
         let spinFinal = baseSpinRpm * spinMult;
         
@@ -702,7 +709,7 @@ window.GolfPhysics = (function() {
                     incidenceAngleDeg = 90.0 - Math.acos(Math.abs(vDotN_impact) / vMagImpact) * (180.0/Math.PI);
                 }
                 
-                let rollsAtOnce = (state.phase === "flight" || state.phase === "bounce")
+                let rollsAtOnce = isPuttLaunch && (state.phase === "flight" || state.phase === "bounce")
                     && Math.abs(vDotN_impact) < ROLL_START_MAX_VERTICAL
                     && vMagImpact < ROLL_START_MAX_SPEED
                     && impactTerrainType !== 'SAND' && impactTerrainType !== 'WATER' && impactTerrainType !== 'OB';
