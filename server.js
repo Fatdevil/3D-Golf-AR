@@ -817,13 +817,16 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
-app.get('/api/courses/:share_code', requireDB, async (req, res) => {
+app.get('/api/courses/:share_code', requireDB, optionalAuth, async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM courses WHERE share_code = $1", [req.params.share_code.toUpperCase()]);
         if(result.rows.length === 0) {
             return res.status(404).json({ error: 'Course not found' });
         }
-        res.json(result.rows[0]);
+        const row = result.rows[0];
+        // only the builder may open the course in the builder (saving is checked against the owner again by POST /api/courses)
+        row.can_edit = !!row.owner_id && !!req.userId && req.userId === row.owner_id;
+        res.json(row);
     } catch(err) {
         console.error("Error fetching course:", err);
         res.status(500).json({ error: 'Internal Server Error' });
