@@ -21,6 +21,23 @@ window.GolfPhysics = (function() {
         stopSpeed: 0.05 // Sänkt från 0.50. 0.50 kapade av rullningen alldeles för tidigt (~1.1 mph). 0.05 låter bollen rulla ut naturligt.
     };
 
+    // Rullfriktion på green ur stimp (Werner & Greig): en boll som släpps med 1,83 m/s rullar stimp fot, a = v^2/(2d) => mu = 0,056 vid stimp 10.
+    // Delas med swing-motorn så att puttkraften och rullningen räknar på samma sätt. Stimp begränsas till 6-14.
+    function greenMu(stimp) {
+        let s = Math.max(6, Math.min(14, stimp || 10));
+        return 0.056 * (10.0 / s);
+    }
+
+    // En nästan horisontell markträff är en putt (eller en boll som redan rullar): putterns loft och slagets friktion ger bollen
+    // framåtrullande spinn direkt, så den börjar rulla utan studs, spin-bite och glidfas. Annars förlorar en putt ca hälften av sin sträcka.
+    // Måttet är farten rakt in i marken, inte infallsvinkeln: en långsam putt faller någon centimeter och får en brant vinkel ändå.
+    const ROLL_START_MAX_VERTICAL = 1.0;  // m/s rakt in i marken
+    const ROLL_START_MAX_SPEED = 12.0;    // m/s totalt (ca 27 mph)
+    // Bara slag som lanseras som putt: nästan ingen loft, nästan ingen spinn och låg fart. En lågt flygande chip med backspin behåller
+    // vanlig studs- och spinnfysik.
+    const PUTT_MAX_LAUNCH_DEG = 4;
+    const PUTT_MAX_SPIN_RPM = 800;
+
     // Hjälpfunktioner för miljö och vektorer
     function calculateAirDensity(altFeet, tempC) {
         // Trackman gillar Referens: 0 fot, 25°C -> RHO ≈ 1.184
@@ -125,9 +142,7 @@ window.GolfPhysics = (function() {
             if (state.terrainType === 'GREEN' && typeof window !== 'undefined' && window.GREEN_STIMP) {
                 // Werner & Greig empirisk ekvation + USGA Fysik korrektion (a = mu * g)
                 // Stimp 10 (feet) kräver acceleration på ~0.55m/s^2, vilket ger mu = 0.056
-                let stimp = window.GREEN_STIMP;
-                if (stimp < 6) stimp = 6; if (stimp > 14) stimp = 14;
-                mu = 0.056 * (10.0 / stimp); // Spot-on Trackman/USGA matematik
+                mu = greenMu(window.GREEN_STIMP); // Spot-on Trackman/USGA matematik
             } else {
                 // Omvandla den inkodade rullbromsen (rollingDecel) tillbaka till ett mu-värde för kompatibilitet.
                 let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
@@ -339,6 +354,9 @@ window.GolfPhysics = (function() {
             }
         }
         
+        // Är detta ett putt-slag? (avgörs av hur bollen lämnar klubban, inte av hur den landar)
+        const isPuttLaunch = vla <= PUTT_MAX_LAUNCH_DEG && baseSpinRpm <= PUTT_MAX_SPIN_RPM && (baseSpeedMph * 0.44704) < ROLL_START_MAX_SPEED;
+
         let speedMS = (baseSpeedMph * speedMult) * 0.44704; // mph -> m/s
         let spinFinal = baseSpinRpm * spinMult;
         
@@ -691,6 +709,11 @@ window.GolfPhysics = (function() {
                     incidenceAngleDeg = 90.0 - Math.acos(Math.abs(vDotN_impact) / vMagImpact) * (180.0/Math.PI);
                 }
                 
+                let rollsAtOnce = isPuttLaunch && (state.phase === "flight" || state.phase === "bounce")
+                    && Math.abs(vDotN_impact) < ROLL_START_MAX_VERTICAL
+                    && vMagImpact < ROLL_START_MAX_SPEED
+                    && impactTerrainType !== 'SAND' && impactTerrainType !== 'WATER' && impactTerrainType !== 'OB';
+
                 let baseCor = GROUND.restitution;
                 let cFriction = GROUND.bounceFriction;
                 let cRollingDecel = GROUND.rollingDecel;
@@ -816,6 +839,7 @@ window.GolfPhysics = (function() {
                         vecScale(vPerp, -cRestitution),  // Normal forces push out
                         vecScale(vTan, e_t)              // Angle-dependent tangential restitution
                     );
+                    if (rollsAtOnce) bounceVel = [...vTan]; // rullar direkt: ingen studs, farten längs marken behålls
 
                     // Fysiskt korrekt spin-bite på lutningar inspirerat av Penner
                     // Green firmness affects grip: SOFT grips more (spin bites deeper)
@@ -830,8 +854,8 @@ window.GolfPhysics = (function() {
                     let vContactX = V[0] - (state.spin[1] * RADIUS);
                     
                     // Energi överförs mellan translation (spinoff) och rotation (bite)
-                    let deltaVY = -(vContactY) / 3.5 * GRIP;
-                    let deltaVX = -(vContactX) / 3.5 * GRIP;
+                    let deltaVY = rollsAtOnce ? 0 : -(vContactY) / 3.5 * GRIP;
+                    let deltaVX = rollsAtOnce ? 0 : -(vContactX) / 3.5 * GRIP;
 
                     bounceVel[1] += deltaVY;
                     bounceVel[0] += deltaVX;
@@ -850,12 +874,16 @@ window.GolfPhysics = (function() {
                         else if (firmness === 'FIRM') spinDamp = 0.78; // Less spin retained
                     }
                     state.spin = vecScale(state.spin, spinDamp);
+                    if (rollsAtOnce) {
+                        // framåtrullande spinn som matchar farten (kontaktpunkten står still): ingen extra broms av spinn
+                        state.spin = [-vTan[1] / RADIUS, vTan[0] / RADIUS, 0];
+                    }
                     
                     // Är studsen för mjuk uppåt längs ytan? => Rullfas
                     let bounceZMag = vecMag(vecScale(vPerp, -cRestitution));
-                    if (bounceZMag < GROUND.minBounceVerticalSpeed || impactTerrainType === 'SAND') {
+                    if (rollsAtOnce || bounceZMag < GROUND.minBounceVerticalSpeed || impactTerrainType === 'SAND') {
                         // Greener genererar mer skid eftersom kinetisk gräsfriktion måste överkommas först
-                        if (impactTerrainType === 'GREEN') {
+                        if (impactTerrainType === 'GREEN' && !rollsAtOnce) {
                             state.phase = "skid"; 
                         } else {
                             state.phase = "roll";
@@ -1034,6 +1062,7 @@ window.GolfPhysics = (function() {
     }
 
     return {
-        simulateFlight: simulateFlight
+        simulateFlight: simulateFlight,
+        greenMu: greenMu
     };
 })();

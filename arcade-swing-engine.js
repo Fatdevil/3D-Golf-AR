@@ -28,7 +28,7 @@ const SwingEngine = (function() {
         PW:     { maxSpeed: 103, baseLaunchAngle: 26.0, baseSpin:  9300, maxSpread:  5, name: 'Pitching', icon: '🏌️' },
         SW:     { maxSpeed:  85, baseLaunchAngle: 32.0, baseSpin: 10200, maxSpread:  5, name: 'Sand',    icon: '🏖️' },
         LW:     { maxSpeed:  72, baseLaunchAngle: 36.0, baseSpin: 10800, maxSpread:  4, name: 'Lob',     icon: '🎯' },
-        PUTT:   { maxSpeed:  12, baseLaunchAngle:  1.5, baseSpin:   300, maxSpread:  3, name: 'Putter',  icon: '🥅' },
+        PUTT:   { maxSpeed:  22, baseLaunchAngle:  1.5, baseSpin:   300, maxSpread:  3, name: 'Putter',  icon: '🥅' },
     };
 
     // SVG constants — circumference of r=100 ring
@@ -71,14 +71,19 @@ const SwingEngine = (function() {
     }
 
     // -----------------------------------------------------------
-    // puttForceToSpeed — Werner-Greig µ (must match physics.js)
-    // µ = 1.83 / (stimp × 0.3048 × 9.81) = 0.612 / stimp
+    // puttForceToSpeed — a first guess of the ball speed for a putt that should roll targetDistMeters.
+    // The real speed is worked out against the actual green (slope, stimp) by window.calibratePuttSpeed
+    // when the shot is fired; this is the fallback and the starting point for that search.
+    // mu comes from physics.js so both sides use the same stimp formula. A putt starts rolling at once in the physics,
+    // so the ball rolls v^2 / (2 mu g).
     // -----------------------------------------------------------
     function puttForceToSpeed(targetDistMeters, stimp) {
-        const mu   = 0.612 / stimp;                       // Verified against physics.js
+        const mu   = (window.GolfPhysics && window.GolfPhysics.greenMu) ? window.GolfPhysics.greenMu(stimp) : 0.56 / stimp;
         const v0ms = Math.sqrt(2 * mu * 9.81 * targetDistMeters);
         return v0ms / 0.44704;                            // m/s → mph
     }
+    // 100 % power rolls the ball to the hole plus this much past it (about 17 inches, the pace a putt should die at)
+    const PUTT_OVERROLL_M = 0.45;
 
     // -----------------------------------------------------------
     // mapCircleToPhysics — converts tap results to launchData
@@ -126,10 +131,12 @@ const SwingEngine = (function() {
 
         // PUTT special case
         if (clubKey === 'PUTT') {
-            const targetDist  = Math.max(0.5, distToHoleM) * effectivePower;
+            // power scales the whole roll: 100 % = to the hole and a little past it
+            const targetDist  = (Math.max(0.02, distToHoleM) + PUTT_OVERROLL_M) * effectivePower;
             const puttSpeedMph = puttForceToSpeed(targetDist, stimp);
             return {
                 ballSpeedMph:   Math.min(puttSpeedMph, club.maxSpeed),
+                puttTargetDistM: targetDist,   // executeArcadeShot turns this into a speed that fits the green under the ball
                 launchAngleDeg: club.baseLaunchAngle,
                 totalSpinRpm:   club.baseSpin,
                 spinAxisDeg:    azimDeg * 0.5, 
