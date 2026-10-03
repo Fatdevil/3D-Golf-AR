@@ -10553,24 +10553,9 @@
             else { memBar.style.background = "#4ade80"; memCur.style.color = "#4ade80"; }
         }
     }
-    async function saveLevel(isAuto = false) {
-        if (!isAuto) window._editRev = (window._editRev || 0) + 1; // the next-step guide: a direct save (panorama, quick save) means the course changed
-        let sText = document.getElementById('save-status-text');
-        let sIcon = document.getElementById('save-status-icon');
-        let sInd = document.getElementById('save-status-indicator');
-        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-
-        if (sText) sText.textContent = isSv ? 'Sparar' : 'Saving';
-        if (sIcon) sIcon.textContent = '⏳';
-        if (sInd) {
-            sInd.style.color = '#fbbf24';
-            sInd.style.background = 'rgba(251,191,36,0.12)';
-            sInd.style.borderColor = 'rgba(251,191,36,0.3)';
-            sInd.title = isSv ? 'Sparar banan...' : 'Saving course...';
-        }
-
-        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
-        let dumpHoles = courseHoles.map(h => ({
+    // every hole with all of its editable definitions (greens, fairways, bunkers, tee boxes): what the builder needs to open it again
+    window.serializeHolesFull = function () {
+        return courseHoles.map(h => ({
             par: h.par, 
             tees: h.tees,
             flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
@@ -10855,6 +10840,26 @@
                 origHeights: h.teeData.origHeights ? Array.from(h.teeData.origHeights) : null
             } : null)
         }));
+    };
+
+    async function saveLevel(isAuto = false, noEdit = false) {
+        if (!isAuto && !noEdit) window._editRev = (window._editRev || 0) + 1; // the next-step guide: a direct save (panorama, quick save) means the course changed
+        let sText = document.getElementById('save-status-text');
+        let sIcon = document.getElementById('save-status-icon');
+        let sInd = document.getElementById('save-status-indicator');
+        let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+
+        if (sText) sText.textContent = isSv ? 'Sparar' : 'Saving';
+        if (sIcon) sIcon.textContent = '⏳';
+        if (sInd) {
+            sInd.style.color = '#fbbf24';
+            sInd.style.background = 'rgba(251,191,36,0.12)';
+            sInd.style.borderColor = 'rgba(251,191,36,0.3)';
+            sInd.title = isSv ? 'Sparar banan...' : 'Saving course...';
+        }
+
+        let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
+        let dumpHoles = window.serializeHolesFull();
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({
             type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0
         })) : [];
@@ -10948,7 +10953,7 @@
     }
     window.saveLevel = saveLevel;
     window.saveQuickDraft = function(isAuto) {
-        return saveLevel(isAuto);
+        return saveLevel(isAuto, true); // saving the course as it is does not change it
     };
 
     // Debounced course saver: coalesces rapid operations (e.g. sculpt strokes) so UI never stutters
@@ -11280,7 +11285,8 @@
         }
         
         let dumpTargets = targets.map(t => ({ x: t.mesh.position.x, y: t.mesh.position.y, z: t.mesh.position.z, c: t.defColor }));
-        let dumpHoles = courseHoles.map(h => ({
+        // a draft is opened in the builder again, so it keeps every editable definition; a published course only needs what is played
+        let dumpHoles = options.isDraft ? window.serializeHolesFull() : courseHoles.map(h => ({
             par: h.par, tees: h.tees, flag: h.flag ? {x: h.flag.x, y: h.flag.y, z: h.flag.z} : null,
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
@@ -20706,7 +20712,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=15"></script>
+<script src="guide.js?v=16"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>
