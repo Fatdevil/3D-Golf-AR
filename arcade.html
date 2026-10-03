@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=25"></script>
+<script src="i18n.js?v=26"></script>
 <script src="physics.js?v=4"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -998,8 +998,14 @@
                     <span data-i18n="mtn_height">🏔️ Bergets höjd</span>
                     <span id="mtn-spline-height-val" style="color:#e2e8f0;">25m</span>
                 </label>
+                <div style="display:flex; gap:4px;">
+                    <button type="button" onclick="mtnHeightPreset(15)" class="mtn-preset" data-i18n="mtn_p_hill">Kulle</button>
+                    <button type="button" onclick="mtnHeightPreset(60)" class="mtn-preset" data-i18n="mtn_p_mtn">Berg</button>
+                    <button type="button" onclick="mtnHeightPreset(150)" class="mtn-preset" data-i18n="mtn_p_high">Högt berg</button>
+                    <button type="button" onclick="mtnHeightPreset(280)" class="mtn-preset" data-i18n="mtn_p_giant">Jätte</button>
+                </div>
                 <input type="range" id="mtn-spline-height" min="2" max="290" value="25" step="1"
-                    oninput="document.getElementById('mtn-spline-height-val').textContent = this.value + 'm';"
+                    oninput="document.getElementById('mtn-spline-height-val').textContent = this.value + 'm'; if (window.refreshSplinePreview) window.refreshSplinePreview();"
                     style="width:100%; accent-color:#38bdf8; cursor:pointer; margin-top:2px;" title="Height of the mountain's highest point">
                 
                 <label style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase; display:flex; justify-content:space-between; margin-top:4px;">
@@ -1007,14 +1013,15 @@
                     <span id="mtn-spline-jagged-val" style="color:#e2e8f0;">50%</span>
                 </label>
                 <input type="range" id="mtn-spline-jagged" min="0" max="100" value="50" step="5"
-                    oninput="document.getElementById('mtn-spline-jagged-val').textContent = this.value + '%';"
+                    oninput="document.getElementById('mtn-spline-jagged-val').textContent = this.value + '%'; if (window.refreshSplinePreview) window.refreshSplinePreview();"
                     style="width:100%; accent-color:#38bdf8; cursor:pointer; margin-top:2px;" title="Control how rough or smooth the mountain surface is">
                 <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px; margin-top:-2px; margin-bottom:4px;">
                     <span data-i18n="mtn_smooth">Mjukt och runt</span>
                     <span data-i18n="mtn_rough_jagged">Skrovligt och vasst</span>
                 </div>
                 
-                <div style="display:flex; gap:6px; margin-top:8px;">
+                <div id="mtn-hill-info" style="color:#facc15; font-size:10px; font-weight:bold; min-height:13px; margin-top:6px;"></div>
+                <div style="display:flex; gap:6px; margin-top:2px;">
                     <button onclick="if(window._mtnToolMode === 'RIDGE' && typeof window.executeRidgeMountain === 'function') window.executeRidgeMountain(); else if (typeof window.executeSplineMountain === 'function') window.executeSplineMountain();" 
                             style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:8px 6px; font-size:11px; border-radius:5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
                         <span data-i18n="mtn_build">⛰️ Bygg berg</span>
@@ -1036,6 +1043,12 @@
             </div>
             <script>
                 window._mtnToolMode = 'SPLINE';
+                window.mtnHeightPreset = function (h) {
+                    const sl = document.getElementById('mtn-spline-height'); if (!sl) return;
+                    sl.value = h;
+                    document.getElementById('mtn-spline-height-val').textContent = h + 'm';
+                    if (window.refreshSplinePreview) window.refreshSplinePreview();
+                };
                 // The hint line under the canvas follows the active Berg mode
                 window.mtnHintHtml = function () {
                     const t = function (k, fb) { return (window.t && window.t(k) !== k) ? window.t(k) : fb; };
@@ -1049,6 +1062,7 @@
                 window.addEventListener('golf_lang_changed', function () {
                     let grp = document.getElementById('terrain-paint-group'), hints = document.getElementById('tool-hints');
                     if (grp && hints && grp.style.display !== 'none') hints.innerHTML = window.mtnHintHtml();
+                    if (window.refreshSplinePreview) window.refreshSplinePreview(); // the size text under the height slider is built in code
                 });
                 function setMtnMode(mode) {
                     window._mtnToolMode = mode;
@@ -1440,7 +1454,9 @@
             border-color: #38bdf8;
         }
                 .flyout-btn.active .hm-mark { color: #0f172a !important; }
-    </style>
+        .mtn-preset { flex:1; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:5px; padding:5px 2px; font-size:9px; font-weight:bold; cursor:pointer; }
+    .mtn-preset:hover { border-color:#38bdf8; color:#fff; }
+</style>
 
 
         <!-- PAINT Tool Panel (Freehand & Polygon) -->
@@ -14750,6 +14766,7 @@
     let splineSpheres = [];
     let splineLineMesh = null;
     let splinePreviewMesh = null;
+    let splineFillMesh = null, splinePoleGroup = null; // the hill preview: its footprint and a pole as tall as the hill will be
 
     // === SMART BUILDER MODULE BRIDGE ===
     // Code moved to smart-builder.js — expose required locals
@@ -17720,9 +17737,19 @@
 
     function updateSplinePreview() {
         // Rensa gamla sfärer och mesh
-        splineSpheres.forEach(s => scene.remove(s));
+        // this runs on every pointer move while a round hill is dragged, so the old preview's GPU resources are freed each time
+        const freePreview = (obj) => {
+            scene.remove(obj);
+            obj.traverse(o => {
+                if (o.geometry) o.geometry.dispose();
+                if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+            });
+        };
+        splineSpheres.forEach(freePreview);
         splineSpheres = [];
-        if(splineLineMesh) { scene.remove(splineLineMesh); splineLineMesh = null; }
+        if(splineLineMesh) { freePreview(splineLineMesh); splineLineMesh = null; }
+        if(splineFillMesh) { freePreview(splineFillMesh); splineFillMesh = null; }
+        if(splinePoleGroup) { freePreview(splinePoleGroup); splinePoleGroup = null; }
 
         let isMtnSpline = (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'));
         let isMtnRidge = (currentTool === 'MTN' && window._mtnToolMode === 'RIDGE');
@@ -17761,6 +17788,79 @@
             splineLineMesh = new THREE.Line(lineGeo, lineMat);
             splineLineMesh.renderOrder = 999;
             scene.add(splineLineMesh);
+
+            // Hill preview: a see-through footprint of the shape and a pole that is as tall as the hill will be
+            if (isMtnSpline && !isMtnRidge && splinePoints.length >= 3) {
+                try {
+                    let shapePts = curvePts.map(cp => new THREE.Vector2(cp.x, -cp.z));
+                    let tris = THREE.ShapeUtils.triangulateShape(shapePts, []);
+                    let fillGeo = new THREE.BufferGeometry();
+                    let maxGround = -Infinity, sx = 0, sz = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                    curvePts.forEach(cp => { if (cp.y > maxGround) maxGround = cp.y; sx += cp.x; sz += cp.z;
+                        minX = Math.min(minX, cp.x); maxX = Math.max(maxX, cp.x); minZ = Math.min(minZ, cp.z); maxZ = Math.max(maxZ, cp.z); });
+                    let verts = [];
+                    curvePts.forEach(cp => verts.push(cp.x, maxGround + 0.2, cp.z));
+                    fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+                    fillGeo.setIndex(tris.flat());
+                    splineFillMesh = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.22, depthTest: false, side: THREE.DoubleSide }));
+                    splineFillMesh.renderOrder = 997;
+                    scene.add(splineFillMesh);
+
+                    // the pole stands at the point farthest from every edge (the same peak the builder uses), so it is always inside the shape
+                    let cx = sx / curvePts.length, cz = sz / curvePts.length, bestD = -1;
+                    // a coarse copy of the outline (at most ~64 points) keeps this cheap enough to run on every pointer move while dragging
+                    const stride = Math.max(1, Math.ceil(curvePts.length / 64));
+                    const ring = curvePts.filter((_, i) => i % stride === 0);
+                    const inside = (x, z) => { let ins = false; for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) {
+                        const xi = ring[a].x, zi = ring[a].z, xj = ring[b].x, zj = ring[b].z;
+                        if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi + 1e-5) + xi)) ins = !ins; } return ins; };
+                    const edgeDist = (x, z) => { let m = Infinity; for (let a = 0; a < ring.length; a++) {
+                        const b = (a + 1) % ring.length, ax = ring[a].x, az = ring[a].z, dx = ring[b].x - ax, dz = ring[b].z - az;
+                        const l2 = dx * dx + dz * dz; let t = l2 ? ((x - ax) * dx + (z - az) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t));
+                        m = Math.min(m, Math.hypot(x - (ax + t * dx), z - (az + t * dz))); } return m; };
+                    // a thin or very curved shape can slip between the points of a coarse grid: look again, finer, only when that happens
+                    for (const N of [14, 40, 100]) {
+                        for (let gi = 0; gi <= N; gi++) for (let gj = 0; gj <= N; gj++) {
+                            const x = minX + (maxX - minX) * gi / N, z = minZ + (maxZ - minZ) * gj / N;
+                            if (!inside(x, z)) continue;
+                            const d = edgeDist(x, z);
+                            if (d > bestD) { bestD = d; cx = x; cz = z; }
+                        }
+                        if (bestD >= 0) break;
+                    }
+                    if (bestD < 0) { cx = ring[0].x; cz = ring[0].z; } // nothing inside at all: stand on the outline rather than outside it
+                    let surfC = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(cx, -cz) : null;
+                    let gy = surfC ? surfC.z : maxGround;
+                    let hh = parseFloat((document.getElementById('mtn-spline-height') || {}).value) || 25;
+                    // near the plate edge the builder lowers the hill toward zero, so the pole shows the height it will really get there
+                    // ...and the builder adds a little noise scaled by the roughness slider: use the same expression at the peak
+                    {
+                        const rawH = hh, jag = parseFloat((document.getElementById('mtn-spline-jagged') || {}).value);
+                        const jm = isNaN(jag) ? 1 : jag / 50;
+                        const noise = typeof window.fbm === 'function' ? window.fbm(cx * 0.1, cz * 0.1, 3, 2.0, 0.5) * (rawH * 0.15) * jm : 0;
+                        const fade = typeof window.mountainEdgeFade === 'function' ? window.mountainEdgeFade(cx, cz, rawH) : 1;
+                        hh = Math.max(0, (rawH + noise) * fade);
+                    }
+                    splinePoleGroup = new THREE.Group();
+                    let poleGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(cx, gy, cz), new THREE.Vector3(cx, gy + hh, cz)]);
+                    let pole = new THREE.Line(poleGeo, new THREE.LineBasicMaterial({ color: 0xfacc15, depthTest: false }));
+                    pole.renderOrder = 998;
+                    let cap = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.8, hh * 0.025), 10, 10), new THREE.MeshBasicMaterial({ color: 0xfacc15, depthTest: false }));
+                    cap.position.set(cx, gy + hh, cz);
+                    cap.renderOrder = 998;
+                    splinePoleGroup.add(pole); splinePoleGroup.add(cap);
+                    scene.add(splinePoleGroup);
+
+                    let info = document.getElementById('mtn-hill-info');
+                    if (info) {
+                        let tpl = (typeof window.t === 'function' && window.t('mtn_hill_info') !== 'mtn_hill_info') ? window.t('mtn_hill_info') : 'Ca {w} × {d} m stor · {h} m hög';
+                        info.textContent = tpl.replace('{w}', Math.round(maxX - minX)).replace('{d}', Math.round(maxZ - minZ)).replace('{h}', Math.round(hh));
+                    }
+                } catch (err) { console.warn('Hill preview failed', err); }
+            }
+        }
+        if (!(isMtnSpline && !isMtnRidge && splinePoints.length >= 3)) {
+            let info = document.getElementById('mtn-hill-info'); if (info) info.textContent = '';
         }
 
         let pnl = document.getElementById('spline-action-panel');
@@ -17772,6 +17872,34 @@
         splinePoints.length = 0;
         updateSplinePreview();
     };
+    window.refreshSplinePreview = updateSplinePreview;
+
+    // Drag out a round hill: press where the middle should be and pull out to the size you want.
+    // (a plain click still adds a corner of a hand-drawn shape; a drag only counts when it starts the shape)
+    let hillDrag = null;
+    renderer.domElement.addEventListener('pointerdown', function (e) {
+        if (e.button === 0 && currentTool === 'MTN' && window._mtnToolMode === 'SPLINE' && splinePoints.length === 1 && lastHitPoint) {
+            hillDrag = { cx: splinePoints[0].x, cz: splinePoints[0].z, moved: false, px: e.clientX, py: e.clientY };
+        } else hillDrag = null;
+    }, false);
+    window.addEventListener('pointermove', function (e) {
+        if (!hillDrag || !(e.buttons & 1) || !lastHitPoint) return;
+        // a click is a click whatever the zoom: the drag has to travel a few screen pixels before it counts
+        if (!hillDrag.moved && Math.hypot(e.clientX - hillDrag.px, e.clientY - hillDrag.py) < 8) return;
+        let r = Math.hypot(lastHitPoint.x - hillDrag.cx, lastHitPoint.z - hillDrag.cz);
+        let half = window.TERRAIN_SIZE / 2;
+        r = Math.min(Math.max(r, 6), 280);
+        splinePoints.length = 0;
+        for (let i = 0; i < 18; i++) {
+            let a = (i / 18) * Math.PI * 2;
+            let x = Math.max(-half + 1, Math.min(half - 1, hillDrag.cx + Math.cos(a) * r));
+            let z = Math.max(-half + 1, Math.min(half - 1, hillDrag.cz + Math.sin(a) * r));
+            splinePoints.push(new THREE.Vector3(x, 0, z));
+        }
+        hillDrag.moved = true;
+        updateSplinePreview();
+    }, false);
+    window.addEventListener('pointerup', function () { hillDrag = null; }, false);
 
 
 
