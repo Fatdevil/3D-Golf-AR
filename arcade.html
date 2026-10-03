@@ -1674,7 +1674,7 @@
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:4px;">
                 <div>
                     <div data-i18n="env_surround_north" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Norr (N)</div>
-                    <select id="surr-N" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-N" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -1687,7 +1687,7 @@
                 </div>
                 <div>
                     <div data-i18n="env_surround_east" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Öster (E)</div>
-                    <select id="surr-E" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-E" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -1700,7 +1700,7 @@
                 </div>
                 <div>
                     <div data-i18n="env_surround_south" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Söder (S)</div>
-                    <select id="surr-S" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-S" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -1713,7 +1713,7 @@
                 </div>
                 <div>
                     <div data-i18n="env_surround_west" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Väster (W)</div>
-                    <select id="surr-W" onchange="window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                    <select id="surr-W" onchange="window._editRev=(window._editRev||0)+1; window.updateSurroundColors()" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
                         <option value="NONE" data-i18n="surr_opt_none">❌ Ingen</option>
                         <option value="roughColor" data-i18n="surr_opt_rough">🟢 Rough</option>
                         <option value="wasteColor" data-i18n="surr_opt_waste">🟡 Waste / Sand</option>
@@ -7407,7 +7407,6 @@
     window.surroundConfig = { N: 'fescueColor', E: 'fescueColor', S: 'fescueColor', W: 'fescueColor' };
 
     window.updateSurroundColors = function() {
-        window._editRev = (window._editRev || 0) + 1; // the next-step guide: the backdrop is part of what was played
         if(!window.surroundMat || !window.CURRENT_BIOME_CONFIG) return;
         
         let elN = document.getElementById('surr-N');
@@ -7422,7 +7421,7 @@
             if (typeof courseHoles !== 'undefined' && courseHoles[currentHoleIndex]) {
                 // the surroundings belong to the whole plate, so every hole on it keeps the same setting
                 courseHoles.forEach(function (h) { if (h) h.surroundConfig = Object.assign({}, window.surroundConfig); });
-                if (typeof saveLevel === 'function') saveLevel();
+                if (typeof saveLevel === 'function') saveLevel(false, true); // the dropdowns and the backdrop map count the edit themselves
             }
         }
         
@@ -20736,8 +20735,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="smart-builder.js?v=44"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
-<script src="backdrop.js?v=11"></script>
-<script src="guide.js?v=17"></script>
+<script src="backdrop.js?v=12"></script>
+<script src="guide.js?v=18"></script>
 <script src="arcade-lm-bridge.js"></script>
 
 <script>

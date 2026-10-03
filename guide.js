@@ -66,6 +66,11 @@
     const loadedAt = Date.now();
     let revBase = null, touched = false;
     ['pointerdown', 'keydown'].forEach(function (ev) { root.addEventListener(ev, function () { if (Date.now() - loadedAt < 5000) touched = true; }, true); });
+    // the revision as it stood when the course had loaded; sampled from the start, whatever else is still loading
+    function trackRev() {
+        const rev = root._editRev || 0;
+        if (revBase === null || (!touched && Date.now() - loadedAt < 5000)) revBase = rev;
+    }
     function playedCurrent() {
         const code = typeof root.getEditCode === 'function' ? root.getEditCode() : null;
         if (!code) return false;
@@ -75,8 +80,7 @@
         if (!on) return false;
         const rev = root._editRev || 0;
         // loading the course bumps the counter without being an edit; once the user has touched anything, that baseline stays put
-        if (!touched && (Date.now() - loadedAt < 5000 || revBase === null)) { revBase = rev; return true; }
-        if (revBase === null) revBase = rev;
+        trackRev();
         if (rev !== revBase) { try { localStorage.removeItem('golfPlayed_' + code); } catch (e) {} return false; }
         return true;
     }
@@ -135,6 +139,7 @@
         return 'border:none; cursor:pointer; font-weight:bold; color:#f1f5f9; ' + (extra || '');
     }
     function render() {
+        trackRev();
         if (!host) return;
         const mode = typeof root.getAppMode === 'function' ? root.getAppMode() : 'BUILD';
         const overlay = document.getElementById('bp-overlay') || document.getElementById('bd-overlay');
