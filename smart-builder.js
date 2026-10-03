@@ -6312,6 +6312,18 @@ function _mtnEdgeFade(x, z, height) {
 }
 window.mountainEdgeFade = _mtnEdgeFade;
 
+// Ridge helpers shared by the preview and the builder, so what you see is what you get:
+// the line is the same smooth curve in both, and the width comes from the height in one place
+window.mtnRidgeWidth = function(height) { return Math.max(8, Math.min(120, Math.abs(height) * 1.2)); };
+window.mtnRidgeCurve = function(points) {
+    if (!points || points.length < 2) return [];
+    if (points.length === 2) return points.map(p => ({ x: p.x, z: p.z }));
+    const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p.x, 0, p.z)), false);
+    const half = (window.TERRAIN_SIZE || 600) / 2 - 1;
+    return curve.getPoints(Math.min(400, 24 * points.length)).map(p => ({
+        x: Math.max(-half, Math.min(half, p.x)), z: Math.max(-half, Math.min(half, p.z)) }));
+};
+
 window.executeRidgeMountain = function() {
     if (!window.splinePoints || window.splinePoints.length < 2) {
         if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_need2', '⚠️ Rita minst 2 punkter för en bergsrygg!'), '#ef4444');
@@ -6331,9 +6343,9 @@ window.executeRidgeMountain = function() {
         jaggedMultiplier = parseFloat(jaggedSlider.value) / 50.0;
     }
     
-    // Auto width: slope ratio 1:1.2 for steep ridge profile
-    let ridgeWidth = Math.abs(targetHeight) * 1.2;
-    if (ridgeWidth < 8) ridgeWidth = 8;
+    // Auto width: slope ratio 1:1.2 for steep ridge profile (capped so a giant ridge does not swallow the plate)
+    let ridgeWidth = window.mtnRidgeWidth(targetHeight);
+    const ridgeLine = window.mtnRidgeCurve(window.splinePoints);
     
     // Use correct terrain geometry reference
     const positions = window._arcadePlaneGeo.attributes.position.array;
@@ -6358,7 +6370,7 @@ window.executeRidgeMountain = function() {
     
     // Find bounding box of spline to limit vertex iteration
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    window.splinePoints.forEach(pt => {
+    ridgeLine.forEach(pt => {
         if (pt.x < minX) minX = pt.x;
         if (pt.x > maxX) maxX = pt.x;
         if (pt.z < minZ) minZ = pt.z;
@@ -6383,8 +6395,8 @@ window.executeRidgeMountain = function() {
             
             // Find minimum distance to any spline segment
             let minDist = Infinity;
-            for (let j = 0; j < window.splinePoints.length - 1; j++) {
-                let d = distToSegment(vx, vz, window.splinePoints[j], window.splinePoints[j + 1]);
+            for (let j = 0; j < ridgeLine.length - 1; j++) {
+                let d = distToSegment(vx, vz, ridgeLine[j], ridgeLine[j + 1]);
                 if (d < minDist) minDist = d;
             }
             
