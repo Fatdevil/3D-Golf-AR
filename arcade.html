@@ -17808,15 +17808,18 @@
 
                     // the pole stands at the point farthest from every edge (the same peak the builder uses), so it is always inside the shape
                     let cx = sx / curvePts.length, cz = sz / curvePts.length, bestD = -1;
-                    const inside = (x, z) => { let ins = false; for (let a = 0, b = curvePts.length - 1; a < curvePts.length; b = a++) {
-                        const xi = curvePts[a].x, zi = curvePts[a].z, xj = curvePts[b].x, zj = curvePts[b].z;
+                    // a coarse copy of the outline (at most ~64 points) keeps this cheap enough to run on every pointer move while dragging
+                    const stride = Math.max(1, Math.ceil(curvePts.length / 64));
+                    const ring = curvePts.filter((_, i) => i % stride === 0);
+                    const inside = (x, z) => { let ins = false; for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) {
+                        const xi = ring[a].x, zi = ring[a].z, xj = ring[b].x, zj = ring[b].z;
                         if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi + 1e-5) + xi)) ins = !ins; } return ins; };
-                    const edgeDist = (x, z) => { let m = Infinity; for (let a = 0; a < curvePts.length; a++) {
-                        const b = (a + 1) % curvePts.length, ax = curvePts[a].x, az = curvePts[a].z, dx = curvePts[b].x - ax, dz = curvePts[b].z - az;
+                    const edgeDist = (x, z) => { let m = Infinity; for (let a = 0; a < ring.length; a++) {
+                        const b = (a + 1) % ring.length, ax = ring[a].x, az = ring[a].z, dx = ring[b].x - ax, dz = ring[b].z - az;
                         const l2 = dx * dx + dz * dz; let t = l2 ? ((x - ax) * dx + (z - az) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t));
                         m = Math.min(m, Math.hypot(x - (ax + t * dx), z - (az + t * dz))); } return m; };
-                    for (let gi = 0; gi <= 24; gi++) for (let gj = 0; gj <= 24; gj++) {
-                        const x = minX + (maxX - minX) * gi / 24, z = minZ + (maxZ - minZ) * gj / 24;
+                    for (let gi = 0; gi <= 14; gi++) for (let gj = 0; gj <= 14; gj++) {
+                        const x = minX + (maxX - minX) * gi / 14, z = minZ + (maxZ - minZ) * gj / 14;
                         if (!inside(x, z)) continue;
                         const d = edgeDist(x, z);
                         if (d > bestD) { bestD = d; cx = x; cz = z; }
@@ -17824,6 +17827,8 @@
                     let surfC = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(cx, -cz) : null;
                     let gy = surfC ? surfC.z : maxGround;
                     let hh = parseFloat((document.getElementById('mtn-spline-height') || {}).value) || 25;
+                    // near the plate edge the builder lowers the hill toward zero, so the pole shows the height it will really get there
+                    if (typeof window.mountainEdgeFade === 'function') hh = hh * window.mountainEdgeFade(cx, cz, hh);
                     splinePoleGroup = new THREE.Group();
                     let poleGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(cx, gy, cz), new THREE.Vector3(cx, gy + hh, cz)]);
                     let pole = new THREE.Line(poleGeo, new THREE.LineBasicMaterial({ color: 0xfacc15, depthTest: false }));
