@@ -1013,7 +1013,7 @@
                     <span id="mtn-spline-jagged-val" style="color:#e2e8f0;">50%</span>
                 </label>
                 <input type="range" id="mtn-spline-jagged" min="0" max="100" value="50" step="5"
-                    oninput="document.getElementById('mtn-spline-jagged-val').textContent = this.value + '%';"
+                    oninput="document.getElementById('mtn-spline-jagged-val').textContent = this.value + '%'; if (window.refreshSplinePreview) window.refreshSplinePreview();"
                     style="width:100%; accent-color:#38bdf8; cursor:pointer; margin-top:2px;" title="Control how rough or smooth the mountain surface is">
                 <div style="display:flex; justify-content:space-between; color:#64748b; font-size:8px; margin-top:-2px; margin-bottom:4px;">
                     <span data-i18n="mtn_smooth">Mjukt och runt</span>
@@ -17818,12 +17818,17 @@
                         const b = (a + 1) % ring.length, ax = ring[a].x, az = ring[a].z, dx = ring[b].x - ax, dz = ring[b].z - az;
                         const l2 = dx * dx + dz * dz; let t = l2 ? ((x - ax) * dx + (z - az) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t));
                         m = Math.min(m, Math.hypot(x - (ax + t * dx), z - (az + t * dz))); } return m; };
-                    for (let gi = 0; gi <= 14; gi++) for (let gj = 0; gj <= 14; gj++) {
-                        const x = minX + (maxX - minX) * gi / 14, z = minZ + (maxZ - minZ) * gj / 14;
-                        if (!inside(x, z)) continue;
-                        const d = edgeDist(x, z);
-                        if (d > bestD) { bestD = d; cx = x; cz = z; }
+                    // a thin or very curved shape can slip between the points of a coarse grid: look again, finer, only when that happens
+                    for (const N of [14, 40, 100]) {
+                        for (let gi = 0; gi <= N; gi++) for (let gj = 0; gj <= N; gj++) {
+                            const x = minX + (maxX - minX) * gi / N, z = minZ + (maxZ - minZ) * gj / N;
+                            if (!inside(x, z)) continue;
+                            const d = edgeDist(x, z);
+                            if (d > bestD) { bestD = d; cx = x; cz = z; }
+                        }
+                        if (bestD >= 0) break;
                     }
+                    if (bestD < 0) { cx = ring[0].x; cz = ring[0].z; } // nothing inside at all: stand on the outline rather than outside it
                     let surfC = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(cx, -cz) : null;
                     let gy = surfC ? surfC.z : maxGround;
                     let hh = parseFloat((document.getElementById('mtn-spline-height') || {}).value) || 25;
