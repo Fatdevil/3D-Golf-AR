@@ -17886,8 +17886,8 @@
                 // pole at the middle of the line, with the height the builder gives there (edge fade included)
                 let acc = 0, mid = line[0];
                 for (let i = 1; i < line.length; i++) { acc += Math.hypot(line[i].x - line[i - 1].x, line[i].z - line[i - 1].z); if (acc >= len / 2) { mid = line[i]; break; } }
-                const fade = typeof window.mountainEdgeFade === 'function' ? window.mountainEdgeFade(mid.x, mid.z, rawH) : 1;
-                const hh = Math.max(0, rawH * fade), gy = gnd(mid.x, mid.z);
+                const jagV = parseFloat((document.getElementById('mtn-spline-jagged') || {}).value);
+                const hh = Math.max(0, window.mtnRidgeHeightAt(mid.x, mid.z, rawH, isNaN(jagV) ? 1 : jagV / 50, 1)), gy = gnd(mid.x, mid.z);
                 splinePoleGroup = new THREE.Group();
                 const poleLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(mid.x, gy, mid.z), new THREE.Vector3(mid.x, gy + hh, mid.z)]), new THREE.LineBasicMaterial({ color: 0xfacc15, depthTest: false }));
                 const cap = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.8, hh * 0.025), 10, 10), new THREE.MeshBasicMaterial({ color: 0xfacc15, depthTest: false }));
@@ -20929,7 +20929,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=2"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=46"></script>
+<script src="smart-builder.js?v=47"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>
