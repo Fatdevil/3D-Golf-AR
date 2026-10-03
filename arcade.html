@@ -12338,7 +12338,7 @@
             const mood = params.get('mood');
             // N is the far horizon, the other three sides share one colour
             const MOOD_EDGES = {
-                forest:   { N: 'fescueColor',  rest: 'fescueColor' },
+                forest:   { N: 'horizonColor', rest: 'fescueColor' },   // not all start values, so the guide still sees the surroundings as done after a reload
                 sea:      { N: 'horizonColor', rest: 'oceanColor' },
                 mountain: { N: 'horizonColor', rest: 'horizonColor' },
                 desert:   { N: 'horizonColor', rest: 'wasteColor' }
