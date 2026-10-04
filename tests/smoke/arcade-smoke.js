@@ -328,6 +328,7 @@ function serve() {
       const orig = window.applyFairwayPipeline; let runs = 0;
       window.applyFairwayPipeline = function () { runs++; return orig.apply(this, arguments); };
       const results = [];
+      for (const mode of ['change', 'cancel']) {
       for (const spec of [['sf-semirough-width', 'sf-semirough-val', 'semiRoughWidth', 3.5], ['sf-rough-width', 'sf-rough-val', 'roughWidth', 9], ['sf-max-slope', 'sf-max-slope-val', 'maxSlopePct', 7]]) {
         const el = document.getElementById(spec[0]), lab = document.getElementById(spec[1]);
         if (!el || !lab) { results.push(spec[0] + ' missing'); continue; }
@@ -338,15 +339,16 @@ function serve() {
         el.value = spec[3]; el.dispatchEvent(new Event('input', { bubbles: true })); window.FairwayStudio.syncUIValues(hS, fdS);
         await frame();
         const during = { runs: runs, prop: fdS[spec[2]], thumb: Number(el.value), label: lab.textContent };
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        if (mode === 'change') { el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); }
+        else el.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true })); // an interrupted touch: no change event follows
         await frame();
         const after = { runs: runs, prop: fdS[spec[2]] };
-        if (!(during.runs === 0 && during.prop === before && during.thumb === spec[3] && /\d/.test(during.label) && after.runs === 1 && after.prop === spec[3])) results.push(spec[0] + ' ' + JSON.stringify({ before: before, during: during, after: after }));
+        if (!(during.runs === 0 && during.prop === before && during.thumb === spec[3] && /\d/.test(during.label) && after.runs === 1 && after.prop === spec[3])) results.push(mode + ' ' + spec[0] + ' ' + JSON.stringify({ before: before, during: during, after: after }));
         fdS[spec[2]] = before;
       }
+      }
       window.applyFairwayPipeline = orig;
-      check('fairway sliders (semi-rough, rough, max slope) do not rebuild while dragging, once on release', results.length === 0, results.join(' | '));
+      check('fairway sliders (semi-rough, rough, max slope) do not rebuild while dragging, once on release or when the pointer is cancelled', results.length === 0, results.join(' | '));
     })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }

@@ -1013,4 +1013,17 @@
     // Instantiate and expose globally
     window.FairwayStudio = new FairwayStudioEngine();
 
+    // A fairway slider (semi-rough, rough, max slope) rebuilds the fairway when it is released. Called on release (change) and when the
+    // pointer is cancelled (touch interrupted by a browser gesture), where no change event follows: the value then still has to be applied.
+    window.sfSliderCommit = function(el, prop) {
+        window._sfDrag = null;
+        if (!el) return;
+        let v = parseFloat(el.value);
+        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        let fd = (hole && typeof window.getActiveFairway === 'function') ? window.getActiveFairway(hole) : null;
+        if (fd && fd[prop] === v) return; // already applied (change fires after pointerup / a second call)
+        if (typeof window.updateLiveFairway === 'function') window.updateLiveFairway(prop, v);
+        if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
+    };
+
 })();

@@ -552,6 +552,7 @@
   "setWaterQuality:function",
   "setWaterType:function",
   "setupPlayers:object",
+  "sfSliderCommit:function",
   "sharedStorage:object",
   "shotStartPos:object",
   "showBuildToast:function",
