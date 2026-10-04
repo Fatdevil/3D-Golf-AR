@@ -2326,9 +2326,17 @@ window.fairwayEditsHeights = function(fd) {
     return !!(fd && ((fd.difficulty && fd.difficulty !== 'FLAT') || (fd.maxSlopePct > 0)));
 };
 
+// _isSculpted is not saved with the course: a loaded fairway that edits heights must still restore its baseline
+// when the user switches the edit off, so the flag is derived once from the saved settings (load / first live edit).
+window.syncFairwaySculptFlag = function(fd) {
+    if (fd && fd._isSculpted === undefined) fd._isSculpted = window.fairwayEditsHeights(fd);
+};
+
 // Slope limiter ("thermal relaxation"): neighbouring height samples may differ by at most maxSlope * spacing.
-// Excess is moved between the two samples (mass preserving), shared by weight: weight 0 = locked (stays put),
-// weight 1 = free. A hill under the fairway is therefore made gentler, not cut away.
+// Excess is moved between the two samples, shared by weight: weight 0 = locked (stays put), weight 1 = free.
+// Between two free samples the height is only moved, not lost; next to a locked sample (the edge of the zone)
+// the free side is lowered to meet the cap and the locked side cannot take the volume, so the hill is cut there.
+// A hill under the fairway is therefore made gentler, not removed.
 // h: Float32Array (gW*gH, row = gz), w: Float32Array weights. Returns { iters, converged, maxSlope }.
 window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, budgetMs) {
     let L = maxSlope * spacing;
@@ -2816,6 +2824,7 @@ window.updateLiveFairway = function(property, value) {
     // pipeline can remove the old ring instead of leaving it behind (course reloaded from file).
     if (!fd._paint && fd.points && fd.points.length >= 3) fd._paint = fairwayFootprint(fd);
 
+    window.syncFairwaySculptFlag(fd); // before the property changes: was the fairway editing heights until now?
     fd[property] = value;
 
     let needsRepaint = (property === 'semiRoughWidth' || property === 'roughWidth' || property === 'roughEnabled' || property === 'edgeSharpness' || property === 'mowPattern');

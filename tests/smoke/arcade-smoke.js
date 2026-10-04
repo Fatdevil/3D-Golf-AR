@@ -192,7 +192,10 @@ function serve() {
       check('water dug in a capped fairway is baked into its baseline', rW === 0 && fd.origHeights[oiW] < origW - 1 && Math.abs(window.getTerrainHeight(25, 150) - wBefore) < 1e-6, 'd=' + (fd.origHeights[oiW] - origW).toFixed(2));
       const lim = (function () { const N = 128, hh2 = new Float32Array(N * N), ww = new Float32Array(N * N); for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { const X = x - 64, Z = z - 64; hh2[z * N + x] = 8 * Math.exp(-(X * X + Z * Z) / 392); ww[z * N + x] = (x > 5 && x < N - 5 && z > 5 && z < N - 5) ? 1 : 0; } return window.limitHeightSlope(hh2, ww, N, N, 0.08, 1, 3000, 2000); })();
       check('slope limiter converges on a broad 8 m hill and reports it', lim.converged && lim.maxSlope < 0.085, JSON.stringify(lim));
+      // a loaded course has no _isSculpted flag: switching the cap off must still restore the natural ground
+      delete fd._isSculpted; window.syncFairwaySculptFlag(fd);
       fd.maxSlopePct = 0; window.applyFairwayPipeline(hh, false, false, fd);
+      check('switching off a loaded cap restores the baseline', window.getTerrainHeight(0, 150) > 3.9, 'centre ' + window.getTerrainHeight(0, 150).toFixed(2));
       const pre3 = new Float32Array(p);
       for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 1 * Math.exp(-((x + 20) * (x + 20) + (z - 150) * (z - 150)) / 18); }
       const h3 = window.getTerrainHeight(-20, 150);
