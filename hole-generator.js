@@ -431,6 +431,15 @@
             if (shape && SHAPE[name] && SHAPE[name].cut) {
                 let lift = (env.lift && typeof env.lift[name] === 'number') ? env.lift[name] : SHAPE[name].lift;
                 cut = cutDepth(poly, step, h, lift);
+                // the green builder adds its tilt and difficulty contours on top of the plateau
+                if (name === 'green' && env.greenRelief) {
+                    let cx = 0, cz = 0;
+                    poly.forEach(function (p) { cx += p.x; cz += p.z; });
+                    cx /= poly.length; cz /= poly.length;
+                    let reach = 0;
+                    poly.forEach(function (p) { reach = Math.max(reach, Math.hypot(p.x - cx, p.z - cz)); });
+                    cut += (env.greenRelief.tilt || 0) * reach + (env.greenRelief.amp || 0);
+                }
                 if (cut > SHAPE[name].cut) { reasons.push(name + '_' + (r || 'range')); return; }
             }
             if (!r) return;
@@ -852,6 +861,8 @@
                 return dflt;
             };
             env.lift = { green: num(['gs-elev-slider', 'sg-elevation-offset'], 0), tee: num(['st-raise-height'], SHAPE.tee.lift) };
+            let amp = { FLAT: 0, EASY: 0.10, MED: 0.26, HARD: 0.33 }[root.greenDifficulty || 'FLAT'];
+            env.greenRelief = { tilt: num(['gs-tilt-slider', 'sg-tilt-pct'], 2) / 100, amp: amp == null ? 0 : amp };
         }
         return env;
     }
@@ -874,7 +885,7 @@
         // a blueprint sketch may stand on ground that needs reshaping (yellow); random placement stays strict
         let env = siteEnv(parts, { diag: true, allowShaping: !!(opts.placement && opts.seed != null) });
         let res;
-        let shaped = null, shapeWork = {}, capMissed = false;
+        let shaped = null, shapeWork = {}, capMissed = false, cappedFairway = null;
         if (opts.placement && opts.seed != null) {
             // a blueprint sketch: the user already chose the spot, we only re-check it
             let plan = planFor(par, opts.seed);
@@ -913,19 +924,18 @@
                 // a fairway on a hill gets a slope cap: the hill stays but becomes playable
                 let capNow = shaped && shaped.indexOf('fairway') >= 0;
                 let prevCap = root._fairwayMaxSlopePct;
-                // explicit for every generated fairway: a cap left behind by an earlier job (or the studio control) must not leak in
-                root._fairwayMaxSlopePct = capNow ? SHAPE.fairway.cap : 0;
+                // built WITHOUT a cap first: the green does not exist yet, so the limiter could not keep its footprint locked.
+                // The cap is applied at the end of the build (below), when the green, tees and bunkers are in place.
+                root._fairwayMaxSlopePct = 0;
                 try { buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); }); }
                 finally {
-                    // the temporary cap was only for this fairway: from here the global follows the Fairway Studio control again
-                    // (the studio may have synced it to the new fairway's cap while building; otherwise it still shows the old value)
+                    // from here the global follows the Fairway Studio control again
+                    // (the studio may have synced it to the new fairway while building; otherwise it still shows the old value)
                     let ctl = root.document && root.document.getElementById('sf-max-slope');
                     let shown = ctl ? parseFloat(ctl.value) : NaN;
                     root._fairwayMaxSlopePct = isFinite(shown) ? shown : prevCap;
                 }
-                // the limiter may run out of time on a huge fairway: remember it so the final message says so
-                let built = hole.fairways && hole.fairways[hole.fairways.length - 1];
-                if (capNow && built && built._slopeCapReached === false) capMissed = true;
+                if (capNow) cappedFairway = hole.fairways && hole.fairways[hole.fairways.length - 1];
             }
             if (parts.green) {
                 buildShape('GREEN', wp.green, function () { root.executeSplineSmartGreen(); });
@@ -959,6 +969,12 @@
                         root.applyTeePipeline(hole, false, false, tb, true);
                     });
                 }
+            }
+            // yellow fairway: now that green / tees / bunkers exist the slope cap can be applied without touching the green zone
+            if (cappedFairway && typeof root.applyFairwayPipeline === 'function') {
+                cappedFairway.maxSlopePct = SHAPE.fairway.cap;
+                root.applyFairwayPipeline(hole, false, false, cappedFairway);
+                if (cappedFairway._slopeCapReached === false) capMissed = true;
             }
             // green left out: remember where it was planned so the user can build it there
             hole.plannedGreen = parts.green ? null : { x: wp.greenCenter.x, z: wp.greenCenter.z, r: Math.max(12, wp.greenReach || 15) };

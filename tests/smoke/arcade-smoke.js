@@ -240,6 +240,12 @@ function serve() {
       check('flat ground with a 4 m green elevation offset is red', !flatLiftedEv.ok, JSON.stringify(flatLiftedEv.reasons));
       const flatTee = flatEnv(0); flatTee.allowShaping = true; flatTee.lift = { green: 0, tee: 4 };
       check('flat ground with a 4 m tee raise is red', !HG.evaluateSite(plan, origin, heading, flatTee).ok);
+      // tilt and difficulty relief are built on top of the plateau: a site just under the limit goes over it
+      const nearEnv = flatEnv(3.6); nearEnv.allowShaping = true;
+      const nearEv = HG.evaluateSite(plan, origin, heading, nearEnv);
+      const reliefEnv = flatEnv(3.6); reliefEnv.allowShaping = true; reliefEnv.greenRelief = { tilt: 0.02, amp: 0.33 };
+      const reliefEv = HG.evaluateSite(plan, origin, heading, reliefEnv);
+      check('green tilt + difficulty relief counts towards the shaping limit', nearEv.ok && nearEv.work.green > 2.4 && !reliefEv.ok, JSON.stringify([nearEv.work, reliefEv.reasons]));
       check('a 12 m cliff stays red even when shaping is allowed', !cliff.ok, JSON.stringify(cliff.reasons));
       // full build from a yellow blueprint site: green flat, fairway capped
       (function () {
