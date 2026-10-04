@@ -401,6 +401,26 @@ function serve() {
       click(0, -100);
       check('ridge line: a dot that would cross the line is refused', n() === 3, 'n ' + n());
       window.clearSpline();
+      // freehand ridge stroke (drag): a loop in the stroke is refused, the line never crosses itself
+      {
+        const at = function (x, z) { const v = new THREE.Vector3(x, 0, z).project(camera); return { clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height }; };
+        const o0 = Object.assign({ bubbles: true, button: 0, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at(-60, -60));
+        cv.dispatchEvent(new PointerEvent('pointerdown', o0));
+        const path = [[-60, -60], [60, -60], [60, 60], [-20, 60], [-20, -100]];
+        let crossed = false, maxN = 0;
+        for (let k = 1; k < path.length; k++) {
+          const a0 = path[k - 1], b0 = path[k], steps = Math.ceil(Math.hypot(b0[0] - a0[0], b0[1] - a0[1]) / 4);
+          for (let t = 1; t <= steps; t++) {
+            const x = a0[0] + (b0[0] - a0[0]) * t / steps, z = a0[1] + (b0[1] - a0[1]) * t / steps;
+            cv.dispatchEvent(new PointerEvent('pointermove', Object.assign({ bubbles: true, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at(x, z))));
+            if (window.splinePoints.length >= 3 && window.polylineSelfIntersects(window.splinePoints, false)) crossed = true;
+            maxN = Math.max(maxN, window.splinePoints.length);
+          }
+        }
+        window.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, o0, { buttons: 0 })));
+        check('ridge freehand stroke: the line never crosses itself (a loop is refused)', !crossed && maxN >= 3, 'crossed ' + crossed + ' maxN ' + maxN);
+        window.clearSpline();
+      }
     })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }

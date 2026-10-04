@@ -12717,8 +12717,11 @@
             // dots that would land on top of an earlier dot of the ridge are left out (no kinks or loops)
             const simple = window.mtnSimplifyStroke(fs.pts, 3, 12, Math.max(2, 14 - fs.base.length))
                 .filter(q => !fs.base.some(b => Math.hypot(b.x - q.x, b.z - q.z) < 4));
+            // a loop in the stroke is refused like a clicked dot: the ridge keeps the last line that did not cross itself
+            const cand = fs.base.concat(simple);
+            if (window.polylineSelfIntersects(cand, false)) { window.warnSelfCrossing(); return; }
             splinePoints.length = 0;
-            fs.base.concat(simple).forEach(q => splinePoints.push(q));
+            cand.forEach(q => splinePoints.push(q));
             updateSplinePreview();
         }
     }, false);
