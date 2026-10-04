@@ -284,6 +284,38 @@ function serve() {
       })();
       check('flat ground stays plain green (no shaping)', flat.ok && !(flat.shaped && flat.shaped.length));
     })();
+
+    // blueprint overlay: the page must not move when the status changes between green, yellow and red while dragging
+    await (async function () {
+      const BP = window.HoleBlueprint;
+      const eh3 = courseHoles[courseHoles.length - 3];
+      eh3.greenData = null; eh3.fairways = []; eh3.fairwayData = null; eh3.bunkers = []; eh3.bunkerData = null; eh3.teeBoxes = []; eh3.teeData = null; eh3.flag = null; eh3.aimPoint = null; eh3.plannedGreen = null;
+      window.changeHoleTo(courseHoles.length - 3);
+      const p4 = planeGeo.attributes.position.array, n4 = planeGeo.attributes.position.count;
+      for (let i = 0; i < n4; i++) { const x = p4[i * 3]; p4[i * 3 + 2] = 5 * Math.exp(-((x - 40) * (x - 40)) / 1250) + 3 * Math.exp(-((x + 90) * (x + 90) + (-p4[i * 3 + 1] - 60) * (-p4[i * 3 + 1] - 60)) / 450); }
+      planeGeo.attributes.position.needsUpdate = true;
+      BP.open();
+      const S = BP.state();
+      // open() starts an asynchronous search for a good spot (status "searching", detail row cleared): wait until it is done
+      for (let w = 0; w < 80 && S.busy; w++) await new Promise(function (r) { setTimeout(r, 100); });
+      const sk = S.sketches[0], seen = {}, tops = [];
+      for (let hd = 0; hd < 6.3; hd += Math.PI / 4) for (let ox = -240; ox <= 240; ox += 40) for (let oz = -240; oz <= 240; oz += 40) {
+        sk.origin = { x: ox, z: oz }; sk.heading = hd; BP.evaluate(0);
+        const e = sk.ev, kind = !e.ok ? 'red' : ((e.shaped && e.shaped.length) ? 'yellow' : 'green');
+        if (!seen[kind]) { seen[kind] = { status: S.dom.status.textContent, detail: S.dom.detail.textContent }; tops.push(Math.round(S.canvas.getBoundingClientRect().top) + '/' + Math.round(S.dom.status.getBoundingClientRect().height)); }
+      }
+      const all3 = !S.busy && seen.red && seen.yellow && seen.green;
+      check('blueprint layout is identical for green, yellow and red status', all3 && tops.every(function (t) { return t === tops[0]; }), JSON.stringify([seen, tops, S.busy]));
+      check('the yellow status shows what happens to the ground; green leaves the detail row empty; red only repeats a cut-off message', all3 && seen.yellow.detail.length > 3 && seen.green.detail === '' && (seen.red.detail === '' || seen.red.detail === seen.red.status) && /utplaning|reshaping/i.test(seen.yellow.status), JSON.stringify(seen));
+      // a status that does not fit (short phones) must still be readable: the detail row carries the whole message
+      sk.origin = { x: 4000, z: 4000 }; BP.evaluate(0);   // far outside the map: red, 'Utanför banan'
+      S.dom.status.style.maxWidth = '36px';
+      BP.evaluate(0);
+      const narrow = { status: S.dom.status.textContent, detail: S.dom.detail.textContent };
+      S.dom.status.style.maxWidth = '';
+      check('a cut-off status is repeated in full in the detail row (touch screens)', narrow.status.length > 4 && narrow.detail === narrow.status, JSON.stringify(narrow));
+      BP.close(false);
+    })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 

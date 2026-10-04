@@ -187,18 +187,19 @@
         if (/_range$/.test(r)) return tr('bp_r_range', 'För ojämn mark');
         return tr('bp_r_slope', 'För brant');
     }
-    // What the builders will do to the ground on a yellow site, e.g. "Kräver utplaning: green ~1.8 m, fairway mjukas (max 10 %)"
-    function shapeText(ev) {
+    // What the builders will do to the ground on a yellow site, e.g. "green ~1.8 m, fairway mjukas (max 10 %)"
+    function shapeBits(ev) {
         const w = ev.work || {}, bits = [];
         const m = function (v) { return (Math.round(v * 10) / 10).toFixed(1); };
         if (ev.shaped.indexOf('green') >= 0) bits.push(tr('bp_shape_green', 'green ~{m} m').replace('{m}', m(w.green || 0)));
         if (ev.shaped.indexOf('tee') >= 0) bits.push(tr('bp_shape_tee', 'tee ~{m} m').replace('{m}', m(w.tee || 0)));
         if (ev.shaped.indexOf('fairway') >= 0) bits.push(tr('bp_shape_fairway', 'fairway mjukas (max {p} %)').replace('{p}', String(w.fairway || 10)));
-        return tr('bp_shape', 'Kräver utplaning') + ': ' + bits.join(', ');
+        return bits.join(', ');
     }
     function setStatus(text, ok) {
         const el = S.dom.status;
         el.textContent = text;
+        el.title = text;
         el.style.background = ok === true ? 'rgba(34,197,94,0.18)' : (ok === 'warn' ? 'rgba(251,191,36,0.18)' : (ok === false ? 'rgba(239,68,68,0.18)' : 'rgba(148,163,184,0.18)'));
         el.style.color = ok === true ? '#86efac' : (ok === 'warn' ? '#fde68a' : (ok === false ? '#fca5a5' : '#cbd5e1'));
     }
@@ -227,7 +228,7 @@
         const ev = cur().ev;
         if (S.busy) setStatus(tr('bp_searching', '⏳ Letar bra plats…'), null);
         else if (S.note) setStatus(S.noteBad ? '⛔ ' + S.note : S.note, !S.noteBad);
-        else if (ev && ev.ok && ev.shaped && ev.shaped.length) setStatus('⚠️ ' + shapeText(ev), 'warn');
+        else if (ev && ev.ok && ev.shaped && ev.shaped.length) setStatus('⚠️ ' + tr('bp_shape', 'Kräver utplaning'), 'warn');
         else if (ev && ev.ok) setStatus('✓ ' + tr('bp_ok', 'Bra plats!'), true);
         else if (ev) setStatus('⛔ ' + reasonText(ev.reasons[0]), false);
         const allOk = S.sketches.every(function (s) { return s.ev && s.ev.ok; }) && !S.busy;
@@ -246,6 +247,16 @@
         enable(S.dom.remove, S.sketches.length > 1 && !S.busy);
         enable(S.dom.earlier, S.sel > 0 && !S.busy);
         enable(S.dom.later, S.sel < S.sketches.length - 1 && !S.busy);
+        // The detail row is reserved space (no layout jump) for what the one-line status cannot say: what a yellow site changes,
+        // and the whole message whenever the status had to be cut off (narrow phones, where a tooltip is not reachable).
+        const shapedNow = !S.busy && !S.note && ev && ev.ok && ev.shaped && ev.shaped.length;
+        const stEl = S.dom.status, cutOff = stEl.scrollWidth > stEl.clientWidth + 1;
+        let detailText = '';
+        if (shapedNow) detailText = (cutOff ? stEl.textContent + ': ' : '') + shapeBits(ev);
+        else if (cutOff) detailText = stEl.textContent;
+        S.dom.detail.textContent = detailText;
+        S.dom.detail.style.color = shapedNow ? '#fde68a' : (ev && !ev.ok && !S.busy ? '#fca5a5' : '#cbd5e1');
+        S.dom.detail.title = detailText;
         buildChips();
         draw();
     }
@@ -486,7 +497,8 @@
         head.style.cssText = 'margin-top:auto; width:' + C + 'px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:#f1f5f9;';
         head.innerHTML = '<b style="font-size:16px;">🗺️ ' + tr('bp_title', 'Planera hålen') + '</b>';
         const status = document.createElement('div');
-        status.style.cssText = 'flex:1; text-align:center; padding:6px 8px; border-radius:8px; font-size:13px; font-weight:bold;';
+        // one fixed-height line: a longer message used to wrap, grow the header and make the whole centred page jump while dragging
+        status.style.cssText = 'flex:1; min-width:0; height:32px; line-height:20px; box-sizing:border-box; text-align:center; padding:6px 8px; border-radius:8px; font-size:13px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
         head.appendChild(status);
         const x = btn('✕', function () { close(true); }, 'min-width:44px; min-height:44px;');
         x.title = tr('bp_cancel', 'Avbryt');
@@ -494,6 +506,9 @@
         const help = document.createElement('div');
         help.style.cssText = 'width:' + C + 'px; color:#94a3b8; font-size:12px; line-height:1.35;';
         help.textContent = tr('bp_help', 'Dra hålet dit du vill ha det. Dra i den blå pricken (G) för att vrida. Tryck på kartan för att flytta teen dit.');
+        // what the builders will do on a yellow site; the height is reserved so the page does not move when it appears
+        const detail = document.createElement('div');
+        detail.style.cssText = 'width:' + C + 'px; height:32px; box-sizing:border-box; overflow:hidden; color:#fde68a; font-size:12px; line-height:16px;';
         const chips = document.createElement('div');
         chips.style.cssText = 'width:' + C + 'px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;';
         const canvas = document.createElement('canvas');
@@ -523,11 +538,11 @@
         [add, reroll, left, right, earlier, later, remove].forEach(function (b) { row2.appendChild(b); });
         const build_ = btn('', build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
-        [head, help, chips, canvas, row1, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        [head, help, detail, chips, canvas, row1, row2, build_].forEach(function (el) { overlay.appendChild(el); });
         document.body.appendChild(overlay);
 
         S = {
-            dom: { overlay: overlay, status: status, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
+            dom: { overlay: overlay, status: status, detail: detail, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, half: half, size: half * 2, mPerPx: half * 2 / C,
             baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
             drag: null, busy: false, snapToken: 0, findToken: 0, raf: 0, note: null, noteBad: false, handles: null
