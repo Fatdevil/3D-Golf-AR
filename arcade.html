@@ -2491,7 +2491,7 @@
                                 <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_semi_rough">Semi-Rough</span>
                                 <span id="sf-semirough-val" style="color:#6b9e3d; font-weight:700; font-size:9.5px;">2.0m</span>
                             </div>
-                            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" oninput="let v=parseFloat(this.value); let el=document.getElementById('sf-semirough-val'); if(el) el.textContent=v.toFixed(1)+'m'; if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('semiRoughWidth', v); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="width:100%; accent-color:#6b9e3d; cursor:pointer;">
+                            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); let el=document.getElementById('sf-semirough-val'); if(el) el.textContent=v.toFixed(1)+'m';" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'semiRoughWidth')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'semiRoughWidth')" style="width:100%; accent-color:#6b9e3d; cursor:pointer;">
                         </div>
 
                         <!-- Rough Width & Toggle -->
@@ -2503,7 +2503,7 @@
                                 </label>
                                 <span id="sf-rough-val" style="color:#4a782b; font-weight:700; font-size:9.5px;">5m</span>
                             </div>
-                            <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" oninput="let v=parseFloat(this.value); let el=document.getElementById('sf-rough-val'); if(el) el.textContent=v.toFixed(0)+'m'; if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('roughWidth', v); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="width:100%; accent-color:#4a782b; cursor:pointer;">
+                            <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); let el=document.getElementById('sf-rough-val'); if(el) el.textContent=v.toFixed(0)+'m';" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'roughWidth')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'roughWidth')" style="width:100%; accent-color:#4a782b; cursor:pointer;">
                         </div>
 
                         <!-- Terrain Waviness / Difficulty Cards -->
@@ -2529,7 +2529,7 @@
                                 <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sf_max_slope">Max lutning (spelbar)</span>
                                 <span id="sf-max-slope-val" style="color:#7db952; font-weight:700; font-size:9.5px;">Av</span>
                             </div>
-                            <input type="range" id="sf-max-slope" min="0" max="20" value="0" step="1" oninput="let v=parseFloat(this.value); window._fairwayMaxSlopePct=v; let el=document.getElementById('sf-max-slope-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Av':'Off'); if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('maxSlopePct', v); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="width:100%; accent-color:#7db952; cursor:pointer;">
+                            <input type="range" id="sf-max-slope" min="0" max="20" value="0" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); window._fairwayMaxSlopePct=v; let el=document.getElementById('sf-max-slope-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Av':'Off');" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'maxSlopePct')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'maxSlopePct')" style="width:100%; accent-color:#7db952; cursor:pointer;">
                             <div style="color:#64748b; font-size:8px; margin-top:2px;" data-i18n="sf_max_slope_hint">Planar ut en kulle under fairwayn så den blir spelbar. 8–10 % är lagom.</div>
                         </div>
 
@@ -15429,8 +15429,8 @@ window.triggerExplosion = function(x, y, z) {
                 let val = parseFloat(this.value);
                 let el = document.getElementById('sf-semirough-val');
                 if (el) el.textContent = val.toFixed(1) + 'm';
-                if (typeof window.updateLiveFairway === 'function') window.updateLiveFairway('semiRoughWidth', val);
             });
+            // the rebuild runs on release from the slider's own onchange attribute (rebuilding on every pixel made the thumb lag)
             sfSemi.addEventListener('change', function() {
                 if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1000);
             });
@@ -15441,8 +15441,8 @@ window.triggerExplosion = function(x, y, z) {
                 let val = parseFloat(this.value);
                 let el = document.getElementById('sf-rough-val');
                 if (el) el.textContent = val.toFixed(0) + 'm';
-                if (typeof window.updateLiveFairway === 'function') window.updateLiveFairway('roughWidth', val);
             });
+            // the rebuild runs on release from the slider's own onchange attribute (rebuilding on every pixel made the thumb lag)
             sfRough.addEventListener('change', function() {
                 if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1000);
             });
@@ -15675,7 +15675,7 @@ window.triggerExplosion = function(x, y, z) {
     </script>
 
 <script src="green-studio.js?v=31"></script>
-<script src="fairway-studio.js?v=3"></script>
+<script src="fairway-studio.js?v=5"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
 <script src="smart-builder.js?v=56"></script>
