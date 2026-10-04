@@ -257,7 +257,23 @@ function serve() {
         let lo = 1e9, hi = -1e9;
         for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) { const x = gc.x + a * 2, z = gc.z + b * 2; if (HG.inPoly(x, z, wp0.green)) { const y = window.getTerrainHeight(x, z); lo = Math.min(lo, y); hi = Math.max(hi, y); } }
         check('yellow site builds: green is flat, fairway has the slope cap', !!built && hole.greenData && hi - lo < 0.05 && hole.fairways[0] && hole.fairways[0].maxSlopePct === 10, 'spread ' + (hi - lo).toFixed(3) + ' cap ' + (hole.fairways[0] && hole.fairways[0].maxSlopePct));
-        const ctl = document.getElementById('sf-max-slope');
+        // a second, unshaped job must not inherit a leftover cap
+      (function () {
+        const p3 = planeGeo.attributes.position.array, n3 = planeGeo.attributes.position.count;
+        for (let i = 0; i < n3; i++) p3[i * 3 + 2] = 0;
+        planeGeo.attributes.position.needsUpdate = true; planeGeo.computeVertexNormals(); if (window._terrainChunks) window._terrainChunks.syncAll();
+        const idx2 = courseHoles.length - 2, eh2 = courseHoles[idx2];
+        eh2.greenData = null; eh2.fairways = []; eh2.fairwayData = null; eh2.bunkers = []; eh2.bunkerData = null; eh2.teeBoxes = []; eh2.teeData = null; eh2.flag = null; eh2.aimPoint = null; eh2.plannedGreen = null;
+        window.changeHoleTo(idx2);
+        window._fairwayMaxSlopePct = 10;
+        const plan2 = HG.planFor(4, 777), env2 = HG.siteEnv(null, { allowShaping: true });
+        let spot = null;
+        for (let hd = 0; hd < 6.3 && !spot; hd += 0.5) for (let ox = -240; ox <= 240 && !spot; ox += 40) for (let oz = -240; oz <= 240 && !spot; oz += 40) { const e2 = HG.evaluateSite(plan2, { x: ox, z: oz }, hd, env2); if (e2.ok) spot = { x: ox, z: oz, heading: hd }; }
+        const b2 = spot ? HG.generate({ par: 4, seed: 777, placement: spot }) : null;
+        check('an unshaped blueprint job does not inherit a leftover fairway cap', !!b2 && eh2.fairways[0] && !(eh2.fairways[0].maxSlopePct > 0), 'cap ' + (eh2.fairways[0] && eh2.fairways[0].maxSlopePct));
+        window._fairwayMaxSlopePct = 0;
+      })();
+      const ctl = document.getElementById('sf-max-slope');
         check('after a yellow build the fairway control and the global cap agree', ctl && Number(ctl.value) === window._fairwayMaxSlopePct, 'control ' + (ctl && ctl.value) + ' global ' + window._fairwayMaxSlopePct);
       })();
       check('flat ground stays plain green (no shaping)', flat.ok && !(flat.shaped && flat.shaped.length));

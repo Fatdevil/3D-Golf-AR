@@ -874,7 +874,7 @@
         // a blueprint sketch may stand on ground that needs reshaping (yellow); random placement stays strict
         let env = siteEnv(parts, { diag: true, allowShaping: !!(opts.placement && opts.seed != null) });
         let res;
-        let shaped = null, shapeWork = {};
+        let shaped = null, shapeWork = {}, capMissed = false;
         if (opts.placement && opts.seed != null) {
             // a blueprint sketch: the user already chose the spot, we only re-check it
             let plan = planFor(par, opts.seed);
@@ -913,7 +913,8 @@
                 // a fairway on a hill gets a slope cap: the hill stays but becomes playable
                 let capNow = shaped && shaped.indexOf('fairway') >= 0;
                 let prevCap = root._fairwayMaxSlopePct;
-                if (capNow) root._fairwayMaxSlopePct = SHAPE.fairway.cap;
+                // explicit for every generated fairway: a cap left behind by an earlier job (or the studio control) must not leak in
+                root._fairwayMaxSlopePct = capNow ? SHAPE.fairway.cap : 0;
                 try { buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); }); }
                 finally {
                     // the temporary cap was only for this fairway: from here the global follows the Fairway Studio control again
@@ -922,6 +923,9 @@
                     let shown = ctl ? parseFloat(ctl.value) : NaN;
                     root._fairwayMaxSlopePct = isFinite(shown) ? shown : prevCap;
                 }
+                // the limiter may run out of time on a huge fairway: remember it so the final message says so
+                let built = hole.fairways && hole.fairways[hole.fairways.length - 1];
+                if (capNow && built && built._slopeCapReached === false) capMissed = true;
             }
             if (parts.green) {
                 buildShape('GREEN', wp.green, function () { root.executeSplineSmartGreen(); });
@@ -972,7 +976,7 @@
         if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
         refreshPlannedGreenMarker();
         focusCamera(wp);
-        toast(t('hg_done', '🎲 Hål slumpat! Ändra fritt – Ångra tar bort hela hålet.') + ' (#' + res.seed + ')' + (shaped ? ' ' + t('hg_shaped', '⛰️ Marken formades för att hålet ska gå att spela.') : ''), '#4ade80');
+        toast(t('hg_done', '🎲 Hål slumpat! Ändra fritt – Ångra tar bort hela hålet.') + ' (#' + res.seed + ')' + (shaped ? ' ' + t('hg_shaped', '⛰️ Marken formades för att hålet ska gå att spela.') : '') + (capMissed ? ' ' + t('hg_cap_missed', '⚠️ Fairwayns lutningstak nåddes inte helt – höj taket i Fairway Studio.') : ''), capMissed ? '#f59e0b' : '#4ade80');
         return { seed: res.seed, plan: res.plan, world: wp };
     }
 
