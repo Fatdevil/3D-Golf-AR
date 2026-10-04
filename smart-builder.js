@@ -2343,6 +2343,29 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
     if (!(L > 0)) return { iters: 0, converged: true, maxSlope: 0 };
     let tol = L * 0.05;
     let it = 0, worst = 0;
+    let verifyExcess = function() {
+        let wmax = 0;
+        for (let gz = 0; gz < gH; gz++) {
+            for (let gx = 0; gx < gW; gx++) {
+                let i = gz * gW + gx;
+                for (let sx = -1; sx <= 1; sx += 2) {
+                    let nx = gx + sx;
+                    if (nx < 0 || nx >= gW) continue;
+                    let jx = gz * gW + nx;
+                    for (let tz = -1; tz <= 1; tz += 2) {
+                        let nz = gz + tz;
+                        if (nz < 0 || nz >= gH) continue;
+                        let jz = nz * gW + gx;
+                        if (w[i] + w[jx] + w[jz] <= 0) continue;
+                        let dx = h[i] - h[jx], dz = h[i] - h[jz];
+                        let ex = Math.sqrt(dx * dx + dz * dz) - L;
+                        if (ex > wmax) wmax = ex;
+                    }
+                }
+            }
+        }
+        return wmax;
+    };
     let t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
     for (; it < (maxIter || 300); it++) {
         // wall-clock budget so a huge fairway cannot freeze the editor; the caller is told if the cap was not reached
@@ -2390,7 +2413,11 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                 }
             }
         }
-        if (worst <= tol) { it++; break; }
+        if (worst <= tol) {
+            // the sweep only saw gradients as they were when visited: confirm with a full read-only scan of all four cells per vertex
+            worst = verifyExcess();
+            if (worst <= tol) { it++; break; }
+        }
     }
     // worst = largest gradient excess seen in the last sweep (0 when the sweep found nothing to fix)
     return { iters: it, converged: worst <= tol, maxSlope: (L + worst) / spacing };
