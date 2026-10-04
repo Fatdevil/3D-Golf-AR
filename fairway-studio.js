@@ -958,8 +958,8 @@
             let srS = document.getElementById('sf-semirough-width');
             let srV = document.getElementById('sf-semirough-val');
             let srw = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2.0;
-            if (srS && document.activeElement !== srS) srS.value = srw;
-            if (srV) srV.textContent = srw.toFixed(1) + 'm';
+            if (srS && document.activeElement !== srS && window._sfDrag !== 'sf-semirough-width') srS.value = srw;
+            if (srV && window._sfDrag !== 'sf-semirough-width') srV.textContent = srw.toFixed(1) + 'm';
 
             // Flik 2 (Bredd & Terräng): Rough
             let rCb = document.getElementById('sf-rough-cb');
@@ -967,16 +967,17 @@
             let rS = document.getElementById('sf-rough-width');
             let rV = document.getElementById('sf-rough-val');
             let rw = fd.roughWidth !== undefined ? fd.roughWidth : 5.0;
-            if (rS && document.activeElement !== rS) rS.value = rw;
-            if (rV) rV.textContent = rw.toFixed(0) + 'm';
+            if (rS && document.activeElement !== rS && window._sfDrag !== 'sf-rough-width') rS.value = rw;
+            if (rV && window._sfDrag !== 'sf-rough-width') rV.textContent = rw.toFixed(0) + 'm';
 
             // Flik 2 (Bredd & Terräng): slope cap
             let msS = document.getElementById('sf-max-slope');
             let msV = document.getElementById('sf-max-slope-val');
             let msp = fd.maxSlopePct > 0 ? fd.maxSlopePct : 0;
-            window._fairwayMaxSlopePct = msp;
-            if (msS && document.activeElement !== msS) msS.value = msp;
-            if (msV) msV.textContent = msp > 0 ? msp.toFixed(0) + '%' : ((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Av' : 'Off');
+            let msDrag = (window._sfDrag === 'sf-max-slope');
+            if (!msDrag) window._fairwayMaxSlopePct = msp;
+            if (msS && document.activeElement !== msS && !msDrag) msS.value = msp;
+            if (msV && !msDrag) msV.textContent = msp > 0 ? msp.toFixed(0) + '%' : ((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Av' : 'Off');
 
             // Flik 2 (Bredd & Terräng): Difficulty cards
             let diff = fd.difficulty || 'FLAT';

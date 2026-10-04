@@ -316,6 +316,38 @@ function serve() {
       check('a cut-off status is repeated in full in the detail row (touch screens)', narrow.status.length > 4 && narrow.detail === narrow.status, JSON.stringify(narrow));
       BP.close(false);
     })();
+
+    // fairway sliders: dragging only moves the thumb and the label; the fairway is rebuilt once, when the slider is released
+    await (async function () {
+      const idxS = courseHoles.length - 2, hS = courseHoles[idxS];
+      window.changeHoleTo(idxS);
+      const fdS = hS.fairways && hS.fairways[0];
+      if (!fdS || !window.FairwayStudio || typeof window.FairwayStudio.syncUIValues !== 'function') { check('fairway sliders rebuild on release only (needs a fairway)', false, 'no fairway on the test hole'); return; }
+      hS.activeFairwayIndex = 0;
+      const frame = function () { return new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); }); };
+      const orig = window.applyFairwayPipeline; let runs = 0;
+      window.applyFairwayPipeline = function () { runs++; return orig.apply(this, arguments); };
+      const results = [];
+      for (const spec of [['sf-semirough-width', 'sf-semirough-val', 'semiRoughWidth', 3.5], ['sf-rough-width', 'sf-rough-val', 'roughWidth', 9], ['sf-max-slope', 'sf-max-slope-val', 'maxSlopePct', 7]]) {
+        const el = document.getElementById(spec[0]), lab = document.getElementById(spec[1]);
+        if (!el || !lab) { results.push(spec[0] + ' missing'); continue; }
+        const before = fdS[spec[2]];
+        runs = 0;
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        for (let v = Number(el.min) + 1; v <= spec[3]; v += Number(el.step)) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); window.FairwayStudio.syncUIValues(hS, fdS); }
+        el.value = spec[3]; el.dispatchEvent(new Event('input', { bubbles: true })); window.FairwayStudio.syncUIValues(hS, fdS);
+        await frame();
+        const during = { runs: runs, prop: fdS[spec[2]], thumb: Number(el.value), label: lab.textContent };
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        await frame();
+        const after = { runs: runs, prop: fdS[spec[2]] };
+        if (!(during.runs === 0 && during.prop === before && during.thumb === spec[3] && /\d/.test(during.label) && after.runs === 1 && after.prop === spec[3])) results.push(spec[0] + ' ' + JSON.stringify({ before: before, during: during, after: after }));
+        fdS[spec[2]] = before;
+      }
+      window.applyFairwayPipeline = orig;
+      check('fairway sliders (semi-rough, rough, max slope) do not rebuild while dragging, once on release', results.length === 0, results.join(' | '));
+    })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 
