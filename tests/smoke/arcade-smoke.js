@@ -208,6 +208,82 @@ function serve() {
       const h3 = window.getTerrainHeight(-20, 150);
       check('plain fairway: stroke is baked without re-running', window.reanchorStudiosAfterSculpt(pre3) === 0 && Math.abs(window.getTerrainHeight(-20, 150) - h3) < 1e-6);
     })();
+
+    // blueprint "yellow" sites: strict planner says no, shaping mode says yes (with how much ground moves); a cliff stays red
+    (function () {
+      const HG = window.HoleGenerator;
+      const plan = HG.planFor(4, 12345), origin = { x: -150, z: 150 }, heading = 0.3;
+      const wp0 = HG.worldPlan(plan, origin, heading), gc = wp0.greenCenter;
+      const flatEnv = function (hillH) { return { half: 300, others: { points: [], polygons: [] }, parts: HG.normalizeParts(null), heightAt: function (x, z) { return hillH * Math.exp(-((x - gc.x) * (x - gc.x) + (z - gc.z) * (z - gc.z)) / (2 * 7 * 7)); } }; };
+      const strict = HG.evaluateSite(plan, origin, heading, flatEnv(2.2));
+      const e2 = flatEnv(2.2); e2.allowShaping = true;
+      const yellow = HG.evaluateSite(plan, origin, heading, e2);
+      const e3 = flatEnv(12); e3.allowShaping = true;
+      const cliff = HG.evaluateSite(plan, origin, heading, e3);
+      const e4 = flatEnv(0); e4.allowShaping = true;
+      const flat = HG.evaluateSite(plan, origin, heading, e4);
+      check('hill under the green: strict planner rejects', !strict.ok && /green_/.test(strict.reasons[0]), JSON.stringify(strict.reasons));
+      check('hill under the green: shaping mode accepts it as yellow with a cut depth', yellow.ok && yellow.shaped && yellow.shaped.indexOf('green') >= 0 && yellow.work.green > 0.3 && yellow.work.green <= 3, JSON.stringify([yellow.shaped, yellow.work]));
+      // a bowl with a high rim: the plateau is built at the rim's height, so the real cut is deeper than the footprint's own mean suggests
+      const bowl = flatEnv(0); bowl.allowShaping = true; bowl.heightAt = function (x, z) { return 4 * (1 - Math.exp(-((x - gc.x) * (x - gc.x) + (z - gc.z) * (z - gc.z)) / 72)); };
+      const bowlEv = HG.evaluateSite(plan, origin, heading, bowl);
+      check('bowl with a high rim is measured against the built plateau (red)', !bowlEv.ok, JSON.stringify([bowlEv.reasons, bowlEv.work]));
+      // the builders' sliders count: a raised green plateau moves the ground further than the planner's default assumes
+      const lifted = flatEnv(2.2); lifted.allowShaping = true; lifted.lift = { green: 3, tee: 0.5 };
+      const liftedEv = HG.evaluateSite(plan, origin, heading, lifted);
+      check('Green Studio elevation offset is included in the shaping work (red when it adds too much)', !liftedEv.ok, JSON.stringify([liftedEv.reasons, liftedEv.work]));
+      const sliderEnv = HG.siteEnv(null, { allowShaping: true });
+      check('siteEnv reads the builders\' sliders for the plateau offsets', sliderEnv.lift && typeof sliderEnv.lift.green === 'number' && typeof sliderEnv.lift.tee === 'number', JSON.stringify(sliderEnv.lift));
+      // flat ground does not excuse a big elevation offset: the builder still cuts/fills that much
+      const flatLifted = flatEnv(0); flatLifted.allowShaping = true; flatLifted.lift = { green: 4, tee: 0.5 };
+      const flatLiftedEv = HG.evaluateSite(plan, origin, heading, flatLifted);
+      check('flat ground with a 4 m green elevation offset is red', !flatLiftedEv.ok, JSON.stringify(flatLiftedEv.reasons));
+      const flatTee = flatEnv(0); flatTee.allowShaping = true; flatTee.lift = { green: 0, tee: 4 };
+      check('flat ground with a 4 m tee raise is red', !HG.evaluateSite(plan, origin, heading, flatTee).ok);
+      // tilt and difficulty relief are built on top of the plateau: a site just under the limit goes over it
+      const nearEnv = flatEnv(3.6); nearEnv.allowShaping = true;
+      const nearEv = HG.evaluateSite(plan, origin, heading, nearEnv);
+      const reliefEnv = flatEnv(3.6); reliefEnv.allowShaping = true; reliefEnv.greenRelief = { tilt: 0.02, amp: 0.33 };
+      const reliefEv = HG.evaluateSite(plan, origin, heading, reliefEnv);
+      check('green tilt + difficulty relief counts towards the shaping limit', nearEv.ok && nearEv.work.green > 2.4 && !reliefEv.ok, JSON.stringify([nearEv.work, reliefEv.reasons]));
+      check('a 12 m cliff stays red even when shaping is allowed', !cliff.ok, JSON.stringify(cliff.reasons));
+      // full build from a yellow blueprint site: green flat, fairway capped
+      (function () {
+        const p2 = planeGeo.attributes.position.array, n2 = planeGeo.attributes.position.count;
+        const mid = wp0.centerline[Math.floor(wp0.centerline.length / 2)];
+        for (let i = 0; i < n2; i++) { const x = p2[i * 3], z = -p2[i * 3 + 1]; p2[i * 3 + 2] = 2.2 * Math.exp(-((x - gc.x) ** 2 + (z - gc.z) ** 2) / 98) + 4 * Math.exp(-((x - mid.x) ** 2 + (z - mid.z) ** 2) / 200); }
+        planeGeo.attributes.position.needsUpdate = true; planeGeo.computeVertexNormals(); if (window._terrainChunks) window._terrainChunks.syncAll();
+        // earlier checks used the first holes: clear the last one so the generator sees an empty hole
+        const idx = courseHoles.length - 1, eh = courseHoles[idx];
+        eh.greenData = null; eh.fairways = []; eh.fairwayData = null; eh.bunkers = []; eh.bunkerData = null; eh.teeBoxes = []; eh.teeData = null; eh.flag = null; eh.aimPoint = null; eh.plannedGreen = null;
+        if (!HG.holeIsEmpty(eh)) { check('yellow site builds (needs an empty hole)', false, 'hole not empty'); return; }
+        window.changeHoleTo(idx);
+        const hole = courseHoles[idx];
+        const built = HG.generate({ par: 4, seed: 12345, placement: { x: origin.x, z: origin.z, heading: heading } });
+        let lo = 1e9, hi = -1e9;
+        for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) { const x = gc.x + a * 2, z = gc.z + b * 2; if (HG.inPoly(x, z, wp0.green)) { const y = window.getTerrainHeight(x, z); lo = Math.min(lo, y); hi = Math.max(hi, y); } }
+        check('yellow site builds: green is flat, fairway has the slope cap', !!built && hole.greenData && hi - lo < 0.05 && hole.fairways[0] && hole.fairways[0].maxSlopePct === 10, 'spread ' + (hi - lo).toFixed(3) + ' cap ' + (hole.fairways[0] && hole.fairways[0].maxSlopePct));
+        // a second, unshaped job must not inherit a leftover cap
+      (function () {
+        const p3 = planeGeo.attributes.position.array, n3 = planeGeo.attributes.position.count;
+        for (let i = 0; i < n3; i++) p3[i * 3 + 2] = 0;
+        planeGeo.attributes.position.needsUpdate = true; planeGeo.computeVertexNormals(); if (window._terrainChunks) window._terrainChunks.syncAll();
+        const idx2 = courseHoles.length - 2, eh2 = courseHoles[idx2];
+        eh2.greenData = null; eh2.fairways = []; eh2.fairwayData = null; eh2.bunkers = []; eh2.bunkerData = null; eh2.teeBoxes = []; eh2.teeData = null; eh2.flag = null; eh2.aimPoint = null; eh2.plannedGreen = null;
+        window.changeHoleTo(idx2);
+        window._fairwayMaxSlopePct = 10;
+        const plan2 = HG.planFor(4, 777), env2 = HG.siteEnv(null, { allowShaping: true });
+        let spot = null;
+        for (let hd = 0; hd < 6.3 && !spot; hd += 0.5) for (let ox = -240; ox <= 240 && !spot; ox += 40) for (let oz = -240; oz <= 240 && !spot; oz += 40) { const e2 = HG.evaluateSite(plan2, { x: ox, z: oz }, hd, env2); if (e2.ok) spot = { x: ox, z: oz, heading: hd }; }
+        const b2 = spot ? HG.generate({ par: 4, seed: 777, placement: spot }) : null;
+        check('an unshaped blueprint job does not inherit a leftover fairway cap', !!b2 && eh2.fairways[0] && !(eh2.fairways[0].maxSlopePct > 0), 'cap ' + (eh2.fairways[0] && eh2.fairways[0].maxSlopePct));
+        window._fairwayMaxSlopePct = 0;
+      })();
+      const ctl = document.getElementById('sf-max-slope');
+        check('after a yellow build the fairway control and the global cap agree', ctl && Number(ctl.value) === window._fairwayMaxSlopePct, 'control ' + (ctl && ctl.value) + ' global ' + window._fairwayMaxSlopePct);
+      })();
+      check('flat ground stays plain green (no shaping)', flat.ok && !(flat.shaped && flat.shaped.length));
+    })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 

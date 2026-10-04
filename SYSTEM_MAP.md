@@ -270,3 +270,7 @@ Det stora inbyggda skriptet i `arcade.html` delas upp i egna filer, ett område 
 
 ## Fairway: lutningstak (2026-10)
 `fd.maxSlopePct` (0/saknas = av, 1–20 %, reglage "Max lutning" i Fairway Studio, flik Bredd & Terräng). `applyFairwayPipeline` kör efter vågorna `window.limitHeightSlope` ("thermal relaxation": grannhöjder får skilja högst tak × rutnätsavstånd, överskottet flyttas mellan dem, massan bevaras). Fri inne i fairwayn, tonar ut över rough-ringen, låst i greenzonen och utanför. En kulle blir alltså mjukare, inte bortgrävd. `window.fairwayEditsHeights(fd)` avgör om en fairway rör höjder (vågor eller tak). Sparas som `maxSlopePct`. Kostnad: ~80 ms för en normal fairway, ~0,4 s för en mycket stor (400 m).
+
+## Planerarens "gula läge" (2026-10)
+`HoleGenerator.scoreSite/evaluateSite` har `env.allowShaping` (satt av kartplaneraren `blueprint.js`; slumpa hål är fortsatt strikt). En plats som den strikta kontrollen (`SLOPE`) avvisar men som ryms inom `HoleGenerator.SHAPE` blir **gul**: `ev.ok === true`, `ev.shaped` (['green','tee','fairway']) och `ev.work` (green/tee: största höjdändring i m = `cutDepth`, fairway: lutningstak i %). Gränser: green ≤ 3 m, tee ≤ 2,5 m, fairway ≤ 30 % lutning (soft 18 %). Därutöver förblir platsen röd.
+Vid bygge (`generate` med `placement`) formas marken: fairwayn skapas med `maxSlopePct` = `SHAPE.fairway.cap` (10 %), greenens `blendDistance` blir max(8, 4 × cut) (högst 15 m), tee-boxarnas `blendRadius` på samma sätt. Kartan visar gult (⚠️ i hålchippen, gul status med vad som sker), Bygg-knappen är aktiv.
