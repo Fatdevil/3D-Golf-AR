@@ -201,6 +201,8 @@ function serve() {
       delete fd._isSculpted; window.syncFairwaySculptFlag(fd);
       fd.maxSlopePct = 0; window.applyFairwayPipeline(hh, false, false, fd);
       check('switching off a loaded cap restores the baseline', window.getTerrainHeight(0, 150) > 3.9, 'centre ' + window.getTerrainHeight(0, 150).toFixed(2));
+      // terrain stamp / mountain tools are wrapped: a hill added inside the fairway is baked into its baseline
+      check('mountain and stamp tools bake into fairway baselines', ['applyTerrainStamp', 'executeRidgeMountain', 'executeSplineMountain'].every(function (nme) { return typeof window[nme] === 'function' && window[nme]._fairwayBaking === true; }));
       const pre3 = new Float32Array(p);
       for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 1 * Math.exp(-((x + 20) * (x + 20) + (z - 150) * (z - 150)) / 18); }
       const h3 = window.getTerrainHeight(-20, 150);

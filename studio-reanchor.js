@@ -158,4 +158,23 @@
         });
         return done;
     };
+
+    // Terrain tools that do not go through the sculpt stroke (mountain spline / ridge, terrain stamp): whatever they change inside a
+    // fairway must be baked into its baseline, otherwise a later slope-cap / wave edit restores the ground from before the tool.
+    // Green and tee are left to their own handling (bake only, no re-run).
+    ['applyTerrainStamp', 'executeRidgeMountain', 'executeSplineMountain'].forEach(function (name) {
+        var orig = window[name];
+        if (typeof orig !== 'function' || orig._fairwayBaking) return;
+        var wrapped = function () {
+            var geo = window._arcadePlaneGeo;
+            var pre = geo ? new Float32Array(geo.attributes.position.array) : null;
+            var result = orig.apply(this, arguments);
+            if (pre) {
+                try { window.reanchorStudiosAfterSculpt(pre, { bakeFairwaysOnly: true }); } catch (err) { console.error('[reanchor]', name, err); }
+            }
+            return result;
+        };
+        wrapped._fairwayBaking = true;
+        window[name] = wrapped;
+    });
 })();
