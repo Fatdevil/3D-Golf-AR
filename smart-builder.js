@@ -2365,6 +2365,8 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                     let nz = gz + tz;
                     if (nz < 0 || nz >= gH) continue;
                     let jz = nz * gW + gx;
+                    // a cell with no movable vertex cannot be fixed: ignore it (steep locked padding must not count as non-convergence)
+                    if (w[i] + w[jx] + w[jz] <= 0) continue;
                     let dx = h[i] - h[jx], dz = h[i] - h[jz];
                     let m = Math.sqrt(dx * dx + dz * dz);
                     if (m <= L) continue;
