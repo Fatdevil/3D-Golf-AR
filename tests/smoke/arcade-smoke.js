@@ -155,6 +155,38 @@ function serve() {
       })();
       check('no change means no work', window.reanchorStudiosAfterSculpt(new Float32Array(p)) === 0);
     })();
+
+    // fairway slope cap: a hill under the fairway is made gentler (not removed) and restored when the cap is turned off
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] = 4 * Math.exp(-(x * x + (z - 150) * (z - 150)) / 200); }
+      const hh = courseHoles[2] || courseHoles[0];
+      const pts = []; for (let k = 0; k < 8; k++) pts.push({ x: 40 * Math.cos(k / 8 * 6.283), y: 0, z: 150 + 12 * Math.sin(k / 8 * 6.283) });
+      const snap = window.captureFairwaySnapshot(hh, pts, 35);
+      const fd = { id: 'fw_t', points: pts, baseElevation: snap.baseElevation, bbox: snap.bbox, origHeights: snap.origHeights, origCanvasPixels: snap.origCanvasPixels, difficulty: 'FLAT', semiRoughWidth: 2, roughWidth: 5, roughEnabled: true, mowPattern: 'SOLID', edgeSharpness: 100, maxSlopePct: 0, seedOffsetX: 0, seedOffsetZ: 0 };
+      hh.fairways = [fd]; hh.fairwayData = fd; hh.activeFairwayIndex = 0;
+      const maxSlope = function () { let m = 0; for (let x = -30; x <= 30; x++) for (let z = 140; z <= 160; z++) { const a = window.getTerrainHeight(x, z); m = Math.max(m, Math.abs(window.getTerrainHeight(x + 1, z) - a), Math.abs(window.getTerrainHeight(x, z + 1) - a)); } return m; };
+      const centre = function () { return window.getTerrainHeight(0, 150); };
+      window.applyFairwayPipeline(hh, false, false, fd);
+      const natural = maxSlope(), c0 = centre();
+      fd.maxSlopePct = 8; window.applyFairwayPipeline(hh, false, false, fd);
+      const capped = maxSlope(), c1 = centre();
+      check('fairway slope cap: natural hill is steep (' + natural.toFixed(2) + ')', natural > 0.2 && Math.abs(c0 - 4) < 0.05, 'centre ' + c0.toFixed(2));
+      check('fairway slope cap 8 %: slope within limit', capped <= 0.10, 'max ' + (capped * 100).toFixed(1) + ' %');
+      check('fairway slope cap keeps a gentler hill', c1 > 0.3 && c1 < c0 - 0.3, 'centre ' + c1.toFixed(2));
+      // a sculpt stroke on top is baked into the baseline and the cap still holds
+      const pre = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 2 * Math.exp(-((x - 15) * (x - 15) + (z - 150) * (z - 150)) / 18); }
+      const redone = window.reanchorStudiosAfterSculpt(pre);
+      check('fairway re-run after sculpt keeps the cap', redone >= 1 && maxSlope() <= 0.10, 'redone ' + redone + ' max ' + (maxSlope() * 100).toFixed(1) + ' %');
+      // cap off: stroke baked, ground follows the sculpt (no stale restore)
+      fd.maxSlopePct = 0; window.applyFairwayPipeline(hh, false, false, fd);
+      check('cap off restores the natural hill incl. the sculpt', Math.abs(centre() - c0) < 0.1 && window.getTerrainHeight(15, 150) > 2, 'centre ' + centre().toFixed(2));
+      const pre3 = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 1 * Math.exp(-((x + 20) * (x + 20) + (z - 150) * (z - 150)) / 18); }
+      const h3 = window.getTerrainHeight(-20, 150);
+      check('plain fairway: stroke is baked without re-running', window.reanchorStudiosAfterSculpt(pre3) === 0 && Math.abs(window.getTerrainHeight(-20, 150) - h3) < 1e-6);
+    })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 

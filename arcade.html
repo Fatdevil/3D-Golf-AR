@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=31"></script>
+<script src="i18n.js?v=32"></script>
 <script src="physics.js?v=8"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -2521,6 +2521,16 @@
                             <button type="button" id="sf-diff-hard" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='HARD'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
                                 Svår <span style="font-size:8px; opacity:0.8;">±0.85m</span>
                             </button>
+                        </div>
+
+                        <!-- Slope cap: gentler fairway on a hill -->
+                        <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:10px; border:1px solid #334155;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sf_max_slope">Max lutning (spelbar)</span>
+                                <span id="sf-max-slope-val" style="color:#7db952; font-weight:700; font-size:9.5px;">Av</span>
+                            </div>
+                            <input type="range" id="sf-max-slope" min="0" max="20" value="0" step="1" oninput="let v=parseFloat(this.value); window._fairwayMaxSlopePct=v; let el=document.getElementById('sf-max-slope-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Av':'Off'); if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('maxSlopePct', v); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="width:100%; accent-color:#7db952; cursor:pointer;">
+                            <div style="color:#64748b; font-size:8px; margin-top:2px;" data-i18n="sf_max_slope_hint">Planar ut en kulle under fairwayn så den blir spelbar. 8–10 % är lagom.</div>
                         </div>
 
                         <!-- Step 2 -> Step 3 Guidance Button -->
@@ -15662,11 +15672,11 @@ window.triggerExplosion = function(x, y, z) {
     </script>
 
 <script src="green-studio.js?v=31"></script>
-<script src="fairway-studio.js?v=2"></script>
+<script src="fairway-studio.js?v=3"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=50"></script>
-<script src="studio-reanchor.js?v=1"></script>
+<script src="smart-builder.js?v=51"></script>
+<script src="studio-reanchor.js?v=2"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>

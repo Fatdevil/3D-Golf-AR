@@ -970,6 +970,14 @@
             if (rS && document.activeElement !== rS) rS.value = rw;
             if (rV) rV.textContent = rw.toFixed(0) + 'm';
 
+            // Flik 2 (Bredd & Terräng): slope cap
+            let msS = document.getElementById('sf-max-slope');
+            let msV = document.getElementById('sf-max-slope-val');
+            let msp = fd.maxSlopePct > 0 ? fd.maxSlopePct : 0;
+            window._fairwayMaxSlopePct = msp;
+            if (msS && document.activeElement !== msS) msS.value = msp;
+            if (msV) msV.textContent = msp > 0 ? msp.toFixed(0) + '%' : ((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Av' : 'Off');
+
             // Flik 2 (Bredd & Terräng): Difficulty cards
             let diff = fd.difficulty || 'FLAT';
             window._fairwayDifficulty = diff;
