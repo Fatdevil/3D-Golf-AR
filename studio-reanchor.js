@@ -1,4 +1,4 @@
-// Re-anchor green and tee boxes after a terrain sculpt stroke.
+// Re-anchor green, tee boxes and fairways after a terrain sculpt stroke.
 //
 // A green/tee is stored as "pristine terrain (origHeights) + flattening on top". A sculpt stroke edits the
 // finished surface, so before this file a hill raised under a green made the green bumpy, and simply
@@ -48,6 +48,17 @@
             var blend = gd.blendDistance !== undefined ? gd.blendDistance : 8;
             if (gDense) out.push({ kind: 'green', sd: gd, dense: gDense, reach: Math.max(blend, gd._maxBlendDistance || 0) + 3 });
         }
+        // Fairways: the stroke is always baked into the baseline (so a later wave / slope-cap setting does not restore stale ground);
+        // the pipeline only re-runs for fairways that actually edit heights
+        var fws = (hole && hole.fairways && hole.fairways.length) ? hole.fairways : (hole && hole.fairwayData ? [hole.fairwayData] : []);
+        fws.forEach(function (fd) {
+            if (!fd || !fd.bbox || !fd.origHeights || !fd.points || fd.points.length < 3 || typeof getDenseFairwayPoints !== 'function') return;
+            var fDense = getDenseFairwayPoints(fd.points);
+            if (!fDense) return;
+            var sr = fd.semiRoughWidth !== undefined ? fd.semiRoughWidth : 2;
+            var rw = (fd.roughEnabled !== false) ? (fd.roughWidth !== undefined ? fd.roughWidth : 5) : 0;
+            out.push({ kind: 'fairway', sd: fd, dense: fDense, reach: sr + rw + 12 });
+        });
         var tees = (hole && hole.teeBoxes && hole.teeBoxes.length) ? hole.teeBoxes : (hole && hole.teeData ? [hole.teeData] : []);
         tees.forEach(function (tb) {
             if (!tb || !tb.bbox || !tb.origHeights || !tb.points || tb.points.length < 3) return;
@@ -62,7 +73,9 @@
 
     // pre: Float32Array of the terrain (position attribute array) from BEFORE the stroke.
     // Returns the number of green/tee boxes that were re-flattened.
-    window.reanchorStudiosAfterSculpt = function (pre) {
+    // opts.bakeFairwaysOnly: only add the stroke to the fairway baselines (no re-run, green and tee untouched) - used for the water tool
+    window.reanchorStudiosAfterSculpt = function (pre, opts) {
+        opts = opts || {};
         var geo = window._arcadePlaneGeo;
         var holes = window.courseHoles;
         if (!geo || !holes || !pre) return 0;
@@ -74,6 +87,7 @@
         var jobs = [];
         holes.forEach(function (hole) {
             studiosOf(hole).forEach(function (st) {
+                if (opts.bakeFairwaysOnly && st.kind !== 'fairway') return;
                 var bb = st.sd.bbox, dense = st.dense;
                 var delta = null, relevant = false;
                 // cheap scan first: most strokes touch no green/tee at all
@@ -95,6 +109,7 @@
                         var vx = pos[idx2 * 3], vz = -pos[idx2 * 3 + 1];
                         var oi = (gz2 - bb.gzStart) * bb.gWidth + (gx2 - bb.gxStart);
                         var dd = delta.get(oi);
+                        if (st.kind === 'fairway' && dd === undefined) continue; // fairways need no average, only the changed vertices
                         var inside = ptInPoly(vx, vz, dense);
                         if (inside) { sumIn += (dd || 0); nIn++; }
                         else if (dd !== undefined && !relevant && distToPoly(vx, vz, dense) <= st.reach) relevant = true;
@@ -114,12 +129,22 @@
             var fresh = new Float32Array(sd.origHeights);
             j.delta.forEach(function (d, oi) { if (oi >= 0 && oi < fresh.length) fresh[oi] += d; });
             sd.origHeights = fresh;
-            sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
+            if (j.st.kind !== 'fairway') sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
         });
         var done = 0;
+        // fairway is the base layer: re-run it before the green and tees that sit on top of it
+        var rank = { fairway: 0, tee: 1, green: 2 };
+        jobs.sort(function (a, b) { return rank[a.st.kind] - rank[b.st.kind]; });
         jobs.forEach(function (j) {
-            if (!j.rerun) return;
+            if (!j.rerun || opts.bakeFairwaysOnly) return;
             try {
+                if (j.st.kind === 'fairway') {
+                    if (window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function') {
+                        window.applyFairwayPipeline(j.hole, false, false, j.st.sd);
+                        done++;
+                    }
+                    return;
+                }
                 if (j.st.kind === 'green' && typeof window.applyGreenPipeline === 'function') {
                     window.applyGreenPipeline(j.hole, false, false);
                     done++;
@@ -133,4 +158,23 @@
         });
         return done;
     };
+
+    // Terrain tools that do not go through the sculpt stroke (mountain spline / ridge, terrain stamp): whatever they change inside a
+    // fairway must be baked into its baseline, otherwise a later slope-cap / wave edit restores the ground from before the tool.
+    // Green and tee are left to their own handling (bake only, no re-run).
+    ['applyTerrainStamp', 'executeRidgeMountain', 'executeSplineMountain'].forEach(function (name) {
+        var orig = window[name];
+        if (typeof orig !== 'function' || orig._fairwayBaking) return;
+        var wrapped = function () {
+            var geo = window._arcadePlaneGeo;
+            var pre = geo ? new Float32Array(geo.attributes.position.array) : null;
+            var result = orig.apply(this, arguments);
+            if (pre) {
+                try { window.reanchorStudiosAfterSculpt(pre, { bakeFairwaysOnly: true }); } catch (err) { console.error('[reanchor]', name, err); }
+            }
+            return result;
+        };
+        wrapped._fairwayBaking = true;
+        window[name] = wrapped;
+    });
 })();

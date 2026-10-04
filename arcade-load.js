@@ -1120,6 +1120,7 @@
                                 if (fd.origHeights && Array.isArray(fd.origHeights)) {
                                     fd.origHeights = new Float32Array(fd.origHeights);
                                 }
+                                if (typeof window.syncFairwaySculptFlag === 'function') window.syncFairwaySculptFlag(fd);
                                 return fd;
                             });
                             h.activeFairwayIndex = 0;
@@ -1129,6 +1130,7 @@
                             if (h.fairwayData.origHeights && Array.isArray(h.fairwayData.origHeights)) {
                                 h.fairwayData.origHeights = new Float32Array(h.fairwayData.origHeights);
                             }
+                            if (typeof window.syncFairwaySculptFlag === 'function') window.syncFairwaySculptFlag(h.fairwayData);
                             h.fairways = [h.fairwayData];
                             h.activeFairwayIndex = 0;
                         } else {

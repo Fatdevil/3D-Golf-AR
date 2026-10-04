@@ -2321,6 +2321,108 @@ window.restoreFairwayFootprint = function(fd, hole) {
 };
 
 // 2. Restore pristine baseline ground & texture before applying modified parameters
+// A fairway only rewrites terrain heights when it has waves (difficulty) or a slope cap (maxSlopePct, in %)
+window.fairwayEditsHeights = function(fd) {
+    return !!(fd && ((fd.difficulty && fd.difficulty !== 'FLAT') || (fd.maxSlopePct > 0)));
+};
+
+// _isSculpted is not saved with the course: a loaded fairway that edits heights must still restore its baseline
+// when the user switches the edit off, so the flag is derived once from the saved settings (load / first live edit).
+window.syncFairwaySculptFlag = function(fd) {
+    if (fd && fd._isSculpted === undefined) fd._isSculpted = window.fairwayEditsHeights(fd);
+};
+
+// Slope limiter ("thermal relaxation"): neighbouring height samples may differ by at most maxSlope * spacing.
+// Excess is moved between the two samples, shared by weight: weight 0 = locked (stays put), weight 1 = free.
+// Between two free samples the height is only moved, not lost; next to a locked sample (the edge of the zone)
+// the free side is lowered to meet the cap and the locked side cannot take the volume, so the hill is cut there.
+// A hill under the fairway is therefore made gentler, not removed.
+// h: Float32Array (gW*gH, row = gz), w: Float32Array weights. Returns { iters, converged, maxSlope }.
+window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, budgetMs) {
+    let L = maxSlope * spacing;
+    if (!(L > 0)) return { iters: 0, converged: true, maxSlope: 0 };
+    let tol = L * 0.05;
+    let it = 0, worst = 0;
+    let verifyExcess = function() {
+        let wmax = 0;
+        for (let gz = 0; gz < gH; gz++) {
+            for (let gx = 0; gx < gW; gx++) {
+                let i = gz * gW + gx;
+                for (let sx = -1; sx <= 1; sx += 2) {
+                    let nx = gx + sx;
+                    if (nx < 0 || nx >= gW) continue;
+                    let jx = gz * gW + nx;
+                    for (let tz = -1; tz <= 1; tz += 2) {
+                        let nz = gz + tz;
+                        if (nz < 0 || nz >= gH) continue;
+                        let jz = nz * gW + gx;
+                        if (w[i] + w[jx] + w[jz] <= 0) continue;
+                        let dx = h[i] - h[jx], dz = h[i] - h[jz];
+                        let ex = Math.sqrt(dx * dx + dz * dz) - L;
+                        if (ex > wmax) wmax = ex;
+                    }
+                }
+            }
+        }
+        return wmax;
+    };
+    let t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
+    for (; it < (maxIter || 300); it++) {
+        // wall-clock budget so a huge fairway cannot freeze the editor; the caller is told if the cap was not reached
+        if (budgetMs && it > 0 && (it & 15) === 0 && performance.now() - t0 > budgetMs) break;
+        worst = 0;
+        let fwd = (it % 2 === 0);
+        for (let a = 0; a < gH; a++) {
+            let gz = fwd ? a : gH - 1 - a;
+            for (let b = 0; b < gW; b++) {
+                let gx = fwd ? b : gW - 1 - b;
+                let i = gz * gW + gx;
+                // Each vertex looks at two grid cells that touch it (x-neighbour on the sweep side, z-neighbour up and down).
+                // The cap applies to the gradient MAGNITUDE of the cell, hypot(dx, dz), so diagonal slopes are not
+                // allowed to be sqrt2 steeper than slopes along the axes. Over two sweeps all four cells are covered.
+                let sx = fwd ? 1 : -1;
+                let nx = gx + sx;
+                if (nx < 0 || nx >= gW) continue;
+                let jx = gz * gW + nx;
+                for (let tz = -1; tz <= 1; tz += 2) {
+                    let nz = gz + tz;
+                    if (nz < 0 || nz >= gH) continue;
+                    let jz = nz * gW + gx;
+                    // a cell with no movable vertex cannot be fixed: ignore it (steep locked padding must not count as non-convergence)
+                    if (w[i] + w[jx] + w[jz] <= 0) continue;
+                    let dx = h[i] - h[jx], dz = h[i] - h[jz];
+                    let m = Math.sqrt(dx * dx + dz * dz);
+                    if (m <= L) continue;
+                    if (m - L > worst) worst = m - L;
+                    let k = (1 - L / m) * 1.25; // mild over-relaxation: ~1.7x fewer sweeps (1.5+ overshoots and flattens everything)
+                    let wa = w[i];
+                    // pair (i, jx)
+                    let ws = wa + w[jx];
+                    if (ws > 0) {
+                        let mv = dx * k;
+                        h[i] -= mv * (wa / ws);
+                        h[jx] += mv * (w[jx] / ws);
+                    }
+                    // pair (i, jz)
+                    ws = wa + w[jz];
+                    if (ws > 0) {
+                        let mv = dz * k;
+                        h[i] -= mv * (wa / ws);
+                        h[jz] += mv * (w[jz] / ws);
+                    }
+                }
+            }
+        }
+        if (worst <= tol) {
+            // the sweep only saw gradients as they were when visited: confirm with a full read-only scan of all four cells per vertex
+            worst = verifyExcess();
+            if (worst <= tol) { it++; break; }
+        }
+    }
+    // worst = largest gradient excess seen in the last sweep (0 when the sweep found nothing to fix)
+    return { iters: it, converged: worst <= tol, maxSlope: (L + worst) / spacing };
+};
+
 window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
     if (restoreTexture === undefined) restoreTexture = false;
     if (!hole) return;
@@ -2341,7 +2443,7 @@ window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
     fds.forEach(fd => {
         if (!fd || !fd.bbox) return;
         // If this fairway is FLAT and was never sculpted, don't restore heights
-        let isCurrentlySculpted = fd._isSculpted || (fd.difficulty && fd.difficulty !== 'FLAT');
+        let isCurrentlySculpted = fd._isSculpted || window.fairwayEditsHeights(fd);
         if (!isCurrentlySculpted && !restoreTexture) return;
 
         let densePts = (fd.points && fd.points.length >= 3 && typeof getDenseFairwayPoints === 'function') ? getDenseFairwayPoints(fd.points) : null;
@@ -2467,7 +2569,7 @@ window._upperLayerSince = 0;
 
 window.anyFairwaySculpted = function(hole) {
     return !!(hole && hole.fairways && hole.fairways.some(function(f) {
-        return f && (f._isSculpted || (f.difficulty && f.difficulty !== 'FLAT'));
+        return f && (f._isSculpted || window.fairwayEditsHeights(f));
     }));
 };
 
@@ -2570,7 +2672,8 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
 
         // === SCULPT PASS ===
         let difficulty = fd.difficulty || 'FLAT';
-        if (difficulty !== 'FLAT' && fd.bbox && fd.origHeights) {
+        let slopeCap = (fd.maxSlopePct > 0) ? fd.maxSlopePct / 100 : 0;
+        if ((difficulty !== 'FLAT' || slopeCap > 0) && fd.bbox && fd.origHeights) {
             // Green protection: gather green points if hole has a green
             let greenPts = null;
             let greenBlend = 8.0;
@@ -2645,6 +2748,44 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
                     positions[idx*3+2] = originalH + (targetHeight - originalH) * influence;
                 }
             }
+
+            // Slope cap: make the fairway playable on a hill. Free inside the outline, fading out over the
+            // rough ring; the green zone and everything outside stays locked.
+            if (slopeCap > 0) {
+                let gW = fd.bbox.gWidth, gH = fd.bbox.gHeight;
+                let spacing = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
+                let feather = Math.max(2, semiRoughWidth + roughWidth);
+                let hh = new Float32Array(gW * gH), ww = new Float32Array(gW * gH);
+                for (let gz = gzStart; gz <= gzEnd; gz++) {
+                    for (let gx = gxStart; gx <= gxEnd; gx++) {
+                        let idx = gz * (window.TERRAIN_SEGS + 1) + gx;
+                        let li = (gz - gzStart) * gW + (gx - gxStart);
+                        if (li < 0 || li >= hh.length) continue;
+                        hh[li] = positions[idx*3+2];
+                        let vx = positions[idx*3], vz = -positions[idx*3+1];
+                        if (greenPts && (pointInPolygon(vx, vz, greenPts) || distToPolygon(vx, vz, greenPts) < greenBlend)) continue;
+                        if (pointInPolygon(vx, vz, densePts)) { ww[li] = 1; continue; }
+                        let dE = distToPolygon(vx, vz, densePts);
+                        if (dE < feather) { let t = 1 - dE / feather; ww[li] = t * t * (3 - 2 * t); }
+                    }
+                }
+                let lim = window.limitHeightSlope(hh, ww, gW, gH, slopeCap, spacing, 3000, 600);
+                fd._slopeCapReached = lim.converged;
+                if (!lim.converged && lim.maxSlope > slopeCap * 1.1) {
+                    console.warn('[fairway] slope cap not fully reached: ' + (lim.maxSlope * 100).toFixed(1) + ' % (cap ' + (slopeCap * 100).toFixed(0) + ' %)');
+                    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                    if (typeof window.showBuildToast === 'function') window.showBuildToast(isSv
+                        ? ('Lutningstaket nåddes inte helt (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Höj taket eller dela upp fairwayn.')
+                        : ('Slope cap not fully reached (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Raise the cap or split the fairway.'), '#f59e0b');
+                }
+                for (let gz = gzStart; gz <= gzEnd; gz++) {
+                    for (let gx = gxStart; gx <= gxEnd; gx++) {
+                        let li = (gz - gzStart) * gW + (gx - gxStart);
+                        if (li < 0 || li >= hh.length || ww[li] <= 0) continue;
+                        positions[(gz * (window.TERRAIN_SEGS + 1) + gx)*3+2] = hh[li];
+                    }
+                }
+            }
         }
     });
 
@@ -2662,7 +2803,7 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
     }
 
     // Sync mesh geometry only if difficulty is not FLAT or if fairway was previously sculpted
-    let hasNonFlat = fds.some(fd => fd.difficulty && fd.difficulty !== 'FLAT');
+    let hasNonFlat = fds.some(fd => window.fairwayEditsHeights(fd));
     let hadSculpted = fds.some(fd => fd._isSculpted);
     let needsGeometrySync = hasNonFlat || hadSculpted;
 
@@ -2683,7 +2824,7 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
     }
 
     fds.forEach(fd => {
-        fd._isSculpted = (fd.difficulty && fd.difficulty !== 'FLAT');
+        fd._isSculpted = window.fairwayEditsHeights(fd);
     });
     } finally {
         window._isApplyingFairwayPipeline = false;
@@ -2712,6 +2853,7 @@ window.updateLiveFairway = function(property, value) {
     // pipeline can remove the old ring instead of leaving it behind (course reloaded from file).
     if (!fd._paint && fd.points && fd.points.length >= 3) fd._paint = fairwayFootprint(fd);
 
+    window.syncFairwaySculptFlag(fd); // before the property changes: was the fairway editing heights until now?
     fd[property] = value;
 
     let needsRepaint = (property === 'semiRoughWidth' || property === 'roughWidth' || property === 'roughEnabled' || property === 'edgeSharpness' || property === 'mowPattern');
@@ -3228,6 +3370,7 @@ window.executeSmartFairway = function() {
         roughEnabled: roughEnabled,
         mowPattern: mowPattern,
         edgeSharpness: sharpness,
+        maxSlopePct: window._fairwayMaxSlopePct || 0,
         seedOffsetX: (Math.random() - 0.5) * 200,
         seedOffsetZ: (Math.random() - 0.5) * 200
     };

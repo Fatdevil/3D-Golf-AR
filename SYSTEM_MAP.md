@@ -266,4 +266,7 @@ Det stora inbyggda skriptet i `arcade.html` delas upp i egna filer, ett område 
 - Green och tee lagras som "orörd mark (`origHeights`) + utplaning". Ett sculpt-drag ändrar den färdiga ytan, så att bara köra om pipelinen hade återställt gamla `origHeights` och raderat draget.
 - Efter draget läggs höjdskillnaden (marken före draget sparas i `window._strokePreHeights` vid pointerdown) in i `origHeights`, `baseElevation` flyttas med medelskillnaden under ytan, och `applyGreenPipeline` / `applyTeePipeline(..., heightsOnly)` körs om. Resultat: platt yta på den nya marknivån, kullen finns kvar runt omkring.
 - `origHeights` ersätts alltid med en NY array (undo-tillstånden pekar på den gamla), så ångra/gör om stämmer.
-- Fairway och bunkrar berörs inte än (fairway ska mjukas, inte plattas ut).
+- Fairways: sculpt-draget bakas alltid in i fairwayns `origHeights`; pipelinen körs om bara om fairwayn redigerar höjder (vågor eller lutningstak). Bunkrar berörs inte än.
+
+## Fairway: lutningstak (2026-10)
+`fd.maxSlopePct` (0/saknas = av, 1–20 %, reglage "Max lutning" i Fairway Studio, flik Bredd & Terräng). `applyFairwayPipeline` kör efter vågorna `window.limitHeightSlope` ("thermal relaxation": grannhöjder får skilja högst tak × rutnätsavstånd, överskottet flyttas mellan dem, massan bevaras). Fri inne i fairwayn, tonar ut över rough-ringen, låst i greenzonen och utanför. En kulle blir alltså mjukare, inte bortgrävd. `window.fairwayEditsHeights(fd)` avgör om en fairway rör höjder (vågor eller tak). Sparas som `maxSlopePct`. Kostnad: ~80 ms för en normal fairway, ~0,4 s för en mycket stor (400 m).
