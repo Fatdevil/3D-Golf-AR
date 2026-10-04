@@ -10532,12 +10532,12 @@
             // Legacy handler — no longer reachable from UI
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || (currentTool === 'PAINT' && window._paintToolMode !== 'POLYGON') || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') || currentTool === 'RAMP') {
             if (e.button !== 0 && e.button !== 2) return; // SF-08: Only Left & Right buttons mutate terrain
+            if (isSculpting && activeSculptPointerId !== null && e.pointerId !== activeSculptPointerId) return; // a second finger must not restart the running stroke
             activeSculptPointerId = e.pointerId; // SF-09: Bind active pointer
             try {
                 renderer.domElement.setPointerCapture(e.pointerId);
             } catch(err) {}
             
-            const _strokeAlreadyActive = isSculpting; // a second finger while the first stroke is still running
             isSculpting = true;
             controls.enabled = false; 
             let baseDir = (window.ipadSculptDir === -1) ? -1 : 1;
@@ -10546,7 +10546,7 @@
             
             // SF-13: Defer undo commit until first actual mutation
             strokePendingUndo = captureEditorState();
-            window._strokePreHeights = (_strokeAlreadyActive && window._strokePreHeights) || strokePendingUndo.heights; // the undo state is committed on the first mutation, keep the terrain-before copy
+            window._strokePreHeights = strokePendingUndo.heights; // the undo state is committed on the first mutation, keep the terrain-before copy
             strokeHasModified = false;
             
             if (currentTool === 'RAMP' && lastHitPoint) {
