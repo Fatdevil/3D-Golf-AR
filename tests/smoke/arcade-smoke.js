@@ -286,22 +286,27 @@ function serve() {
     })();
 
     // blueprint overlay: the page must not move when the status changes between green, yellow and red while dragging
-    (function () {
+    await (async function () {
       const BP = window.HoleBlueprint;
       const eh3 = courseHoles[courseHoles.length - 3];
       eh3.greenData = null; eh3.fairways = []; eh3.fairwayData = null; eh3.bunkers = []; eh3.bunkerData = null; eh3.teeBoxes = []; eh3.teeData = null; eh3.flag = null; eh3.aimPoint = null; eh3.plannedGreen = null;
       window.changeHoleTo(courseHoles.length - 3);
       const p4 = planeGeo.attributes.position.array, n4 = planeGeo.attributes.position.count;
-      for (let i = 0; i < n4; i++) { const x = p4[i * 3]; p4[i * 3 + 2] = 5 * Math.exp(-((x - 40) * (x - 40)) / 1250); }
+      for (let i = 0; i < n4; i++) { const x = p4[i * 3]; p4[i * 3 + 2] = 5 * Math.exp(-((x - 40) * (x - 40)) / 1250) + 3 * Math.exp(-((x + 90) * (x + 90) + (-p4[i * 3 + 1] - 60) * (-p4[i * 3 + 1] - 60)) / 450); }
       planeGeo.attributes.position.needsUpdate = true;
       BP.open();
-      const S = BP.state(), sk = S.sketches[0], seen = {}, tops = [];
-      for (let hd = 0; hd < 6.3; hd += Math.PI / 4) for (let ox = -240; ox <= 240; ox += 80) for (let oz = -240; oz <= 240; oz += 80) {
+      const S = BP.state();
+      // open() starts an asynchronous search for a good spot (status "searching", detail row cleared): wait until it is done
+      for (let w = 0; w < 80 && S.busy; w++) await new Promise(function (r) { setTimeout(r, 100); });
+      const sk = S.sketches[0], seen = {}, tops = [];
+      for (let hd = 0; hd < 6.3; hd += Math.PI / 4) for (let ox = -240; ox <= 240; ox += 40) for (let oz = -240; oz <= 240; oz += 40) {
         sk.origin = { x: ox, z: oz }; sk.heading = hd; BP.evaluate(0);
         const e = sk.ev, kind = !e.ok ? 'red' : ((e.shaped && e.shaped.length) ? 'yellow' : 'green');
-        if (!seen[kind]) { seen[kind] = true; tops.push(Math.round(S.canvas.getBoundingClientRect().top) + '/' + Math.round(S.dom.status.getBoundingClientRect().height)); }
+        if (!seen[kind]) { seen[kind] = { status: S.dom.status.textContent, detail: S.dom.detail.textContent }; tops.push(Math.round(S.canvas.getBoundingClientRect().top) + '/' + Math.round(S.dom.status.getBoundingClientRect().height)); }
       }
-      check('blueprint layout is identical for green, yellow and red status', Object.keys(seen).length >= 2 && tops.every(function (t) { return t === tops[0]; }), JSON.stringify([Object.keys(seen), tops]));
+      const all3 = !S.busy && seen.red && seen.yellow && seen.green;
+      check('blueprint layout is identical for green, yellow and red status', all3 && tops.every(function (t) { return t === tops[0]; }), JSON.stringify([seen, tops, S.busy]));
+      check('the yellow status shows what happens to the ground; green and red leave the detail row empty', all3 && seen.yellow.detail.length > 3 && seen.green.detail === '' && seen.red.detail === '' && /utplaning|reshaping/i.test(seen.yellow.status), JSON.stringify(seen));
       BP.close(false);
     })();
     return out;
