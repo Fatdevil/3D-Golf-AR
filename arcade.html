@@ -10755,12 +10755,14 @@
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault(), false);
     
     // SF-01: Centralized cleanup for pointerleave, pointercancel, blur
-    renderer.domElement.addEventListener('pointerleave', () => {
+    renderer.domElement.addEventListener('pointerleave', (e) => {
+        if (activeSculptPointerId !== null && e && e.pointerId !== undefined && e.pointerId !== activeSculptPointerId) return; // ignored second finger
         finalizeSculptStroke({ save: true });
     }, false);
     
     renderer.domElement.addEventListener('pointercancel', (e) => {
         if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag(e);
+        if (activeSculptPointerId !== null && e.pointerId !== undefined && e.pointerId !== activeSculptPointerId) return; // ignored second finger
         finalizeSculptStroke({ save: true });
     }, false);
     
