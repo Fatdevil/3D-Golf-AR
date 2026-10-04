@@ -38,6 +38,14 @@
         bunker:  { max: 0.25, range: 6 },
         fairway: { max: 0.18, soft: 0.10, softShare: 0.15 }
     };
+    // What the builders can reshape (blueprint "yellow" sites): green / tee are cut or filled to a plateau at the mean height of
+    // the footprint, `cut` = the largest height change in metres; the fairway only gets a slope cap (`cap`, in %) so the hill stays but plays
+    const SHAPE = {
+        green:   { cut: 3 },
+        tee:     { cut: 2.5 },
+        fairway: { max: 0.30, soft: 0.18, softShare: 0.25, cap: 10 },
+        blendPerMeter: 4, minBlend: 8, maxBlend: 15, teeMinBlend: 4, teeMaxBlend: 15
+    };
     const FAIRWAY_START = 80;     // the tee layout spans ~56 m forward of the back tee
     const MAP_HALF = 300;
     const MAP_MARGIN = 25;
@@ -381,6 +389,17 @@
         if (lim.soft && pts.length && steep / pts.length > lim.softShare) return 'slope';
         return null;
     }
+    // How far the ground must move to make this polygon a flat plateau at its mean height: the largest |height - mean|
+    function cutDepth(poly, step, h) {
+        let pts = interior(poly, step).concat(densify(poly, step, true));
+        if (!pts.length) return 0;
+        let ys = pts.map(function (p) { return h(p.x, p.z); }), mean = 0;
+        ys.forEach(function (y) { mean += y; });
+        mean /= ys.length;
+        let worst = 0;
+        ys.forEach(function (y) { if (Math.abs(y - mean) > worst) worst = Math.abs(y - mean); });
+        return worst;
+    }
     // Is the terrain under this placed hole flat enough? env.heightAt(x, z) gives ground height.
     // Returns { ok, reasons: ['green_slope', ...] } - reasons also tell a future blueprint view why a spot is red.
     function scoreSite(wp, env) {
@@ -389,16 +408,37 @@
         // only the parts that will be built count (env.parts; default: all)
         let parts = (env && env.parts) || normalizeParts(null);
         let withFairway = !!(wp.fairway && parts.fairway);
+        // blueprint sites may be "yellow": too steep for nature as it is, but within what the builders can reshape
+        let shape = !!(env && env.allowShaping);
         // cheap first look: the centre line every ~20 m (most hilly spots fail here without any polygon sampling)
         if (withFairway) {
+            let lim = shape ? SHAPE.fairway.max : SLOPE.fairway.max;
             for (let i = 0; i < wp.centerline.length; i++) {
                 let c = wp.centerline[i];
                 // only where the fairway actually lies (the line also runs under the tee and green)
-                if (inPoly(c.x, c.z, wp.fairway) && slopeAt(h, c.x, c.z) > SLOPE.fairway.max) return { ok: false, reasons: ['fairway_slope'] };
+                if (inPoly(c.x, c.z, wp.fairway) && slopeAt(h, c.x, c.z) > lim) return { ok: false, reasons: ['fairway_slope'] };
             }
         }
-        let reasons = [];
-        let test = function (name, poly, step, lim) { if (!reasons.length) { let r = checkArea(poly, step, h, lim); if (r) reasons.push(name + '_' + r); } };
+        let reasons = [], shaped = [], work = {};
+        let test = function (name, poly, step, lim) {
+            if (reasons.length) return;
+            let r = checkArea(poly, step, h, lim);
+            if (!r) return;
+            if (shape && name === 'fairway' && !checkArea(poly, step, h, SHAPE.fairway)) {
+                if (shaped.indexOf(name) < 0) shaped.push(name);
+                work.fairway = SHAPE.fairway.cap;
+                return;
+            }
+            if (shape && SHAPE[name] && SHAPE[name].cut) {
+                let c = cutDepth(poly, step, h);
+                if (c <= SHAPE[name].cut) {
+                    if (shaped.indexOf(name) < 0) shaped.push(name);
+                    work[name] = Math.max(work[name] || 0, c);
+                    return;
+                }
+            }
+            reasons.push(name + '_' + r);
+        };
         if (parts.green) test('green', wp.green, 3, SLOPE.green);
         if (parts.tee) (wp.teeBoxes || []).forEach(function (b) { test('tee', b, 3, SLOPE.tee); });
         wp.bunkers.forEach(function (b, i) {
@@ -407,7 +447,7 @@
             test('bunker', b, 4, SLOPE.bunker);
         });
         if (withFairway) test('fairway', wp.fairway, 5, SLOPE.fairway);
-        return { ok: reasons.length === 0, reasons: reasons };
+        return { ok: reasons.length === 0, reasons: reasons, shaped: shaped, work: work };
     }
 
     // Why did placement fail? Out-of-bounds tries are cheap and common for long holes anywhere on the map,
@@ -583,6 +623,7 @@
         if (env && env.heightAt) {
             let sc = scoreSite(wp, env);
             if (!sc.ok) return { ok: false, reasons: sc.reasons, world: wp };
+            if (sc.shaped && sc.shaped.length) return { ok: true, reasons: [], world: wp, shaped: sc.shaped, work: sc.work };
         }
         return { ok: true, reasons: [], world: wp };
     }
@@ -792,6 +833,7 @@
             parts: normalizeParts(parts)
         };
         if (o && o.diag) env.diag = {};
+        if (o && o.allowShaping) env.allowShaping = true;
         return env;
     }
 
@@ -810,14 +852,17 @@
         }
         hole.plannedGreen = null;   // the hole is empty here; any older plan is stale
         let par = clampPar(opts.par != null ? opts.par : (hole.par || 4));
-        let env = siteEnv(parts, { diag: true });
+        // a blueprint sketch may stand on ground that needs reshaping (yellow); random placement stays strict
+        let env = siteEnv(parts, { diag: true, allowShaping: !!(opts.placement && opts.seed != null) });
         let res;
+        let shaped = null, shapeWork = {};
         if (opts.placement && opts.seed != null) {
             // a blueprint sketch: the user already chose the spot, we only re-check it
             let plan = planFor(par, opts.seed);
             let pl = opts.placement;
             let ev = evaluateSite(plan, { x: pl.x, z: pl.z }, pl.heading || 0, env);
             res = ev.ok ? { seed: opts.seed, plan: plan, placed: { world: ev.world, origin: { x: pl.x, z: pl.z }, heading: pl.heading || 0 } } : null;
+            if (ev.ok && ev.shaped && ev.shaped.length) { shaped = ev.shaped; shapeWork = ev.work || {}; }
             if (!res) {
                 toast(t('bp_site_bad', '⚠️ Platsen fungerar inte längre. Öppna kartan och flytta hålet.'), '#ef4444');
                 return null;
@@ -845,8 +890,22 @@
         let realSave = root.saveUndoState;
         root.saveUndoState = function () { };
         try {
-            if (wp.fairway && parts.fairway) buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); });
-            if (parts.green) buildShape('GREEN', wp.green, function () { root.executeSplineSmartGreen(); });
+            if (wp.fairway && parts.fairway) {
+                // a fairway on a hill gets a slope cap: the hill stays but becomes playable
+                let capNow = shaped && shaped.indexOf('fairway') >= 0;
+                let prevCap = root._fairwayMaxSlopePct;
+                if (capNow) root._fairwayMaxSlopePct = SHAPE.fairway.cap;
+                try { buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); }); }
+                finally { root._fairwayMaxSlopePct = prevCap; }
+            }
+            if (parts.green) {
+                buildShape('GREEN', wp.green, function () { root.executeSplineSmartGreen(); });
+                // cutting a hill needs a wider blend, or the plateau ends in a wall
+                if (shaped && shaped.indexOf('green') >= 0 && hole.greenData && typeof root.applyGreenPipeline === 'function') {
+                    hole.greenData.blendDistance = Math.min(SHAPE.maxBlend, Math.max(SHAPE.minBlend, (shapeWork.green || 0) * SHAPE.blendPerMeter));
+                    root.applyGreenPipeline(hole, false, true);
+                }
+            }
             wp.bunkers.forEach(function (b, i) {
                 let kind = wp.bunkerKinds[i];
                 if ((kind === 'green' && !parts.greenBunkers) || (kind === 'fairway' && !parts.fairwayBunkers)) return;
@@ -865,6 +924,12 @@
                 }
                 if (typeof root.setSmartBuilderType === 'function') root.setSmartBuilderType('TEE');
                 root.buildStandardTeeLayout(wp.tee.x, wp.tee.z);
+                if (shaped && shaped.indexOf('tee') >= 0 && typeof root.applyTeePipeline === 'function') {
+                    (hole.teeBoxes || []).forEach(function (tb) {
+                        tb.blendRadius = Math.min(SHAPE.teeMaxBlend, Math.max(SHAPE.teeMinBlend, (shapeWork.tee || 0) * SHAPE.blendPerMeter));
+                        root.applyTeePipeline(hole, false, false, tb, true);
+                    });
+                }
             }
             // green left out: remember where it was planned so the user can build it there
             hole.plannedGreen = parts.green ? null : { x: wp.greenCenter.x, z: wp.greenCenter.z, r: Math.max(12, wp.greenReach || 15) };
@@ -882,13 +947,13 @@
         if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
         refreshPlannedGreenMarker();
         focusCamera(wp);
-        toast(t('hg_done', '🎲 Hål slumpat! Ändra fritt – Ångra tar bort hela hålet.') + ' (#' + res.seed + ')', '#4ade80');
+        toast(t('hg_done', '🎲 Hål slumpat! Ändra fritt – Ångra tar bort hela hålet.') + ' (#' + res.seed + ')', (shaped ? ' ' + t('hg_shaped', '⛰️ Marken formades för att hålet ska gå att spela.') : ''), '#4ade80');
         return { seed: res.seed, plan: res.plan, world: wp };
     }
 
     root.HoleGenerator = {
         RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, SHAPE: SHAPE, cutDepth: cutDepth, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)

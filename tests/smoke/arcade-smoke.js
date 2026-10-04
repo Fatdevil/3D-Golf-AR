@@ -208,6 +208,42 @@ function serve() {
       const h3 = window.getTerrainHeight(-20, 150);
       check('plain fairway: stroke is baked without re-running', window.reanchorStudiosAfterSculpt(pre3) === 0 && Math.abs(window.getTerrainHeight(-20, 150) - h3) < 1e-6);
     })();
+
+    // blueprint "yellow" sites: strict planner says no, shaping mode says yes (with how much ground moves); a cliff stays red
+    (function () {
+      const HG = window.HoleGenerator;
+      const plan = HG.planFor(4, 12345), origin = { x: -150, z: 150 }, heading = 0.3;
+      const wp0 = HG.worldPlan(plan, origin, heading), gc = wp0.greenCenter;
+      const flatEnv = function (hillH) { return { half: 300, others: { points: [], polygons: [] }, parts: HG.normalizeParts(null), heightAt: function (x, z) { return hillH * Math.exp(-((x - gc.x) * (x - gc.x) + (z - gc.z) * (z - gc.z)) / (2 * 7 * 7)); } }; };
+      const strict = HG.evaluateSite(plan, origin, heading, flatEnv(2.2));
+      const e2 = flatEnv(2.2); e2.allowShaping = true;
+      const yellow = HG.evaluateSite(plan, origin, heading, e2);
+      const e3 = flatEnv(12); e3.allowShaping = true;
+      const cliff = HG.evaluateSite(plan, origin, heading, e3);
+      const e4 = flatEnv(0); e4.allowShaping = true;
+      const flat = HG.evaluateSite(plan, origin, heading, e4);
+      check('hill under the green: strict planner rejects', !strict.ok && /green_/.test(strict.reasons[0]), JSON.stringify(strict.reasons));
+      check('hill under the green: shaping mode accepts it as yellow with a cut depth', yellow.ok && yellow.shaped && yellow.shaped.indexOf('green') >= 0 && yellow.work.green > 0.3 && yellow.work.green <= 3, JSON.stringify([yellow.shaped, yellow.work]));
+      check('a 12 m cliff stays red even when shaping is allowed', !cliff.ok, JSON.stringify(cliff.reasons));
+      // full build from a yellow blueprint site: green flat, fairway capped
+      (function () {
+        const p2 = planeGeo.attributes.position.array, n2 = planeGeo.attributes.position.count;
+        const mid = wp0.centerline[Math.floor(wp0.centerline.length / 2)];
+        for (let i = 0; i < n2; i++) { const x = p2[i * 3], z = -p2[i * 3 + 1]; p2[i * 3 + 2] = 2.2 * Math.exp(-((x - gc.x) ** 2 + (z - gc.z) ** 2) / 98) + 4 * Math.exp(-((x - mid.x) ** 2 + (z - mid.z) ** 2) / 200); }
+        planeGeo.attributes.position.needsUpdate = true; planeGeo.computeVertexNormals(); if (window._terrainChunks) window._terrainChunks.syncAll();
+        // earlier checks used the first holes: clear the last one so the generator sees an empty hole
+        const idx = courseHoles.length - 1, eh = courseHoles[idx];
+        eh.greenData = null; eh.fairways = []; eh.fairwayData = null; eh.bunkers = []; eh.bunkerData = null; eh.teeBoxes = []; eh.teeData = null; eh.flag = null; eh.aimPoint = null; eh.plannedGreen = null;
+        if (!HG.holeIsEmpty(eh)) { check('yellow site builds (needs an empty hole)', false, 'hole not empty'); return; }
+        window.changeHoleTo(idx);
+        const hole = courseHoles[idx];
+        const built = HG.generate({ par: 4, seed: 12345, placement: { x: origin.x, z: origin.z, heading: heading } });
+        let lo = 1e9, hi = -1e9;
+        for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) { const x = gc.x + a * 2, z = gc.z + b * 2; if (HG.inPoly(x, z, wp0.green)) { const y = window.getTerrainHeight(x, z); lo = Math.min(lo, y); hi = Math.max(hi, y); } }
+        check('yellow site builds: green is flat, fairway has the slope cap', !!built && hole.greenData && hi - lo < 0.05 && hole.fairways[0] && hole.fairways[0].maxSlopePct === 10, 'spread ' + (hi - lo).toFixed(3) + ' cap ' + (hole.fairways[0] && hole.fairways[0].maxSlopePct));
+      })();
+      check('flat ground stays plain green (no shaping)', flat.ok && !(flat.shaped && flat.shaped.length));
+    })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 

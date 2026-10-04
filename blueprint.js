@@ -9,7 +9,7 @@
     'use strict';
     if (typeof document === 'undefined') return;
 
-    const COLORS = { ok: '#4ade80', bad: '#f87171' };
+    const COLORS = { ok: '#4ade80', warn: '#fbbf24', bad: '#f87171' };
     let S = null;   // open map state
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
@@ -117,16 +117,17 @@
     function drawSketch(ctx, sk, i, selected) {
         const ev = sk.ev, wp = ev && ev.world;
         if (!wp) return;
-        const col = ev.ok ? COLORS.ok : COLORS.bad;
+        const warn = !!(ev.ok && ev.shaped && ev.shaped.length);   // yellow: fine after the builders reshape the ground
+        const col = ev.ok ? (warn ? COLORS.warn : COLORS.ok) : COLORS.bad;
         ctx.globalAlpha = selected ? 1 : 0.6;
         ctx.lineWidth = selected ? 2.5 : 1.5; ctx.strokeStyle = col;
-        if (wp.fairway) { polyPath(ctx, wp.fairway); ctx.fillStyle = ev.ok ? 'rgba(74,222,128,0.38)' : 'rgba(248,113,113,0.38)'; ctx.fill(); ctx.stroke(); }
+        if (wp.fairway) { polyPath(ctx, wp.fairway); ctx.fillStyle = ev.ok ? (warn ? 'rgba(251,191,36,0.38)' : 'rgba(74,222,128,0.38)') : 'rgba(248,113,113,0.38)'; ctx.fill(); ctx.stroke(); }
         ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath();
         wp.centerline.forEach(function (p, k) { if (k) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
         ctx.stroke(); ctx.setLineDash([]);
         ctx.strokeStyle = col;
         wp.bunkers.forEach(function (b) { polyPath(ctx, b); ctx.fillStyle = 'rgba(253,230,138,0.9)'; ctx.fill(); ctx.stroke(); });
-        polyPath(ctx, wp.green); ctx.fillStyle = ev.ok ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.8)'; ctx.fill(); ctx.stroke();
+        polyPath(ctx, wp.green); ctx.fillStyle = ev.ok ? (warn ? 'rgba(245,158,11,0.9)' : 'rgba(34,197,94,0.85)') : 'rgba(239,68,68,0.8)'; ctx.fill(); ctx.stroke();
         (wp.teeBoxes || []).forEach(function (b) { polyPath(ctx, b); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill(); });
         ctx.globalAlpha = 1;
         const tee = { x: cx(sk.origin.x), y: cz(sk.origin.z) };
@@ -186,11 +187,20 @@
         if (/_range$/.test(r)) return tr('bp_r_range', 'För ojämn mark');
         return tr('bp_r_slope', 'För brant');
     }
+    // What the builders will do to the ground on a yellow site, e.g. "Kräver utplaning: green ~1.8 m, fairway mjukas (max 10 %)"
+    function shapeText(ev) {
+        const w = ev.work || {}, bits = [];
+        const m = function (v) { return (Math.round(v * 10) / 10).toFixed(1); };
+        if (ev.shaped.indexOf('green') >= 0) bits.push(tr('bp_shape_green', 'green ~{m} m').replace('{m}', m(w.green || 0)));
+        if (ev.shaped.indexOf('tee') >= 0) bits.push(tr('bp_shape_tee', 'tee ~{m} m').replace('{m}', m(w.tee || 0)));
+        if (ev.shaped.indexOf('fairway') >= 0) bits.push(tr('bp_shape_fairway', 'fairway mjukas (max {p} %)').replace('{p}', String(w.fairway || 10)));
+        return tr('bp_shape', 'Kräver utplaning') + ': ' + bits.join(', ');
+    }
     function setStatus(text, ok) {
         const el = S.dom.status;
         el.textContent = text;
-        el.style.background = ok === true ? 'rgba(34,197,94,0.18)' : (ok === false ? 'rgba(239,68,68,0.18)' : 'rgba(148,163,184,0.18)');
-        el.style.color = ok === true ? '#86efac' : (ok === false ? '#fca5a5' : '#cbd5e1');
+        el.style.background = ok === true ? 'rgba(34,197,94,0.18)' : (ok === 'warn' ? 'rgba(251,191,36,0.18)' : (ok === false ? 'rgba(239,68,68,0.18)' : 'rgba(148,163,184,0.18)'));
+        el.style.color = ok === true ? '#86efac' : (ok === 'warn' ? '#fde68a' : (ok === false ? '#fca5a5' : '#cbd5e1'));
     }
     function enable(btn, on) {
         btn.disabled = !on;
@@ -204,7 +214,8 @@
             const b = document.createElement('button');
             b.type = 'button';
             const bad = sk.ev && !sk.ev.ok;
-            b.textContent = (bad ? '⛔ ' : '') + tr('bp_hole', 'Hål') + ' ' + holeNo(i) + ' · Par ' + sk.par;
+            const shapedHole = !!(sk.ev && sk.ev.ok && sk.ev.shaped && sk.ev.shaped.length);
+            b.textContent = (bad ? '⛔ ' : (shapedHole ? '⚠️ ' : '')) + tr('bp_hole', 'Hål') + ' ' + holeNo(i) + ' · Par ' + sk.par;
             const on = i === S.sel;
             b.style.cssText = 'min-height:36px; padding:0 12px; border-radius:18px; font-weight:bold; font-size:13px; cursor:pointer; border:2px solid ' + (on ? '#38bdf8' : '#334155') + '; background:' + (on ? '#0c4a6e' : '#1e293b') + '; color:#f1f5f9;';
             b.onclick = function () { if (!S.busy) { S.sel = i; S.note = null; S.noteBad = false; refreshUi(); } };
@@ -216,6 +227,7 @@
         const ev = cur().ev;
         if (S.busy) setStatus(tr('bp_searching', '⏳ Letar bra plats…'), null);
         else if (S.note) setStatus(S.noteBad ? '⛔ ' + S.note : S.note, !S.noteBad);
+        else if (ev && ev.ok && ev.shaped && ev.shaped.length) setStatus('⚠️ ' + shapeText(ev), 'warn');
         else if (ev && ev.ok) setStatus('✓ ' + tr('bp_ok', 'Bra plats!'), true);
         else if (ev) setStatus('⛔ ' + reasonText(ev.reasons[0]), false);
         const allOk = S.sketches.every(function (s) { return s.ev && s.ev.ok; }) && !S.busy;
@@ -520,7 +532,7 @@
             baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
             drag: null, busy: false, snapToken: 0, findToken: 0, raf: 0, note: null, noteBad: false, handles: null
         };
-        const env = HG.siteEnv(root._hgParts || null);
+        const env = HG.siteEnv(root._hgParts || null, { allowShaping: true });
         env.others = Array.isArray(env.others) ? { points: env.others, polygons: [] } : (env.others || { points: [], polygons: [] });
         S.baseEnv = env;
         S.terrain = renderTerrain(half);
