@@ -101,8 +101,9 @@
                         if (inside && dd !== undefined) relevant = true;
                     }
                 }
-                if (!relevant) return;
-                jobs.push({ hole: hole, st: st, delta: delta, meanIn: nIn > 0 ? sumIn / nIn : 0 });
+                // A stroke inside the saved snapshot but out of reach is still baked into the baseline (no re-flatten),
+                // so a later bigger blend radius does not restore stale ground over it
+                jobs.push({ hole: hole, st: st, delta: delta, rerun: relevant, meanIn: relevant && nIn > 0 ? sumIn / nIn : 0 });
             });
         });
         if (!jobs.length) return 0;
@@ -117,6 +118,7 @@
         });
         var done = 0;
         jobs.forEach(function (j) {
+            if (!j.rerun) return;
             try {
                 if (j.st.kind === 'green' && typeof window.applyGreenPipeline === 'function') {
                     window.applyGreenPipeline(j.hole, false, false);

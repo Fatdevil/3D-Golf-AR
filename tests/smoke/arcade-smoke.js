@@ -143,6 +143,16 @@ function serve() {
       check('green follows the raised ground', hh.greenData.baseElevation > 2, hh.greenData.baseElevation.toFixed(2) + ' m');
       check('hill outside the green is kept', Math.abs(window.getTerrainHeight(90, 40) - 3 * Math.exp(-((90 - 62) ** 2 + 4) / 392)) < 0.05);
       check('old baseline array is left alone (undo)', gs.origHeights.every(function (v) { return Math.abs(v) < 1e-6; }));
+      // a mound 20 m from the green edge: out of reach now, but must be kept in the baseline for a later bigger blend
+      (function () {
+        const g = hh.greenData, pre2 = new Float32Array(p);
+        for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 2 * Math.exp(-((x - 92) * (x - 92) + (z - 40) * (z - 40)) / 8); }
+        const ref = g.origHeights, base0 = g.baseElevation;
+        const r = window.reanchorStudiosAfterSculpt(pre2);
+        const bb = g.bbox, gx = Math.round((92 + window.TERRAIN_SIZE / 2) / (window.TERRAIN_SIZE / window.TERRAIN_SEGS)), gz = Math.round((40 + window.TERRAIN_SIZE / 2) / (window.TERRAIN_SIZE / window.TERRAIN_SEGS));
+        const oi = (gz - bb.gzStart) * bb.gWidth + (gx - bb.gxStart);
+        check('far mound is baked into the green baseline without re-flattening', r === 0 && g.origHeights !== ref && g.origHeights[oi] - ref[oi] > 1.5 && g.baseElevation === base0, 'r=' + r + ' d=' + (g.origHeights[oi] - ref[oi]).toFixed(2));
+      })();
       check('no change means no work', window.reanchorStudiosAfterSculpt(new Float32Array(p)) === 0);
     })();
     return out;
