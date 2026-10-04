@@ -228,6 +228,12 @@ function serve() {
       const bowl = flatEnv(0); bowl.allowShaping = true; bowl.heightAt = function (x, z) { return 4 * (1 - Math.exp(-((x - gc.x) * (x - gc.x) + (z - gc.z) * (z - gc.z)) / 72)); };
       const bowlEv = HG.evaluateSite(plan, origin, heading, bowl);
       check('bowl with a high rim is measured against the built plateau (red)', !bowlEv.ok, JSON.stringify([bowlEv.reasons, bowlEv.work]));
+      // the builders' sliders count: a raised green plateau moves the ground further than the planner's default assumes
+      const lifted = flatEnv(2.2); lifted.allowShaping = true; lifted.lift = { green: 3, tee: 0.5 };
+      const liftedEv = HG.evaluateSite(plan, origin, heading, lifted);
+      check('Green Studio elevation offset is included in the shaping work (red when it adds too much)', !liftedEv.ok, JSON.stringify([liftedEv.reasons, liftedEv.work]));
+      const sliderEnv = HG.siteEnv(null, { allowShaping: true });
+      check('siteEnv reads the builders\' sliders for the plateau offsets', sliderEnv.lift && typeof sliderEnv.lift.green === 'number' && typeof sliderEnv.lift.tee === 'number', JSON.stringify(sliderEnv.lift));
       check('a 12 m cliff stays red even when shaping is allowed', !cliff.ok, JSON.stringify(cliff.reasons));
       // full build from a yellow blueprint site: green flat, fairway capped
       (function () {

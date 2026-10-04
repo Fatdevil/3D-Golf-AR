@@ -432,7 +432,8 @@
                 return;
             }
             if (shape && SHAPE[name] && SHAPE[name].cut) {
-                let c = cutDepth(poly, step, h, SHAPE[name].lift);
+                let lift = (env.lift && typeof env.lift[name] === 'number') ? env.lift[name] : SHAPE[name].lift;   // the builders' own sliders when known
+                let c = cutDepth(poly, step, h, lift);
                 if (c <= SHAPE[name].cut) {
                     if (shaped.indexOf(name) < 0) shaped.push(name);
                     work[name] = Math.max(work[name] || 0, c);
@@ -835,7 +836,19 @@
             parts: normalizeParts(parts)
         };
         if (o && o.diag) env.diag = {};
-        if (o && o.allowShaping) env.allowShaping = true;
+        if (o && o.allowShaping) {
+            env.allowShaping = true;
+            // the plateau is built at ground + the Green Studio elevation / Tee Studio raise height: use what the sliders say now
+            let num = function (ids, dflt) {
+                for (let i = 0; i < ids.length; i++) {
+                    let el = root.document && root.document.getElementById(ids[i]);
+                    let v = el ? parseFloat(el.value) : NaN;
+                    if (isFinite(v)) return v;
+                }
+                return dflt;
+            };
+            env.lift = { green: num(['gs-elev-slider', 'sg-elevation-offset'], 0), tee: num(['st-raise-height'], SHAPE.tee.lift) };
+        }
         return env;
     }
 
