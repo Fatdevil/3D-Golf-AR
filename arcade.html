@@ -10532,6 +10532,7 @@
             // Legacy handler — no longer reachable from UI
         } else if(currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || (currentTool === 'PAINT' && window._paintToolMode !== 'POLYGON') || currentTool === 'WATER' || currentTool === 'RIDGE' || currentTool === 'NOISE' || (currentTool === 'PROPS' && window._propsToolMode === 'BRUSH') || currentTool === 'RAMP') {
             if (e.button !== 0 && e.button !== 2) return; // SF-08: Only Left & Right buttons mutate terrain
+            if (isSculpting && activeSculptPointerId !== null && e.pointerId !== activeSculptPointerId) return; // a second finger must not restart the running stroke
             activeSculptPointerId = e.pointerId; // SF-09: Bind active pointer
             try {
                 renderer.domElement.setPointerCapture(e.pointerId);
@@ -10545,6 +10546,7 @@
             
             // SF-13: Defer undo commit until first actual mutation
             strokePendingUndo = captureEditorState();
+            window._strokePreHeights = strokePendingUndo.heights; // the undo state is committed on the first mutation, keep the terrain-before copy
             strokeHasModified = false;
             
             if (currentTool === 'RAMP' && lastHitPoint) {
@@ -10639,6 +10641,7 @@
         // SF-13: If stroke never mutated anything, discard pending undo without dirtying history or save state
         if (!strokeHasModified) {
             strokePendingUndo = null;
+            window._strokePreHeights = null;
             if (currentTool === 'RAMP' && window.rampSnapshotHeights) {
                 planeGeo.attributes.position.array.set(window.rampSnapshotHeights);
                 planeGeo.attributes.position.needsUpdate = true;
@@ -10648,6 +10651,10 @@
             return;
         }
         
+        // Terrain before this stroke - used below to re-flatten greens/tees
+        const preStrokeHeights = window._strokePreHeights || (strokePendingUndo ? strokePendingUndo.heights : null);
+        window._strokePreHeights = null;
+
         // Commit pending undo if not yet committed
         if (strokePendingUndo) {
             if (undoStack.length >= 20) undoStack.shift();
@@ -10681,6 +10688,14 @@
             if (window._terrainShells) window._terrainShells.refresh();
             if (options.save) debounceSaveCourse(1500);
         } else {
+            // Greens and tee boxes follow the ground: bake the stroke into their baseline and flatten them again
+            if (typeof window.reanchorStudiosAfterSculpt === 'function' && preStrokeHeights && ['SCULPT', 'SMOOTH', 'FLATTEN', 'RIDGE', 'NOISE', 'RAMP'].includes(currentTool)) { // not WATER: digging a lake must not lower the green/tee baseline
+                try {
+                    if (window.reanchorStudiosAfterSculpt(preStrokeHeights) > 0 && typeof showBuildToast === 'function') {
+                        showBuildToast((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Green/tee planades om efter sculpt' : 'Green/tee re-flattened after sculpt', '#4ade80');
+                    }
+                } catch (err) { console.error('[reanchor]', err); }
+            }
             // SF-01: Guaranteed normals recomputation, chunk/shell sync, object snap, and save
             planeGeo.computeVertexNormals(); 
             planeGeo.computeBoundingBox();
@@ -10740,12 +10755,14 @@
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault(), false);
     
     // SF-01: Centralized cleanup for pointerleave, pointercancel, blur
-    renderer.domElement.addEventListener('pointerleave', () => {
+    renderer.domElement.addEventListener('pointerleave', (e) => {
+        if (activeSculptPointerId !== null && e && e.pointerId !== undefined && e.pointerId !== activeSculptPointerId) return; // ignored second finger
         finalizeSculptStroke({ save: true });
     }, false);
     
     renderer.domElement.addEventListener('pointercancel', (e) => {
         if (window.GreenStudio && window.GreenStudio.cancelWholeDrag) window.GreenStudio.cancelWholeDrag(e);
+        if (activeSculptPointerId !== null && e.pointerId !== undefined && e.pointerId !== activeSculptPointerId) return; // ignored second finger
         finalizeSculptStroke({ save: true });
     }, false);
     
@@ -15649,6 +15666,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
 <script src="smart-builder.js?v=50"></script>
+<script src="studio-reanchor.js?v=1"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>

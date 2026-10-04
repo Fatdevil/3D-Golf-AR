@@ -1,0 +1,136 @@
+// Re-anchor green and tee boxes after a terrain sculpt stroke.
+//
+// A green/tee is stored as "pristine terrain (origHeights) + flattening on top". A sculpt stroke edits the
+// finished surface, so before this file a hill raised under a green made the green bumpy, and simply
+// re-running the pipeline would have restored the old origHeights and thrown the sculpt away.
+//
+// After a stroke we (1) add the height change of the stroke to the pristine baseline and move the
+// baseElevation by the average change under the footprint, then (2) re-run the pipeline. The green/tee is
+// therefore flat again, at the height of the new ground, and the sculpt survives around it.
+// origHeights is replaced by a NEW array (never edited in place) because undo states keep a reference
+// to the old one.
+(function () {
+    'use strict';
+
+    var EPS = 0.005;        // ignore height changes below 5 mm
+    var TEE_REACH = 17;     // matches TEE_MAX_REACH in smart-builder.js
+
+    function ptInPoly(x, z, poly) {
+        var inside = false;
+        for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            var xi = poly[i].x, zi = poly[i].z, xj = poly[j].x, zj = poly[j].z;
+            if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) inside = !inside;
+        }
+        return inside;
+    }
+
+    function distToPoly(x, z, poly) {
+        var best = Infinity;
+        for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            var ax = poly[j].x, az = poly[j].z, bx = poly[i].x, bz = poly[i].z;
+            var dx = bx - ax, dz = bz - az;
+            var l2 = dx * dx + dz * dz;
+            var t = l2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0;
+            var ex = x - (ax + t * dx), ez = z - (az + t * dz);
+            var d = Math.sqrt(ex * ex + ez * ez);
+            if (d < best) best = d;
+        }
+        return best;
+    }
+
+    // Studios this module manages: one green and any number of tee boxes per hole
+    function studiosOf(hole) {
+        var out = [];
+        var gd = hole && hole.greenData;
+        if (gd && gd.bbox && gd.origHeights && gd.points && gd.points.length >= 3) {
+            var gDense = (gd.densePts && gd.densePts.length >= 3) ? gd.densePts
+                : (typeof getDenseGreenPoints === 'function' ? getDenseGreenPoints(gd.points, gd.tension !== undefined ? gd.tension : 0.5) : null);
+            var blend = gd.blendDistance !== undefined ? gd.blendDistance : 8;
+            if (gDense) out.push({ kind: 'green', sd: gd, dense: gDense, reach: Math.max(blend, gd._maxBlendDistance || 0) + 3 });
+        }
+        var tees = (hole && hole.teeBoxes && hole.teeBoxes.length) ? hole.teeBoxes : (hole && hole.teeData ? [hole.teeData] : []);
+        tees.forEach(function (tb) {
+            if (!tb || !tb.bbox || !tb.origHeights || !tb.points || tb.points.length < 3) return;
+            var tDense = typeof teeDensePts === 'function' ? teeDensePts(tb)
+                : (typeof getDenseGreenPoints === 'function' ? getDenseGreenPoints(tb.points, 0.5) : null);
+            if (!tDense) return;
+            var br = tb.blendRadius !== undefined ? tb.blendRadius : 4;
+            out.push({ kind: 'tee', sd: tb, dense: tDense, reach: Math.max(TEE_REACH, br + 2) });
+        });
+        return out;
+    }
+
+    // pre: Float32Array of the terrain (position attribute array) from BEFORE the stroke.
+    // Returns the number of green/tee boxes that were re-flattened.
+    window.reanchorStudiosAfterSculpt = function (pre) {
+        var geo = window._arcadePlaneGeo;
+        var holes = window.courseHoles;
+        if (!geo || !holes || !pre) return 0;
+        var pos = geo.attributes.position.array;
+        if (pre.length !== pos.length) return 0;
+        var stride = window.TERRAIN_SEGS + 1;
+
+        // Phase 1: read all deltas BEFORE any pipeline touches the terrain
+        var jobs = [];
+        holes.forEach(function (hole) {
+            studiosOf(hole).forEach(function (st) {
+                var bb = st.sd.bbox, dense = st.dense;
+                var delta = null, relevant = false;
+                // cheap scan first: most strokes touch no green/tee at all
+                for (var gz = bb.gzStart; gz <= bb.gzEnd; gz++) {
+                    for (var gx = bb.gxStart; gx <= bb.gxEnd; gx++) {
+                        var idx = gz * stride + gx;
+                        var d = pos[idx * 3 + 2] - pre[idx * 3 + 2];
+                        if (Math.abs(d) > EPS) {
+                            if (!delta) delta = new Map();
+                            delta.set((gz - bb.gzStart) * bb.gWidth + (gx - bb.gxStart), d);
+                        }
+                    }
+                }
+                if (!delta) return;
+                var sumIn = 0, nIn = 0;
+                for (var gz2 = bb.gzStart; gz2 <= bb.gzEnd; gz2++) {
+                    for (var gx2 = bb.gxStart; gx2 <= bb.gxEnd; gx2++) {
+                        var idx2 = gz2 * stride + gx2;
+                        var vx = pos[idx2 * 3], vz = -pos[idx2 * 3 + 1];
+                        var oi = (gz2 - bb.gzStart) * bb.gWidth + (gx2 - bb.gxStart);
+                        var dd = delta.get(oi);
+                        var inside = ptInPoly(vx, vz, dense);
+                        if (inside) { sumIn += (dd || 0); nIn++; }
+                        else if (dd !== undefined && !relevant && distToPoly(vx, vz, dense) <= st.reach) relevant = true;
+                        if (inside && dd !== undefined) relevant = true;
+                    }
+                }
+                // A stroke inside the saved snapshot but out of reach is still baked into the baseline (no re-flatten),
+                // so a later bigger blend radius does not restore stale ground over it
+                jobs.push({ hole: hole, st: st, delta: delta, rerun: relevant, meanIn: relevant && nIn > 0 ? sumIn / nIn : 0 });
+            });
+        });
+        if (!jobs.length) return 0;
+
+        // Phase 2: bake the stroke into the baseline (copy-on-write), then flatten again
+        jobs.forEach(function (j) {
+            var sd = j.st.sd;
+            var fresh = new Float32Array(sd.origHeights);
+            j.delta.forEach(function (d, oi) { if (oi >= 0 && oi < fresh.length) fresh[oi] += d; });
+            sd.origHeights = fresh;
+            sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
+        });
+        var done = 0;
+        jobs.forEach(function (j) {
+            if (!j.rerun) return;
+            try {
+                if (j.st.kind === 'green' && typeof window.applyGreenPipeline === 'function') {
+                    window.applyGreenPipeline(j.hole, false, false);
+                    done++;
+                } else if (j.st.kind === 'tee' && typeof window.applyTeePipeline === 'function') {
+                    window.applyTeePipeline(j.hole, false, false, j.st.sd, true);
+                    done++;
+                }
+            } catch (err) {
+                console.error('[reanchor] pipeline failed:', err);
+            }
+        });
+        return done;
+    };
+})();

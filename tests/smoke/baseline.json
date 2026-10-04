@@ -436,6 +436,7 @@
   "puttBreakPath:function",
   "queryLocalFonts:function",
   "rangeUseMeters:boolean",
+  "reanchorStudiosAfterSculpt:function",
   "rebuildAllPools:function",
   "rebuildGreenMask:function",
   "rebuildInstancePool:function",
