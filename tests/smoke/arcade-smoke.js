@@ -165,7 +165,8 @@ function serve() {
       const snap = window.captureFairwaySnapshot(hh, pts, 35);
       const fd = { id: 'fw_t', points: pts, baseElevation: snap.baseElevation, bbox: snap.bbox, origHeights: snap.origHeights, origCanvasPixels: snap.origCanvasPixels, difficulty: 'FLAT', semiRoughWidth: 2, roughWidth: 5, roughEnabled: true, mowPattern: 'SOLID', edgeSharpness: 100, maxSlopePct: 0, seedOffsetX: 0, seedOffsetZ: 0 };
       hh.fairways = [fd]; hh.fairwayData = fd; hh.activeFairwayIndex = 0;
-      const maxSlope = function () { let m = 0; for (let x = -30; x <= 30; x++) for (let z = 140; z <= 160; z++) { const a = window.getTerrainHeight(x, z); m = Math.max(m, Math.abs(window.getTerrainHeight(x + 1, z) - a), Math.abs(window.getTerrainHeight(x, z + 1) - a)); } return m; };
+      // gradient magnitude (diagonals included), not just the per-axis step
+      const maxSlope = function () { let m = 0; for (let x = -30; x <= 30; x++) for (let z = 140; z <= 160; z++) { const a = window.getTerrainHeight(x, z); m = Math.max(m, Math.hypot(window.getTerrainHeight(x + 1, z) - a, window.getTerrainHeight(x, z + 1) - a)); } return m; };
       const centre = function () { return window.getTerrainHeight(0, 150); };
       window.applyFairwayPipeline(hh, false, false, fd);
       const natural = maxSlope(), c0 = centre();

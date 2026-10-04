@@ -2343,22 +2343,37 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter) {
             for (let b = 0; b < gW; b++) {
                 let gx = fwd ? b : gW - 1 - b;
                 let i = gz * gW + gx;
-                // x-neighbour and z-neighbour on the "later" side of the sweep
-                for (let k = 0; k < 2; k++) {
-                    let nx = gx + (k === 0 ? (fwd ? 1 : -1) : 0);
-                    let nz = gz + (k === 1 ? (fwd ? 1 : -1) : 0);
-                    if (nx < 0 || nx >= gW || nz < 0 || nz >= gH) continue;
-                    let j = nz * gW + nx;
-                    let wa = w[i], wb = w[j];
-                    let ws = wa + wb;
-                    if (ws <= 0) continue;
-                    let d = h[i] - h[j];
-                    let ex = Math.abs(d) - L;
-                    if (ex <= 0) continue;
-                    if (ex > worst) worst = ex;
-                    let sgn = d > 0 ? 1 : -1;
-                    h[i] -= sgn * ex * (wa / ws);
-                    h[j] += sgn * ex * (wb / ws);
+                // Each vertex looks at two grid cells that touch it (x-neighbour on the sweep side, z-neighbour up and down).
+                // The cap applies to the gradient MAGNITUDE of the cell, hypot(dx, dz), so diagonal slopes are not
+                // allowed to be sqrt2 steeper than slopes along the axes. Over two sweeps all four cells are covered.
+                let sx = fwd ? 1 : -1;
+                let nx = gx + sx;
+                if (nx < 0 || nx >= gW) continue;
+                let jx = gz * gW + nx;
+                for (let tz = -1; tz <= 1; tz += 2) {
+                    let nz = gz + tz;
+                    if (nz < 0 || nz >= gH) continue;
+                    let jz = nz * gW + gx;
+                    let dx = h[i] - h[jx], dz = h[i] - h[jz];
+                    let m = Math.sqrt(dx * dx + dz * dz);
+                    if (m <= L) continue;
+                    if (m - L > worst) worst = m - L;
+                    let k = 1 - L / m;
+                    let wa = w[i];
+                    // pair (i, jx)
+                    let ws = wa + w[jx];
+                    if (ws > 0) {
+                        let mv = dx * k;
+                        h[i] -= mv * (wa / ws);
+                        h[jx] += mv * (w[jx] / ws);
+                    }
+                    // pair (i, jz)
+                    ws = wa + w[jz];
+                    if (ws > 0) {
+                        let mv = dz * k;
+                        h[i] -= mv * (wa / ws);
+                        h[jz] += mv * (w[jz] / ws);
+                    }
                 }
             }
         }
