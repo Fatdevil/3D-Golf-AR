@@ -234,6 +234,12 @@ function serve() {
       check('Green Studio elevation offset is included in the shaping work (red when it adds too much)', !liftedEv.ok, JSON.stringify([liftedEv.reasons, liftedEv.work]));
       const sliderEnv = HG.siteEnv(null, { allowShaping: true });
       check('siteEnv reads the builders\' sliders for the plateau offsets', sliderEnv.lift && typeof sliderEnv.lift.green === 'number' && typeof sliderEnv.lift.tee === 'number', JSON.stringify(sliderEnv.lift));
+      // flat ground does not excuse a big elevation offset: the builder still cuts/fills that much
+      const flatLifted = flatEnv(0); flatLifted.allowShaping = true; flatLifted.lift = { green: 4, tee: 0.5 };
+      const flatLiftedEv = HG.evaluateSite(plan, origin, heading, flatLifted);
+      check('flat ground with a 4 m green elevation offset is red', !flatLiftedEv.ok, JSON.stringify(flatLiftedEv.reasons));
+      const flatTee = flatEnv(0); flatTee.allowShaping = true; flatTee.lift = { green: 0, tee: 4 };
+      check('flat ground with a 4 m tee raise is red', !HG.evaluateSite(plan, origin, heading, flatTee).ok);
       check('a 12 m cliff stays red even when shaping is allowed', !cliff.ok, JSON.stringify(cliff.reasons));
       // full build from a yellow blueprint site: green flat, fairway capped
       (function () {
@@ -251,6 +257,8 @@ function serve() {
         let lo = 1e9, hi = -1e9;
         for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) { const x = gc.x + a * 2, z = gc.z + b * 2; if (HG.inPoly(x, z, wp0.green)) { const y = window.getTerrainHeight(x, z); lo = Math.min(lo, y); hi = Math.max(hi, y); } }
         check('yellow site builds: green is flat, fairway has the slope cap', !!built && hole.greenData && hi - lo < 0.05 && hole.fairways[0] && hole.fairways[0].maxSlopePct === 10, 'spread ' + (hi - lo).toFixed(3) + ' cap ' + (hole.fairways[0] && hole.fairways[0].maxSlopePct));
+        const ctl = document.getElementById('sf-max-slope');
+        check('after a yellow build the fairway control and the global cap agree', ctl && Number(ctl.value) === window._fairwayMaxSlopePct, 'control ' + (ctl && ctl.value) + ' global ' + window._fairwayMaxSlopePct);
       })();
       check('flat ground stays plain green (no shaping)', flat.ok && !(flat.shaped && flat.shaped.length));
     })();

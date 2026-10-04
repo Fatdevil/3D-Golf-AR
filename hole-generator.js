@@ -425,20 +425,24 @@
         let test = function (name, poly, step, lim) {
             if (reasons.length) return;
             let r = checkArea(poly, step, h, lim);
+            // green / tee: the builders cut or fill to a plateau at control-point height + their own offset sliders, so the work is
+            // measured even on flat ground (a 4 m elevation offset is 4 m of work whatever the terrain looks like)
+            let cut = null;
+            if (shape && SHAPE[name] && SHAPE[name].cut) {
+                let lift = (env.lift && typeof env.lift[name] === 'number') ? env.lift[name] : SHAPE[name].lift;
+                cut = cutDepth(poly, step, h, lift);
+                if (cut > SHAPE[name].cut) { reasons.push(name + '_' + (r || 'range')); return; }
+            }
             if (!r) return;
             if (shape && name === 'fairway' && !checkArea(poly, step, h, SHAPE.fairway)) {
                 if (shaped.indexOf(name) < 0) shaped.push(name);
                 work.fairway = SHAPE.fairway.cap;
                 return;
             }
-            if (shape && SHAPE[name] && SHAPE[name].cut) {
-                let lift = (env.lift && typeof env.lift[name] === 'number') ? env.lift[name] : SHAPE[name].lift;   // the builders' own sliders when known
-                let c = cutDepth(poly, step, h, lift);
-                if (c <= SHAPE[name].cut) {
-                    if (shaped.indexOf(name) < 0) shaped.push(name);
-                    work[name] = Math.max(work[name] || 0, c);
-                    return;
-                }
+            if (cut !== null) {
+                if (shaped.indexOf(name) < 0) shaped.push(name);
+                work[name] = Math.max(work[name] || 0, cut);
+                return;
             }
             reasons.push(name + '_' + r);
         };
@@ -911,7 +915,13 @@
                 let prevCap = root._fairwayMaxSlopePct;
                 if (capNow) root._fairwayMaxSlopePct = SHAPE.fairway.cap;
                 try { buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); }); }
-                finally { root._fairwayMaxSlopePct = prevCap; }
+                finally {
+                    // the temporary cap was only for this fairway: from here the global follows the Fairway Studio control again
+                    // (the studio may have synced it to the new fairway's cap while building; otherwise it still shows the old value)
+                    let ctl = root.document && root.document.getElementById('sf-max-slope');
+                    let shown = ctl ? parseFloat(ctl.value) : NaN;
+                    root._fairwayMaxSlopePct = isFinite(shown) ? shown : prevCap;
+                }
             }
             if (parts.green) {
                 buildShape('GREEN', wp.green, function () { root.executeSplineSmartGreen(); });
