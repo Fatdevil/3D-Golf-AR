@@ -42,7 +42,7 @@
     // the footprint, `cut` = the largest height change in metres; the fairway only gets a slope cap (`cap`, in %) so the hill stays but plays
     const SHAPE = {
         green:   { cut: 3 },
-        tee:     { cut: 2.5 },
+        tee:     { cut: 2.5, lift: 0.5 },   // lift: the tee builder raises the plateau (default 0.5 m)
         fairway: { max: 0.30, soft: 0.18, softShare: 0.25, cap: 10 },
         blendPerMeter: 4, minBlend: 8, maxBlend: 15, teeMinBlend: 4, teeMaxBlend: 15
     };
@@ -389,15 +389,17 @@
         if (lim.soft && pts.length && steep / pts.length > lim.softShare) return 'slope';
         return null;
     }
-    // How far the ground must move to make this polygon a flat plateau at its mean height: the largest |height - mean|
-    function cutDepth(poly, step, h) {
+    // How far the ground must move to make this polygon a flat plateau, at the height the builders use:
+    // the mean ground height at the polygon's control points (captureGreenSnapshot / captureTeeSnapshot), plus `lift`
+    // (tee boxes are raised). Returns the largest |ground - plateau| over the footprint.
+    function cutDepth(poly, step, h, lift) {
         let pts = interior(poly, step).concat(densify(poly, step, true));
-        if (!pts.length) return 0;
-        let ys = pts.map(function (p) { return h(p.x, p.z); }), mean = 0;
-        ys.forEach(function (y) { mean += y; });
-        mean /= ys.length;
+        if (!pts.length || !poly.length) return 0;
+        let plateau = 0;
+        poly.forEach(function (p) { plateau += h(p.x, p.z); });
+        plateau = plateau / poly.length + (lift || 0);
         let worst = 0;
-        ys.forEach(function (y) { if (Math.abs(y - mean) > worst) worst = Math.abs(y - mean); });
+        pts.forEach(function (p) { let d = Math.abs(h(p.x, p.z) - plateau); if (d > worst) worst = d; });
         return worst;
     }
     // Is the terrain under this placed hole flat enough? env.heightAt(x, z) gives ground height.
@@ -430,7 +432,7 @@
                 return;
             }
             if (shape && SHAPE[name] && SHAPE[name].cut) {
-                let c = cutDepth(poly, step, h);
+                let c = cutDepth(poly, step, h, SHAPE[name].lift);
                 if (c <= SHAPE[name].cut) {
                     if (shaped.indexOf(name) < 0) shaped.push(name);
                     work[name] = Math.max(work[name] || 0, c);
@@ -947,7 +949,7 @@
         if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
         refreshPlannedGreenMarker();
         focusCamera(wp);
-        toast(t('hg_done', '🎲 Hål slumpat! Ändra fritt – Ångra tar bort hela hålet.') + ' (#' + res.seed + ')', (shaped ? ' ' + t('hg_shaped', '⛰️ Marken formades för att hålet ska gå att spela.') : ''), '#4ade80');
+        toast(t('hg_done', '🎲 Hål slumpat! Ändra fritt – Ångra tar bort hela hålet.') + ' (#' + res.seed + ')' + (shaped ? ' ' + t('hg_shaped', '⛰️ Marken formades för att hålet ska gå att spela.') : ''), '#4ade80');
         return { seed: res.seed, plan: res.plan, world: wp };
     }
 

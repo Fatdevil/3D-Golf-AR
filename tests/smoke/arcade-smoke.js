@@ -224,6 +224,10 @@ function serve() {
       const flat = HG.evaluateSite(plan, origin, heading, e4);
       check('hill under the green: strict planner rejects', !strict.ok && /green_/.test(strict.reasons[0]), JSON.stringify(strict.reasons));
       check('hill under the green: shaping mode accepts it as yellow with a cut depth', yellow.ok && yellow.shaped && yellow.shaped.indexOf('green') >= 0 && yellow.work.green > 0.3 && yellow.work.green <= 3, JSON.stringify([yellow.shaped, yellow.work]));
+      // a bowl with a high rim: the plateau is built at the rim's height, so the real cut is deeper than the footprint's own mean suggests
+      const bowl = flatEnv(0); bowl.allowShaping = true; bowl.heightAt = function (x, z) { return 4 * (1 - Math.exp(-((x - gc.x) * (x - gc.x) + (z - gc.z) * (z - gc.z)) / 72)); };
+      const bowlEv = HG.evaluateSite(plan, origin, heading, bowl);
+      check('bowl with a high rim is measured against the built plateau (red)', !bowlEv.ok, JSON.stringify([bowlEv.reasons, bowlEv.work]));
       check('a 12 m cliff stays red even when shaping is allowed', !cliff.ok, JSON.stringify(cliff.reasons));
       // full build from a yellow blueprint site: green flat, fairway capped
       (function () {
