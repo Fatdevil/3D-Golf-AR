@@ -10252,22 +10252,40 @@
         } else if(currentTool === 'SPLINE' || (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'))) {
             window._splineDrag = null; window._freeStroke = null;
             const picked = (window.pickSplinePoint && splinePoints.length) ? window.pickSplinePoint(e.clientX, e.clientY, e.pointerType === 'touch' ? 24 : 14) : -1;
-            if(e.button === 0 && picked >= 0) {
+            const mtnHill = currentTool === 'MTN' && window._mtnToolMode === 'SPLINE';
+            const mtnDraw = currentTool === 'MTN';
+            if(e.button === 0 && picked >= 0 && mtnHill && picked === 0 && splinePoints.length >= 3 && !window._mtnClosed) {
+                window.closeMountainShape(); // the first ball is a magnet: touching it closes the shape (as for green and fairway)
+            } else if(e.button === 0 && picked >= 0) {
                 window._splineDrag = { i: picked }; // grab a dot to move it
             } else if(e.button === 0 && lastHitPoint) {
-                // a dot very close to an existing one would only make a kink: skip it
-                const tooClose = splinePoints.some(q => Math.hypot(q.x - lastHitPoint.x, q.z - lastHitPoint.z) < 4);
-                if (!tooClose) splinePoints.push(lastHitPoint.clone());
-                // on a ridge, keep the button down and drag to draw freehand from this point
-                if (!tooClose && currentTool === 'MTN' && window._mtnToolMode === 'RIDGE') {
-                    window._freeStroke = { base: splinePoints.slice(0, splinePoints.length - 1), pts: [lastHitPoint.clone()], px: e.clientX, py: e.clientY, moved: false };
+                const ext = smartShapeExtent(splinePoints);
+                const closeR = Math.max(window.smartSnapRadius(splinePoints), Math.min(12, ext * 0.06));
+                if (mtnHill && window._mtnClosed) {
+                    window.showBuildToast && window.showBuildToast((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? '🔒 Formen är redan stängd! Klicka på Bygg berg eller dra i bollarna.' : '🔒 Shape is already closed! Click Build mountain or drag the balls.', '#38bdf8');
+                } else if (mtnHill && splinePoints.length >= 3 && Math.hypot(lastHitPoint.x - splinePoints[0].x, lastHitPoint.z - splinePoints[0].z) < closeR) {
+                    window.closeMountainShape(); // magnet: a click near the first ball closes the shape
+                } else {
+                    // a dot very close to an existing one would only make a kink: skip it
+                    const tooClose = splinePoints.some(q => Math.hypot(q.x - lastHitPoint.x, q.z - lastHitPoint.z) < 4);
+                    // a mountain outline / ridge never needs to cross itself: refuse a dot whose segment would cross the line drawn so far
+                    const crosses = mtnDraw && splinePoints.length >= 3 && !window.polylineSelfIntersects(splinePoints, false) && window.polylineSelfIntersects(splinePoints.concat([lastHitPoint]), false);
+                    if (crosses) { window.warnSelfCrossing(); }
+                    else {
+                        if (!tooClose) splinePoints.push(lastHitPoint.clone());
+                        // on a ridge, keep the button down and drag to draw freehand from this point
+                        if (!tooClose && currentTool === 'MTN' && window._mtnToolMode === 'RIDGE') {
+                            window._freeStroke = { base: splinePoints.slice(0, splinePoints.length - 1), pts: [lastHitPoint.clone()], px: e.clientX, py: e.clientY, moved: false };
+                        }
+                    }
+                    updateSplinePreview();
                 }
-                updateSplinePreview();
             } else if (e.button === 2 && picked >= 0) {
                 splinePoints.splice(picked, 1); // right-click on a dot removes just that dot
                 updateSplinePreview();
             } else if (e.button === 2 && splinePoints.length > 0) {
                 splinePoints.pop();
+                window._mtnClosed = false; // removing the last ball opens the shape again
                 updateSplinePreview();
             }
             controls.enabled = false;
@@ -12442,13 +12460,18 @@
 
         let isMtnSpline = (currentTool === 'MTN' && (window._mtnToolMode === 'SPLINE' || window._mtnToolMode === 'RIDGE'));
         let isMtnRidge = (currentTool === 'MTN' && window._mtnToolMode === 'RIDGE');
+        let isHillSpline = isMtnSpline && !isMtnRidge;
+        if (splinePoints.length < 3) window._mtnClosed = false; // closed only means something with a real shape
+        let hillClosed = isHillSpline && !!window._mtnClosed;
         let dotColor = isMtnRidge ? 0xf59e0b : (isMtnSpline ? 0x38bdf8 : 0xec4899);
         let startColor = isMtnRidge ? 0xfbbf24 : (isMtnSpline ? 0x60a5fa : 0x38bdf8);
 
         let sMat = new THREE.MeshBasicMaterial({ color: dotColor, depthTest: false });
         let sMatFirst = new THREE.MeshBasicMaterial({ color: startColor, depthTest: false });
-        let sGeo = new THREE.SphereGeometry(0.4, 8, 8);
-        let sGeoFirst = new THREE.SphereGeometry(0.6, 8, 8);
+        // mountain dots are big (like the green / fairway balls) and grow with the shape so they stay easy to see and grab
+        let dotR = isMtnSpline ? Math.max(0.85, Math.min(3.2, smartShapeExtent(splinePoints) * 0.012)) : 0.4;
+        let sGeo = new THREE.SphereGeometry(dotR, 12, 12);
+        let sGeoFirst = new THREE.SphereGeometry(isMtnSpline ? dotR * 1.4 : 0.6, 12, 12);
         splinePoints.forEach((pt, idx) => {
             let s = new THREE.Mesh(idx === 0 ? sGeoFirst : sGeo, idx === 0 ? sMatFirst : sMat);
             let surf = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(pt.x, -pt.z) : null;
@@ -12465,7 +12488,8 @@
                 return new THREE.Vector3(p.x, (surf ? surf.z : p.y) + 0.4, p.z);
             });
             
-            let closedCurve = isMtnSpline && !isMtnRidge;
+            // a hill outline stays open (lighter line) until the shape is closed with the magnet, like green and fairway; the build closes it anyway
+            let closedCurve = hillClosed;
             let curve = new THREE.CatmullRomCurve3(pts, closedCurve);
             let curvePts = (isMtnRidge && window.mtnRidgeCurve)
                 ? window.mtnRidgeCurve(splinePoints).map(p => new THREE.Vector3(p.x, 0, p.z)) // exactly the line the builder follows
@@ -12475,7 +12499,7 @@
                 if (surf) cp.y = surf.z + 0.4;
             });
             let lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
-            let lineMat = new THREE.LineBasicMaterial({ color: dotColor, linewidth: 3, depthTest: false });
+            let lineMat = new THREE.LineBasicMaterial({ color: (isHillSpline && !hillClosed) ? 0x93c5fd : dotColor, linewidth: 3, depthTest: false });
             splineLineMesh = new THREE.Line(lineGeo, lineMat);
             splineLineMesh.renderOrder = 999;
             scene.add(splineLineMesh);
@@ -12483,14 +12507,20 @@
             // Hill preview: a see-through footprint of the shape and a pole that is as tall as the hill will be
             if (isMtnSpline && !isMtnRidge && splinePoints.length >= 3) {
                 try {
-                    let shapePts = curvePts.map(cp => new THREE.Vector2(cp.x, -cp.z));
+                    // the footprint and the peak always use the closed outline: that is the shape the builder makes
+                    let hillPts = curvePts;
+                    if (!hillClosed) {
+                        hillPts = new THREE.CatmullRomCurve3(pts, true).getPoints(50 * pts.length);
+                        hillPts.forEach(cp => { let surf = typeof localGetTerrainAt === 'function' ? localGetTerrainAt(cp.x, -cp.z) : null; if (surf) cp.y = surf.z + 0.4; });
+                    }
+                    let shapePts = hillPts.map(cp => new THREE.Vector2(cp.x, -cp.z));
                     let tris = THREE.ShapeUtils.triangulateShape(shapePts, []);
                     let fillGeo = new THREE.BufferGeometry();
                     let maxGround = -Infinity, sx = 0, sz = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-                    curvePts.forEach(cp => { if (cp.y > maxGround) maxGround = cp.y; sx += cp.x; sz += cp.z;
+                    hillPts.forEach(cp => { if (cp.y > maxGround) maxGround = cp.y; sx += cp.x; sz += cp.z;
                         minX = Math.min(minX, cp.x); maxX = Math.max(maxX, cp.x); minZ = Math.min(minZ, cp.z); maxZ = Math.max(maxZ, cp.z); });
                     let verts = [];
-                    curvePts.forEach(cp => verts.push(cp.x, maxGround + 0.2, cp.z));
+                    hillPts.forEach(cp => verts.push(cp.x, maxGround + 0.2, cp.z));
                     fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
                     fillGeo.setIndex(tris.flat());
                     splineFillMesh = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.22, depthTest: false, side: THREE.DoubleSide }));
@@ -12498,10 +12528,10 @@
                     scene.add(splineFillMesh);
 
                     // the pole stands at the point farthest from every edge (the same peak the builder uses), so it is always inside the shape
-                    let cx = sx / curvePts.length, cz = sz / curvePts.length, bestD = -1;
+                    let cx = sx / hillPts.length, cz = sz / hillPts.length, bestD = -1;
                     // a coarse copy of the outline (at most ~64 points) keeps this cheap enough to run on every pointer move while dragging
-                    const stride = Math.max(1, Math.ceil(curvePts.length / 64));
-                    const ring = curvePts.filter((_, i) => i % stride === 0);
+                    const stride = Math.max(1, Math.ceil(hillPts.length / 64));
+                    const ring = hillPts.filter((_, i) => i % stride === 0);
                     const inside = (x, z) => { let ins = false; for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) {
                         const xi = ring[a].x, zi = ring[a].z, xj = ring[b].x, zj = ring[b].z;
                         if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi + 1e-5) + xi)) ins = !ins; } return ins; };
@@ -12607,6 +12637,15 @@
         renderer.render(scene, camera); // Force draw
     }
 
+    // Magnet: close the mountain outline (refused if it would cross itself)
+    window.closeMountainShape = function() {
+        if (splinePoints.length < 3 || window._mtnClosed) return false;
+        if (window.polylineSelfIntersects(splinePoints, true)) { window.warnSelfCrossing(); return false; }
+        window._mtnClosed = true;
+        if (typeof window.showBuildToast === 'function') window.showBuildToast((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? '🔒 Formen är stängd! Klicka på Bygg berg.' : '🔒 Shape closed! Click Build mountain.', '#4ade80');
+        updateSplinePreview();
+        return true;
+    };
     window.clearSpline = function() {
         splinePoints.length = 0;
         updateSplinePreview();
@@ -12636,6 +12675,7 @@
             splinePoints.push(new THREE.Vector3(x, 0, z));
         }
         hillDrag.moved = true;
+        window._mtnClosed = true; // a pulled-out round hill is a finished shape
         updateSplinePreview();
     }, false);
     window.addEventListener('pointerup', function () { hillDrag = null; }, false);
@@ -12660,8 +12700,11 @@
         const sd = window._splineDrag, fs = window._freeStroke;
         if (sd && splinePoints[sd.i]) {
             const half = window.TERRAIN_SIZE / 2;
-            splinePoints[sd.i].x = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.x));
-            splinePoints[sd.i].z = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.z));
+            const nx = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.x)), nz = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.z));
+            // a mountain outline / ridge ball can not be dragged across the line (a shape that already crosses may still be moved to fix it)
+            if (currentTool === 'MTN' && window.moveWouldCross(splinePoints, sd.i, nx, nz, window._mtnToolMode === 'SPLINE' && !!window._mtnClosed)) { window.warnSelfCrossing(); return; }
+            splinePoints[sd.i].x = nx;
+            splinePoints[sd.i].z = nz;
             splinePoints[sd.i].y = lastHitPoint.y; // keep the height of the ground under the dot (fence length, posts)
             updateSplinePreview();
         } else if (fs && currentTool === 'MTN' && window._mtnToolMode === 'RIDGE') {
@@ -15678,7 +15721,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=5"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=56"></script>
+<script src="smart-builder.js?v=57"></script>
 <script src="studio-reanchor.js?v=4"></script>
 <script src="hole-generator.js?v=28"></script>
 <script src="blueprint.js?v=20"></script>

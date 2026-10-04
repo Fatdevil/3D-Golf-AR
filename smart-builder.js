@@ -6515,7 +6515,8 @@ window.executeRidgeMountain = function() {
         if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_need2', '⚠️ Rita minst 2 punkter för en bergsrygg!'), '#ef4444');
         return;
     }
-    
+    if (window.polylineSelfIntersects(window.splinePoints, false)) { window.warnSelfCrossing(); return; } // a ridge line never crosses itself
+
     window.saveUndoState();
     if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_building_ridge', '⏳ Bygger bergsryggen…'), '#38bdf8');
     
@@ -6638,6 +6639,8 @@ window.executeSplineMountain = function() {
             }
             return;
         }
+
+        if (!window.validateSmartShape(window.splinePoints)) return; // the outline must not cross itself
 
         // Spara undo-tillstånd
         if (typeof window.saveUndoState === 'function') {
