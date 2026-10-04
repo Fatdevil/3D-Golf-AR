@@ -306,7 +306,14 @@ function serve() {
       }
       const all3 = !S.busy && seen.red && seen.yellow && seen.green;
       check('blueprint layout is identical for green, yellow and red status', all3 && tops.every(function (t) { return t === tops[0]; }), JSON.stringify([seen, tops, S.busy]));
-      check('the yellow status shows what happens to the ground; green and red leave the detail row empty', all3 && seen.yellow.detail.length > 3 && seen.green.detail === '' && seen.red.detail === '' && /utplaning|reshaping/i.test(seen.yellow.status), JSON.stringify(seen));
+      check('the yellow status shows what happens to the ground; green leaves the detail row empty; red only repeats a cut-off message', all3 && seen.yellow.detail.length > 3 && seen.green.detail === '' && (seen.red.detail === '' || seen.red.detail === seen.red.status) && /utplaning|reshaping/i.test(seen.yellow.status), JSON.stringify(seen));
+      // a status that does not fit (short phones) must still be readable: the detail row carries the whole message
+      sk.origin = { x: 4000, z: 4000 }; BP.evaluate(0);   // far outside the map: red, 'Utanför banan'
+      S.dom.status.style.maxWidth = '36px';
+      BP.evaluate(0);
+      const narrow = { status: S.dom.status.textContent, detail: S.dom.detail.textContent };
+      S.dom.status.style.maxWidth = '';
+      check('a cut-off status is repeated in full in the detail row (touch screens)', narrow.status.length > 4 && narrow.detail === narrow.status, JSON.stringify(narrow));
       BP.close(false);
     })();
     return out;

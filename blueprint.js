@@ -247,9 +247,16 @@
         enable(S.dom.remove, S.sketches.length > 1 && !S.busy);
         enable(S.dom.earlier, S.sel > 0 && !S.busy);
         enable(S.dom.later, S.sel < S.sketches.length - 1 && !S.busy);
+        // The detail row is reserved space (no layout jump) for what the one-line status cannot say: what a yellow site changes,
+        // and the whole message whenever the status had to be cut off (narrow phones, where a tooltip is not reachable).
         const shapedNow = !S.busy && !S.note && ev && ev.ok && ev.shaped && ev.shaped.length;
-        S.dom.detail.textContent = shapedNow ? shapeBits(ev) : '';
-        S.dom.detail.title = S.dom.detail.textContent;
+        const stEl = S.dom.status, cutOff = stEl.scrollWidth > stEl.clientWidth + 1;
+        let detailText = '';
+        if (shapedNow) detailText = (cutOff ? stEl.textContent + ': ' : '') + shapeBits(ev);
+        else if (cutOff) detailText = stEl.textContent;
+        S.dom.detail.textContent = detailText;
+        S.dom.detail.style.color = shapedNow ? '#fde68a' : (ev && !ev.ok && !S.busy ? '#fca5a5' : '#cbd5e1');
+        S.dom.detail.title = detailText;
         buildChips();
         draw();
     }
