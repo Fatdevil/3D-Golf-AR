@@ -284,6 +284,26 @@ function serve() {
       })();
       check('flat ground stays plain green (no shaping)', flat.ok && !(flat.shaped && flat.shaped.length));
     })();
+
+    // blueprint overlay: the page must not move when the status changes between green, yellow and red while dragging
+    (function () {
+      const BP = window.HoleBlueprint;
+      const eh3 = courseHoles[courseHoles.length - 3];
+      eh3.greenData = null; eh3.fairways = []; eh3.fairwayData = null; eh3.bunkers = []; eh3.bunkerData = null; eh3.teeBoxes = []; eh3.teeData = null; eh3.flag = null; eh3.aimPoint = null; eh3.plannedGreen = null;
+      window.changeHoleTo(courseHoles.length - 3);
+      const p4 = planeGeo.attributes.position.array, n4 = planeGeo.attributes.position.count;
+      for (let i = 0; i < n4; i++) { const x = p4[i * 3]; p4[i * 3 + 2] = 5 * Math.exp(-((x - 40) * (x - 40)) / 1250); }
+      planeGeo.attributes.position.needsUpdate = true;
+      BP.open();
+      const S = BP.state(), sk = S.sketches[0], seen = {}, tops = [];
+      for (let hd = 0; hd < 6.3; hd += Math.PI / 4) for (let ox = -240; ox <= 240; ox += 80) for (let oz = -240; oz <= 240; oz += 80) {
+        sk.origin = { x: ox, z: oz }; sk.heading = hd; BP.evaluate(0);
+        const e = sk.ev, kind = !e.ok ? 'red' : ((e.shaped && e.shaped.length) ? 'yellow' : 'green');
+        if (!seen[kind]) { seen[kind] = true; tops.push(Math.round(S.canvas.getBoundingClientRect().top) + '/' + Math.round(S.dom.status.getBoundingClientRect().height)); }
+      }
+      check('blueprint layout is identical for green, yellow and red status', Object.keys(seen).length >= 2 && tops.every(function (t) { return t === tops[0]; }), JSON.stringify([Object.keys(seen), tops]));
+      BP.close(false);
+    })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 
