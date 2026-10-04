@@ -2329,14 +2329,17 @@ window.fairwayEditsHeights = function(fd) {
 // Slope limiter ("thermal relaxation"): neighbouring height samples may differ by at most maxSlope * spacing.
 // Excess is moved between the two samples (mass preserving), shared by weight: weight 0 = locked (stays put),
 // weight 1 = free. A hill under the fairway is therefore made gentler, not cut away.
-// h: Float32Array (gW*gH, row = gz), w: Float32Array weights. Returns the iterations used.
-window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter) {
+// h: Float32Array (gW*gH, row = gz), w: Float32Array weights. Returns { iters, converged, maxSlope }.
+window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, budgetMs) {
     let L = maxSlope * spacing;
-    if (!(L > 0)) return 0;
-    let tol = L * 0.02;
-    let it = 0;
+    if (!(L > 0)) return { iters: 0, converged: true, maxSlope: 0 };
+    let tol = L * 0.05;
+    let it = 0, worst = 0;
+    let t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
     for (; it < (maxIter || 300); it++) {
-        let worst = 0;
+        // wall-clock budget so a huge fairway cannot freeze the editor; the caller is told if the cap was not reached
+        if (budgetMs && it > 0 && (it & 15) === 0 && performance.now() - t0 > budgetMs) break;
+        worst = 0;
         let fwd = (it % 2 === 0);
         for (let a = 0; a < gH; a++) {
             let gz = fwd ? a : gH - 1 - a;
@@ -2358,7 +2361,7 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter) {
                     let m = Math.sqrt(dx * dx + dz * dz);
                     if (m <= L) continue;
                     if (m - L > worst) worst = m - L;
-                    let k = 1 - L / m;
+                    let k = (1 - L / m) * 1.25; // mild over-relaxation: ~1.7x fewer sweeps (1.5+ overshoots and flattens everything)
                     let wa = w[i];
                     // pair (i, jx)
                     let ws = wa + w[jx];
@@ -2379,7 +2382,8 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter) {
         }
         if (worst <= tol) { it++; break; }
     }
-    return it;
+    // worst = largest gradient excess seen in the last sweep (0 when the sweep found nothing to fix)
+    return { iters: it, converged: worst <= tol, maxSlope: (L + worst) / spacing };
 };
 
 window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
@@ -2728,7 +2732,15 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
                         if (dE < feather) { let t = 1 - dE / feather; ww[li] = t * t * (3 - 2 * t); }
                     }
                 }
-                window.limitHeightSlope(hh, ww, gW, gH, slopeCap, spacing, 300);
+                let lim = window.limitHeightSlope(hh, ww, gW, gH, slopeCap, spacing, 3000, 600);
+                fd._slopeCapReached = lim.converged;
+                if (!lim.converged && lim.maxSlope > slopeCap * 1.1) {
+                    console.warn('[fairway] slope cap not fully reached: ' + (lim.maxSlope * 100).toFixed(1) + ' % (cap ' + (slopeCap * 100).toFixed(0) + ' %)');
+                    let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                    if (typeof window.showBuildToast === 'function') window.showBuildToast(isSv
+                        ? ('Lutningstaket nåddes inte helt (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Höj taket eller dela upp fairwayn.')
+                        : ('Slope cap not fully reached (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Raise the cap or split the fairway.'), '#f59e0b');
+                }
                 for (let gz = gzStart; gz <= gzEnd; gz++) {
                     for (let gx = gxStart; gx <= gxEnd; gx++) {
                         let li = (gz - gzStart) * gW + (gx - gxStart);

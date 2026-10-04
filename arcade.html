@@ -10705,6 +10705,9 @@
                         showBuildToast((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Green/tee planades om efter sculpt' : 'Green/tee re-flattened after sculpt', '#4ade80');
                     }
                 } catch (err) { console.error('[reanchor]', err); }
+            } else if (typeof window.reanchorStudiosAfterSculpt === 'function' && preStrokeHeights && currentTool === 'WATER') {
+                // a lake dug into a fairway must survive later fairway edits; green/tee keep their own water handling
+                try { window.reanchorStudiosAfterSculpt(preStrokeHeights, { bakeFairwaysOnly: true }); } catch (err) { console.error('[reanchor]', err); }
             }
             // SF-01: Guaranteed normals recomputation, chunk/shell sync, object snap, and save
             planeGeo.computeVertexNormals(); 
@@ -15675,8 +15678,8 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=3"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=52"></script>
-<script src="studio-reanchor.js?v=2"></script>
+<script src="smart-builder.js?v=53"></script>
+<script src="studio-reanchor.js?v=3"></script>
 <script src="hole-generator.js?v=22"></script>
 <script src="blueprint.js?v=17"></script>
 <script src="backdrop.js?v=12"></script>

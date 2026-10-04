@@ -183,6 +183,16 @@ function serve() {
       // cap off: stroke baked, ground follows the sculpt (no stale restore)
       fd.maxSlopePct = 0; window.applyFairwayPipeline(hh, false, false, fd);
       check('cap off restores the natural hill incl. the sculpt', Math.abs(centre() - c0) < 0.1 && window.getTerrainHeight(15, 150) > 2, 'centre ' + centre().toFixed(2));
+      // water tool: bake-only into the fairway baseline, no re-run
+      fd.maxSlopePct = 8; window.applyFairwayPipeline(hh, false, false, fd);
+      const preW = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] -= 1.5 * Math.exp(-((x - 25) * (x - 25) + (z - 150) * (z - 150)) / 8); }
+      const wBefore = window.getTerrainHeight(25, 150), oiW = (Math.round(150 + 300) - fd.bbox.gzStart) * fd.bbox.gWidth + (Math.round(25 + 300) - fd.bbox.gxStart), origW = fd.origHeights[oiW];
+      const rW = window.reanchorStudiosAfterSculpt(preW, { bakeFairwaysOnly: true });
+      check('water dug in a capped fairway is baked into its baseline', rW === 0 && fd.origHeights[oiW] < origW - 1 && Math.abs(window.getTerrainHeight(25, 150) - wBefore) < 1e-6, 'd=' + (fd.origHeights[oiW] - origW).toFixed(2));
+      const lim = (function () { const N = 128, hh2 = new Float32Array(N * N), ww = new Float32Array(N * N); for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { const X = x - 64, Z = z - 64; hh2[z * N + x] = 8 * Math.exp(-(X * X + Z * Z) / 392); ww[z * N + x] = (x > 5 && x < N - 5 && z > 5 && z < N - 5) ? 1 : 0; } return window.limitHeightSlope(hh2, ww, N, N, 0.08, 1, 3000, 2000); })();
+      check('slope limiter converges on a broad 8 m hill and reports it', lim.converged && lim.maxSlope < 0.085, JSON.stringify(lim));
+      fd.maxSlopePct = 0; window.applyFairwayPipeline(hh, false, false, fd);
       const pre3 = new Float32Array(p);
       for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 1 * Math.exp(-((x + 20) * (x + 20) + (z - 150) * (z - 150)) / 18); }
       const h3 = window.getTerrainHeight(-20, 150);

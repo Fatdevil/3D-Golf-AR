@@ -73,7 +73,9 @@
 
     // pre: Float32Array of the terrain (position attribute array) from BEFORE the stroke.
     // Returns the number of green/tee boxes that were re-flattened.
-    window.reanchorStudiosAfterSculpt = function (pre) {
+    // opts.bakeFairwaysOnly: only add the stroke to the fairway baselines (no re-run, green and tee untouched) - used for the water tool
+    window.reanchorStudiosAfterSculpt = function (pre, opts) {
+        opts = opts || {};
         var geo = window._arcadePlaneGeo;
         var holes = window.courseHoles;
         if (!geo || !holes || !pre) return 0;
@@ -85,6 +87,7 @@
         var jobs = [];
         holes.forEach(function (hole) {
             studiosOf(hole).forEach(function (st) {
+                if (opts.bakeFairwaysOnly && st.kind !== 'fairway') return;
                 var bb = st.sd.bbox, dense = st.dense;
                 var delta = null, relevant = false;
                 // cheap scan first: most strokes touch no green/tee at all
@@ -133,7 +136,7 @@
         var rank = { fairway: 0, tee: 1, green: 2 };
         jobs.sort(function (a, b) { return rank[a.st.kind] - rank[b.st.kind]; });
         jobs.forEach(function (j) {
-            if (!j.rerun) return;
+            if (!j.rerun || opts.bakeFairwaysOnly) return;
             try {
                 if (j.st.kind === 'fairway') {
                     if (window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function') {
