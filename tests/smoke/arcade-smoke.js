@@ -401,6 +401,31 @@ function serve() {
       click(0, -100);
       check('ridge line: a dot that would cross the line is refused', n() === 3, 'n ' + n());
       window.clearSpline();
+      // control balls without crossing, but the smoothed curve between sharp turns loops over itself: refused at build as well
+      {
+        const V = function (c) { return new THREE.Vector3(c[0], 0, c[1]); };
+        const sumH = function () { let t = 0; for (let x = -150; x <= 150; x += 15) for (let z = -150; z <= 150; z += 15) t += window.getTerrainHeight(x, z); return t; };
+        const ridge = [[-76, 77], [-3, 55], [-15, -8], [46, 56], [25, 99], [-21, 71], [23, 35]];
+        window.splinePoints.length = 0; ridge.forEach(function (c) { window.splinePoints.push(V(c)); });
+        const ridgeCtl = window.polylineSelfIntersects(window.splinePoints, false), ridgeSmooth = window.mtnOutlineCrosses(window.splinePoints, false);
+        const hb = sumH(); window.executeRidgeMountain(); const ha = sumH();
+        // a hill outline of the same kind (found with a fixed pseudo-random search)
+        let seed = 12345, rnd = function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }, hill = null;
+        for (let k = 0; k < 4000 && !hill; k++) {
+          const pts = []; for (let i = 0; i < 7; i++) pts.push([Math.round(rnd() * 160 - 80), Math.round(rnd() * 160 - 80)]);
+          const ps = pts.map(V);
+          if (!window.polylineSelfIntersects(ps, true) && window.mtnOutlineCrosses(ps, true)) hill = pts;
+        }
+        let hillOk = false, hillDetail = 'no sample found';
+        if (hill) {
+          window.splinePoints.length = 0; hill.forEach(function (c) { window.splinePoints.push(V(c)); });
+          const b2 = sumH(); window.executeSplineMountain(); const a2 = sumH();
+          hillOk = Math.abs(a2 - b2) < 0.01; hillDetail = JSON.stringify([hill, b2, a2]);
+        }
+        check('build refuses a ridge and a hill whose control balls are fine but whose smoothed curve loops over itself',
+          !ridgeCtl && ridgeSmooth && Math.abs(ha - hb) < 0.01 && hillOk, JSON.stringify([ridgeCtl, ridgeSmooth, hb, ha, hillDetail]));
+        window.clearSpline();
+      }
       // freehand ridge stroke (drag): a loop in the stroke is refused, the line never crosses itself
       {
         const at = function (x, z) { const v = new THREE.Vector3(x, 0, z).project(camera); return { clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height }; };

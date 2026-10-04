@@ -384,6 +384,7 @@
   "moveWouldCross:function",
   "mtnHeightPreset:function",
   "mtnHintHtml:function",
+  "mtnOutlineCrosses:function",
   "mtnRidgeCurve:function",
   "mtnRidgeHeightAt:function",
   "mtnRidgeWidth:function",
