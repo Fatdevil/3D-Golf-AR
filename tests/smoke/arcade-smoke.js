@@ -376,6 +376,14 @@ function serve() {
       check('mountain outline: open while drawing, a crossing dot is refused, the magnet closes it, a closed shape takes no more dots',
         open.n === 4 && !open.closed && afterCross === 4 && closed.n === 4 && closed.closed && afterClosed === 4, JSON.stringify([open, afterCross, closed, afterClosed]));
       check('mountain outline: dragging a ball across the outline is refused', window.moveWouldCross(window.splinePoints, 0, 0, 100, true) === true && window.moveWouldCross(window.splinePoints, 0, -50, -50, true) === false);
+      // right-clicking a ball (or empty ground) removes a point and opens the closed outline again
+      const rclick = function (x, z) {
+        const v = new THREE.Vector3(x, 0, z).project(camera);
+        cv.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 2, buttons: 2, clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height, pointerId: 1, pointerType: 'mouse' }));
+      };
+      rclick(-60, 60);
+      const reopened = { n: n(), closed: !!window._mtnClosed };
+      check('mountain outline: removing a ball (right-click on it) opens a closed outline again', reopened.n === 3 && reopened.closed === false, JSON.stringify(reopened));
       // build: a bow-tie is refused, the plain square is built
       const h0 = window.getTerrainHeight(0, 0);
       window.splinePoints.length = 0;

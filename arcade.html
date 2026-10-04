@@ -10282,6 +10282,7 @@
                 }
             } else if (e.button === 2 && picked >= 0) {
                 splinePoints.splice(picked, 1); // right-click on a dot removes just that dot
+                window._mtnClosed = false; // removing a ball opens a closed outline again
                 updateSplinePreview();
             } else if (e.button === 2 && splinePoints.length > 0) {
                 splinePoints.pop();
