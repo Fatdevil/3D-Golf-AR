@@ -376,6 +376,23 @@ function serve() {
       check('mountain outline: open while drawing, a crossing dot is refused, the magnet closes it, a closed shape takes no more dots',
         open.n === 4 && !open.closed && afterCross === 4 && closed.n === 4 && closed.closed && afterClosed === 4, JSON.stringify([open, afterCross, closed, afterClosed]));
       check('mountain outline: dragging a ball across the outline is refused', window.moveWouldCross(window.splinePoints, 0, 0, 100, true) === true && window.moveWouldCross(window.splinePoints, 0, -50, -50, true) === false);
+      // an OPEN hill is built closed: dragging a ball so that only the implicit closing edge would cross is refused too
+      {
+        window._mtnToolMode = 'SPLINE'; window.clearSpline();
+        [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { click(c[0], c[1]); });
+        const at2 = function (x, z) { const v = new THREE.Vector3(x, 0, z).project(camera); return { clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height }; };
+        const startPos = { x: window.splinePoints[1].x, z: window.splinePoints[1].z };
+        const dn = Object.assign({ bubbles: true, button: 0, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at2(60, -60));
+        cv.dispatchEvent(new PointerEvent('pointerdown', dn));
+        cv.dispatchEvent(new PointerEvent('pointermove', Object.assign({ bubbles: true, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at2(-100, 0))));
+        const moved = { x: window.splinePoints[1].x - startPos.x, z: window.splinePoints[1].z - startPos.z, closed: !!window._mtnClosed, n: n() };
+        window.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, dn, { buttons: 0 })));
+        check('open hill: dragging a ball so that the closing edge would cross is refused', moved.x === 0 && moved.z === 0 && !moved.closed && moved.n === 4, JSON.stringify(moved));
+        // back to the closed square used by the checks below
+        window.clearSpline();
+        [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { click(c[0], c[1]); });
+        click(-57, -57);
+      }
       // right-clicking a ball (or empty ground) removes a point and opens the closed outline again
       const rclick = function (x, z) {
         const v = new THREE.Vector3(x, 0, z).project(camera);

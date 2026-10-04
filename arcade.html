@@ -12702,8 +12702,9 @@
         if (sd && splinePoints[sd.i]) {
             const half = window.TERRAIN_SIZE / 2;
             const nx = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.x)), nz = Math.max(-half + 1, Math.min(half - 1, lastHitPoint.z));
-            // a mountain outline / ridge ball can not be dragged across the line (a shape that already crosses may still be moved to fix it)
-            if (currentTool === 'MTN' && window.moveWouldCross(splinePoints, sd.i, nx, nz, window._mtnToolMode === 'SPLINE' && !!window._mtnClosed)) { window.warnSelfCrossing(); return; }
+            // a mountain outline / ridge ball can not be dragged across the line (a shape that already crosses may still be moved to fix it);
+            // a hill is always built as a closed outline, so its closing edge counts even before the magnet has closed it
+            if (currentTool === 'MTN' && window.moveWouldCross(splinePoints, sd.i, nx, nz, window._mtnToolMode === 'SPLINE' && splinePoints.length >= 3)) { window.warnSelfCrossing(); return; }
             splinePoints[sd.i].x = nx;
             splinePoints[sd.i].z = nz;
             splinePoints[sd.i].y = lastHitPoint.y; // keep the height of the ground under the dot (fence length, posts)
