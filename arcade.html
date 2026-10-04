@@ -10688,7 +10688,7 @@
             if (options.save) debounceSaveCourse(1500);
         } else {
             // Greens and tee boxes follow the ground: bake the stroke into their baseline and flatten them again
-            if (typeof window.reanchorStudiosAfterSculpt === 'function' && preStrokeHeights) {
+            if (typeof window.reanchorStudiosAfterSculpt === 'function' && preStrokeHeights && ['SCULPT', 'SMOOTH', 'FLATTEN', 'RIDGE', 'NOISE', 'RAMP'].includes(currentTool)) { // not WATER: digging a lake must not lower the green/tee baseline
                 try {
                     if (window.reanchorStudiosAfterSculpt(preStrokeHeights) > 0 && typeof showBuildToast === 'function') {
                         showBuildToast((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Green/tee planades om efter sculpt' : 'Green/tee re-flattened after sculpt', '#4ade80');
