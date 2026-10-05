@@ -299,6 +299,7 @@ function serve() {
       // open() starts an asynchronous search for a good spot (status "searching", detail row cleared): wait until it is done
       for (let w = 0; w < 80 && S.busy; w++) await new Promise(function (r) { setTimeout(r, 100); });
       const sk = S.sketches[0], seen = {}, tops = [];
+      sk.seed = 4242; sk.plan = window.HoleGenerator.planFor(sk.par, sk.seed); // the planner starts from a random seed: pin it so the test sees the same hole every run
       for (let hd = 0; hd < 6.3; hd += Math.PI / 4) for (let ox = -240; ox <= 240; ox += 40) for (let oz = -240; oz <= 240; oz += 40) {
         sk.origin = { x: ox, z: oz }; sk.heading = hd; BP.evaluate(0);
         const e = sk.ev, kind = !e.ok ? 'red' : ((e.shaped && e.shaped.length) ? 'yellow' : 'green');
@@ -349,6 +350,119 @@ function serve() {
       }
       window.applyFairwayPipeline = orig;
       check('fairway sliders (semi-rough, rough, max slope) do not rebuild while dragging, once on release or when the pointer is cancelled', results.length === 0, results.join(' | '));
+    })();
+
+    // mountain outline: open line while drawing, magnet closes it, never crosses itself (like green and fairway)
+    await (async function () {
+      if (appMode !== 'BUILD') { check('mountain outline checks need build mode', false, 'appMode ' + appMode); return; }
+      window.setTool('MTN'); window._mtnToolMode = 'SPLINE'; window.clearSpline();
+      camera.position.set(0, 420, 0.01); controls.target.set(0, 0, 0); camera.lookAt(0, 0, 0); controls.update(); camera.updateMatrixWorld(true);
+      const cv = renderer.domElement, rect = cv.getBoundingClientRect();
+      const click = function (x, z) {
+        const v = new THREE.Vector3(x, 0, z).project(camera);
+        const o = { bubbles: true, button: 0, buttons: 1, clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height, pointerId: 1, pointerType: 'mouse' };
+        cv.dispatchEvent(new PointerEvent('pointerdown', o));
+        window.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, o, { buttons: 0 })));
+      };
+      const n = function () { return window.splinePoints.length; };
+      [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { click(c[0], c[1]); });
+      const open = { n: n(), closed: !!window._mtnClosed };
+      click(0, -100);  // the segment from the 4th dot would cross the first one
+      const afterCross = n();
+      click(-57, -57); // near the first ball: the magnet closes the shape
+      const closed = { n: n(), closed: !!window._mtnClosed };
+      click(0, 0);     // a closed shape takes no more dots
+      const afterClosed = n();
+      check('mountain outline: open while drawing, a crossing dot is refused, the magnet closes it, a closed shape takes no more dots',
+        open.n === 4 && !open.closed && afterCross === 4 && closed.n === 4 && closed.closed && afterClosed === 4, JSON.stringify([open, afterCross, closed, afterClosed]));
+      check('mountain outline: dragging a ball across the outline is refused', window.moveWouldCross(window.splinePoints, 0, 0, 100, true) === true && window.moveWouldCross(window.splinePoints, 0, -50, -50, true) === false);
+      // an OPEN hill is built closed: dragging a ball so that only the implicit closing edge would cross is refused too
+      {
+        window._mtnToolMode = 'SPLINE'; window.clearSpline();
+        [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { click(c[0], c[1]); });
+        const at2 = function (x, z) { const v = new THREE.Vector3(x, 0, z).project(camera); return { clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height }; };
+        const startPos = { x: window.splinePoints[1].x, z: window.splinePoints[1].z };
+        const dn = Object.assign({ bubbles: true, button: 0, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at2(60, -60));
+        cv.dispatchEvent(new PointerEvent('pointerdown', dn));
+        cv.dispatchEvent(new PointerEvent('pointermove', Object.assign({ bubbles: true, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at2(-100, 0))));
+        const moved = { x: window.splinePoints[1].x - startPos.x, z: window.splinePoints[1].z - startPos.z, closed: !!window._mtnClosed, n: n() };
+        window.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, dn, { buttons: 0 })));
+        check('open hill: dragging a ball so that the closing edge would cross is refused', moved.x === 0 && moved.z === 0 && !moved.closed && moved.n === 4, JSON.stringify(moved));
+        // back to the closed square used by the checks below
+        window.clearSpline();
+        [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { click(c[0], c[1]); });
+        click(-57, -57);
+      }
+      // right-clicking a ball (or empty ground) removes a point and opens the closed outline again
+      const rclick = function (x, z) {
+        const v = new THREE.Vector3(x, 0, z).project(camera);
+        cv.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 2, buttons: 2, clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height, pointerId: 1, pointerType: 'mouse' }));
+      };
+      rclick(-60, 60);
+      const reopened = { n: n(), closed: !!window._mtnClosed };
+      check('mountain outline: removing a ball (right-click on it) opens a closed outline again', reopened.n === 3 && reopened.closed === false, JSON.stringify(reopened));
+      // build: a bow-tie is refused, the plain square is built
+      const h0 = window.getTerrainHeight(0, 0);
+      window.splinePoints.length = 0;
+      [[-60, -60], [60, 60], [60, -60], [-60, 60]].forEach(function (c) { window.splinePoints.push(new THREE.Vector3(c[0], 0, c[1])); });
+      window.executeSplineMountain();
+      const afterBowtie = window.getTerrainHeight(0, 0);
+      window.splinePoints.length = 0;
+      [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { window.splinePoints.push(new THREE.Vector3(c[0], 0, c[1])); });
+      window.executeSplineMountain();
+      const afterSquare = window.getTerrainHeight(0, 0);
+      check('mountain build refuses a crossing outline and builds a plain one', Math.abs(afterBowtie - h0) < 0.01 && afterSquare > h0 + 1, JSON.stringify([h0, afterBowtie, afterSquare]));
+      // ridge: an open line, a dot that would cross it is refused
+      window._mtnToolMode = 'RIDGE'; window.clearSpline();
+      [[-60, -60], [60, -60], [60, 60]].forEach(function (c) { click(c[0], c[1]); });
+      click(0, -100);
+      check('ridge line: a dot that would cross the line is refused', n() === 3, 'n ' + n());
+      window.clearSpline();
+      // control balls without crossing, but the smoothed curve between sharp turns loops over itself: refused at build as well
+      {
+        const V = function (c) { return new THREE.Vector3(c[0], 0, c[1]); };
+        const sumH = function () { let t = 0; for (let x = -150; x <= 150; x += 15) for (let z = -150; z <= 150; z += 15) t += window.getTerrainHeight(x, z); return t; };
+        const ridge = [[-76, 77], [-3, 55], [-15, -8], [46, 56], [25, 99], [-21, 71], [23, 35]];
+        window.splinePoints.length = 0; ridge.forEach(function (c) { window.splinePoints.push(V(c)); });
+        const ridgeCtl = window.polylineSelfIntersects(window.splinePoints, false), ridgeSmooth = window.mtnOutlineCrosses(window.splinePoints, false);
+        const hb = sumH(); window.executeRidgeMountain(); const ha = sumH();
+        // a hill outline of the same kind (found with a fixed pseudo-random search)
+        let seed = 12345, rnd = function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }, hill = null;
+        for (let k = 0; k < 4000 && !hill; k++) {
+          const pts = []; for (let i = 0; i < 7; i++) pts.push([Math.round(rnd() * 160 - 80), Math.round(rnd() * 160 - 80)]);
+          const ps = pts.map(V);
+          if (!window.polylineSelfIntersects(ps, true) && window.mtnOutlineCrosses(ps, true)) hill = pts;
+        }
+        let hillOk = false, hillDetail = 'no sample found';
+        if (hill) {
+          window.splinePoints.length = 0; hill.forEach(function (c) { window.splinePoints.push(V(c)); });
+          const b2 = sumH(); window.executeSplineMountain(); const a2 = sumH();
+          hillOk = Math.abs(a2 - b2) < 0.01; hillDetail = JSON.stringify([hill, b2, a2]);
+        }
+        check('build refuses a ridge and a hill whose control balls are fine but whose smoothed curve loops over itself',
+          !ridgeCtl && ridgeSmooth && Math.abs(ha - hb) < 0.01 && hillOk, JSON.stringify([ridgeCtl, ridgeSmooth, hb, ha, hillDetail]));
+        window.clearSpline();
+      }
+      // freehand ridge stroke (drag): a loop in the stroke is refused, the line never crosses itself
+      {
+        const at = function (x, z) { const v = new THREE.Vector3(x, 0, z).project(camera); return { clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height }; };
+        const o0 = Object.assign({ bubbles: true, button: 0, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at(-60, -60));
+        cv.dispatchEvent(new PointerEvent('pointerdown', o0));
+        const path = [[-60, -60], [60, -60], [60, 60], [-20, 60], [-20, -100]];
+        let crossed = false, maxN = 0;
+        for (let k = 1; k < path.length; k++) {
+          const a0 = path[k - 1], b0 = path[k], steps = Math.ceil(Math.hypot(b0[0] - a0[0], b0[1] - a0[1]) / 4);
+          for (let t = 1; t <= steps; t++) {
+            const x = a0[0] + (b0[0] - a0[0]) * t / steps, z = a0[1] + (b0[1] - a0[1]) * t / steps;
+            cv.dispatchEvent(new PointerEvent('pointermove', Object.assign({ bubbles: true, buttons: 1, pointerId: 1, pointerType: 'mouse' }, at(x, z))));
+            if (window.splinePoints.length >= 3 && window.polylineSelfIntersects(window.splinePoints, false)) crossed = true;
+            maxN = Math.max(maxN, window.splinePoints.length);
+          }
+        }
+        window.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, o0, { buttons: 0 })));
+        check('ridge freehand stroke: the line never crosses itself (a loop is refused)', !crossed && maxN >= 3, 'crossed ' + crossed + ' maxN ' + maxN);
+        window.clearSpline();
+      }
     })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }

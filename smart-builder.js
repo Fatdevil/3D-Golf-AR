@@ -6510,12 +6510,29 @@ window.mtnRidgeCurve = function(points) {
         x: Math.max(-half, Math.min(half, p.x)), z: Math.max(-half, Math.min(half, p.z)) }));
 };
 
+// Does the line the builder will follow cross itself? The control balls can form a plain chain while the smoothed (Catmull-Rom)
+// curve between sharp turns still loops over itself, so the sampled curve is checked as well, with the builder's own sampling.
+window.mtnOutlineCrosses = function(points, closed) {
+    if (!points || points.length < 3) return false;
+    if (window.polylineSelfIntersects(points, closed)) return true;
+    let line;
+    if (closed) {
+        const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p.x, 0, p.z)), true);
+        line = curve.getPoints(Math.max(150, points.length * 30));
+        line.pop(); // a closed curve repeats its first point at the end
+    } else {
+        line = window.mtnRidgeCurve(points);
+    }
+    return window.polylineSelfIntersects(line.map(p => ({ x: p.x, z: p.z })), closed);
+};
+
 window.executeRidgeMountain = function() {
     if (!window.splinePoints || window.splinePoints.length < 2) {
         if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_need2', '⚠️ Rita minst 2 punkter för en bergsrygg!'), '#ef4444');
         return;
     }
-    
+    if (window.mtnOutlineCrosses(window.splinePoints, false)) { window.warnSelfCrossing(); return; } // a ridge line never crosses itself (control balls and smoothed line)
+
     window.saveUndoState();
     if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_building_ridge', '⏳ Bygger bergsryggen…'), '#38bdf8');
     
@@ -6638,6 +6655,8 @@ window.executeSplineMountain = function() {
             }
             return;
         }
+
+        if (window.mtnOutlineCrosses(window.splinePoints, true)) { window.warnSelfCrossing(); return; } // the outline must not cross itself (control balls and smoothed curve)
 
         // Spara undo-tillstånd
         if (typeof window.saveUndoState === 'function') {
