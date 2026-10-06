@@ -6709,10 +6709,14 @@ window.mtnHillField = function(points, height, jagMul, opts) {
     }
     // The height of every vertex is scaled by the largest distance to the edge. A coarse sample can miss the true maximum, so look at
     // the full-resolution neighbourhood of the best samples: the preview then uses the same scale as the build at every stride.
+    // The distance is 1-Lipschitz, so a sample can only hide a larger value within half a stride (diagonal) of itself: the best samples
+    // are refined first, and the search stops as soon as no remaining sample can beat the best value found.
     if (stride > 1 && maxD > 0) {
-        const r = Math.ceil(0.72 * stride), slack = 1.5 * stride * step, seen = new Set();
-        const cand = inside.filter(v => v.d >= maxD - slack);
-        cand.forEach(c => {
+        const r = Math.ceil(stride / 2), reach = 0.71 * stride * step, seen = new Set();
+        const cand = inside.slice().sort((p, q) => q.d - p.d);
+        for (let ci = 0; ci < cand.length; ci++) {
+            const c = cand[ci];
+            if (c.d + reach <= maxD) break;
             for (let gz = Math.max(0, c.gz - r); gz <= Math.min(segs, c.gz + r); gz++) {
                 for (let gx = Math.max(0, c.gx - r); gx <= Math.min(segs, c.gx + r); gx++) {
                     const idx = gz * rowLen + gx;
@@ -6724,7 +6728,7 @@ window.mtnHillField = function(points, height, jagMul, opts) {
                     if (d > maxD) maxD = d;
                 }
             }
-        });
+        }
     }
     if (maxD > 0) {
         const fbm = window.fbm || function() { return 0; };

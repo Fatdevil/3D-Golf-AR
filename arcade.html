@@ -12502,24 +12502,28 @@
         mesh.raycast = function () {}; // never in the way of clicks
         return mesh;
     }
-    // a few thousand points while things move, every terrain vertex a moment after the last change
-    function strideFor(maxCells) {
+    // The preview works with a budget, not a fixed grid: its cost is (terrain samples) x (segments of the smoothed outline), so a detailed
+    // outline gets a coarser grid. A little work while things move, more a moment after the last change (the heights stay exact at every
+    // sampled vertex, only the grid gets coarser).
+    function strideFor(maxCells, work) {
         let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
         splinePoints.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z); });
         const step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
         const cells = ((maxX - minX) / step + 4) * ((maxZ - minZ) / step + 4);
-        return Math.max(1, Math.ceil(Math.sqrt(cells / maxCells)));
+        const outlineSegs = Math.max(150, splinePoints.length * 30);
+        const budget = Math.max(400, Math.min(maxCells, work / outlineSegs));
+        return Math.max(1, Math.ceil(Math.sqrt(cells / budget)));
     }
     function scheduleHillMesh() {
         const rev = hillMeshRev;
         try {
-            const m = buildHillMesh(strideFor(6000));
+            const m = buildHillMesh(strideFor(6000, 1.0e6));
             if (m) { splineHillMesh = m; scene.add(m); }
         } catch (err) { console.warn('Hill mesh failed', err); }
         hillMeshTimer = setTimeout(function () {
             if (rev !== hillMeshRev || splinePoints.length < 3) return; // something changed since: its own refresh takes over
             try {
-                const m = buildHillMesh(strideFor(90000));
+                const m = buildHillMesh(strideFor(30000, 8.0e6));
                 if (splineHillMesh) { freePreview(splineHillMesh); splineHillMesh = null; }
                 if (m) { splineHillMesh = m; scene.add(m); }
                 renderer.render(scene, camera);
@@ -15796,7 +15800,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=5"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=60"></script>
+<script src="smart-builder.js?v=61"></script>
 <script src="studio-reanchor.js?v=4"></script>
 <script src="hole-generator.js?v=28"></script>
 <script src="blueprint.js?v=20"></script>

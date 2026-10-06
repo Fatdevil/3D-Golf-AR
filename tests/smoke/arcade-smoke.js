@@ -424,6 +424,23 @@ function serve() {
         js.value = 50; js.dispatchEvent(new Event('input', { bubbles: true }));
         check('hill preview: a 3D surface with the exact peak height, redrawn by the jaggedness slider, one mesh at a time', ok0 && ok1 && count1 === 1, JSON.stringify([ok0, ok1, count1, m0 && topY(m0), fmax + 0.15]));
       }
+      // the preview does a bounded amount of work however detailed the outline is (samples x outline segments)
+      {
+        const wait2 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        const origField = window.mtnHillField, calls = [];
+        window.mtnHillField = function () { const t = performance.now(); const f = origField.apply(this, arguments); calls.push({ stride: f.stride, inside: f.inside.length, ms: performance.now() - t, segs: Math.max(150, arguments[0].length * 30) }); return f; };
+        const keep = window.splinePoints.map(function (p) { return p.clone(); }), keepClosed = window._mtnClosed;
+        window.splinePoints.length = 0;
+        for (let i = 0; i < 80; i++) { const t = i / 80 * Math.PI * 2, rr = 140 * (0.8 + 0.2 * Math.sin(i * 2.3)); window.splinePoints.push(new THREE.Vector3(Math.cos(t) * rr, 0, Math.sin(t) * rr)); }
+        window._mtnClosed = true;
+        const t0 = performance.now(); window.refreshSplinePreview(); const syncMs = performance.now() - t0;
+        await wait2(600);
+        window.mtnHillField = origField;
+        const draftC = calls[0], fullC = calls[calls.length - 1];
+        const draftWork = draftC ? draftC.inside * draftC.segs : 1e12, fullWork = fullC ? fullC.inside * fullC.segs : 1e12;
+        check('hill preview work is bounded by outline detail (80 control balls, 140 m): draft <= 1.2M, full <= 9.6M segment checks', calls.length >= 2 && draftWork <= 1.2e6 && fullWork <= 9.6e6 && syncMs < 400, JSON.stringify({ n: calls.length, draftWork: draftWork, fullWork: fullWork, syncMs: Math.round(syncMs), draft: draftC && draftC.stride, full: fullC && fullC.stride }));
+        window.splinePoints.length = 0; keep.forEach(function (p) { window.splinePoints.push(p); }); window._mtnClosed = keepClosed; window.refreshSplinePreview();
+      }
       // a coarse preview uses the build's scale: the heights of the vertices it samples equal the full-resolution ones
       {
         const full = window.mtnHillField(window.splinePoints, 25, 1, { stride: 1 }), coarse = window.mtnHillField(window.splinePoints, 25, 1, { stride: 4 });
