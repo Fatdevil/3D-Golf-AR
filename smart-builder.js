@@ -6646,6 +6646,79 @@ window.executeRidgeMountain = function() {
     if (typeof window.saveLevel === 'function') window.saveLevel();
 };
 
+// The heights a hill outline gives, as a pure calculation (nothing is written to the terrain). The builder and the 3D preview
+// both use it, so what the preview shows is exactly what the build makes.
+// points: closed outline (THREE.Vector3 / {x,z}), height in metres, jagMul = jaggedness slider / 50.
+// opts.stride: only look at every n-th terrain vertex (cheap draft for the preview; 1 = every vertex, as the build does)
+window.mtnHillField = function(points, height, jagMul, opts) {
+    const stride = Math.max(1, ((opts && opts.stride) | 0) || 1);
+    const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p.x, 0, p.z)), true);
+    const densePts = curve.getPoints(Math.max(150, points.length * 30));
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    densePts.forEach(pt => {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.z < minZ) minZ = pt.z;
+        if (pt.z > maxZ) maxZ = pt.z;
+    });
+    const segs = window.TERRAIN_SEGS, size = window.TERRAIN_SIZE, step = size / segs;
+    const gxMin = Math.max(0, Math.floor((minX + (size / 2)) / step) - 2);
+    const gxMax = Math.min(segs, Math.ceil((maxX + (size / 2)) / step) + 2);
+    const gzMin = Math.max(0, Math.floor((minZ + (size / 2)) / step) - 2);
+    const gzMax = Math.min(segs, Math.ceil((maxZ + (size / 2)) / step) + 2);
+
+    function pointInPolygon(x, z, polygon) {
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i].x, zi = polygon[i].z, xj = polygon[j].x, zj = polygon[j].z;
+            if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi + 0.00001) + xi)) inside = !inside;
+        }
+        return inside;
+    }
+    function distanceToSegmentSq(px, pz, ax, az, bx, bz) {
+        const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+        if (l2 === 0) return (px - ax) * (px - ax) + (pz - az) * (pz - az);
+        let t = ((px - ax) * dx + (pz - az) * dz) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const rx = px - (ax + t * dx), rz = pz - (az + t * dz);
+        return rx * rx + rz * rz;
+    }
+    function minDistanceToPolygon(x, z, polygon) {
+        let m = Infinity;
+        for (let i = 0; i < polygon.length; i++) {
+            const n = (i + 1) % polygon.length;
+            const d = distanceToSegmentSq(x, z, polygon[i].x, polygon[i].z, polygon[n].x, polygon[n].z);
+            if (d < m) m = d;
+        }
+        return Math.sqrt(m);
+    }
+
+    const positions = window._arcadePlaneGeo.attributes.position.array, rowLen = segs + 1;
+    const inside = [];
+    let maxD = 0;
+    for (let gz = gzMin; gz <= gzMax; gz += stride) {
+        for (let gx = gxMin; gx <= gxMax; gx += stride) {
+            const idx = gz * rowLen + gx;
+            const vx = positions[idx * 3], vz = -positions[idx * 3 + 1], origH = positions[idx * 3 + 2];
+            if (pointInPolygon(vx, vz, densePts)) {
+                const d = minDistanceToPolygon(vx, vz, densePts);
+                if (d > maxD) maxD = d;
+                inside.push({ idx: idx, gx: gx, gz: gz, x: vx, z: vz, origH: origH, d: d, newH: origH });
+            }
+        }
+    }
+    if (maxD > 0) {
+        const fbm = window.fbm || function() { return 0; };
+        inside.forEach(v => {
+            const t = v.d / maxD;
+            const falloff = t * t * (3 - 2 * t); // smoothstep
+            const noiseVal = fbm(v.x * 0.1, v.z * 0.1, 3, 2.0, 0.5) * (height * 0.15) * jagMul;
+            v.newH = v.origH + (height + noiseVal) * falloff * _mtnEdgeFade(v.x, v.z, height);
+        });
+    }
+    return { inside: inside, maxD: maxD, stride: stride, gxMin: gxMin, gxMax: gxMax, gzMin: gzMin, gzMax: gzMax, step: step };
+};
+
 window.executeSplineMountain = function() {
         if (!window.splinePoints || window.splinePoints.length < 3) {
             if (window.showBuildToast) {
@@ -6665,113 +6738,20 @@ window.executeSplineMountain = function() {
 
         let mtnHeight = parseFloat(document.getElementById('mtn-spline-height').value) || 25;
 
-        // Skapa en stängd kurva och sampla tätt
-        let curve = new THREE.CatmullRomCurve3(window.splinePoints, true);
-        let numSamples = Math.max(150, window.splinePoints.length * 30);
-        let densePts = curve.getPoints(numSamples);
-
-        // Hitta 2D bounding box
-        let minX = Infinity, maxX = -Infinity;
-        let minZ = Infinity, maxZ = -Infinity;
-        densePts.forEach(pt => {
-            if (pt.x < minX) minX = pt.x;
-            if (pt.x > maxX) maxX = pt.x;
-            if (pt.z < minZ) minZ = pt.z;
-            if (pt.z > maxZ) maxZ = pt.z;
-        });
-
-        let segs = window.TERRAIN_SEGS;
-        let size = window.TERRAIN_SIZE;
-        let step = size / segs;
-        let gxMin = Math.max(0, Math.floor((minX + (size / 2)) / step) - 2);
-        let gxMax = Math.min(segs, Math.ceil((maxX + (size / 2)) / step) + 2);
-        let gzMin = Math.max(0, Math.floor((minZ + (size / 2)) / step) - 2);
-        let gzMax = Math.min(segs, Math.ceil((maxZ + (size / 2)) / step) + 2);
-
-        // Hjälpfunktioner för point-in-polygon och avstånd
-        function pointInPolygon(x, z, polygon) {
-            let inside = false;
-            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-                let xi = polygon[i].x, zi = polygon[i].z;
-                let xj = polygon[j].x, zj = polygon[j].z;
-                let intersect = ((zi > z) !== (zj > z))
-                    && (x < (xj - xi) * (z - zi) / (zj - zi + 0.00001) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
-        }
-
-        function distanceToSegmentSq(px, pz, ax, az, bx, bz) {
-            let dx = bx - ax;
-            let dz = bz - az;
-            let l2 = dx * dx + dz * dz;
-            if (l2 === 0) return (px - ax) * (px - ax) + (pz - az) * (pz - az);
-            let t = ((px - ax) * dx + (pz - az) * dz) / l2;
-            t = Math.max(0, Math.min(1, t));
-            let projX = ax + t * dx;
-            let projZ = az + t * dz;
-            let rx = px - projX;
-            let rz = pz - projZ;
-            return rx * rx + rz * rz;
-        }
-
-        function minDistanceToPolygon(x, z, polygon) {
-            let minDistSq = Infinity;
-            for (let i = 0; i < polygon.length; i++) {
-                let next = (i + 1) % polygon.length;
-                let dSq = distanceToSegmentSq(x, z, polygon[i].x, polygon[i].z, polygon[next].x, polygon[next].z);
-                if (dSq < minDistSq) minDistSq = dSq;
-            }
-            return Math.sqrt(minDistSq);
-        }
-
-        // Samla vertexer inuti
-        let insideVertices = [];
-        let maxD = 0;
-        let positions = window._arcadePlaneGeo.attributes.position.array;
-        let stride = segs + 1;
-
-        for (let gz = gzMin; gz <= gzMax; gz++) {
-            for (let gx = gxMin; gx <= gxMax; gx++) {
-                let idx = gz * stride + gx;
-                let vx = positions[idx * 3];
-                let vz = -positions[idx * 3 + 1];
-                let origH = positions[idx * 3 + 2];
-
-                if (pointInPolygon(vx, vz, densePts)) {
-                    let d = minDistanceToPolygon(vx, vz, densePts);
-                    if (d > maxD) maxD = d;
-                    insideVertices.push({ idx: idx, x: vx, z: vz, origH: origH, d: d });
-                }
-            }
-        }
-
-        if (insideVertices.length === 0 || maxD === 0) {
-            if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_none_inside', '⚠️ Ingen mark hittades inuti formen!'), '#f59e0b');
-            return;
-        }
-
-        let fbm = window.fbm || function(x, y) { return 0; };
-
         let jaggedMultiplier = 1.0;
         let jaggedSlider = document.getElementById('mtn-spline-jagged');
         if (jaggedSlider) {
             jaggedMultiplier = parseFloat(jaggedSlider.value) / 50.0;
         }
 
-        // Höj terrängen inuti formen
-        insideVertices.forEach(v => {
-            let t = v.d / maxD;
-            // Smoothstep falloff
-            let falloff = t * t * (3 - 2 * t);
-            
-            // FBM noise med frekvens och dämpning, skalat med jaggedMultiplier
-            let noiseVal = fbm(v.x * 0.1, v.z * 0.1, 3, 2.0, 0.5) * (mtnHeight * 0.15) * jaggedMultiplier;
-            
-            // Slutlig höjdändring
-            let targetH = v.origH + (mtnHeight + noiseVal) * falloff * _mtnEdgeFade(v.x, v.z, mtnHeight);
-            positions[v.idx * 3 + 2] = targetH;
-        });
+        // Samma beräkning som förhandsvisningen
+        const field = window.mtnHillField(window.splinePoints, mtnHeight, jaggedMultiplier);
+        if (field.inside.length === 0 || field.maxD === 0) {
+            if (window.showBuildToast) window.showBuildToast(_mtnT('mtn_none_inside', '⚠️ Ingen mark hittades inuti formen!'), '#f59e0b');
+            return;
+        }
+        let positions = window._arcadePlaneGeo.attributes.position.array;
+        field.inside.forEach(v => { positions[v.idx * 3 + 2] = v.newH; });
 
         // Uppdatera geometri
         window._arcadePlaneGeo.attributes.position.needsUpdate = true;

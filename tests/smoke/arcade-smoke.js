@@ -401,6 +401,29 @@ function serve() {
       rclick(-60, 60);
       const reopened = { n: n(), closed: !!window._mtnClosed };
       check('mountain outline: removing a ball (right-click on it) opens a closed outline again', reopened.n === 3 && reopened.closed === false, JSON.stringify(reopened));
+      // the 3D preview of the hill: a see-through surface with the exact heights, redrawn when height / jaggedness change
+      {
+        const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        const prevMesh = function () { return scene.children.find(function (o) { return o.isMesh && o.renderOrder === 996; }); };
+        const topY = function (m) { const a = m.geometry.attributes.position.array; let t = -1e9; for (let i = 1; i < a.length; i += 3) t = Math.max(t, a[i]); return t; };
+        const sig = function (m) { const a = m.geometry.attributes.position.array; let t = 0; for (let i = 1; i < a.length; i += 3) t += a[i]; return t; };
+        const hs = document.getElementById('mtn-spline-height'), js = document.getElementById('mtn-spline-jagged');
+        hs.value = 25; js.value = 0; js.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait(350);
+        const m0 = prevMesh();
+        const fld = window.mtnHillField(window.splinePoints, 25, 0);
+        let fmax = -1e9; fld.inside.forEach(function (v) { fmax = Math.max(fmax, v.newH); });
+        const ok0 = !!m0 && Math.abs(topY(m0) - (fmax + 0.15)) < 0.05;
+        const sig0 = m0 ? sig(m0) : 0;
+        js.value = 100; js.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait(350);
+        const m1 = prevMesh();
+        const ok1 = !!m1 && Math.abs(sig(m1) - sig0) > 1;
+        // the preview replaces itself: exactly one mesh, none after the outline is cleared
+        const count1 = scene.children.filter(function (o) { return o.isMesh && o.renderOrder === 996; }).length;
+        js.value = 50; js.dispatchEvent(new Event('input', { bubbles: true }));
+        check('hill preview: a 3D surface with the exact peak height, redrawn by the jaggedness slider, one mesh at a time', ok0 && ok1 && count1 === 1, JSON.stringify([ok0, ok1, count1, m0 && topY(m0), fmax + 0.15]));
+      }
       // build: a bow-tie is refused, the plain square is built
       const h0 = window.getTerrainHeight(0, 0);
       window.splinePoints.length = 0;
@@ -409,7 +432,12 @@ function serve() {
       const afterBowtie = window.getTerrainHeight(0, 0);
       window.splinePoints.length = 0;
       [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { window.splinePoints.push(new THREE.Vector3(c[0], 0, c[1])); });
+      const hv = parseFloat(document.getElementById('mtn-spline-height').value) || 25, jv = (parseFloat(document.getElementById('mtn-spline-jagged').value) || 0) / 50;
+      const expected = window.mtnHillField(window.splinePoints, hv, jv);
       window.executeSplineMountain();
+      const posA = planeGeo.attributes.position.array; let worst = 0;
+      expected.inside.forEach(function (v) { worst = Math.max(worst, Math.abs(posA[v.idx * 3 + 2] - v.newH)); });
+      check('what the preview computes is what the build writes (every vertex)', expected.inside.length > 1000 && worst < 1e-4, 'n ' + expected.inside.length + ' worst ' + worst);
       const afterSquare = window.getTerrainHeight(0, 0);
       check('mountain build refuses a crossing outline and builds a plain one', Math.abs(afterBowtie - h0) < 0.01 && afterSquare > h0 + 1, JSON.stringify([h0, afterBowtie, afterSquare]));
       // ridge: an open line, a dot that would cross it is refused
