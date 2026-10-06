@@ -531,6 +531,7 @@ function serve() {
         const fwNew = eh2.fairways[0];
         check('a new fairway starts with the slope cap off, even if the controls held one', !!fwNew && !(fwNew.maxSlopePct > 0) && !(fwNew.maxSlopeAlongPct > 0) && window._fairwayMaxSlopePct === 0 && window._fairwayMaxSlopeAlongPct === 0, 'cap ' + (fwNew && fwNew.maxSlopePct) + '/' + (fwNew && fwNew.maxSlopeAlongPct));
       })();
+      check('the fairway editor panel exists exactly once (a duplicate steals getElementById)', document.querySelectorAll('#sf-panel-built').length === 1 && document.querySelectorAll('#sf-max-along').length === 1 && document.querySelectorAll('#sf-max-slope').length === 1 && document.querySelectorAll('#gs-content-klippning').length === 1);
       const ctl = document.getElementById('sf-max-slope');
         check('after a yellow build the fairway control and the global cap agree', ctl && Number(ctl.value) === window._fairwayMaxSlopePct, 'control ' + (ctl && ctl.value) + ' global ' + window._fairwayMaxSlopePct);
       })();
