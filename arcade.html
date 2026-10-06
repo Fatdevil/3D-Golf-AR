@@ -12458,10 +12458,10 @@
             if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
         });
     }
-    function buildHillMesh(stride) {
+    function buildHillMesh(stride, refineWork) {
         const h = parseFloat((document.getElementById('mtn-spline-height') || {}).value) || 25;
         const jag = parseFloat((document.getElementById('mtn-spline-jagged') || {}).value);
-        const f = window.mtnHillField(splinePoints, h, isNaN(jag) ? 1 : jag / 50, { stride: stride });
+        const f = window.mtnHillField(splinePoints, h, isNaN(jag) ? 1 : jag / 50, { stride: stride, refineWork: refineWork });
         if (!f.inside.length || !f.maxD) return null;
         const s = f.stride, nx = Math.floor((f.gxMax - f.gxMin) / s) + 1, nz = Math.floor((f.gzMax - f.gzMin) / s) + 1;
         const pos = window._arcadePlaneGeo.attributes.position.array, rowLen = window.TERRAIN_SEGS + 1;
@@ -12511,19 +12511,20 @@
         const step = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
         const cells = ((maxX - minX) / step + 4) * ((maxZ - minZ) / step + 4);
         const outlineSegs = Math.max(150, splinePoints.length * 30);
-        const budget = Math.max(400, Math.min(maxCells, work / outlineSegs));
+        // no floor on the sample count: the cost is samples x segments, so a very detailed outline gets a very coarse grid
+        const budget = Math.max(16, Math.min(maxCells, work / outlineSegs));
         return Math.max(1, Math.ceil(Math.sqrt(cells / budget)));
     }
     function scheduleHillMesh() {
         const rev = hillMeshRev;
         try {
-            const m = buildHillMesh(strideFor(6000, 1.0e6));
+            const m = buildHillMesh(strideFor(6000, 1.0e6), 0.5e6);
             if (m) { splineHillMesh = m; scene.add(m); }
         } catch (err) { console.warn('Hill mesh failed', err); }
         hillMeshTimer = setTimeout(function () {
             if (rev !== hillMeshRev || splinePoints.length < 3) return; // something changed since: its own refresh takes over
             try {
-                const m = buildHillMesh(strideFor(30000, 8.0e6));
+                const m = buildHillMesh(strideFor(30000, 8.0e6), 4.0e6);
                 if (splineHillMesh) { freePreview(splineHillMesh); splineHillMesh = null; }
                 if (m) { splineHillMesh = m; scene.add(m); }
                 renderer.render(scene, camera);
@@ -15800,7 +15801,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="fairway-studio.js?v=5"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=61"></script>
+<script src="smart-builder.js?v=62"></script>
 <script src="studio-reanchor.js?v=4"></script>
 <script src="hole-generator.js?v=28"></script>
 <script src="blueprint.js?v=20"></script>

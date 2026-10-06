@@ -6650,6 +6650,7 @@ window.executeRidgeMountain = function() {
 // both use it, so what the preview shows is exactly what the build makes.
 // points: closed outline (THREE.Vector3 / {x,z}), height in metres, jagMul = jaggedness slider / 50.
 // opts.stride: only look at every n-th terrain vertex (cheap draft for the preview; 1 = every vertex, as the build does)
+// opts.refineWork: cap (in outline-segment checks) for refining the height scale of a coarse preview; unlimited for the build
 window.mtnHillField = function(points, height, jagMul, opts) {
     const stride = Math.max(1, ((opts && opts.stride) | 0) || 1);
     const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p.x, 0, p.z)), true);
@@ -6713,8 +6714,10 @@ window.mtnHillField = function(points, height, jagMul, opts) {
     // are refined first, and the search stops as soon as no remaining sample can beat the best value found.
     if (stride > 1 && maxD > 0) {
         const r = Math.ceil(stride / 2), reach = 0.71 * stride * step, seen = new Set();
+        const refineCap = (opts && opts.refineWork > 0) ? opts.refineWork : Infinity;
+        let refineWork = 0;
         const cand = inside.slice().sort((p, q) => q.d - p.d);
-        for (let ci = 0; ci < cand.length; ci++) {
+        for (let ci = 0; ci < cand.length && refineWork <= refineCap; ci++) {
             const c = cand[ci];
             if (c.d + reach <= maxD) break;
             for (let gz = Math.max(0, c.gz - r); gz <= Math.min(segs, c.gz + r); gz++) {
@@ -6724,9 +6727,12 @@ window.mtnHillField = function(points, height, jagMul, opts) {
                     seen.add(idx);
                     const vx = positions[idx * 3], vz = -positions[idx * 3 + 1];
                     if (!pointInPolygon(vx, vz, densePts)) continue;
+                    refineWork += densePts.length;
                     const d = minDistanceToPolygon(vx, vz, densePts);
                     if (d > maxD) maxD = d;
+                    if (refineWork > refineCap) break;
                 }
+                if (refineWork > refineCap) break;
             }
         }
     }
