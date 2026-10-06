@@ -236,10 +236,21 @@ function serve() {
       check('fairway slope cap 8 %: slope within limit', capped <= 0.10, 'max ' + (capped * 100).toFixed(1) + ' %');
       check('fairway slope cap keeps a gentler hill', c1 > 0.3 && c1 < c0 - 0.3, 'centre ' + c1.toFixed(2));
       // a sculpt stroke on top is baked into the baseline and the cap still holds
+      // (a bunker on another hole just outside the fairway, untouched by the stroke, must be dug again after the fairway re-runs)
+      const bh = courseHoles[0] === hh ? courseHoles[1] : courseHoles[0];
+      const bpts = []; for (let k = 0; k < 8; k++) bpts.push({ x: -46 + 3 * Math.cos(k / 8 * 6.283), y: 0, z: 150 + 3 * Math.sin(k / 8 * 6.283) });
+      const bsn = window.captureBunkerSnapshot(bh, bpts, 15);
+      const bkd = { id: 'bk_f', points: bpts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: bsn.baseElevation, bbox: bsn.bbox, origHeights: bsn.origHeights, origCanvasPixels: bsn.origCanvasPixels };
+      bh.bunkers = [bkd]; bh.bunkerData = bkd; bh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(bh, false, false, bkd);
+      const bDip = function () { return window.getTerrainHeight(-46, 150) - window.getTerrainHeight(-46, 159); };
+      const bDip0 = bDip();
       const pre = new Float32Array(p);
       for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 2 * Math.exp(-((x - 15) * (x - 15) + (z - 150) * (z - 150)) / 18); }
       const redone = window.reanchorStudiosAfterSculpt(pre);
       check('fairway re-run after sculpt keeps the cap', redone >= 1 && maxSlope() <= 0.10, 'redone ' + redone + ' max ' + (maxSlope() * 100).toFixed(1) + ' %');
+      check('bunker on another hole beside a re-run fairway is dug again (dip ' + bDip0.toFixed(2) + ' -> ' + bDip().toFixed(2) + ')', bDip0 < -0.3 && bDip() < bDip0 + 0.25, 'dip0 ' + bDip0.toFixed(2) + ' now ' + bDip().toFixed(2));
+      bh.bunkers = []; bh.bunkerData = null; bh.activeBunkerIndex = null;
       // cap off: stroke baked, ground follows the sculpt (no stale restore)
       fd.maxSlopePct = 0; window.applyFairwayPipeline(hh, false, false, fd);
       check('cap off restores the natural hill incl. the sculpt', Math.abs(centre() - c0) < 0.1 && window.getTerrainHeight(15, 150) > 2, 'centre ' + centre().toFixed(2));

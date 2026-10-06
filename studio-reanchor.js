@@ -165,9 +165,7 @@
                         window.applyFairwayPipeline(j.hole, false, false, j.st.sd);
                         done++;
                     }
-                    return;
-                }
-                if (j.st.kind === 'green' && typeof window.applyGreenPipeline === 'function') {
+                } else if (j.st.kind === 'green' && typeof window.applyGreenPipeline === 'function') {
                     window.applyGreenPipeline(j.hole, false, false);
                     done++;
                 } else if (j.st.kind === 'tee' && typeof window.applyTeePipeline === 'function') {
