@@ -541,6 +541,20 @@ function serve() {
         const fwNew = eh2.fairways[0];
         check('a new fairway starts with the slope cap off, even if the controls held one', !!fwNew && !(fwNew.maxSlopePct > 0) && !(fwNew.maxSlopeAlongPct > 0) && window._fairwayMaxSlopePct === 0 && window._fairwayMaxSlopeAlongPct === 0, 'cap ' + (fwNew && fwNew.maxSlopePct) + '/' + (fwNew && fwNew.maxSlopeAlongPct));
       })();
+      // full-screen dialogs inside #ui-layer (pointer-events: none) must take clicks themselves: the water-hazard buttons were dead
+      (function () {
+        const reach = function (modalId, btnId, show, hide) {
+          show(); const m = document.getElementById(modalId), b = document.getElementById(btnId), r = b.getBoundingClientRect();
+          const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); const ok = top === b || b.contains(top);
+          hide(); return ok;
+        };
+        const pm = document.getElementById('penalty-decision-modal');
+        const okPen = reach('penalty-decision-modal', 'penalty-btn-drop', function () { window.showPenaltyDecision('WATER'); }, function () { pm.style.display = 'none'; });
+        const gm = document.getElementById('gallery-modal');
+        const okGal = reach('gallery-modal', 'btn-gallery-publish', function () { gm.style.display = 'flex'; }, function () { gm.style.display = 'none'; });
+        check('the water-hazard dialog buttons receive clicks', okPen);
+        check('the publish gallery dialog buttons receive clicks', okGal);
+      })();
       check('the fairway editor panel exists exactly once (a duplicate steals getElementById)', document.querySelectorAll('#sf-panel-built').length === 1 && document.querySelectorAll('#sf-max-along').length === 1 && document.querySelectorAll('#sf-max-slope').length === 1 && document.querySelectorAll('#gs-content-klippning').length === 1);
       const ctl = document.getElementById('sf-max-slope');
         check('after a yellow build the fairway control and the global cap agree', ctl && Number(ctl.value) === window._fairwayMaxSlopePct, 'control ' + (ctl && ctl.value) + ' global ' + window._fairwayMaxSlopePct);
