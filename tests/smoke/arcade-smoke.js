@@ -182,6 +182,11 @@ function serve() {
       let same = 0; for (let i = 0; i < e1.h.length; i++) same = Math.max(same, Math.abs(e1.h[i] - e2.h[i]));
       check('limiter: equal along / across caps behave exactly like the single cap', same < 1e-4, 'max diff ' + same);
 
+      // the reported slope is the real gradient of the worst cell, also when along and across caps differ
+      const g = mk(0.40, 0, 0), rg = window.limitHeightSlope(g.h, g.w, N, N, 0.15, 1, 1, 4000, { across: 0.06, tx: g.tx, tz: g.tz });
+      let realMax = 0; for (let z = 0; z < N - 1; z++) for (let x = 0; x < N - 1; x++) realMax = Math.max(realMax, Math.hypot(g.h[z * N + x + 1] - g.h[z * N + x], g.h[(z + 1) * N + x] - g.h[z * N + x]));
+      check('limiter: a non-converged run with split caps reports the real remaining slope', !rg.converged && rg.maxSlope > 0.15 && Math.abs(rg.maxSlope - realMax) < 0.03, 'reported ' + (rg.maxSlope * 100).toFixed(1) + ' % real ' + (realMax * 100).toFixed(1) + ' %');
+
       // 2. the direction of play
       const A1 = window.fairwayAxisField({ tees: { red: { x: 0, z: 100 } }, flag: { x: 0, z: -100 } }, { points: [] })(5, 0);
       const f2 = window.fairwayAxisField({ tees: { red: { x: 0, z: 100 } }, aimPoint: { x: 0, z: 0 }, flag: { x: 100, z: 0 } }, { points: [] });

@@ -2414,9 +2414,9 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
     let La = capA * spacing, Lc = capC * spacing;
     if (!(isFinite(La) || isFinite(Lc))) return { iters: 0, converged: true, maxSlope: 0, worstRel: 0 };
     let invA = isFinite(La) ? 1 / La : 0, invC = isFinite(Lc) ? 1 / Lc : 0;
-    let capRef = Math.min(capA, capC); // reported slope is relative to the stricter cap
+    let capRef = Math.min(capA, capC); // fallback for the reported slope when nothing exceeded a cap
     let tol = 0.05; // converged when no cell is more than 5 % over its cap
-    let it = 0, worst = 0;
+    let it = 0, worst = 0, worstMag = 0; // worstMag: the real gradient (m per m) of the cell that is furthest over its cap
     let tAx = aniso ? aniso.tx : null, tAz = aniso ? aniso.tz : null;
     // how far over its cap a cell is: 1 = exactly at the cap (s), measured on the gradient ellipse
     let overOf = function(i, ddx, ddz) {
@@ -2425,8 +2425,10 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
         let a = (ddx * tx + ddz * tz) * invA, c = (-ddx * tz + ddz * tx) * invC;
         return Math.sqrt(a * a + c * c);
     };
+    let magOf = function(ddx, ddz) { return Math.sqrt(ddx * ddx + ddz * ddz) / spacing; };
     let verifyExcess = function() {
         let wmax = 0;
+        worstMag = 0;
         for (let gz = 0; gz < gH; gz++) {
             for (let gx = 0; gx < gW; gx++) {
                 let i = gz * gW + gx;
@@ -2439,8 +2441,9 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                         if (nz < 0 || nz >= gH) continue;
                         let jz = nz * gW + gx;
                         if (w[i] + w[jx] + w[jz] <= 0) continue;
-                        let ex = overOf(i, (h[jx] - h[i]) * sx, (h[jz] - h[i]) * tz) - 1;
-                        if (ex > wmax) wmax = ex;
+                        let vdx = (h[jx] - h[i]) * sx, vdz = (h[jz] - h[i]) * tz;
+                        let ex = overOf(i, vdx, vdz) - 1;
+                        if (ex > wmax) { wmax = ex; worstMag = magOf(vdx, vdz); }
                     }
                 }
             }
@@ -2451,7 +2454,7 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
     for (; it < (maxIter || 300); it++) {
         // wall-clock budget so a huge fairway cannot freeze the editor; the caller is told if the cap was not reached
         if (budgetMs && it > 0 && (it & 15) === 0 && performance.now() - t0 > budgetMs) break;
-        worst = 0;
+        worst = 0; worstMag = 0;
         let fwd = (it % 2 === 0);
         for (let a = 0; a < gH; a++) {
             let gz = fwd ? a : gH - 1 - a;
@@ -2475,7 +2478,7 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                     // gradient of the cell in the sweep's own direction (sign matters for the projection on the axis)
                     let s = overOf(i, -dx * sx, -dz * tz);
                     if (s <= 1) continue;
-                    if (s - 1 > worst) worst = s - 1;
+                    if (s - 1 > worst) { worst = s - 1; worstMag = magOf(dx * sx, dz * tz); }
                     let k = (1 - 1 / s) * 1.25; // mild over-relaxation: ~1.7x fewer sweeps (1.5+ overshoots and flattens everything)
                     let wa = w[i];
                     // pair (i, jx)
@@ -2501,8 +2504,10 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
             if (worst <= tol) { it++; break; }
         }
     }
-    // worst = largest relative excess seen in the last sweep (0 when the sweep found nothing to fix); maxSlope is reported against the stricter cap
-    return { iters: it, converged: worst <= tol, maxSlope: capRef * (1 + worst), worstRel: worst };
+    // not converged (budget or iteration limit): measure what is really left, a sweep's own numbers include gradients that were fixed a moment later
+    if (worst > tol) worst = verifyExcess();
+    // worst = largest relative excess seen in the last sweep (0 when the sweep found nothing to fix); maxSlope is the actual gradient of that worst cell (not scaled by a cap, so split caps report the true slope)
+    return { iters: it, converged: worst <= tol, maxSlope: worstMag > 0 ? worstMag : capRef, worstRel: worst };
 };
 
 window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
