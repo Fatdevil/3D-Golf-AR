@@ -182,6 +182,11 @@ function serve() {
       let same = 0; for (let i = 0; i < e1.h.length; i++) same = Math.max(same, Math.abs(e1.h[i] - e2.h[i]));
       check('limiter: equal along / across caps behave exactly like the single cap', same < 1e-4, 'max diff ' + same);
 
+      // one direction without a cap keeps its slope: 20 % along under a 15 % along cap, across uncapped (50 %)
+      const u = mk(0.20, 0.50, 0), ru = run(u, 0.15, 0);
+      check('limiter: with the across cap off, limiting the along slope leaves the across slope alone', ru.r.converged && slopeAlong(u.h) < 0.1575 && slopeAcross(u.h) > 0.47 && slopeAcross(u.h) < 0.53, 'along ' + (slopeAlong(u.h) * 100).toFixed(1) + ' % across ' + (slopeAcross(u.h) * 100).toFixed(1) + ' %');
+      const u2 = mk(0.50, 0.09, 0), ru2 = run(u2, 0, 0.06);
+      check('limiter: with the along cap off, limiting the across slope leaves the along slope alone', ru2.r.converged && slopeAcross(u2.h) < 0.0645 && slopeAlong(u2.h) > 0.47 && slopeAlong(u2.h) < 0.53, 'along ' + (slopeAlong(u2.h) * 100).toFixed(1) + ' % across ' + (slopeAcross(u2.h) * 100).toFixed(3) + ' %');
       // the reported slope is the real gradient of the worst cell, also when along and across caps differ
       const g = mk(0.40, 0, 0), rg = window.limitHeightSlope(g.h, g.w, N, N, 0.15, 1, 1, 4000, { across: 0.06, tx: g.tx, tz: g.tz });
       let realMax = 0; for (let z = 0; z < N - 1; z++) for (let x = 0; x < N - 1; x++) realMax = Math.max(realMax, Math.hypot(g.h[z * N + x + 1] - g.h[z * N + x], g.h[(z + 1) * N + x] - g.h[z * N + x]));

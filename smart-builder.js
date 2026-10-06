@@ -2481,17 +2481,26 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                     if (s - 1 > worst) { worst = s - 1; worstMag = magOf(dx * sx, dz * tz); }
                     let k = (1 - 1 / s) * 1.25; // mild over-relaxation: ~1.7x fewer sweeps (1.5+ overshoots and flattens everything)
                     let wa = w[i];
+                    // how far each of the two pairs is moved. Normally the whole gradient is scaled back; when one direction has no cap
+                    // the correction is projected on the capped direction only, so the free direction keeps its slope.
+                    let mvx = dx * k, mvz = dz * k;
+                    if (aniso && (invA === 0 || invC === 0)) {
+                        let gx = -dx * sx, gz = -dz * tz, ux = tAx[i], uz = tAz[i], px, pz;
+                        if (invC === 0) { let c = gx * ux + gz * uz; px = c * ux; pz = c * uz; }      // only along is capped
+                        else { let c = -gx * uz + gz * ux; px = -c * uz; pz = c * ux; }              // only across is capped
+                        mvx = -k * px * sx; mvz = -k * pz * tz;
+                    }
                     // pair (i, jx)
                     let ws = wa + w[jx];
                     if (ws > 0) {
-                        let mv = dx * k;
+                        let mv = mvx;
                         h[i] -= mv * (wa / ws);
                         h[jx] += mv * (w[jx] / ws);
                     }
                     // pair (i, jz)
                     ws = wa + w[jz];
                     if (ws > 0) {
-                        let mv = dz * k;
+                        let mv = mvz;
                         h[i] -= mv * (wa / ws);
                         h[jz] += mv * (w[jz] / ws);
                     }
