@@ -217,6 +217,169 @@ function serve() {
       for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
     })();
 
+    // sculpt re-anchor for bunkers: a hill raised over a bunker keeps the dig-out and survives a later bunker edit
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[3] || courseHoles[0];
+      const pts = []; for (let k = 0; k < 8; k++) pts.push({ x: -60 + 6 * Math.cos(k / 8 * 6.283), y: 0, z: -140 + 5 * Math.sin(k / 8 * 6.283) });
+      const snap = window.captureBunkerSnapshot(hh, pts, 15);
+      const bd = { id: 'bk_t', points: pts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: snap.baseElevation, bbox: snap.bbox, origHeights: snap.origHeights, origCanvasPixels: snap.origCanvasPixels };
+      hh.bunkers = [bd]; hh.bunkerData = bd; hh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(hh, false, false, bd);
+      const dip = function () { return window.getTerrainHeight(-60, -140) - window.getTerrainHeight(-60 + 14, -140); };
+      const dip0 = dip();
+      const pre = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 4 * Math.exp(-((x + 60) * (x + 60) + (z + 140) * (z + 140)) / 200); }
+      const old = bd.origHeights;
+      window.reanchorStudiosAfterSculpt(pre);
+      const hill = 4 * Math.exp(-(14 * 14) / 200);
+      check('hill over a bunker: bunker baseline gets the hill (old array untouched for undo)', bd.origHeights !== old && old.every(function (v) { return Math.abs(v) < 1e-6; }) && Math.max.apply(null, Array.from(bd.origHeights)) > 3.5);
+      check('hill over a bunker: the bunker is still dug into the hill', dip0 < -0.3 && window.getTerrainHeight(-60, -140) > 3 && window.getTerrainHeight(-60 + 14, -140) - hill > -0.15, 'dip0 ' + dip0.toFixed(2) + ' centre ' + window.getTerrainHeight(-60, -140).toFixed(2));
+      bd.depth = 1.2; window.applyBunkerPipeline(hh, false, false, bd);
+      check('editing the bunker later does not flatten the hill', Math.abs(window.getTerrainHeight(-60 + 14, -140) - hill) < 0.3 && window.getTerrainHeight(-60, -140) > 2.5, 'rim ' + window.getTerrainHeight(-60 + 14, -140).toFixed(2) + ' want ' + hill.toFixed(2));
+      // bake-only (mountain / water tools) keeps the baseline in step without touching the ground
+      const pre2 = new Float32Array(p), h2 = window.getTerrainHeight(-60 + 3, -140);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 1 * Math.exp(-((x + 57) * (x + 57) + (z + 140) * (z + 140)) / 8); }
+      const h2b = window.getTerrainHeight(-60 + 3, -140);
+      window.reanchorStudiosAfterSculpt(pre2, { bakeFairwaysOnly: true });
+      bd.depth = 1.2; window.applyBunkerPipeline(hh, false, false, bd);
+      check('bake-only tools are baked into the bunker baseline too', h2b > h2 + 0.5 && Math.abs(window.getTerrainHeight(-60 + 3, -140) - h2b) < 0.25, h2b.toFixed(2) + ' -> ' + window.getTerrainHeight(-60 + 3, -140).toFixed(2));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
+    // two overlapping bunkers (the second was captured with the first already dug): a hill over them keeps both dips, dug once
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[3] || courseHoles[0];
+      const mk = function (id, cx, cz, r) { const pts = []; for (let k = 0; k < 8; k++) pts.push({ x: cx + r * Math.cos(k / 8 * 6.283), y: 0, z: cz + r * Math.sin(k / 8 * 6.283) }); const sn = window.captureBunkerSnapshot(hh, pts, 15); return { id: id, points: pts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: sn.baseElevation, bbox: sn.bbox, origHeights: sn.origHeights, origCanvasPixels: sn.origCanvasPixels }; };
+      const A = mk('bk_a', -60, -140, 6);
+      hh.bunkers = [A]; hh.bunkerData = A; window.applyBunkerPipeline(hh, false, false, A);
+      const B = mk('bk_b', -53, -140, 5); // captured with A already dug
+      hh.bunkers = [A, B]; hh.activeBunkerIndex = 1; window.applyBunkerPipeline(hh, false, false, B);
+      const pts = [[-64, -140], [-57, -140], [-50, -140], [-56, -144]];
+      const before = pts.map(function (q) { return window.getTerrainHeight(q[0], q[1]); });
+      const pre = new Float32Array(p);
+      const hill = function (x, z) { return 4 * Math.exp(-((x + 56) * (x + 56) + (z + 140) * (z + 140)) / 200); };
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += hill(x, z); }
+      window.reanchorStudiosAfterSculpt(pre);
+      const worst = Math.max.apply(null, pts.map(function (q, i) { return Math.abs(window.getTerrainHeight(q[0], q[1]) - hill(q[0], q[1]) - before[i]); }));
+      check('stacked bunkers under a hill keep their dips (each dug once)', worst < 0.2, 'worst ' + worst.toFixed(2) + ' before ' + before.map(function (v) { return v.toFixed(2); }).join(','));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
+    // overlapping bunkers on two holes: the older one sits on the higher hole index; layer order follows the creation time in the id
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hOld = courseHoles[3] || courseHoles[1], hNew = courseHoles[0];
+      const mk = function (h, id, cx, cz, r) { const pts = []; for (let k = 0; k < 8; k++) pts.push({ x: cx + r * Math.cos(k / 8 * 6.283), y: 0, z: cz + r * Math.sin(k / 8 * 6.283) }); const sn = window.captureBunkerSnapshot(h, pts, 15); return { id: id, points: pts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: sn.baseElevation, bbox: sn.bbox, origHeights: sn.origHeights, origCanvasPixels: sn.origCanvasPixels }; };
+      const A = mk(hOld, 'bk_1000_aaaa', -60, -140, 6);
+      hOld.bunkers = [A]; hOld.bunkerData = A; hOld.activeBunkerIndex = 0; window.applyBunkerPipeline(hOld, false, false, A);
+      const B = mk(hNew, 'bk_2000_bbbb', -53, -140, 5); // captured with A already dug
+      hNew.bunkers = [B]; hNew.bunkerData = B; hNew.activeBunkerIndex = 0; window.applyBunkerPipeline(hNew, false, false, B);
+      const pts = [[-64, -140], [-57, -140], [-50, -140], [-56, -144]];
+      const before = pts.map(function (q) { return window.getTerrainHeight(q[0], q[1]); });
+      const pre = new Float32Array(p);
+      const hill = function (x, z) { return 4 * Math.exp(-((x + 56) * (x + 56) + (z + 140) * (z + 140)) / 200); };
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += hill(x, z); }
+      window.reanchorStudiosAfterSculpt(pre);
+      const worst = Math.max.apply(null, pts.map(function (q, i) { return Math.abs(window.getTerrainHeight(q[0], q[1]) - hill(q[0], q[1]) - before[i]); }));
+      check('stacked bunkers on different holes keep their dips (layer order by creation time)', worst < 0.2, 'worst ' + worst.toFixed(2));
+      [hOld, hNew].forEach(function (h) { h.bunkers = []; h.bunkerData = null; h.activeBunkerIndex = null; });
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
+    // an older bunker moved on top of a newer one is re-captured and becomes the top layer: lifting follows the capture order, not the id
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[3] || courseHoles[0];
+      const ptsAt = function (cx, cz, r) { const a = []; for (let k = 0; k < 8; k++) a.push({ x: cx + r * Math.cos(k / 8 * 6.283), y: 0, z: cz + r * Math.sin(k / 8 * 6.283) }); return a; };
+      const mk = function (id, cx, cz, r) { const pts = ptsAt(cx, cz, r); const sn = window.captureBunkerSnapshot(hh, pts, 15); return { id: id, points: pts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: sn.baseElevation, bbox: sn.bbox, origHeights: sn.origHeights, origCanvasPixels: sn.origCanvasPixels }; };
+      const A = mk('bk_1000_aaaa', -120, -140, 6), B = mk('bk_2000_bbbb', -53, -140, 5);
+      hh.bunkers = [A, B]; hh.bunkerData = A; hh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(hh, false, false, A); window.applyBunkerPipeline(hh, false, false, B);
+      // move A (the older id) onto B: lift, re-capture, dig again
+      window.restoreBunkerBase(hh, false, A);
+      A.points = ptsAt(-60, -140, 6);
+      const snap = window.captureBunkerSnapshot(hh, A.points, 15);
+      A.bbox = snap.bbox; A.origHeights = snap.origHeights; A.origCanvasPixels = snap.origCanvasPixels;
+      window.applyBunkerPipeline(hh, false, false, A);
+      const pts = [[-64, -140], [-57, -140], [-50, -140], [-56, -144]];
+      const before = pts.map(function (q) { return window.getTerrainHeight(q[0], q[1]); });
+      const pre = new Float32Array(p);
+      const hill = function (x, z) { return 4 * Math.exp(-((x + 56) * (x + 56) + (z + 140) * (z + 140)) / 200); };
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += hill(x, z); }
+      window.reanchorStudiosAfterSculpt(pre);
+      const worst = Math.max.apply(null, pts.map(function (q, i) { return Math.abs(window.getTerrainHeight(q[0], q[1]) - hill(q[0], q[1]) - before[i]); }));
+      check('a moved (re-captured) bunker is the top layer: dips survive a hill, dug once', worst < 0.2, 'worst ' + worst.toFixed(2));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
+    // a bunker beside the green that the stroke never touches is dug again after the green re-runs (its dip must not be erased)
+    [false, true].forEach(function (cross) { // the bunker belongs to the green's hole, or to a neighbouring hole (terrain is shared)
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[1] || courseHoles[0];
+      const ring = function (cx, cz, rx, rz) { const a = []; for (let k = 0; k < 8; k++) a.push({ x: cx + rx * Math.cos(k / 8 * 6.283), y: 0, z: cz + rz * Math.sin(k / 8 * 6.283) }); return a; };
+      const gp = ring(60, 40, 12, 9);
+      const gs = window.captureGreenSnapshot(hh, gp, 25);
+      hh.greenData = { points: gp, baseElevation: gs.baseElevation, bbox: gs.bbox, origHeights: gs.origHeights, origCanvasPixels: gs.origCanvasPixels, difficulty: 'FLAT', elevationOffset: 0, blendDistance: 8, tiltPct: 0, tiltAim: false, tiltToFlag: false, stimp: 10, firmness: 'NORMAL', tension: 0.5, mowPattern: 'SOLID', foregreenWidth: 1, edgeSharpness: 100, seedOffsetX: 0, seedOffsetZ: 0 };
+      window.applyGreenPipeline(hh, false, false);
+      const bh = cross ? (courseHoles[0] === hh ? courseHoles[2] : courseHoles[0]) : hh;
+      const bp = ring(38, 40, 3, 3);
+      const bs = window.captureBunkerSnapshot(bh, bp, 15);
+      const bd = { id: 'bk_g', points: bp, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: bs.baseElevation, bbox: bs.bbox, origHeights: bs.origHeights, origCanvasPixels: bs.origCanvasPixels };
+      bh.bunkers = [bd]; bh.bunkerData = bd; bh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(bh, false, false, bd);
+      const dipOf = function () { return window.getTerrainHeight(38, 40) - window.getTerrainHeight(38, 40 + 9); };
+      const dip0 = dipOf();
+      const pre = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 1.5 * Math.exp(-((x - 68) * (x - 68) + (z - 40) * (z - 40)) / 8); }
+      let touched = false; for (let gz = bd.bbox.gzStart; gz <= bd.bbox.gzEnd; gz++) for (let gx = bd.bbox.gxStart; gx <= bd.bbox.gxEnd; gx++) { const i = gz * (window.TERRAIN_SEGS + 1) + gx; if (Math.abs(p[i * 3 + 2] - pre[i * 3 + 2]) > 0.005) touched = true; }
+      window.reanchorStudiosAfterSculpt(pre);
+      check('stroke on the green does not touch the bunker bbox (test setup)', !touched);
+      check('bunker beside a re-run green is dug again' + (cross ? ' (bunker on another hole)' : '') + ' (dip ' + dip0.toFixed(2) + ' -> ' + dipOf().toFixed(2) + ')', dip0 < -0.3 && dipOf() < dip0 + 0.25, 'dip0 ' + dip0.toFixed(2) + ' now ' + dipOf().toFixed(2));
+      bh.bunkers = []; bh.bunkerData = null; bh.activeBunkerIndex = null; hh.greenData = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    });
+
+    // a stroke on the far side of the green re-flattens it at a new height: the bunker beside it (stroke never touched its bbox)
+    // must follow the reshaped ground instead of being dug into the old surface
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[1] || courseHoles[0];
+      const ring = function (cx, cz, rx, rz) { const a = []; for (let k = 0; k < 8; k++) a.push({ x: cx + rx * Math.cos(k / 8 * 6.283), y: 0, z: cz + rz * Math.sin(k / 8 * 6.283) }); return a; };
+      const gp = ring(60, 40, 12, 9);
+      const gs = window.captureGreenSnapshot(hh, gp, 25);
+      hh.greenData = { points: gp, baseElevation: gs.baseElevation, bbox: gs.bbox, origHeights: gs.origHeights, origCanvasPixels: gs.origCanvasPixels, difficulty: 'FLAT', elevationOffset: 0, blendDistance: 8, tiltPct: 0, tiltAim: false, tiltToFlag: false, stimp: 10, firmness: 'NORMAL', tension: 0.5, mowPattern: 'SOLID', foregreenWidth: 1, edgeSharpness: 100, seedOffsetX: 0, seedOffsetZ: 0 };
+      window.applyGreenPipeline(hh, false, false);
+      const bp = ring(42, 40, 3, 3);
+      const bs = window.captureBunkerSnapshot(hh, bp, 15);
+      const bd = { id: 'bk_r', points: bp, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: bs.baseElevation, bbox: bs.bbox, origHeights: bs.origHeights, origCanvasPixels: bs.origCanvasPixels };
+      hh.bunkers = [bd]; hh.bunkerData = bd; hh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(hh, false, false, bd);
+      const old = bd.origHeights;
+      const pre = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 12 * Math.exp(-((x - 72) * (x - 72) + (z - 40) * (z - 40)) / 10); }
+      let touched = false; for (let gz = bd.bbox.gzStart; gz <= bd.bbox.gzEnd; gz++) for (let gx = bd.bbox.gxStart; gx <= bd.bbox.gxEnd; gx++) { const i = gz * (window.TERRAIN_SEGS + 1) + gx; if (Math.abs(p[i * 3 + 2] - pre[i * 3 + 2]) > 0.005) touched = true; }
+      const base0 = hh.greenData.baseElevation;
+      window.reanchorStudiosAfterSculpt(pre);
+      const raised = hh.greenData.baseElevation - base0;
+      // between the bunker and the green edge: the blend slope must be smooth, not a step up to the new green height
+      const step = window.getTerrainHeight(50, 40) - window.getTerrainHeight(47, 40);
+      check('far-side stroke raises the green but misses the bunker bbox (test setup)', !touched && raised > 0.2, 'touched ' + touched + ' raised ' + raised.toFixed(2));
+      check('bunker follows the reshaped ground (no step at its edge, new baseline)', bd.origHeights !== old && Math.abs(step) < 0.35, 'step ' + step.toFixed(2));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null; hh.greenData = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
     // fairway slope cap: a hill under the fairway is made gentler (not removed) and restored when the cap is turned off
     (function () {
       const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
@@ -237,10 +400,31 @@ function serve() {
       check('fairway slope cap 8 %: slope within limit', capped <= 0.10, 'max ' + (capped * 100).toFixed(1) + ' %');
       check('fairway slope cap keeps a gentler hill', c1 > 0.3 && c1 < c0 - 0.3, 'centre ' + c1.toFixed(2));
       // a sculpt stroke on top is baked into the baseline and the cap still holds
+      // (a bunker on another hole just outside the fairway, untouched by the stroke, must be dug again after the fairway re-runs)
+      const bh = courseHoles[0] === hh ? courseHoles[1] : courseHoles[0];
+      const bpts = []; for (let k = 0; k < 8; k++) bpts.push({ x: -46 + 3 * Math.cos(k / 8 * 6.283), y: 0, z: 150 + 3 * Math.sin(k / 8 * 6.283) });
+      const bsn = window.captureBunkerSnapshot(bh, bpts, 15);
+      const bkd = { id: 'bk_f', points: bpts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: bsn.baseElevation, bbox: bsn.bbox, origHeights: bsn.origHeights, origCanvasPixels: bsn.origCanvasPixels };
+      bh.bunkers = [bkd]; bh.bunkerData = bkd; bh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(bh, false, false, bkd);
+      const bDip = function () { return window.getTerrainHeight(-46, 150) - window.getTerrainHeight(-46, 159); };
+      const bDip0 = bDip();
+      // and one on the fairway's own hole: the fairway edit re-attaches it itself, it must not be dug a second time on top
+      const bpts2 = []; for (let k = 0; k < 8; k++) bpts2.push({ x: -46 + 3 * Math.cos(k / 8 * 6.283), y: 0, z: 138 + 3 * Math.sin(k / 8 * 6.283) });
+      const bsn2 = window.captureBunkerSnapshot(hh, bpts2, 15);
+      const bkd2 = { id: 'bk_f2', points: bpts2, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: bsn2.baseElevation, bbox: bsn2.bbox, origHeights: bsn2.origHeights, origCanvasPixels: bsn2.origCanvasPixels };
+      hh.bunkers = [bkd2]; hh.bunkerData = bkd2; hh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(hh, false, false, bkd2);
+      const bDip2 = function () { return window.getTerrainHeight(-46, 138) - window.getTerrainHeight(-46, 129); };
+      const bDip20 = bDip2();
       const pre = new Float32Array(p);
       for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 2 * Math.exp(-((x - 15) * (x - 15) + (z - 150) * (z - 150)) / 18); }
       const redone = window.reanchorStudiosAfterSculpt(pre);
       check('fairway re-run after sculpt keeps the cap', redone >= 1 && maxSlope() <= 0.10, 'redone ' + redone + ' max ' + (maxSlope() * 100).toFixed(1) + ' %');
+      check('bunker on another hole beside a re-run fairway is dug again (dip ' + bDip0.toFixed(2) + ' -> ' + bDip().toFixed(2) + ')', bDip0 < -0.3 && bDip() < bDip0 + 0.25, 'dip0 ' + bDip0.toFixed(2) + ' now ' + bDip().toFixed(2));
+      check('bunker on the fairway\'s own hole is dug once, not twice (dip ' + bDip20.toFixed(2) + ' -> ' + bDip2().toFixed(2) + ')', bDip20 < -0.3 && Math.abs(bDip2() - bDip20) < 0.2, 'dip0 ' + bDip20.toFixed(2) + ' now ' + bDip2().toFixed(2));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null;
+      bh.bunkers = []; bh.bunkerData = null; bh.activeBunkerIndex = null;
       // cap off: stroke baked, ground follows the sculpt (no stale restore)
       fd.maxSlopePct = 0; window.applyFairwayPipeline(hh, false, false, fd);
       check('cap off restores the natural hill incl. the sculpt', Math.abs(centre() - c0) < 0.1 && window.getTerrainHeight(15, 150) > 2, 'centre ' + centre().toFixed(2));
@@ -546,7 +730,11 @@ function serve() {
       [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { window.splinePoints.push(new THREE.Vector3(c[0], 0, c[1])); });
       const hv = parseFloat(document.getElementById('mtn-spline-height').value) || 25, jv = (parseFloat(document.getElementById('mtn-spline-jagged').value) || 0) / 50;
       const expected = window.mtnHillField(window.splinePoints, hv, jv);
+      const dsc0 = window.debounceSaveCourse, savedAgain = { n: 0 };
+      window.debounceSaveCourse = function () { savedAgain.n++; };
       window.executeSplineMountain();
+      window.debounceSaveCourse = dsc0;
+      check('mountain build saves again after its baselines were updated', savedAgain.n >= 1, 'n ' + savedAgain.n);
       const posA = planeGeo.attributes.position.array; let worst = 0;
       expected.inside.forEach(function (v) { worst = Math.max(worst, Math.abs(posA[v.idx * 3 + 2] - v.newH)); });
       check('what the preview computes is what the build writes (every vertex)', expected.inside.length > 1000 && worst < 1e-4, 'n ' + expected.inside.length + ' worst ' + worst);
