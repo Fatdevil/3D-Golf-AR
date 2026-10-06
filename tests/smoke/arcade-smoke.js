@@ -428,7 +428,7 @@ function serve() {
       {
         const wait2 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
         const origField = window.mtnHillField, calls = [];
-        window.mtnHillField = function () { const t = performance.now(); const f = origField.apply(this, arguments); calls.push({ stride: f.stride, inside: f.inside.length, ms: performance.now() - t, segs: Math.max(150, arguments[0].length * 30) }); return f; };
+        window.mtnHillField = function () { const t = performance.now(); const f = origField.apply(this, arguments); calls.push({ stride: f.stride, inside: f.inside.length, work: f.work, ms: performance.now() - t, segs: Math.max(150, arguments[0].length * 30) }); return f; };
         const keep = window.splinePoints.map(function (p) { return p.clone(); }), keepClosed = window._mtnClosed;
         const res = [];
         for (const nPts of [80, 400, 1500]) {
@@ -443,8 +443,22 @@ function serve() {
           const slow = Math.max.apply(null, calls.map(function (c) { return c.ms; }));
           res.push({ n: nPts, calls: calls.length, draftWork: draftWork, fullWork: fullWork, syncMs: Math.round(syncMs), slowestFieldMs: Math.round(slow), ok: calls.length >= 2 && draftWork <= 1.2e6 && fullWork <= 9.6e6 && syncMs < 600 && slow < 600 });
         }
+        // a thin, concave crescent: a big bounding box with very few vertices inside (the outside polygon tests must count too)
+        {
+          calls.length = 0;
+          window.splinePoints.length = 0;
+          const nC = 60;
+          for (let i = 0; i <= nC / 2; i++) { const t = -2.3 + (i / (nC / 2)) * 4.6; window.splinePoints.push(new THREE.Vector3(Math.cos(t) * 150, 0, Math.sin(t) * 150)); }
+          for (let i = nC / 2; i >= 0; i--) { const t = -2.3 + (i / (nC / 2)) * 4.6; window.splinePoints.push(new THREE.Vector3(Math.cos(t) * 143, 0, Math.sin(t) * 143)); }
+          window._mtnClosed = true;
+          window.refreshSplinePreview();
+          await wait2(600);
+          const workOf = function (c) { return c ? c.work : 1e12; };
+          const dW = workOf(calls[0]), fW = workOf(calls[calls.length - 1]);
+          res.push({ n: 'crescent', calls: calls.length, draftWork: dW, fullWork: fW, ok: calls.length >= 2 && dW <= 2.0e6 && fW <= 12e6 });
+        }
         window.mtnHillField = origField;
-        check('hill preview work is bounded by outline detail (80, 400 and 1500 control balls): draft <= 1.2M, final <= 9.6M segment checks', res.every(function (r) { return r.ok; }), JSON.stringify(res));
+        check('hill preview work is bounded by outline detail (80, 400, 1500 control balls and a thin crescent): draft and final stay within budget', res.every(function (r) { return r.ok; }), JSON.stringify(res));
         window.splinePoints.length = 0; keep.forEach(function (p) { window.splinePoints.push(p); }); window._mtnClosed = keepClosed; window.refreshSplinePreview();
       }
       // a coarse preview uses the build's scale: the heights of the vertices it samples equal the full-resolution ones

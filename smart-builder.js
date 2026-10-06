@@ -6696,12 +6696,14 @@ window.mtnHillField = function(points, height, jagMul, opts) {
 
     const positions = window._arcadePlaneGeo.attributes.position.array, rowLen = segs + 1;
     const inside = [];
-    let maxD = 0;
+    let maxD = 0, work = 0; // work = outline-segment checks done (every polygon test and distance), reported for tests and tuning
     for (let gz = gzMin; gz <= gzMax; gz += stride) {
         for (let gx = gxMin; gx <= gxMax; gx += stride) {
             const idx = gz * rowLen + gx;
             const vx = positions[idx * 3], vz = -positions[idx * 3 + 1], origH = positions[idx * 3 + 2];
+            work += densePts.length;
             if (pointInPolygon(vx, vz, densePts)) {
+                work += densePts.length;
                 const d = minDistanceToPolygon(vx, vz, densePts);
                 if (d > maxD) maxD = d;
                 inside.push({ idx: idx, gx: gx, gz: gz, x: vx, z: vz, origH: origH, d: d, newH: origH });
@@ -6726,8 +6728,11 @@ window.mtnHillField = function(points, height, jagMul, opts) {
                     if (seen.has(idx)) continue;
                     seen.add(idx);
                     const vx = positions[idx * 3], vz = -positions[idx * 3 + 1];
+                    // every polygon test counts toward the cap (also for vertices outside a thin or concave outline), and so does the distance
+                    refineWork += densePts.length; work += densePts.length;
+                    if (refineWork > refineCap) break;
                     if (!pointInPolygon(vx, vz, densePts)) continue;
-                    refineWork += densePts.length;
+                    refineWork += densePts.length; work += densePts.length;
                     const d = minDistanceToPolygon(vx, vz, densePts);
                     if (d > maxD) maxD = d;
                     if (refineWork > refineCap) break;
@@ -6745,7 +6750,7 @@ window.mtnHillField = function(points, height, jagMul, opts) {
             v.newH = v.origH + (height + noiseVal) * falloff * _mtnEdgeFade(v.x, v.z, height);
         });
     }
-    return { inside: inside, maxD: maxD, stride: stride, gxMin: gxMin, gxMax: gxMax, gzMin: gzMin, gzMax: gzMax, step: step };
+    return { inside: inside, maxD: maxD, work: work, stride: stride, gxMin: gxMin, gxMax: gxMax, gzMin: gzMin, gzMax: gzMax, step: step };
 };
 
 window.executeSplineMountain = function() {
