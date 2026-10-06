@@ -216,6 +216,37 @@ function serve() {
       for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
     });
 
+    // a stroke on the far side of the green re-flattens it at a new height: the bunker beside it (stroke never touched its bbox)
+    // must follow the reshaped ground instead of being dug into the old surface
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[1] || courseHoles[0];
+      const ring = function (cx, cz, rx, rz) { const a = []; for (let k = 0; k < 8; k++) a.push({ x: cx + rx * Math.cos(k / 8 * 6.283), y: 0, z: cz + rz * Math.sin(k / 8 * 6.283) }); return a; };
+      const gp = ring(60, 40, 12, 9);
+      const gs = window.captureGreenSnapshot(hh, gp, 25);
+      hh.greenData = { points: gp, baseElevation: gs.baseElevation, bbox: gs.bbox, origHeights: gs.origHeights, origCanvasPixels: gs.origCanvasPixels, difficulty: 'FLAT', elevationOffset: 0, blendDistance: 8, tiltPct: 0, tiltAim: false, tiltToFlag: false, stimp: 10, firmness: 'NORMAL', tension: 0.5, mowPattern: 'SOLID', foregreenWidth: 1, edgeSharpness: 100, seedOffsetX: 0, seedOffsetZ: 0 };
+      window.applyGreenPipeline(hh, false, false);
+      const bp = ring(42, 40, 3, 3);
+      const bs = window.captureBunkerSnapshot(hh, bp, 15);
+      const bd = { id: 'bk_r', points: bp, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: bs.baseElevation, bbox: bs.bbox, origHeights: bs.origHeights, origCanvasPixels: bs.origCanvasPixels };
+      hh.bunkers = [bd]; hh.bunkerData = bd; hh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(hh, false, false, bd);
+      const old = bd.origHeights;
+      const pre = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 12 * Math.exp(-((x - 72) * (x - 72) + (z - 40) * (z - 40)) / 10); }
+      let touched = false; for (let gz = bd.bbox.gzStart; gz <= bd.bbox.gzEnd; gz++) for (let gx = bd.bbox.gxStart; gx <= bd.bbox.gxEnd; gx++) { const i = gz * (window.TERRAIN_SEGS + 1) + gx; if (Math.abs(p[i * 3 + 2] - pre[i * 3 + 2]) > 0.005) touched = true; }
+      const base0 = hh.greenData.baseElevation;
+      window.reanchorStudiosAfterSculpt(pre);
+      const raised = hh.greenData.baseElevation - base0;
+      // between the bunker and the green edge: the blend slope must be smooth, not a step up to the new green height
+      const step = window.getTerrainHeight(50, 40) - window.getTerrainHeight(47, 40);
+      check('far-side stroke raises the green but misses the bunker bbox (test setup)', !touched && raised > 0.2, 'touched ' + touched + ' raised ' + raised.toFixed(2));
+      check('bunker follows the reshaped ground (no step at its edge, new baseline)', bd.origHeights !== old && Math.abs(step) < 0.35, 'step ' + step.toFixed(2));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null; hh.greenData = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
     // fairway slope cap: a hill under the fairway is made gentler (not removed) and restored when the cap is turned off
     (function () {
       const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;

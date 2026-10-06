@@ -143,57 +143,59 @@
         });
         var done = 0;
         // fairway is the base layer: re-run it before the green and tees that sit on top of it
-        // bunkers are dug last, on top of the finished fairway / green / tee ground
         var rank = { fairway: 0, tee: 1, green: 2, bunker: 3 };
         jobs.sort(function (a, b) { return rank[a.st.kind] - rank[b.st.kind]; });
-        // a green/tee/fairway re-run resets the ground around it, including the dips of bunkers next to it
-        var reran = [], ranBunkers = new Set();
-        jobs.forEach(function (j) {
-            if (opts.bakeFairwaysOnly) return;
-            if (j.st.kind === 'bunker') {
-                if (!j.rerun) return;
-                try {
-                    if (typeof window.applyBunkerPipeline === 'function') { window.applyBunkerPipeline(j.hole, false, false, j.st.sd); ranBunkers.add(j.st.sd); done++; }
-                } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
-                return;
-            }
-            if (!j.rerun) return;
-            var before = done;
-            try {
-                if (j.st.kind === 'fairway') {
-                    if (window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function') {
-                        window.applyFairwayPipeline(j.hole, false, false, j.st.sd);
-                        done++;
-                    }
-                } else if (j.st.kind === 'green' && typeof window.applyGreenPipeline === 'function') {
-                    window.applyGreenPipeline(j.hole, false, false);
-                    done++;
-                } else if (j.st.kind === 'tee' && typeof window.applyTeePipeline === 'function') {
-                    window.applyTeePipeline(j.hole, false, false, j.st.sd, true);
-                    done++;
-                }
-            } catch (err) {
-                console.error('[reanchor] pipeline failed:', err);
-            }
-            if (done > before) reran.push(j.st);
+        var reruns = opts.bakeFairwaysOnly ? [] : jobs.filter(function (j) {
+            if (!j.rerun || j.st.kind === 'bunker') return false;
+            if (j.st.kind === 'fairway') return !!(window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function');
+            return typeof (j.st.kind === 'green' ? window.applyGreenPipeline : window.applyTeePipeline) === 'function';
         });
-        // Bunkers the stroke did not reach (no job, or a job that was not due) can still have been erased by a green/tee/fairway
-        // re-run next to them. Terrain is shared, so this looks at every hole's bunkers, not just the re-run hole's.
-        if (!opts.bakeFairwaysOnly && reran.length && typeof window.applyBunkerPipeline === 'function') {
+
+        // Bunkers sit on top of the other layers. Those the stroke hit, and those next to a green/tee/fairway that is about to re-run
+        // (its restore pass resets the ground around it, bunker dips included), are lifted off first, and dug again on the finished
+        // ground once the others are done. Terrain is shared, so every hole's bunkers are looked at, not just the re-run hole's.
+        var lifted = [];
+        if (!opts.bakeFairwaysOnly && typeof window.applyBunkerPipeline === 'function' && typeof window.restoreBunkerBase === 'function' && typeof window.captureBunkerSnapshot === 'function') {
+            var hit = new Set();
+            jobs.forEach(function (j) { if (j.st.kind === 'bunker' && j.rerun) hit.add(j.st.sd); });
             holes.forEach(function (hole) {
                 var bks = (hole.bunkers && hole.bunkers.length) ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []);
                 bks.forEach(function (bd) {
-                    if (!bd || ranBunkers.has(bd) || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3 || typeof getDenseBunkerPoints !== 'function') return;
-                    var bDense = getDenseBunkerPoints(bd.points);
-                    if (!bDense || bDense.length < 3) return;
-                    var near = reran.some(function (st) {
-                        return bDense.some(function (q) { return ptInPoly(q.x, q.z, st.dense) || distToPoly(q.x, q.z, st.dense) <= st.reach + BUNKER_REACH; });
-                    });
-                    if (!near) return;
-                    try { window.applyBunkerPipeline(hole, false, false, bd); ranBunkers.add(bd); done++; } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
+                    if (!bd || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3 || typeof getDenseBunkerPoints !== 'function') return;
+                    var near = hit.has(bd);
+                    if (!near && reruns.length) {
+                        var bDense = getDenseBunkerPoints(bd.points);
+                        near = !!bDense && reruns.some(function (j) {
+                            return bDense.some(function (q) { return ptInPoly(q.x, q.z, j.st.dense) || distToPoly(q.x, q.z, j.st.dense) <= j.st.reach + BUNKER_REACH; });
+                        });
+                    }
+                    if (near) lifted.push({ hole: hole, bd: bd });
                 });
             });
+            lifted.forEach(function (l) { try { window.restoreBunkerBase(l.hole, false, l.bd); } catch (err) { console.error('[reanchor] bunker lift failed:', err); } });
         }
+
+        reruns.forEach(function (j) {
+            try {
+                if (j.st.kind === 'fairway') window.applyFairwayPipeline(j.hole, false, false, j.st.sd);
+                else if (j.st.kind === 'green') window.applyGreenPipeline(j.hole, false, false);
+                else window.applyTeePipeline(j.hole, false, false, j.st.sd, true);
+                done++;
+            } catch (err) {
+                console.error('[reanchor] pipeline failed:', err);
+            }
+        });
+
+        // The re-run may have raised / lowered the ground under a bunker: its baseline is taken from the finished ground (heights only,
+        // the saved texture pixels and bbox stay as they are; a new array so undo states keep the old one)
+        lifted.forEach(function (l) {
+            try {
+                var snap = window.captureBunkerSnapshot(l.hole, l.bd.points, l.bd.bbox.margin || 15);
+                if (snap && snap.origHeights && snap.origHeights.length === l.bd.origHeights.length) l.bd.origHeights = snap.origHeights;
+                window.applyBunkerPipeline(l.hole, false, false, l.bd);
+                done++;
+            } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
+        });
         return done;
     };
 
