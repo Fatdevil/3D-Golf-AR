@@ -189,7 +189,7 @@ function serve() {
     })();
 
     // a bunker beside the green that the stroke never touches is dug again after the green re-runs (its dip must not be erased)
-    (function () {
+    [false, true].forEach(function (cross) { // the bunker belongs to the green's hole, or to a neighbouring hole (terrain is shared)
       const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
       for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
       const hh = courseHoles[1] || courseHoles[0];
@@ -198,11 +198,12 @@ function serve() {
       const gs = window.captureGreenSnapshot(hh, gp, 25);
       hh.greenData = { points: gp, baseElevation: gs.baseElevation, bbox: gs.bbox, origHeights: gs.origHeights, origCanvasPixels: gs.origCanvasPixels, difficulty: 'FLAT', elevationOffset: 0, blendDistance: 8, tiltPct: 0, tiltAim: false, tiltToFlag: false, stimp: 10, firmness: 'NORMAL', tension: 0.5, mowPattern: 'SOLID', foregreenWidth: 1, edgeSharpness: 100, seedOffsetX: 0, seedOffsetZ: 0 };
       window.applyGreenPipeline(hh, false, false);
+      const bh = cross ? (courseHoles[0] === hh ? courseHoles[2] : courseHoles[0]) : hh;
       const bp = ring(38, 40, 3, 3);
-      const bs = window.captureBunkerSnapshot(hh, bp, 15);
+      const bs = window.captureBunkerSnapshot(bh, bp, 15);
       const bd = { id: 'bk_g', points: bp, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: bs.baseElevation, bbox: bs.bbox, origHeights: bs.origHeights, origCanvasPixels: bs.origCanvasPixels };
-      hh.bunkers = [bd]; hh.bunkerData = bd; hh.activeBunkerIndex = 0;
-      window.applyBunkerPipeline(hh, false, false, bd);
+      bh.bunkers = [bd]; bh.bunkerData = bd; bh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(bh, false, false, bd);
       const dipOf = function () { return window.getTerrainHeight(38, 40) - window.getTerrainHeight(38, 40 + 9); };
       const dip0 = dipOf();
       const pre = new Float32Array(p);
@@ -210,10 +211,10 @@ function serve() {
       let touched = false; for (let gz = bd.bbox.gzStart; gz <= bd.bbox.gzEnd; gz++) for (let gx = bd.bbox.gxStart; gx <= bd.bbox.gxEnd; gx++) { const i = gz * (window.TERRAIN_SEGS + 1) + gx; if (Math.abs(p[i * 3 + 2] - pre[i * 3 + 2]) > 0.005) touched = true; }
       window.reanchorStudiosAfterSculpt(pre);
       check('stroke on the green does not touch the bunker bbox (test setup)', !touched);
-      check('bunker beside a re-run green is dug again (dip ' + dip0.toFixed(2) + ' -> ' + dipOf().toFixed(2) + ')', dip0 < -0.3 && dipOf() < dip0 + 0.25, 'dip0 ' + dip0.toFixed(2) + ' now ' + dipOf().toFixed(2));
-      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null; hh.greenData = null;
+      check('bunker beside a re-run green is dug again' + (cross ? ' (bunker on another hole)' : '') + ' (dip ' + dip0.toFixed(2) + ' -> ' + dipOf().toFixed(2) + ')', dip0 < -0.3 && dipOf() < dip0 + 0.25, 'dip0 ' + dip0.toFixed(2) + ' now ' + dipOf().toFixed(2));
+      bh.bunkers = []; bh.bunkerData = null; bh.activeBunkerIndex = null; hh.greenData = null;
       for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
-    })();
+    });
 
     // fairway slope cap: a hill under the fairway is made gentler (not removed) and restored when the cap is turned off
     (function () {

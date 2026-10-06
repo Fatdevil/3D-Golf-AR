@@ -147,11 +147,11 @@
         var rank = { fairway: 0, tee: 1, green: 2, bunker: 3 };
         jobs.sort(function (a, b) { return rank[a.st.kind] - rank[b.st.kind]; });
         // a green/tee/fairway re-run resets the ground around it, including the dips of bunkers next to it
-        var reranHoles = new Set(), ranBunkers = new Set();
+        var reran = [], ranBunkers = new Set();
         jobs.forEach(function (j) {
             if (opts.bakeFairwaysOnly) return;
             if (j.st.kind === 'bunker') {
-                if (!j.rerun && !reranHoles.has(j.hole)) return;
+                if (!j.rerun) return;
                 try {
                     if (typeof window.applyBunkerPipeline === 'function') { window.applyBunkerPipeline(j.hole, false, false, j.st.sd); ranBunkers.add(j.st.sd); done++; }
                 } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
@@ -177,15 +177,22 @@
             } catch (err) {
                 console.error('[reanchor] pipeline failed:', err);
             }
-            if (done > before) reranHoles.add(j.hole);
+            if (done > before) reran.push(j.st);
         });
-        // bunkers whose own bbox the stroke never touched have no job, but a green/tee/fairway re-run may still have erased them
-        if (!opts.bakeFairwaysOnly && typeof window.applyBunkerPipeline === 'function') {
-            reranHoles.forEach(function (hole) {
+        // Bunkers the stroke did not reach (no job, or a job that was not due) can still have been erased by a green/tee/fairway
+        // re-run next to them. Terrain is shared, so this looks at every hole's bunkers, not just the re-run hole's.
+        if (!opts.bakeFairwaysOnly && reran.length && typeof window.applyBunkerPipeline === 'function') {
+            holes.forEach(function (hole) {
                 var bks = (hole.bunkers && hole.bunkers.length) ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []);
                 bks.forEach(function (bd) {
-                    if (!bd || ranBunkers.has(bd) || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3) return;
-                    try { window.applyBunkerPipeline(hole, false, false, bd); done++; } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
+                    if (!bd || ranBunkers.has(bd) || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3 || typeof getDenseBunkerPoints !== 'function') return;
+                    var bDense = getDenseBunkerPoints(bd.points);
+                    if (!bDense || bDense.length < 3) return;
+                    var near = reran.some(function (st) {
+                        return bDense.some(function (q) { return ptInPoly(q.x, q.z, st.dense) || distToPoly(q.x, q.z, st.dense) <= st.reach + BUNKER_REACH; });
+                    });
+                    if (!near) return;
+                    try { window.applyBunkerPipeline(hole, false, false, bd); ranBunkers.add(bd); done++; } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
                 });
             });
         }
