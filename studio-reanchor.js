@@ -169,10 +169,10 @@
                             return bDense.some(function (q) { return ptInPoly(q.x, q.z, j.st.dense) || distToPoly(q.x, q.z, j.st.dense) <= j.st.reach + BUNKER_REACH; });
                         });
                     }
-                    if (near) lifted.push({ hole: hole, bd: bd });
+                    if (near) lifted.push({ hole: hole, bd: bd, ref: null });
                 });
             });
-            lifted.forEach(function (l) { try { window.restoreBunkerBase(l.hole, false, l.bd); } catch (err) { console.error('[reanchor] bunker lift failed:', err); } });
+            lifted.forEach(function (l) { try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); } });
         }
 
         reruns.forEach(function (j) {
@@ -184,6 +184,12 @@
             } catch (err) {
                 console.error('[reanchor] pipeline failed:', err);
             }
+            // A fairway edit brackets its own hole's bunkers (attachUpperLayers: new baseline from the clean fairway surface, dug again).
+            // Those are lifted once more so they stay off the ground for the studios that follow; their baseline is already the clean surface.
+            lifted.forEach(function (l) {
+                if (l.bd.origHeights === l.ref) return;
+                try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); }
+            });
         });
 
         // The re-run may have raised / lowered the ground under a bunker: its baseline is taken from the finished ground (heights only,
@@ -193,7 +199,6 @@
                 var snap = window.captureBunkerSnapshot(l.hole, l.bd.points, l.bd.bbox.margin || 15);
                 if (snap && snap.origHeights && snap.origHeights.length === l.bd.origHeights.length) l.bd.origHeights = snap.origHeights;
                 window.applyBunkerPipeline(l.hole, false, false, l.bd);
-                done++;
             } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
         });
         return done;
@@ -211,6 +216,8 @@
             var result = orig.apply(this, arguments);
             if (pre) {
                 try { window.reanchorStudiosAfterSculpt(pre, { bakeFairwaysOnly: true }); } catch (err) { console.error('[reanchor]', name, err); }
+                // the builders save before returning, i.e. before the baselines above were updated: save again
+                if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
             }
             return result;
         };
