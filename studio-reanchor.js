@@ -14,6 +14,23 @@
 
     var EPS = 0.005;        // ignore height changes below 5 mm
     var TEE_REACH = 17;     // matches TEE_MAX_REACH in smart-builder.js
+    var BUNKER_REACH = 6;   // restoreBunkerBase resets 4.5 m around the bunker; a little more for the smoothing pass
+
+    // Overlapping bunkers are height layers: a later bunker's baseline was captured with the earlier ones already dug. The layer of a
+    // bunker is the moment its baseline was captured (a moved / reshaped bunker is re-captured and so becomes the top layer again), so
+    // every capture is stamped on the baseline array itself; a baked copy of the array keeps its stamp.
+    var layerSeq = 0, layerOf = new WeakMap();
+    (function () {
+        var orig = window.captureBunkerSnapshot;
+        if (typeof orig !== 'function' || orig._layerStamped) return;
+        var stamped = function () {
+            var snap = orig.apply(this, arguments);
+            if (snap && snap.origHeights) layerOf.set(snap.origHeights, ++layerSeq);
+            return snap;
+        };
+        stamped._layerStamped = true;
+        window.captureBunkerSnapshot = stamped;
+    })();
 
     function ptInPoly(x, z, poly) {
         var inside = false;
@@ -68,12 +85,21 @@
             var br = tb.blendRadius !== undefined ? tb.blendRadius : 4;
             out.push({ kind: 'tee', sd: tb, dense: tDense, reach: Math.max(TEE_REACH, br + 2) });
         });
+        // Bunkers: stored as "pristine terrain + dig-out". Without this, a hill raised under or around a bunker was undone
+        // the next time the bunker (or the green next to it) re-ran, because the old baseline was written back over the hill.
+        var bks = (hole && hole.bunkers && hole.bunkers.length) ? hole.bunkers : (hole && hole.bunkerData ? [hole.bunkerData] : []);
+        bks.forEach(function (bd) {
+            if (!bd || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3 || typeof getDenseBunkerPoints !== 'function') return;
+            var bDense = getDenseBunkerPoints(bd.points);
+            if (bDense && bDense.length >= 3) out.push({ kind: 'bunker', sd: bd, dense: bDense, reach: BUNKER_REACH });
+        });
         return out;
     }
 
     // pre: Float32Array of the terrain (position attribute array) from BEFORE the stroke.
     // Returns the number of green/tee boxes that were re-flattened.
-    // opts.bakeFairwaysOnly: only add the stroke to the fairway baselines (no re-run, green and tee untouched) - used for the water tool
+    // opts.bakeFairwaysOnly: only add the stroke to the fairway and bunker baselines (no re-run, green and tee untouched) - used for the water tool
+    //   (bake-only is always consistent: terrain = baseline + dig-out + stroke, and the baseline gets the stroke too)
     window.reanchorStudiosAfterSculpt = function (pre, opts) {
         opts = opts || {};
         var geo = window._arcadePlaneGeo;
@@ -87,7 +113,7 @@
         var jobs = [];
         holes.forEach(function (hole) {
             studiosOf(hole).forEach(function (st) {
-                if (opts.bakeFairwaysOnly && st.kind !== 'fairway') return;
+                if (opts.bakeFairwaysOnly && st.kind !== 'fairway' && st.kind !== 'bunker') return;
                 var bb = st.sd.bbox, dense = st.dense;
                 var delta = null, relevant = false;
                 // cheap scan first: most strokes touch no green/tee at all
@@ -128,33 +154,83 @@
             var sd = j.st.sd;
             var fresh = new Float32Array(sd.origHeights);
             j.delta.forEach(function (d, oi) { if (oi >= 0 && oi < fresh.length) fresh[oi] += d; });
+            if (layerOf.has(sd.origHeights)) layerOf.set(fresh, layerOf.get(sd.origHeights));
             sd.origHeights = fresh;
-            if (j.st.kind !== 'fairway') sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
+            if (j.st.kind === 'green' || j.st.kind === 'tee') sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
         });
         var done = 0;
         // fairway is the base layer: re-run it before the green and tees that sit on top of it
-        var rank = { fairway: 0, tee: 1, green: 2 };
+        var rank = { fairway: 0, tee: 1, green: 2, bunker: 3 };
         jobs.sort(function (a, b) { return rank[a.st.kind] - rank[b.st.kind]; });
-        jobs.forEach(function (j) {
-            if (!j.rerun || opts.bakeFairwaysOnly) return;
-            try {
-                if (j.st.kind === 'fairway') {
-                    if (window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function') {
-                        window.applyFairwayPipeline(j.hole, false, false, j.st.sd);
-                        done++;
+        var reruns = opts.bakeFairwaysOnly ? [] : jobs.filter(function (j) {
+            if (!j.rerun || j.st.kind === 'bunker') return false;
+            if (j.st.kind === 'fairway') return !!(window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function');
+            return typeof (j.st.kind === 'green' ? window.applyGreenPipeline : window.applyTeePipeline) === 'function';
+        });
+
+        // Bunkers sit on top of the other layers. Those the stroke hit, and those next to a green/tee/fairway that is about to re-run
+        // (its restore pass resets the ground around it, bunker dips included), are lifted off first, and dug again on the finished
+        // ground once the others are done. Terrain is shared, so every hole's bunkers are looked at, not just the re-run hole's.
+        var lifted = [];
+        if (!opts.bakeFairwaysOnly && typeof window.applyBunkerPipeline === 'function' && typeof window.restoreBunkerBase === 'function' && typeof window.captureBunkerSnapshot === 'function') {
+            var hit = new Set();
+            jobs.forEach(function (j) { if (j.st.kind === 'bunker' && j.rerun) hit.add(j.st.sd); });
+            holes.forEach(function (hole) {
+                var bks = (hole.bunkers && hole.bunkers.length) ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []);
+                bks.forEach(function (bd) {
+                    if (!bd || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3 || typeof getDenseBunkerPoints !== 'function') return;
+                    var near = hit.has(bd);
+                    if (!near && reruns.length) {
+                        var bDense = getDenseBunkerPoints(bd.points);
+                        near = !!bDense && reruns.some(function (j) {
+                            return bDense.some(function (q) { return ptInPoly(q.x, q.z, j.st.dense) || distToPoly(q.x, q.z, j.st.dense) <= j.st.reach + BUNKER_REACH; });
+                        });
                     }
-                    return;
-                }
-                if (j.st.kind === 'green' && typeof window.applyGreenPipeline === 'function') {
-                    window.applyGreenPipeline(j.hole, false, false);
-                    done++;
-                } else if (j.st.kind === 'tee' && typeof window.applyTeePipeline === 'function') {
-                    window.applyTeePipeline(j.hole, false, false, j.st.sd, true);
-                    done++;
-                }
+                    if (near) lifted.push({ hole: hole, bd: bd, ref: null });
+                });
+            });
+            // layer order across holes: baseline capture stamp first (see layerOf), then the creation time in the bunker id
+            // (bk_<ms>_xxxx, for loaded courses whose baselines carry no stamp), then the hole / array order
+            (function () {
+                var key = lifted.map(function (l, i) {
+                    var m = /^bk_(\d+)_/.exec(l.bd.id || '');
+                    return [layerOf.get(l.bd.origHeights) || 0, m ? +m[1] : 0, i];
+                });
+                var idx = lifted.map(function (l, i) { return i; }).sort(function (a, b) {
+                    return (key[a][0] - key[b][0]) || (key[a][1] - key[b][1]) || (a - b);
+                });
+                var sorted = idx.map(function (i) { return lifted[i]; });
+                lifted.length = 0; sorted.forEach(function (l) { lifted.push(l); });
+            })();
+            // newest first: a later bunker's baseline was taken with the earlier ones already dug, so the earlier ones must be lifted last
+            lifted.slice().reverse().forEach(function (l) { try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); } });
+        }
+
+        reruns.forEach(function (j) {
+            try {
+                if (j.st.kind === 'fairway') window.applyFairwayPipeline(j.hole, false, false, j.st.sd);
+                else if (j.st.kind === 'green') window.applyGreenPipeline(j.hole, false, false);
+                else window.applyTeePipeline(j.hole, false, false, j.st.sd, true);
+                done++;
             } catch (err) {
                 console.error('[reanchor] pipeline failed:', err);
             }
+            // A fairway edit brackets its own hole's bunkers (attachUpperLayers: new baseline from the clean fairway surface, dug again).
+            // Those are lifted once more so they stay off the ground for the studios that follow; their baseline is already the clean surface.
+            lifted.slice().reverse().forEach(function (l) {
+                if (l.bd.origHeights === l.ref) return;
+                try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); }
+            });
+        });
+
+        // The re-run may have raised / lowered the ground under a bunker: its baseline is taken from the finished ground (heights only,
+        // the saved texture pixels and bbox stay as they are; a new array so undo states keep the old one)
+        lifted.forEach(function (l) {
+            try {
+                var snap = window.captureBunkerSnapshot(l.hole, l.bd.points, l.bd.bbox.margin || 15);
+                if (snap && snap.origHeights && snap.origHeights.length === l.bd.origHeights.length) l.bd.origHeights = snap.origHeights;
+                window.applyBunkerPipeline(l.hole, false, false, l.bd);
+            } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
         });
         return done;
     };
@@ -171,6 +247,8 @@
             var result = orig.apply(this, arguments);
             if (pre) {
                 try { window.reanchorStudiosAfterSculpt(pre, { bakeFairwaysOnly: true }); } catch (err) { console.error('[reanchor]', name, err); }
+                // the builders save before returning, i.e. before the baselines above were updated: save again
+                if (typeof window.debounceSaveCourse === 'function') window.debounceSaveCourse(1500);
             }
             return result;
         };
