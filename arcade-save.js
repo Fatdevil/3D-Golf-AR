@@ -311,7 +311,16 @@
         }));
     };
 
+    // Until loadLevel has read the stored course, the world is still the empty default. Anything that saved in that window (the surroundings
+    // dropdowns, removePanorama and others run while the page starts) overwrote the stored draft with an empty course before it was read,
+    // so opening "Snabbutkast" showed nothing. loadLevel clears the flag when it is done; the timer is only a net if it never runs.
+    if (window._courseLoading === undefined) {
+        window._courseLoading = true;
+        setTimeout(function () { window._courseLoading = false; }, 60000);
+    }
+
     async function saveLevel(isAuto = false, noEdit = false) {
+        if (window._courseLoading) return null; // not now: see above
         if (!isAuto && !noEdit) window._editRev = (window._editRev || 0) + 1; // the next-step guide: a direct save (panorama, quick save) means the course changed
         let sText = document.getElementById('save-status-text');
         let sIcon = document.getElementById('save-status-icon');

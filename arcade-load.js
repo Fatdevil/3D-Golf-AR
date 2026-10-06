@@ -792,7 +792,19 @@
         saveLevel();
     };
 
+    // Saves are held back while the course is read (see arcade-save.js). A new course asks for its first save once the page is set up.
     async function loadLevel() {
+        window._courseLoading = true;
+        const startsNew = new URLSearchParams(window.location.search).get('autorun') === 'new_build';
+        try {
+            await loadLevelBody();
+        } finally {
+            window._courseLoading = false;
+        }
+        if (startsNew && typeof saveLevel === 'function') saveLevel(true, true);
+    }
+
+    async function loadLevelBody() {
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course');
         let editCode = params.get('edit');

@@ -733,6 +733,44 @@ function serve() {
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
 
+  // The quick draft ("Snabbutkast") reopened while the page is still starting (slow device-id / network call before loadLevel):
+  // saves that run during start-up must not overwrite the stored course with the empty default before it is read.
+  let reopenStep = 'start';
+  try {
+    await page.close(); // the first page is done; its render loop would slow the two below
+    await ctx.close();  // and the pages below get a clean browser profile of their own (the stored draft is theirs alone)
+    const ctx2 = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
+    await ctx2.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
+      const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
+      if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
+    });
+    await ctx2.route(/^https:\/\/(?!cdn)/, function (r) { r.abort(); });
+    reopenStep = 'seed page'; const seed = await ctx2.newPage();
+    await seed.goto(base + '/arcade.html?autorun=edit_build', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await seed.waitForFunction(function () { return window._courseLoading !== true; }, null, { timeout: 120000 });
+    await seed.waitForTimeout(9000);
+    const seeded = await seed.evaluate(async function () {
+      courseHoles[0].flag = { x: 5, y: 0, z: 90 };
+      await window.saveLevel(true, true);
+      return !!(await window.ArcadeStorage.loadFullDraft('quick_draft')).holes[0].flag;
+    });
+    await seed.close();
+    reopenStep = 'slow page'; const slow = await ctx2.newPage();
+    // like production: the biome / asset lists answer quickly and the page applies them (which saves), the device-id call that
+    // loadLevel waits for is slow
+    await slow.route(base + '/api/**', async function (r) {
+      const quick = /biome|asset/.test(r.request().url());
+      await new Promise(function (res) { setTimeout(res, quick ? 300 : 3000); });
+      r.fulfill({ status: 200, contentType: 'application/json', body: quick ? '[]' : '{}' });
+    });
+    await slow.goto(base + '/arcade.html?autorun=edit_build', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await slow.waitForFunction(function () { return window._courseLoading !== true; }, null, { timeout: 120000 });
+    await slow.waitForTimeout(9000); // the delayed calls (3 s) and the load itself are done by now
+    const reopened = await slow.evaluate(async function () { const d = await window.ArcadeStorage.loadFullDraft('quick_draft'); return { flag: !!courseHoles[0].flag, stored: !!(d && d.holes && d.holes[0].flag) }; });
+    await slow.close();
+    checks.push({ name: 'quick draft reopened while the page starts slowly keeps the course (start-up saves do not overwrite it)', ok: seeded && reopened.flag && reopened.stored, detail: JSON.stringify([seeded, reopened]) });
+  } catch (e) { checks.push({ name: 'quick draft reopen check ran', ok: false, detail: 'step ' + reopenStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
+
   await browser.close();
   srv.close();
 
