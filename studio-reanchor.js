@@ -172,6 +172,14 @@
                     if (near) lifted.push({ hole: hole, bd: bd, ref: null });
                 });
             });
+            // creation order across holes: bunker ids carry their creation time (bk_<ms>_xxxx); without it the hole / array order stands
+            (function () {
+                var ts = lifted.map(function (l) { var m = /^bk_(\d+)_/.exec(l.bd.id || ''); return m ? +m[1] : null; });
+                if (!ts.length || ts.some(function (t) { return t === null; })) return;
+                var idx = lifted.map(function (l, i) { return i; }).sort(function (a, b) { return (ts[a] - ts[b]) || (a - b); });
+                var sorted = idx.map(function (i) { return lifted[i]; });
+                lifted.length = 0; sorted.forEach(function (l) { lifted.push(l); });
+            })();
             // newest first: a later bunker's baseline was taken with the earlier ones already dug, so the earlier ones must be lifted last
             lifted.slice().reverse().forEach(function (l) { try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); } });
         }
