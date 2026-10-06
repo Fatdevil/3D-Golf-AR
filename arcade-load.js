@@ -932,7 +932,10 @@
                         currentEditCode = data.share_code; 
                         if(document.getElementById('course-name-input')) document.getElementById('course-name-input').value = data.name;
                         if(document.getElementById('author-name-input')) document.getElementById('author-name-input').value = data.author;
-                        if (document.getElementById('btn-save-draft')) document.getElementById('btn-save-draft').style.display = 'block';
+                        // a published course is updated with Publish (a new version of it); only a draft is saved as a draft
+                        if (document.getElementById('btn-save-draft')) document.getElementById('btn-save-draft').style.display = data.is_draft === true ? 'block' : 'none';
+                        // the owner opens the builder with the builder's own definitions (greens, fairways, bunkers, tee boxes), not the played copy
+                        if ((autoRun === 'edit_build' || autoRun === 'build') && data.builder_holes) savedStr.holes = data.builder_holes;
                     }
                     if(typeof savedStr.holes === 'string') savedStr.holes = JSON.parse(savedStr.holes);
                     if(typeof savedStr.targets === 'string') savedStr.targets = JSON.parse(savedStr.targets);
@@ -979,6 +982,16 @@
                     if (fullDraft && fullDraft._fullSave) {
                         savedStr = fullDraft;
                         isCloud = true; // Triggers full terrain, water & biomemap reconstruction below
+                        // the working copy remembers which saved course it belongs to, so Publish / Save draft update that one instead of making a copy
+                        // the course name and author the builder had typed in
+                        let nameEl = document.getElementById('course-name-input'), authorEl = document.getElementById('author-name-input');
+                        if (nameEl && fullDraft.name && fullDraft.name !== 'Quick Draft') nameEl.value = fullDraft.name;
+                        if (authorEl && fullDraft.author) authorEl.value = fullDraft.author;
+                        if (fullDraft.edit_code && !editCode && !courseCode) {
+                            currentEditCode = fullDraft.edit_code;
+                            window._editIsPublished = !!fullDraft.edit_is_published;
+                            if (document.getElementById('btn-save-draft')) document.getElementById('btn-save-draft').style.display = window._editIsPublished ? 'none' : 'block';
+                        }
                         console.log('✅ Loaded FULL course draft from IndexedDB (terrain + textures + objects)');
                     }
                 } catch(e) {

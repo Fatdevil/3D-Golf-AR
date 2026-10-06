@@ -805,6 +805,9 @@
                             <span class="stat-item">☁️ Cloud Draft</span>
                             <span class="stat-item">EDIT →</span>
                         </div>
+                        <div class="card-actions">
+                            <button class="card-btn card-btn-delete" onclick="event.stopPropagation(); deleteCourse('${d.code}', true)" title="Delete">🗑️</button>
+                        </div>
                     </div>
                 </div>`;
             });
@@ -821,9 +824,36 @@
     //  Published Courses
     // ═══════════════════════════════════════════════════════════
     let _allCourses = [];
+    let _myCourses = null;   // my own courses from the server, drafts and published (null: not loaded)
+
+    // My courses come from the server (the public list only holds the newest 50 of everybody, so older courses of mine would be missing).
+    // The local draft list, which the hub and the course pages also read, is brought in step with the server.
+    async function loadMyCourses() {
+        let deviceId = localStorage.getItem('golf_os_device_id');
+        if (!deviceId) return false;
+        try {
+            let res = await fetch(API_BASE + '/api/my/courses', { headers: { 'x-user-id': deviceId } });
+            if (!res.ok) return false;
+            let rows = await res.json();
+            if (!Array.isArray(rows)) return false;
+            _myCourses = rows;
+            let published = new Set(rows.filter(c => !c.is_draft).map(c => c.share_code));
+            let serverDrafts = rows.filter(c => c.is_draft);
+            let known = new Set(serverDrafts.map(c => c.share_code));
+            // local entries the server does not know about stay (older drafts saved before the account existed); a published course is no draft
+            let kept = JSON.parse(localStorage.getItem('golf_os_my_drafts') || '[]').filter(d => !known.has(d.code) && !published.has(d.code));
+            let merged = kept.concat(serverDrafts.map(c => ({ code: c.share_code, name: c.name, date: c.updated_at || c.created_at })));
+            merged.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+            localStorage.setItem('golf_os_my_drafts', JSON.stringify(merged));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
 
     async function loadPublished() {
         try {
+            if (_myCourses) { renderMyPublished(); return; }
             let res = await fetch(API_BASE + '/api/courses');
             _allCourses = await res.json();
             renderMyPublished();
@@ -842,7 +872,7 @@
             return;
         }
 
-        let myCourses = _allCourses.filter(c => c.owner_id === myDeviceId);
+        let myCourses = _myCourses ? _myCourses.filter(c => !c.is_draft) : _allCourses.filter(c => c.owner_id === myDeviceId);
         let html = '';
 
         myCourses.forEach(c => {
@@ -889,8 +919,8 @@
         carousel.innerHTML = html;
     }
 
-    async function deleteCourse(code) {
-        if (!confirm('Är du helt säker på att du vill radera denna bana?\nALLA leaderboard-resultat försvinner permanent.')) return;
+    async function deleteCourse(code, isDraft) {
+        if (!confirm(isDraft ? 'Radera detta utkast?' : 'Är du helt säker på att du vill radera denna bana?\nALLA leaderboard-resultat försvinner permanent.')) return;
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');
             let res = await fetch(API_BASE + '/api/courses/' + code, {
@@ -898,6 +928,9 @@
                 headers: { 'x-user-id': deviceId }
             });
             if (res.ok) {
+                try { localStorage.setItem('golf_os_my_drafts', JSON.stringify(JSON.parse(localStorage.getItem('golf_os_my_drafts') || '[]').filter(d => d.code !== code))); } catch (e) {}
+                await loadMyCourses();
+                loadDrafts();
                 loadPublished();
             } else {
                 alert('Du saknar behörighet att radera denna bana.');
@@ -1116,6 +1149,8 @@
         if (window.GolfAuth) {
             await window.GolfAuth.init();
         }
+        loadDrafts();                 // what is on this device straight away
+        await loadMyCourses();        // then what the server has
         loadDrafts();
         loadPublished();
         loadCollections();

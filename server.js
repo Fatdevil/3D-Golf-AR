@@ -207,6 +207,8 @@ async function initDB() {
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS course_rating DECIMAL(4,1);`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS slope_rating INT DEFAULT 113;`);
             await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS stroke_index JSONB;`);
+            // the builder's own definitions (greens, fairways, bunkers, tee boxes ...): lets the owner open a published course in the builder again
+            await pool.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS builder_holes JSONB;`);
             await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS handicap_at_play DECIMAL(4,1);`);
             await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS score_differential DECIMAL(5,1);`);
             await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS net_score INT;`);
@@ -444,6 +446,25 @@ app.get('/api/users/:id/handicap', requireDB, async (req, res) => {
         );
         res.json({ handicap_index: user.rows[0].handicap_index, rounds_counted: user.rows[0].handicap_rounds, last_updated: user.rows[0].handicap_updated, recent_rounds: rounds.rows });
     } catch(err) { console.error('HCP fetch error:', err); res.status(500).json({ error: 'Server error' }); }
+});
+
+// The signed-in builder's own courses, drafts and published, newest first (the public list above only holds the newest 50 of everybody)
+app.get('/api/my/courses', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT share_code, name, author, likes, hole_count, total_par, play_count, owner_id, version,
+                   COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range, created_at, updated_at
+            FROM courses
+            WHERE owner_id = $1
+              AND COALESCE(theme_data->>'_playCopy', '') <> 'true'
+            ORDER BY COALESCE(updated_at, created_at) DESC
+            LIMIT 300
+        `, [req.userId]);
+        res.json(result.rows);
+    } catch(err) {
+        console.error('GET /api/my/courses error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.get('/api/courses', requireDB, async (req, res) => {
@@ -743,7 +764,7 @@ async function updateHandicapIndex(playerId, dbPool) {
 
 app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
     try {
-        const { name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, terrain_watermask, is_draft, is_range, edit_code, theme_data, hole_count, total_par, new_version, cover_image } = req.body;
+        const { name, author, holes, builder_holes, targets, trees, terrain_heightmap, terrain_biomemap, terrain_watermask, is_draft, is_range, edit_code, theme_data, hole_count, total_par, new_version, cover_image } = req.body;
         
         // Validering
         if (!holes) return res.status(400).json({ error: 'Missing holes data' });
@@ -758,7 +779,7 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
 
         if (edit_code) {
             // Check ownership before allowing edit
-            const ownerCheck = await pool.query('SELECT owner_id FROM courses WHERE share_code = $1', [edit_code.toUpperCase()]);
+            const ownerCheck = await pool.query('SELECT owner_id, is_draft FROM courses WHERE share_code = $1', [edit_code.toUpperCase()]);
             if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id) {
                 // Course has an owner — require matching auth
                 if (!req.userId) {
@@ -769,16 +790,18 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                 }
             }
 
-            // Version bump if re-publishing a published course
+            // Version bump only when a course that is already published is published again; publishing a draft for the first time is version 1
             let versionBump = '';
-            if (new_version && !draftStatus) {
-                versionBump = ', version = version + 1, play_count = 0';
+            const wasPublished = ownerCheck.rows.length > 0 && ownerCheck.rows[0].is_draft === false;
+            if (wasPublished && !draftStatus) {
+                versionBump = ', version = COALESCE(version, 1) + 1, play_count = 0';
             }
 
             const updateResult = await pool.query(
                 `UPDATE courses 
                  SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, 
                      is_draft=$8, theme_data=$10, is_range=$11, hole_count=$12, total_par=$13, cover_image=$14,
+                     builder_holes=$15, owner_id=COALESCE(owner_id, $16),
                      updated_at=CURRENT_TIMESTAMP ${versionBump}
                  WHERE share_code=$9 
                  RETURNING share_code, version`,
@@ -787,7 +810,8 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                     JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
                     terrain_heightmap, terrain_biomemap, draftStatus, 
                     edit_code.toUpperCase(), JSON.stringify(c_theme_data), rangeStatus,
-                    c_hole_count, c_total_par, cover_image || null
+                    c_hole_count, c_total_par, cover_image || null,
+                    builder_holes ? JSON.stringify(builder_holes) : null, req.userId || null
                 ]
             );
             
@@ -800,14 +824,15 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO courses 
-            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index, cover_image, updated_at) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP) RETURNING share_code`,
+            (share_code, name, author, holes, targets, trees, terrain_heightmap, terrain_biomemap, is_draft, theme_data, is_range, owner_id, hole_count, total_par, course_rating, slope_rating, stroke_index, cover_image, builder_holes, updated_at) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP) RETURNING share_code`,
             [
                 share_code, c_name, c_author, 
                 JSON.stringify(holes), JSON.stringify(targets || []), JSON.stringify(trees || []), 
                 terrain_heightmap, terrain_biomemap, draftStatus, JSON.stringify(c_theme_data), rangeStatus,
                 req.userId || null, c_hole_count, c_total_par,
-                calculateCourseRating(holes, c_total_par), calculateSlopeRating(holes), JSON.stringify(calculateStrokeIndex(holes)), cover_image || null
+                calculateCourseRating(holes, c_total_par), calculateSlopeRating(holes), JSON.stringify(calculateStrokeIndex(holes)), cover_image || null,
+                builder_holes ? JSON.stringify(builder_holes) : null
             ]
         );
 
@@ -826,6 +851,7 @@ app.get('/api/courses/:share_code', requireDB, optionalAuth, async (req, res) =>
         const row = result.rows[0];
         // only the builder may open the course in the builder (saving is checked against the owner again by POST /api/courses)
         row.can_edit = !!row.owner_id && !!req.userId && req.userId === row.owner_id;
+        if (!row.can_edit) delete row.builder_holes; // the builder's own definitions are for the builder only, players never download them
         res.json(row);
     } catch(err) {
         console.error("Error fetching course:", err);

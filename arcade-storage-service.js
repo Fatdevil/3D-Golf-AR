@@ -84,6 +84,10 @@ window.ArcadeStorage = {
         this.saveDrafts(drafts);
     },
 
+    removeDraft(code) {
+        this.saveDrafts(this.getDrafts().filter(d => d.code !== code));
+    },
+
     // ----- INDEXEDDB: FULL COURSE PERSISTENCE (Heightmap + Textures + Holes + Trees) -----
     _db: null,
     _openDB() {
