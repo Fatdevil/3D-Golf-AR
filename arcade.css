@@ -211,6 +211,11 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       flex-direction: column;
       gap: 4px;
   }
+  /* Hole builder: fixed narrow width so the hint text wraps instead of stretching the menu over the terrain */
+  #flyout-holes-strip { width: 200px; }
+  #flyout-holes-strip .flyout-btn { min-width: 0; }
+  #hole-next-card { white-space: normal; overflow-wrap: anywhere; }
+  #hole-next-card button { white-space: normal; line-height: 1.25; }
   .flyout-header {
       color: #64748b;
       font-size: 9px;

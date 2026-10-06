@@ -2321,9 +2321,9 @@ window.restoreFairwayFootprint = function(fd, hole) {
 };
 
 // 2. Restore pristine baseline ground & texture before applying modified parameters
-// A fairway only rewrites terrain heights when it has waves (difficulty) or a slope cap (maxSlopePct, in %)
+// A fairway only rewrites terrain heights when it has waves (difficulty) or a slope cap (maxSlopePct = across / legacy cap, maxSlopeAlongPct = along, in %)
 window.fairwayEditsHeights = function(fd) {
-    return !!(fd && ((fd.difficulty && fd.difficulty !== 'FLAT') || (fd.maxSlopePct > 0)));
+    return !!(fd && ((fd.difficulty && fd.difficulty !== 'FLAT') || (fd.maxSlopePct > 0) || (fd.maxSlopeAlongPct > 0)));
 };
 
 // _isSculpted is not saved with the course: a loaded fairway that edits heights must still restore its baseline
@@ -2338,13 +2338,97 @@ window.syncFairwaySculptFlag = function(fd) {
 // the free side is lowered to meet the cap and the locked side cannot take the volume, so the hill is cut there.
 // A hill under the fairway is therefore made gentler, not removed.
 // h: Float32Array (gW*gH, row = gz), w: Float32Array weights. Returns { iters, converged, maxSlope }.
-window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, budgetMs) {
-    let L = maxSlope * spacing;
-    if (!(L > 0)) return { iters: 0, converged: true, maxSlope: 0 };
-    let tol = L * 0.05;
-    let it = 0, worst = 0;
+// Direction of play for a fairway: a function (x, z) -> [tx, tz] (unit vector, unsigned: uphill and downhill are treated the same).
+// Follows the line tee -> aim point -> green of the hole (so a dogleg turns with the fairway), blended smoothly at the bends.
+// Without such a line it falls back to the main axis of the fairway outline.
+window.fairwayAxisField = function(hole, fd) {
+    let line = [];
+    let ok = function(p) { return p && isFinite(p.x) && isFinite(p.z); };
+    let teePt = null;
+    if (hole && hole.tees) {
+        let sx = 0, sz = 0, n = 0;
+        Object.keys(hole.tees).forEach(function(c) { let t = hole.tees[c]; if (ok(t)) { sx += t.x; sz += t.z; n++; } });
+        if (n) teePt = { x: sx / n, z: sz / n };
+    }
+    if (!teePt && hole && hole.teeBoxes && hole.teeBoxes[0] && hole.teeBoxes[0].points && hole.teeBoxes[0].points.length) {
+        let ps = hole.teeBoxes[0].points, sx = 0, sz = 0;
+        ps.forEach(function(q) { sx += q.x; sz += q.z; });
+        teePt = { x: sx / ps.length, z: sz / ps.length };
+    }
+    let greenPt = null;
+    if (hole && hole.flag) {
+        let fx = hole.flag.x !== undefined ? hole.flag.x : (hole.flag.position ? hole.flag.position.x : NaN);
+        let fz = hole.flag.z !== undefined ? hole.flag.z : (hole.flag.position ? hole.flag.position.z : NaN);
+        if (isFinite(fx) && isFinite(fz)) greenPt = { x: fx, z: fz };
+    }
+    if (!greenPt && hole && hole.greenData && hole.greenData.points && hole.greenData.points.length) {
+        let ps = hole.greenData.points, sx = 0, sz = 0;
+        ps.forEach(function(q) { sx += q.x; sz += q.z; });
+        greenPt = { x: sx / ps.length, z: sz / ps.length };
+    }
+    if (teePt) line.push(teePt);
+    if (hole && ok(hole.aimPoint)) line.push({ x: hole.aimPoint.x, z: hole.aimPoint.z });
+    if (greenPt) line.push(greenPt);
+    // drop points that sit on top of each other (a zero-length segment has no direction)
+    line = line.filter(function(p, i) { return i === 0 || Math.hypot(p.x - line[i - 1].x, p.z - line[i - 1].z) > 2; });
+    if (line.length >= 2) {
+        let segs = [];
+        for (let i = 0; i + 1 < line.length; i++) {
+            let dx = line[i + 1].x - line[i].x, dz = line[i + 1].z - line[i].z, len = Math.hypot(dx, dz);
+            segs.push({ ax: line[i].x, az: line[i].z, dx: dx / len, dz: dz / len, len: len });
+        }
+        const BLEND = 15; // metres over which the direction turns into the next segment's
+        return function(x, z) {
+            let best = -1, bd = Infinity, bt = 0;
+            for (let k = 0; k < segs.length; k++) {
+                let sg = segs[k], t = ((x - sg.ax) * sg.dx + (z - sg.az) * sg.dz);
+                t = Math.max(0, Math.min(sg.len, t));
+                let d = Math.hypot(x - (sg.ax + sg.dx * t), z - (sg.az + sg.dz * t));
+                if (d < bd) { bd = d; best = k; bt = t; }
+            }
+            let sg = segs[best], tx = sg.dx, tz = sg.dz;
+            let toStart = bt, toEnd = sg.len - bt;
+            if (best > 0 && toStart < BLEND) { let wgt = 0.5 * (1 - toStart / BLEND), pv = segs[best - 1]; tx = tx * (1 - wgt) + pv.dx * wgt; tz = tz * (1 - wgt) + pv.dz * wgt; }
+            if (best < segs.length - 1 && toEnd < BLEND) { let wgt = 0.5 * (1 - toEnd / BLEND), nx = segs[best + 1]; tx = tx * (1 - wgt) + nx.dx * wgt; tz = tz * (1 - wgt) + nx.dz * wgt; }
+            let l = Math.hypot(tx, tz) || 1;
+            return [tx / l, tz / l];
+        };
+    }
+    // fallback: principal axis of the outline (covariance of its points)
+    let pts = (fd && fd.points) || [], mx = 0, mz = 0;
+    pts.forEach(function(q) { mx += q.x; mz += q.z; });
+    mx /= Math.max(1, pts.length); mz /= Math.max(1, pts.length);
+    let sxx = 0, szz = 0, sxz = 0;
+    pts.forEach(function(q) { let dx = q.x - mx, dz = q.z - mz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; });
+    let ang = 0.5 * Math.atan2(2 * sxz, sxx - szz), ax = Math.cos(ang), az = Math.sin(ang);
+    return function() { return [ax, az]; };
+};
+
+// aniso (optional): { across, tx, tz } - a separate cap ACROSS the fairway (side slope) and a unit axis per vertex (tx, tz: the
+// direction of play there). maxSlope is then the cap ALONG the axis (uphill / downhill). The allowed gradient is an ellipse:
+// (along / maxSlope)^2 + (across / aniso.across)^2 <= 1. A cap of 0 / Infinity in one direction leaves that direction free.
+// Without aniso every direction gets maxSlope (the circle: the original behaviour).
+window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, budgetMs, aniso) {
+    let capA = maxSlope > 0 ? maxSlope : Infinity;
+    let capC = aniso ? (aniso.across > 0 ? aniso.across : Infinity) : capA;
+    let La = capA * spacing, Lc = capC * spacing;
+    if (!(isFinite(La) || isFinite(Lc))) return { iters: 0, converged: true, maxSlope: 0, worstRel: 0 };
+    let invA = isFinite(La) ? 1 / La : 0, invC = isFinite(Lc) ? 1 / Lc : 0;
+    let capRef = Math.min(capA, capC); // fallback for the reported slope when nothing exceeded a cap
+    let tol = 0.05; // converged when no cell is more than 5 % over its cap
+    let it = 0, worst = 0, worstMag = 0; // worstMag: the real gradient (m per m) of the cell that is furthest over its cap
+    let tAx = aniso ? aniso.tx : null, tAz = aniso ? aniso.tz : null;
+    // how far over its cap a cell is: 1 = exactly at the cap (s), measured on the gradient ellipse
+    let overOf = function(i, ddx, ddz) {
+        if (!aniso) return Math.sqrt(ddx * ddx + ddz * ddz) * invA;
+        let tx = tAx[i], tz = tAz[i];
+        let a = (ddx * tx + ddz * tz) * invA, c = (-ddx * tz + ddz * tx) * invC;
+        return Math.sqrt(a * a + c * c);
+    };
+    let magOf = function(ddx, ddz) { return Math.sqrt(ddx * ddx + ddz * ddz) / spacing; };
     let verifyExcess = function() {
         let wmax = 0;
+        worstMag = 0;
         for (let gz = 0; gz < gH; gz++) {
             for (let gx = 0; gx < gW; gx++) {
                 let i = gz * gW + gx;
@@ -2357,9 +2441,9 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                         if (nz < 0 || nz >= gH) continue;
                         let jz = nz * gW + gx;
                         if (w[i] + w[jx] + w[jz] <= 0) continue;
-                        let dx = h[i] - h[jx], dz = h[i] - h[jz];
-                        let ex = Math.sqrt(dx * dx + dz * dz) - L;
-                        if (ex > wmax) wmax = ex;
+                        let vdx = (h[jx] - h[i]) * sx, vdz = (h[jz] - h[i]) * tz;
+                        let ex = overOf(i, vdx, vdz) - 1;
+                        if (ex > wmax) { wmax = ex; worstMag = magOf(vdx, vdz); }
                     }
                 }
             }
@@ -2370,7 +2454,7 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
     for (; it < (maxIter || 300); it++) {
         // wall-clock budget so a huge fairway cannot freeze the editor; the caller is told if the cap was not reached
         if (budgetMs && it > 0 && (it & 15) === 0 && performance.now() - t0 > budgetMs) break;
-        worst = 0;
+        worst = 0; worstMag = 0;
         let fwd = (it % 2 === 0);
         for (let a = 0; a < gH; a++) {
             let gz = fwd ? a : gH - 1 - a;
@@ -2378,7 +2462,7 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                 let gx = fwd ? b : gW - 1 - b;
                 let i = gz * gW + gx;
                 // Each vertex looks at two grid cells that touch it (x-neighbour on the sweep side, z-neighbour up and down).
-                // The cap applies to the gradient MAGNITUDE of the cell, hypot(dx, dz), so diagonal slopes are not
+                // The cap applies to the gradient of the whole cell, not per axis, so diagonal slopes are not
                 // allowed to be sqrt2 steeper than slopes along the axes. Over two sweeps all four cells are covered.
                 let sx = fwd ? 1 : -1;
                 let nx = gx + sx;
@@ -2391,22 +2475,32 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
                     // a cell with no movable vertex cannot be fixed: ignore it (steep locked padding must not count as non-convergence)
                     if (w[i] + w[jx] + w[jz] <= 0) continue;
                     let dx = h[i] - h[jx], dz = h[i] - h[jz];
-                    let m = Math.sqrt(dx * dx + dz * dz);
-                    if (m <= L) continue;
-                    if (m - L > worst) worst = m - L;
-                    let k = (1 - L / m) * 1.25; // mild over-relaxation: ~1.7x fewer sweeps (1.5+ overshoots and flattens everything)
+                    // gradient of the cell in the sweep's own direction (sign matters for the projection on the axis)
+                    let s = overOf(i, -dx * sx, -dz * tz);
+                    if (s <= 1) continue;
+                    if (s - 1 > worst) { worst = s - 1; worstMag = magOf(dx * sx, dz * tz); }
+                    let k = (1 - 1 / s) * 1.25; // mild over-relaxation: ~1.7x fewer sweeps (1.5+ overshoots and flattens everything)
                     let wa = w[i];
+                    // how far each of the two pairs is moved. Normally the whole gradient is scaled back; when one direction has no cap
+                    // the correction is projected on the capped direction only, so the free direction keeps its slope.
+                    let mvx = dx * k, mvz = dz * k;
+                    if (aniso && (invA === 0 || invC === 0)) {
+                        let gx = -dx * sx, gz = -dz * tz, ux = tAx[i], uz = tAz[i], px, pz;
+                        if (invC === 0) { let c = gx * ux + gz * uz; px = c * ux; pz = c * uz; }      // only along is capped
+                        else { let c = -gx * uz + gz * ux; px = -c * uz; pz = c * ux; }              // only across is capped
+                        mvx = -k * px * sx; mvz = -k * pz * tz;
+                    }
                     // pair (i, jx)
                     let ws = wa + w[jx];
                     if (ws > 0) {
-                        let mv = dx * k;
+                        let mv = mvx;
                         h[i] -= mv * (wa / ws);
                         h[jx] += mv * (w[jx] / ws);
                     }
                     // pair (i, jz)
                     ws = wa + w[jz];
                     if (ws > 0) {
-                        let mv = dz * k;
+                        let mv = mvz;
                         h[i] -= mv * (wa / ws);
                         h[jz] += mv * (w[jz] / ws);
                     }
@@ -2419,8 +2513,10 @@ window.limitHeightSlope = function(h, w, gW, gH, maxSlope, spacing, maxIter, bud
             if (worst <= tol) { it++; break; }
         }
     }
-    // worst = largest gradient excess seen in the last sweep (0 when the sweep found nothing to fix)
-    return { iters: it, converged: worst <= tol, maxSlope: (L + worst) / spacing };
+    // not converged (budget or iteration limit): measure what is really left, a sweep's own numbers include gradients that were fixed a moment later
+    if (worst > tol) worst = verifyExcess();
+    // worst = largest relative excess seen in the last sweep (0 when the sweep found nothing to fix); maxSlope is the actual gradient of that worst cell (not scaled by a cap, so split caps report the true slope)
+    return { iters: it, converged: worst <= tol, maxSlope: worstMag > 0 ? worstMag : capRef, worstRel: worst };
 };
 
 window.restoreFairwayBase = function(hole, restoreTexture, targetFairway) {
@@ -2672,7 +2768,12 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
 
         // === SCULPT PASS ===
         let difficulty = fd.difficulty || 'FLAT';
-        let slopeCap = (fd.maxSlopePct > 0) ? fd.maxSlopePct / 100 : 0;
+        // Caps: maxSlopePct = the slope across the fairway (side slope); it is the only cap on courses saved before the two were split.
+        // maxSlopeAlongPct = uphill / downhill along the line of play. Only maxSlopePct set: one cap in every direction (as before).
+        let capAcross = (fd.maxSlopePct > 0) ? fd.maxSlopePct / 100 : 0;
+        let capAlong = (fd.maxSlopeAlongPct > 0) ? fd.maxSlopeAlongPct / 100 : 0;
+        let slopeCap = capAlong > 0 ? capAlong : capAcross; // the cap the limiter is called with (along when there is one)
+        let splitCaps = capAlong > 0;
         if ((difficulty !== 'FLAT' || slopeCap > 0) && fd.bbox && fd.origHeights) {
             // Green protection: gather green points if hole has a green
             let greenPts = null;
@@ -2756,6 +2857,8 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
                 let spacing = window.TERRAIN_SIZE / window.TERRAIN_SEGS;
                 let feather = Math.max(2, semiRoughWidth + roughWidth);
                 let hh = new Float32Array(gW * gH), ww = new Float32Array(gW * gH);
+                let axisAt = splitCaps ? window.fairwayAxisField(hole, fd) : null;
+                let aniso = splitCaps ? { across: capAcross, tx: new Float32Array(gW * gH), tz: new Float32Array(gW * gH) } : null;
                 for (let gz = gzStart; gz <= gzEnd; gz++) {
                     for (let gx = gxStart; gx <= gxEnd; gx++) {
                         let idx = gz * (window.TERRAIN_SEGS + 1) + gx;
@@ -2763,20 +2866,21 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
                         if (li < 0 || li >= hh.length) continue;
                         hh[li] = positions[idx*3+2];
                         let vx = positions[idx*3], vz = -positions[idx*3+1];
+                        if (aniso) { let ax = axisAt(vx, vz); aniso.tx[li] = ax[0]; aniso.tz[li] = ax[1]; }
                         if (greenPts && (pointInPolygon(vx, vz, greenPts) || distToPolygon(vx, vz, greenPts) < greenBlend)) continue;
                         if (pointInPolygon(vx, vz, densePts)) { ww[li] = 1; continue; }
                         let dE = distToPolygon(vx, vz, densePts);
                         if (dE < feather) { let t = 1 - dE / feather; ww[li] = t * t * (3 - 2 * t); }
                     }
                 }
-                let lim = window.limitHeightSlope(hh, ww, gW, gH, slopeCap, spacing, 3000, 600);
+                let lim = window.limitHeightSlope(hh, ww, gW, gH, slopeCap, spacing, 3000, 600, aniso);
                 fd._slopeCapReached = lim.converged;
-                if (!lim.converged && lim.maxSlope > slopeCap * 1.1) {
-                    console.warn('[fairway] slope cap not fully reached: ' + (lim.maxSlope * 100).toFixed(1) + ' % (cap ' + (slopeCap * 100).toFixed(0) + ' %)');
+                if (!lim.converged && lim.worstRel > 0.1) {
+                    console.warn('[fairway] slope cap not fully reached: ' + (lim.maxSlope * 100).toFixed(1) + ' % (cap ' + (Math.min(capAcross || Infinity, capAlong || Infinity) * 100).toFixed(0) + ' %)');
                     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                     if (typeof window.showBuildToast === 'function') window.showBuildToast(isSv
-                        ? ('Lutningstaket nåddes inte helt (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Höj taket eller dela upp fairwayn.')
-                        : ('Slope cap not fully reached (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Raise the cap or split the fairway.'), '#f59e0b');
+                        ? ('Marken är för brant för att jämnas ut här (' + (lim.maxSlope * 100).toFixed(0) + ' % kvar). Forma marken först med Platta till eller Ramp, flytta fairwayn eller stäng av lutningstaket.')
+                        : ('The ground is too steep to level here (' + (lim.maxSlope * 100).toFixed(0) + '% left). Shape the ground first with Flatten or Ramp, move the fairway, or turn the slope cap off.'), '#f59e0b');
                 }
                 for (let gz = gzStart; gz <= gzEnd; gz++) {
                     for (let gx = gxStart; gx <= gxEnd; gx++) {
@@ -3370,12 +3474,15 @@ window.executeSmartFairway = function() {
         roughEnabled: roughEnabled,
         mowPattern: mowPattern,
         edgeSharpness: sharpness,
-        maxSlopePct: window._fairwayMaxSlopePct || 0,
+        // a new fairway never inherits the cap of the previous one: the ground is only reshaped when the builder asks for it
+        maxSlopePct: 0,
+        maxSlopeAlongPct: 0,
         seedOffsetX: (Math.random() - 0.5) * 200,
         seedOffsetZ: (Math.random() - 0.5) * 200
     };
 
     hole.fairways.push(newFairway);
+    window._fairwayMaxSlopePct = 0; window._fairwayMaxSlopeAlongPct = 0;
     hole.activeFairwayIndex = hole.fairways.length - 1;
     hole.fairwayData = hole.fairways[0]; // Mirror primary for backward compatibility
 
