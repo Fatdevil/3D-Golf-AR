@@ -16,6 +16,22 @@
     var TEE_REACH = 17;     // matches TEE_MAX_REACH in smart-builder.js
     var BUNKER_REACH = 6;   // restoreBunkerBase resets 4.5 m around the bunker; a little more for the smoothing pass
 
+    // Overlapping bunkers are height layers: a later bunker's baseline was captured with the earlier ones already dug. The layer of a
+    // bunker is the moment its baseline was captured (a moved / reshaped bunker is re-captured and so becomes the top layer again), so
+    // every capture is stamped on the baseline array itself; a baked copy of the array keeps its stamp.
+    var layerSeq = 0, layerOf = new WeakMap();
+    (function () {
+        var orig = window.captureBunkerSnapshot;
+        if (typeof orig !== 'function' || orig._layerStamped) return;
+        var stamped = function () {
+            var snap = orig.apply(this, arguments);
+            if (snap && snap.origHeights) layerOf.set(snap.origHeights, ++layerSeq);
+            return snap;
+        };
+        stamped._layerStamped = true;
+        window.captureBunkerSnapshot = stamped;
+    })();
+
     function ptInPoly(x, z, poly) {
         var inside = false;
         for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -138,6 +154,7 @@
             var sd = j.st.sd;
             var fresh = new Float32Array(sd.origHeights);
             j.delta.forEach(function (d, oi) { if (oi >= 0 && oi < fresh.length) fresh[oi] += d; });
+            if (layerOf.has(sd.origHeights)) layerOf.set(fresh, layerOf.get(sd.origHeights));
             sd.origHeights = fresh;
             if (j.st.kind === 'green' || j.st.kind === 'tee') sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
         });
@@ -172,11 +189,16 @@
                     if (near) lifted.push({ hole: hole, bd: bd, ref: null });
                 });
             });
-            // creation order across holes: bunker ids carry their creation time (bk_<ms>_xxxx); without it the hole / array order stands
+            // layer order across holes: baseline capture stamp first (see layerOf), then the creation time in the bunker id
+            // (bk_<ms>_xxxx, for loaded courses whose baselines carry no stamp), then the hole / array order
             (function () {
-                var ts = lifted.map(function (l) { var m = /^bk_(\d+)_/.exec(l.bd.id || ''); return m ? +m[1] : null; });
-                if (!ts.length || ts.some(function (t) { return t === null; })) return;
-                var idx = lifted.map(function (l, i) { return i; }).sort(function (a, b) { return (ts[a] - ts[b]) || (a - b); });
+                var key = lifted.map(function (l, i) {
+                    var m = /^bk_(\d+)_/.exec(l.bd.id || '');
+                    return [layerOf.get(l.bd.origHeights) || 0, m ? +m[1] : 0, i];
+                });
+                var idx = lifted.map(function (l, i) { return i; }).sort(function (a, b) {
+                    return (key[a][0] - key[b][0]) || (key[a][1] - key[b][1]) || (a - b);
+                });
                 var sorted = idx.map(function (i) { return lifted[i]; });
                 lifted.length = 0; sorted.forEach(function (l) { lifted.push(l); });
             })();
