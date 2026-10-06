@@ -188,6 +188,28 @@ function serve() {
       for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
     })();
 
+    // two overlapping bunkers (the second was captured with the first already dug): a hill over them keeps both dips, dug once
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[3] || courseHoles[0];
+      const mk = function (id, cx, cz, r) { const pts = []; for (let k = 0; k < 8; k++) pts.push({ x: cx + r * Math.cos(k / 8 * 6.283), y: 0, z: cz + r * Math.sin(k / 8 * 6.283) }); const sn = window.captureBunkerSnapshot(hh, pts, 15); return { id: id, points: pts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: sn.baseElevation, bbox: sn.bbox, origHeights: sn.origHeights, origCanvasPixels: sn.origCanvasPixels }; };
+      const A = mk('bk_a', -60, -140, 6);
+      hh.bunkers = [A]; hh.bunkerData = A; window.applyBunkerPipeline(hh, false, false, A);
+      const B = mk('bk_b', -53, -140, 5); // captured with A already dug
+      hh.bunkers = [A, B]; hh.activeBunkerIndex = 1; window.applyBunkerPipeline(hh, false, false, B);
+      const pts = [[-64, -140], [-57, -140], [-50, -140], [-56, -144]];
+      const before = pts.map(function (q) { return window.getTerrainHeight(q[0], q[1]); });
+      const pre = new Float32Array(p);
+      const hill = function (x, z) { return 4 * Math.exp(-((x + 56) * (x + 56) + (z + 140) * (z + 140)) / 200); };
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += hill(x, z); }
+      window.reanchorStudiosAfterSculpt(pre);
+      const worst = Math.max.apply(null, pts.map(function (q, i) { return Math.abs(window.getTerrainHeight(q[0], q[1]) - hill(q[0], q[1]) - before[i]); }));
+      check('stacked bunkers under a hill keep their dips (each dug once)', worst < 0.2, 'worst ' + worst.toFixed(2) + ' before ' + before.map(function (v) { return v.toFixed(2); }).join(','));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
     // a bunker beside the green that the stroke never touches is dug again after the green re-runs (its dip must not be erased)
     [false, true].forEach(function (cross) { // the bunker belongs to the green's hole, or to a neighbouring hole (terrain is shared)
       const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;

@@ -172,7 +172,8 @@
                     if (near) lifted.push({ hole: hole, bd: bd, ref: null });
                 });
             });
-            lifted.forEach(function (l) { try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); } });
+            // newest first: a later bunker's baseline was taken with the earlier ones already dug, so the earlier ones must be lifted last
+            lifted.slice().reverse().forEach(function (l) { try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); } });
         }
 
         reruns.forEach(function (j) {
@@ -186,7 +187,7 @@
             }
             // A fairway edit brackets its own hole's bunkers (attachUpperLayers: new baseline from the clean fairway surface, dug again).
             // Those are lifted once more so they stay off the ground for the studios that follow; their baseline is already the clean surface.
-            lifted.forEach(function (l) {
+            lifted.slice().reverse().forEach(function (l) {
                 if (l.bd.origHeights === l.ref) return;
                 try { window.restoreBunkerBase(l.hole, false, l.bd); l.ref = l.bd.origHeights; } catch (err) { console.error('[reanchor] bunker lift failed:', err); }
             });
