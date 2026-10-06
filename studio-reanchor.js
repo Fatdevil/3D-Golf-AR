@@ -147,18 +147,18 @@
         var rank = { fairway: 0, tee: 1, green: 2, bunker: 3 };
         jobs.sort(function (a, b) { return rank[a.st.kind] - rank[b.st.kind]; });
         // a green/tee/fairway re-run resets the ground around it, including the dips of bunkers next to it
-        var reranHoles = new Set();
+        var reranHoles = new Set(), ranBunkers = new Set();
         jobs.forEach(function (j) {
             if (opts.bakeFairwaysOnly) return;
             if (j.st.kind === 'bunker') {
                 if (!j.rerun && !reranHoles.has(j.hole)) return;
                 try {
-                    if (typeof window.applyBunkerPipeline === 'function') { window.applyBunkerPipeline(j.hole, false, false, j.st.sd); done++; }
+                    if (typeof window.applyBunkerPipeline === 'function') { window.applyBunkerPipeline(j.hole, false, false, j.st.sd); ranBunkers.add(j.st.sd); done++; }
                 } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
                 return;
             }
             if (!j.rerun) return;
-            reranHoles.add(j.hole);
+            var before = done;
             try {
                 if (j.st.kind === 'fairway') {
                     if (window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function') {
@@ -177,7 +177,18 @@
             } catch (err) {
                 console.error('[reanchor] pipeline failed:', err);
             }
+            if (done > before) reranHoles.add(j.hole);
         });
+        // bunkers whose own bbox the stroke never touched have no job, but a green/tee/fairway re-run may still have erased them
+        if (!opts.bakeFairwaysOnly && typeof window.applyBunkerPipeline === 'function') {
+            reranHoles.forEach(function (hole) {
+                var bks = (hole.bunkers && hole.bunkers.length) ? hole.bunkers : (hole.bunkerData ? [hole.bunkerData] : []);
+                bks.forEach(function (bd) {
+                    if (!bd || ranBunkers.has(bd) || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3) return;
+                    try { window.applyBunkerPipeline(hole, false, false, bd); done++; } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
+                });
+            });
+        }
         return done;
     };
 
