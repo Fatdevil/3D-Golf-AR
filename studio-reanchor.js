@@ -14,6 +14,7 @@
 
     var EPS = 0.005;        // ignore height changes below 5 mm
     var TEE_REACH = 17;     // matches TEE_MAX_REACH in smart-builder.js
+    var BUNKER_REACH = 6;   // restoreBunkerBase resets 4.5 m around the bunker; a little more for the smoothing pass
 
     function ptInPoly(x, z, poly) {
         var inside = false;
@@ -68,12 +69,21 @@
             var br = tb.blendRadius !== undefined ? tb.blendRadius : 4;
             out.push({ kind: 'tee', sd: tb, dense: tDense, reach: Math.max(TEE_REACH, br + 2) });
         });
+        // Bunkers: stored as "pristine terrain + dig-out". Without this, a hill raised under or around a bunker was undone
+        // the next time the bunker (or the green next to it) re-ran, because the old baseline was written back over the hill.
+        var bks = (hole && hole.bunkers && hole.bunkers.length) ? hole.bunkers : (hole && hole.bunkerData ? [hole.bunkerData] : []);
+        bks.forEach(function (bd) {
+            if (!bd || !bd.bbox || !bd.origHeights || !bd.points || bd.points.length < 3 || typeof getDenseBunkerPoints !== 'function') return;
+            var bDense = getDenseBunkerPoints(bd.points);
+            if (bDense && bDense.length >= 3) out.push({ kind: 'bunker', sd: bd, dense: bDense, reach: BUNKER_REACH });
+        });
         return out;
     }
 
     // pre: Float32Array of the terrain (position attribute array) from BEFORE the stroke.
     // Returns the number of green/tee boxes that were re-flattened.
-    // opts.bakeFairwaysOnly: only add the stroke to the fairway baselines (no re-run, green and tee untouched) - used for the water tool
+    // opts.bakeFairwaysOnly: only add the stroke to the fairway and bunker baselines (no re-run, green and tee untouched) - used for the water tool
+    //   (bake-only is always consistent: terrain = baseline + dig-out + stroke, and the baseline gets the stroke too)
     window.reanchorStudiosAfterSculpt = function (pre, opts) {
         opts = opts || {};
         var geo = window._arcadePlaneGeo;
@@ -87,7 +97,7 @@
         var jobs = [];
         holes.forEach(function (hole) {
             studiosOf(hole).forEach(function (st) {
-                if (opts.bakeFairwaysOnly && st.kind !== 'fairway') return;
+                if (opts.bakeFairwaysOnly && st.kind !== 'fairway' && st.kind !== 'bunker') return;
                 var bb = st.sd.bbox, dense = st.dense;
                 var delta = null, relevant = false;
                 // cheap scan first: most strokes touch no green/tee at all
@@ -129,14 +139,26 @@
             var fresh = new Float32Array(sd.origHeights);
             j.delta.forEach(function (d, oi) { if (oi >= 0 && oi < fresh.length) fresh[oi] += d; });
             sd.origHeights = fresh;
-            if (j.st.kind !== 'fairway') sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
+            if (j.st.kind === 'green' || j.st.kind === 'tee') sd.baseElevation = (sd.baseElevation || 0) + j.meanIn;
         });
         var done = 0;
         // fairway is the base layer: re-run it before the green and tees that sit on top of it
-        var rank = { fairway: 0, tee: 1, green: 2 };
+        // bunkers are dug last, on top of the finished fairway / green / tee ground
+        var rank = { fairway: 0, tee: 1, green: 2, bunker: 3 };
         jobs.sort(function (a, b) { return rank[a.st.kind] - rank[b.st.kind]; });
+        // a green/tee/fairway re-run resets the ground around it, including the dips of bunkers next to it
+        var reranHoles = new Set();
         jobs.forEach(function (j) {
-            if (!j.rerun || opts.bakeFairwaysOnly) return;
+            if (opts.bakeFairwaysOnly) return;
+            if (j.st.kind === 'bunker') {
+                if (!j.rerun && !reranHoles.has(j.hole)) return;
+                try {
+                    if (typeof window.applyBunkerPipeline === 'function') { window.applyBunkerPipeline(j.hole, false, false, j.st.sd); done++; }
+                } catch (err) { console.error('[reanchor] bunker pipeline failed:', err); }
+                return;
+            }
+            if (!j.rerun) return;
+            reranHoles.add(j.hole);
             try {
                 if (j.st.kind === 'fairway') {
                     if (window.fairwayEditsHeights && window.fairwayEditsHeights(j.st.sd) && typeof window.applyFairwayPipeline === 'function') {

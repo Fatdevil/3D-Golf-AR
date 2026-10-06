@@ -156,6 +156,38 @@ function serve() {
       check('no change means no work', window.reanchorStudiosAfterSculpt(new Float32Array(p)) === 0);
     })();
 
+    // sculpt re-anchor for bunkers: a hill raised over a bunker keeps the dig-out and survives a later bunker edit
+    (function () {
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+      const hh = courseHoles[3] || courseHoles[0];
+      const pts = []; for (let k = 0; k < 8; k++) pts.push({ x: -60 + 6 * Math.cos(k / 8 * 6.283), y: 0, z: -140 + 5 * Math.sin(k / 8 * 6.283) });
+      const snap = window.captureBunkerSnapshot(hh, pts, 15);
+      const bd = { id: 'bk_t', points: pts, depth: 0.8, lipHeight: 0, shape: 'FLAT', sandColor: '#e0d8a4', edgeSharpness: 100, baseElevation: snap.baseElevation, bbox: snap.bbox, origHeights: snap.origHeights, origCanvasPixels: snap.origCanvasPixels };
+      hh.bunkers = [bd]; hh.bunkerData = bd; hh.activeBunkerIndex = 0;
+      window.applyBunkerPipeline(hh, false, false, bd);
+      const dip = function () { return window.getTerrainHeight(-60, -140) - window.getTerrainHeight(-60 + 14, -140); };
+      const dip0 = dip();
+      const pre = new Float32Array(p);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 4 * Math.exp(-((x + 60) * (x + 60) + (z + 140) * (z + 140)) / 200); }
+      const old = bd.origHeights;
+      window.reanchorStudiosAfterSculpt(pre);
+      const hill = 4 * Math.exp(-(14 * 14) / 200);
+      check('hill over a bunker: bunker baseline gets the hill (old array untouched for undo)', bd.origHeights !== old && old.every(function (v) { return Math.abs(v) < 1e-6; }) && Math.max.apply(null, Array.from(bd.origHeights)) > 3.5);
+      check('hill over a bunker: the bunker is still dug into the hill', dip0 < -0.3 && window.getTerrainHeight(-60, -140) > 3 && window.getTerrainHeight(-60 + 14, -140) - hill > -0.15, 'dip0 ' + dip0.toFixed(2) + ' centre ' + window.getTerrainHeight(-60, -140).toFixed(2));
+      bd.depth = 1.2; window.applyBunkerPipeline(hh, false, false, bd);
+      check('editing the bunker later does not flatten the hill', Math.abs(window.getTerrainHeight(-60 + 14, -140) - hill) < 0.3 && window.getTerrainHeight(-60, -140) > 2.5, 'rim ' + window.getTerrainHeight(-60 + 14, -140).toFixed(2) + ' want ' + hill.toFixed(2));
+      // bake-only (mountain / water tools) keeps the baseline in step without touching the ground
+      const pre2 = new Float32Array(p), h2 = window.getTerrainHeight(-60 + 3, -140);
+      for (let i = 0; i < n; i++) { const x = p[i * 3], z = -p[i * 3 + 1]; p[i * 3 + 2] += 1 * Math.exp(-((x + 57) * (x + 57) + (z + 140) * (z + 140)) / 8); }
+      const h2b = window.getTerrainHeight(-60 + 3, -140);
+      window.reanchorStudiosAfterSculpt(pre2, { bakeFairwaysOnly: true });
+      bd.depth = 1.2; window.applyBunkerPipeline(hh, false, false, bd);
+      check('bake-only tools are baked into the bunker baseline too', h2b > h2 + 0.5 && Math.abs(window.getTerrainHeight(-60 + 3, -140) - h2b) < 0.25, h2b.toFixed(2) + ' -> ' + window.getTerrainHeight(-60 + 3, -140).toFixed(2));
+      hh.bunkers = []; hh.bunkerData = null; hh.activeBunkerIndex = null;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
     // fairway slope cap: a hill under the fairway is made gentler (not removed) and restored when the cap is turned off
     (function () {
       const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
