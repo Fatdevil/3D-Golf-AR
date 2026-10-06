@@ -2865,8 +2865,8 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
                     console.warn('[fairway] slope cap not fully reached: ' + (lim.maxSlope * 100).toFixed(1) + ' % (cap ' + (Math.min(capAcross || Infinity, capAlong || Infinity) * 100).toFixed(0) + ' %)');
                     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                     if (typeof window.showBuildToast === 'function') window.showBuildToast(isSv
-                        ? ('Lutningstaket nåddes inte helt (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Höj taket eller dela upp fairwayn.')
-                        : ('Slope cap not fully reached (max ' + (lim.maxSlope * 100).toFixed(0) + ' %). Raise the cap or split the fairway.'), '#f59e0b');
+                        ? ('Marken är för brant för att jämnas ut här (' + (lim.maxSlope * 100).toFixed(0) + ' % kvar). Forma marken först med Platta till eller Ramp, flytta fairwayn eller stäng av lutningstaket.')
+                        : ('The ground is too steep to level here (' + (lim.maxSlope * 100).toFixed(0) + '% left). Shape the ground first with Flatten or Ramp, move the fairway, or turn the slope cap off.'), '#f59e0b');
                 }
                 for (let gz = gzStart; gz <= gzEnd; gz++) {
                     for (let gx = gxStart; gx <= gxEnd; gx++) {
@@ -3460,13 +3460,15 @@ window.executeSmartFairway = function() {
         roughEnabled: roughEnabled,
         mowPattern: mowPattern,
         edgeSharpness: sharpness,
-        maxSlopePct: window._fairwayMaxSlopePct || 0,
-        maxSlopeAlongPct: window._fairwayMaxSlopeAlongPct || 0,
+        // a new fairway never inherits the cap of the previous one: the ground is only reshaped when the builder asks for it
+        maxSlopePct: 0,
+        maxSlopeAlongPct: 0,
         seedOffsetX: (Math.random() - 0.5) * 200,
         seedOffsetZ: (Math.random() - 0.5) * 200
     };
 
     hole.fairways.push(newFairway);
+    window._fairwayMaxSlopePct = 0; window._fairwayMaxSlopeAlongPct = 0;
     hole.activeFairwayIndex = hole.fairways.length - 1;
     hole.fairwayData = hole.fairways[0]; // Mirror primary for backward compatibility
 

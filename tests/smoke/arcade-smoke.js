@@ -339,6 +339,13 @@ function serve() {
         const b2 = spot ? HG.generate({ par: 4, seed: 777, placement: spot }) : null;
         check('an unshaped blueprint job does not inherit a leftover fairway cap', !!b2 && eh2.fairways[0] && !(eh2.fairways[0].maxSlopePct > 0), 'cap ' + (eh2.fairways[0] && eh2.fairways[0].maxSlopePct));
         window._fairwayMaxSlopePct = 0;
+        // a fairway built by hand while the controls still hold an old cap starts with the cap off
+        eh2.fairways = []; eh2.fairwayData = null;
+        window._fairwayMaxSlopePct = 10; window._fairwayMaxSlopeAlongPct = 15;
+        smartGreenPoints = [{ x: -60, y: 0, z: -60 }, { x: -40, y: 0, z: -60 }, { x: -40, y: 0, z: -20 }, { x: -60, y: 0, z: -20 }];
+        window.executeSmartFairway();
+        const fwNew = eh2.fairways[0];
+        check('a new fairway starts with the slope cap off, even if the controls held one', !!fwNew && !(fwNew.maxSlopePct > 0) && !(fwNew.maxSlopeAlongPct > 0) && window._fairwayMaxSlopePct === 0 && window._fairwayMaxSlopeAlongPct === 0, 'cap ' + (fwNew && fwNew.maxSlopePct) + '/' + (fwNew && fwNew.maxSlopeAlongPct));
       })();
       const ctl = document.getElementById('sf-max-slope');
         check('after a yellow build the fairway control and the global cap agree', ctl && Number(ctl.value) === window._fairwayMaxSlopePct, 'control ' + (ctl && ctl.value) + ' global ' + window._fairwayMaxSlopePct);
