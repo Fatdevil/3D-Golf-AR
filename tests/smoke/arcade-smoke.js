@@ -401,6 +401,73 @@ function serve() {
       rclick(-60, 60);
       const reopened = { n: n(), closed: !!window._mtnClosed };
       check('mountain outline: removing a ball (right-click on it) opens a closed outline again', reopened.n === 3 && reopened.closed === false, JSON.stringify(reopened));
+      // the 3D preview of the hill: a see-through surface with the exact heights, redrawn when height / jaggedness change
+      {
+        const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        const prevMesh = function () { return scene.children.find(function (o) { return o.isMesh && o.renderOrder === 996; }); };
+        const topY = function (m) { const a = m.geometry.attributes.position.array; let t = -1e9; for (let i = 1; i < a.length; i += 3) t = Math.max(t, a[i]); return t; };
+        const sig = function (m) { const a = m.geometry.attributes.position.array; let t = 0; for (let i = 1; i < a.length; i += 3) t += a[i]; return t; };
+        const hs = document.getElementById('mtn-spline-height'), js = document.getElementById('mtn-spline-jagged');
+        hs.value = 25; js.value = 0; js.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait(350);
+        const m0 = prevMesh();
+        const fld = window.mtnHillField(window.splinePoints, 25, 0);
+        let fmax = -1e9; fld.inside.forEach(function (v) { fmax = Math.max(fmax, v.newH); });
+        const ok0 = !!m0 && Math.abs(topY(m0) - (fmax + 0.15)) < 0.05;
+        const sig0 = m0 ? sig(m0) : 0;
+        js.value = 100; js.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait(350);
+        const m1 = prevMesh();
+        const ok1 = !!m1 && Math.abs(sig(m1) - sig0) > 1;
+        // the preview replaces itself: exactly one mesh, none after the outline is cleared
+        const count1 = scene.children.filter(function (o) { return o.isMesh && o.renderOrder === 996; }).length;
+        js.value = 50; js.dispatchEvent(new Event('input', { bubbles: true }));
+        check('hill preview: a 3D surface with the exact peak height, redrawn by the jaggedness slider, one mesh at a time', ok0 && ok1 && count1 === 1, JSON.stringify([ok0, ok1, count1, m0 && topY(m0), fmax + 0.15]));
+      }
+      // the preview does a bounded amount of work however detailed the outline is (samples x outline segments), also for extreme outlines
+      {
+        const wait2 = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        const origField = window.mtnHillField, calls = [];
+        window.mtnHillField = function () { const t = performance.now(); const f = origField.apply(this, arguments); calls.push({ stride: f.stride, inside: f.inside.length, work: f.work, ms: performance.now() - t, segs: Math.max(150, arguments[0].length * 30) }); return f; };
+        const keep = window.splinePoints.map(function (p) { return p.clone(); }), keepClosed = window._mtnClosed;
+        const res = [];
+        for (const nPts of [80, 400, 1500]) {
+          calls.length = 0;
+          window.splinePoints.length = 0;
+          for (let i = 0; i < nPts; i++) { const t = i / nPts * Math.PI * 2, rr = 140 * (0.8 + 0.2 * Math.sin(i * 2.3)); window.splinePoints.push(new THREE.Vector3(Math.cos(t) * rr, 0, Math.sin(t) * rr)); }
+          window._mtnClosed = true;
+          const t0 = performance.now(); window.refreshSplinePreview(); const syncMs = performance.now() - t0;
+          await wait2(600);
+          const draftC = calls[0], fullC = calls[calls.length - 1];
+          const draftWork = draftC ? draftC.inside * draftC.segs : 1e12, fullWork = fullC ? fullC.inside * fullC.segs : 1e12;
+          const slow = Math.max.apply(null, calls.map(function (c) { return c.ms; }));
+          res.push({ n: nPts, calls: calls.length, draftWork: draftWork, fullWork: fullWork, syncMs: Math.round(syncMs), slowestFieldMs: Math.round(slow), ok: calls.length >= 2 && draftWork <= 1.2e6 && fullWork <= 9.6e6 && syncMs < 600 && slow < 600 });
+        }
+        // a thin, concave crescent: a big bounding box with very few vertices inside (the outside polygon tests must count too)
+        {
+          calls.length = 0;
+          window.splinePoints.length = 0;
+          const nC = 60;
+          for (let i = 0; i <= nC / 2; i++) { const t = -2.3 + (i / (nC / 2)) * 4.6; window.splinePoints.push(new THREE.Vector3(Math.cos(t) * 150, 0, Math.sin(t) * 150)); }
+          for (let i = nC / 2; i >= 0; i--) { const t = -2.3 + (i / (nC / 2)) * 4.6; window.splinePoints.push(new THREE.Vector3(Math.cos(t) * 143, 0, Math.sin(t) * 143)); }
+          window._mtnClosed = true;
+          window.refreshSplinePreview();
+          await wait2(600);
+          const workOf = function (c) { return c ? c.work : 1e12; };
+          const dW = workOf(calls[0]), fW = workOf(calls[calls.length - 1]);
+          res.push({ n: 'crescent', calls: calls.length, draftWork: dW, fullWork: fW, ok: calls.length >= 2 && dW <= 2.0e6 && fW <= 12e6 });
+        }
+        window.mtnHillField = origField;
+        check('hill preview work is bounded by outline detail (80, 400, 1500 control balls and a thin crescent): draft and final stay within budget', res.every(function (r) { return r.ok; }), JSON.stringify(res));
+        window.splinePoints.length = 0; keep.forEach(function (p) { window.splinePoints.push(p); }); window._mtnClosed = keepClosed; window.refreshSplinePreview();
+      }
+      // a coarse preview uses the build's scale: the heights of the vertices it samples equal the full-resolution ones
+      {
+        const full = window.mtnHillField(window.splinePoints, 25, 1, { stride: 1 }), coarse = window.mtnHillField(window.splinePoints, 25, 1, { stride: 4 });
+        const byIdx = new Map(); full.inside.forEach(function (v) { byIdx.set(v.idx, v.newH); });
+        let worstC = 0, nC = 0; coarse.inside.forEach(function (v) { nC++; worstC = Math.max(worstC, Math.abs(v.newH - byIdx.get(v.idx))); });
+        check('a coarse preview (stride 4) has exactly the heights of the build at the vertices it samples', nC > 200 && Math.abs(full.maxD - coarse.maxD) < 1e-9 && worstC < 1e-6, 'n ' + nC + ' maxD ' + full.maxD + '/' + coarse.maxD + ' worst ' + worstC);
+      }
       // build: a bow-tie is refused, the plain square is built
       const h0 = window.getTerrainHeight(0, 0);
       window.splinePoints.length = 0;
@@ -409,9 +476,20 @@ function serve() {
       const afterBowtie = window.getTerrainHeight(0, 0);
       window.splinePoints.length = 0;
       [[-60, -60], [60, -60], [60, 60], [-60, 60]].forEach(function (c) { window.splinePoints.push(new THREE.Vector3(c[0], 0, c[1])); });
+      const hv = parseFloat(document.getElementById('mtn-spline-height').value) || 25, jv = (parseFloat(document.getElementById('mtn-spline-jagged').value) || 0) / 50;
+      const expected = window.mtnHillField(window.splinePoints, hv, jv);
       window.executeSplineMountain();
+      const posA = planeGeo.attributes.position.array; let worst = 0;
+      expected.inside.forEach(function (v) { worst = Math.max(worst, Math.abs(posA[v.idx * 3 + 2] - v.newH)); });
+      check('what the preview computes is what the build writes (every vertex)', expected.inside.length > 1000 && worst < 1e-4, 'n ' + expected.inside.length + ' worst ' + worst);
       const afterSquare = window.getTerrainHeight(0, 0);
       check('mountain build refuses a crossing outline and builds a plain one', Math.abs(afterBowtie - h0) < 0.01 && afterSquare > h0 + 1, JSON.stringify([h0, afterBowtie, afterSquare]));
+      // the hill-only preview controls (colour legend, mesh toggle) show for hills and are hidden for ridges
+      const ctl = document.getElementById('mtn-hill-preview-ctl');
+      window.setMtnMode('RIDGE'); const hiddenInRidge = ctl.style.display === 'none';
+      window.setMtnMode('SPLINE'); const shownInHill = ctl.style.display !== 'none';
+      check('hill preview controls are hidden in ridge mode and shown for hills', hiddenInRidge && shownInHill, JSON.stringify([hiddenInRidge, shownInHill]));
+      window.setTool('MTN');
       // ridge: an open line, a dot that would cross it is refused
       window._mtnToolMode = 'RIDGE'; window.clearSpline();
       [[-60, -60], [60, -60], [60, 60]].forEach(function (c) { click(c[0], c[1]); });
