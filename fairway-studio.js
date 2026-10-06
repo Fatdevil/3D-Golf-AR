@@ -979,6 +979,15 @@
             if (msS && document.activeElement !== msS && !msDrag) msS.value = msp;
             if (msV && !msDrag) msV.textContent = msp > 0 ? msp.toFixed(0) + '%' : ((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Av' : 'Off');
 
+            // along (uphill / downhill) cap
+            let maS = document.getElementById('sf-max-along');
+            let maV = document.getElementById('sf-max-along-val');
+            let mpa = fd.maxSlopeAlongPct > 0 ? fd.maxSlopeAlongPct : 0;
+            let maDrag = (window._sfDrag === 'sf-max-along');
+            if (!maDrag) window._fairwayMaxSlopeAlongPct = mpa;
+            if (maS && document.activeElement !== maS && !maDrag) maS.value = mpa;
+            if (maV && !maDrag) maV.textContent = mpa > 0 ? mpa.toFixed(0) + '%' : ((window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? 'Som tvärs' : 'Same as across');
+
             // Flik 2 (Bredd & Terräng): Difficulty cards
             let diff = fd.difficulty || 'FLAT';
             window._fairwayDifficulty = diff;

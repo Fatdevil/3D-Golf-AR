@@ -923,10 +923,10 @@
             if (wp.fairway && parts.fairway) {
                 // a fairway on a hill gets a slope cap: the hill stays but becomes playable
                 let capNow = shaped && shaped.indexOf('fairway') >= 0;
-                let prevCap = root._fairwayMaxSlopePct;
+                let prevCap = root._fairwayMaxSlopePct, prevAlong = root._fairwayMaxSlopeAlongPct;
                 // built WITHOUT a cap first: the green does not exist yet, so the limiter could not keep its footprint locked.
                 // The cap is applied at the end of the build (below), when the green, tees and bunkers are in place.
-                root._fairwayMaxSlopePct = 0;
+                root._fairwayMaxSlopePct = 0; root._fairwayMaxSlopeAlongPct = 0;
                 try { buildShape('FAIRWAY', wp.fairway, function () { root.executeSmartFairway(); }); }
                 finally {
                     // from here the global follows the Fairway Studio control again
@@ -934,6 +934,9 @@
                     let ctl = root.document && root.document.getElementById('sf-max-slope');
                     let shown = ctl ? parseFloat(ctl.value) : NaN;
                     root._fairwayMaxSlopePct = isFinite(shown) ? shown : prevCap;
+                    let ctlA = root.document && root.document.getElementById('sf-max-along');
+                    let shownA = ctlA ? parseFloat(ctlA.value) : NaN;
+                    root._fairwayMaxSlopeAlongPct = isFinite(shownA) ? shownA : prevAlong;
                 }
                 if (capNow) cappedFairway = hole.fairways && hole.fairways[hole.fairways.length - 1];
             }

@@ -156,6 +156,67 @@ function serve() {
       check('no change means no work', window.reanchorStudiosAfterSculpt(new Float32Array(p)) === 0);
     })();
 
+    // separate slope caps along (uphill / downhill) and across (side slope) the fairway
+    (function () {
+      // 1. the limiter alone, on tilted planes (axis of play = +x)
+      const N = 80, mk = function (sx, sz, bump) { const h = new Float32Array(N * N), w = new Float32Array(N * N).fill(1), tx = new Float32Array(N * N).fill(1), tz = new Float32Array(N * N);
+        for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) h[z * N + x] = sx * x + sz * z + (bump ? bump * Math.sin(x * 0.4) * Math.cos(z * 0.3) : 0);
+        return { h: h, w: w, tx: tx, tz: tz }; };
+      const slopeAlong = function (h) { let t = 0, n = 0; for (let z = 20; z < 60; z++) for (let x = 20; x < 59; x++) { t += Math.abs(h[z * N + x + 1] - h[z * N + x]); n++; } return t / n; };
+      const slopeAcross = function (h) { let t = 0, n = 0; for (let z = 20; z < 59; z++) for (let x = 20; x < 60; x++) { t += Math.abs(h[(z + 1) * N + x] - h[z * N + x]); n++; } return t / n; };
+      const run = function (f, along, across) { const h0 = Float32Array.from(f.h); const r = window.limitHeightSlope(f.h, f.w, N, N, along, 1, 3000, 4000, { across: across, tx: f.tx, tz: f.tz }); return { r: r, h0: h0 }; };
+      const a = mk(0.12, 0, 0), ra = run(a, 0.15, 0.06);
+      let moved = 0; for (let i = 0; i < a.h.length; i++) moved = Math.max(moved, Math.abs(a.h[i] - ra.h0[i]));
+      check('limiter: a 12 % uphill along the fairway is left alone under a 15 % along cap', moved < 1e-4 && ra.r.converged, 'moved ' + moved);
+      const b = mk(0, 0.12, 0), rb = run(b, 0.15, 0.06);
+      check('limiter: a 12 % side slope is cut to the 6 % across cap (not flattened)', rb.r.converged && slopeAcross(b.h) > 0.05 && slopeAcross(b.h) < 0.0645, 'across ' + (slopeAcross(b.h) * 100).toFixed(2) + ' %');
+      const c = mk(0.20, 0, 0), rc = run(c, 0.15, 0.06);
+      check('limiter: a 20 % uphill is cut down to the 15 % along cap (the sweeps overshoot a little, as for the single cap)', rc.r.converged && slopeAlong(c.h) > 0.12 && slopeAlong(c.h) < 0.1575, 'along ' + (slopeAlong(c.h) * 100).toFixed(2) + ' %');
+      const d = mk(0.12, 0.12, 0), rd = run(d, 0.15, 0.06);
+      const ar = slopeAlong(d.h), ac = slopeAcross(d.h), ell = Math.sqrt(Math.pow(ar / 0.15, 2) + Math.pow(ac / 0.06, 2));
+      check('limiter: a diagonal slope ends on the cap ellipse', rd.r.converged && ell > 0.75 && ell < 1.07, 'along ' + (ar * 100).toFixed(1) + ' % across ' + (ac * 100).toFixed(1) + ' % ellipse ' + ell.toFixed(3));
+      // equal caps give exactly the old single cap
+      const e1 = mk(0.1, 0.07, 1.2), e2 = mk(0.1, 0.07, 1.2);
+      window.limitHeightSlope(e1.h, e1.w, N, N, 0.08, 1, 3000, 4000, { across: 0.08, tx: e1.tx, tz: e1.tz });
+      window.limitHeightSlope(e2.h, e2.w, N, N, 0.08, 1, 3000, 4000);
+      let same = 0; for (let i = 0; i < e1.h.length; i++) same = Math.max(same, Math.abs(e1.h[i] - e2.h[i]));
+      check('limiter: equal along / across caps behave exactly like the single cap', same < 1e-4, 'max diff ' + same);
+
+      // 2. the direction of play
+      const A1 = window.fairwayAxisField({ tees: { red: { x: 0, z: 100 } }, flag: { x: 0, z: -100 } }, { points: [] })(5, 0);
+      const f2 = window.fairwayAxisField({ tees: { red: { x: 0, z: 100 } }, aimPoint: { x: 0, z: 0 }, flag: { x: 100, z: 0 } }, { points: [] });
+      const A2 = f2(0, 60), A3 = f2(70, 0), A4 = f2(0, 3);
+      const A5 = window.fairwayAxisField({}, { points: [{ x: -40, z: 0 }, { x: 40, z: 0 }, { x: 40, z: 10 }, { x: -40, z: 10 }] })(0, 5);
+      check('direction of play: straight hole, dogleg (turns with the line, blended at the bend) and the outline fallback',
+        Math.abs(A1[1]) > 0.99 && Math.abs(A2[1]) > 0.98 && Math.abs(A3[0]) > 0.98 && Math.abs(A4[0]) > 0.1 && Math.abs(A4[1]) > 0.1 && Math.abs(A5[0]) > 0.99, JSON.stringify([A1, A2, A3, A4, A5]));
+
+      // 3. through the fairway pipeline, on ridges that are steep in only ONE direction (a uniform tilt cannot be levelled: the
+      //    outline is pinned to the ground around it). Hole line runs along z.
+      const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
+      const hh = courseHoles[2] || courseHoles[0];
+      const keep = { fairways: hh.fairways, fairwayData: hh.fairwayData, active: hh.activeFairwayIndex, tees: hh.tees, flag: hh.flag, aim: hh.aimPoint, green: hh.greenData };
+      const pts = [{ x: -14, y: 0, z: 100 }, { x: 14, y: 0, z: 100 }, { x: 14, y: 0, z: 200 }, { x: -14, y: 0, z: 200 }];
+      hh.greenData = null; hh.aimPoint = null; hh.tees = { red: { x: 0, y: 0, z: 40 } }; hh.flag = { x: 0, z: 260 };
+      const centreH = function () { return window.getTerrainHeight(0, 150); };
+      const res = {};
+      // steep along z (sigma 8), gentle across (sigma 60: 3 %) / steep across x, gentle along z
+      [['alongSteep', function (x, z) { return 3 * Math.exp(-(x * x / (2 * 60 * 60) + (z - 150) * (z - 150) / (2 * 8 * 8))); }],
+       ['acrossSteep', function (x, z) { return 3 * Math.exp(-(x * x / (2 * 8 * 8) + (z - 150) * (z - 150) / (2 * 60 * 60))); }]].forEach(function (cs) {
+        for (let i = 0; i < n; i++) p[i * 3 + 2] = cs[1](p[i * 3], -p[i * 3 + 1]);
+        const snap = window.captureFairwaySnapshot(hh, pts, 35);
+        const fd = { id: 'fw_ax', points: pts, baseElevation: snap.baseElevation, bbox: snap.bbox, origHeights: snap.origHeights, origCanvasPixels: snap.origCanvasPixels, difficulty: 'FLAT', semiRoughWidth: 2, roughWidth: 5, roughEnabled: true, mowPattern: 'SOLID', edgeSharpness: 100, maxSlopePct: 6, maxSlopeAlongPct: 0, seedOffsetX: 0, seedOffsetZ: 0 };
+        hh.fairways = [fd]; hh.fairwayData = fd; hh.activeFairwayIndex = 0;
+        window.applyFairwayPipeline(hh, false, false, fd); const single = centreH();
+        fd.maxSlopeAlongPct = 15; window.applyFairwayPipeline(hh, false, false, fd); const split = centreH();
+        fd.maxSlopePct = 0; fd.maxSlopeAlongPct = 0; window.applyFairwayPipeline(hh, false, false, fd); const natural = centreH();
+        res[cs[0]] = { natural: +natural.toFixed(2), single6: +single.toFixed(2), split6_15: +split.toFixed(2) };
+      });
+      check('fairway 6 % across / 15 % along: a ridge steep ALONG the fairway is levelled much less than with one 6 % cap', res.alongSteep.natural > 2.9 && res.alongSteep.split6_15 > res.alongSteep.single6 + 0.4, JSON.stringify(res.alongSteep));
+      check('fairway 6 % across / 15 % along: a ridge steep ACROSS the fairway is levelled as with the 6 % cap', res.acrossSteep.natural > 2.9 && Math.abs(res.acrossSteep.split6_15 - res.acrossSteep.single6) < 0.25, JSON.stringify(res.acrossSteep));
+      hh.fairways = keep.fairways; hh.fairwayData = keep.fairwayData; hh.activeFairwayIndex = keep.active; hh.tees = keep.tees; hh.flag = keep.flag; hh.aimPoint = keep.aim; hh.greenData = keep.green;
+      for (let i = 0; i < n; i++) p[i * 3 + 2] = 0;
+    })();
+
     // fairway slope cap: a hill under the fairway is made gentler (not removed) and restored when the cap is turned off
     (function () {
       const p = planeGeo.attributes.position.array, n = planeGeo.attributes.position.count;
