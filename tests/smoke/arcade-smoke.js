@@ -424,6 +424,13 @@ function serve() {
         js.value = 50; js.dispatchEvent(new Event('input', { bubbles: true }));
         check('hill preview: a 3D surface with the exact peak height, redrawn by the jaggedness slider, one mesh at a time', ok0 && ok1 && count1 === 1, JSON.stringify([ok0, ok1, count1, m0 && topY(m0), fmax + 0.15]));
       }
+      // a coarse preview uses the build's scale: the heights of the vertices it samples equal the full-resolution ones
+      {
+        const full = window.mtnHillField(window.splinePoints, 25, 1, { stride: 1 }), coarse = window.mtnHillField(window.splinePoints, 25, 1, { stride: 4 });
+        const byIdx = new Map(); full.inside.forEach(function (v) { byIdx.set(v.idx, v.newH); });
+        let worstC = 0, nC = 0; coarse.inside.forEach(function (v) { nC++; worstC = Math.max(worstC, Math.abs(v.newH - byIdx.get(v.idx))); });
+        check('a coarse preview (stride 4) has exactly the heights of the build at the vertices it samples', nC > 200 && Math.abs(full.maxD - coarse.maxD) < 1e-9 && worstC < 1e-6, 'n ' + nC + ' maxD ' + full.maxD + '/' + coarse.maxD + ' worst ' + worstC);
+      }
       // build: a bow-tie is refused, the plain square is built
       const h0 = window.getTerrainHeight(0, 0);
       window.splinePoints.length = 0;
@@ -440,6 +447,12 @@ function serve() {
       check('what the preview computes is what the build writes (every vertex)', expected.inside.length > 1000 && worst < 1e-4, 'n ' + expected.inside.length + ' worst ' + worst);
       const afterSquare = window.getTerrainHeight(0, 0);
       check('mountain build refuses a crossing outline and builds a plain one', Math.abs(afterBowtie - h0) < 0.01 && afterSquare > h0 + 1, JSON.stringify([h0, afterBowtie, afterSquare]));
+      // the hill-only preview controls (colour legend, mesh toggle) show for hills and are hidden for ridges
+      const ctl = document.getElementById('mtn-hill-preview-ctl');
+      window.setMtnMode('RIDGE'); const hiddenInRidge = ctl.style.display === 'none';
+      window.setMtnMode('SPLINE'); const shownInHill = ctl.style.display !== 'none';
+      check('hill preview controls are hidden in ridge mode and shown for hills', hiddenInRidge && shownInHill, JSON.stringify([hiddenInRidge, shownInHill]));
+      window.setTool('MTN');
       // ridge: an open line, a dot that would cross it is refused
       window._mtnToolMode = 'RIDGE'; window.clearSpline();
       [[-60, -60], [60, -60], [60, 60]].forEach(function (c) { click(c[0], c[1]); });

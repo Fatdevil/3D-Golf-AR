@@ -6707,6 +6707,25 @@ window.mtnHillField = function(points, height, jagMul, opts) {
             }
         }
     }
+    // The height of every vertex is scaled by the largest distance to the edge. A coarse sample can miss the true maximum, so look at
+    // the full-resolution neighbourhood of the best samples: the preview then uses the same scale as the build at every stride.
+    if (stride > 1 && maxD > 0) {
+        const r = Math.ceil(0.72 * stride), slack = 1.5 * stride * step, seen = new Set();
+        const cand = inside.filter(v => v.d >= maxD - slack);
+        cand.forEach(c => {
+            for (let gz = Math.max(0, c.gz - r); gz <= Math.min(segs, c.gz + r); gz++) {
+                for (let gx = Math.max(0, c.gx - r); gx <= Math.min(segs, c.gx + r); gx++) {
+                    const idx = gz * rowLen + gx;
+                    if (seen.has(idx)) continue;
+                    seen.add(idx);
+                    const vx = positions[idx * 3], vz = -positions[idx * 3 + 1];
+                    if (!pointInPolygon(vx, vz, densePts)) continue;
+                    const d = minDistanceToPolygon(vx, vz, densePts);
+                    if (d > maxD) maxD = d;
+                }
+            }
+        });
+    }
     if (maxD > 0) {
         const fbm = window.fbm || function() { return 0; };
         inside.forEach(v => {
