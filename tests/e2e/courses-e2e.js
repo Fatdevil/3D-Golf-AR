@@ -179,6 +179,19 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const still = (await pool.query('SELECT is_draft, name FROM courses WHERE share_code = $1', [code])).rows[0];
     check('a published course cannot be saved back to a draft by a stale tab (409, row untouched)', stale.status === 409 && stale.body.code === 'already_published' && still.is_draft === false && still.name !== 'Stale', JSON.stringify([stale, still]));
 
+    // overlapping publish and stale draft saves: whatever the order, a course that was published never ends as a draft
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id) SELECT $1 || '-R' || g, 'Race ' || g, 'o', '[]'::jsonb, true, $2 FROM generate_series(1, 25) g", [tag, deviceId]);
+    const race = await page.evaluate(async function (t) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const post = function (c, draft) { return fetch('/api/courses', { method: 'POST', headers: hdr, body: JSON.stringify({ name: draft ? 'stale' : 'published', holes: [], edit_code: c, is_draft: draft }) }).then(function (r) { return r.status; }); };
+      const jobs = [];
+      for (let g = 1; g <= 25; g++) { const c = t + '-R' + g; jobs.push(Promise.all([post(c, false), post(c, true), post(c, true)])); }
+      return Promise.all(jobs);
+    }, tag);
+    const raced = (await pool.query("SELECT count(*) FILTER (WHERE is_draft) AS drafts, count(*) AS n FROM courses WHERE share_code LIKE $1", [tag + '-R%'])).rows[0];
+    check('overlapping publish and stale draft saves never leave a published course as a draft (25 courses)', Number(raced.drafts) === 0 && race.every(function (r) { return r[0] === 200; }), JSON.stringify([raced, race.filter(function (r) { return r[0] !== 200; }).length]));
+    await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-R%']);
+
     // 8. a draft can be deleted from the list
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 99 }); document.getElementById('course-name-input').value = 'Att radera'; smartSaveDraft(); }); await wait(6000);

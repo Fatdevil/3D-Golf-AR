@@ -808,6 +808,7 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                      course_rating=$17, slope_rating=$18, stroke_index=$19,
                      updated_at=CURRENT_TIMESTAMP ${versionBump}
                  WHERE share_code=$9 
+                   AND ($8 = false OR is_draft = true) -- decided in the same statement: a request that overlaps a publish cannot take the course back to a draft
                  RETURNING share_code, version`,
                 [
                     c_name, c_author, 
@@ -821,6 +822,10 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                 ]
             );
             
+            if (updateResult.rows.length === 0 && draftStatus && ownerCheck.rows.length > 0) {
+                // the course exists but was published between the check above and the update
+                return res.status(409).json({ error: 'This course is already published. Use Publish to update it.', code: 'already_published' });
+            }
             if (updateResult.rows.length > 0) {
                 return res.json({ success: true, share_code: updateResult.rows[0].share_code, version: updateResult.rows[0].version });
             }
