@@ -443,6 +443,7 @@
   "polySetCategory:function",
   "polylineSelfIntersects:function",
   "promptNewPresetFromLibrary:function",
+  "propIsHidden:function",
   "propsMixEnabled:boolean",
   "propsVarianceEnabled:boolean",
   "publishCourse:function",

@@ -987,6 +987,19 @@ function serve() {
     });
     await pp.mouse.move(setup.cx, setup.cy); await pp.waitForTimeout(150); await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
     const afterClick = await pp.evaluate(function () { return { sel: window.selectedPropIndex, panel: getComputedStyle(document.getElementById('prop-editor-panel')).display, pointerdowns: window.__pd }; });
+    // a small prop buried deep (its geometry cannot be hit by the ray at all): a click next to its base must not pick it either; at ground level it is picked
+    await pp.evaluate(function () {
+      const t = window.__t; scene.remove(t.buried); window._propMeshes = window._propMeshes.filter(function (mm) { return mm !== t.buried; }); window.placedTrees.length = t.n0;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); const q = raycaster.intersectObject(plane)[0].point;
+      window.placedTrees.push({ type: 'zz_small', x: q.x, z: q.z, y: q.y, yOffset: -45, scale: 1, rot: 0 });
+      window.deselectProp();
+    });
+    await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
+    const smallBuried = await pp.evaluate(function () { return { sel: window.selectedPropIndex, hidden: window.propIsHidden(window.placedTrees[window.placedTrees.length - 1]) }; });
+    await pp.evaluate(function () { window.placedTrees[window.placedTrees.length - 1].yOffset = 0; window.deselectProp(); });
+    await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
+    const smallVisible = await pp.evaluate(function () { return { sel: window.selectedPropIndex, expect: window.placedTrees.length - 1 }; });
+    checks.push({ name: 'a small prop buried deep is not picked by a click next to its base; at ground level it is', ok: smallBuried.hidden === true && smallBuried.sel == null && smallVisible.sel === smallVisible.expect, detail: JSON.stringify([smallBuried, smallVisible]) });
     // the same prop standing on the ground is picked
     const above = await pp.evaluate(function () {
       const t = window.__t; scene.remove(t.buried); window._propMeshes = window._propMeshes.filter(function (m) { return m !== t.buried; }); window.placedTrees.length = t.n0;
