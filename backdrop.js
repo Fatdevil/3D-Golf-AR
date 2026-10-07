@@ -33,7 +33,7 @@
     // ---- exact footprint ---------------------------------------------------------------------------------
     // A model is scaled uniformly so its HEIGHT equals the asset's targetHeight, and is centred on x/z (arcade.html loadAsset),
     // so its width and depth are whatever the mesh happens to be. We therefore read the loaded mesh itself: the convex hull of
-    // every vertex seen from above, in metres at scale 1. A placed figure is that hull * o.scale, turned by o.rot about Y.
+    // every vertex seen from above, in metres at scale 1. A placed figure is that hull * o.scale, turned the way the renderer turns it.
     // fpCache holds a hull per type; a type whose model has not loaded yet gets none, and the old rough circle is used meanwhile.
     const fpCache = {};
     const fpAsked = {};
@@ -46,31 +46,46 @@
         lo.pop(); up.pop();
         return lo.concat(up);
     }
+    // Mirrors rebuildInstancePool (arcade.html): each sub-mesh sits at the instance position + its world position * scale, UNturned,
+    // and only its geometry (stretched by the mesh's world scale) is turned by the instance's Euler YXZ rotation and scaled.
+    // A vertex therefore lands at  offset + R * (localVertex * worldScale)  ; we keep both parts per sampled vertex.
     function computeFootprint(type) {
         const model = root.customModels && root.customModels[type];
         if (!model || model === 'LOADING' || !model.isObject3D) return null;
         model.updateWorldMatrix(true, true);
-        const pts = [], pts3 = [];
+        const pts = [];   // [localX, localY, localZ, offsetX, offsetZ]
         let total = 0;
         model.traverse(function (m) { if (m.isMesh && m.geometry && m.geometry.attributes.position) total += m.geometry.attributes.position.count; });
-        const stride = Math.max(1, Math.ceil(total / 40000)), stride3 = stride * Math.max(1, Math.ceil(total / stride / 4000));   // a mountain can have a million vertices; the outline does not need them all
+        const stride = Math.max(1, Math.ceil(total / 8000));   // a mountain can have a million vertices; the outline does not need them all
         model.traverse(function (m) {
             if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
-            const pos = m.geometry.attributes.position;
-            const e = m.matrixWorld.elements;
-            for (let i = 0; i < pos.count; i += stride) {
-                const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-                const wx = e[0] * x + e[4] * y + e[8] * z + e[12], wy = e[1] * x + e[5] * y + e[9] * z + e[13], wz = e[2] * x + e[6] * y + e[10] * z + e[14];
-                pts.push([wx, wz]);
-                if (i % stride3 === 0) pts3.push([wx, wy, wz]);   // a thinner 3D sample, for figures that are tilted or rolled
-            }
+            const pos = m.geometry.attributes.position, e = m.matrixWorld.elements;
+            const sx = Math.hypot(e[0], e[1], e[2]), sy = Math.hypot(e[4], e[5], e[6]), sz = Math.hypot(e[8], e[9], e[10]);
+            for (let i = 0; i < pos.count; i += stride) pts.push([pos.getX(i) * sx, pos.getY(i) * sy, pos.getZ(i) * sz, e[12], e[14]]);
         });
         if (pts.length < 3) return null;
-        const hull = convexHull(pts);
-        if (hull.length < 3) return null;
+        const fp = { pts: pts, model: model, sx: model.scale.x, cache: {}, reach: 0 };
+        // furthest a vertex can be from the centre when the figure is only turned about Y (what "Runt om hela" does)
+        pts.forEach(function (p) { fp.reach = Math.max(fp.reach, Math.hypot(p[3], p[4]) + Math.hypot(p[0], p[2])); });
+        const flat = outlineFor(fp, 0, 0, 0);
+        fp.w = flat.w; fp.d = flat.d;
+        return fp;
+    }
+    // Outline of a figure at scale 1 relative to its centre, for the given turn/tilt/roll (cached per angle set)
+    function outlineFor(fp, rot, tilt, roll) {
+        const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3);
+        if (fp.cache[key]) return fp.cache[key];
+        const cz = Math.cos(roll), sz = Math.sin(roll), cx = Math.cos(tilt), sx = Math.sin(tilt), cy = Math.cos(rot), sy = Math.sin(rot);
+        const flat = fp.pts.map(function (p) {
+            const x1 = p[0] * cz - p[1] * sz, y1 = p[0] * sz + p[1] * cz;
+            const z2 = y1 * sx + p[2] * cx;
+            return [p[3] + x1 * cy + z2 * sy, p[4] - x1 * sy + z2 * cy];
+        });
+        const hull = convexHull(flat);
         let rad = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
         hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minZ = Math.min(minZ, p[1]); maxZ = Math.max(maxZ, p[1]); });
-        return { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ, pts3: pts3, model: model, sx: model.scale.x, tilted: {} };
+        if (Object.keys(fp.cache).length > 400) fp.cache = {};
+        return (fp.cache[key] = { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ });
     }
     function footprintOf(type) {
         const hit = fpCache[type], live = root.customModels && root.customModels[type];
@@ -82,31 +97,10 @@
         if (!fpAsked[type] && typeof root.loadAsset === 'function' && reg(type)) { fpAsked[type] = true; try { root.loadAsset(type); } catch (err) { /* stays a circle */ } }
         return null;
     }
-    // Outline of a figure at scale 1, relative to its centre, turned the way rebuildInstancePool turns it (Euler YXZ: tilt, turn, roll).
-    // Without tilt or roll that is the cached hull; with them the 3D sample is turned and a new hull taken (cached per angle set).
+    // Outline of a placed figure at scale 1, relative to its centre, turned the way rebuildInstancePool turns it (Euler YXZ)
     function relativeOutline(o) {
         const fp = footprintOf(o.type);
-        if (!fp) return null;
-        const rot = o.rot || 0, tilt = o.tiltX || 0, roll = o.rollZ || 0;
-        if (!tilt && !roll) {
-            const c = Math.cos(rot), n = Math.sin(rot);
-            return { hull: fp.hull.map(function (p) { return [p[0] * c + p[1] * n, -p[0] * n + p[1] * c]; }), rad: fp.rad };
-        }
-        const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3);
-        if (!fp.tilted[key]) {
-            const cz = Math.cos(roll), sz = Math.sin(roll), cx = Math.cos(tilt), sx = Math.sin(tilt), cy = Math.cos(rot), sy = Math.sin(rot);
-            const flat = fp.pts3.map(function (p) {
-                const x1 = p[0] * cz - p[1] * sz, y1 = p[0] * sz + p[1] * cz;
-                const y2 = y1 * cx - p[2] * sx, z2 = y1 * sx + p[2] * cx;
-                return [x1 * cy + z2 * sy, -x1 * sy + z2 * cy];
-            });
-            const hull = flat.length >= 3 ? convexHull(flat) : [];
-            let rad = 0;
-            hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); });
-            if (Object.keys(fp.tilted).length > 40) fp.tilted = {};
-            fp.tilted[key] = hull.length >= 3 ? { hull: hull, rad: rad } : { hull: fp.hull, rad: fp.rad };
-        }
-        return fp.tilted[key];
+        return fp ? outlineFor(fp, o.rot || 0, o.tiltX || 0, o.rollZ || 0) : null;
     }
     // The figure's outline on the ground in world metres, or null while its model has not loaded
     function outlineOf(o) {
@@ -419,13 +413,20 @@
         refresh();
     }
     // Place figures evenly around the plate with open ground between plate and figure
-    function ring() {
+    function ring(waited) {
         const type = B.shelfType || (B.sel && B.sel.type);
         const d = type && reg(type);
         if (!d) { toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
+        // the real size is only known once the model has loaded: wait for it (up to ~10 s) rather than lay out a guess
+        if (!footprintOf(type) && !(waited >= 20)) {
+            say(tr('bd_loading', 'Laddar figuren…'));
+            const mine = B;
+            setTimeout(function () { if (B === mine) ring((waited || 0) + 1); }, 500);
+            return;
+        }
         undoPoint();
         const H = d.targetHeight || 10, half = plateHalf(), a0 = Math.random() * Math.PI * 2, limit = VIEW * 0.95;
-        const fp = footprintOf(type), unitR = fp ? fp.rad : 0.6 * H;   // reach of one figure at scale 1, whatever way it is turned
+        const fp = footprintOf(type), unitR = fp ? fp.reach : 0.6 * H;   // reach of one figure at scale 1, whatever way it is turned
         // distance from the plate square (not from its centre) to a point at distance t along the direction (ux, uz)
         function gapAt(t, ux, uz) { return Math.hypot(Math.max(0, Math.abs(ux * t) - half), Math.max(0, Math.abs(uz * t) - half)); }
         for (let k = 0; k < RING_COUNT; k++) {
@@ -577,7 +578,7 @@
         const bigBtn = btn(tr('bd_big', 'Stora'), function () { B.showAll = false; refresh(); }, 'min-height:32px; font-size:12px;');
         const allBtn = btn(tr('bd_all', 'Alla'), function () { B.showAll = true; refresh(); }, 'min-height:32px; font-size:12px;');
         filters.appendChild(bigBtn); filters.appendChild(allBtn);
-        const ring_ = btn(tr('bd_ring', '🔁 Runt om hela'), ring, 'flex:1; min-height:32px; font-size:12px; background:#7c2d12; color:#fff;');
+        const ring_ = btn(tr('bd_ring', '🔁 Runt om hela'), function () { ring(0); }, 'flex:1; min-height:32px; font-size:12px; background:#7c2d12; color:#fff;');
         filters.appendChild(ring_);
 
         const shelf = document.createElement('div');
