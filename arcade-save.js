@@ -667,6 +667,7 @@
         // a published course is never overwritten by playing it: its edits go to a separate draft copy that is reused each time
         const origCode = currentEditCode;
         const published = !!origCode && !!window._editIsPublished;
+        window._playCopySource = published ? origCode : null; // the copy remembers its course, so deleting the course removes it too
         window._savingPlayCopy = published; // the copy is bookkeeping, not one of the builder's drafts (kept out of "My drafts")
         if (published) { try { currentEditCode = localStorage.getItem('golfPlayCopy_' + origCode) || null; } catch (e) { currentEditCode = null; } }
         let saved = false;
@@ -833,7 +834,7 @@
                 // a published course's holes keep only what is played; the builder's own definitions go along for its owner
                 builder_holes: options.isDraft ? undefined : window.serializeHolesFull(),
                 is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
-                theme_data: { _playCopy: window._savingPlayCopy ? true : undefined, biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR', enableOrganicNoise: window.ENABLE_ORGANIC_NOISE },
+                theme_data: { _playCopy: window._savingPlayCopy ? true : undefined, _playCopyOf: window._savingPlayCopy ? (window._playCopySource || undefined) : undefined, biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR', enableOrganicNoise: window.ENABLE_ORGANIC_NOISE },
                 owner_id: window.GolfAuth?.userId || null,
                 cover_image: (window.capturedPhotos && window.capturedPhotos.length > 0) 
                     ? window.capturedPhotos[window.coverImageIndex || 0] 

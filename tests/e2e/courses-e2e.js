@@ -161,6 +161,16 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const drafts3 = await cards('#drafts-carousel');
     check('list: the play copy is not shown among My drafts', drafts3.filter(function (n) { return n !== 'Snabbutkast'; }).length === 0, JSON.stringify(drafts3));
 
+    const ofRow = (await pool.query("SELECT theme_data->>'_playCopyOf' AS src FROM courses WHERE share_code = $1", [copy && copy.share_code])).rows[0];
+    check('Save & play: the play copy remembers which course it belongs to', ofRow && ofRow.src === code, JSON.stringify(ofRow));
+    // deleting a course takes its play copy with it (and leaves other courses' copies alone)
+    const dp = tag + '-DP', dc = tag + '-DC', dk = tag + '-DK';
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, theme_data) VALUES ($1,'Del','o','[]'::jsonb,false,$4,'{}'::jsonb), ($2,'Del copy','o','[]'::jsonb,true,$4,$5::jsonb), ($3,'Other copy','o','[]'::jsonb,true,$4,$6::jsonb)", [dp, dc, dk, deviceId, JSON.stringify({ _playCopy: true, _playCopyOf: dp }), JSON.stringify({ _playCopy: true, _playCopyOf: code })]);
+    const delRes = await page.evaluate(async function (c) { const r = await fetch('/api/courses/' + c, { method: 'DELETE', headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') } }); return r.status; }, dp);
+    const left = (await pool.query("SELECT share_code FROM courses WHERE share_code IN ($1,$2,$3) ORDER BY share_code", [dp, dc, dk])).rows.map(function (x) { return x.share_code; });
+    check('delete: a course takes its play copy with it, other courses\' copies stay', delRes === 200 && left.length === 1 && left[0] === dk, JSON.stringify([delRes, left]));
+    await pool.query("DELETE FROM courses WHERE share_code = $1", [dk]);
+
     // an older course whose draft flag is NULL counts as published: publishing it again is a new version
     const legacyCode = tag + '-L';
     await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, version) VALUES ($1, 'Legacy', 'o', '[]'::jsonb, NULL, $2, 1)", [legacyCode, deviceId]);

@@ -886,11 +886,15 @@ app.delete('/api/courses/:code', requireDB, authMiddleware, async (req, res) => 
             return res.status(403).json({ error: 'You are not the owner of this course' });
         }
         
+        // A published course that was play-tested has a hidden draft copy of its own (Save & play); it goes with the course
+        const copies = (await pool.query("SELECT share_code FROM courses WHERE theme_data->>'_playCopyOf' = $1 AND owner_id IS NOT DISTINCT FROM $2", [code, course.rows[0].owner_id])).rows.map(r => r.share_code);
+        const doomed = [code].concat(copies);
+
         // Delete leaderboard records first (foreign key integrity)
-        await pool.query('DELETE FROM course_records WHERE course_code = $1', [code]);
+        await pool.query('DELETE FROM course_records WHERE course_code = ANY($1)', [doomed]);
         
         // Delete the course
-        await pool.query('DELETE FROM courses WHERE share_code = $1', [code]);
+        await pool.query('DELETE FROM courses WHERE share_code = ANY($1)', [doomed]);
         
         console.log('🗑️ Course deleted:', code, 'by user:', req.userId.substring(0, 8) + '...');
         res.json({ success: true, deleted: code });
