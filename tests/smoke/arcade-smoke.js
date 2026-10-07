@@ -875,6 +875,17 @@ function serve() {
       document.getElementById('voice-btn').click();
       const rp = window.__sr[window.__sr.length - 1]; rp.onerror({ error: 'no-speech' });
       check('voice: a pause without speech keeps listening', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'true');
+      // hole navigation: an unfinished hole keeps its own "Finish hole" message, a finished one moves on
+      const h0 = courseHoles[0], keep = { tees: h0.tees, flag: h0.flag, aim: h0.aimPoint }, idx0 = window.currentHoleIndex;
+      window.changeHoleTo(0); h0.tees = {}; h0.flag = null; h0.aimPoint = null;
+      say('next hole'); await new Promise(function (r) { setTimeout(r, 100); });
+      const tBlocked = (document.getElementById('build-toast') || {}).textContent || '';
+      const stayed = window.currentHoleIndex === 0;
+      h0.tees = { yellow: { x: 0, z: 0 } }; h0.flag = { x: 0, z: -8 }; h0.aimPoint = { x: 0, z: -4 };
+      say('next hole'); await new Promise(function (r) { setTimeout(r, 100); });
+      const moved = window.currentHoleIndex === 1, tMoved = (document.getElementById('build-toast') || {}).textContent || '';
+      window.changeHoleTo(0); h0.tees = keep.tees; h0.flag = keep.flag; h0.aimPoint = keep.aim;
+      check('voice: "next hole" keeps the Finish-hole message when the hole is unfinished and announces only a real move', stayed && /Finish Hole/.test(tBlocked) && moved && /Next hole|Nästa hål/.test(tMoved), JSON.stringify([stayed, tBlocked, moved, tMoved]));
       // "spara" says saved only when the write happened
       const sq = window.saveQuickDraft; const toastText = function () { const t = document.getElementById('build-toast'); return t ? t.textContent : ''; };
       window.saveQuickDraft = function () { return Promise.resolve({ ok: 1 }); }; say('spara'); await new Promise(function (r) { setTimeout(r, 100); }); const tOk = toastText();

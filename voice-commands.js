@@ -102,7 +102,11 @@
             case 'redo': if (typeof root.performRedo === 'function') { root.performRedo(); toast('🎙️ ' + tx('redo')); return true; } return false;
             case 'hole':
                 if (typeof root.changeHole !== 'function') return false;
-                root.changeHole(cmd.value); if (typeof root.updateSBHoleDisplay === 'function') root.updateSBHoleDisplay();
+                const from = root.currentHoleIndex;
+                root.changeHole(cmd.value);
+                // changeHole explains itself when it refuses (a hole without tee, flag or aim point) or is at the end: say nothing then, so its message stays
+                if (root.currentHoleIndex === from) return false;
+                if (typeof root.updateSBHoleDisplay === 'function') root.updateSBHoleDisplay();
                 toast('🎙️ ' + (cmd.value > 0 ? tx('next') : tx('prev'))); return true;
             case 'save':
                 if (typeof root.saveQuickDraft !== 'function') return false;
