@@ -314,7 +314,15 @@
         }));
     };
 
+    // Until loadLevel has read the stored course, the world is still the empty default. Anything that saved in that window (the surroundings
+    // dropdowns, removePanorama and others run while the page starts) overwrote the stored draft with an empty course before it was read,
+    // so opening "Snabbutkast" showed nothing. loadLevel clears the flag when it is done. It always runs: arcade.html starts it when the device
+    // id is known or after 8 s at the latest, and there is deliberately no timer that releases the flag, since that would let a slow load
+    // be overwritten again.
+    if (window._courseLoading === undefined) window._courseLoading = true;
+
     async function saveLevel(isAuto = false, noEdit = false) {
+        if (window._courseLoading) return null; // not now: see above
         if (!isAuto && !noEdit) window._editRev = (window._editRev || 0) + 1; // the next-step guide: a direct save (panorama, quick save) means the course changed
         let sText = document.getElementById('save-status-text');
         let sIcon = document.getElementById('save-status-icon');
@@ -371,7 +379,10 @@
 
         let fullData = {
             _fullSave: true,
+            edit_code: (typeof currentEditCode !== 'undefined' && currentEditCode) ? currentEditCode : null,
+            edit_is_published: !!window._editIsPublished,
             name: (document.getElementById('course-name-input') && document.getElementById('course-name-input').value) || 'Quick Draft',
+            author: (document.getElementById('author-name-input') && document.getElementById('author-name-input').value) || '',
             targets: dumpTargets,
             holes: dumpHoles,
             trees: dumpTrees,
@@ -615,6 +626,13 @@
     };
     // ── Smart Draft: auto-overwrite if we have an edit_code, otherwise new slot ──
     window.smartSaveDraft = function() {
+        // a published course stays published: saving it "as a draft" would take it offline for everybody who plays it. Its edits are
+        // published with the publish button (a new version of the same course), the working copy is kept as the quick draft meanwhile.
+        if (currentEditCode && window._editIsPublished) {
+            const sv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+            if (typeof showBuildToast === 'function') showBuildToast(sv ? 'Banan är publicerad. Använd Publicera för att uppdatera den.' : 'This course is published. Use Publish to update it.', '#f59e0b');
+            return;
+        }
         let hasExistingDraft = !!currentEditCode;
         publishCourse({ isDraft: true, overwrite: hasExistingDraft });
     };
@@ -649,6 +667,8 @@
         // a published course is never overwritten by playing it: its edits go to a separate draft copy that is reused each time
         const origCode = currentEditCode;
         const published = !!origCode && !!window._editIsPublished;
+        window._playCopySource = published ? origCode : null; // the copy remembers its course, so deleting the course removes it too
+        window._savingPlayCopy = published; // the copy is bookkeeping, not one of the builder's drafts (kept out of "My drafts")
         if (published) { try { currentEditCode = localStorage.getItem('golfPlayCopy_' + origCode) || null; } catch (e) { currentEditCode = null; } }
         let saved = false;
         try { saved = await publishCourse({ isDraft: true, overwrite: !!currentEditCode }); } catch (e) { saved = false; }
@@ -659,6 +679,7 @@
             if (saved && playCode) { try { localStorage.setItem('golfPlayCopy_' + origCode, playCode); } catch (e) {} }
         }
         window._savingForPlay = false;
+        window._savingPlayCopy = false;
         if (!saved || !playCode) {
             if (btn) btn.innerHTML = label;
             showBuildToast(tr('sp_failed', 'Det gick inte att spara banan. Försök igen.'), '#ef4444');
@@ -690,7 +711,10 @@
         }
     };
 
-    window.publishCourse = async function(options = { isDraft: false, overwrite: false }) {
+    window.publishCourse = async function(options = { isDraft: false }) {
+        // a course that was opened from, or already saved to, the server is updated in place: publishing a draft turns that draft into the
+        // published course and publishing a published course again is a new version of it, never a second copy
+        if (options.overwrite === undefined) options = Object.assign({}, options, { overwrite: !!currentEditCode });
         let name = document.getElementById('course-name-input').value;
         let author = document.getElementById('author-name-input').value;
         let stat = document.getElementById('publish-status');
@@ -807,8 +831,10 @@
                 terrain_biomemap: biome,
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
+                // a published course's holes keep only what is played; the builder's own definitions go along for its owner
+                builder_holes: options.isDraft ? undefined : window.serializeHolesFull(),
                 is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
-                theme_data: { biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR', enableOrganicNoise: window.ENABLE_ORGANIC_NOISE },
+                theme_data: { _playCopy: window._savingPlayCopy ? true : undefined, _playCopyOf: window._savingPlayCopy ? (window._playCopySource || undefined) : undefined, biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR', enableOrganicNoise: window.ENABLE_ORGANIC_NOISE },
                 owner_id: window.GolfAuth?.userId || null,
                 cover_image: (window.capturedPhotos && window.capturedPhotos.length > 0) 
                     ? window.capturedPhotos[window.coverImageIndex || 0] 
@@ -818,11 +844,7 @@
             };
             
             if (options.overwrite && currentEditCode) {
-                payload.edit_code = currentEditCode;
-                // If re-publishing (not draft), trigger version bump
-                if (!options.isDraft) {
-                    payload.new_version = true;
-                }
+                payload.edit_code = currentEditCode; // the server bumps the version when a published course is published again
             }
             
             let data = await ArcadeAPI.saveCourse(payload);
@@ -831,19 +853,41 @@
                 window._editIsPublished = !options.isDraft;
                 window.hasUnsavedChanges = false;
                 
-                if (options.isDraft) {
+                // "My drafts" holds drafts only: a published course leaves the list, a draft joins it
+                if (options.isDraft && window._savingPlayCopy) {
+                    // a play copy never shows in the list
+                } else if (options.isDraft) {
                     ArcadeStorage.addOrUpdateDraft(data.share_code, payload.name);
+                } else if (ArcadeStorage.removeDraft) {
+                    ArcadeStorage.removeDraft(data.share_code);
                 }
                 
                 let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
-                let href = window.location.origin + window.location.pathname + (options.isDraft ? "?edit=" : "?course=") + data.share_code + (isRange ? '&mode=range' : '');
+                // the address stays the builder's (a reload must reopen the builder, not start a round); the link to share is the player link
+                let builderHref = window.location.origin + window.location.pathname + '?autorun=edit_build&edit=' + data.share_code + (isRange ? '&mode=range' : '');
+                let href = options.isDraft ? builderHref : window.location.origin + window.location.pathname + '?course=' + data.share_code + (isRange ? '&mode=range' : '');
                 
-                window.history.pushState({}, '', href);
+                window.history.pushState({}, '', builderHref);
+                try { window.refreshBuilderButtons && window.refreshBuilderButtons(); } catch (e) {}
+                let draftBtn = document.getElementById('btn-save-draft');
+                if (draftBtn) draftBtn.style.display = options.isDraft ? 'block' : 'none';
+                // the working copy on this device now belongs to the saved course (so a later Publish updates it); not for a play copy,
+                // but Save & play on an unpublished course saves the real draft, and that one must be remembered too
+                // (awaited: the success below is only reported once the working copy knows, so leaving at once cannot leave it marked as a draft)
+                if (!window._savingPlayCopy && typeof window.saveQuickDraft === 'function') {
+                    try { await window.saveQuickDraft(true); } catch (e) { console.warn('Quick draft refresh failed:', e); }
+                }
                 
                 stat.style.color = '#4ade80';
                 stat.innerHTML = "Saved! Your link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
                 return true;
             } else {
+                if (data.code === 'already_published') {
+                    // saved as published elsewhere (another tab or device): this tab must not offer "Save draft" any more
+                    window._editIsPublished = true;
+                    let draftBtn = document.getElementById('btn-save-draft');
+                    if (draftBtn) draftBtn.style.display = 'none';
+                }
                 showError("Failed: " + data.error);
             }
         } catch(e) {

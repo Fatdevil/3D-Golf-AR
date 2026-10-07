@@ -25,7 +25,7 @@
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
 <script src="arcade-api-service.js"></script>
-<script src="arcade-storage-service.js"></script>
+<script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-swing-engine.js?v=4"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=7"></script>
@@ -7648,11 +7648,11 @@
         }
     }
 </script>
-<script src="arcade-save.js?v=2"></script>
+<script src="arcade-save.js?v=9"></script>
 <script>
 
 </script>
-<script src="arcade-load.js?v=2"></script>
+<script src="arcade-load.js?v=5"></script>
 <script>
     
     let isFlying = false;
@@ -15015,7 +15015,8 @@ window.triggerExplosion = function(x, y, z) {
     
     // Initialize auth (Device ID) before loading level
     if (window.GolfAuth) {
-        window.GolfAuth.init().then(() => {
+        // the course is read once the device id is known, but never later than a few seconds in: a hung request must not keep the builder from opening
+        Promise.race([window.GolfAuth.init(), new Promise(r => setTimeout(r, 8000))]).then(() => {
             console.log('🔑 Auth initialized, loading level...');
             loadLevel();
         }).catch(() => {
