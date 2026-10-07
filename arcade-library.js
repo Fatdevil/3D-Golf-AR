@@ -680,16 +680,20 @@
 
     // The prop under the pointer (index into placedTrees) or -1. A prop that is hidden behind the ground does not count:
     // a buried or very large prop would otherwise be picked "through" the terrain from almost anywhere on the screen.
+    // window._occludedPropIndex is the prop the ray did hit but the ground hides (or -1), so that the click fallback
+    // ("a click on the ground near a prop's base picks it") does not pick that very prop.
     window.pickPropIndex = function(rc, grounds) {
+        window._occludedPropIndex = -1;
         if (!window._propMeshes || window._propMeshes.length === 0) return -1;
         const hits = rc.intersectObjects(window._propMeshes);
         if (hits.length === 0 || hits[0].instanceId === undefined) return -1;
+        const idx = window.getGlobalPropIndex(hits[0].object.propType, hits[0].instanceId);
         const surfaces = (grounds || []).filter(Boolean);
         if (surfaces.length) {
             const g = rc.intersectObjects(surfaces);
-            if (g.length && g[0].distance < hits[0].distance - 0.05) return -1;
+            if (g.length && g[0].distance < hits[0].distance - 0.05) { window._occludedPropIndex = idx; return -1; }
         }
-        return window.getGlobalPropIndex(hits[0].object.propType, hits[0].instanceId);
+        return idx;
     };
 
     window.getPlacementParams = function(type) {

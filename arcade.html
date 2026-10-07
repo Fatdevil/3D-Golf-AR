@@ -10066,6 +10066,7 @@
             } else if (lastHitPoint) {
                 let closest = null; let minDist = 1.8;
                 for (let i = 0; i < window.placedTrees.length; i++) {
+                    if (i === window._occludedPropIndex) continue; // the ground hides it: not picked through the ground by its base either
                     let t = window.placedTrees[i];
                     let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
                     if (d < minDist) { minDist = d; closest = i; }
