@@ -870,9 +870,10 @@
                 try { window.refreshBuilderButtons && window.refreshBuilderButtons(); } catch (e) {}
                 let draftBtn = document.getElementById('btn-save-draft');
                 if (draftBtn) draftBtn.style.display = options.isDraft ? 'block' : 'none';
-                // the working copy on this device now belongs to the saved course (so a later Publish updates it); not for a play copy
+                // the working copy on this device now belongs to the saved course (so a later Publish updates it); not for a play copy,
+                // but Save & play on an unpublished course saves the real draft, and that one must be remembered too
                 // (awaited: the success below is only reported once the working copy knows, so leaving at once cannot leave it marked as a draft)
-                if (!window._savingForPlay && typeof window.saveQuickDraft === 'function') {
+                if (!window._savingPlayCopy && typeof window.saveQuickDraft === 'function') {
                     try { await window.saveQuickDraft(true); } catch (e) { console.warn('Quick draft refresh failed:', e); }
                 }
                 

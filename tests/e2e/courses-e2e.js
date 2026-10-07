@@ -205,6 +205,14 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('two overlapping first publications of one draft end as version 2 (20 courses)', Number(vers.v2) === 20 && Number(vers.n) === 20, JSON.stringify(vers));
     await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-V%']);
 
+    // Save & play on a new course saves the real draft (not a play copy): the working copy must learn its code
+    await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
+    await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 7 }); document.getElementById('course-name-input').value = 'E2E Spela'; });
+    await wait(2500);
+    const sp = await page.evaluate(async function () { window._savingForPlay = true; const ok = await publishCourse({ isDraft: true, overwrite: false }); window._savingForPlay = false; const d = await ArcadeStorage.loadFullDraft('quick_draft'); return { ok: ok, code: currentEditCode, quick: d && d.edit_code }; });
+    check('Save & play on a new course: the working copy remembers the draft it just created', sp.ok === true && !!sp.code && sp.quick === sp.code, JSON.stringify(sp));
+    await pool.query("DELETE FROM courses WHERE share_code = $1", [sp.code || '-']);
+
     // 8. a draft can be deleted from the list
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 99 }); document.getElementById('course-name-input').value = 'Att radera'; smartSaveDraft(); }); await wait(6000);
