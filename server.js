@@ -802,6 +802,7 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                  SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, 
                      is_draft=$8, theme_data=$10, is_range=$11, hole_count=$12, total_par=$13, cover_image=$14,
                      builder_holes=$15, owner_id=COALESCE(owner_id, $16),
+                     course_rating=$17, slope_rating=$18, stroke_index=$19,
                      updated_at=CURRENT_TIMESTAMP ${versionBump}
                  WHERE share_code=$9 
                  RETURNING share_code, version`,
@@ -811,7 +812,9 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                     terrain_heightmap, terrain_biomemap, draftStatus, 
                     edit_code.toUpperCase(), JSON.stringify(c_theme_data), rangeStatus,
                     c_hole_count, c_total_par, cover_image || null,
-                    builder_holes ? JSON.stringify(builder_holes) : null, req.userId || null
+                    builder_holes ? JSON.stringify(builder_holes) : null, req.userId || null,
+                    // the ratings follow the holes as they are now (a draft saved early has none worth keeping once the holes are built)
+                    calculateCourseRating(holes, c_total_par), calculateSlopeRating(holes), JSON.stringify(calculateStrokeIndex(holes))
                 ]
             );
             

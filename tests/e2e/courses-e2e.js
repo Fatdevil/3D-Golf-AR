@@ -74,7 +74,10 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     // 1. a new course with a built hole, saved as a draft
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     deviceId = await page.evaluate(function () { return localStorage.getItem('golf_os_device_id'); });
-    await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 12345 }); document.getElementById('course-name-input').value = 'E2E Bana'; document.getElementById('author-name-input').value = 'Tester'; });
+    // a draft saved before anything is built gets its ratings from an empty course; they must follow the holes later
+    await page.evaluate(function () { document.getElementById('course-name-input').value = 'E2E Bana'; document.getElementById('author-name-input').value = 'Tester'; return smartSaveDraft(); }); await wait(5000);
+    const blankRating = (await pool.query('SELECT course_rating::float AS cr, slope_rating AS sr FROM courses WHERE owner_id = $1', [deviceId])).rows[0];
+    await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 12345 }); });
     await wait(2500);
     await page.evaluate(function () { return smartSaveDraft(); }); await wait(6000);
     let r = await rows();
@@ -97,6 +100,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await publish(); await wait(6000);
     r = await rows();
     check('publish: the draft became the published course (same record, no copy, version 1)', r.length === 1 && r[0].share_code === code && r[0].is_draft === false && r[0].version === 1, JSON.stringify(r));
+    const ratings = (await pool.query('SELECT course_rating::float AS cr, slope_rating AS sr, stroke_index, hole_count FROM courses WHERE owner_id = $1', [deviceId])).rows[0];
+    check('publish: ratings follow the built holes, not the empty draft saved first', blankRating && ratings && ratings.cr !== blankRating.cr && ratings.stroke_index && ratings.stroke_index.some(function (n) { return n > 0; }), JSON.stringify([blankRating, ratings]));
     check('publish: the address stays the builder\'s', /autorun=edit_build/.test((await state()).search));
     await listPage();
     const drafts2 = await cards('#drafts-carousel'), pub2 = await cards('#published-carousel');
