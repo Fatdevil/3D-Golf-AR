@@ -475,7 +475,7 @@ app.get('/api/courses', requireDB, async (req, res) => {
             WHERE (is_draft = false OR is_draft IS NULL) 
               AND (is_range = false OR is_range IS NULL)
               AND (is_hidden = false OR is_hidden IS NULL)
-            ORDER BY created_at DESC 
+            ORDER BY COALESCE(updated_at, created_at) DESC 
             LIMIT 50
         `);
         res.json(result.rows);

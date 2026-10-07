@@ -117,9 +117,13 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await open('autorun=edit_build&edit=' + code, 6000);
     st = await state();
     check('reopen published: green, fairway, bunkers and tee boxes are back, no Save draft button', st.green && st.fairways === 1 && st.bunkers === 2 && st.teeBoxes === 3 && st.draftBtn === 'none', JSON.stringify(st));
+    await pool.query("UPDATE courses SET created_at = now() - interval '10 days' WHERE share_code = $1", [code]); // an old course: published again it must still lead the public list
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, created_at) VALUES ($1, 'Newer than mine', 'o', '[]'::jsonb, false, 'someone-else', now() - interval '1 day')", [tag + '-N']);
     await page.evaluate(function () { document.getElementById('course-name-input').value = 'E2E Bana v3'; }); await publish(); await wait(6000);
     r = await rows();
     check('publish again: a new version of the same course (not a second course)', r.length === 1 && r[0].version === 2 && r[0].name === 'E2E Bana v3', JSON.stringify(r));
+    const pubList = await page.evaluate(async function () { return (await (await fetch('/api/courses')).json()).map(function (c) { return c.share_code; }); });
+    check('public list: an old course that is published again is listed first (ordered by last publish, not by creation)', pubList[0] === code, JSON.stringify(pubList.slice(0, 3)));
     const api = await page.evaluate(async function (c) {
       const get = async function (h) { const j = await (await fetch('/api/courses/' + c, { headers: h })).json(); return { canEdit: j.can_edit, builder: !!j.builder_holes }; };
       return { owner: await get({ 'x-user-id': localStorage.getItem('golf_os_device_id') }), guest: await get({}) };
