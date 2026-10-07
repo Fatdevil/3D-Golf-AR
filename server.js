@@ -458,8 +458,7 @@ app.get('/api/my/courses', requireDB, authMiddleware, async (req, res) => {
             WHERE owner_id = $1
               AND COALESCE(theme_data->>'_playCopy', '') <> 'true'
             ORDER BY COALESCE(updated_at, created_at) DESC
-            LIMIT 300
-        `, [req.userId]);
+        `, [req.userId]); // no cap: the rows are small (no holes, no images) and the client treats this as the whole list
         res.json(result.rows);
     } catch(err) {
         console.error('GET /api/my/courses error:', err);

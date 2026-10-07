@@ -135,6 +135,12 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await listPage();
     check('list: my published course is still listed with 60 newer courses by others', (await cards('#published-carousel')).indexOf('E2E Bana v3') >= 0);
 
+    // my own list has no cap (the page treats it as the whole list)
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id) SELECT $1 || '-M' || g, 'Mine ' || g, 'o', '[]'::jsonb, true, $2 FROM generate_series(1, 320) g", [tag, deviceId]);
+    const mineCount = await page.evaluate(async function () { return (await (await fetch('/api/my/courses', { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') } })).json()).length; });
+    check('my courses: the list is not capped (321 of mine, all returned)', mineCount === 321, 'n ' + mineCount);
+    await pool.query('DELETE FROM courses WHERE share_code LIKE $1', [tag + '-M%']);
+
     // 6. the working copy remembers its course
     await open('autorun=edit_build', 6000);
     st = await state();
