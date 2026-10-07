@@ -148,6 +148,15 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const drafts3 = await cards('#drafts-carousel');
     check('list: the play copy is not shown among My drafts', drafts3.filter(function (n) { return n !== 'Snabbutkast'; }).length === 0, JSON.stringify(drafts3));
 
+    // an older course whose draft flag is NULL counts as published: publishing it again is a new version
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, version) VALUES ('ZZLEGACY', 'Legacy', 'o', '[]'::jsonb, NULL, $1, 1)", [deviceId]);
+    const legacy = await page.evaluate(async function () {
+      const res = await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') }, body: JSON.stringify({ name: 'Legacy', holes: [], edit_code: 'ZZLEGACY', is_draft: false }) });
+      return res.json();
+    });
+    const lv = (await pool.query("SELECT version FROM courses WHERE share_code = 'ZZLEGACY'")).rows[0];
+    check('publish again: a course without a draft flag (older course) counts as published and gets a new version', legacy.success && lv.version === 2, JSON.stringify([legacy, lv]));
+
     // 8. a draft can be deleted from the list
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 99 }); document.getElementById('course-name-input').value = 'Att radera'; smartSaveDraft(); }); await wait(6000);

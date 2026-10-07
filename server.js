@@ -792,7 +792,7 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
 
             // Version bump only when a course that is already published is published again; publishing a draft for the first time is version 1
             let versionBump = '';
-            const wasPublished = ownerCheck.rows.length > 0 && ownerCheck.rows[0].is_draft === false;
+            const wasPublished = ownerCheck.rows.length > 0 && ownerCheck.rows[0].is_draft !== true; // older courses have no flag (NULL): published, as the lists treat them
             if (wasPublished && !draftStatus) {
                 versionBump = ', version = COALESCE(version, 1) + 1, play_count = 0';
             }
