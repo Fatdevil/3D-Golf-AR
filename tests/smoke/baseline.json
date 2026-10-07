@@ -288,6 +288,7 @@
   "executeSplineSmartGreen:function",
   "exportCourseURL:function",
   "extractSubMeshes:function",
+  "fairwayAxisField:function",
   "fairwayEditsHeights:function",
   "fairwayFootprint:function",
   "fbm:function",

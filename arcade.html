@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=11">
+<link rel="stylesheet" href="arcade.css?v=12">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=35"></script>
+<script src="i18n.js?v=36"></script>
 <script src="physics.js?v=8"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -2528,14 +2528,19 @@
                             </button>
                         </div>
 
-                        <!-- Slope cap: gentler fairway on a hill -->
+                        <!-- Slope cap: gentler fairway on a hill. Across (side slope) and along (uphill / downhill) are separate caps -->
                         <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:10px; border:1px solid #334155;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sf_max_slope">Max lutning (spelbar)</span>
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sf_max_slope">Max lutning tvärs (sidled)</span>
                                 <span id="sf-max-slope-val" style="color:#7db952; font-weight:700; font-size:9.5px;">Av</span>
                             </div>
                             <input type="range" id="sf-max-slope" min="0" max="20" value="0" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); window._fairwayMaxSlopePct=v; let el=document.getElementById('sf-max-slope-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Av':'Off');" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'maxSlopePct')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'maxSlopePct')" style="width:100%; accent-color:#7db952; cursor:pointer;">
-                            <div style="color:#64748b; font-size:8px; margin-top:2px;" data-i18n="sf_max_slope_hint">Planar ut en kulle under fairwayn så den blir spelbar. 8–10 % är lagom.</div>
+                            <div style="display:flex; justify-content:space-between; margin:6px 0 2px;">
+                                <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sf_max_slope_along">Max lutning längs (uppför/nedför)</span>
+                                <span id="sf-max-along-val" style="color:#7db952; font-weight:700; font-size:9.5px;">Som tvärs</span>
+                            </div>
+                            <input type="range" id="sf-max-along" min="0" max="30" value="0" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); window._fairwayMaxSlopeAlongPct=v; let el=document.getElementById('sf-max-along-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Som tvärs':'Same as across');" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'maxSlopeAlongPct')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'maxSlopeAlongPct')" style="width:100%; accent-color:#7db952; cursor:pointer;">
+                            <div style="color:#64748b; font-size:8px; margin-top:2px;" data-i18n="sf_max_slope_hint">Planar ut en kulle under fairwayn så den blir spelbar. Tips: 6 % tvärs och 15 % längs.</div>
                         </div>
 
                         <!-- Step 2 -> Step 3 Guidance Button -->
@@ -3608,7 +3613,7 @@
     </div>
 
     <!-- GALLERY MODAL -->
-    <div id="gallery-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.95); backdrop-filter:blur(10px); z-index:9999; align-items:center; justify-content:center; flex-direction:column;">
+    <div id="gallery-modal" style="display:none; pointer-events:auto; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.95); backdrop-filter:blur(10px); z-index:9999; align-items:center; justify-content:center; flex-direction:column;">
         <h2 style="color:#fff; font-weight:900; font-size:32px; margin-bottom:10px;">SELECT COVER IMAGE</h2>
         <p style="color:#94a3b8; font-size:16px; margin-bottom:30px;">Click the best photo to set as the main cover in the Hub.</p>
         <div id="gallery-container" style="display:flex; flex-wrap:wrap; gap:15px; justify-content:center; max-width:900px; margin-bottom:40px;">
@@ -3620,7 +3625,7 @@
     </div>
 
     <!-- PENALTY DECISION MODAL -->
-    <div id="penalty-decision-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; font-family:'Inter',sans-serif;">
+    <div id="penalty-decision-modal" style="display:none; pointer-events:auto; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; font-family:'Inter',sans-serif;">
         <div style="background:#1e293b; border:2px solid #475569; border-radius:16px; padding:30px; max-width:400px; width:90%; text-align:center;">
             <div id="penalty-title" style="font-size:22px; font-weight:900; margin-bottom:8px; color:#fff;">💦 WATER HAZARD</div>
             <div id="penalty-subtitle" style="color:#94a3b8; font-size:13px; margin-bottom:20px;">+1 Penalty Stroke</div>
@@ -7643,7 +7648,7 @@
         }
     }
 </script>
-<script src="arcade-save.js?v=5"></script>
+<script src="arcade-save.js?v=6"></script>
 <script>
 
 </script>
@@ -15799,12 +15804,12 @@ window.triggerExplosion = function(x, y, z) {
     </script>
 
 <script src="green-studio.js?v=31"></script>
-<script src="fairway-studio.js?v=5"></script>
+<script src="fairway-studio.js?v=6"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=63"></script>
+<script src="smart-builder.js?v=67"></script>
 <script src="studio-reanchor.js?v=5"></script>
-<script src="hole-generator.js?v=28"></script>
+<script src="hole-generator.js?v=29"></script>
 <script src="blueprint.js?v=20"></script>
 <script src="backdrop.js?v=12"></script>
 <script src="guide.js?v=18"></script>
