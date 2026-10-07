@@ -10058,7 +10058,8 @@
         // --- PROP SELECTION FOR INSPECT & PROPS ---
         if ((currentTool === 'INSPECT' || currentTool === 'PROPS') && e.button === 0) {
             // picked now, not from the last mouse move (a tap has no hover), and not through the ground
-            let pickedIdx = window.pickPropIndex(raycaster, [plane, window.surroundPlane]);
+            // (the brush and polygon modes of the props tool keep their own click: a prop under the pointer must not swallow it)
+            let pickedIdx = (currentTool === 'INSPECT' || window._propsToolMode === 'SINGLE') ? window.pickPropIndex(raycaster, [plane, window.surroundPlane]) : -1;
             if (pickedIdx >= 0) {
                 window.selectPropAt(pickedIdx);
                 window._justSelectedProp = true;
