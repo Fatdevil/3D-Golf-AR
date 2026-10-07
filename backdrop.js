@@ -30,8 +30,84 @@
         return h ? h * (o.scale || 1) : 0;
     }
     function outsidePlate(o) { const half = plateHalf(); return Math.abs(o.x) > half || Math.abs(o.z) > half; }
-    // Rough half-width of a figure: mountains are wider than they are tall, so this errs a little large
-    function radiusOf(o) { return 0.6 * heightOf(o); }
+    // ---- exact footprint ---------------------------------------------------------------------------------
+    // A model is scaled uniformly so its HEIGHT equals the asset's targetHeight, and is centred on x/z (arcade.html loadAsset),
+    // so its width and depth are whatever the mesh happens to be. We therefore read the loaded mesh itself: the convex hull of
+    // every vertex seen from above, in metres at scale 1. A placed figure is that hull * o.scale, turned by o.rot about Y.
+    // fpCache holds a hull per type; a type whose model has not loaded yet gets none, and the old rough circle is used meanwhile.
+    const fpCache = {};
+    const fpAsked = {};
+    function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+    function convexHull(pts) {
+        pts.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+        const lo = [], up = [];
+        pts.forEach(function (p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); });
+        for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+        lo.pop(); up.pop();
+        return lo.concat(up);
+    }
+    function computeFootprint(type) {
+        const model = root.customModels && root.customModels[type];
+        if (!model || model === 'LOADING' || !model.isObject3D) return null;
+        model.updateWorldMatrix(true, true);
+        const pts = [];
+        let total = 0;
+        model.traverse(function (m) { if (m.isMesh && m.geometry && m.geometry.attributes.position) total += m.geometry.attributes.position.count; });
+        const stride = Math.max(1, Math.ceil(total / 40000));   // a mountain can have a million vertices; the outline does not need them all
+        model.traverse(function (m) {
+            if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
+            const pos = m.geometry.attributes.position;
+            const e = m.matrixWorld.elements;
+            for (let i = 0; i < pos.count; i += stride) {
+                const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+                pts.push([e[0] * x + e[4] * y + e[8] * z + e[12], e[2] * x + e[6] * y + e[10] * z + e[14]]);
+            }
+        });
+        if (pts.length < 3) return null;
+        const hull = convexHull(pts);
+        if (hull.length < 3) return null;
+        let rad = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minZ = Math.min(minZ, p[1]); maxZ = Math.max(maxZ, p[1]); });
+        return { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ };
+    }
+    function footprintOf(type) {
+        if (fpCache[type]) return fpCache[type];
+        const fp = computeFootprint(type);
+        if (fp) { fpCache[type] = fp; return fp; }
+        // not loaded yet: ask for it once; the map redraws twice a second and picks it up
+        if (!fpAsked[type] && typeof root.loadAsset === 'function' && reg(type)) { fpAsked[type] = true; try { root.loadAsset(type); } catch (err) { /* stays a circle */ } }
+        return null;
+    }
+    // The figure's outline on the ground in world metres (turned and scaled the way the instance matrix does it), or null
+    function outlineOf(o) {
+        const fp = footprintOf(o.type);
+        if (!fp) return null;
+        const s = o.scale || 1, c = Math.cos(o.rot || 0), n = Math.sin(o.rot || 0);
+        return fp.hull.map(function (p) { return [o.x + s * (p[0] * c + p[1] * n), o.z + s * (-p[0] * n + p[1] * c)]; });
+    }
+    // Furthest reach of a figure from its centre, whatever way it is turned. Without a loaded model: a rough guess
+    function radiusOf(o) { const fp = footprintOf(o.type); return fp ? fp.rad * (o.scale || 1) : 0.6 * heightOf(o); }
+    function pointInPoly(x, z, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            if (((poly[i][1] > z) !== (poly[j][1] > z)) && (x < (poly[j][0] - poly[i][0]) * (z - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0])) inside = !inside;
+        }
+        return inside;
+    }
+    // Does the figure's base reach over the course plate? Exact for the convex outline (separating-axis test)
+    function coversPlate(o) {
+        const half = plateHalf(), poly = outlineOf(o);
+        if (!poly) return Math.hypot(Math.max(0, Math.abs(o.x) - half), Math.max(0, Math.abs(o.z) - half)) < radiusOf(o);
+        const axes = [[1, 0], [0, 1]];
+        for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; axes.push([-(b[1] - a[1]), b[0] - a[0]]); }
+        const corners = [[-half, -half], [half, -half], [half, half], [-half, half]];
+        return axes.every(function (ax) {
+            let p0 = Infinity, p1 = -Infinity, r0 = Infinity, r1 = -Infinity;
+            poly.forEach(function (p) { const d = p[0] * ax[0] + p[1] * ax[1]; p0 = Math.min(p0, d); p1 = Math.max(p1, d); });
+            corners.forEach(function (p) { const d = p[0] * ax[0] + p[1] * ax[1]; r0 = Math.min(r0, d); r1 = Math.max(r1, d); });
+            return p1 > r0 && r1 > p0;
+        });
+    }
 
     // ---- fog: far figures must stay visible at dawn and dusk -------------------------------------------
     // arcade-scene-engine.js reads this when it sets the fog, so the fog ends beyond the farthest big figure.
@@ -132,22 +208,31 @@
             poly.forEach(function (p, i) { if (i) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
             ctx.closePath(); ctx.fill(); ctx.stroke();
         });
-        // figures
+        // figures: the real outline of the base (same shape, size and turn as the 3D model); a circle until the model has loaded
         mapObjects().forEach(function (o) {
-            const big = heightOf(o) >= BACKDROP_MIN, rr = Math.max(heightOf(o) >= SHELF_MIN ? 5 : 3, mToPx(radiusOf(o))), sel = o === B.sel;
-            ctx.beginPath(); ctx.arc(cx(o.x), cz(o.z), rr, 0, 7);
-            ctx.fillStyle = big ? 'rgba(120,113,108,0.65)' : 'rgba(56,189,248,0.7)'; ctx.fill();
-            ctx.lineWidth = sel ? 3 : 1.2; ctx.strokeStyle = sel ? '#facc15' : 'rgba(15,23,42,0.8)'; ctx.stroke();
+            const big = heightOf(o) >= BACKDROP_MIN, sel = o === B.sel, poly = outlineOf(o);
+            const rr = Math.max(heightOf(o) >= SHELF_MIN ? 5 : 3, mToPx(radiusOf(o))), over = big && coversPlate(o);
+            ctx.beginPath();
+            if (poly) poly.forEach(function (p, i) { if (i) ctx.lineTo(cx(p[0]), cz(p[1])); else ctx.moveTo(cx(p[0]), cz(p[1])); });
+            else ctx.arc(cx(o.x), cz(o.z), rr, 0, 7);
+            ctx.closePath();
+            ctx.fillStyle = over ? 'rgba(239,68,68,0.55)' : (big ? 'rgba(120,113,108,0.65)' : 'rgba(56,189,248,0.7)'); ctx.fill();
+            ctx.lineWidth = sel ? 3 : 1.2; ctx.strokeStyle = sel ? '#facc15' : (over ? '#ef4444' : 'rgba(15,23,42,0.8)');
+            if (!poly) ctx.setLineDash([4, 3]);
+            ctx.stroke(); ctx.setLineDash([]);
+            // a figure too small to see as an outline still gets a dot to grab
+            if (poly && mToPx(radiusOf(o)) < 5) { ctx.beginPath(); ctx.arc(cx(o.x), cz(o.z), 4, 0, 7); ctx.fillStyle = 'rgba(56,189,248,0.9)'; ctx.fill(); }
             // a notch shows which way the figure faces
             if (sel || big) {
-                const a = -(o.rot || 0);
-                ctx.beginPath(); ctx.moveTo(cx(o.x), cz(o.z)); ctx.lineTo(cx(o.x) + Math.cos(a) * rr, cz(o.z) + Math.sin(a) * rr);
+                const a = -(o.rot || 0), nr = Math.max(4, mToPx(radiusOf(o)));
+                ctx.beginPath(); ctx.moveTo(cx(o.x), cz(o.z)); ctx.lineTo(cx(o.x) + Math.cos(a) * nr, cz(o.z) + Math.sin(a) * nr);
                 ctx.strokeStyle = 'rgba(15,23,42,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
             }
             if (sel) {
-                const d = reg(o.type);
+                const d = reg(o.type), fp = footprintOf(o.type), sc = o.scale || 1;
+                const size = fp ? ' · ' + Math.round(fp.w * sc) + '×' + Math.round(fp.d * sc) + ' m' : '';
                 ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-                ctx.fillText(((d && d.name) || o.type) + ' · ' + Math.round(heightOf(o)) + ' m', cx(o.x), cz(o.z) + rr + 3);
+                ctx.fillText(((d && d.name) || o.type) + ' · ' + Math.round(heightOf(o)) + ' m h' + size, cx(o.x), cz(o.z) + rr + 3);
             }
         });
         ctx.fillStyle = 'rgba(248,250,252,0.85)'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -300,6 +385,7 @@
         fn(B.sel);
         rebuild(B.sel.type);
         persist();
+        warnIfCovering(B.sel);
         refresh();
     }
     // Place figures evenly around the plate with open ground between plate and figure
@@ -308,23 +394,32 @@
         const d = type && reg(type);
         if (!d) { toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
         undoPoint();
-        const H = d.targetHeight || 10, half = plateHalf(), a0 = Math.random() * Math.PI * 2;
+        const H = d.targetHeight || 10, half = plateHalf(), a0 = Math.random() * Math.PI * 2, limit = VIEW * 0.95;
+        const fp = footprintOf(type), unitR = fp ? fp.rad : 0.6 * H;   // reach of one figure at scale 1, whatever way it is turned
+        // distance from the plate square (not from its centre) to a point at distance t along the direction (ux, uz)
+        function gapAt(t, ux, uz) { return Math.hypot(Math.max(0, Math.abs(ux * t) - half), Math.max(0, Math.abs(uz * t) - half)); }
         for (let k = 0; k < RING_COUNT; k++) {
-            const ang = a0 + k * 2 * Math.PI / RING_COUNT + (Math.random() - 0.5) * 0.25;
-            let sc = 0.8 + Math.random() * 0.4;
-            const edge = half / Math.max(Math.abs(Math.cos(ang)), Math.abs(Math.sin(ang)));
-            // keep the whole figure inside the map
-            const maxR = Math.max(10, (VIEW * 0.95 - edge - RING_GAP) / 2);
-            let R = 0.6 * H * sc;
-            if (R > maxR) { R = maxR; sc = R / (0.6 * H); }
-            const dist = edge + RING_GAP + R;
-            create(type, Math.cos(ang) * dist, Math.sin(ang) * dist, sc, Math.random() * Math.PI * 2, true);
+            const ang = a0 + k * 2 * Math.PI / RING_COUNT + (Math.random() - 0.5) * 0.25, ux = Math.cos(ang), uz = Math.sin(ang);
+            let sc = 0.8 + Math.random() * 0.4, R = unitR * sc, dist = 0;
+            // push the centre out until the figure's whole reach clears the plate by RING_GAP; shrink it if that goes off the map
+            for (let tries = 0; tries < 14; tries++) {
+                let lo = 0, hi = limit * 2;
+                for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (gapAt(mid, ux, uz) >= R + RING_GAP) hi = mid; else lo = mid; }
+                dist = hi;
+                if (dist + R <= limit || R <= 10) break;
+                sc *= 0.85; R = unitR * sc;
+            }
+            create(type, ux * dist, uz * dist, sc, Math.random() * Math.PI * 2, true);
         }
         rebuild(type);
         B.sel = null;
         persist();
         say(tr('bd_ring_done', '{n} figurer utlagda runt banan. Flytta dem som du vill.').replace('{n}', RING_COUNT));
         refresh();
+    }
+
+    function warnIfCovering(o) {
+        if (o && heightOf(o) >= BACKDROP_MIN && coversPlate(o)) toast(tr('bd_covers', '⚠️ Figurens bas ligger över banan. Flytta den längre ut eller gör den mindre.'), '#ef4444');
     }
 
     // ---- pointer handling ----------------------------------------------------------------------------------
@@ -336,8 +431,10 @@
     function hit(p) {
         const list = mapObjects();
         for (let i = list.length - 1; i >= 0; i--) {
-            const o = list[i], rr = Math.max(minPickPx(), mToPx(radiusOf(o)));
-            if (Math.hypot(p.px - cx(o.x), p.py - cz(o.z)) <= rr) return o;
+            const o = list[i], poly = outlineOf(o);
+            // inside the drawn outline, or near the centre (so a thin figure can still be grabbed)
+            if (poly ? (pointInPoly(p.x, p.z, poly) || Math.hypot(p.px - cx(o.x), p.py - cz(o.z)) <= minPickPx())
+                     : Math.hypot(p.px - cx(o.x), p.py - cz(o.z)) <= Math.max(minPickPx(), mToPx(radiusOf(o)))) return o;
         }
         return null;
     }
@@ -385,6 +482,7 @@
         const moved = B.drag.snapped;
         B.drag = null;
         if (moved && B.sel) { rebuild(B.sel.type); persist(); }
+        warnIfCovering(B.sel);
         refresh();
     }
 
@@ -526,5 +624,5 @@
     }
 
     root.openBackdropMap = open;
-    root.Backdrop = { open: open, close: close, state: function () { return B; }, ring: ring, refresh: refresh, refreshFog: refreshFog };
+    root.Backdrop = { footprint: footprintOf, outline: outlineOf, coversPlate: coversPlate, open: open, close: close, state: function () { return B; }, ring: ring, refresh: refresh, refreshFog: refreshFog };
 })(typeof window !== 'undefined' ? window : globalThis);
