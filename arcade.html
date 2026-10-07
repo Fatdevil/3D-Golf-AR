@@ -10057,16 +10057,20 @@
 
         // --- PROP SELECTION FOR INSPECT & PROPS ---
         if ((currentTool === 'INSPECT' || currentTool === 'PROPS') && e.button === 0) {
-            if (window._hoveredPropIndex !== undefined && window._hoveredPropIndex !== null) {
-                window.selectPropAt(window._hoveredPropIndex);
+            // picked now, not from the last mouse move (a tap has no hover), and not through the ground
+            // (the brush and polygon modes of the props tool keep their own click: a prop under the pointer must not swallow it)
+            let pickedIdx = (currentTool === 'INSPECT' || window._propsToolMode === 'SINGLE') ? window.pickPropIndex(raycaster, [plane, window.surroundPlane]) : -1;
+            if (pickedIdx >= 0) {
+                window.selectPropAt(pickedIdx);
                 window._justSelectedProp = true;
                 return;
             } else if (lastHitPoint) {
                 let closest = null; let minDist = 1.8;
                 for (let i = 0; i < window.placedTrees.length; i++) {
+                    if (i === window._occludedPropIndex) continue; // the ground hides it: not picked through the ground by its base either
                     let t = window.placedTrees[i];
                     let d = Math.sqrt((t.x - lastHitPoint.x)**2 + (t.z - lastHitPoint.z)**2);
-                    if (d < minDist) { minDist = d; closest = i; }
+                    if (d < minDist && !window.propIsHidden(t)) { minDist = d; closest = i; }
                 }
                 if (closest !== null) {
                     window.selectPropAt(closest);
@@ -11843,13 +11847,10 @@
         sculptBrushCursor.visible = false;
         raycaster.setFromCamera(mouse, camera);
         
-        // Check for prop hovers via precise raycast
+        // Check for prop hovers via precise raycast (a prop behind the ground is not under the pointer)
         if (window._propMeshes && window._propMeshes.length > 0) {
-            let propIntersects = raycaster.intersectObjects(window._propMeshes);
-            if (propIntersects.length > 0 && propIntersects[0].instanceId !== undefined) {
-                let hitMesh = propIntersects[0].object;
-                let iid = propIntersects[0].instanceId;
-                let globalIdx = window.getGlobalPropIndex(hitMesh.propType, iid);
+            {
+                let globalIdx = window.pickPropIndex(raycaster, [plane, window.surroundPlane]);
                 if (globalIdx >= 0) {
                     let prop = window.placedTrees[globalIdx];
                     if (!window.hoverRingMesh) {

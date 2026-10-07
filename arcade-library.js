@@ -678,6 +678,35 @@
         return -1;
     };
 
+    // The prop under the pointer (index into placedTrees) or -1. A prop that is hidden behind the ground does not count:
+    // a buried or very large prop would otherwise be picked "through" the terrain from almost anywhere on the screen.
+    // A prop that is wholly below the ground (a large negative yOffset): nothing of it shows, so a click near its base must not pick it.
+    window.propIsHidden = function(prop) {
+        if (!prop || typeof window.getTerrainHeight !== 'function') return false;
+        const ground = window.getTerrainHeight(prop.x, prop.z);
+        if (typeof ground !== 'number' || !isFinite(ground)) return false;
+        let top = (prop.y || 0) + (prop.yOffset || 0);
+        const m = window.customModels && window.customModels[prop.type];
+        if (m && m.isObject3D) top += new THREE.Box3().setFromObject(m).max.y * (prop.scale || 1);
+        return top < ground - 0.1;
+    };
+
+    // window._occludedPropIndex is the prop the ray did hit but the ground hides (or -1), so that the click fallback
+    // ("a click on the ground near a prop's base picks it") does not pick that very prop.
+    window.pickPropIndex = function(rc, grounds) {
+        window._occludedPropIndex = -1;
+        if (!window._propMeshes || window._propMeshes.length === 0) return -1;
+        const hits = rc.intersectObjects(window._propMeshes);
+        if (hits.length === 0 || hits[0].instanceId === undefined) return -1;
+        const idx = window.getGlobalPropIndex(hits[0].object.propType, hits[0].instanceId);
+        const surfaces = (grounds || []).filter(Boolean);
+        if (surfaces.length) {
+            const g = rc.intersectObjects(surfaces);
+            if (g.length && g[0].distance < hits[0].distance - 0.05) { window._occludedPropIndex = idx; return -1; }
+        }
+        return idx;
+    };
+
     window.getPlacementParams = function(type) {
         let finalType = type || window.currentNatureType;
         if (window.propsMixEnabled && window.selectedNatureTypes && window.selectedNatureTypes.length > 0) {

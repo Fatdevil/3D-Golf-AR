@@ -948,6 +948,94 @@ function serve() {
     const hungState = await hung.evaluate(async function () { const d = await window.ArcadeStorage.loadFullDraft('quick_draft'); return { flag: !!courseHoles[0].flag, stored: !!(d && d.holes && d.holes[0].flag) }; });
     await hung.close();
     checks.push({ name: 'quick draft opens even when the device-id call hangs, and keeps the course', ok: hungState.flag && hungState.stored, detail: JSON.stringify(hungState) });
+    reopenStep = 'prop picking page';
+  // a prop buried under the ground (or a huge one behind it) is not under the pointer: it used to be picked through the terrain,
+  // so the edit panel opened and closed on its own while the object was being changed
+    // a page opened like the builder is (the range page used above handles clicks differently)
+    const pp = await ctx2.newPage();
+    await pp.goto(base + '/arcade.html?autorun=new_build&template=blank&biome=GLOBAL', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await pp.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await pp.waitForTimeout(4000);
+    await pp.evaluate(function () { setMode('BUILD'); setTool('INSPECT'); });
+    await pp.waitForTimeout(500);
+    const setup = await pp.evaluate(function () {
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      const g = raycaster.intersectObject(plane);
+      if (!g.length) return { ok: false };
+      const p0 = g[0].point;
+      const mk = function (type, y, h) {
+        const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(400, h, 400), new THREE.MeshBasicMaterial(), 1);
+        mesh.propType = type; mesh.frustumCulled = false;
+        mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(p0.x, y, p0.z)); mesh.instanceMatrix.needsUpdate = true;
+        scene.add(mesh); mesh.updateMatrixWorld(true);
+        window._propMeshes = (window._propMeshes || []).concat([mesh]);
+        window.placedTrees.push({ type: type, x: p0.x, z: p0.z, y: 0, scale: 1, rot: 0 });
+        return mesh;
+      };
+      window.__t = { n0: window.placedTrees.length, buried: mk('zz_buried', p0.y - 31, 60) };
+      window.__pd = 0; renderer.domElement.addEventListener('pointerdown', function () { window.__pd++; }, true);
+      const r = renderer.domElement.getBoundingClientRect(); // p0 is the point under the middle of the canvas
+      const cx = Math.round(r.left + r.width / 2), cy = Math.round(r.top + r.height / 2);
+      return { ok: isFinite(cx) && isFinite(cy), y: p0.y, cx: cx, cy: cy };
+    });
+    await pp.mouse.move(640, 380); await pp.waitForTimeout(100);
+    await pp.mouse.move(500, 350); await pp.waitForTimeout(100);
+    await pp.mouse.move(Math.round(await pp.evaluate(function () { return innerWidth / 2; })), Math.round(await pp.evaluate(function () { return innerHeight / 2; }))); await pp.waitForTimeout(200);
+    const buried = await pp.evaluate(function () {
+      const h = window._hoveredPropIndex;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); const raw = raycaster.intersectObjects(window._propMeshes).length; return { hover: h, raw: raw, direct: window.pickPropIndex ? window.pickPropIndex(raycaster, [plane, window.surroundPlane]) : 'none' };
+    });
+    await pp.mouse.move(setup.cx, setup.cy); await pp.waitForTimeout(150); await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
+    const afterClick = await pp.evaluate(function () { return { sel: window.selectedPropIndex, panel: getComputedStyle(document.getElementById('prop-editor-panel')).display, pointerdowns: window.__pd }; });
+    // a small prop buried deep (its geometry cannot be hit by the ray at all): a click next to its base must not pick it either; at ground level it is picked
+    await pp.evaluate(function () {
+      const t = window.__t; scene.remove(t.buried); window._propMeshes = window._propMeshes.filter(function (mm) { return mm !== t.buried; }); window.placedTrees.length = t.n0;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); const q = raycaster.intersectObject(plane)[0].point;
+      window.placedTrees.push({ type: 'zz_small', x: q.x, z: q.z, y: q.y, yOffset: -45, scale: 1, rot: 0 });
+      window.deselectProp();
+    });
+    await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
+    const smallBuried = await pp.evaluate(function () { return { sel: window.selectedPropIndex, hidden: window.propIsHidden(window.placedTrees[window.placedTrees.length - 1]) }; });
+    await pp.evaluate(function () { window.placedTrees[window.placedTrees.length - 1].yOffset = 0; window.deselectProp(); });
+    await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
+    const smallVisible = await pp.evaluate(function () { return { sel: window.selectedPropIndex, expect: window.placedTrees.length - 1 }; });
+    checks.push({ name: 'a small prop buried deep is not picked by a click next to its base; at ground level it is', ok: smallBuried.hidden === true && smallBuried.sel == null && smallVisible.sel === smallVisible.expect, detail: JSON.stringify([smallBuried, smallVisible]) });
+    // the same prop standing on the ground is picked
+    const above = await pp.evaluate(function () {
+      const t = window.__t; scene.remove(t.buried); window._propMeshes = window._propMeshes.filter(function (m) { return m !== t.buried; }); window.placedTrees.length = t.n0;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      const p0 = raycaster.intersectObject(plane)[0].point;
+      const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(6, 30, 6), new THREE.MeshBasicMaterial(), 1);
+      mesh.propType = 'zz_above'; mesh.frustumCulled = false;
+      mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(p0.x, p0.y + 8, p0.z)); mesh.instanceMatrix.needsUpdate = true;
+      scene.add(mesh); mesh.updateMatrixWorld(true);
+      window._propMeshes.push(mesh); window.placedTrees.push({ type: 'zz_above', x: p0.x, z: p0.z, y: 0, scale: 1, rot: 0 }); window.__t.above = mesh;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      return { idx: window.pickPropIndex ? window.pickPropIndex(raycaster, [plane, window.surroundPlane]) : -2, expect: window.placedTrees.length - 1 };
+    });
+    await pp.evaluate(function () { const t = window.__t; scene.remove(t.above); window._propMeshes = window._propMeshes.filter(function (m) { return m !== t.above; }); window.placedTrees.length = t.n0; window.deselectProp(); });
+    // the brush mode of the props tool paints over props: a prop under the pointer does not swallow the click (single mode picks it)
+    const modes = await pp.evaluate(function () {
+      const n0 = window.placedTrees.length;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); const q = raycaster.intersectObject(plane)[0].point;
+      const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(8, 40, 8), new THREE.MeshBasicMaterial(), 1);
+      mesh.propType = 'zz_mode'; mesh.frustumCulled = false;
+      mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(q.x, q.y + 10, q.z)); mesh.instanceMatrix.needsUpdate = true; scene.add(mesh); mesh.updateMatrixWorld(true);
+      window._propMeshes.push(mesh); window.placedTrees.push({ type: 'zz_mode', x: q.x + 30, z: q.z, y: q.y, scale: 1, rot: 0 }); // anchor far from the click: only the ray can pick it
+      window.__mode = { n0: n0, mesh: mesh, tool: window.currentTool, pm: window._propsToolMode };
+      window.deselectProp(); window._propsToolMode = 'BRUSH'; setTool('PROPS');
+      return n0;
+    });
+    await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
+    const inBrush = await pp.evaluate(function () { return window.selectedPropIndex; });
+    await pp.evaluate(function () { window.deselectProp(); window._propsToolMode = 'SINGLE'; });
+    await pp.mouse.click(setup.cx, setup.cy); await pp.waitForTimeout(300);
+    const inSingle = await pp.evaluate(function () { const r = { sel: window.selectedPropIndex, last: window.placedTrees.length - 1 }; const t = window.__mode; scene.remove(t.mesh); window._propMeshes = window._propMeshes.filter(function (mm) { return mm !== t.mesh; }); window.placedTrees.length = t.n0; window.deselectProp(); window._propsToolMode = t.pm; setTool('INSPECT'); return r; });
+    checks.push({ name: 'a prop under the pointer is picked in single mode but does not swallow a click in the brush mode', ok: inBrush == null && inSingle.sel === inSingle.last, detail: JSON.stringify([modes, inBrush, inSingle]) });
+    checks.push({ name: 'a prop buried under the ground is not hovered, and a click does not open the edit panel', ok: setup.ok && buried.raw > 0 && buried.hover == null && buried.direct === -1 && afterClick.pointerdowns === 1 && afterClick.sel == null && afterClick.panel === 'none', detail: JSON.stringify([setup, buried, afterClick]) });
+    checks.push({ name: 'a prop standing on the ground is still picked', ok: above.idx === above.expect, detail: JSON.stringify(above) });
+    await pp.close();
+
   } catch (e) { checks.push({ name: 'quick draft reopen check ran', ok: false, detail: 'step ' + reopenStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
 
   await browser.close();
