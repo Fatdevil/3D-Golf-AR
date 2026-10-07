@@ -880,6 +880,12 @@
                 stat.innerHTML = "Saved! Your link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
                 return true;
             } else {
+                if (data.code === 'already_published') {
+                    // saved as published elsewhere (another tab or device): this tab must not offer "Save draft" any more
+                    window._editIsPublished = true;
+                    let draftBtn = document.getElementById('btn-save-draft');
+                    if (draftBtn) draftBtn.style.display = 'none';
+                }
                 showError("Failed: " + data.error);
             }
         } catch(e) {

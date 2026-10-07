@@ -171,6 +171,14 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const lv = (await pool.query('SELECT version FROM courses WHERE share_code = $1', [legacyCode])).rows[0];
     check('publish again: a course without a draft flag (older course) counts as published and gets a new version', legacy.success && lv.version === 2, JSON.stringify([legacy, lv]));
 
+    // a stale tab (or another device) cannot take a published course back to a draft
+    const stale = await page.evaluate(async function (c) {
+      const res = await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') }, body: JSON.stringify({ name: 'Stale', holes: [], edit_code: c, is_draft: true }) });
+      return { status: res.status, body: await res.json() };
+    }, code);
+    const still = (await pool.query('SELECT is_draft, name FROM courses WHERE share_code = $1', [code])).rows[0];
+    check('a published course cannot be saved back to a draft by a stale tab (409, row untouched)', stale.status === 409 && stale.body.code === 'already_published' && still.is_draft === false && still.name !== 'Stale', JSON.stringify([stale, still]));
+
     // 8. a draft can be deleted from the list
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 99 }); document.getElementById('course-name-input').value = 'Att radera'; smartSaveDraft(); }); await wait(6000);
