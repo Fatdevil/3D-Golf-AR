@@ -50,17 +50,19 @@
         const model = root.customModels && root.customModels[type];
         if (!model || model === 'LOADING' || !model.isObject3D) return null;
         model.updateWorldMatrix(true, true);
-        const pts = [];
+        const pts = [], pts3 = [];
         let total = 0;
         model.traverse(function (m) { if (m.isMesh && m.geometry && m.geometry.attributes.position) total += m.geometry.attributes.position.count; });
-        const stride = Math.max(1, Math.ceil(total / 40000));   // a mountain can have a million vertices; the outline does not need them all
+        const stride = Math.max(1, Math.ceil(total / 40000)), stride3 = stride * Math.max(1, Math.ceil(total / stride / 4000));   // a mountain can have a million vertices; the outline does not need them all
         model.traverse(function (m) {
             if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
             const pos = m.geometry.attributes.position;
             const e = m.matrixWorld.elements;
             for (let i = 0; i < pos.count; i += stride) {
                 const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-                pts.push([e[0] * x + e[4] * y + e[8] * z + e[12], e[2] * x + e[6] * y + e[10] * z + e[14]]);
+                const wx = e[0] * x + e[4] * y + e[8] * z + e[12], wy = e[1] * x + e[5] * y + e[9] * z + e[13], wz = e[2] * x + e[6] * y + e[10] * z + e[14];
+                pts.push([wx, wz]);
+                if (i % stride3 === 0) pts3.push([wx, wy, wz]);   // a thinner 3D sample, for figures that are tilted or rolled
             }
         });
         if (pts.length < 3) return null;
@@ -68,25 +70,53 @@
         if (hull.length < 3) return null;
         let rad = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
         hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minZ = Math.min(minZ, p[1]); maxZ = Math.max(maxZ, p[1]); });
-        return { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ };
+        return { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ, pts3: pts3, model: model, sx: model.scale.x, tilted: {} };
     }
     function footprintOf(type) {
-        if (fpCache[type]) return fpCache[type];
+        const hit = fpCache[type], live = root.customModels && root.customModels[type];
+        // Saving a prop as the new default rescales the model itself (arcade-library.js savePropAsDefault): measure it again
+        if (hit && hit.model === live && hit.sx === live.scale.x) return hit;
         const fp = computeFootprint(type);
         if (fp) { fpCache[type] = fp; return fp; }
         // not loaded yet: ask for it once; the map redraws twice a second and picks it up
         if (!fpAsked[type] && typeof root.loadAsset === 'function' && reg(type)) { fpAsked[type] = true; try { root.loadAsset(type); } catch (err) { /* stays a circle */ } }
         return null;
     }
-    // The figure's outline on the ground in world metres (turned and scaled the way the instance matrix does it), or null
-    function outlineOf(o) {
+    // Outline of a figure at scale 1, relative to its centre, turned the way rebuildInstancePool turns it (Euler YXZ: tilt, turn, roll).
+    // Without tilt or roll that is the cached hull; with them the 3D sample is turned and a new hull taken (cached per angle set).
+    function relativeOutline(o) {
         const fp = footprintOf(o.type);
         if (!fp) return null;
-        const s = o.scale || 1, c = Math.cos(o.rot || 0), n = Math.sin(o.rot || 0);
-        return fp.hull.map(function (p) { return [o.x + s * (p[0] * c + p[1] * n), o.z + s * (-p[0] * n + p[1] * c)]; });
+        const rot = o.rot || 0, tilt = o.tiltX || 0, roll = o.rollZ || 0;
+        if (!tilt && !roll) {
+            const c = Math.cos(rot), n = Math.sin(rot);
+            return { hull: fp.hull.map(function (p) { return [p[0] * c + p[1] * n, -p[0] * n + p[1] * c]; }), rad: fp.rad };
+        }
+        const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3);
+        if (!fp.tilted[key]) {
+            const cz = Math.cos(roll), sz = Math.sin(roll), cx = Math.cos(tilt), sx = Math.sin(tilt), cy = Math.cos(rot), sy = Math.sin(rot);
+            const flat = fp.pts3.map(function (p) {
+                const x1 = p[0] * cz - p[1] * sz, y1 = p[0] * sz + p[1] * cz;
+                const y2 = y1 * cx - p[2] * sx, z2 = y1 * sx + p[2] * cx;
+                return [x1 * cy + z2 * sy, -x1 * sy + z2 * cy];
+            });
+            const hull = flat.length >= 3 ? convexHull(flat) : [];
+            let rad = 0;
+            hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); });
+            if (Object.keys(fp.tilted).length > 40) fp.tilted = {};
+            fp.tilted[key] = hull.length >= 3 ? { hull: hull, rad: rad } : { hull: fp.hull, rad: fp.rad };
+        }
+        return fp.tilted[key];
     }
-    // Furthest reach of a figure from its centre, whatever way it is turned. Without a loaded model: a rough guess
-    function radiusOf(o) { const fp = footprintOf(o.type); return fp ? fp.rad * (o.scale || 1) : 0.6 * heightOf(o); }
+    // The figure's outline on the ground in world metres, or null while its model has not loaded
+    function outlineOf(o) {
+        const rel = relativeOutline(o);
+        if (!rel) return null;
+        const s = o.scale || 1;
+        return rel.hull.map(function (p) { return [o.x + s * p[0], o.z + s * p[1]]; });
+    }
+    // Furthest reach of a figure from its centre. Without a loaded model: a rough guess
+    function radiusOf(o) { const rel = relativeOutline(o); return rel ? rel.rad * (o.scale || 1) : 0.6 * heightOf(o); }
     function pointInPoly(x, z, poly) {
         let inside = false;
         for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
