@@ -426,6 +426,7 @@
   "performUndo:function",
   "perlin2D:function",
   "physicsTerrainAt:function",
+  "pickPropIndex:function",
   "pickSplinePoint:function",
   "placedTrees:object",
   "playerScores:object",

@@ -833,6 +833,55 @@ function serve() {
     })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
+  // a prop buried under the ground (or a huge one behind it) is not under the pointer: it used to be picked through the terrain,
+  // so the edit panel opened and closed on its own while the object was being changed
+  try {
+    await page.evaluate(function () { setMode('BUILD'); setTool('INSPECT'); });
+    await page.waitForTimeout(500);
+    const setup = await page.evaluate(function () {
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      const g = raycaster.intersectObject(plane);
+      if (!g.length) return { ok: false };
+      const p0 = g[0].point;
+      const mk = function (type, y, h) {
+        const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(400, h, 400), new THREE.MeshBasicMaterial(), 1);
+        mesh.propType = type; mesh.frustumCulled = false;
+        mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(p0.x, y, p0.z)); mesh.instanceMatrix.needsUpdate = true;
+        scene.add(mesh); mesh.updateMatrixWorld(true);
+        window._propMeshes = (window._propMeshes || []).concat([mesh]);
+        window.placedTrees.push({ type: type, x: p0.x, z: p0.z, y: 0, scale: 1, rot: 0 });
+        return mesh;
+      };
+      window.__t = { n0: window.placedTrees.length, buried: mk('zz_buried', p0.y - 31, 60) };
+      return { ok: true, y: p0.y };
+    });
+    await page.mouse.move(640, 380); await page.waitForTimeout(100);
+    await page.mouse.move(500, 350); await page.waitForTimeout(100);
+    await page.mouse.move(Math.round(await page.evaluate(function () { return innerWidth / 2; })), Math.round(await page.evaluate(function () { return innerHeight / 2; }))); await page.waitForTimeout(200);
+    const buried = await page.evaluate(function () {
+      const h = window._hoveredPropIndex;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); const raw = raycaster.intersectObjects(window._propMeshes).length; return { hover: h, raw: raw, direct: window.pickPropIndex ? window.pickPropIndex(raycaster, [plane, window.surroundPlane]) : 'none' };
+    });
+    await page.mouse.click(Math.round(await page.evaluate(function () { return innerWidth / 2; })), Math.round(await page.evaluate(function () { return innerHeight / 2; }))); await page.waitForTimeout(300);
+    const afterClick = await page.evaluate(function () { return { sel: window.selectedPropIndex, panel: getComputedStyle(document.getElementById('prop-editor-panel')).display }; });
+    // the same prop standing on the ground is picked
+    const above = await page.evaluate(function () {
+      const t = window.__t; scene.remove(t.buried); window._propMeshes = window._propMeshes.filter(function (m) { return m !== t.buried; }); window.placedTrees.length = t.n0;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      const p0 = raycaster.intersectObject(plane)[0].point;
+      const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(6, 30, 6), new THREE.MeshBasicMaterial(), 1);
+      mesh.propType = 'zz_above'; mesh.frustumCulled = false;
+      mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(p0.x, p0.y + 8, p0.z)); mesh.instanceMatrix.needsUpdate = true;
+      scene.add(mesh); mesh.updateMatrixWorld(true);
+      window._propMeshes.push(mesh); window.placedTrees.push({ type: 'zz_above', x: p0.x, z: p0.z, y: 0, scale: 1, rot: 0 }); window.__t.above = mesh;
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      return { idx: window.pickPropIndex ? window.pickPropIndex(raycaster, [plane, window.surroundPlane]) : -2, expect: window.placedTrees.length - 1 };
+    });
+    await page.evaluate(function () { const t = window.__t; scene.remove(t.above); window._propMeshes = window._propMeshes.filter(function (m) { return m !== t.above; }); window.placedTrees.length = t.n0; window.deselectProp(); });
+    checks.push({ name: 'a prop buried under the ground is not hovered, and a click does not open the edit panel', ok: setup.ok && buried.raw > 0 && buried.hover == null && buried.direct === -1 && afterClick.sel == null && afterClick.panel === 'none', detail: JSON.stringify([setup, buried, afterClick]) });
+    checks.push({ name: 'a prop standing on the ground is still picked', ok: above.idx === above.expect, detail: JSON.stringify(above) });
+  } catch (e) { checks.push({ name: 'prop picking checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }); }
+
   // voice commands: say a phrase to the recogniser and the builder does what the button does
   try {
     const vc = await page.evaluate(async function () {
