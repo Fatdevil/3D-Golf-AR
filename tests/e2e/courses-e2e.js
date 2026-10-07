@@ -192,6 +192,19 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('overlapping publish and stale draft saves never leave a published course as a draft (25 courses)', Number(raced.drafts) === 0 && race.every(function (r) { return r[0] === 200; }), JSON.stringify([raced, race.filter(function (r) { return r[0] !== 200; }).length]));
     await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-R%']);
 
+    // two overlapping first publications of the same draft: the second one is a new version, as if it had come after
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id) SELECT $1 || '-V' || g, 'Ver ' || g, 'o', '[]'::jsonb, true, $2 FROM generate_series(1, 20) g", [tag, deviceId]);
+    await page.evaluate(async function (t) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const post = function (c) { return fetch('/api/courses', { method: 'POST', headers: hdr, body: JSON.stringify({ name: 'pub', holes: [], edit_code: c, is_draft: false }) }); };
+      const jobs = [];
+      for (let g = 1; g <= 20; g++) { const c = t + '-V' + g; jobs.push(Promise.all([post(c), post(c)])); }
+      await Promise.all(jobs);
+    }, tag);
+    const vers = (await pool.query("SELECT count(*) FILTER (WHERE version = 2) AS v2, count(*) AS n FROM courses WHERE share_code LIKE $1", [tag + '-V%'])).rows[0];
+    check('two overlapping first publications of one draft end as version 2 (20 courses)', Number(vers.v2) === 20 && Number(vers.n) === 20, JSON.stringify(vers));
+    await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-V%']);
+
     // 8. a draft can be deleted from the list
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 99 }); document.getElementById('course-name-input').value = 'Att radera'; smartSaveDraft(); }); await wait(6000);

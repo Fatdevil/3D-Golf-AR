@@ -796,8 +796,10 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
             if (wasPublished && draftStatus) {
                 return res.status(409).json({ error: 'This course is already published. Use Publish to update it.', code: 'already_published' });
             }
-            if (wasPublished && !draftStatus) {
-                versionBump = ', version = COALESCE(version, 1) + 1, play_count = 0';
+            if (!draftStatus) {
+                // decided from the row as the UPDATE sees it, so two overlapping first publications make the second one version 2
+                versionBump = `, version = CASE WHEN is_draft IS DISTINCT FROM true THEN COALESCE(version, 1) + 1 ELSE COALESCE(version, 1) END,
+                     play_count = CASE WHEN is_draft IS DISTINCT FROM true THEN 0 ELSE play_count END`;
             }
 
             const updateResult = await pool.query(
