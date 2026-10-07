@@ -937,7 +937,8 @@
                 method: 'DELETE',
                 headers: { 'x-user-id': deviceId }
             });
-            if (res.ok) {
+            // a draft the server no longer has (404) is gone either way: its local entry must be removable; 403 and the like are not
+            if (res.ok || (isDraft && res.status === 404)) {
                 try { localStorage.setItem('golf_os_my_drafts', JSON.stringify(JSON.parse(localStorage.getItem('golf_os_my_drafts') || '[]').filter(d => d.code !== code))); } catch (e) {}
                 await loadMyCourses();
                 loadDrafts();

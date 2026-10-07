@@ -180,6 +180,13 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await wait(3500);
     const gone = (await pool.query("SELECT count(*)::int AS n FROM courses WHERE name = 'Att radera' AND owner_id = $1", [deviceId])).rows[0].n === 0;
     check('delete: the draft is gone from the list and from the server', gone && (await cards('#drafts-carousel')).indexOf('Att radera') < 0);
+    // a local entry whose server row is already gone can still be removed
+    await page.evaluate(function () { const l = JSON.parse(localStorage.getItem('golf_os_my_drafts') || '[]'); l.push({ code: 'NOSUCH', name: 'Borta', date: new Date().toISOString() }); localStorage.setItem('golf_os_my_drafts', JSON.stringify(l)); });
+    await listPage();
+    check('delete: a stale local draft is listed', (await cards('#drafts-carousel')).indexOf('Borta') >= 0);
+    await page.evaluate(function () { window.confirm = function () { return true; }; const c = Array.from(document.querySelectorAll('#drafts-carousel .build-card')).find(function (x) { return /Borta/.test(x.textContent); }); c.querySelector('.card-btn-delete').click(); });
+    await wait(3000);
+    check('delete: a stale local draft (server row already gone) can be removed', (await cards('#drafts-carousel')).indexOf('Borta') < 0 && !/NOSUCH/.test(await page.evaluate(function () { return localStorage.getItem('golf_os_my_drafts'); })));
   } catch (e) {
     console.error(e); failed++;
   }
