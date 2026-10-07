@@ -867,6 +867,22 @@ function serve() {
       say('change green'); check('voice: "change green" opens the green builder', window._smartBuilderType === 'GREEN' && window.currentTool === 'SMART_BUILDER');
       window.__sr[window.__sr.length - 1].onerror({ error: 'not-allowed' });
       check('voice: a blocked microphone turns listening off', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'false');
+      // a failed microphone (not a pause) turns listening off for good instead of restarting
+      document.getElementById('voice-btn').click();
+      const rf = window.__sr[window.__sr.length - 1], nf = window.__sr.length;
+      rf.onerror({ error: 'audio-capture' }); rf.onend && rf.onend(); await new Promise(function (r) { setTimeout(r, 600); });
+      check('voice: a fatal recognition error turns listening off and does not restart', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'false' && window.__sr.length === nf, document.getElementById('voice-btn').getAttribute('aria-pressed') + ' ' + (window.__sr.length - nf));
+      document.getElementById('voice-btn').click();
+      const rp = window.__sr[window.__sr.length - 1]; rp.onerror({ error: 'no-speech' });
+      check('voice: a pause without speech keeps listening', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'true');
+      // "spara" says saved only when the write happened
+      const sq = window.saveQuickDraft; const toastText = function () { const t = document.getElementById('build-toast'); return t ? t.textContent : ''; };
+      window.saveQuickDraft = function () { return Promise.resolve({ ok: 1 }); }; say('spara'); await new Promise(function (r) { setTimeout(r, 100); }); const tOk = toastText();
+      window.saveQuickDraft = function () { return Promise.resolve(null); }; say('spara'); await new Promise(function (r) { setTimeout(r, 100); }); const tNull = toastText();
+      window.saveQuickDraft = function () { return Promise.reject(new Error('disk')); }; say('spara'); await new Promise(function (r) { setTimeout(r, 100); }); const tRej = toastText();
+      window.saveQuickDraft = sq;
+      check('voice: "spara" says saved only after a successful write', /Sparat|Saved/.test(tOk) && /Kunde inte spara|Could not save/.test(tNull) && /Kunde inte spara|Could not save/.test(tRej), JSON.stringify([tOk, tNull, tRej]));
+      document.getElementById('voice-btn').click(); // off
       document.getElementById('voice-lang').click(); // back to what it was
       setMode('TEST'); await new Promise(function (r) { setTimeout(r, 1000); });
       check('voice: the button is hidden outside build mode', getComputedStyle(document.getElementById('voice-ctl')).display === 'none');

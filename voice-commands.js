@@ -51,10 +51,10 @@
         en: { GREEN: 'Green', FAIRWAY: 'Fairway', BUNKER: 'Bunker', TEE: 'Tee', SMART_BUILDER: 'Hole', INSPECT: 'Inspect', SCULPT: 'Sculpt', PAINT: 'Paint', WATER: 'Water', PROPS: 'Objects', ENV: 'Environment' }
     };
     const TEXT = {
-        sv: { heard: 'Hörde', none: 'inget kommando', undo: 'Ångra', redo: 'Gör om', next: 'Nästa hål', prev: 'Föregående hål', saved: 'Sparat', play: 'Sparar och spelar…', off: 'Röststyrning av',
+        sv: { heard: 'Hörde', none: 'inget kommando', undo: 'Ångra', redo: 'Gör om', next: 'Nästa hål', prev: 'Föregående hål', saved: 'Sparat', saveFailed: 'Kunde inte spara just nu', micFailed: 'Röstigenkänningen fungerar inte här (mikrofon eller språk saknas)', play: 'Sparar och spelar…', off: 'Röststyrning av',
               notBuild: 'Röstkommandon fungerar i byggläget', unsupported: 'Den här webbläsaren stöder inte röstigenkänning (prova Chrome eller Safari)', denied: 'Mikrofonen är blockerad. Tillåt den i webbläsarens inställningar',
               help: 'Säg: ändra green · fairway · bunker · tee · forma · måla · vatten · objekt · miljö · ångra · gör om · nästa hål · föregående hål · spara · spara och spela', on: 'Lyssnar…', mic: 'Röststyrning' },
-        en: { heard: 'Heard', none: 'no command', undo: 'Undo', redo: 'Redo', next: 'Next hole', prev: 'Previous hole', saved: 'Saved', play: 'Saving and playing…', off: 'Voice control off',
+        en: { heard: 'Heard', none: 'no command', undo: 'Undo', redo: 'Redo', next: 'Next hole', prev: 'Previous hole', saved: 'Saved', saveFailed: 'Could not save right now', micFailed: 'Speech recognition does not work here (no microphone or language)', play: 'Saving and playing…', off: 'Voice control off',
               notBuild: 'Voice commands work in build mode', unsupported: 'This browser does not support speech recognition (try Chrome or Safari)', denied: 'The microphone is blocked. Allow it in the browser settings',
               help: 'Say: change green · fairway · bunker · tee · sculpt · paint · water · objects · environment · undo · redo · next hole · previous hole · save · save and play', on: 'Listening…', mic: 'Voice control' }
     };
@@ -104,7 +104,13 @@
                 if (typeof root.changeHole !== 'function') return false;
                 root.changeHole(cmd.value); if (typeof root.updateSBHoleDisplay === 'function') root.updateSBHoleDisplay();
                 toast('🎙️ ' + (cmd.value > 0 ? tx('next') : tx('prev'))); return true;
-            case 'save': if (typeof root.saveQuickDraft === 'function') { root.saveQuickDraft(); toast('🎙️ ' + tx('saved'), '#10b981'); return true; } return false;
+            case 'save':
+                if (typeof root.saveQuickDraft !== 'function') return false;
+                // saved is only announced once the write is done (saveLevel gives null while the course is still loading, and a write can fail)
+                Promise.resolve().then(function () { return root.saveQuickDraft(); })
+                    .then(function (r) { toast(r ? '🎙️ ' + tx('saved') : '🎙️ ' + tx('saveFailed'), r ? '#10b981' : '#ef4444'); })
+                    .catch(function () { toast('🎙️ ' + tx('saveFailed'), '#ef4444'); });
+                return true;
             case 'saveplay': if (typeof root.saveAndPlay === 'function') { toast('🎙️ ' + tx('play'), '#10b981'); root.saveAndPlay(); return true; } return false;
         }
         return false;
@@ -155,7 +161,10 @@
             }
         };
         rec.onerror = function (e) {
-            if (e && (e.error === 'not-allowed' || e.error === 'service-not-allowed')) { stop(); toast(tx('denied'), '#ef4444'); }
+            const err = e && e.error;
+            if (!err || err === 'no-speech' || err === 'aborted') return; // a pause or our own stop: the session is simply started again
+            // anything else will fail again at once (blocked or missing microphone, language or service not available): turn off instead of retrying
+            stop(); toast(err === 'not-allowed' || err === 'service-not-allowed' ? tx('denied') : tx('micFailed'), '#ef4444');
         };
         // the browser ends a session after a pause: start a new one while the button is on
         rec.onend = function () { if (listening) { clearTimeout(restartTimer); restartTimer = setTimeout(function () { if (listening) { try { build(); } catch (er) { stop(); } } }, 250); } };
