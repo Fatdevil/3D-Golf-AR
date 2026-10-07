@@ -851,6 +851,16 @@
         }
     }
 
+    // my published courses, from whichever list was loaded (the plate picker of the collections reads them too)
+    function myPublishedCourses() {
+        if (_myCourses) return _myCourses.filter(c => !c.is_draft);
+        let myDeviceId = localStorage.getItem('golf_os_device_id');
+        return _allCourses.filter(c => c.owner_id === myDeviceId);
+    }
+    function findCourseByCode(code) {
+        return (_myCourses || []).find(x => x.share_code === code) || _allCourses.find(x => x.share_code === code);
+    }
+
     async function loadPublished() {
         try {
             if (_myCourses) { renderMyPublished(); return; }
@@ -872,7 +882,7 @@
             return;
         }
 
-        let myCourses = _myCourses ? _myCourses.filter(c => !c.is_draft) : _allCourses.filter(c => c.owner_id === myDeviceId);
+        let myCourses = myPublishedCourses();
         let html = '';
 
         myCourses.forEach(c => {
@@ -1041,10 +1051,7 @@
         let list = document.getElementById('plate-picker-list');
         
         // Show my published 3-hole plates
-        let myCourses = _allCourses.filter(c => {
-            let myDeviceId = localStorage.getItem('golf_os_device_id');
-            return c.owner_id === myDeviceId && !c.is_range;
-        });
+        let myCourses = myPublishedCourses().filter(c => !c.is_range);
 
         let html = '';
         if (myCourses.length === 0) {
@@ -1084,7 +1091,7 @@
         let totalPar = 0;
         for (let p of plates) {
             let code = typeof p === 'string' ? p : p.plate_code;
-            let c = _allCourses.find(x => x.share_code === code);
+            let c = findCourseByCode(code);
             if (c) totalPar += (c.total_par || 12);
         }
 

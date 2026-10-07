@@ -107,6 +107,9 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const drafts2 = await cards('#drafts-carousel'), pub2 = await cards('#published-carousel');
     check('list: published course is under My published and no longer under My drafts', pub2.indexOf('E2E Bana v2') >= 0 && drafts2.indexOf('E2E Bana v2') < 0, JSON.stringify([drafts2, pub2]));
 
+    const forPicker = await page.evaluate(function (c) { return { mine: myPublishedCourses().map(function (x) { return x.name; }), found: !!findCourseByCode(c) }; }, code);
+    check('collections: the plate picker sees my published course', forPicker.mine.indexOf('E2E Bana v2') >= 0 && forPicker.found, JSON.stringify(forPicker));
+
     // 4. the published course reopens in the builder with its definitions; publishing again is a new version of the same course
     await open('autorun=edit_build&edit=' + code, 6000);
     st = await state();
