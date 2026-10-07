@@ -738,7 +738,8 @@ function serve() {
   let reopenStep = 'start';
   try {
     await page.close(); // the first page is done; its render loop would slow the two below
-    await ctx.close();  // and the pages below get a clean browser profile of their own (the stored draft is theirs alone)
+    await browser.close(); // and the pages below get a browser of their own (a clean profile: the stored draft is theirs alone)
+    browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
     const ctx2 = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
     await ctx2.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
       const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
@@ -769,6 +770,15 @@ function serve() {
     const reopened = await slow.evaluate(async function () { const d = await window.ArcadeStorage.loadFullDraft('quick_draft'); return { flag: !!courseHoles[0].flag, stored: !!(d && d.holes && d.holes[0].flag) }; });
     await slow.close();
     checks.push({ name: 'quick draft reopened while the page starts slowly keeps the course (start-up saves do not overwrite it)', ok: seeded && reopened.flag && reopened.stored, detail: JSON.stringify([seeded, reopened]) });
+    // the device-id call never answers: the course is still read after a few seconds (the builder opens) and nothing overwrote it before that
+    reopenStep = 'hung page'; const hung = await ctx2.newPage();
+    await hung.route(base + '/api/auth/register', function () { /* never answered */ });
+    await hung.goto(base + '/arcade.html?autorun=edit_build', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await hung.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await hung.waitForTimeout(3000);
+    const hungState = await hung.evaluate(async function () { const d = await window.ArcadeStorage.loadFullDraft('quick_draft'); return { flag: !!courseHoles[0].flag, stored: !!(d && d.holes && d.holes[0].flag) }; });
+    await hung.close();
+    checks.push({ name: 'quick draft opens even when the device-id call hangs, and keeps the course', ok: hungState.flag && hungState.stored, detail: JSON.stringify(hungState) });
   } catch (e) { checks.push({ name: 'quick draft reopen check ran', ok: false, detail: 'step ' + reopenStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
 
   await browser.close();

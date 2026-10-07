@@ -313,11 +313,10 @@
 
     // Until loadLevel has read the stored course, the world is still the empty default. Anything that saved in that window (the surroundings
     // dropdowns, removePanorama and others run while the page starts) overwrote the stored draft with an empty course before it was read,
-    // so opening "Snabbutkast" showed nothing. loadLevel clears the flag when it is done; the timer is only a net if it never runs.
-    if (window._courseLoading === undefined) {
-        window._courseLoading = true;
-        setTimeout(function () { window._courseLoading = false; }, 60000);
-    }
+    // so opening "Snabbutkast" showed nothing. loadLevel clears the flag when it is done. It always runs: arcade.html starts it when the device
+    // id is known or after 8 s at the latest, and there is deliberately no timer that releases the flag, since that would let a slow load
+    // be overwritten again.
+    if (window._courseLoading === undefined) window._courseLoading = true;
 
     async function saveLevel(isAuto = false, noEdit = false) {
         if (window._courseLoading) return null; // not now: see above
