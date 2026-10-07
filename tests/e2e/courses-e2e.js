@@ -1,7 +1,7 @@
 // End-to-end test of saved and published courses: the real server.js against a real Postgres, driven through the real pages in Chromium.
 //   E2E_DATABASE_URL=postgres://user@127.0.0.1:5432/golf_test npm run e2e
 // Needs a Postgres on localhost (the test refuses any other host) and the browser libraries of the smoke test (npm --prefix tests install).
-// It only touches rows of its own: courses owned by the browser's fresh device id and the filler rows 'ZZ...'.
+// It only touches rows of its own: courses owned by the browser's fresh device id and the filler rows tagged 'E2E-<random>-...'.
 //
 // Covers: save a draft (twice: one record), list it, reopen it with its greens / fairways / bunkers / tee boxes, publish it (the same record,
 // not a copy), "My published" next to 60 newer courses of others, reopen the published course in the builder with its definitions, publish a
@@ -42,9 +42,10 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
   const BASE = 'http://127.0.0.1:' + port;
   const server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), DATABASE_URL: URL_DB }), stdio: 'ignore' });
   let deviceId = null, browser = null;
+  const tag = 'E2E-' + require('crypto').randomBytes(3).toString('hex').toUpperCase(); // the application's own share codes never contain a hyphen
   async function cleanup() {
     try { if (deviceId) await pool.query('DELETE FROM course_records WHERE course_code IN (SELECT share_code FROM courses WHERE owner_id = $1)', [deviceId]); } catch (e) { /* none */ }
-    try { await pool.query("DELETE FROM courses WHERE owner_id = $1 OR share_code LIKE 'ZZ%'", [deviceId || 'none']); } catch (e) { /* none */ }
+    try { await pool.query("DELETE FROM courses WHERE owner_id = $1 OR share_code LIKE $2", [deviceId || 'none', tag + '-%']); } catch (e) { /* none */ }
     try { if (browser) await browser.close(); } catch (e) { /* none */ }
     server.kill(); await pool.end();
   }
@@ -96,8 +97,10 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     let st = await state();
     check('reopen draft: green, fairway, bunkers and tee boxes are back', st.flag && st.green && st.fairways === 1 && st.bunkers === 2 && st.teeBoxes === 3 && st.name === 'E2E Bana v2', JSON.stringify(st));
 
-    // 3. publish: the draft becomes the published course
-    await publish(); await wait(6000);
+    // 3. publish: the draft becomes the published course (and the working copy knows it by the time publishing is reported done)
+    const qd = await page.evaluate(async function () { window._bypassCapture = true; await publishCourse({ isDraft: false }); const d = await ArcadeStorage.loadFullDraft('quick_draft'); return { published: d.edit_is_published, code: d.edit_code }; });
+    check('publish: the working copy is marked published before success is reported', qd.published === true && qd.code === code, JSON.stringify(qd));
+    await wait(1500);
     r = await rows();
     check('publish: the draft became the published course (same record, no copy, version 1)', r.length === 1 && r[0].share_code === code && r[0].is_draft === false && r[0].version === 1, JSON.stringify(r));
     const ratings = (await pool.query('SELECT course_rating::float AS cr, slope_rating AS sr, stroke_index, hole_count FROM courses WHERE owner_id = $1', [deviceId])).rows[0];
@@ -124,7 +127,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('builder data is for the owner only', api.owner.canEdit && api.owner.builder && !api.guest.canEdit && !api.guest.builder, JSON.stringify(api));
 
     // 5. My published is not limited to the newest 50 courses of everybody
-    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, created_at) SELECT 'ZZ' || g, 'Other ' || g, 'o', '[]'::jsonb, false, 'someone-else', now() + (g || ' minutes')::interval FROM generate_series(1, 60) g");
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, created_at) SELECT $1 || '-' || g, 'Other ' || g, 'o', '[]'::jsonb, false, 'someone-else', now() + (g || ' minutes')::interval FROM generate_series(1, 60) g", [tag]);
     await listPage();
     check('list: my published course is still listed with 60 newer courses by others', (await cards('#published-carousel')).indexOf('E2E Bana v3') >= 0);
 
@@ -149,12 +152,13 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('list: the play copy is not shown among My drafts', drafts3.filter(function (n) { return n !== 'Snabbutkast'; }).length === 0, JSON.stringify(drafts3));
 
     // an older course whose draft flag is NULL counts as published: publishing it again is a new version
-    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, version) VALUES ('ZZLEGACY', 'Legacy', 'o', '[]'::jsonb, NULL, $1, 1)", [deviceId]);
-    const legacy = await page.evaluate(async function () {
-      const res = await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') }, body: JSON.stringify({ name: 'Legacy', holes: [], edit_code: 'ZZLEGACY', is_draft: false }) });
+    const legacyCode = tag + '-L';
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, version) VALUES ($1, 'Legacy', 'o', '[]'::jsonb, NULL, $2, 1)", [legacyCode, deviceId]);
+    const legacy = await page.evaluate(async function (lc) {
+      const res = await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') }, body: JSON.stringify({ name: 'Legacy', holes: [], edit_code: lc, is_draft: false }) });
       return res.json();
-    });
-    const lv = (await pool.query("SELECT version FROM courses WHERE share_code = 'ZZLEGACY'")).rows[0];
+    }, legacyCode);
+    const lv = (await pool.query('SELECT version FROM courses WHERE share_code = $1', [legacyCode])).rows[0];
     check('publish again: a course without a draft flag (older course) counts as published and gets a new version', legacy.success && lv.version === 2, JSON.stringify([legacy, lv]));
 
     // 8. a draft can be deleted from the list

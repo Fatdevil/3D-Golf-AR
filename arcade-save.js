@@ -869,7 +869,10 @@
                 let draftBtn = document.getElementById('btn-save-draft');
                 if (draftBtn) draftBtn.style.display = options.isDraft ? 'block' : 'none';
                 // the working copy on this device now belongs to the saved course (so a later Publish updates it); not for a play copy
-                if (!window._savingForPlay && typeof window.saveQuickDraft === 'function') window.saveQuickDraft(true);
+                // (awaited: the success below is only reported once the working copy knows, so leaving at once cannot leave it marked as a draft)
+                if (!window._savingForPlay && typeof window.saveQuickDraft === 'function') {
+                    try { await window.saveQuickDraft(true); } catch (e) { console.warn('Quick draft refresh failed:', e); }
+                }
                 
                 stat.style.color = '#4ade80';
                 stat.innerHTML = "Saved! Your link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
