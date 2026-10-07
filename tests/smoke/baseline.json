@@ -37,6 +37,7 @@
   "TeeStudio:object",
   "TerrainChunkManager:function",
   "TerrainShellManager:function",
+  "VoiceCommands:object",
   "WindSway:object",
   "_activeEnvCategory:string",
   "_activePresetId:string",
