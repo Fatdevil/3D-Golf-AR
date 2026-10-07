@@ -55,6 +55,14 @@ function serve() {
   let browser;
   try { browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }); } catch (e) { console.error('Could not start Chromium: ' + e.message.split('\n')[0] + '\nRun: npm --prefix tests run setup   (or set CHROMIUM_PATH)'); srv.close(); process.exit(2); }
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
+  // a recogniser the test can talk to: the real one needs a microphone
+  await ctx.addInitScript(function () {
+    window.__sr = [];
+    function FakeSR() { this.started = 0; this.aborted = false; window.__sr.push(this); }
+    FakeSR.prototype.start = function () { this.started++; };
+    FakeSR.prototype.abort = function () { this.aborted = true; };
+    window.SpeechRecognition = FakeSR; window.webkitSpeechRecognition = FakeSR;
+  });
   await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
     const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
     if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
@@ -825,6 +833,74 @@ function serve() {
     })();
     return out;
   }); } catch (e) { checks = [{ name: 'behaviour checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }]; }
+  // voice commands: say a phrase to the recogniser and the builder does what the button does
+  try {
+    const vc = await page.evaluate(async function () {
+      const out = [];
+      function check(name, ok, detail) { out.push({ name: name, ok: !!ok, detail: detail || '' }); }
+      function say(text, final) { const r = window.__sr[window.__sr.length - 1]; const alt = [{ transcript: text }]; alt.isFinal = final !== false; r.onresult({ resultIndex: 0, results: [alt] }); }
+      check('voice: the microphone button is mounted', !!document.getElementById('voice-btn') && !!window.VoiceCommands);
+      setMode('BUILD'); await new Promise(function (r) { setTimeout(r, 1000); });
+      const ctl = document.getElementById('voice-ctl');
+      check('voice: the button shows in build mode', getComputedStyle(ctl).display !== 'none', getComputedStyle(ctl).display);
+      document.getElementById('voice-lang').click(); const l1 = localStorage.getItem('golf_voice_lang');
+      document.getElementById('voice-lang').click(); const l2 = localStorage.getItem('golf_voice_lang');
+      check('voice: the language chip switches between English and Swedish', l1 !== l2 && (l1 === 'en' || l1 === 'sv'), l1 + ' ' + l2);
+      if (l2 === 'en') document.getElementById('voice-lang').click(); // Swedish
+      document.getElementById('voice-btn').click();
+      const r0 = window.__sr[window.__sr.length - 1];
+      check('voice: tapping the button starts listening in Swedish', r0 && r0.started === 1 && r0.lang === 'sv-SE' && document.getElementById('voice-btn').getAttribute('aria-pressed') === 'true', r0 && r0.lang);
+      say('ändra green');
+      check('voice: "ändra green" opens the green builder', window._smartBuilderType === 'GREEN' && window.currentTool === 'SMART_BUILDER', window._smartBuilderType + ' ' + window.currentTool);
+      say('bunker'); check('voice: "bunker" switches the hole builder to bunker', window._smartBuilderType === 'BUNKER', window._smartBuilderType);
+      say('change fairway'); check('voice: English phrases work while listening in Swedish', window._smartBuilderType === 'FAIRWAY', window._smartBuilderType);
+      say('forma'); check('voice: "forma" selects the sculpt tool', window.currentTool === 'SCULPT', window.currentTool);
+      say('måla', false); check('voice: a phrase that is not finished does nothing yet', window.currentTool === 'SCULPT', window.currentTool);
+      say('måla'); check('voice: "måla" selects the paint tool', window.currentTool === 'PAINT', window.currentTool);
+      const before = window.currentTool; say('jag tror att det blir regn'); check('voice: ordinary talk does nothing', window.currentTool === before);
+      // the browser ends a session after a pause: a new one is started while the button is on
+      const n = window.__sr.length; r0.onend(); await new Promise(function (r) { setTimeout(r, 500); });
+      check('voice: listening restarts after the browser ends a session', window.__sr.length === n + 1 && window.__sr[n].started === 1);
+      document.getElementById('voice-lang').click();
+      const r2 = window.__sr[window.__sr.length - 1];
+      check('voice: changing language restarts listening in English', r2.lang === 'en-US' && r2.started === 1 && document.getElementById('voice-btn').getAttribute('aria-pressed') === 'true', r2.lang);
+      say('change green'); check('voice: "change green" opens the green builder', window._smartBuilderType === 'GREEN' && window.currentTool === 'SMART_BUILDER');
+      window.__sr[window.__sr.length - 1].onerror({ error: 'not-allowed' });
+      check('voice: a blocked microphone turns listening off', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'false');
+      // a failed microphone (not a pause) turns listening off for good instead of restarting
+      document.getElementById('voice-btn').click();
+      const rf = window.__sr[window.__sr.length - 1], nf = window.__sr.length;
+      rf.onerror({ error: 'audio-capture' }); rf.onend && rf.onend(); await new Promise(function (r) { setTimeout(r, 600); });
+      check('voice: a fatal recognition error turns listening off and does not restart', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'false' && window.__sr.length === nf, document.getElementById('voice-btn').getAttribute('aria-pressed') + ' ' + (window.__sr.length - nf));
+      document.getElementById('voice-btn').click();
+      const rp = window.__sr[window.__sr.length - 1]; rp.onerror({ error: 'no-speech' });
+      check('voice: a pause without speech keeps listening', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'true');
+      // hole navigation: an unfinished hole keeps its own "Finish hole" message, a finished one moves on
+      const h0 = courseHoles[0], keep = { tees: h0.tees, flag: h0.flag, aim: h0.aimPoint }, idx0 = window.currentHoleIndex;
+      window.changeHoleTo(0); h0.tees = {}; h0.flag = null; h0.aimPoint = null;
+      say('next hole'); await new Promise(function (r) { setTimeout(r, 100); });
+      const tBlocked = (document.getElementById('build-toast') || {}).textContent || '';
+      const stayed = window.currentHoleIndex === 0;
+      h0.tees = { yellow: { x: 0, z: 0 } }; h0.flag = { x: 0, z: -8 }; h0.aimPoint = { x: 0, z: -4 };
+      say('next hole'); await new Promise(function (r) { setTimeout(r, 100); });
+      const moved = window.currentHoleIndex === 1, tMoved = (document.getElementById('build-toast') || {}).textContent || '';
+      window.changeHoleTo(0); h0.tees = keep.tees; h0.flag = keep.flag; h0.aimPoint = keep.aim;
+      check('voice: "next hole" keeps the Finish-hole message when the hole is unfinished and announces only a real move', stayed && /Finish Hole/.test(tBlocked) && moved && /Next hole|Nästa hål/.test(tMoved), JSON.stringify([stayed, tBlocked, moved, tMoved]));
+      // "spara" says saved only when the write happened
+      const sq = window.saveQuickDraft; const toastText = function () { const t = document.getElementById('build-toast'); return t ? t.textContent : ''; };
+      window.saveQuickDraft = function () { return Promise.resolve({ ok: 1 }); }; say('spara'); await new Promise(function (r) { setTimeout(r, 100); }); const tOk = toastText();
+      window.saveQuickDraft = function () { return Promise.resolve(null); }; say('spara'); await new Promise(function (r) { setTimeout(r, 100); }); const tNull = toastText();
+      window.saveQuickDraft = function () { return Promise.reject(new Error('disk')); }; say('spara'); await new Promise(function (r) { setTimeout(r, 100); }); const tRej = toastText();
+      window.saveQuickDraft = sq;
+      check('voice: "spara" says saved only after a successful write', /Sparat|Saved/.test(tOk) && /Kunde inte spara|Could not save/.test(tNull) && /Kunde inte spara|Could not save/.test(tRej), JSON.stringify([tOk, tNull, tRej]));
+      document.getElementById('voice-btn').click(); // off
+      document.getElementById('voice-lang').click(); // back to what it was
+      setMode('TEST'); await new Promise(function (r) { setTimeout(r, 1000); });
+      check('voice: the button is hidden outside build mode', getComputedStyle(document.getElementById('voice-ctl')).display === 'none');
+      return out;
+    });
+    checks = checks.concat(vc);
+  } catch (e) { checks.push({ name: 'voice checks ran', ok: false, detail: String(e.message).split('\n')[0].slice(0, 160) }); }
 
   // The quick draft ("Snabbutkast") reopened while the page is still starting (slow device-id / network call before loadLevel):
   // saves that run during start-up must not overwrite the stored course with the empty default before it is read.
