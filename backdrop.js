@@ -89,7 +89,7 @@
         }
         let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
         fp.meshes.forEach(function (m) { for (let i = 0; i < m.n; i++) { at(m, i); x0 = Math.min(x0, out[0]); x1 = Math.max(x1, out[0]); z0 = Math.min(z0, out[1]); z1 = Math.max(z1, out[1]); } });
-        const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;   // the middle of the bounding box lies inside the (convex) outline
+        const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;   // only the origin for the angular slices below, which any point can serve as
         const bestR = new Float64Array(SECTORS).fill(-1), bestX = new Float64Array(SECTORS), bestZ = new Float64Array(SECTORS);
         fp.meshes.forEach(function (m) {
             for (let i = 0; i < m.n; i++) {
@@ -105,18 +105,22 @@
         // only the (few) points outside `rough` can add to it. Find each point's wedge of `rough` by angle and test it against that edge.
         let hull = rough;
         if (rough.length >= 3) {
-            const ring = rough.map(function (p) { return { p: p, a: Math.atan2(p[1] - mz, p[0] - mx) }; }).sort(function (u, v) { return u.a - v.a; });
+            // the wedges need a point that really is inside `rough`: the mean of a convex polygon's corners always is (the box middle need not be)
+            let cxm = 0, czm = 0;
+            rough.forEach(function (p) { cxm += p[0]; czm += p[1]; });
+            cxm /= rough.length; czm /= rough.length;
+            const ring = rough.map(function (p) { return { p: p, a: Math.atan2(p[1] - czm, p[0] - cxm) }; }).sort(function (u, v) { return u.a - v.a; });
             const H = ring.length, ang = ring.map(function (r) { return r.a; });
             const side = function (u, v, x, z) { return (v[0] - u[0]) * (z - u[1]) - (v[1] - u[1]) * (x - u[0]); };
             const extra = [];
             fp.meshes.forEach(function (m) {
                 for (let i = 0; i < m.n; i++) {
                     at(m, i);
-                    const x = out[0], z = out[1], a = Math.atan2(z - mz, x - mx);
+                    const x = out[0], z = out[1], a = Math.atan2(z - czm, x - cxm);
                     let lo = 0, hi = H - 1, j = H - 1;   // last wedge start at or before a (the wrap-around wedge when a precedes them all)
                     if (a >= ang[0]) { while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ang[mid] <= a) lo = mid; else hi = mid - 1; } j = lo; }
                     const u = ring[j].p, v = ring[(j + 1) % H].p;
-                    if (side(u, v, x, z) * side(u, v, mx, mz) < 0) extra.push([x, z]);
+                    if (side(u, v, x, z) * side(u, v, cxm, czm) < 0) extra.push([x, z]);
                 }
             });
             if (extra.length) hull = convexHull(rough.concat(extra));
