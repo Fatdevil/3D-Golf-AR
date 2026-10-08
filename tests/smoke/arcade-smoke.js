@@ -1055,6 +1055,33 @@ function serve() {
       return { size: n, nextToEdge: at(0.3), mid: at(1.5), far: at(20), onFairway: at(-10), off: off, on: on, defaultOff: sh.edgeWeighted === false };
     });
     checks.push({ name: 'edge map: 1 next to a fairway edge, 0 far inside the grass; the edge switch reaches the shaders', ok: edge.size === 1024 && edge.nextToEdge > 150 && edge.mid > 40 && edge.mid < edge.nextToEdge && edge.far === 0 && edge.onFairway === 255 && edge.off === 0 && edge.on === 1 && edge.defaultOff, detail: JSON.stringify(edge) });
+    // edge blades: off by default; on, they stand along all four sides of a fairway rectangle (both axes), at the border
+    const bl = await pp.evaluate(async function () {
+      const sh = window._terrainShells, px = function (x) { return Math.round((x / 600 + 0.5) * 4096); }, pz = function (z) { return Math.round((z / 600 + 0.5) * 4096); };
+      const defaultOff = sh.bladesOn === false && sh.blades.length === 0;
+      window.pCtx.fillStyle = '#4a782b'; window.pCtx.fillRect(0, 0, 4096, 4096);
+      window.pCtx.fillStyle = '#7db952'; window.pCtx.fillRect(px(-20), pz(-60), px(20) - px(-20), pz(-8) - pz(-60));
+      window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+      window._roughMaskDirty = false; window.rebuildRoughMask();
+      sh.setBlades(true);
+      let n = 0, outside = 0, worst = 0, deepest = 0; const sides = { left: 0, right: 0, near: 0, far: 0 };
+      for (const b of sh.blades) {
+        const a = b.mesh.geometry.attributes.iBase.array;
+        for (let i = 0; i < b.count; i++) {
+          const x = a[i * 3], z = a[i * 3 + 2];
+          const dx = Math.max(-20 - x, 0, x - 20), dz = Math.max(-60 - z, 0, z + 8), dist = Math.hypot(dx, dz);
+          const depth = dist > 0 ? 0 : Math.min(x + 20, 20 - x, z + 60, -8 - z);   // how far inside the fairway rectangle
+          n++; if (dist > 0) outside++; worst = Math.max(worst, dist); deepest = Math.max(deepest, depth);
+          if (dist < 1.5 && x > -20.5 && x < 20.5 && z > -60.5 && z < -7.5 || dist < 1.5) {
+            if (dx > 0 && x < 0) sides.left++; else if (dx > 0) sides.right++; else if (dz > 0 && z > -30) sides.near++; else if (dz > 0) sides.far++;
+          }
+        }
+      }
+      const chunks = sh.blades.length, vis = sh.blades.filter(function (b) { return b.mesh.visible; }).length;
+      sh.setBlades(false); const cleared = sh.blades.length === 0;
+      return { defaultOff: defaultOff, n: n, outsideShare: n ? outside / n : 0, worst: +worst.toFixed(2), deepest: +deepest.toFixed(2), sides: sides, chunks: chunks, cleared: cleared };
+    });
+    checks.push({ name: 'edge blades: off by default; on, they stand at the border along all four fairway sides, not out on the fairway', ok: bl.defaultOff && bl.n > 500 && bl.worst < 1.5 && bl.deepest < 0.45 && bl.sides.left > 50 && bl.sides.right > 50 && bl.sides.near > 50 && bl.sides.far > 50 && bl.cleared, detail: JSON.stringify(bl) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
