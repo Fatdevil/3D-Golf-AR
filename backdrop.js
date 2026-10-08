@@ -16,7 +16,6 @@
     const FOG_LIMIT = 4000;
     let B = null;                 // open map state
     const CHECK_WAIT_MS = 60000;        // how long a deferred coverage check waits for a slow model
-    const checkSince = new WeakMap();   // when a figure's deferred check first had to wait for its model
     let pendingChecks = [];       // figures to test against the plate once their model has loaded; outlives the map, which may be closed first
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
@@ -478,8 +477,10 @@
         const type = job ? job.type : (B.shelfType || (B.sel && B.sel.type));
         const d = type && reg(type);
         if (!d) { B.ringJob = null; toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
-        // the real size is only known once the model has loaded: wait for it (up to ~10 s) rather than lay out a guess
-        if (!footprintOf(type) && !(job && job.waited >= 20)) {
+        // the real size is only known once the model has loaded: wait for it rather than lay out a guess. Keep waiting while it is still
+        // LOADING (at most a minute); if the load has plainly failed, give up after ~10 s and use the rough guess
+        const stillLoading = root.customModels && root.customModels[type] === 'LOADING';
+        if (!footprintOf(type) && !(job && (job.waited >= 120 || (job.waited >= 20 && !stillLoading)))) {
             job = job || { type: type, waited: 0 };
             job.waited++;
             B.ringJob = job;
@@ -494,6 +495,7 @@
         const fp = footprintOf(type), unitR = fp ? fp.reach : 0.6 * H;   // reach of one figure at scale 1, whatever way it is turned
         // distance from the plate square (not from its centre) to a point at distance t along the direction (ux, uz)
         function gapAt(t, ux, uz) { return Math.hypot(Math.max(0, Math.abs(ux * t) - half), Math.max(0, Math.abs(uz * t) - half)); }
+        const placed = [];
         for (let k = 0; k < RING_COUNT; k++) {
             const ang = a0 + k * 2 * Math.PI / RING_COUNT + (Math.random() - 0.5) * 0.25, ux = Math.cos(ang), uz = Math.sin(ang);
             let sc = 0.8 + Math.random() * 0.4, R = unitR * sc, dist = 0;
@@ -505,9 +507,10 @@
                 if (dist + R <= limit || R <= 10) break;
                 sc *= 0.85; R = unitR * sc;
             }
-            create(type, ux * dist, uz * dist, sc, Math.random() * Math.PI * 2, true);
+            placed.push(create(type, ux * dist, uz * dist, sc, Math.random() * Math.PI * 2, true));
         }
         rebuild(type);
+        if (!fp) placed.forEach(function (o) { warnIfCovering(o); });   // laid out from a guess: check again once the real outline exists
         B.sel = null;
         persist();
         say(tr('bd_ring_done', '{n} figurer utlagda runt banan. Flytta dem som du vill.').replace('{n}', RING_COUNT));
@@ -516,26 +519,29 @@
 
     // A figure placed before its model has loaded is only checked against a rough guess, so it is checked again once its real outline exists.
     // The queue is not part of the map's state: tapping Done before a slow model arrives must not drop the warning.
-    function warnIfCovering(o) {
+    // Entries are { o, type, x, z, since }: undo/redo rebuild placedTrees with new objects, so a queued figure is looked up again by its
+    // type and spot when its own object is gone.
+    function warnIfCovering(o, since) {
         if (!o || heightOf(o) < BACKDROP_MIN) return;
         if (!footprintOf(o.type)) {
             // wall-clock budget, since both the map's and the module's timer call this
-            const since = checkSince.get(o) || Date.now();
-            checkSince.set(o, since);
-            if (Date.now() - since <= CHECK_WAIT_MS && pendingChecks.indexOf(o) < 0) pendingChecks.push(o);   // after that the model is taken as unloadable
+            const t0 = since || Date.now();
+            if (Date.now() - t0 <= CHECK_WAIT_MS && !pendingChecks.some(function (e) { return e.o === o; })) pendingChecks.push({ o: o, type: o.type, x: o.x, z: o.z, since: t0 });   // after that the model is taken as unloadable
             return;
         }
-        checkSince.delete(o);
-        pendingChecks = pendingChecks.filter(function (x) { return x !== o; });
+        pendingChecks = pendingChecks.filter(function (e) { return e.o !== o; });
         if (coversPlate(o)) toast(tr('bd_covers', '⚠️ Figurens bas ligger över banan. Flytta den längre ut eller gör den mindre.'), '#ef4444');
     }
     function recheckLoaded() {
         if (!pendingChecks.length) return;
-        const waiting = pendingChecks;
+        const waiting = pendingChecks, list = root.placedTrees || [];
         pendingChecks = [];
-        waiting.forEach(function (o) {
-            if ((root.placedTrees || []).indexOf(o) < 0) return;   // removed or undone meanwhile
-            warnIfCovering(o);   // asks again if the model is still not there
+        waiting.forEach(function (e) {
+            let o = e.o;
+            if (list.indexOf(o) < 0) {   // removed, or replaced by undo/redo: take the equivalent figure if one is still there
+                o = list.find(function (t) { return t && t.type === e.type && Math.abs(t.x - e.x) < 0.01 && Math.abs(t.z - e.z) < 0.01; });
+            }
+            if (o) warnIfCovering(o, e.since);   // asks again if the model is still not there
         });
     }
 
