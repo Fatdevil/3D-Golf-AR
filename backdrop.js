@@ -15,7 +15,8 @@
     const RING_COUNT = 8;
     const FOG_LIMIT = 4000;
     let B = null;                 // open map state
-    const checkTries = new WeakMap();   // how often a figure's deferred check has had to wait again
+    const CHECK_WAIT_MS = 60000;        // how long a deferred coverage check waits for a slow model
+    const checkSince = new WeakMap();   // when a figure's deferred check first had to wait for its model
     let pendingChecks = [];       // figures to test against the plate once their model has loaded; outlives the map, which may be closed first
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
@@ -518,12 +519,13 @@
     function warnIfCovering(o) {
         if (!o || heightOf(o) < BACKDROP_MIN) return;
         if (!footprintOf(o.type)) {
-            const tries = (checkTries.get(o) || 0) + 1;
-            checkTries.set(o, tries);
-            if (tries <= 30 && pendingChecks.indexOf(o) < 0) pendingChecks.push(o);   // ~1 minute, then the model is taken as unloadable
+            // wall-clock budget, since both the map's and the module's timer call this
+            const since = checkSince.get(o) || Date.now();
+            checkSince.set(o, since);
+            if (Date.now() - since <= CHECK_WAIT_MS && pendingChecks.indexOf(o) < 0) pendingChecks.push(o);   // after that the model is taken as unloadable
             return;
         }
-        checkTries.delete(o);
+        checkSince.delete(o);
         pendingChecks = pendingChecks.filter(function (x) { return x !== o; });
         if (coversPlate(o)) toast(tr('bd_covers', '⚠️ Figurens bas ligger över banan. Flytta den längre ut eller gör den mindre.'), '#ef4444');
     }
