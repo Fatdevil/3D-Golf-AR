@@ -16,9 +16,10 @@
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        LOW:  { layers: 3, maxDist: 60 },
-        MED:  { layers: 5, maxDist: 120 },
-        HIGH: { layers: 8, maxDist: 250 }
+        // interior: how many shells are drawn well inside the grass (the edges, where the height shows, get all of them)
+        LOW:  { layers: 3, maxDist: 60,  interior: 1 },
+        MED:  { layers: 5, maxDist: 120, interior: 2 },
+        HIGH: { layers: 8, maxDist: 250, interior: 2 }
     };
 
     // ─── GLSL: 3D Shell Shader ──────────────────────────────────
@@ -84,6 +85,10 @@
         uniform float uDeepH;
         uniform float uSemiH;
         uniform float uLayers;
+        uniform float uLayer;
+        uniform sampler2D uEdgeMap;
+        uniform float uInteriorLayers;
+        uniform float uEdgeOn;
         uniform float uMaxHeight;
         uniform float uMaxDist;
         uniform vec2  uWindDir;
@@ -137,6 +142,19 @@
             if (vCamDist > uMaxDist) discard;
             float distFade = 1.0 - smoothstep(uMaxDist * 0.75, uMaxDist, vCamDist);
             if (hash(vWorldPos.xz * 37.0) > distFade) discard;
+
+            // Edge-weighted shells: the height of the grass shows at its borders (against fairway, green and sand), where the
+            // silhouette is seen from the side. Well inside the grass only every stride-th shell is drawn: the same total height
+            // with fewer layers. uEdgeMap is 1 at a border and fades to 0 a few metres in; a dither makes the change gradual.
+            // This comes before the texture reads and the noise below, so the skipped shells cost almost nothing.
+            if (uEdgeOn > 0.5) {
+                float stride = max(1.0, floor(uLayers / max(uInteriorLayers, 1.0)));
+                if (mod(uLayer, stride) > 0.5) {
+                    float nearEdge = smoothstep(0.0, 0.35, texture2D(uEdgeMap, vUv).r);
+                    if (hash(vWorldPos.xz * 53.0) > nearEdge) discard;
+                }
+            }
+
 
             // ── Water exclusion: no 3D grass inside water bodies or on submerged banks ──
             float waterMask = texture2D(uWaterMap, vUv).r;
@@ -252,6 +270,18 @@
             this.waterTex = waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || null;
             this.quality = 'OFF';
             this.shells = [];   // { layer, mesh, mat }
+            // Draw all shells only near borders (see the fragment shader). Off by default until it has been tried on a phone:
+            // ?grassedge=1 in the address turns it on (and remembers it), ?grassedge=0 turns it off again.
+            let edgeFlag = null;
+            try {
+                const q = new URLSearchParams(window.location.search).get('grassedge');
+                if (q !== null) localStorage.setItem('golf_grass_edge', q === '1' ? '1' : '0');
+                edgeFlag = localStorage.getItem('golf_grass_edge');
+            } catch (e) { /* storage blocked: stays off */ }
+            this.edgeWeighted = edgeFlag === '1';
+            this.edgeWidth = 4.0;       // metres from a border where all shells are drawn
+            this._edgeTex = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.RedFormat, THREE.UnsignedByteType);
+            this._edgeTex.needsUpdate = true;   // 1x1 'everything is an edge' until the mask has been built
             this._frame = 0;
 
             // 1x1 black dummy texture fallback so shader never fails if waterTex is null
@@ -494,6 +524,62 @@
 
         refresh() { this._rebuild(); }
 
+        setEdgeWeighted(on) {
+            this.edgeWeighted = !!on;
+            for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeOn) s.mat.uniforms.uEdgeOn.value = this.edgeWeighted ? 1 : 0;
+        }
+
+        // maskRGBA: the rough mask (srcSize x srcSize, R=rough G=deep B=semi). Builds a coarse "closeness to a border" map:
+        // 1 on and next to a border with anything that is not shell grass (fairway, green, sand), fading to 0 over edgeWidth.
+        setEdgeMapFromMask(maskRGBA, srcSize) {
+            const n = 1024, step = Math.max(1, Math.floor(srcSize / n)), half = step >> 1;
+            const worldSize = window.TERRAIN_SIZE || 600;
+            const width = Math.max(1.5, this.edgeWidth / (worldSize / n));   // in cells
+            const d = new Float32Array(n * n), INF = 1e9;
+            for (let y = 0; y < n; y++) {
+                const row = (y * step + half) * srcSize;
+                for (let x = 0; x < n; x++) {
+                    const i = (row + x * step + half) * 4;
+                    d[y * n + x] = (maskRGBA[i] === 255 || maskRGBA[i + 1] === 255 || maskRGBA[i + 2] === 255) ? INF : 0;
+                }
+            }
+            for (let y = 0; y < n; y++) {            // distance to the nearest non-grass cell (two-pass chamfer)
+                for (let x = 0; x < n; x++) {
+                    let v = d[y * n + x];
+                    if (x > 0) v = Math.min(v, d[y * n + x - 1] + 1);
+                    if (y > 0) {
+                        v = Math.min(v, d[(y - 1) * n + x] + 1);
+                        if (x > 0) v = Math.min(v, d[(y - 1) * n + x - 1] + 1.414);
+                        if (x < n - 1) v = Math.min(v, d[(y - 1) * n + x + 1] + 1.414);
+                    }
+                    d[y * n + x] = v;
+                }
+            }
+            const out = new Uint8Array(n * n);
+            for (let y = n - 1; y >= 0; y--) {
+                for (let x = n - 1; x >= 0; x--) {
+                    let v = d[y * n + x];
+                    if (x < n - 1) v = Math.min(v, d[y * n + x + 1] + 1);
+                    if (y < n - 1) {
+                        v = Math.min(v, d[(y + 1) * n + x] + 1);
+                        if (x < n - 1) v = Math.min(v, d[(y + 1) * n + x + 1] + 1.414);
+                        if (x > 0) v = Math.min(v, d[(y + 1) * n + x - 1] + 1.414);
+                    }
+                    d[y * n + x] = v;
+                    // a DataTexture has row 0 at v=0, the canvas-based mask has it at v=1: rows are stored flipped
+                    out[(n - 1 - y) * n + x] = Math.round(255 * (1 - Math.min(v / width, 1)));
+                }
+            }
+            const old = this._edgeTex;
+            const tex = new THREE.DataTexture(out, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+            tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.needsUpdate = true;
+            this._edgeTex = tex;
+            for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeMap) s.mat.uniforms.uEdgeMap.value = tex;
+            if (old && old.dispose) old.dispose();
+        }
+
         getStats() {
             let visible = 0, tris = 0;
             // CODEX L1 FIX: Use actual shell segments instead of TERRAIN_SEGS
@@ -565,6 +651,9 @@
                     uRoughH:   { value: this.roughHeight },
                     uDeepH:    { value: this.deepHeight },
                     uSemiH:    { value: this.semiHeight },
+                    uEdgeMap:  { value: this._edgeTex },
+                    uInteriorLayers: { value: preset.interior || 2 },
+                    uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
                     uTime:     { value: 0 },

@@ -30,7 +30,7 @@
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=7"></script>
 <script src="terrain-chunks.js?v=7"></script>
-<script src="terrain-shells.js?v=24"></script>
+<script src="terrain-shells.js?v=25"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
 <script src="arcade-scene-engine.js?v=9"></script>
 <script src="arcade-tracer-engine.js"></script>
@@ -5154,6 +5154,8 @@
             mData.data[i + 3] = 255;  // Alpha always opaque
             if (LE) lastOut = dst32[i >> 2];
         }
+        // the shells draw all their layers only near borders (fairway, green, sand): a coarse closeness-to-border map
+        if (window._terrainShells && typeof window._terrainShells.setEdgeMapFromMask === 'function') window._terrainShells.setEdgeMapFromMask(mData.data, 4096);
         window.roughMaskCtx.putImageData(mData, 0, 0);
         window.roughMaskTex.needsUpdate = true;
 

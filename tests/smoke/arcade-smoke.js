@@ -1043,6 +1043,18 @@ function serve() {
       const sh = window._terrainShells;
       return { errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }), shells: sh.shells.length, semi: sh.semiHeight, rough: sh.roughHeight, deep: sh.deepHeight, u: sh.shells[0] && sh.shells[0].mat.uniforms.uSemiH.value };
     });
+    // the closeness-to-border map the edge-weighted shells use: 1 at a fairway edge, 0 well inside the grass, and the switch reaches the shaders
+    const edge = await pp.evaluate(async function () {
+      const sh = window._terrainShells, px = function (x) { return Math.round((x / 600 + 0.5) * 4096); };
+      window.pCtx.fillStyle = '#4a782b'; window.pCtx.fillRect(0, 0, 4096, 4096);
+      window.pCtx.fillStyle = '#7db952'; window.pCtx.fillRect(px(-300), 0, px(0) - px(-300), 4096); // fairway on the left half
+      window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+      window._roughMaskDirty = false; window.rebuildRoughMask();
+      const t = sh._edgeTex, n = t.image.width, at = function (x) { return t.image.data[512 * n + Math.round((x / 600 + 0.5) * n)]; };
+      const off = sh.shells[0].mat.uniforms.uEdgeOn.value; sh.setEdgeWeighted(true); const on = sh.shells[0].mat.uniforms.uEdgeOn.value; sh.setEdgeWeighted(false);
+      return { size: n, nextToEdge: at(0.3), mid: at(1.5), far: at(20), onFairway: at(-10), off: off, on: on, defaultOff: sh.edgeWeighted === false };
+    });
+    checks.push({ name: 'edge map: 1 next to a fairway edge, 0 far inside the grass; the edge switch reaches the shaders', ok: edge.size === 1024 && edge.nextToEdge > 150 && edge.mid > 40 && edge.mid < edge.nextToEdge && edge.far === 0 && edge.onFairway === 255 && edge.off === 0 && edge.on === 1 && edge.defaultOff, detail: JSON.stringify(edge) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
