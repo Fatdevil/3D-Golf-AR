@@ -479,8 +479,9 @@
         if (!d) { B.ringJob = null; toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
         // the real size is only known once the model has loaded: wait for it rather than lay out a guess. Keep waiting while it is still
         // LOADING (at most a minute); if the load has plainly failed, give up after ~10 s and use the rough guess
+        const ready = footprintOf(type);   // (this may start a retry, so read the loading state only after it)
         const stillLoading = root.customModels && root.customModels[type] === 'LOADING';
-        if (!footprintOf(type) && !(job && (job.waited >= 120 || (job.waited >= 20 && !stillLoading)))) {
+        if (!ready && !(job && (job.waited >= 120 || (job.waited >= 20 && !stillLoading)))) {
             job = job || { type: type, waited: 0 };
             job.waited++;
             B.ringJob = job;
@@ -525,8 +526,9 @@
         if (!o || heightOf(o) < BACKDROP_MIN) return;
         if (!footprintOf(o.type)) {
             // wall-clock budget, since both the map's and the module's timer call this
-            const t0 = since || Date.now();
-            if (Date.now() - t0 <= CHECK_WAIT_MS && !pendingChecks.some(function (e) { return e.o === o; })) pendingChecks.push({ o: o, type: o.type, x: o.x, z: o.z, since: t0 });   // after that the model is taken as unloadable
+            const t0 = since || Date.now(), queued = pendingChecks.filter(function (e) { return e.o === o; })[0];
+            if (queued) { queued.x = o.x; queued.z = o.z; }   // moved again while waiting: undo/redo must look for it where it is now
+            else if (Date.now() - t0 <= CHECK_WAIT_MS) pendingChecks.push({ o: o, type: o.type, x: o.x, z: o.z, since: t0 });   // after that the model is taken as unloadable
             return;
         }
         pendingChecks = pendingChecks.filter(function (e) { return e.o !== o; });
