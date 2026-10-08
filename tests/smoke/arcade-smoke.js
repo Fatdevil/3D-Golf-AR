@@ -1125,6 +1125,21 @@ function serve() {
       return { defaultOff: defaultOff, n: n, outsideShare: n ? outside / n : 0, worst: +worst.toFixed(2), deepest: +deepest.toFixed(2), sides: sides, chunks: chunks, cleared: cleared, heightRatio: heightRatio, y0: +y0.toFixed(1), y1: +y1.toFixed(1), edgeFormat: edgeFormat, builds: builds, rebuiltBlades: rebuiltBlades, waterWired: waterWired };
     });
     checks.push({ name: 'edge blades: off by default; on, they stand at the border along all four fairway sides, not out on the fairway', ok: bl.defaultOff && bl.n > 500 && bl.worst < 1.5 && bl.deepest < 0.45 && bl.sides.left > 50 && bl.sides.right > 50 && bl.sides.near > 50 && bl.sides.far > 50 && bl.cleared && bl.heightRatio[0] === 1.5 && bl.y1 > bl.y0 + 40 && bl.edgeFormat && bl.builds === 1 && bl.waterWired && bl.rebuiltBlades > 0, detail: JSON.stringify(bl) });
+    // the blade texture on the deep rough: off by default, loads when switched on and reaches every shell; no shader errors
+    const gt = await pp.evaluate(async function () {
+      const sh = window._terrainShells, errs = []; const oe = console.error; console.error = function () { errs.push(String(arguments[0]).slice(0, 160)); oe.apply(console, arguments); };
+      const defaultOff = sh.grassTexOn === false && sh.shells.every(function (q) { return q.mat.uniforms.uTexOn.value === 0; });
+      sh.setGrassTex(true);
+      for (let i = 0; i < 50 && !sh._grassTexReady; i++) await new Promise(function (r) { setTimeout(r, 100); });
+      await new Promise(function (r) { setTimeout(r, 600); });
+      const on = sh._grassTexReady && sh.shells.every(function (q) { return q.mat.uniforms.uTexOn.value === 1 && q.mat.uniforms.uGrassTex.value === sh._grassTex; });
+      const w = sh._grassTex && sh._grassTex.image && sh._grassTex.image.width;
+      sh.setGrassTex(false); sh.refresh();   // a rebuild after switching off must not bring the texture back
+      const off = sh.shells.length > 0 && sh.shells.every(function (q) { return q.mat.uniforms.uTexOn.value === 0; });
+      console.error = oe;
+      return { defaultOff: defaultOff, on: on, off: off, w: w, errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }) };
+    });
+    checks.push({ name: 'grass texture on the deep rough: off by default, loads and reaches all shells when switched on, switches off again', ok: gt.defaultOff && gt.on && gt.off && gt.w === 1024 && gt.errs.length === 0, detail: JSON.stringify(gt) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 

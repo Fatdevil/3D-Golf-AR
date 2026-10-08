@@ -88,6 +88,9 @@
         uniform float uLayer;
         uniform sampler2D uEdgeMap;
         uniform float uInterior;
+        uniform sampler2D uGrassTex;
+        uniform float uTexOn;
+        uniform float uTexTile;
         uniform float uEdgeOn;
         uniform float uMaxHeight;
         uniform float uMaxDist;
@@ -213,6 +216,14 @@
             float aoBase = mix(0.72, 0.82, slopeCompensation);
             float ao = mix(aoBase, 1.0, normH);
             vec3 col = baseCol * ao;
+            // Blade texture (deep rough only): a top-down grass photo as light/dark detail on the biome colour, so a flat surface
+            // still reads as grass. The texture is mean 0.5, so x2 keeps the average brightness; mipmaps fade it out with distance.
+            if (uTexOn > 0.5 && isDeep > 0.5) {
+                // two scales (the second one rotated) so the repeat of the tile does not show
+                vec2 rXZ = vec2(wXZ.x * 0.8 - wXZ.y * 0.6, wXZ.x * 0.6 + wXZ.y * 0.8);
+                float texd = texture2D(uGrassTex, wXZ / uTexTile).r + texture2D(uGrassTex, rXZ / (uTexTile * 2.7)).r;
+                col *= clamp(1.0 + (texd - 1.0) * 1.5, 0.15, 2.0);
+            }
 
             // Apply dynamic diffuse lighting matching the terrain plane
             vec3 N = normalize(vWorldNormal);
@@ -333,6 +344,15 @@
                 edgeFlag = localStorage.getItem('golf_grass_edge');
             } catch (e) { /* storage blocked: stays off */ }
             this.edgeWeighted = edgeFlag === '1';
+            // Blade texture on the deep rough: off by default; ?grasstex=1 turns it on (and remembers it), ?grasstex=0 turns it off.
+            let texFlag = null;
+            try {
+                const tq = new URLSearchParams(window.location.search).get('grasstex');
+                if (tq !== null) localStorage.setItem('golf_grass_tex', tq === '1' ? '1' : '0');
+                texFlag = localStorage.getItem('golf_grass_tex');
+            } catch (e) { /* storage blocked: stays off */ }
+            this.grassTexOn = texFlag === '1';
+            this._grassTex = null; this._grassTexReady = false;
             this.edgeWidth = 5.5;       // metres from a border where all shells are drawn
             // Edge blades: also off by default; ?grassblades=1 turns them on (and remembers it), ?grassblades=0 turns them off.
             let bladeFlag = null;
@@ -617,6 +637,30 @@
             if (!g.boundingBox) g.computeBoundingBox();
             sg.boundingSphere = g.boundingSphere.clone();
             sg.boundingBox = g.boundingBox.clone();
+        }
+
+        setGrassTex(on) {
+            this.grassTexOn = !!on;
+            if (this.grassTexOn && !this._grassTex && !this._grassTexLoading) {
+                this._grassTexLoading = true;
+                new THREE.TextureLoader().load('grass-tile.jpg', (tex) => {
+                    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+                    tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
+                    tex.generateMipmaps = true; tex.anisotropy = 4;
+                    this._grassTex = tex; this._grassTexReady = true; this._grassTexLoading = false;
+                    this._applyGrassTex();
+                }, undefined, () => { this._grassTexLoading = false; });
+            }
+            this._applyGrassTex();
+        }
+
+        _applyGrassTex() {
+            const on = this.grassTexOn && this._grassTexReady ? 1 : 0;
+            for (let s of this.shells) {
+                if (!s.mat || !s.mat.uniforms.uTexOn) continue;
+                s.mat.uniforms.uTexOn.value = on;
+                if (this._grassTex) s.mat.uniforms.uGrassTex.value = this._grassTex;
+            }
         }
 
         _isInteriorLayer(layer, total) {
@@ -929,6 +973,7 @@
                 this.shells.push({ layer, mesh, mat });
             }
             this._buildStrip();
+            if (this.grassTexOn) this.setGrassTex(true);
             console.log('[Shells] Built', this.shells.length,
                 'meshes (' + preset.layers + ' 3D layers) on master geo');
         }
@@ -947,6 +992,7 @@
                     uSemiH:    { value: this.semiHeight },
                     uEdgeMap:  { value: this._edgeTex },
                     uInterior: { value: this._isInteriorLayer(layer, total) ? 1 : 0 },
+                    uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this.grassTexOn && this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 },
                     uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
