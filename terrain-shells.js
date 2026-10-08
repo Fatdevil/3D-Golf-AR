@@ -16,9 +16,10 @@
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        LOW:  { layers: 3, maxDist: 60 },
-        MED:  { layers: 5, maxDist: 120 },
-        HIGH: { layers: 8, maxDist: 250 }
+        // interior: how many shells are drawn well inside the grass: the lowest one, plus a middle one when 2 (the edges, where the height shows, get all of them)
+        LOW:  { layers: 3, maxDist: 60,  interior: 1 },
+        MED:  { layers: 5, maxDist: 120, interior: 2 },
+        HIGH: { layers: 8, maxDist: 250, interior: 2 }
     };
 
     // ─── GLSL: 3D Shell Shader ──────────────────────────────────
@@ -82,6 +83,12 @@
         uniform vec3  uSandCol;
         uniform float uRoughH;
         uniform float uDeepH;
+        uniform float uSemiH;
+        uniform float uLayers;
+        uniform float uLayer;
+        uniform sampler2D uEdgeMap;
+        uniform float uInterior;
+        uniform float uEdgeOn;
         uniform float uMaxHeight;
         uniform float uMaxDist;
         uniform vec2  uWindDir;
@@ -136,17 +143,29 @@
             float distFade = 1.0 - smoothstep(uMaxDist * 0.75, uMaxDist, vCamDist);
             if (hash(vWorldPos.xz * 37.0) > distFade) discard;
 
+            // Edge-weighted shells: the height of the grass shows at its borders (against fairway, green and sand), where the
+            // silhouette is seen from the side. Well inside the grass only the interior shells are drawn (uInterior = 1: the
+            // lowest, dense one, a dark ground carpet), the upper ones only near a border. uEdgeMap is 1 at a border and fades
+            // to 0 a few metres in; a dither makes the change gradual. On the CPU side the upper shells only have geometry in the
+            // border strip (see _buildStrip), so this test also guards the edge of that strip.
+            if (uEdgeOn > 0.5 && uInterior < 0.5) {
+                float nearEdge = smoothstep(0.0, 0.35, texture2D(uEdgeMap, vUv).r);
+                if (hash(vWorldPos.xz * 53.0) > nearEdge) discard;
+            }
+
+
             // ── Water exclusion: no 3D grass inside water bodies or on submerged banks ──
             float waterMask = texture2D(uWaterMap, vUv).r;
             if (waterMask > 0.05) discard;
             float shoreFade = 1.0 - smoothstep(0.005, 0.04, waterMask);
             if (shoreFade < 0.05) discard;
 
-            // ── Biome mask: R=rough, G=deep ──
+            // ── Biome mask: R=rough, G=deep, B=semi-rough ──
             vec3 mask = texture2D(uRoughMask, vUv).rgb;
             float isRough = step(0.75, mask.r);                    // R=1.0
             float isDeep  = step(0.75, mask.g);                    // G=1.0
-            float roughness = max(isRough, isDeep);
+            float isSemi  = step(0.75, mask.b);                    // B=1.0
+            float roughness = max(max(isRough, isDeep), isSemi);
             if (roughness < 0.1) discard;
 
             // Pick color and height based on dominant biome channel (pure canvas colors)
@@ -155,10 +174,15 @@
             if (isDeep > 0.5) {
                 baseCol = uDeepCol;
                 targetH = uDeepH;
-            } else {
+            } else if (isRough > 0.5) {
                 baseCol = uRoughCol;
                 targetH = uRoughH;
+            } else {
+                baseCol = uSemiCol;
+                targetH = uSemiH;
             }
+            // a short grass is never thinner than the first shell (low quality has few, tall layers)
+            targetH = max(targetH, uMaxHeight / max(uLayers, 1.0));
 
             // Height-proportional layer culling with soft fade
             float eL = vL * (uMaxHeight / max(targetH, 0.001));
@@ -232,6 +256,62 @@
         }
     `;
 
+    // ─── Edge blades: real tapered blades along the borders of the grass ─────────────
+    // Where the grass meets fairway, green or sand the height shows in the silhouette. A thin strip of blades there
+    // (a few thousand, only near the camera) gives what the shells cannot: separate, pointed blades.
+    const BLADE_VERT = `
+        attribute vec3 iBase;     // blade root (world)
+        attribute vec4 iParam;    // height, yaw, lean, shade
+        attribute float iClass;   // 0 rough, 1 deep rough, 2 semi-rough
+        uniform float uWidth;
+        uniform vec3 uRoughCol;
+        uniform vec3 uDeepCol;
+        uniform vec3 uSemiCol;
+        uniform float uWorld;     // terrain size, to turn a root position into the water map's uv
+        varying vec3 vCol;
+        varying float vDist;
+        varying vec2 vWaterUv;
+        void main() {
+            vWaterUv = vec2(iBase.x / uWorld + 0.5, 0.5 - iBase.z / uWorld);   // the same uv the terrain plane has
+            float t = position.y;                                   // 0 at the root, 1 at the tip
+            float w = position.x * uWidth * (1.0 - 0.9 * t);        // tapers to a point
+            vec3 l = vec3(w, t * iParam.x, iParam.z * t * t * iParam.x);   // bends over towards its lean
+            float c = cos(iParam.y), s = sin(iParam.y);
+            vec3 wp = iBase + vec3(l.x * c + l.z * s, l.y, -l.x * s + l.z * c);
+            vec3 base = iClass < 0.5 ? uRoughCol : (iClass < 1.5 ? uDeepCol : uSemiCol);
+            vCol = base * mix(0.55, 1.12, t) * iParam.w;            // darker at the root, lighter at the tip
+            vDist = distance(wp, cameraPosition);
+            gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+        }
+    `;
+    const BLADE_FRAG = `
+        uniform float uMaxDist;
+        uniform vec3 uLightDir;
+        uniform vec3 uDirColor;
+        uniform vec3 uAmbColor;
+        uniform sampler2D uWaterMap;
+        varying vec3 vCol;
+        varying float vDist;
+        varying vec2 vWaterUv;
+        float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        void main() {
+            if (vDist > uMaxDist) discard;
+            if (texture2D(uWaterMap, vWaterUv).r > 0.05) discard;   // no grass in water: the same test as the shells
+            float fade = 1.0 - smoothstep(uMaxDist * 0.7, uMaxDist, vDist);
+            if (hash2(gl_FragCoord.xy) > fade) discard;
+            vec3 light = uAmbColor + uDirColor * max(0.0, uLightDir.y * 0.8 + 0.2);
+            gl_FragColor = vec4(vCol * light, 1.0);
+        }
+    `;
+    // blades per boundary cell and how far away they are drawn, per quality
+    const BLADES = {
+        LOW:  { perCell: 3,  maxDist: 40 },
+        MED:  { perCell: 6,  maxDist: 70 },
+        HIGH: { perCell: 10, maxDist: 120 }
+    };
+    const BLADE_CHUNK = 48;      // metres: blades are grouped in chunks that are culled and hidden by distance
+    const BLADE_WIDTH = 0.025;   // metres at the root (stylised: a real blade is a few millimetres)
+
     // ─── Manager ─────────────────────────────────────────────────
 
     class TerrainShellManager {
@@ -244,6 +324,29 @@
             this.waterTex = waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || null;
             this.quality = 'OFF';
             this.shells = [];   // { layer, mesh, mat }
+            // Draw all shells only near borders (see the fragment shader). Off by default until it has been tried on a phone:
+            // ?grassedge=1 in the address turns it on (and remembers it), ?grassedge=0 turns it off again.
+            let edgeFlag = null;
+            try {
+                const q = new URLSearchParams(window.location.search).get('grassedge');
+                if (q !== null) localStorage.setItem('golf_grass_edge', q === '1' ? '1' : '0');
+                edgeFlag = localStorage.getItem('golf_grass_edge');
+            } catch (e) { /* storage blocked: stays off */ }
+            this.edgeWeighted = edgeFlag === '1';
+            this.edgeWidth = 5.5;       // metres from a border where all shells are drawn
+            // Edge blades: also off by default; ?grassblades=1 turns them on (and remembers it), ?grassblades=0 turns them off.
+            let bladeFlag = null;
+            try {
+                const bq = new URLSearchParams(window.location.search).get('grassblades');
+                if (bq !== null) localStorage.setItem('golf_grass_blades', bq === '1' ? '1' : '0');
+                bladeFlag = localStorage.getItem('golf_grass_blades');
+            } catch (e) { /* storage blocked: stays off */ }
+            this.bladesOn = bladeFlag === '1';
+            this.blades = [];        // { mesh, count, cx, cz, r }
+            this._bladeMat = null;
+            this._cls = null;        // 1024x1024 grass class per cell: 0 none, 1 rough, 2 deep, 3 semi
+            this._edgeTex = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.LuminanceFormat, THREE.UnsignedByteType);
+            this._edgeTex.needsUpdate = true;   // 1x1 'everything is an edge' until the mask has been built
             this._frame = 0;
 
             // 1x1 black dummy texture fallback so shader never fails if waterTex is null
@@ -251,6 +354,9 @@
             this._dummyWaterTex = new THREE.DataTexture(blackPixel, 1, 1, THREE.RGBAFormat);
             this._dummyWaterTex.needsUpdate = true;
 
+            // fairway is the cut surface (no shells); semi-rough, rough and deep rough stand above it (metres).
+            // The heights are exaggerated on purpose: with real heights (4-8 cm) the shells cannot be seen at game distances.
+            this.semiHeight  = 0.12;
             this.roughHeight = 0.30;
             this.deepHeight  = 0.60;
 
@@ -326,6 +432,8 @@
             let len = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1.0;
             lx /= len; ly /= len; lz /= len;
 
+            this._updateBlades(camera, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB);
+
             let curWaterTex = this.waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || this._dummyWaterTex;
 
             for (let s of this.shells) {
@@ -389,6 +497,7 @@
         syncHeights() {
             if (this.shells.length === 0) return;
             this._resampleFromMaster();
+            this._scheduleBladeHeights();
         }
 
         _resampleFromMaster() {
@@ -463,23 +572,304 @@
             this.customGeo.attributes.normal.needsUpdate = true;
             this.customGeo.computeBoundingBox();
             this.customGeo.computeBoundingSphere();
+            this._syncStripBounds();
         }
 
         // CODEX M1 FIX: Smooth 60 FPS live shader uniforms update without rebuilding geometry or meshes
         setHeights(roughH, deepH) {
+            const oldH = [this.roughHeight, this.deepHeight, this.semiHeight];   // indexed like the blade class: 0 rough, 1 deep, 2 semi
             this.roughHeight = roughH;
             this.deepHeight = deepH;
-            let maxH = Math.max(roughH, deepH);
+            this.semiHeight = Math.max(0.03, roughH * 0.4); // semi-rough follows the rough slider at 40 % of its height
+            this._scaleBlades(oldH, [this.roughHeight, this.deepHeight, this.semiHeight]);
+            let maxH = Math.max(roughH, deepH, this.semiHeight);
             for (let s of this.shells) {
                 if (s.mat && s.mat.uniforms) {
                     s.mat.uniforms.uRoughH.value = roughH;
                     s.mat.uniforms.uDeepH.value = deepH;
+                    s.mat.uniforms.uSemiH.value = this.semiHeight;
                     s.mat.uniforms.uMaxHeight.value = maxH;
                 }
             }
         }
 
         refresh() { this._rebuild(); }
+
+        setEdgeWeighted(on) {
+            this.edgeWeighted = !!on;
+            for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeOn) s.mat.uniforms.uEdgeOn.value = this.edgeWeighted ? 1 : 0;
+            if (this.edgeWeighted && this._ensureEdgeMap()) return;   // the repaint built the map, the strip and the blades
+            this._buildStrip();
+        }
+
+        // a feature was switched on while the map was skipped: repaint the rough mask, which hands over a fresh mask and builds it
+        _ensureEdgeMap() {
+            if (!this._edgeStale || typeof window.rebuildRoughMask !== 'function') return false;
+            window.rebuildRoughMask();
+            return !this._edgeStale;
+        }
+
+        // the strip shares the (moving) vertices of customGeo but caches its own bounds: it takes the grid's, a safe superset
+        _syncStripBounds() {
+            const g = this.customGeo, sg = this._stripGeo;
+            if (!g || !sg) return;
+            if (!g.boundingSphere) g.computeBoundingSphere();
+            if (!g.boundingBox) g.computeBoundingBox();
+            sg.boundingSphere = g.boundingSphere.clone();
+            sg.boundingBox = g.boundingBox.clone();
+        }
+
+        _isInteriorLayer(layer, total) {
+            const p = QUALITY[this.quality] || {};
+            return layer === 1 || ((p.interior || 1) >= 2 && layer === Math.ceil(total / 2));
+        }
+
+        // The upper shells only need geometry where the border is: a second index buffer over the same vertices, with just
+        // the grid cells at (or next to) a border. The lowest shells keep the whole grid. Fewer triangles, not just fewer pixels.
+        _buildStrip() {
+            if (this._stripGeo) { this._stripGeo.dispose(); this._stripGeo = null; }
+            const g = this.customGeo, data = this._edgeData, cls = this._cls;
+            if (g && this.edgeWeighted && data && cls) {
+                const segs = g.parameters.widthSegments, n = this._edgeN, src = g.index.array;
+                const flag = new Uint8Array(segs * segs);
+                for (let iy = 0; iy < segs; iy++) {
+                    const r0 = Math.floor((1 - (iy + 1) / segs) * n), r1 = Math.min(n - 1, Math.ceil((1 - iy / segs) * n));
+                    for (let ix = 0; ix < segs; ix++) {
+                        const c0 = Math.floor(ix / segs * n), c1 = Math.min(n - 1, Math.ceil((ix + 1) / segs * n));
+                        let hit = 0;
+                        for (let r = r0; r <= r1 && !hit; r++) for (let c = c0; c <= c1; c++) if (data[r * n + c] > 0 && cls[(n - 1 - r) * n + c] > 0) { hit = 1; break; }   // grass next to a border
+                        flag[iy * segs + ix] = hit;
+                    }
+                }
+                const keep = new Uint8Array(segs * segs);   // one cell of margin: the fragment test fades the edge inside it
+                for (let iy = 0; iy < segs; iy++) for (let ix = 0; ix < segs; ix++) {
+                    if (!flag[iy * segs + ix]) continue;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        const y = iy + dy, x = ix + dx;
+                        if (y >= 0 && y < segs && x >= 0 && x < segs) keep[y * segs + x] = 1;
+                    }
+                }
+                let cells = 0;
+                for (let i = 0; i < keep.length; i++) cells += keep[i];
+                const idx = new (src.constructor)(cells * 6);
+                let o = 0;
+                for (let k = 0; k < keep.length; k++) if (keep[k]) { for (let j = 0; j < 6; j++) idx[o++] = src[k * 6 + j]; }
+                const sg = new THREE.BufferGeometry();
+                for (const name in g.attributes) sg.setAttribute(name, g.attributes[name]);   // shared vertex data
+                sg.setIndex(new THREE.BufferAttribute(idx, 1));
+                this._stripGeo = sg;
+                this._stripCells = cells;
+                this._syncStripBounds();
+            }
+            for (let s of this.shells) {
+                const interior = s.mat.uniforms.uInterior.value > 0.5;
+                s.mesh.geometry = (interior || !this._stripGeo) ? this.customGeo : this._stripGeo;
+            }
+        }
+
+        setBlades(on) {
+            this.bladesOn = !!on;
+            if (this.bladesOn) this._ensureEdgeMap();
+            this._buildBlades();
+        }
+
+        _clearBlades() {
+            for (let b of this.blades) { if (b.mesh.parent) this.scene.remove(b.mesh); b.mesh.geometry.dispose(); }
+            this.blades = [];
+        }
+
+        // Blades along every border between shell grass and anything else, from the class map built with the edge map.
+        // a mask repaint and a shell rebuild usually come together: one blade build for both, a moment later
+        _scheduleBladeBuild() {
+            if (this._bladeBuildTimer || (!this.bladesOn && !this.blades.length)) return;
+            this._bladeBuildTimer = setTimeout(() => { this._bladeBuildTimer = null; this._buildBlades(); }, 0);
+        }
+
+        _buildBlades() {
+            if (this._bladeBuildTimer) { clearTimeout(this._bladeBuildTimer); this._bladeBuildTimer = null; }
+            this._clearBlades();
+            const preset = BLADES[this.quality];
+            if (!this.bladesOn || !preset || !this._cls) return;
+            const n = 1024, cls = this._cls, world = window.TERRAIN_SIZE || 600, cell = world / n, half = world / 2;
+            const heights = [0, this.roughHeight, this.deepHeight, this.semiHeight];
+            const gh = typeof window.getTerrainHeight === 'function' ? window.getTerrainHeight : null;
+            const per = preset.perCell, perAxis = Math.ceil(world / BLADE_CHUNK);
+            const chunks = new Map();
+            // a deterministic random number per cell and blade: the blades keep their place when the mask is rebuilt
+            const rnd = function (cellIdx, k) { let h = Math.imul(cellIdx + 1, 374761393) ^ Math.imul(k + 1, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+            for (let y = 0; y < n; y++) {
+                for (let x = 0; x < n; x++) {
+                    const c = cls[y * n + x];
+                    if (!c) continue;
+                    let dx = 0, dz = 0;   // towards the neighbouring non-grass cells
+                    if (x > 0 && !cls[y * n + x - 1]) dx -= 1;
+                    if (x < n - 1 && !cls[y * n + x + 1]) dx += 1;
+                    if (y > 0 && !cls[(y - 1) * n + x]) dz -= 1;
+                    if (y < n - 1 && !cls[(y + 1) * n + x]) dz += 1;
+                    if (!dx && !dz) continue;
+                    const ci = y * n + x;
+                    for (let k = 0; k < per; k++) {
+                        // anywhere inside the border cell (the cell is the grass next to the border, so the roots sit at the edge)
+                        const wx = (x + 0.5 + (rnd(ci, k * 5) - 0.5)) * cell - half;
+                        const wz = (y + 0.5 + (rnd(ci, k * 5 + 1) - 0.5)) * cell - half;
+                        const key = Math.min(perAxis - 1, Math.max(0, Math.floor((wx + half) / BLADE_CHUNK))) * perAxis + Math.min(perAxis - 1, Math.max(0, Math.floor((wz + half) / BLADE_CHUNK)));
+                        let ch = chunks.get(key);
+                        if (!ch) { ch = []; chunks.set(key, ch); }
+                        ch.push(wx, gh ? gh(wx, wz) : 0, wz,
+                            heights[c] * (0.75 + rnd(ci, k * 5 + 2) * 0.5), rnd(ci, k * 5 + 3) * Math.PI * 2, 0.1 + rnd(ci, k * 5 + 4) * 0.3, 0.85 + rnd(ci, k * 5 + 2) * 0.25,
+                            c - 1 === 0 ? 0 : (c === 2 ? 1 : 2));
+                    }
+                }
+            }
+            if (!this._bladeMat) {
+                this._bladeMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uWidth: { value: BLADE_WIDTH }, uWorld: { value: window.TERRAIN_SIZE || 600 }, uWaterMap: { value: this.waterTex || window.waterTex || this._dummyWaterTex }, uMaxDist: { value: preset.maxDist },
+                        uRoughCol: { value: this._roughCol.clone() }, uDeepCol: { value: this._deepCol.clone() }, uSemiCol: { value: this._semiCol.clone() },
+                        uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) }
+                    },
+                    vertexShader: BLADE_VERT, fragmentShader: BLADE_FRAG, side: THREE.DoubleSide
+                });
+            }
+            this._bladeMat.uniforms.uMaxDist.value = preset.maxDist;
+            // one blade: 7 vertices, 5 triangles (x = across, y = 0 root .. 1 tip)
+            const tpl = new Float32Array([-0.5,0,0, 0.5,0,0, -0.5,0.4,0, 0.5,0.4,0, -0.5,0.75,0, 0.5,0.75,0, 0,1,0]);
+            const idx = [0,1,2, 1,3,2, 2,3,4, 3,5,4, 4,5,6];
+            chunks.forEach(function (arr, key) {
+                const count = arr.length / 8, base = new Float32Array(count * 3), param = new Float32Array(count * 4), klass = new Float32Array(count);
+                let minY = 1e9, maxY = -1e9, maxH = 0;
+                for (let i = 0; i < count; i++) {
+                    const o = i * 8;
+                    base[i * 3] = arr[o]; base[i * 3 + 1] = arr[o + 1]; base[i * 3 + 2] = arr[o + 2];
+                    param[i * 4] = arr[o + 3]; param[i * 4 + 1] = arr[o + 4]; param[i * 4 + 2] = arr[o + 5]; param[i * 4 + 3] = arr[o + 6];
+                    klass[i] = arr[o + 7];
+                    minY = Math.min(minY, arr[o + 1]); maxY = Math.max(maxY, arr[o + 1]); maxH = Math.max(maxH, arr[o + 3]);
+                }
+                const geo = new THREE.InstancedBufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(tpl, 3));
+                geo.setIndex(idx);
+                geo.setAttribute('iBase', new THREE.InstancedBufferAttribute(base, 3));
+                geo.setAttribute('iParam', new THREE.InstancedBufferAttribute(param, 4));
+                geo.setAttribute('iClass', new THREE.InstancedBufferAttribute(klass, 1));
+                geo.instanceCount = count;
+                const cx = (Math.floor(key / perAxis) + 0.5) * BLADE_CHUNK - half, cz = ((key % perAxis) + 0.5) * BLADE_CHUNK - half;
+                const r = BLADE_CHUNK * 0.71 + (maxY - minY) + maxH + 2;
+                geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, (minY + maxY) / 2, cz), r);
+                const mesh = new THREE.Mesh(geo, this._bladeMat);
+                mesh.frustumCulled = true;
+                mesh.renderOrder = 120;
+                this.scene.add(mesh);
+                this.blades.push({ mesh: mesh, count: count, cx: cx, cz: cz, r: r, maxH: maxH });
+            }, this);
+            console.log('[Shells] Edge blades:', this.blades.reduce(function (a, b) { return a + b.count; }, 0), 'in', this.blades.length, 'chunks');
+        }
+
+        // the height sliders moved: every blade keeps its random share of its biome's height, scaled to the new height
+        _scaleBlades(oldH, newH) {
+            if (!this.blades.length) return;
+            const k = newH.map(function (h, i) { return oldH[i] > 0 ? h / oldH[i] : 1; });
+            for (let b of this.blades) {
+                const g = b.mesh.geometry, pa = g.attributes.iParam, ca = g.attributes.iClass.array, arr = pa.array;
+                let maxH = 0;
+                for (let i = 0; i < b.count; i++) { arr[i * 4] *= k[ca[i]]; if (arr[i * 4] > maxH) maxH = arr[i * 4]; }
+                pa.needsUpdate = true;
+                g.boundingSphere.radius += maxH - b.maxH; b.r += maxH - b.maxH; b.maxH = maxH;
+            }
+        }
+
+        // the terrain was reshaped: the blade roots follow it (a moment after the last change)
+        _scheduleBladeHeights() {
+            if (!this.blades.length || typeof window.getTerrainHeight !== 'function') return;
+            clearTimeout(this._bladeTimer);
+            this._bladeTimer = setTimeout(() => {
+                for (let b of this.blades) {
+                    const a = b.mesh.geometry.attributes.iBase, arr = a.array;
+                    let minY = 1e9, maxY = -1e9;
+                    for (let i = 0; i < b.count; i++) {
+                        const y = arr[i * 3 + 1] = window.getTerrainHeight(arr[i * 3], arr[i * 3 + 2]);
+                        if (y < minY) minY = y; if (y > maxY) maxY = y;
+                    }
+                    a.needsUpdate = true;
+                    // the culling sphere follows the new elevations (same formula as in _buildBlades)
+                    const sp = b.mesh.geometry.boundingSphere;
+                    sp.center.y = (minY + maxY) / 2;
+                    sp.radius = b.r = BLADE_CHUNK * 0.71 + (maxY - minY) + b.maxH + 2;
+                }
+            }, 300);
+        }
+
+        _updateBlades(camera, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB) {
+            if (!this.blades.length || !this._bladeMat) return;
+            const u = this._bladeMat.uniforms, maxD = u.uMaxDist.value;
+            u.uWaterMap.value = this.waterTex || window.waterTex || this._dummyWaterTex;
+            u.uWorld.value = window.TERRAIN_SIZE || 600;
+            u.uLightDir.value.set(lx, ly, lz); u.uDirColor.value.set(dirR, dirG, dirB); u.uAmbColor.value.set(ambR, ambG, ambB);
+            u.uRoughCol.value.copy(this._roughCol); u.uDeepCol.value.copy(this._deepCol); u.uSemiCol.value.copy(this._semiCol);
+            if (!camera) return;
+            const cp = camera.position;
+            for (let b of this.blades) b.mesh.visible = Math.hypot(cp.x - b.cx, cp.z - b.cz) - b.r < maxD;
+        }
+
+        // maskRGBA: the rough mask (srcSize x srcSize, R=rough G=deep B=semi). Builds a coarse "closeness to a border" map:
+        // 1 on and next to a border with anything that is not shell grass (fairway, green, sand), fading to 0 over edgeWidth.
+        setEdgeMapFromMask(maskRGBA, srcSize) {
+            // the map costs several 1024x1024 passes: only built while a feature that uses it is on (else on demand, see _ensureEdgeMap)
+            if (!this.edgeWeighted && !this.bladesOn) { this._edgeStale = true; return; }
+            this._edgeStale = false;
+            const n = 1024, step = Math.max(1, Math.floor(srcSize / n)), half = step >> 1;
+            const worldSize = window.TERRAIN_SIZE || 600;
+            const width = Math.max(1.5, this.edgeWidth / (worldSize / n));   // in cells
+            const d = new Float32Array(n * n), INF = 1e9;
+            const cls = new Uint8Array(n * n);
+            for (let y = 0; y < n; y++) {
+                const row = (y * step + half) * srcSize;
+                for (let x = 0; x < n; x++) {
+                    const i = (row + x * step + half) * 4;
+                    const c = maskRGBA[i] === 255 ? 1 : (maskRGBA[i + 1] === 255 ? 2 : (maskRGBA[i + 2] === 255 ? 3 : 0));
+                    cls[y * n + x] = c;
+                    d[y * n + x] = c ? INF : 0;
+                }
+            }
+            this._cls = cls;
+            for (let y = 0; y < n; y++) {            // distance to the nearest non-grass cell (two-pass chamfer)
+                for (let x = 0; x < n; x++) {
+                    let v = d[y * n + x];
+                    if (x > 0) v = Math.min(v, d[y * n + x - 1] + 1);
+                    if (y > 0) {
+                        v = Math.min(v, d[(y - 1) * n + x] + 1);
+                        if (x > 0) v = Math.min(v, d[(y - 1) * n + x - 1] + 1.414);
+                        if (x < n - 1) v = Math.min(v, d[(y - 1) * n + x + 1] + 1.414);
+                    }
+                    d[y * n + x] = v;
+                }
+            }
+            const out = new Uint8Array(n * n);
+            for (let y = n - 1; y >= 0; y--) {
+                for (let x = n - 1; x >= 0; x--) {
+                    let v = d[y * n + x];
+                    if (x < n - 1) v = Math.min(v, d[y * n + x + 1] + 1);
+                    if (y < n - 1) {
+                        v = Math.min(v, d[(y + 1) * n + x] + 1);
+                        if (x < n - 1) v = Math.min(v, d[(y + 1) * n + x + 1] + 1.414);
+                        if (x > 0) v = Math.min(v, d[(y + 1) * n + x - 1] + 1.414);
+                    }
+                    d[y * n + x] = v;
+                    // a DataTexture has row 0 at v=0, the canvas-based mask has it at v=1: rows are stored flipped
+                    out[(n - 1 - y) * n + x] = Math.round(255 * (1 - Math.min(v / width, 1)));
+                }
+            }
+            this._edgeData = out; this._edgeN = n;
+            const old = this._edgeTex;
+            const tex = new THREE.DataTexture(out, n, n, THREE.LuminanceFormat, THREE.UnsignedByteType);
+            tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.needsUpdate = true;
+            this._edgeTex = tex;
+            for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeMap) s.mat.uniforms.uEdgeMap.value = tex;
+            if (old && old.dispose) old.dispose();
+            this._buildStrip();
+            this._scheduleBladeBuild();
+        }
 
         getStats() {
             let visible = 0, tris = 0;
@@ -488,7 +878,7 @@
             for (let s of this.shells) {
                 if (s.mesh.visible) {
                     visible++;
-                    tris += segs * segs * 2;
+                    tris += s.mesh.geometry === this._stripGeo ? this._stripCells * 2 : segs * segs * 2;
                 }
             }
             return { total: this.shells.length, visible, extraTris: tris };
@@ -503,7 +893,9 @@
                 s.mat.dispose();
             }
             this.shells = [];
+            if (this._stripGeo) { this._stripGeo.dispose(); this._stripGeo = null; }
 
+            this._scheduleBladeBuild();   // the number of blades follows the quality
             let preset = QUALITY[this.quality];
             // CODEX L2 FIX: Free customGeo vertex buffer from memory when quality is OFF
             if (!preset || preset.layers === 0) {
@@ -515,7 +907,7 @@
             }
 
             this._updateColors();
-            let maxH = Math.max(this.roughHeight, this.deepHeight);
+            let maxH = Math.max(this.roughHeight, this.deepHeight, this.semiHeight);
             
             // Decouple from Green Grid! Cap 3D grass resolution at max 200.
             let shellSegs = Math.min(window._terrainGridSegs || 200, 200);
@@ -536,6 +928,7 @@
                 this.scene.add(mesh);
                 this.shells.push({ layer, mesh, mat });
             }
+            this._buildStrip();
             console.log('[Shells] Built', this.shells.length,
                 'meshes (' + preset.layers + ' 3D layers) on master geo');
         }
@@ -551,6 +944,10 @@
                     uMaxHeight:{ value: maxH },
                     uRoughH:   { value: this.roughHeight },
                     uDeepH:    { value: this.deepHeight },
+                    uSemiH:    { value: this.semiHeight },
+                    uEdgeMap:  { value: this._edgeTex },
+                    uInterior: { value: this._isInteriorLayer(layer, total) ? 1 : 0 },
+                    uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
                     uTime:     { value: 0 },

@@ -1034,6 +1034,98 @@ function serve() {
     checks.push({ name: 'a prop under the pointer is picked in single mode but does not swallow a click in the brush mode', ok: inBrush == null && inSingle.sel === inSingle.last, detail: JSON.stringify([modes, inBrush, inSingle]) });
     checks.push({ name: 'a prop buried under the ground is not hovered, and a click does not open the edit panel', ok: setup.ok && buried.raw > 0 && buried.hover == null && buried.direct === -1 && afterClick.pointerdowns === 1 && afterClick.sel == null && afterClick.panel === 'none', detail: JSON.stringify([setup, buried, afterClick]) });
     checks.push({ name: 'a prop standing on the ground is still picked', ok: above.idx === above.expect, detail: JSON.stringify(above) });
+    // the 3D grass shells compile (a shader that does not compile draws no grass at all, without any page error) and the semi-rough has grass of its own
+    const grass = await pp.evaluate(async function () {
+      const errs = []; const oe = console.error; console.error = function () { errs.push(String(arguments[0]).slice(0, 160) + ' ' + String(arguments[arguments.length - 1]).slice(0, 200)); oe.apply(console, arguments); };
+      window.setGrassQuality('MED');
+      await new Promise(function (r) { setTimeout(r, 1500); });
+      console.error = oe;
+      const sh = window._terrainShells;
+      return { errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }), shells: sh.shells.length, semi: sh.semiHeight, rough: sh.roughHeight, deep: sh.deepHeight, u: sh.shells[0] && sh.shells[0].mat.uniforms.uSemiH.value };
+    });
+    // the closeness-to-border map the edge-weighted shells use: 1 at a fairway edge, 0 well inside the grass, and the switch reaches the shaders
+    const edge = await pp.evaluate(async function () {
+      const sh = window._terrainShells, px = function (x) { return Math.round((x / 600 + 0.5) * 4096); };
+      window.pCtx.fillStyle = '#4a782b'; window.pCtx.fillRect(0, 0, 4096, 4096);
+      window.pCtx.fillStyle = '#7db952'; window.pCtx.fillRect(px(-300), 0, px(0) - px(-300), 4096); // fairway on the left half
+      window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+      window._roughMaskDirty = false; window.rebuildRoughMask();
+      // with both edge features off (the default) the map is not built; switching one on builds it
+      const lazy = { stale: sh._edgeStale === true, w: sh._edgeTex.image.width };
+      const off = sh.shells[0].mat.uniforms.uEdgeOn.value; sh.setEdgeWeighted(true);
+      lazy.built = sh._edgeTex.image.width === 1024;
+      const t = sh._edgeTex, n = t.image.width, at = function (x) { return t.image.data[512 * n + Math.round((x / 600 + 0.5) * n)]; };
+      const on = sh.shells[0].mat.uniforms.uEdgeOn.value;
+      // the upper shells only have geometry in the border strip; the lowest one keeps the whole grid
+      const full = sh.customGeo.index.count / 3, strip = sh.shells.filter(function (q) { return q.mesh.geometry !== sh.customGeo; });
+      const g = strip[0] && strip[0].mesh.geometry, ix = g ? g.index.array : [], pos = sh.customGeo.attributes.position.array;
+      let maxAbsX = 0; for (let i = 0; i < ix.length; i++) maxAbsX = Math.max(maxAbsX, Math.abs(pos[ix[i] * 3]));   // plane x = world x
+      const stripInfo = { full: full, strip: g ? g.index.count / 3 : -1, upper: strip.length, shells: sh.shells.length, lowestFull: sh.shells[0].mesh.geometry === sh.customGeo, maxAbsX: maxAbsX, sharesVerts: !!g && g.attributes.position === sh.customGeo.attributes.position };
+      // the terrain is sculpted: the strip's culling bounds follow the shared vertices (else the upper shells vanish on a new mountain)
+      let boundsFollow = false;
+      if (g && sh.masterGeo) {
+        const mp = sh.masterGeo.attributes.position, before = g.boundingSphere ? g.boundingSphere.center.z : null, saved = mp.array.slice();
+        for (let i = 2; i < mp.array.length; i += 3) mp.array[i] += 80;   // plane local z is the height
+        sh.syncHeights();
+        boundsFollow = g.boundingSphere && Math.abs(g.boundingSphere.center.z - sh.customGeo.boundingSphere.center.z) < 1e-6 && (before === null || g.boundingSphere.center.z > before + 40);
+        mp.array.set(saved); sh.syncHeights();
+      }
+      stripInfo.boundsFollow = boundsFollow;
+      sh.setEdgeWeighted(false); const back = sh.shells.every(function (q) { return q.mesh.geometry === sh.customGeo; });
+      return { lazy: lazy, stripInfo: stripInfo, back: back, size: n, nextToEdge: at(0.3), mid: at(1.5), far: at(20), onFairway: at(-10), off: off, on: on, defaultOff: sh.edgeWeighted === false };
+    });
+    checks.push({ name: 'edge map: 1 next to a fairway edge, 0 far inside the grass; the edge switch reaches the shaders', ok: edge.lazy.stale && edge.lazy.w === 1 && edge.lazy.built && edge.size === 1024 && edge.nextToEdge > 150 && edge.mid > 40 && edge.mid < edge.nextToEdge && edge.far === 0 && edge.onFairway === 255 && edge.off === 0 && edge.on === 1 && edge.defaultOff, detail: JSON.stringify(edge) });
+    const si = edge.stripInfo;
+    checks.push({ name: 'edge strip: the upper shells only draw the border strip (few triangles, same vertices), the lowest one the whole grid; switching off restores all', ok: si.upper > 0 && si.upper < si.shells && si.lowestFull && si.sharesVerts && si.strip > 0 && si.strip < si.full * 0.15 && si.maxAbsX < 16 && si.boundsFollow && edge.back, detail: JSON.stringify(edge.stripInfo) });
+    // edge blades: off by default; on, they stand along all four sides of a fairway rectangle (both axes), at the border
+    const bl = await pp.evaluate(async function () {
+      const sh = window._terrainShells, px = function (x) { return Math.round((x / 600 + 0.5) * 4096); }, pz = function (z) { return Math.round((z / 600 + 0.5) * 4096); };
+      const defaultOff = sh.bladesOn === false && sh.blades.length === 0;
+      window.pCtx.fillStyle = '#4a782b'; window.pCtx.fillRect(0, 0, 4096, 4096);
+      window.pCtx.fillStyle = '#7db952'; window.pCtx.fillRect(px(-20), pz(-60), px(20) - px(-20), pz(-8) - pz(-60));
+      window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+      window._roughMaskDirty = false; window.rebuildRoughMask();
+      sh.setBlades(true);
+      let n = 0, outside = 0, worst = 0, deepest = 0; const sides = { left: 0, right: 0, near: 0, far: 0 };
+      for (const b of sh.blades) {
+        const a = b.mesh.geometry.attributes.iBase.array;
+        for (let i = 0; i < b.count; i++) {
+          const x = a[i * 3], z = a[i * 3 + 2];
+          const dx = Math.max(-20 - x, 0, x - 20), dz = Math.max(-60 - z, 0, z + 8), dist = Math.hypot(dx, dz);
+          const depth = dist > 0 ? 0 : Math.min(x + 20, 20 - x, z + 60, -8 - z);   // how far inside the fairway rectangle
+          n++; if (dist > 0) outside++; worst = Math.max(worst, dist); deepest = Math.max(deepest, depth);
+          if (dist < 1.5 && x > -20.5 && x < 20.5 && z > -60.5 && z < -7.5 || dist < 1.5) {
+            if (dx > 0 && x < 0) sides.left++; else if (dx > 0) sides.right++; else if (dz > 0 && z > -30) sides.near++; else if (dz > 0) sides.far++;
+          }
+        }
+      }
+      // the height sliders reach the blades that are already built
+      const maxPer = function () { const m = [0, 0, 0]; for (const b of sh.blades) { const P = b.mesh.geometry.attributes.iParam.array, C = b.mesh.geometry.attributes.iClass.array; for (let i = 0; i < b.count; i++) m[C[i]] = Math.max(m[C[i]], P[i * 4]); } return m; };
+      const h0 = [sh.roughHeight, sh.deepHeight], m0 = maxPer();
+      sh.setHeights(h0[0] * 1.5, h0[1] * 0.5); const m1 = maxPer(); sh.setHeights(h0[0], h0[1]);
+      const heightRatio = m0.map(function (v, i) { return v ? +(m1[i] / v).toFixed(2) : -1; });
+      // the terrain was raised: the roots move up and so does the culling sphere (else the blades vanish on a new hill)
+      const realH = window.getTerrainHeight, y0 = sh.blades[0].mesh.geometry.boundingSphere.center.y;
+      window.getTerrainHeight = function () { return 50; };
+      sh._scheduleBladeHeights(); await new Promise(function (r) { setTimeout(r, 500); });
+      window.getTerrainHeight = realH;
+      const y1 = sh.blades[0].mesh.geometry.boundingSphere.center.y;
+      const edgeFormat = sh._edgeTex.format === THREE.LuminanceFormat;   // WebGL1 has no RED texture format
+      // the blades see the water map like the shells do (no grass in water)
+      const fakeWater = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1, THREE.RGBAFormat), keepWater = sh.waterTex;
+      sh.waterTex = fakeWater; sh._updateBlades(null, 0, 1, 0, 1, 1, 1, 0.5, 0.5, 0.5); const waterWired = sh._bladeMat.uniforms.uWaterMap.value === fakeWater && sh._bladeMat.uniforms.uWorld.value > 0;
+      sh.waterTex = keepWater;
+      // a mask repaint followed by a shell refresh (what every load / undo / paint does) builds the blades once, not twice
+      let builds = 0; const ob = sh._buildBlades; sh._buildBlades = function () { builds++; return ob.apply(this, arguments); };
+      window._roughMaskDirty = false; window.rebuildRoughMask(); sh.refresh(); await new Promise(function (r) { setTimeout(r, 100); });
+      sh._buildBlades = ob;
+      const rebuiltBlades = sh.blades.length;
+      const chunks = sh.blades.length, vis = sh.blades.filter(function (b) { return b.mesh.visible; }).length;
+      sh.setBlades(false); const cleared = sh.blades.length === 0;
+      return { defaultOff: defaultOff, n: n, outsideShare: n ? outside / n : 0, worst: +worst.toFixed(2), deepest: +deepest.toFixed(2), sides: sides, chunks: chunks, cleared: cleared, heightRatio: heightRatio, y0: +y0.toFixed(1), y1: +y1.toFixed(1), edgeFormat: edgeFormat, builds: builds, rebuiltBlades: rebuiltBlades, waterWired: waterWired };
+    });
+    checks.push({ name: 'edge blades: off by default; on, they stand at the border along all four fairway sides, not out on the fairway', ok: bl.defaultOff && bl.n > 500 && bl.worst < 1.5 && bl.deepest < 0.45 && bl.sides.left > 50 && bl.sides.right > 50 && bl.sides.near > 50 && bl.sides.far > 50 && bl.cleared && bl.heightRatio[0] === 1.5 && bl.y1 > bl.y0 + 40 && bl.edgeFormat && bl.builds === 1 && bl.waterWired && bl.rebuiltBlades > 0, detail: JSON.stringify(bl) });
+    checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
   } catch (e) { checks.push({ name: 'quick draft reopen check ran', ok: false, detail: 'step ' + reopenStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
