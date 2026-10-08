@@ -1176,6 +1176,11 @@ function serve() {
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };
       const out = { hasButtons: !!document.getElementById('grass-x-edge-1') && !!document.getElementById('grass-x-blades-1') && !!document.getElementById('grass-x-tex-2') };
+      // the option labels follow the language
+      const prevLang = localStorage.getItem('golf_os_lang') || 'en';
+      window.setGolfLanguage('en'); out.en = document.getElementById('grass-x-edge-0').textContent + '/' + document.getElementById('grass-x-edge-1').textContent + '/' + document.getElementById('grass-x-tex-2').textContent;
+      window.setGolfLanguage('sv'); out.sv = document.getElementById('grass-x-edge-0').textContent + '/' + document.getElementById('grass-x-edge-1').textContent + '/' + document.getElementById('grass-x-tex-2').textContent;
+      window.setGolfLanguage(prevLang);
       window.setGrassExtra('edge', '1'); window.setGrassExtra('blades', '1'); window.setGrassExtra('tex', '2');
       out.on = sh.edgeWeighted === true && sh.bladesOn === true && sh.grassTexOn === true && sh.grassTexVariant === 2;
       out.shown = st('edge', '1') && st('blades', '1') && st('tex', '2') && !st('edge', '0') && !st('tex', '0');
@@ -1185,7 +1190,7 @@ function serve() {
       out.storedOff = localStorage.getItem('golf_grass_edge') === '0' && localStorage.getItem('golf_grass_blades') === '0' && localStorage.getItem('golf_grass_tex') === '0';
       return out;
     });
-    checks.push({ name: 'grass menu: buttons for edge layers, edge blades and grass pattern switch the mode, show it and remember it', ok: gx.hasButtons && gx.on && gx.shown && gx.stored && gx.off && gx.storedOff, detail: JSON.stringify(gx) });
+    checks.push({ name: 'grass menu: buttons for edge layers, edge blades and grass pattern switch the mode, show it and remember it', ok: gx.hasButtons && gx.en === 'Off/On/Pattern 2' && gx.sv === 'Av/På/Mönster 2' && gx.on && gx.shown && gx.stored && gx.off && gx.storedOff, detail: JSON.stringify(gx) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
