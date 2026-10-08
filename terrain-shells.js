@@ -91,6 +91,7 @@
         uniform sampler2D uGrassTex;
         uniform float uTexOn;
         uniform float uTexTile;
+        uniform float uTexLift;
         uniform float uEdgeOn;
         uniform float uMaxHeight;
         uniform float uMaxDist;
@@ -222,7 +223,10 @@
                 // two scales (the second one rotated) so the repeat of the tile does not show
                 vec2 rXZ = vec2(wXZ.x * 0.8 - wXZ.y * 0.6, wXZ.x * 0.6 + wXZ.y * 0.8);
                 float texd = texture2D(uGrassTex, wXZ / uTexTile).r + texture2D(uGrassTex, rXZ / (uTexTile * 2.7)).r;
-                col *= clamp(1.0 + (texd - 1.0) * 1.5, 0.15, 2.0);
+                // lighter and flatter than a photo: the shadows between the blades stay soft, so it reads as a cartoon lawn
+                float tex = clamp(1.0 + (texd - 1.0) * 1.3, 0.55, 1.9);
+                col *= tex * uTexLift;
+                col += vec3(0.03, 0.05, 0.0) * max(tex - 1.0, 0.0);   // the lit blade tips lean a little yellow-green
             }
 
             // Apply dynamic diffuse lighting matching the terrain plane
@@ -344,14 +348,17 @@
                 edgeFlag = localStorage.getItem('golf_grass_edge');
             } catch (e) { /* storage blocked: stays off */ }
             this.edgeWeighted = edgeFlag === '1';
-            // Blade texture on the deep rough: off by default; ?grasstex=1 turns it on (and remembers it), ?grasstex=0 turns it off.
+            // Blade texture on the deep rough: off by default; ?grasstex=1 (or =2 for the other tile) turns it on (and remembers it), ?grasstex=0 turns it off.
             let texFlag = null;
             try {
                 const tq = new URLSearchParams(window.location.search).get('grasstex');
-                if (tq !== null) localStorage.setItem('golf_grass_tex', tq === '1' ? '1' : '0');
+                if (tq !== null) localStorage.setItem('golf_grass_tex', (tq === '1' || tq === '2') ? tq : '0');
                 texFlag = localStorage.getItem('golf_grass_tex');
             } catch (e) { /* storage blocked: stays off */ }
-            this.grassTexOn = texFlag === '1';
+            this.grassTexOn = texFlag === '1' || texFlag === '2';
+            this.grassTexVariant = texFlag === '2' ? 2 : 1;
+            this.grassTexLift = 1.4;   // brightness of the texture on the deep rough (1 = the biome colour as is)
+            this._grassTexCache = {}; this._grassTexLoading = {};
             this._grassTex = null; this._grassTexReady = false;
             this.edgeWidth = 5.5;       // metres from a border where all shells are drawn
             // Edge blades: also off by default; ?grassblades=1 turns them on (and remembers it), ?grassblades=0 turns them off.
@@ -520,6 +527,48 @@
             this._scheduleBladeHeights();
         }
 
+        // While a sculpt stroke is going on the master terrain moves with every pointer event, but the shells only follow on release
+        // (the full resample also redoes the normals): the grass sank into a rising hill and hung in the air over a dug one.
+        // This follows the heights (not the normals) in the touched area, at most about 12 times a second.
+        queueRegionSync(cx, cz, r) { this.queueRegionBounds(cx - r, cx + r, cz - r, cz + r); }
+
+        // world-space box; a fast drag modifies the whole corridor from the previous to the current pointer position
+        queueRegionBounds(x0, x1, z0, z1) {
+            if (!this.shells.length || !this.customGeo || !this.masterGeo) return;
+            const q = this._regionQ || (this._regionQ = { x0: 1e9, x1: -1e9, z0: 1e9, z1: -1e9 });
+            q.x0 = Math.min(q.x0, x0); q.x1 = Math.max(q.x1, x1);
+            q.z0 = Math.min(q.z0, z0); q.z1 = Math.max(q.z1, z1);
+            if (this._regionTimer) return;
+            this._regionTimer = setTimeout(() => {
+                this._regionTimer = null;
+                const b = this._regionQ; this._regionQ = null;
+                if (b) this._syncRegion(b);
+            }, 80);
+        }
+
+        _syncRegion(b) {
+            const g = this.customGeo, m = this.masterGeo;
+            if (!g || !m) return;
+            const mPos = m.attributes.position.array, mSegs = window.TERRAIN_SEGS || 600, mStride = mSegs + 1;
+            const size = window.TERRAIN_SIZE || 600, half = size / 2, mStep = size / mSegs;
+            const cPos = g.attributes.position.array, segs = g.parameters.widthSegments, cStride = segs + 1, step = size / segs;
+            const j0 = Math.max(0, Math.floor((b.x0 + half) / step) - 1), j1 = Math.min(segs, Math.ceil((b.x1 + half) / step) + 1);
+            const i0 = Math.max(0, Math.floor((b.z0 + half) / step) - 1), i1 = Math.min(segs, Math.ceil((b.z1 + half) / step) + 1);
+            for (let i = i0; i <= i1; i++) {
+                const worldZ = -(half - i * step);
+                for (let j = j0; j <= j1; j++) {
+                    const gx = Math.max(0, Math.min(mSegs, (-half + j * step + half) / mStep)), gz = Math.max(0, Math.min(mSegs, (worldZ + half) / mStep));
+                    const ix = Math.min(mSegs - 1, Math.floor(gx)), iz = Math.min(mSegs - 1, Math.floor(gz)), fx = gx - ix, fz = gz - iz;
+                    const a = (iz * mStride + ix) * 3 + 2, c = ((iz + 1) * mStride + ix) * 3 + 2;
+                    cPos[(i * cStride + j) * 3 + 2] = (mPos[a] || 0) * (1 - fx) * (1 - fz) + (mPos[a + 3] || 0) * fx * (1 - fz) + (mPos[c] || 0) * (1 - fx) * fz + (mPos[c + 3] || 0) * fx * fz;
+                }
+            }
+            g.attributes.position.needsUpdate = true;
+            g.computeBoundingBox(); g.computeBoundingSphere();
+            this._syncStripBounds();
+            this._scheduleBladeHeights();
+        }
+
         _resampleFromMaster() {
             if (!this.masterGeo || !this.customGeo) return;
 
@@ -639,17 +688,22 @@
             sg.boundingBox = g.boundingBox.clone();
         }
 
-        setGrassTex(on) {
+        // variant 1 or 2 picks the tile (grass-tile.jpg / grass-tile-2.jpg); left out, the current one stays
+        setGrassTex(on, variant) {
             this.grassTexOn = !!on;
-            if (this.grassTexOn && !this._grassTex && !this._grassTexLoading) {
-                this._grassTexLoading = true;
-                new THREE.TextureLoader().load('grass-tile.jpg', (tex) => {
+            if (variant === 1 || variant === 2) this.grassTexVariant = variant;
+            const v = this.grassTexVariant, cached = this._grassTexCache[v] || null;
+            this._grassTex = cached; this._grassTexReady = !!cached;
+            if (this.grassTexOn && !cached && !this._grassTexLoading[v]) {
+                this._grassTexLoading[v] = true;
+                new THREE.TextureLoader().load(v === 2 ? 'grass-tile-2.jpg' : 'grass-tile.jpg', (tex) => {
                     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
                     tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
                     tex.generateMipmaps = true; tex.anisotropy = 4;
-                    this._grassTex = tex; this._grassTexReady = true; this._grassTexLoading = false;
+                    this._grassTexCache[v] = tex; this._grassTexLoading[v] = false;
+                    if (this.grassTexVariant === v) { this._grassTex = tex; this._grassTexReady = true; }
                     this._applyGrassTex();
-                }, undefined, () => { this._grassTexLoading = false; });
+                }, undefined, () => { this._grassTexLoading[v] = false; });
             }
             this._applyGrassTex();
         }
@@ -992,7 +1046,7 @@
                     uSemiH:    { value: this.semiHeight },
                     uEdgeMap:  { value: this._edgeTex },
                     uInterior: { value: this._isInteriorLayer(layer, total) ? 1 : 0 },
-                    uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this.grassTexOn && this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 },
+                    uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this.grassTexOn && this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 }, uTexLift: { value: this.grassTexLift },
                     uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
