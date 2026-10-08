@@ -16,7 +16,7 @@
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        // interior: how many shells are drawn well inside the grass: the lowest one, plus a middle one when 2 (the edges, where the height shows, get all of them)
+        // interior: shells drawn well inside the grass: the lowest, the top (the canopy at the real height) and a middle one when 2; the rest only at the edges
         LOW:  { layers: 3, maxDist: 60,  interior: 1 },
         MED:  { layers: 5, maxDist: 120, interior: 2 },
         HIGH: { layers: 8, maxDist: 250, interior: 2 }
@@ -88,6 +88,7 @@
         uniform float uLayer;
         uniform sampler2D uEdgeMap;
         uniform float uInterior;
+        uniform float uNextInterior;
         uniform sampler2D uGrassTex;
         uniform float uTexOn;
         uniform float uTexTile;
@@ -193,6 +194,19 @@
             float heightFade = 1.0 - smoothstep(0.85, 1.05, eL);
             if (heightFade < 0.05) discard;
 
+            // Interior shells (edge mode): the grass is seen from above, so the top of each biome should be a dense canopy at
+            // its real height, not a carpet at the ground with the layers stacking up only at the border. An interior shell is
+            // the canopy where the next interior shell above it is already taller than this biome. The other interior shells
+            // (except the lowest, the ground carpet) are only drawn near a border, like the upper shells.
+            float canopy = 0.0;
+            float nearE = 1.0;
+            if (uEdgeOn > 0.5 && uInterior > 0.5 && uLayer > 1.5) {
+                float eNext = uNextInterior / max(uLayers, 1.0) * (uMaxHeight / max(targetH, 0.001));
+                canopy = (eL <= 1.05 && eNext > 1.05) ? 1.0 : 0.0;
+                nearE = smoothstep(0.0, 0.35, texture2D(uEdgeMap, vUv).r);
+                if (canopy < 0.5 && hash(vWorldPos.xz * 53.0) > nearE) discard;
+            }
+
             vec2 wXZ = vWorldPos.xz;
 
             // Dense, fine-grained turf structure (uniform coverage without coarse blotchy clumps)
@@ -204,6 +218,7 @@
             // On slopes: bottom layers are fully solid to prevent terrain showing through
             float slopeCompensation = smoothstep(0.10, 0.40, vSlope);
             float baseThreshold = eL * eL * 0.40;
+            baseThreshold *= mix(0.35, 1.0, nearE * canopy + (1.0 - canopy));   // a dense canopy well inside, the open tips at a border
             float threshold = baseThreshold * (1.0 - slopeCompensation * (1.0 - eL));
             if (grass < threshold) discard;
 
@@ -719,7 +734,13 @@
 
         _isInteriorLayer(layer, total) {
             const p = QUALITY[this.quality] || {};
-            return layer === 1 || ((p.interior || 1) >= 2 && layer === Math.ceil(total / 2));
+            return layer === 1 || layer === total || ((p.interior || 1) >= 2 && layer === Math.ceil(total / 2));
+        }
+
+        // the next interior shell above this one (a huge number when there is none): it bounds the biome heights this shell is the canopy for
+        _nextInteriorLayer(layer, total) {
+            for (let l = layer + 1; l <= total; l++) if (this._isInteriorLayer(l, total)) return l;
+            return 1e4;
         }
 
         // The upper shells only need geometry where the border is: a second index buffer over the same vertices, with just
@@ -1046,6 +1067,7 @@
                     uSemiH:    { value: this.semiHeight },
                     uEdgeMap:  { value: this._edgeTex },
                     uInterior: { value: this._isInteriorLayer(layer, total) ? 1 : 0 },
+                    uNextInterior: { value: this._nextInteriorLayer(layer, total) },
                     uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this.grassTexOn && this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 }, uTexLift: { value: this.grassTexLift },
                     uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
