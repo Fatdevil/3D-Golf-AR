@@ -239,7 +239,7 @@
                 vec2 rXZ = vec2(wXZ.x * 0.8 - wXZ.y * 0.6, wXZ.x * 0.6 + wXZ.y * 0.8);
                 float texd = texture2D(uGrassTex, wXZ / uTexTile).r + texture2D(uGrassTex, rXZ / (uTexTile * 2.7)).r;
                 // lighter and flatter than a photo: the shadows between the blades stay soft, so it reads as a cartoon lawn
-                float tex = clamp(1.0 + (texd - 1.0) * 1.3, 0.55, 1.9);
+                float tex = clamp(1.0 + (texd - 1.0) * 1.0, 0.85, 1.5);
                 col *= tex * uTexLift;
                 col += vec3(0.03, 0.05, 0.0) * max(tex - 1.0, 0.0);   // the lit blade tips lean a little yellow-green
             }
@@ -372,7 +372,7 @@
             } catch (e) { /* storage blocked: stays off */ }
             this.grassTexOn = texFlag === '1' || texFlag === '2';
             this.grassTexVariant = texFlag === '2' ? 2 : 1;
-            this.grassTexLift = 1.4;   // brightness of the texture on the deep rough (1 = the biome colour as is)
+            this.grassTexLift = 1.0;   // brightness of the texture on the deep rough (1 = the biome colour as is)
             this._grassTexCache = {}; this._grassTexLoading = {};
             this._grassTex = null; this._grassTexReady = false;
             this.edgeWidth = 5.5;       // metres from a border where all shells are drawn
