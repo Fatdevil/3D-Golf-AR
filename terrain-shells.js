@@ -82,6 +82,8 @@
         uniform vec3  uSandCol;
         uniform float uRoughH;
         uniform float uDeepH;
+        uniform float uSemiH;
+        uniform float uLayers;
         uniform float uMaxHeight;
         uniform float uMaxDist;
         uniform vec2  uWindDir;
@@ -142,11 +144,12 @@
             float shoreFade = 1.0 - smoothstep(0.005, 0.04, waterMask);
             if (shoreFade < 0.05) discard;
 
-            // ── Biome mask: R=rough, G=deep ──
+            // ── Biome mask: R=rough, G=deep, B=semi-rough ──
             vec3 mask = texture2D(uRoughMask, vUv).rgb;
             float isRough = step(0.75, mask.r);                    // R=1.0
             float isDeep  = step(0.75, mask.g);                    // G=1.0
-            float roughness = max(isRough, isDeep);
+            float isSemi  = step(0.75, mask.b);                    // B=1.0
+            float roughness = max(max(isRough, isDeep), isSemi);
             if (roughness < 0.1) discard;
 
             // Pick color and height based on dominant biome channel (pure canvas colors)
@@ -155,10 +158,15 @@
             if (isDeep > 0.5) {
                 baseCol = uDeepCol;
                 targetH = uDeepH;
-            } else {
+            } else if (isRough > 0.5) {
                 baseCol = uRoughCol;
                 targetH = uRoughH;
+            } else {
+                baseCol = uSemiCol;
+                targetH = uSemiH;
             }
+            // a short grass is never thinner than the first shell (low quality has few, tall layers)
+            targetH = max(targetH, uMaxHeight / max(uLayers, 1.0));
 
             // Height-proportional layer culling with soft fade
             float eL = vL * (uMaxHeight / max(targetH, 0.001));
@@ -251,6 +259,9 @@
             this._dummyWaterTex = new THREE.DataTexture(blackPixel, 1, 1, THREE.RGBAFormat);
             this._dummyWaterTex.needsUpdate = true;
 
+            // fairway is the cut surface (no shells); semi-rough, rough and deep rough stand above it (metres).
+            // The heights are exaggerated on purpose: with real heights (4-8 cm) the shells cannot be seen at game distances.
+            this.semiHeight  = 0.12;
             this.roughHeight = 0.30;
             this.deepHeight  = 0.60;
 
@@ -469,11 +480,13 @@
         setHeights(roughH, deepH) {
             this.roughHeight = roughH;
             this.deepHeight = deepH;
-            let maxH = Math.max(roughH, deepH);
+            this.semiHeight = Math.max(0.03, roughH * 0.4); // semi-rough follows the rough slider at 40 % of its height
+            let maxH = Math.max(roughH, deepH, this.semiHeight);
             for (let s of this.shells) {
                 if (s.mat && s.mat.uniforms) {
                     s.mat.uniforms.uRoughH.value = roughH;
                     s.mat.uniforms.uDeepH.value = deepH;
+                    s.mat.uniforms.uSemiH.value = this.semiHeight;
                     s.mat.uniforms.uMaxHeight.value = maxH;
                 }
             }
@@ -515,7 +528,7 @@
             }
 
             this._updateColors();
-            let maxH = Math.max(this.roughHeight, this.deepHeight);
+            let maxH = Math.max(this.roughHeight, this.deepHeight, this.semiHeight);
             
             // Decouple from Green Grid! Cap 3D grass resolution at max 200.
             let shellSegs = Math.min(window._terrainGridSegs || 200, 200);
@@ -551,6 +564,7 @@
                     uMaxHeight:{ value: maxH },
                     uRoughH:   { value: this.roughHeight },
                     uDeepH:    { value: this.deepHeight },
+                    uSemiH:    { value: this.semiHeight },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
                     uTime:     { value: 0 },

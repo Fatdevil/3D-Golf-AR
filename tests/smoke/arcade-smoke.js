@@ -1034,6 +1034,16 @@ function serve() {
     checks.push({ name: 'a prop under the pointer is picked in single mode but does not swallow a click in the brush mode', ok: inBrush == null && inSingle.sel === inSingle.last, detail: JSON.stringify([modes, inBrush, inSingle]) });
     checks.push({ name: 'a prop buried under the ground is not hovered, and a click does not open the edit panel', ok: setup.ok && buried.raw > 0 && buried.hover == null && buried.direct === -1 && afterClick.pointerdowns === 1 && afterClick.sel == null && afterClick.panel === 'none', detail: JSON.stringify([setup, buried, afterClick]) });
     checks.push({ name: 'a prop standing on the ground is still picked', ok: above.idx === above.expect, detail: JSON.stringify(above) });
+    // the 3D grass shells compile (a shader that does not compile draws no grass at all, without any page error) and the semi-rough has grass of its own
+    const grass = await pp.evaluate(async function () {
+      const errs = []; const oe = console.error; console.error = function () { errs.push(String(arguments[0]).slice(0, 160) + ' ' + String(arguments[arguments.length - 1]).slice(0, 200)); oe.apply(console, arguments); };
+      window.setGrassQuality('MED');
+      await new Promise(function (r) { setTimeout(r, 1500); });
+      console.error = oe;
+      const sh = window._terrainShells;
+      return { errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }), shells: sh.shells.length, semi: sh.semiHeight, rough: sh.roughHeight, deep: sh.deepHeight, u: sh.shells[0] && sh.shells[0].mat.uniforms.uSemiH.value };
+    });
+    checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
   } catch (e) { checks.push({ name: 'quick draft reopen check ran', ok: false, detail: 'step ' + reopenStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
