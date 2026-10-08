@@ -1155,10 +1155,16 @@ function serve() {
       sh.queueRegionSync(40, -40, 25);
       await new Promise(function (r) { setTimeout(r, 300); });
       const during = shellH(40, -40), ground = window.getTerrainHeight(40, -40);
+      // a fast drag: only the far end of the corridor is queued as a box, both ends must follow
+      const farBefore = shellH(40, -64);
+      for (let i = 0; i < mp.length; i += 3) { if (Math.abs(mp[i] - 40) < 4 && Math.abs(-mp[i + 1] + 64) < 4) mp[i + 2] += 2; }
+      sh.queueRegionBounds(36, 44, -68, -36);
+      await new Promise(function (r) { setTimeout(r, 300); });
+      const farAfter = shellH(40, -64);
       mp.set(saved); sh.syncHeights();
-      return { before: +before.toFixed(2), during: +during.toFixed(2), ground: +ground.toFixed(2) };
+      return { before: +before.toFixed(2), during: +during.toFixed(2), ground: +ground.toFixed(2), farRise: +(farAfter - farBefore).toFixed(2) };
     });
-    checks.push({ name: 'sculpt: the 3D grass follows the ground during the stroke (not only on release)', ok: live.during > live.before + 2.5 && Math.abs(live.during - live.ground) < 0.3, detail: JSON.stringify(live) });
+    checks.push({ name: 'sculpt: the 3D grass follows the ground during the stroke (not only on release)', ok: live.during > live.before + 2.5 && Math.abs(live.during - live.ground) < 0.3 && live.farRise > 1, detail: JSON.stringify(live) });
     checks.push({ name: 'grass texture on the deep rough: off by default, loads and reaches all shells when switched on, switches off again', ok: gt.defaultOff && gt.on && gt.second && gt.backToFirst && gt.off && gt.w === 1024 && gt.errs.length === 0, detail: JSON.stringify(gt) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
