@@ -1101,6 +1101,10 @@ function serve() {
       window.getTerrainHeight = realH;
       const y1 = sh.blades[0].mesh.geometry.boundingSphere.center.y;
       const edgeFormat = sh._edgeTex.format === THREE.LuminanceFormat;   // WebGL1 has no RED texture format
+      // the blades see the water map like the shells do (no grass in water)
+      const fakeWater = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1, THREE.RGBAFormat), keepWater = sh.waterTex;
+      sh.waterTex = fakeWater; sh._updateBlades(null, 0, 1, 0, 1, 1, 1, 0.5, 0.5, 0.5); const waterWired = sh._bladeMat.uniforms.uWaterMap.value === fakeWater && sh._bladeMat.uniforms.uWorld.value > 0;
+      sh.waterTex = keepWater;
       // a mask repaint followed by a shell refresh (what every load / undo / paint does) builds the blades once, not twice
       let builds = 0; const ob = sh._buildBlades; sh._buildBlades = function () { builds++; return ob.apply(this, arguments); };
       window._roughMaskDirty = false; window.rebuildRoughMask(); sh.refresh(); await new Promise(function (r) { setTimeout(r, 100); });
@@ -1108,9 +1112,9 @@ function serve() {
       const rebuiltBlades = sh.blades.length;
       const chunks = sh.blades.length, vis = sh.blades.filter(function (b) { return b.mesh.visible; }).length;
       sh.setBlades(false); const cleared = sh.blades.length === 0;
-      return { defaultOff: defaultOff, n: n, outsideShare: n ? outside / n : 0, worst: +worst.toFixed(2), deepest: +deepest.toFixed(2), sides: sides, chunks: chunks, cleared: cleared, heightRatio: heightRatio, y0: +y0.toFixed(1), y1: +y1.toFixed(1), edgeFormat: edgeFormat, builds: builds, rebuiltBlades: rebuiltBlades };
+      return { defaultOff: defaultOff, n: n, outsideShare: n ? outside / n : 0, worst: +worst.toFixed(2), deepest: +deepest.toFixed(2), sides: sides, chunks: chunks, cleared: cleared, heightRatio: heightRatio, y0: +y0.toFixed(1), y1: +y1.toFixed(1), edgeFormat: edgeFormat, builds: builds, rebuiltBlades: rebuiltBlades, waterWired: waterWired };
     });
-    checks.push({ name: 'edge blades: off by default; on, they stand at the border along all four fairway sides, not out on the fairway', ok: bl.defaultOff && bl.n > 500 && bl.worst < 1.5 && bl.deepest < 0.45 && bl.sides.left > 50 && bl.sides.right > 50 && bl.sides.near > 50 && bl.sides.far > 50 && bl.cleared && bl.heightRatio[0] === 1.5 && bl.y1 > bl.y0 + 40 && bl.edgeFormat && bl.builds === 1 && bl.rebuiltBlades > 0, detail: JSON.stringify(bl) });
+    checks.push({ name: 'edge blades: off by default; on, they stand at the border along all four fairway sides, not out on the fairway', ok: bl.defaultOff && bl.n > 500 && bl.worst < 1.5 && bl.deepest < 0.45 && bl.sides.left > 50 && bl.sides.right > 50 && bl.sides.near > 50 && bl.sides.far > 50 && bl.cleared && bl.heightRatio[0] === 1.5 && bl.y1 > bl.y0 + 40 && bl.edgeFormat && bl.builds === 1 && bl.waterWired && bl.rebuiltBlades > 0, detail: JSON.stringify(bl) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 

@@ -267,9 +267,12 @@
         uniform vec3 uRoughCol;
         uniform vec3 uDeepCol;
         uniform vec3 uSemiCol;
+        uniform float uWorld;     // terrain size, to turn a root position into the water map's uv
         varying vec3 vCol;
         varying float vDist;
+        varying vec2 vWaterUv;
         void main() {
+            vWaterUv = vec2(iBase.x / uWorld + 0.5, 0.5 - iBase.z / uWorld);   // the same uv the terrain plane has
             float t = position.y;                                   // 0 at the root, 1 at the tip
             float w = position.x * uWidth * (1.0 - 0.9 * t);        // tapers to a point
             vec3 l = vec3(w, t * iParam.x, iParam.z * t * t * iParam.x);   // bends over towards its lean
@@ -286,11 +289,14 @@
         uniform vec3 uLightDir;
         uniform vec3 uDirColor;
         uniform vec3 uAmbColor;
+        uniform sampler2D uWaterMap;
         varying vec3 vCol;
         varying float vDist;
+        varying vec2 vWaterUv;
         float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         void main() {
             if (vDist > uMaxDist) discard;
+            if (texture2D(uWaterMap, vWaterUv).r > 0.05) discard;   // no grass in water: the same test as the shells
             float fade = 1.0 - smoothstep(uMaxDist * 0.7, uMaxDist, vDist);
             if (hash2(gl_FragCoord.xy) > fade) discard;
             vec3 light = uAmbColor + uDirColor * max(0.0, uLightDir.y * 0.8 + 0.2);
@@ -706,7 +712,7 @@
             if (!this._bladeMat) {
                 this._bladeMat = new THREE.ShaderMaterial({
                     uniforms: {
-                        uWidth: { value: BLADE_WIDTH }, uMaxDist: { value: preset.maxDist },
+                        uWidth: { value: BLADE_WIDTH }, uWorld: { value: window.TERRAIN_SIZE || 600 }, uWaterMap: { value: this.waterTex || window.waterTex || this._dummyWaterTex }, uMaxDist: { value: preset.maxDist },
                         uRoughCol: { value: this._roughCol.clone() }, uDeepCol: { value: this._deepCol.clone() }, uSemiCol: { value: this._semiCol.clone() },
                         uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) }
                     },
@@ -783,6 +789,8 @@
         _updateBlades(camera, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB) {
             if (!this.blades.length || !this._bladeMat) return;
             const u = this._bladeMat.uniforms, maxD = u.uMaxDist.value;
+            u.uWaterMap.value = this.waterTex || window.waterTex || this._dummyWaterTex;
+            u.uWorld.value = window.TERRAIN_SIZE || 600;
             u.uLightDir.value.set(lx, ly, lz); u.uDirColor.value.set(dirR, dirG, dirB); u.uAmbColor.value.set(ambR, ambG, ambB);
             u.uRoughCol.value.copy(this._roughCol); u.uDeepCol.value.copy(this._deepCol); u.uSemiCol.value.copy(this._semiCol);
             if (!camera) return;
