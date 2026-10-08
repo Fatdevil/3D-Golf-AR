@@ -1134,7 +1134,8 @@ function serve() {
       await new Promise(function (r) { setTimeout(r, 600); });
       const on = sh._grassTexReady && sh.shells.every(function (q) { return q.mat.uniforms.uTexOn.value === 1 && q.mat.uniforms.uGrassTex.value === sh._grassTex; });
       const w = sh._grassTex && sh._grassTex.image && sh._grassTex.image.width;
-      sh.setGrassTex(false); const off = sh.shells.every(function (q) { return q.mat.uniforms.uTexOn.value === 0; });
+      sh.setGrassTex(false); sh.refresh();   // a rebuild after switching off must not bring the texture back
+      const off = sh.shells.length > 0 && sh.shells.every(function (q) { return q.mat.uniforms.uTexOn.value === 0; });
       console.error = oe;
       return { defaultOff: defaultOff, on: on, off: off, w: w, errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }) };
     });

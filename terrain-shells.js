@@ -992,7 +992,7 @@
                     uSemiH:    { value: this.semiHeight },
                     uEdgeMap:  { value: this._edgeTex },
                     uInterior: { value: this._isInteriorLayer(layer, total) ? 1 : 0 },
-                    uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 },
+                    uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this.grassTexOn && this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 },
                     uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
