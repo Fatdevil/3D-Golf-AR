@@ -15,6 +15,8 @@
     const RING_COUNT = 8;
     const FOG_LIMIT = 4000;
     let B = null;                 // open map state
+    const checkTries = new WeakMap();   // how often a figure's deferred check has had to wait again
+    let pendingChecks = [];       // figures to test against the plate once their model has loaded; outlives the map, which may be closed first
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
     function toast(msg, color) { if (typeof root.showBuildToast === 'function') root.showBuildToast(msg, color || '#38bdf8'); }
@@ -216,7 +218,7 @@
         if (typeof root.setTimeOfDay === 'function' && root.currentTimeOfDay != null) root.setTimeOfDay(root.currentTimeOfDay);
     }
     // courses are loaded by several different paths, so look now and then instead of hooking each one
-    setInterval(function () { (root.placedTrees || []).forEach(function (o) { if (o) remember(o.type); }); refreshFog(); }, 2000);
+    setInterval(function () { (root.placedTrees || []).forEach(function (o) { if (o) remember(o.type); }); refreshFog(); recheckLoaded(); }, 2000);
 
     // ---- the picture ---------------------------------------------------------------------------------------
     // The colour a surround choice has in the scene (same lookup as updateSurroundColors)
@@ -511,17 +513,24 @@
         refresh();
     }
 
-    // A figure placed before its model has loaded is only checked against a rough guess, so it is checked again once its real outline exists
+    // A figure placed before its model has loaded is only checked against a rough guess, so it is checked again once its real outline exists.
+    // The queue is not part of the map's state: tapping Done before a slow model arrives must not drop the warning.
     function warnIfCovering(o) {
         if (!o || heightOf(o) < BACKDROP_MIN) return;
-        if (!footprintOf(o.type)) { if (B && B.recheck.indexOf(o) < 0) B.recheck.push(o); return; }
-        if (B) B.recheck = B.recheck.filter(function (x) { return x !== o; });
+        if (!footprintOf(o.type)) {
+            const tries = (checkTries.get(o) || 0) + 1;
+            checkTries.set(o, tries);
+            if (tries <= 30 && pendingChecks.indexOf(o) < 0) pendingChecks.push(o);   // ~1 minute, then the model is taken as unloadable
+            return;
+        }
+        checkTries.delete(o);
+        pendingChecks = pendingChecks.filter(function (x) { return x !== o; });
         if (coversPlate(o)) toast(tr('bd_covers', '⚠️ Figurens bas ligger över banan. Flytta den längre ut eller gör den mindre.'), '#ef4444');
     }
     function recheckLoaded() {
-        if (!B || !B.recheck.length) return;
-        const waiting = B.recheck.slice();
-        B.recheck = [];
+        if (!pendingChecks.length) return;
+        const waiting = pendingChecks;
+        pendingChecks = [];
         waiting.forEach(function (o) {
             if ((root.placedTrees || []).indexOf(o) < 0) return;   // removed or undone meanwhile
             warnIfCovering(o);   // asks again if the model is still not there
@@ -699,7 +708,7 @@
         if (Array.isArray(others)) others = { points: others, polygons: [] };
         B = {
             dom: { edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
-            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, recheck: [], sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
+            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();
         B.plate = (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) ? root.HoleBlueprint.renderTerrain(plateHalf()) : document.createElement('canvas');
@@ -730,5 +739,5 @@
     }
 
     root.openBackdropMap = open;
-    root.Backdrop = { footprint: footprintOf, outline: outlineOf, coversPlate: coversPlate, open: open, close: close, state: function () { return B; }, ring: ring, refresh: refresh, refreshFog: refreshFog };
+    root.Backdrop = { warnIfCovering: warnIfCovering, footprint: footprintOf, outline: outlineOf, coversPlate: coversPlate, open: open, close: close, state: function () { return B; }, ring: ring, refresh: refresh, refreshFog: refreshFog };
 })(typeof window !== 'undefined' ? window : globalThis);
