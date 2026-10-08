@@ -1146,10 +1146,16 @@ function serve() {
       const second = sh._grassTexReady && sh._grassTex !== firstTex && sh._grassTex.image.width === 1024 && sh.shells.every(function (q) { return q.mat.uniforms.uGrassTex.value === sh._grassTex; });
       sh.setGrassTex(true, 1);
       const backToFirst = sh._grassTex === firstTex;
+      // the brightness slider: a live uniform on every shell, kept over a rebuild, back to 1 afterwards
+      sh.setGrassTexLift(1.4);
+      const liftLive = sh.shells.every(function (q) { return q.mat.uniforms.uTexLift.value === 1.4; });
+      sh.refresh();
+      const liftKept = sh.shells.length > 0 && sh.shells.every(function (q) { return q.mat.uniforms.uTexLift.value === 1.4; });
+      sh.setGrassTexLift(1.0);
       sh.setGrassTex(false); sh.refresh();   // a rebuild after switching off must not bring the texture back
       const off = sh.shells.length > 0 && sh.shells.every(function (q) { return q.mat.uniforms.uTexOn.value === 0; });
       console.error = oe;
-      return { second: second, backToFirst: backToFirst, defaultOff: defaultOff, on: on, off: off, w: w, errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }) };
+      return { liftLive: liftLive, liftKept: liftKept, second: second, backToFirst: backToFirst, defaultOff: defaultOff, on: on, off: off, w: w, errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }) };
     });
     // sculpting: the 3D grass follows the ground while the stroke is going on, not only on release (else it sinks into a rising hill)
     const live = await pp.evaluate(async function () {
@@ -1171,7 +1177,7 @@ function serve() {
       return { before: +before.toFixed(2), during: +during.toFixed(2), ground: +ground.toFixed(2), farRise: +(farAfter - farBefore).toFixed(2) };
     });
     checks.push({ name: 'sculpt: the 3D grass follows the ground during the stroke (not only on release)', ok: live.during > live.before + 2.5 && Math.abs(live.during - live.ground) < 0.3 && live.farRise > 1, detail: JSON.stringify(live) });
-    checks.push({ name: 'grass texture on the deep rough: off by default, loads and reaches all shells when switched on, switches off again', ok: gt.defaultOff && gt.on && gt.second && gt.backToFirst && gt.off && gt.w === 1024 && gt.errs.length === 0, detail: JSON.stringify(gt) });
+    checks.push({ name: 'grass texture on the deep rough: off by default, loads and reaches all shells when switched on, switches off again', ok: gt.defaultOff && gt.on && gt.second && gt.backToFirst && gt.liftLive && gt.liftKept && gt.off && gt.w === 1024 && gt.errs.length === 0, detail: JSON.stringify(gt) });
     // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };
