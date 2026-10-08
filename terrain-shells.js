@@ -722,7 +722,7 @@
             this._grassTex = cached; this._grassTexReady = !!cached;
             if (this.grassTexOn && !cached && !this._grassTexLoading[v]) {
                 this._grassTexLoading[v] = true;
-                new THREE.TextureLoader().load(v === 2 ? 'grass-tile-2.jpg' : 'grass-tile.jpg', (tex) => {
+                new THREE.TextureLoader().load(v === 2 ? 'grass-tile-2.jpg?v=2' : 'grass-tile.jpg', (tex) => {
                     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
                     tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
                     tex.generateMipmaps = true; tex.anisotropy = 4;
