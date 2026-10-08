@@ -35,14 +35,6 @@
     // so its width and depth are whatever the mesh happens to be. We therefore read the loaded mesh itself: the convex hull of
     // every vertex seen from above, in metres at scale 1. A placed figure is that hull * o.scale, turned the way the renderer turns it.
     // fpCache holds a hull per type; a type whose model has not loaded yet gets none, and the old rough circle is used meanwhile.
-    const EXT_DIRS = (function () {
-        const out = [];
-        for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
-            if (x || y || z) { const l = Math.hypot(x, y, z); out.push([x / l, y / l, z / l]); }
-        }
-        for (let k = 0; k < 16; k++) out.push([Math.cos(k * Math.PI / 8), 0, Math.sin(k * Math.PI / 8)]);
-        return out;
-    })();
     const fpCache = {};
     const fpAsked = {};
     function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
@@ -55,66 +47,70 @@
         return lo.concat(up);
     }
     // Mirrors rebuildInstancePool (arcade.html): each sub-mesh sits at the instance position + its world position * scale, UNturned,
-    // and only its geometry (stretched by the mesh's world scale) is turned by the instance's Euler YXZ rotation and scaled.
-    // A vertex therefore lands at  offset + R * (localVertex * worldScale)  ; we keep both parts per sampled vertex.
+    // and only its geometry (stretched by the mesh's signed world scale) is turned by the instance's Euler YXZ rotation and scaled.
+    // A vertex therefore lands at  offset + R * (localVertex * worldScale). Every vertex is used, none is sampled away.
     function computeFootprint(type) {
         const model = root.customModels && root.customModels[type];
         if (!model || model === 'LOADING' || !model.isObject3D) return null;
         model.updateWorldMatrix(true, true);
-        const pts = [];   // [localX, localY, localZ, offsetX, offsetZ]
+        const meshes = [];
         let total = 0, reach = 0;
-        model.traverse(function (m) { if (m.isMesh && m.geometry && m.geometry.attributes.position) total += m.geometry.attributes.position.count; });
         model.traverse(function (m) {
             if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
             const pos = m.geometry.attributes.position, e = m.matrixWorld.elements, n = pos.count;
             // signed like Object3D.getWorldScale, which the renderer uses: a mirrored mesh (negative determinant) flips x
             const det = e[0] * (e[5] * e[10] - e[9] * e[6]) - e[4] * (e[1] * e[10] - e[9] * e[2]) + e[8] * (e[1] * e[6] - e[5] * e[2]);
-            const sx = Math.hypot(e[0], e[1], e[2]) * (det < 0 ? -1 : 1), sy = Math.hypot(e[4], e[5], e[6]), sz = Math.hypot(e[8], e[9], e[10]);
-            const ox = e[12], oz = e[14];
-            // Vertex order is not spatial, so a plain stride can skip the very points that make the outline. Every sub-mesh gets its own
-            // share of the sample, and a pass over ALL its vertices keeps the extreme vertex in each of a fan of directions
-            // (the cube's 26 and a ring of horizontal ones) plus the one furthest from the mesh's own centre line.
-            const stride = Math.max(1, Math.ceil(n / Math.max(300, Math.round(8000 * n / Math.max(1, total)))));
-            for (let i = 0; i < n; i += stride) pts.push([pos.getX(i) * sx, pos.getY(i) * sy, pos.getZ(i) * sz, ox, oz]);
-            const best = new Float64Array(EXT_DIRS.length).fill(-Infinity), at = new Int32Array(EXT_DIRS.length);
-            let far = -1, farAt = 0;
-            for (let i = 0; i < n; i++) {
-                const x = pos.getX(i) * sx, y = pos.getY(i) * sy, z = pos.getZ(i) * sz;
-                for (let k = 0; k < EXT_DIRS.length; k++) { const d = EXT_DIRS[k], v = x * d[0] + y * d[1] + z * d[2]; if (v > best[k]) { best[k] = v; at[k] = i; } }
-                const r = x * x + z * z;
-                if (r > far) { far = r; farAt = i; }
-            }
-            for (let k = 0; k < EXT_DIRS.length; k++) if (best[k] > -Infinity) pts.push([pos.getX(at[k]) * sx, pos.getY(at[k]) * sy, pos.getZ(at[k]) * sz, ox, oz]);
-            pts.push([pos.getX(farAt) * sx, pos.getY(farAt) * sy, pos.getZ(farAt) * sz, ox, oz]);
-            reach = Math.max(reach, Math.hypot(ox, oz) + Math.sqrt(Math.max(0, far)));   // furthest a vertex gets from the centre, turned about Y
+            const mesh = { pos: pos, n: n, sx: Math.hypot(e[0], e[1], e[2]) * (det < 0 ? -1 : 1), sy: Math.hypot(e[4], e[5], e[6]), sz: Math.hypot(e[8], e[9], e[10]), ox: e[12], oz: e[14] };
+            let far = 0;
+            for (let i = 0; i < n; i++) { const x = pos.getX(i) * mesh.sx, z = pos.getZ(i) * mesh.sz; far = Math.max(far, x * x + z * z); }
+            reach = Math.max(reach, Math.hypot(mesh.ox, mesh.oz) + Math.sqrt(far));   // furthest a vertex gets from the centre, turned about Y
+            total += n;
+            meshes.push(mesh);
         });
-        if (pts.length < 3) return null;
-        const fp = { pts: pts, model: model, sx: model.scale.x, cache: new Map(), reach: reach };
+        if (total < 3) return null;
+        const fp = { meshes: meshes, model: model, sx: model.scale.x, cache: new Map(), reach: reach };
         const flat = outlineFor(fp, 0, 0, 0);
         fp.w = flat.w; fp.d = flat.d;
         return fp;
     }
-    // Outline of a figure at scale 1 relative to its centre, for the given turn/tilt/roll (cached per angle set)
+    // Outline of a figure at scale 1 relative to its centre, for the given turn/tilt/roll (cached per angle set, least recently used out first).
+    // Every vertex is turned and looked at. To keep the hull cheap the points are thinned to the one furthest from the middle in each of
+    // SECTORS angular slices; a hull corner hidden that way lies within one slice of the kept outline, i.e. off by under 0.3 % of the reach.
+    const SECTORS = 2048;
     function outlineFor(fp, rot, tilt, roll) {
         const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3), hit = fp.cache.get(key);
         if (hit) { fp.cache.delete(key); fp.cache.set(key, hit); return hit; }   // most recently used goes last
         const cz = Math.cos(roll), sz = Math.sin(roll), cx = Math.cos(tilt), sx = Math.sin(tilt), cy = Math.cos(rot), sy = Math.sin(rot);
-        const flat = fp.pts.map(function (p) {
-            const x1 = p[0] * cz - p[1] * sz, y1 = p[0] * sz + p[1] * cz;
-            const z2 = y1 * sx + p[2] * cx;
-            return [p[3] + x1 * cy + z2 * sy, p[4] - x1 * sy + z2 * cy];
+        const out = [0, 0];
+        function at(m, i) {
+            const lx = m.pos.getX(i) * m.sx, ly = m.pos.getY(i) * m.sy, lz = m.pos.getZ(i) * m.sz;
+            const x1 = lx * cz - ly * sz, y1 = lx * sz + ly * cz, z2 = y1 * sx + lz * cx;
+            out[0] = m.ox + x1 * cy + z2 * sy; out[1] = m.oz - x1 * sy + z2 * cy;
+        }
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        fp.meshes.forEach(function (m) { for (let i = 0; i < m.n; i++) { at(m, i); x0 = Math.min(x0, out[0]); x1 = Math.max(x1, out[0]); z0 = Math.min(z0, out[1]); z1 = Math.max(z1, out[1]); } });
+        const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;   // the middle of the bounding box lies inside the (convex) outline
+        const bestR = new Float64Array(SECTORS).fill(-1), bestX = new Float64Array(SECTORS), bestZ = new Float64Array(SECTORS);
+        fp.meshes.forEach(function (m) {
+            for (let i = 0; i < m.n; i++) {
+                at(m, i);
+                const dx = out[0] - mx, dz = out[1] - mz, k = Math.min(SECTORS - 1, Math.floor((Math.atan2(dz, dx) + Math.PI) / (2 * Math.PI) * SECTORS)), r = dx * dx + dz * dz;
+                if (r > bestR[k]) { bestR[k] = r; bestX[k] = out[0]; bestZ[k] = out[1]; }
+            }
         });
-        const hull = convexHull(flat);
-        let rad = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-        hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minZ = Math.min(minZ, p[1]); maxZ = Math.max(maxZ, p[1]); });
-        const out = { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ };
-        fp.cache.set(key, out);
+        const kept = [];
+        for (let k = 0; k < SECTORS; k++) if (bestR[k] >= 0) kept.push([bestX[k], bestZ[k]]);
+        const hull = convexHull(kept);
+        let rad = 0;
+        hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); });
+        const res = { hull: hull, rad: rad, w: x1 - x0, d: z1 - z0 };
+        fp.cache.set(key, res);
         // drop the longest-unused outlines one at a time; never fewer than the orientations placed figures are using right now
         if (fp.cache.size > 400) {
             const keep = Math.max(400, 2 * (root.placedTrees || []).length);
             for (const k of fp.cache.keys()) { if (fp.cache.size <= keep) break; fp.cache.delete(k); }
         }
-        return out;
+        return res;
     }
     function footprintOf(type) {
         const hit = fpCache[type], live = root.customModels && root.customModels[type];
