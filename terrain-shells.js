@@ -520,6 +520,45 @@
             this._scheduleBladeHeights();
         }
 
+        // While a sculpt stroke is going on the master terrain moves with every pointer event, but the shells only follow on release
+        // (the full resample also redoes the normals): the grass sank into a rising hill and hung in the air over a dug one.
+        // This follows the heights (not the normals) in the touched area, at most about 12 times a second.
+        queueRegionSync(cx, cz, r) {
+            if (!this.shells.length || !this.customGeo || !this.masterGeo) return;
+            const q = this._regionQ || (this._regionQ = { x0: 1e9, x1: -1e9, z0: 1e9, z1: -1e9 });
+            q.x0 = Math.min(q.x0, cx - r); q.x1 = Math.max(q.x1, cx + r);
+            q.z0 = Math.min(q.z0, cz - r); q.z1 = Math.max(q.z1, cz + r);
+            if (this._regionTimer) return;
+            this._regionTimer = setTimeout(() => {
+                this._regionTimer = null;
+                const b = this._regionQ; this._regionQ = null;
+                if (b) this._syncRegion(b);
+            }, 80);
+        }
+
+        _syncRegion(b) {
+            const g = this.customGeo, m = this.masterGeo;
+            if (!g || !m) return;
+            const mPos = m.attributes.position.array, mSegs = window.TERRAIN_SEGS || 600, mStride = mSegs + 1;
+            const size = window.TERRAIN_SIZE || 600, half = size / 2, mStep = size / mSegs;
+            const cPos = g.attributes.position.array, segs = g.parameters.widthSegments, cStride = segs + 1, step = size / segs;
+            const j0 = Math.max(0, Math.floor((b.x0 + half) / step) - 1), j1 = Math.min(segs, Math.ceil((b.x1 + half) / step) + 1);
+            const i0 = Math.max(0, Math.floor((b.z0 + half) / step) - 1), i1 = Math.min(segs, Math.ceil((b.z1 + half) / step) + 1);
+            for (let i = i0; i <= i1; i++) {
+                const worldZ = -(half - i * step);
+                for (let j = j0; j <= j1; j++) {
+                    const gx = Math.max(0, Math.min(mSegs, (-half + j * step + half) / mStep)), gz = Math.max(0, Math.min(mSegs, (worldZ + half) / mStep));
+                    const ix = Math.min(mSegs - 1, Math.floor(gx)), iz = Math.min(mSegs - 1, Math.floor(gz)), fx = gx - ix, fz = gz - iz;
+                    const a = (iz * mStride + ix) * 3 + 2, c = ((iz + 1) * mStride + ix) * 3 + 2;
+                    cPos[(i * cStride + j) * 3 + 2] = (mPos[a] || 0) * (1 - fx) * (1 - fz) + (mPos[a + 3] || 0) * fx * (1 - fz) + (mPos[c] || 0) * (1 - fx) * fz + (mPos[c + 3] || 0) * fx * fz;
+                }
+            }
+            g.attributes.position.needsUpdate = true;
+            g.computeBoundingBox(); g.computeBoundingSphere();
+            this._syncStripBounds();
+            this._scheduleBladeHeights();
+        }
+
         _resampleFromMaster() {
             if (!this.masterGeo || !this.customGeo) return;
 

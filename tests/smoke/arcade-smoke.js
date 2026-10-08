@@ -1139,6 +1139,20 @@ function serve() {
       console.error = oe;
       return { defaultOff: defaultOff, on: on, off: off, w: w, errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }) };
     });
+    // sculpting: the 3D grass follows the ground while the stroke is going on, not only on release (else it sinks into a rising hill)
+    const live = await pp.evaluate(async function () {
+      const sh = window._terrainShells, mp = sh.masterGeo.attributes.position.array, cp = sh.customGeo.attributes.position.array, saved = mp.slice();
+      const shellH = function (x, z) { const segs = sh.customGeo.parameters.widthSegments, size = window.TERRAIN_SIZE || 600, st = size / segs; const j = Math.round((x + size / 2) / st), i = Math.round((size / 2 + z) / st); return cp[(i * (segs + 1) + j) * 3 + 2]; };
+      const before = shellH(40, -40);
+      for (let i = 0; i < mp.length; i += 3) { const d = Math.hypot(mp[i] - 40, -mp[i + 1] + 40); if (d < 25) mp[i + 2] += 3 * Math.pow(Math.cos(d / 25 * Math.PI / 2), 2); }
+      sh.masterGeo.attributes.position.needsUpdate = true;
+      sh.queueRegionSync(40, -40, 25);
+      await new Promise(function (r) { setTimeout(r, 300); });
+      const during = shellH(40, -40), ground = window.getTerrainHeight(40, -40);
+      mp.set(saved); sh.syncHeights();
+      return { before: +before.toFixed(2), during: +during.toFixed(2), ground: +ground.toFixed(2) };
+    });
+    checks.push({ name: 'sculpt: the 3D grass follows the ground during the stroke (not only on release)', ok: live.during > live.before + 2.5 && Math.abs(live.during - live.ground) < 0.3, detail: JSON.stringify(live) });
     checks.push({ name: 'grass texture on the deep rough: off by default, loads and reaches all shells when switched on, switches off again', ok: gt.defaultOff && gt.on && gt.off && gt.w === 1024 && gt.errs.length === 0, detail: JSON.stringify(gt) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
