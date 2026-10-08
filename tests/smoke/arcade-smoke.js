@@ -1061,12 +1061,22 @@ function serve() {
       const g = strip[0] && strip[0].mesh.geometry, ix = g ? g.index.array : [], pos = sh.customGeo.attributes.position.array;
       let maxAbsX = 0; for (let i = 0; i < ix.length; i++) maxAbsX = Math.max(maxAbsX, Math.abs(pos[ix[i] * 3]));   // plane x = world x
       const stripInfo = { full: full, strip: g ? g.index.count / 3 : -1, upper: strip.length, shells: sh.shells.length, lowestFull: sh.shells[0].mesh.geometry === sh.customGeo, maxAbsX: maxAbsX, sharesVerts: !!g && g.attributes.position === sh.customGeo.attributes.position };
+      // the terrain is sculpted: the strip's culling bounds follow the shared vertices (else the upper shells vanish on a new mountain)
+      let boundsFollow = false;
+      if (g && sh.masterGeo) {
+        const mp = sh.masterGeo.attributes.position, before = g.boundingSphere ? g.boundingSphere.center.z : null, saved = mp.array.slice();
+        for (let i = 2; i < mp.array.length; i += 3) mp.array[i] += 80;   // plane local z is the height
+        sh.syncHeights();
+        boundsFollow = g.boundingSphere && Math.abs(g.boundingSphere.center.z - sh.customGeo.boundingSphere.center.z) < 1e-6 && (before === null || g.boundingSphere.center.z > before + 40);
+        mp.array.set(saved); sh.syncHeights();
+      }
+      stripInfo.boundsFollow = boundsFollow;
       sh.setEdgeWeighted(false); const back = sh.shells.every(function (q) { return q.mesh.geometry === sh.customGeo; });
       return { lazy: lazy, stripInfo: stripInfo, back: back, size: n, nextToEdge: at(0.3), mid: at(1.5), far: at(20), onFairway: at(-10), off: off, on: on, defaultOff: sh.edgeWeighted === false };
     });
     checks.push({ name: 'edge map: 1 next to a fairway edge, 0 far inside the grass; the edge switch reaches the shaders', ok: edge.lazy.stale && edge.lazy.w === 1 && edge.lazy.built && edge.size === 1024 && edge.nextToEdge > 150 && edge.mid > 40 && edge.mid < edge.nextToEdge && edge.far === 0 && edge.onFairway === 255 && edge.off === 0 && edge.on === 1 && edge.defaultOff, detail: JSON.stringify(edge) });
     const si = edge.stripInfo;
-    checks.push({ name: 'edge strip: the upper shells only draw the border strip (few triangles, same vertices), the lowest one the whole grid; switching off restores all', ok: si.upper > 0 && si.upper < si.shells && si.lowestFull && si.sharesVerts && si.strip > 0 && si.strip < si.full * 0.15 && si.maxAbsX < 16 && edge.back, detail: JSON.stringify(edge.stripInfo) });
+    checks.push({ name: 'edge strip: the upper shells only draw the border strip (few triangles, same vertices), the lowest one the whole grid; switching off restores all', ok: si.upper > 0 && si.upper < si.shells && si.lowestFull && si.sharesVerts && si.strip > 0 && si.strip < si.full * 0.15 && si.maxAbsX < 16 && si.boundsFollow && edge.back, detail: JSON.stringify(edge.stripInfo) });
     // edge blades: off by default; on, they stand along all four sides of a fairway rectangle (both axes), at the border
     const bl = await pp.evaluate(async function () {
       const sh = window._terrainShells, px = function (x) { return Math.round((x / 600 + 0.5) * 4096); }, pz = function (z) { return Math.round((z / 600 + 0.5) * 4096); };

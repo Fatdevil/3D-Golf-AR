@@ -572,6 +572,7 @@
             this.customGeo.attributes.normal.needsUpdate = true;
             this.customGeo.computeBoundingBox();
             this.customGeo.computeBoundingSphere();
+            this._syncStripBounds();
         }
 
         // CODEX M1 FIX: Smooth 60 FPS live shader uniforms update without rebuilding geometry or meshes
@@ -606,6 +607,16 @@
             if (!this._edgeStale || typeof window.rebuildRoughMask !== 'function') return false;
             window.rebuildRoughMask();
             return !this._edgeStale;
+        }
+
+        // the strip shares the (moving) vertices of customGeo but caches its own bounds: it takes the grid's, a safe superset
+        _syncStripBounds() {
+            const g = this.customGeo, sg = this._stripGeo;
+            if (!g || !sg) return;
+            if (!g.boundingSphere) g.computeBoundingSphere();
+            if (!g.boundingBox) g.computeBoundingBox();
+            sg.boundingSphere = g.boundingSphere.clone();
+            sg.boundingBox = g.boundingBox.clone();
         }
 
         _isInteriorLayer(layer, total) {
@@ -648,6 +659,7 @@
                 sg.setIndex(new THREE.BufferAttribute(idx, 1));
                 this._stripGeo = sg;
                 this._stripCells = cells;
+                this._syncStripBounds();
             }
             for (let s of this.shells) {
                 const interior = s.mat.uniforms.uInterior.value > 0.5;
