@@ -372,7 +372,9 @@
             } catch (e) { /* storage blocked: stays off */ }
             this.grassTexOn = texFlag === '1' || texFlag === '2';
             this.grassTexVariant = texFlag === '2' ? 2 : 1;
-            this.grassTexLift = 1.0;   // brightness of the texture on the deep rough (1 = the biome colour as is)
+            // brightness of the texture on the deep rough (1 = the biome colour as is); the slider in the grass menu remembers it
+            this.grassTexLift = 1.0;
+            try { const l = parseFloat(localStorage.getItem('golf_grass_tex_lift')); if (isFinite(l)) this.grassTexLift = Math.min(2.5, Math.max(0.5, l)); } catch (e) { /* storage blocked: stays at 1 */ }
             this._grassTexCache = {}; this._grassTexLoading = {};
             this._grassTex = null; this._grassTexReady = false;
             this.edgeWidth = 5.5;       // metres from a border where all shells are drawn
@@ -732,6 +734,12 @@
                 }, undefined, () => { this._grassTexLoading[v] = false; });
             }
             this._applyGrassTex();
+        }
+
+        // brightness of the pattern on the deep rough, live (a uniform): 1 keeps the biome colour as is
+        setGrassTexLift(v) {
+            this.grassTexLift = Math.min(2.5, Math.max(0.5, +v || 1));
+            for (let s of this.shells) if (s.mat && s.mat.uniforms.uTexLift) s.mat.uniforms.uTexLift.value = this.grassTexLift;
         }
 
         _applyGrassTex() {
