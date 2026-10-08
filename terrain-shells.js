@@ -339,7 +339,7 @@
             this.blades = [];        // { mesh, count, cx, cz, r }
             this._bladeMat = null;
             this._cls = null;        // 1024x1024 grass class per cell: 0 none, 1 rough, 2 deep, 3 semi
-            this._edgeTex = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.RedFormat, THREE.UnsignedByteType);
+            this._edgeTex = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.LuminanceFormat, THREE.UnsignedByteType);
             this._edgeTex.needsUpdate = true;   // 1x1 'everything is an edge' until the mask has been built
             this._frame = 0;
 
@@ -750,8 +750,16 @@
             this._bladeTimer = setTimeout(() => {
                 for (let b of this.blades) {
                     const a = b.mesh.geometry.attributes.iBase, arr = a.array;
-                    for (let i = 0; i < b.count; i++) arr[i * 3 + 1] = window.getTerrainHeight(arr[i * 3], arr[i * 3 + 2]);
+                    let minY = 1e9, maxY = -1e9;
+                    for (let i = 0; i < b.count; i++) {
+                        const y = arr[i * 3 + 1] = window.getTerrainHeight(arr[i * 3], arr[i * 3 + 2]);
+                        if (y < minY) minY = y; if (y > maxY) maxY = y;
+                    }
                     a.needsUpdate = true;
+                    // the culling sphere follows the new elevations (same formula as in _buildBlades)
+                    const sp = b.mesh.geometry.boundingSphere;
+                    sp.center.y = (minY + maxY) / 2;
+                    sp.radius = b.r = BLADE_CHUNK * 0.71 + (maxY - minY) + b.maxH + 2;
                 }
             }, 300);
         }
@@ -813,7 +821,7 @@
             }
             this._edgeData = out; this._edgeN = n;
             const old = this._edgeTex;
-            const tex = new THREE.DataTexture(out, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+            const tex = new THREE.DataTexture(out, n, n, THREE.LuminanceFormat, THREE.UnsignedByteType);
             tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
             tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
             tex.needsUpdate = true;
