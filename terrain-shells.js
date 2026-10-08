@@ -591,7 +591,15 @@
         setEdgeWeighted(on) {
             this.edgeWeighted = !!on;
             for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeOn) s.mat.uniforms.uEdgeOn.value = this.edgeWeighted ? 1 : 0;
+            if (this.edgeWeighted && this._ensureEdgeMap()) return;   // the repaint built the map, the strip and the blades
             this._buildStrip();
+        }
+
+        // a feature was switched on while the map was skipped: repaint the rough mask, which hands over a fresh mask and builds it
+        _ensureEdgeMap() {
+            if (!this._edgeStale || typeof window.rebuildRoughMask !== 'function') return false;
+            window.rebuildRoughMask();
+            return !this._edgeStale;
         }
 
         _isInteriorLayer(layer, total) {
@@ -643,6 +651,7 @@
 
         setBlades(on) {
             this.bladesOn = !!on;
+            if (this.bladesOn && this._ensureEdgeMap()) return;
             this._buildBlades();
         }
 
@@ -777,6 +786,9 @@
         // maskRGBA: the rough mask (srcSize x srcSize, R=rough G=deep B=semi). Builds a coarse "closeness to a border" map:
         // 1 on and next to a border with anything that is not shell grass (fairway, green, sand), fading to 0 over edgeWidth.
         setEdgeMapFromMask(maskRGBA, srcSize) {
+            // the map costs several 1024x1024 passes: only built while a feature that uses it is on (else on demand, see _ensureEdgeMap)
+            if (!this.edgeWeighted && !this.bladesOn) { this._edgeStale = true; return; }
+            this._edgeStale = false;
             const n = 1024, step = Math.max(1, Math.floor(srcSize / n)), half = step >> 1;
             const worldSize = window.TERRAIN_SIZE || 600;
             const width = Math.max(1.5, this.edgeWidth / (worldSize / n));   // in cells
