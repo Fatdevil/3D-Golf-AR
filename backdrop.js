@@ -439,17 +439,23 @@
         refresh();
     }
     // Place figures evenly around the plate with open ground between plate and figure
-    function ring(waited) {
-        const type = B.shelfType || (B.sel && B.sel.type);
+    // `job` is only passed by ring's own retries: it pins the figure that was asked for, and B.ringJob lets one request wait at a time
+    function ring(job) {
+        if (!job && B.ringJob) return;   // already waiting for a model to load: another tap must not queue a second ring
+        const type = job ? job.type : (B.shelfType || (B.sel && B.sel.type));
         const d = type && reg(type);
-        if (!d) { toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
+        if (!d) { B.ringJob = null; toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
         // the real size is only known once the model has loaded: wait for it (up to ~10 s) rather than lay out a guess
-        if (!footprintOf(type) && !(waited >= 20)) {
+        if (!footprintOf(type) && !(job && job.waited >= 20)) {
+            job = job || { type: type, waited: 0 };
+            job.waited++;
+            B.ringJob = job;
             say(tr('bd_loading', 'Laddar figuren…'));
             const mine = B;
-            setTimeout(function () { if (B === mine) ring((waited || 0) + 1); }, 500);
+            setTimeout(function () { if (B === mine && B.ringJob === job) ring(job); }, 500);
             return;
         }
+        B.ringJob = null;
         undoPoint();
         const H = d.targetHeight || 10, half = plateHalf(), a0 = Math.random() * Math.PI * 2, limit = VIEW * 0.95;
         const fp = footprintOf(type), unitR = fp ? fp.reach : 0.6 * H;   // reach of one figure at scale 1, whatever way it is turned
@@ -604,7 +610,7 @@
         const bigBtn = btn(tr('bd_big', 'Stora'), function () { B.showAll = false; refresh(); }, 'min-height:32px; font-size:12px;');
         const allBtn = btn(tr('bd_all', 'Alla'), function () { B.showAll = true; refresh(); }, 'min-height:32px; font-size:12px;');
         filters.appendChild(bigBtn); filters.appendChild(allBtn);
-        const ring_ = btn(tr('bd_ring', '🔁 Runt om hela'), function () { ring(0); }, 'flex:1; min-height:32px; font-size:12px; background:#7c2d12; color:#fff;');
+        const ring_ = btn(tr('bd_ring', '🔁 Runt om hela'), function () { ring(); }, 'flex:1; min-height:32px; font-size:12px; background:#7c2d12; color:#fff;');
         filters.appendChild(ring_);
 
         const shelf = document.createElement('div');
