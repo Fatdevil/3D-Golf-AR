@@ -344,14 +344,16 @@
                 edgeFlag = localStorage.getItem('golf_grass_edge');
             } catch (e) { /* storage blocked: stays off */ }
             this.edgeWeighted = edgeFlag === '1';
-            // Blade texture on the deep rough: off by default; ?grasstex=1 turns it on (and remembers it), ?grasstex=0 turns it off.
+            // Blade texture on the deep rough: off by default; ?grasstex=1 (or =2 for the other tile) turns it on (and remembers it), ?grasstex=0 turns it off.
             let texFlag = null;
             try {
                 const tq = new URLSearchParams(window.location.search).get('grasstex');
-                if (tq !== null) localStorage.setItem('golf_grass_tex', tq === '1' ? '1' : '0');
+                if (tq !== null) localStorage.setItem('golf_grass_tex', (tq === '1' || tq === '2') ? tq : '0');
                 texFlag = localStorage.getItem('golf_grass_tex');
             } catch (e) { /* storage blocked: stays off */ }
-            this.grassTexOn = texFlag === '1';
+            this.grassTexOn = texFlag === '1' || texFlag === '2';
+            this.grassTexVariant = texFlag === '2' ? 2 : 1;
+            this._grassTexCache = {}; this._grassTexLoading = {};
             this._grassTex = null; this._grassTexReady = false;
             this.edgeWidth = 5.5;       // metres from a border where all shells are drawn
             // Edge blades: also off by default; ?grassblades=1 turns them on (and remembers it), ?grassblades=0 turns them off.
@@ -678,17 +680,22 @@
             sg.boundingBox = g.boundingBox.clone();
         }
 
-        setGrassTex(on) {
+        // variant 1 or 2 picks the tile (grass-tile.jpg / grass-tile-2.jpg); left out, the current one stays
+        setGrassTex(on, variant) {
             this.grassTexOn = !!on;
-            if (this.grassTexOn && !this._grassTex && !this._grassTexLoading) {
-                this._grassTexLoading = true;
-                new THREE.TextureLoader().load('grass-tile.jpg', (tex) => {
+            if (variant === 1 || variant === 2) this.grassTexVariant = variant;
+            const v = this.grassTexVariant, cached = this._grassTexCache[v] || null;
+            this._grassTex = cached; this._grassTexReady = !!cached;
+            if (this.grassTexOn && !cached && !this._grassTexLoading[v]) {
+                this._grassTexLoading[v] = true;
+                new THREE.TextureLoader().load(v === 2 ? 'grass-tile-2.jpg' : 'grass-tile.jpg', (tex) => {
                     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
                     tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
                     tex.generateMipmaps = true; tex.anisotropy = 4;
-                    this._grassTex = tex; this._grassTexReady = true; this._grassTexLoading = false;
+                    this._grassTexCache[v] = tex; this._grassTexLoading[v] = false;
+                    if (this.grassTexVariant === v) { this._grassTex = tex; this._grassTexReady = true; }
                     this._applyGrassTex();
-                }, undefined, () => { this._grassTexLoading = false; });
+                }, undefined, () => { this._grassTexLoading[v] = false; });
             }
             this._applyGrassTex();
         }
