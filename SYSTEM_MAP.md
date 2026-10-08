@@ -313,3 +313,5 @@ Kantviktning (av som standard, `?grassedge=1` slår på och minns, `?grassedge=0
 
 ## Dialoger i #ui-layer tar emot klick själva
 `#ui-layer` har `pointer-events: none`, och barn ärver det. En helskärmsdialog som ligger i den måste ha `pointer-events: auto` på sig själv, annars faller klicken igenom till canvasen och knapparna är döda. Det drabbade vattenhindrets dialog (`#penalty-decision-modal`, REHIT / LATERAL DROP) och publiceringsgalleriet (`#gallery-modal`). Röktestet kontrollerar att knapparna i båda nås av `elementFromPoint`.
+
+Gräsmeny (Environment > 3D Grass): under höjdreglagen finns knappar för de tre extralägena (kantlager, kantstrån, gräsmönster av/1/2). `setGrassExtra(kind, v)` i arcade.html slår på läget i `_terrainShells` och sparar samma localStorage-nyckel som `?grassedge` / `?grassblades` / `?grasstex`; `syncGrassExtraUI()` visar aktuellt läge. Knapparna syns bara när 3D-gräset inte är OFF.
