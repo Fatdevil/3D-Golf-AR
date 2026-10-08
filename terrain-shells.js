@@ -570,9 +570,11 @@
 
         // CODEX M1 FIX: Smooth 60 FPS live shader uniforms update without rebuilding geometry or meshes
         setHeights(roughH, deepH) {
+            const oldH = [this.roughHeight, this.deepHeight, this.semiHeight];   // indexed like the blade class: 0 rough, 1 deep, 2 semi
             this.roughHeight = roughH;
             this.deepHeight = deepH;
             this.semiHeight = Math.max(0.03, roughH * 0.4); // semi-rough follows the rough slider at 40 % of its height
+            this._scaleBlades(oldH, [this.roughHeight, this.deepHeight, this.semiHeight]);
             let maxH = Math.max(roughH, deepH, this.semiHeight);
             for (let s of this.shells) {
                 if (s.mat && s.mat.uniforms) {
@@ -723,9 +725,22 @@
                 mesh.frustumCulled = true;
                 mesh.renderOrder = 120;
                 this.scene.add(mesh);
-                this.blades.push({ mesh: mesh, count: count, cx: cx, cz: cz, r: r });
+                this.blades.push({ mesh: mesh, count: count, cx: cx, cz: cz, r: r, maxH: maxH });
             }, this);
             console.log('[Shells] Edge blades:', this.blades.reduce(function (a, b) { return a + b.count; }, 0), 'in', this.blades.length, 'chunks');
+        }
+
+        // the height sliders moved: every blade keeps its random share of its biome's height, scaled to the new height
+        _scaleBlades(oldH, newH) {
+            if (!this.blades.length) return;
+            const k = newH.map(function (h, i) { return oldH[i] > 0 ? h / oldH[i] : 1; });
+            for (let b of this.blades) {
+                const g = b.mesh.geometry, pa = g.attributes.iParam, ca = g.attributes.iClass.array, arr = pa.array;
+                let maxH = 0;
+                for (let i = 0; i < b.count; i++) { arr[i * 4] *= k[ca[i]]; if (arr[i * 4] > maxH) maxH = arr[i * 4]; }
+                pa.needsUpdate = true;
+                g.boundingSphere.radius += maxH - b.maxH; b.r += maxH - b.maxH; b.maxH = maxH;
+            }
         }
 
         // the terrain was reshaped: the blade roots follow it (a moment after the last change)
