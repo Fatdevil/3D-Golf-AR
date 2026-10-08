@@ -1172,6 +1172,20 @@ function serve() {
     });
     checks.push({ name: 'sculpt: the 3D grass follows the ground during the stroke (not only on release)', ok: live.during > live.before + 2.5 && Math.abs(live.during - live.ground) < 0.3 && live.farRise > 1, detail: JSON.stringify(live) });
     checks.push({ name: 'grass texture on the deep rough: off by default, loads and reaches all shells when switched on, switches off again', ok: gt.defaultOff && gt.on && gt.second && gt.backToFirst && gt.off && gt.w === 1024 && gt.errs.length === 0, detail: JSON.stringify(gt) });
+    // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
+    const gx = await pp.evaluate(async function () {
+      const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };
+      const out = { hasButtons: !!document.getElementById('grass-x-edge-1') && !!document.getElementById('grass-x-blades-1') && !!document.getElementById('grass-x-tex-2') };
+      window.setGrassExtra('edge', '1'); window.setGrassExtra('blades', '1'); window.setGrassExtra('tex', '2');
+      out.on = sh.edgeWeighted === true && sh.bladesOn === true && sh.grassTexOn === true && sh.grassTexVariant === 2;
+      out.shown = st('edge', '1') && st('blades', '1') && st('tex', '2') && !st('edge', '0') && !st('tex', '0');
+      out.stored = localStorage.getItem('golf_grass_edge') === '1' && localStorage.getItem('golf_grass_blades') === '1' && localStorage.getItem('golf_grass_tex') === '2';
+      window.setGrassExtra('edge', '0'); window.setGrassExtra('blades', '0'); window.setGrassExtra('tex', '0');
+      out.off = sh.edgeWeighted === false && sh.bladesOn === false && sh.grassTexOn === false && st('edge', '0') && st('blades', '0') && st('tex', '0');
+      out.storedOff = localStorage.getItem('golf_grass_edge') === '0' && localStorage.getItem('golf_grass_blades') === '0' && localStorage.getItem('golf_grass_tex') === '0';
+      return out;
+    });
+    checks.push({ name: 'grass menu: buttons for edge layers, edge blades and grass pattern switch the mode, show it and remember it', ok: gx.hasButtons && gx.on && gx.shown && gx.stored && gx.off && gx.storedOff, detail: JSON.stringify(gx) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 

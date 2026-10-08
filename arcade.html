@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=36"></script>
+<script src="i18n.js?v=37"></script>
 <script src="physics.js?v=8"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
@@ -1813,6 +1813,15 @@
                     <input type="range" id="grass-rough-height" min="10" max="80" value="30" step="5" oninput="updateGrassHeight()" style="width:100%; accent-color:#4ade80; cursor:pointer;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:6px;"><span data-i18n="env_grass_deep_h" style="color:#94a3b8; font-size:9px; font-weight:bold;">Deep Rough Höjd</span><span id="grass-deep-h-val" style="color:#2d6b14; font-size:9px; font-weight:bold;">60cm</span></div>
                     <input type="range" id="grass-deep-height" min="20" max="120" value="60" step="5" oninput="updateGrassHeight()" style="width:100%; accent-color:#2d6b14; cursor:pointer;">
+                    <div style="margin-top:10px; padding-top:8px; border-top:1px solid #334155;">
+                    <div data-i18n="env_grass_extras" style="color:#cbd5e1; font-size:10px; font-weight:600;">Extra gräslägen (test)</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_grass_edge" style="color:#94a3b8; font-size:9px; font-weight:bold;">Kantlager (höjd vid kanter)</span></div>
+                    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;"><button id="grass-x-edge-0" onclick="setGrassExtra('edge','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-edge-1" onclick="setGrassExtra('edge','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_grass_blades" style="color:#94a3b8; font-size:9px; font-weight:bold;">Kantstrån</span></div>
+                    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;"><button id="grass-x-blades-0" onclick="setGrassExtra('blades','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-blades-1" onclick="setGrassExtra('blades','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_grass_tex" style="color:#94a3b8; font-size:9px; font-weight:bold;">Gräsmönster (deep rough)</span></div>
+                    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:4px;"><button id="grass-x-tex-0" onclick="setGrassExtra('tex','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-tex-1" onclick="setGrassExtra('tex','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Mönster 1</button><button id="grass-x-tex-2" onclick="setGrassExtra('tex','2')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Mönster 2</button></div>
+                    </div>
                 </div>
             </div>
 
@@ -2903,6 +2912,30 @@
             // Show/hide height controls
             let hc = document.getElementById('grass-height-controls');
             if (hc) hc.style.display = q === 'OFF' ? 'none' : 'block';
+            if (typeof window.syncGrassExtraUI === 'function') window.syncGrassExtraUI();
+        };
+
+        window.syncGrassExtraUI = function() {
+            const sh = window._terrainShells; if (!sh) return;
+            const cur = { edge: sh.edgeWeighted ? '1' : '0', blades: sh.bladesOn ? '1' : '0', tex: sh.grassTexOn ? String(sh.grassTexVariant === 2 ? 2 : 1) : '0' };
+            ['edge', 'blades', 'tex'].forEach(function(kind) {
+                ['0', '1', '2'].forEach(function(v) {
+                    const b = document.getElementById('grass-x-' + kind + '-' + v); if (!b) return;
+                    const on = cur[kind] === v;
+                    b.style.background = on ? '#4ade80' : '#334155'; b.style.color = on ? '#0f172a' : '#94a3b8';
+                });
+            });
+        };
+
+        // the three extra grass modes (edge shells, edge blades, blade texture): off unless switched on here or with ?grassedge / ?grassblades / ?grasstex in the address
+        window.setGrassExtra = function(kind, v) {
+            const sh = window._terrainShells; if (!sh) return;
+            try {
+                if (kind === 'edge') { sh.setEdgeWeighted(v === '1'); localStorage.setItem('golf_grass_edge', v === '1' ? '1' : '0'); }
+                else if (kind === 'blades') { sh.setBlades(v === '1'); localStorage.setItem('golf_grass_blades', v === '1' ? '1' : '0'); }
+                else if (kind === 'tex') { sh.setGrassTex(v !== '0', v === '2' ? 2 : 1); localStorage.setItem('golf_grass_tex', v === '2' ? '2' : (v === '1' ? '1' : '0')); }
+            } catch (e) { /* storage blocked: the mode still switches, it is just not remembered */ }
+            window.syncGrassExtraUI();
         };
 
         window.updateGrassHeight = function() {
