@@ -651,7 +651,7 @@
 
         setBlades(on) {
             this.bladesOn = !!on;
-            if (this.bladesOn && this._ensureEdgeMap()) return;
+            if (this.bladesOn) this._ensureEdgeMap();
             this._buildBlades();
         }
 
@@ -661,7 +661,14 @@
         }
 
         // Blades along every border between shell grass and anything else, from the class map built with the edge map.
+        // a mask repaint and a shell rebuild usually come together: one blade build for both, a moment later
+        _scheduleBladeBuild() {
+            if (this._bladeBuildTimer || (!this.bladesOn && !this.blades.length)) return;
+            this._bladeBuildTimer = setTimeout(() => { this._bladeBuildTimer = null; this._buildBlades(); }, 0);
+        }
+
         _buildBlades() {
+            if (this._bladeBuildTimer) { clearTimeout(this._bladeBuildTimer); this._bladeBuildTimer = null; }
             this._clearBlades();
             const preset = BLADES[this.quality];
             if (!this.bladesOn || !preset || !this._cls) return;
@@ -841,7 +848,7 @@
             for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeMap) s.mat.uniforms.uEdgeMap.value = tex;
             if (old && old.dispose) old.dispose();
             this._buildStrip();
-            this._buildBlades();
+            this._scheduleBladeBuild();
         }
 
         getStats() {
@@ -868,7 +875,7 @@
             this.shells = [];
             if (this._stripGeo) { this._stripGeo.dispose(); this._stripGeo = null; }
 
-            this._buildBlades();   // the number of blades follows the quality
+            this._scheduleBladeBuild();   // the number of blades follows the quality
             let preset = QUALITY[this.quality];
             // CODEX L2 FIX: Free customGeo vertex buffer from memory when quality is OFF
             if (!preset || preset.layers === 0) {
