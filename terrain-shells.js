@@ -16,7 +16,7 @@
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        // interior: shells drawn well inside the grass: the lowest, the top (the canopy at the real height) and a middle one when 2; the rest only at the edges
+        // interior: shells drawn well inside the grass: the lowest and, per biome, the canopy at its real height; the rest only at the edges
         LOW:  { layers: 3, maxDist: 60,  interior: 1 },
         MED:  { layers: 5, maxDist: 120, interior: 2 },
         HIGH: { layers: 8, maxDist: 250, interior: 2 }
@@ -666,6 +666,7 @@
             this.deepHeight = deepH;
             this.semiHeight = Math.max(0.03, roughH * 0.4); // semi-rough follows the rough slider at 40 % of its height
             this._scaleBlades(oldH, [this.roughHeight, this.deepHeight, this.semiHeight]);
+            this._refreshInterior();
             let maxH = Math.max(roughH, deepH, this.semiHeight);
             for (let s of this.shells) {
                 if (s.mat && s.mat.uniforms) {
@@ -674,6 +675,16 @@
                     s.mat.uniforms.uSemiH.value = this.semiHeight;
                     s.mat.uniforms.uMaxHeight.value = maxH;
                 }
+            }
+        }
+
+        // the canopy shells move with the heights: new interior flags, and the geometry (whole grid or border strip) each shell draws
+        _refreshInterior() {
+            for (let s of this.shells) {
+                const total = s.mat.uniforms.uLayers.value;
+                s.mat.uniforms.uInterior.value = this._isInteriorLayer(s.layer, total) ? 1 : 0;
+                s.mat.uniforms.uNextInterior.value = this._nextInteriorLayer(s.layer, total);
+                s.mesh.geometry = (s.mat.uniforms.uInterior.value > 0.5 || !this._stripGeo) ? this.customGeo : this._stripGeo;
             }
         }
 
@@ -732,9 +743,14 @@
             }
         }
 
+        // The interior shells: the lowest (ground carpet) plus, for each biome, the tallest shell that is still within its height
+        // (floor, so a canopy is never above the grass). They follow the height sliders, see _refreshInterior.
         _isInteriorLayer(layer, total) {
-            const p = QUALITY[this.quality] || {};
-            return layer === 1 || layer === total || ((p.interior || 1) >= 2 && layer === Math.ceil(total / 2));
+            if (layer === 1) return true;
+            const hs = [this.roughHeight, this.deepHeight, this.semiHeight];
+            const maxH = Math.max(hs[0], hs[1], hs[2], 0.001);
+            for (const h of hs) if (layer === Math.max(1, Math.floor(h / maxH * total + 0.05))) return true;
+            return false;
         }
 
         // the next interior shell above this one (a huge number when there is none): it bounds the biome heights this shell is the canopy for
