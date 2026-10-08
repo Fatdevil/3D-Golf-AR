@@ -74,8 +74,8 @@
         return fp;
     }
     // Outline of a figure at scale 1 relative to its centre, for the given turn/tilt/roll (cached per angle set, least recently used out first).
-    // Every vertex is turned and looked at. To keep the hull cheap the points are thinned to the one furthest from the middle in each of
-    // SECTORS angular slices; a hull corner hidden that way lies within one slice of the kept outline, i.e. off by under 0.3 % of the reach.
+    // Every vertex is turned and looked at and the outline is exact: a rough hull from the point furthest out in each of SECTORS angular
+    // slices is built first, and only the points that fall outside it are added to the final hull.
     const SECTORS = 2048;
     function outlineFor(fp, rot, tilt, roll) {
         const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3), hit = fp.cache.get(key);
@@ -100,7 +100,27 @@
         });
         const kept = [];
         for (let k = 0; k < SECTORS; k++) if (bestR[k] >= 0) kept.push([bestX[k], bestZ[k]]);
-        const hull = convexHull(kept);
+        const rough = convexHull(kept);
+        // Exact step: a point strictly inside a convex polygon made of real vertices can never be a corner of the true outline, so
+        // only the (few) points outside `rough` can add to it. Find each point's wedge of `rough` by angle and test it against that edge.
+        let hull = rough;
+        if (rough.length >= 3) {
+            const ring = rough.map(function (p) { return { p: p, a: Math.atan2(p[1] - mz, p[0] - mx) }; }).sort(function (u, v) { return u.a - v.a; });
+            const H = ring.length, ang = ring.map(function (r) { return r.a; });
+            const side = function (u, v, x, z) { return (v[0] - u[0]) * (z - u[1]) - (v[1] - u[1]) * (x - u[0]); };
+            const extra = [];
+            fp.meshes.forEach(function (m) {
+                for (let i = 0; i < m.n; i++) {
+                    at(m, i);
+                    const x = out[0], z = out[1], a = Math.atan2(z - mz, x - mx);
+                    let lo = 0, hi = H - 1, j = H - 1;   // last wedge start at or before a (the wrap-around wedge when a precedes them all)
+                    if (a >= ang[0]) { while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ang[mid] <= a) lo = mid; else hi = mid - 1; } j = lo; }
+                    const u = ring[j].p, v = ring[(j + 1) % H].p;
+                    if (side(u, v, x, z) * side(u, v, mx, mz) < 0) extra.push([x, z]);
+                }
+            });
+            if (extra.length) hull = convexHull(rough.concat(extra));
+        }
         let rad = 0;
         hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); });
         const res = { hull: hull, rad: rad, w: x1 - x0, d: z1 - z0 };
