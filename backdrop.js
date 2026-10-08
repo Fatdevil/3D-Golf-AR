@@ -67,7 +67,9 @@
         model.traverse(function (m) {
             if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
             const pos = m.geometry.attributes.position, e = m.matrixWorld.elements, n = pos.count;
-            const sx = Math.hypot(e[0], e[1], e[2]), sy = Math.hypot(e[4], e[5], e[6]), sz = Math.hypot(e[8], e[9], e[10]);
+            // signed like Object3D.getWorldScale, which the renderer uses: a mirrored mesh (negative determinant) flips x
+            const det = e[0] * (e[5] * e[10] - e[9] * e[6]) - e[4] * (e[1] * e[10] - e[9] * e[2]) + e[8] * (e[1] * e[6] - e[5] * e[2]);
+            const sx = Math.hypot(e[0], e[1], e[2]) * (det < 0 ? -1 : 1), sy = Math.hypot(e[4], e[5], e[6]), sz = Math.hypot(e[8], e[9], e[10]);
             const ox = e[12], oz = e[14];
             // Vertex order is not spatial, so a plain stride can skip the very points that make the outline. Every sub-mesh gets its own
             // share of the sample, and a pass over ALL its vertices keeps the extreme vertex in each of a fan of directions
@@ -87,15 +89,15 @@
             reach = Math.max(reach, Math.hypot(ox, oz) + Math.sqrt(Math.max(0, far)));   // furthest a vertex gets from the centre, turned about Y
         });
         if (pts.length < 3) return null;
-        const fp = { pts: pts, model: model, sx: model.scale.x, cache: {}, reach: reach };
+        const fp = { pts: pts, model: model, sx: model.scale.x, cache: new Map(), reach: reach };
         const flat = outlineFor(fp, 0, 0, 0);
         fp.w = flat.w; fp.d = flat.d;
         return fp;
     }
     // Outline of a figure at scale 1 relative to its centre, for the given turn/tilt/roll (cached per angle set)
     function outlineFor(fp, rot, tilt, roll) {
-        const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3);
-        if (fp.cache[key]) return fp.cache[key];
+        const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3), hit = fp.cache.get(key);
+        if (hit) { fp.cache.delete(key); fp.cache.set(key, hit); return hit; }   // most recently used goes last
         const cz = Math.cos(roll), sz = Math.sin(roll), cx = Math.cos(tilt), sx = Math.sin(tilt), cy = Math.cos(rot), sy = Math.sin(rot);
         const flat = fp.pts.map(function (p) {
             const x1 = p[0] * cz - p[1] * sz, y1 = p[0] * sz + p[1] * cz;
@@ -105,8 +107,14 @@
         const hull = convexHull(flat);
         let rad = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
         hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minZ = Math.min(minZ, p[1]); maxZ = Math.max(maxZ, p[1]); });
-        if (Object.keys(fp.cache).length > 400) fp.cache = {};
-        return (fp.cache[key] = { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ });
+        const out = { hull: hull, rad: rad, w: maxX - minX, d: maxZ - minZ };
+        fp.cache.set(key, out);
+        // drop the longest-unused outlines one at a time; never fewer than the orientations placed figures are using right now
+        if (fp.cache.size > 400) {
+            const keep = Math.max(400, 2 * (root.placedTrees || []).length);
+            for (const k of fp.cache.keys()) { if (fp.cache.size <= keep) break; fp.cache.delete(k); }
+        }
+        return out;
     }
     function footprintOf(type) {
         const hit = fpCache[type], live = root.customModels && root.customModels[type];
