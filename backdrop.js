@@ -15,6 +15,8 @@
     const RING_COUNT = 8;
     const FOG_LIMIT = 4000;
     let B = null;                 // open map state
+    const CHECK_WAIT_MS = 60000;        // how long a deferred coverage check waits for a slow model
+    let pendingChecks = [];       // figures to test against the plate once their model has loaded; outlives the map, which may be closed first
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
     function toast(msg, color) { if (typeof root.showBuildToast === 'function') root.showBuildToast(msg, color || '#38bdf8'); }
@@ -30,8 +32,164 @@
         return h ? h * (o.scale || 1) : 0;
     }
     function outsidePlate(o) { const half = plateHalf(); return Math.abs(o.x) > half || Math.abs(o.z) > half; }
-    // Rough half-width of a figure: mountains are wider than they are tall, so this errs a little large
-    function radiusOf(o) { return 0.6 * heightOf(o); }
+    // ---- exact footprint ---------------------------------------------------------------------------------
+    // A model is scaled uniformly so its HEIGHT equals the asset's targetHeight, and is centred on x/z (arcade.html loadAsset),
+    // so its width and depth are whatever the mesh happens to be. We therefore read the loaded mesh itself: the convex hull of
+    // every vertex seen from above, in metres at scale 1. A placed figure is that hull * o.scale, turned the way the renderer turns it.
+    // fpCache holds a hull per type; a type whose model has not loaded yet gets none, and the old rough circle is used meanwhile.
+    const fpCache = {};
+    const fpAsked = {};
+    function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+    function convexHull(pts) {
+        pts.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+        const lo = [], up = [];
+        pts.forEach(function (p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); });
+        for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+        lo.pop(); up.pop();
+        return lo.concat(up);
+    }
+    // Mirrors rebuildInstancePool (arcade.html): each sub-mesh sits at the instance position + its world position * scale, UNturned,
+    // and only its geometry (stretched by the mesh's signed world scale) is turned by the instance's Euler YXZ rotation and scaled.
+    // A vertex therefore lands at  offset + R * (localVertex * worldScale). Every vertex is used, none is sampled away.
+    function computeFootprint(type) {
+        const model = root.customModels && root.customModels[type];
+        if (!model || model === 'LOADING' || !model.isObject3D) return null;
+        model.updateWorldMatrix(true, true);
+        const meshes = [];
+        let total = 0, reach = 0;
+        model.traverse(function (m) {
+            if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
+            const pos = m.geometry.attributes.position, e = m.matrixWorld.elements, n = pos.count;
+            // signed like Object3D.getWorldScale, which the renderer uses: a mirrored mesh (negative determinant) flips x
+            const det = e[0] * (e[5] * e[10] - e[9] * e[6]) - e[4] * (e[1] * e[10] - e[9] * e[2]) + e[8] * (e[1] * e[6] - e[5] * e[2]);
+            const mesh = { pos: pos, n: n, sx: Math.hypot(e[0], e[1], e[2]) * (det < 0 ? -1 : 1), sy: Math.hypot(e[4], e[5], e[6]), sz: Math.hypot(e[8], e[9], e[10]), ox: e[12], oz: e[14] };
+            let far = 0;
+            for (let i = 0; i < n; i++) { const x = pos.getX(i) * mesh.sx, z = pos.getZ(i) * mesh.sz; far = Math.max(far, x * x + z * z); }
+            reach = Math.max(reach, Math.hypot(mesh.ox, mesh.oz) + Math.sqrt(far));   // furthest a vertex gets from the centre, turned about Y
+            total += n;
+            meshes.push(mesh);
+        });
+        if (total < 3) return null;
+        const fp = { meshes: meshes, model: model, sx: model.scale.x, cache: new Map(), reach: reach };
+        const flat = outlineFor(fp, 0, 0, 0);
+        fp.w = flat.w; fp.d = flat.d;
+        return fp;
+    }
+    // Outline of a figure at scale 1 relative to its centre, for the given turn/tilt/roll (cached per angle set, least recently used out first).
+    // Every vertex is turned and looked at and the outline is exact: a rough hull from the point furthest out in each of SECTORS angular
+    // slices is built first, and only the points that fall outside it are added to the final hull.
+    const SECTORS = 2048;
+    function outlineFor(fp, rot, tilt, roll) {
+        const key = rot + '|' + tilt + '|' + roll, hit = fp.cache.get(key);   // exact angles: a rounded key would hand one figure another's outline
+        if (hit) { fp.cache.delete(key); fp.cache.set(key, hit); return hit; }   // most recently used goes last
+        const cz = Math.cos(roll), sz = Math.sin(roll), cx = Math.cos(tilt), sx = Math.sin(tilt), cy = Math.cos(rot), sy = Math.sin(rot);
+        const out = [0, 0];
+        function at(m, i) {
+            const lx = m.pos.getX(i) * m.sx, ly = m.pos.getY(i) * m.sy, lz = m.pos.getZ(i) * m.sz;
+            const x1 = lx * cz - ly * sz, y1 = lx * sz + ly * cz, z2 = y1 * sx + lz * cx;
+            out[0] = m.ox + x1 * cy + z2 * sy; out[1] = m.oz - x1 * sy + z2 * cy;
+        }
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        fp.meshes.forEach(function (m) { for (let i = 0; i < m.n; i++) { at(m, i); x0 = Math.min(x0, out[0]); x1 = Math.max(x1, out[0]); z0 = Math.min(z0, out[1]); z1 = Math.max(z1, out[1]); } });
+        const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;   // only the origin for the angular slices below, which any point can serve as
+        const bestR = new Float64Array(SECTORS).fill(-1), bestX = new Float64Array(SECTORS), bestZ = new Float64Array(SECTORS);
+        fp.meshes.forEach(function (m) {
+            for (let i = 0; i < m.n; i++) {
+                at(m, i);
+                const dx = out[0] - mx, dz = out[1] - mz, k = Math.min(SECTORS - 1, Math.floor((Math.atan2(dz, dx) + Math.PI) / (2 * Math.PI) * SECTORS)), r = dx * dx + dz * dz;
+                if (r > bestR[k]) { bestR[k] = r; bestX[k] = out[0]; bestZ[k] = out[1]; }
+            }
+        });
+        const kept = [];
+        for (let k = 0; k < SECTORS; k++) if (bestR[k] >= 0) kept.push([bestX[k], bestZ[k]]);
+        const rough = convexHull(kept);
+        // Exact step: a point strictly inside a convex polygon made of real vertices can never be a corner of the true outline, so
+        // only the (few) points outside `rough` can add to it. Find each point's wedge of `rough` by angle and test it against that edge.
+        let hull = rough;
+        if (rough.length >= 3) {
+            // the wedges need a point that really is inside `rough`: the mean of a convex polygon's corners always is (the box middle need not be)
+            let cxm = 0, czm = 0;
+            rough.forEach(function (p) { cxm += p[0]; czm += p[1]; });
+            cxm /= rough.length; czm /= rough.length;
+            const ring = rough.map(function (p) { return { p: p, a: Math.atan2(p[1] - czm, p[0] - cxm) }; }).sort(function (u, v) { return u.a - v.a; });
+            const H = ring.length, ang = ring.map(function (r) { return r.a; });
+            const side = function (u, v, x, z) { return (v[0] - u[0]) * (z - u[1]) - (v[1] - u[1]) * (x - u[0]); };
+            const extra = [];
+            fp.meshes.forEach(function (m) {
+                for (let i = 0; i < m.n; i++) {
+                    at(m, i);
+                    const x = out[0], z = out[1], a = Math.atan2(z - czm, x - cxm);
+                    let lo = 0, hi = H - 1, j = H - 1;   // last wedge start at or before a (the wrap-around wedge when a precedes them all)
+                    if (a >= ang[0]) { while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ang[mid] <= a) lo = mid; else hi = mid - 1; } j = lo; }
+                    const u = ring[j].p, v = ring[(j + 1) % H].p;
+                    if (side(u, v, x, z) * side(u, v, cxm, czm) < 0) extra.push([x, z]);
+                }
+            });
+            if (extra.length) hull = convexHull(rough.concat(extra));
+        }
+        let rad = 0;
+        hull.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0], p[1])); });
+        const res = { hull: hull, rad: rad, w: x1 - x0, d: z1 - z0 };
+        fp.cache.set(key, res);
+        // drop the longest-unused outlines one at a time; never fewer than the orientations placed figures are using right now
+        if (fp.cache.size > 400) {
+            const keep = Math.max(400, 2 * (root.placedTrees || []).length);
+            for (const k of fp.cache.keys()) { if (fp.cache.size <= keep) break; fp.cache.delete(k); }
+        }
+        return res;
+    }
+    function footprintOf(type) {
+        const hit = fpCache[type], live = root.customModels && root.customModels[type];
+        // Saving a prop as the new default rescales the model itself (arcade-library.js savePropAsDefault): measure it again
+        if (hit && hit.model === live && hit.sx === live.scale.x) return hit;
+        const fp = computeFootprint(type);
+        if (fp) { fpCache[type] = fp; return fp; }
+        // not loaded yet: ask for it once; the map redraws twice a second and picks it up
+        // (a failed download leaves customModels[type] empty again, so ask again after a few seconds rather than never)
+        const now = Date.now();
+        if ((!fpAsked[type] || now - fpAsked[type] > 4000) && live !== 'LOADING' && typeof root.loadAsset === 'function' && reg(type)) {
+            fpAsked[type] = now;
+            try { root.loadAsset(type); } catch (err) { /* stays a circle */ }
+        }
+        return null;
+    }
+    // Outline of a placed figure at scale 1, relative to its centre, turned the way rebuildInstancePool turns it (Euler YXZ)
+    function relativeOutline(o) {
+        const fp = footprintOf(o.type);
+        return fp ? outlineFor(fp, o.rot || 0, o.tiltX || 0, o.rollZ || 0) : null;
+    }
+    // The figure's outline on the ground in world metres, or null while its model has not loaded
+    function outlineOf(o) {
+        const rel = relativeOutline(o);
+        if (!rel) return null;
+        const s = o.scale || 1;
+        return rel.hull.map(function (p) { return [o.x + s * p[0], o.z + s * p[1]]; });
+    }
+    // Furthest reach of a figure from its centre. Without a loaded model: a rough guess
+    function radiusOf(o) { const rel = relativeOutline(o); return rel ? rel.rad * (o.scale || 1) : 0.6 * heightOf(o); }
+    function pointInPoly(x, z, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            if (((poly[i][1] > z) !== (poly[j][1] > z)) && (x < (poly[j][0] - poly[i][0]) * (z - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0])) inside = !inside;
+        }
+        return inside;
+    }
+    // Does the figure's base reach over the course plate? Exact and linear in the outline's corners: for a convex outline and a box, if they
+    // do not overlap there is a separating line along one of the box's sides or along one of the outline's edges (with the outline behind it)
+    function coversPlate(o) {
+        const half = plateHalf(), poly = outlineOf(o);
+        if (!poly) return Math.hypot(Math.max(0, Math.abs(o.x) - half), Math.max(0, Math.abs(o.z) - half)) < radiusOf(o);
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        poly.forEach(function (p) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); });
+        if (x0 >= half || x1 <= -half || z0 >= half || z1 <= -half) return false;
+        // the hull runs counter-clockwise, so an edge a->b has its outside on the (dz, -dx) side; the plate (centred on 0) lies fully beyond
+        // that edge when its smallest value along the normal, -half * (|nx| + |nz|), is at least the edge's own
+        for (let i = 0; i < poly.length; i++) {
+            const a = poly[i], b = poly[(i + 1) % poly.length], nx = b[1] - a[1], nz = -(b[0] - a[0]);
+            if (-half * (Math.abs(nx) + Math.abs(nz)) >= a[0] * nx + a[1] * nz) return false;
+        }
+        return true;
+    }
 
     // ---- fog: far figures must stay visible at dawn and dusk -------------------------------------------
     // arcade-scene-engine.js reads this when it sets the fog, so the fog ends beyond the farthest big figure.
@@ -60,7 +218,7 @@
         if (typeof root.setTimeOfDay === 'function' && root.currentTimeOfDay != null) root.setTimeOfDay(root.currentTimeOfDay);
     }
     // courses are loaded by several different paths, so look now and then instead of hooking each one
-    setInterval(function () { (root.placedTrees || []).forEach(function (o) { if (o) remember(o.type); }); refreshFog(); }, 2000);
+    setInterval(function () { (root.placedTrees || []).forEach(function (o) { if (o) remember(o.type); }); refreshFog(); recheckLoaded(); }, 2000);
 
     // ---- the picture ---------------------------------------------------------------------------------------
     // The colour a surround choice has in the scene (same lookup as updateSurroundColors)
@@ -132,22 +290,31 @@
             poly.forEach(function (p, i) { if (i) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
             ctx.closePath(); ctx.fill(); ctx.stroke();
         });
-        // figures
+        // figures: the real outline of the base (same shape, size and turn as the 3D model); a circle until the model has loaded
         mapObjects().forEach(function (o) {
-            const big = heightOf(o) >= BACKDROP_MIN, rr = Math.max(heightOf(o) >= SHELF_MIN ? 5 : 3, mToPx(radiusOf(o))), sel = o === B.sel;
-            ctx.beginPath(); ctx.arc(cx(o.x), cz(o.z), rr, 0, 7);
-            ctx.fillStyle = big ? 'rgba(120,113,108,0.65)' : 'rgba(56,189,248,0.7)'; ctx.fill();
-            ctx.lineWidth = sel ? 3 : 1.2; ctx.strokeStyle = sel ? '#facc15' : 'rgba(15,23,42,0.8)'; ctx.stroke();
+            const big = heightOf(o) >= BACKDROP_MIN, sel = o === B.sel, poly = outlineOf(o);
+            const rr = Math.max(heightOf(o) >= SHELF_MIN ? 5 : 3, mToPx(radiusOf(o))), over = big && coversPlate(o);
+            ctx.beginPath();
+            if (poly) poly.forEach(function (p, i) { if (i) ctx.lineTo(cx(p[0]), cz(p[1])); else ctx.moveTo(cx(p[0]), cz(p[1])); });
+            else ctx.arc(cx(o.x), cz(o.z), rr, 0, 7);
+            ctx.closePath();
+            ctx.fillStyle = over ? 'rgba(239,68,68,0.55)' : (big ? 'rgba(120,113,108,0.65)' : 'rgba(56,189,248,0.7)'); ctx.fill();
+            ctx.lineWidth = sel ? 3 : 1.2; ctx.strokeStyle = sel ? '#facc15' : (over ? '#ef4444' : 'rgba(15,23,42,0.8)');
+            if (!poly) ctx.setLineDash([4, 3]);
+            ctx.stroke(); ctx.setLineDash([]);
+            // a figure too small to see as an outline still gets a dot to grab
+            if (poly && mToPx(radiusOf(o)) < 5) { ctx.beginPath(); ctx.arc(cx(o.x), cz(o.z), 4, 0, 7); ctx.fillStyle = 'rgba(56,189,248,0.9)'; ctx.fill(); }
             // a notch shows which way the figure faces
             if (sel || big) {
-                const a = -(o.rot || 0);
-                ctx.beginPath(); ctx.moveTo(cx(o.x), cz(o.z)); ctx.lineTo(cx(o.x) + Math.cos(a) * rr, cz(o.z) + Math.sin(a) * rr);
+                const a = -(o.rot || 0), nr = Math.max(4, mToPx(radiusOf(o)));
+                ctx.beginPath(); ctx.moveTo(cx(o.x), cz(o.z)); ctx.lineTo(cx(o.x) + Math.cos(a) * nr, cz(o.z) + Math.sin(a) * nr);
                 ctx.strokeStyle = 'rgba(15,23,42,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
             }
             if (sel) {
-                const d = reg(o.type);
+                const d = reg(o.type), fp = footprintOf(o.type), sc = o.scale || 1;
+                const size = fp ? ' · ' + Math.round(fp.w * sc) + '×' + Math.round(fp.d * sc) + ' m' : '';
                 ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-                ctx.fillText(((d && d.name) || o.type) + ' · ' + Math.round(heightOf(o)) + ' m', cx(o.x), cz(o.z) + rr + 3);
+                ctx.fillText(((d && d.name) || o.type) + ' · ' + Math.round(heightOf(o)) + ' m h' + size, cx(o.x), cz(o.z) + rr + 3);
             }
         });
         ctx.fillStyle = 'rgba(248,250,252,0.85)'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -300,31 +467,84 @@
         fn(B.sel);
         rebuild(B.sel.type);
         persist();
+        warnIfCovering(B.sel);
         refresh();
     }
     // Place figures evenly around the plate with open ground between plate and figure
-    function ring() {
-        const type = B.shelfType || (B.sel && B.sel.type);
+    // `job` is only passed by ring's own retries: it pins the figure that was asked for, and B.ringJob lets one request wait at a time
+    function ring(job) {
+        if (!job && B.ringJob) return;   // already waiting for a model to load: another tap must not queue a second ring
+        const type = job ? job.type : (B.shelfType || (B.sel && B.sel.type));
         const d = type && reg(type);
-        if (!d) { toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
+        if (!d) { B.ringJob = null; toast(tr('bd_pick_first', 'Välj först en figur i hyllan.'), '#f59e0b'); return; }
+        // the real size is only known once the model has loaded: wait for it rather than lay out a guess. Keep waiting while it is still
+        // LOADING (at most a minute); if the load has plainly failed, give up after ~10 s and use the rough guess
+        const ready = footprintOf(type);   // (this may start a retry, so read the loading state only after it)
+        const stillLoading = root.customModels && root.customModels[type] === 'LOADING';
+        if (!ready && !(job && (job.waited >= 120 || (job.waited >= 20 && !stillLoading)))) {
+            job = job || { type: type, waited: 0 };
+            job.waited++;
+            B.ringJob = job;
+            say(tr('bd_loading', 'Laddar figuren…'));
+            const mine = B;
+            setTimeout(function () { if (B === mine && B.ringJob === job) ring(job); }, 500);
+            return;
+        }
+        B.ringJob = null;
         undoPoint();
-        const H = d.targetHeight || 10, half = plateHalf(), a0 = Math.random() * Math.PI * 2;
+        const H = d.targetHeight || 10, half = plateHalf(), a0 = Math.random() * Math.PI * 2, limit = VIEW * 0.95;
+        const fp = footprintOf(type), unitR = fp ? fp.reach : 0.6 * H;   // reach of one figure at scale 1, whatever way it is turned
+        // distance from the plate square (not from its centre) to a point at distance t along the direction (ux, uz)
+        function gapAt(t, ux, uz) { return Math.hypot(Math.max(0, Math.abs(ux * t) - half), Math.max(0, Math.abs(uz * t) - half)); }
+        const placed = [];
         for (let k = 0; k < RING_COUNT; k++) {
-            const ang = a0 + k * 2 * Math.PI / RING_COUNT + (Math.random() - 0.5) * 0.25;
-            let sc = 0.8 + Math.random() * 0.4;
-            const edge = half / Math.max(Math.abs(Math.cos(ang)), Math.abs(Math.sin(ang)));
-            // keep the whole figure inside the map
-            const maxR = Math.max(10, (VIEW * 0.95 - edge - RING_GAP) / 2);
-            let R = 0.6 * H * sc;
-            if (R > maxR) { R = maxR; sc = R / (0.6 * H); }
-            const dist = edge + RING_GAP + R;
-            create(type, Math.cos(ang) * dist, Math.sin(ang) * dist, sc, Math.random() * Math.PI * 2, true);
+            const ang = a0 + k * 2 * Math.PI / RING_COUNT + (Math.random() - 0.5) * 0.25, ux = Math.cos(ang), uz = Math.sin(ang);
+            let sc = 0.8 + Math.random() * 0.4, R = unitR * sc, dist = 0;
+            // push the centre out until the figure's whole reach clears the plate by RING_GAP; shrink it if that goes off the map
+            for (let tries = 0; tries < 14; tries++) {
+                let lo = 0, hi = limit * 2;
+                for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (gapAt(mid, ux, uz) >= R + RING_GAP) hi = mid; else lo = mid; }
+                dist = hi;
+                if (dist + R <= limit || R <= 10) break;
+                sc *= 0.85; R = unitR * sc;
+            }
+            placed.push(create(type, ux * dist, uz * dist, sc, Math.random() * Math.PI * 2, true));
         }
         rebuild(type);
+        if (!fp) placed.forEach(function (o) { warnIfCovering(o); });   // laid out from a guess: check again once the real outline exists
         B.sel = null;
         persist();
         say(tr('bd_ring_done', '{n} figurer utlagda runt banan. Flytta dem som du vill.').replace('{n}', RING_COUNT));
         refresh();
+    }
+
+    // A figure placed before its model has loaded is only checked against a rough guess, so it is checked again once its real outline exists.
+    // The queue is not part of the map's state: tapping Done before a slow model arrives must not drop the warning.
+    // Entries are { o, type, x, z, since }: undo/redo rebuild placedTrees with new objects, so a queued figure is looked up again by its
+    // type and spot when its own object is gone.
+    function warnIfCovering(o, since) {
+        if (!o || heightOf(o) < BACKDROP_MIN) return;
+        if (!footprintOf(o.type)) {
+            // wall-clock budget, since both the map's and the module's timer call this
+            const t0 = since || Date.now(), queued = pendingChecks.filter(function (e) { return e.o === o; })[0];
+            if (queued) { queued.x = o.x; queued.z = o.z; }   // moved again while waiting: undo/redo must look for it where it is now
+            else if (Date.now() - t0 <= CHECK_WAIT_MS) pendingChecks.push({ o: o, type: o.type, x: o.x, z: o.z, since: t0 });   // after that the model is taken as unloadable
+            return;
+        }
+        pendingChecks = pendingChecks.filter(function (e) { return e.o !== o; });
+        if (coversPlate(o)) toast(tr('bd_covers', '⚠️ Figurens bas ligger över banan. Flytta den längre ut eller gör den mindre.'), '#ef4444');
+    }
+    function recheckLoaded() {
+        if (!pendingChecks.length) return;
+        const waiting = pendingChecks, list = root.placedTrees || [];
+        pendingChecks = [];
+        waiting.forEach(function (e) {
+            let o = e.o;
+            if (list.indexOf(o) < 0) {   // removed, or replaced by undo/redo: take the equivalent figure if one is still there
+                o = list.find(function (t) { return t && t.type === e.type && Math.abs(t.x - e.x) < 0.01 && Math.abs(t.z - e.z) < 0.01; });
+            }
+            if (o) warnIfCovering(o, e.since);   // asks again if the model is still not there
+        });
     }
 
     // ---- pointer handling ----------------------------------------------------------------------------------
@@ -336,8 +556,10 @@
     function hit(p) {
         const list = mapObjects();
         for (let i = list.length - 1; i >= 0; i--) {
-            const o = list[i], rr = Math.max(minPickPx(), mToPx(radiusOf(o)));
-            if (Math.hypot(p.px - cx(o.x), p.py - cz(o.z)) <= rr) return o;
+            const o = list[i], poly = outlineOf(o);
+            // inside the drawn outline, or near the centre (so a thin figure can still be grabbed)
+            if (poly ? (pointInPoly(p.x, p.z, poly) || Math.hypot(p.px - cx(o.x), p.py - cz(o.z)) <= minPickPx())
+                     : Math.hypot(p.px - cx(o.x), p.py - cz(o.z)) <= Math.max(minPickPx(), mToPx(radiusOf(o)))) return o;
         }
         return null;
     }
@@ -385,6 +607,7 @@
         const moved = B.drag.snapped;
         B.drag = null;
         if (moved && B.sel) { rebuild(B.sel.type); persist(); }
+        warnIfCovering(B.sel);
         refresh();
     }
 
@@ -449,7 +672,7 @@
         const bigBtn = btn(tr('bd_big', 'Stora'), function () { B.showAll = false; refresh(); }, 'min-height:32px; font-size:12px;');
         const allBtn = btn(tr('bd_all', 'Alla'), function () { B.showAll = true; refresh(); }, 'min-height:32px; font-size:12px;');
         filters.appendChild(bigBtn); filters.appendChild(allBtn);
-        const ring_ = btn(tr('bd_ring', '🔁 Runt om hela'), ring, 'flex:1; min-height:32px; font-size:12px; background:#7c2d12; color:#fff;');
+        const ring_ = btn(tr('bd_ring', '🔁 Runt om hela'), function () { ring(); }, 'flex:1; min-height:32px; font-size:12px; background:#7c2d12; color:#fff;');
         filters.appendChild(ring_);
 
         const shelf = document.createElement('div');
@@ -500,7 +723,7 @@
         B.surround = surroundPicture();
         B.plate = (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) ? root.HoleBlueprint.renderTerrain(plateHalf()) : document.createElement('canvas');
         // Ctrl+Z / Ctrl+Y reach the editor's own undo while the map is open; keep the picture in step with it
-        B.timer = setInterval(function () { if (!B) return; const had = B.sel; dropStaleSelection(); if (had && !B.sel) refresh(); else draw(); }, 500);
+        B.timer = setInterval(function () { if (!B) return; recheckLoaded(); const had = B.sel; dropStaleSelection(); if (had && !B.sel) refresh(); else draw(); }, 500);
         B.keyHandler = function (e) {
             if (e.ctrlKey || e.metaKey) {
                 // undo / redo run here so the map can take a fresh picture of the course afterwards
@@ -526,5 +749,5 @@
     }
 
     root.openBackdropMap = open;
-    root.Backdrop = { open: open, close: close, state: function () { return B; }, ring: ring, refresh: refresh, refreshFog: refreshFog };
+    root.Backdrop = { warnIfCovering: warnIfCovering, footprint: footprintOf, outline: outlineOf, coversPlate: coversPlate, open: open, close: close, state: function () { return B; }, ring: ring, refresh: refresh, refreshFog: refreshFog };
 })(typeof window !== 'undefined' ? window : globalThis);
