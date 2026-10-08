@@ -509,8 +509,21 @@
         refresh();
     }
 
+    // A figure placed before its model has loaded is only checked against a rough guess, so it is checked again once its real outline exists
     function warnIfCovering(o) {
-        if (o && heightOf(o) >= BACKDROP_MIN && coversPlate(o)) toast(tr('bd_covers', '⚠️ Figurens bas ligger över banan. Flytta den längre ut eller gör den mindre.'), '#ef4444');
+        if (!o || heightOf(o) < BACKDROP_MIN) return;
+        if (!footprintOf(o.type)) { if (B && B.recheck.indexOf(o) < 0) B.recheck.push(o); return; }
+        if (B) B.recheck = B.recheck.filter(function (x) { return x !== o; });
+        if (coversPlate(o)) toast(tr('bd_covers', '⚠️ Figurens bas ligger över banan. Flytta den längre ut eller gör den mindre.'), '#ef4444');
+    }
+    function recheckLoaded() {
+        if (!B || !B.recheck.length) return;
+        const waiting = B.recheck.slice();
+        B.recheck = [];
+        waiting.forEach(function (o) {
+            if ((root.placedTrees || []).indexOf(o) < 0) return;   // removed or undone meanwhile
+            warnIfCovering(o);   // asks again if the model is still not there
+        });
     }
 
     // ---- pointer handling ----------------------------------------------------------------------------------
@@ -684,12 +697,12 @@
         if (Array.isArray(others)) others = { points: others, polygons: [] };
         B = {
             dom: { edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
-            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
+            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, recheck: [], sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();
         B.plate = (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) ? root.HoleBlueprint.renderTerrain(plateHalf()) : document.createElement('canvas');
         // Ctrl+Z / Ctrl+Y reach the editor's own undo while the map is open; keep the picture in step with it
-        B.timer = setInterval(function () { if (!B) return; const had = B.sel; dropStaleSelection(); if (had && !B.sel) refresh(); else draw(); }, 500);
+        B.timer = setInterval(function () { if (!B) return; recheckLoaded(); const had = B.sel; dropStaleSelection(); if (had && !B.sel) refresh(); else draw(); }, 500);
         B.keyHandler = function (e) {
             if (e.ctrlKey || e.metaKey) {
                 // undo / redo run here so the map can take a fresh picture of the course afterwards
