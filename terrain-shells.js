@@ -16,7 +16,7 @@
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
-        // interior: how many shells are drawn well inside the grass (the edges, where the height shows, get all of them)
+        // interior: how many shells are drawn well inside the grass: the lowest one, plus a middle one when 2 (the edges, where the height shows, get all of them)
         LOW:  { layers: 3, maxDist: 60,  interior: 1 },
         MED:  { layers: 5, maxDist: 120, interior: 2 },
         HIGH: { layers: 8, maxDist: 250, interior: 2 }
@@ -87,7 +87,7 @@
         uniform float uLayers;
         uniform float uLayer;
         uniform sampler2D uEdgeMap;
-        uniform float uInteriorLayers;
+        uniform float uInterior;
         uniform float uEdgeOn;
         uniform float uMaxHeight;
         uniform float uMaxDist;
@@ -144,15 +144,13 @@
             if (hash(vWorldPos.xz * 37.0) > distFade) discard;
 
             // Edge-weighted shells: the height of the grass shows at its borders (against fairway, green and sand), where the
-            // silhouette is seen from the side. Well inside the grass only every stride-th shell is drawn: the same total height
-            // with fewer layers. uEdgeMap is 1 at a border and fades to 0 a few metres in; a dither makes the change gradual.
-            // This comes before the texture reads and the noise below, so the skipped shells cost almost nothing.
-            if (uEdgeOn > 0.5) {
-                float stride = max(1.0, floor(uLayers / max(uInteriorLayers, 1.0)));
-                if (mod(uLayer, stride) > 0.5) {
-                    float nearEdge = smoothstep(0.0, 0.35, texture2D(uEdgeMap, vUv).r);
-                    if (hash(vWorldPos.xz * 53.0) > nearEdge) discard;
-                }
+            // silhouette is seen from the side. Well inside the grass only the interior shells are drawn (uInterior = 1: the
+            // lowest, dense one, a dark ground carpet), the upper ones only near a border. uEdgeMap is 1 at a border and fades
+            // to 0 a few metres in; a dither makes the change gradual. On the CPU side the upper shells only have geometry in the
+            // border strip (see _buildStrip), so this test also guards the edge of that strip.
+            if (uEdgeOn > 0.5 && uInterior < 0.5) {
+                float nearEdge = smoothstep(0.0, 0.35, texture2D(uEdgeMap, vUv).r);
+                if (hash(vWorldPos.xz * 53.0) > nearEdge) discard;
             }
 
 
@@ -329,7 +327,7 @@
                 edgeFlag = localStorage.getItem('golf_grass_edge');
             } catch (e) { /* storage blocked: stays off */ }
             this.edgeWeighted = edgeFlag === '1';
-            this.edgeWidth = 4.0;       // metres from a border where all shells are drawn
+            this.edgeWidth = 5.5;       // metres from a border where all shells are drawn
             // Edge blades: also off by default; ?grassblades=1 turns them on (and remembers it), ?grassblades=0 turns them off.
             let bladeFlag = null;
             try {
@@ -591,6 +589,54 @@
         setEdgeWeighted(on) {
             this.edgeWeighted = !!on;
             for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeOn) s.mat.uniforms.uEdgeOn.value = this.edgeWeighted ? 1 : 0;
+            this._buildStrip();
+        }
+
+        _isInteriorLayer(layer, total) {
+            const p = QUALITY[this.quality] || {};
+            return layer === 1 || ((p.interior || 1) >= 2 && layer === Math.ceil(total / 2));
+        }
+
+        // The upper shells only need geometry where the border is: a second index buffer over the same vertices, with just
+        // the grid cells at (or next to) a border. The lowest shells keep the whole grid. Fewer triangles, not just fewer pixels.
+        _buildStrip() {
+            if (this._stripGeo) { this._stripGeo.dispose(); this._stripGeo = null; }
+            const g = this.customGeo, data = this._edgeData, cls = this._cls;
+            if (g && this.edgeWeighted && data && cls) {
+                const segs = g.parameters.widthSegments, n = this._edgeN, src = g.index.array;
+                const flag = new Uint8Array(segs * segs);
+                for (let iy = 0; iy < segs; iy++) {
+                    const r0 = Math.floor((1 - (iy + 1) / segs) * n), r1 = Math.min(n - 1, Math.ceil((1 - iy / segs) * n));
+                    for (let ix = 0; ix < segs; ix++) {
+                        const c0 = Math.floor(ix / segs * n), c1 = Math.min(n - 1, Math.ceil((ix + 1) / segs * n));
+                        let hit = 0;
+                        for (let r = r0; r <= r1 && !hit; r++) for (let c = c0; c <= c1; c++) if (data[r * n + c] > 0 && cls[(n - 1 - r) * n + c] > 0) { hit = 1; break; }   // grass next to a border
+                        flag[iy * segs + ix] = hit;
+                    }
+                }
+                const keep = new Uint8Array(segs * segs);   // one cell of margin: the fragment test fades the edge inside it
+                for (let iy = 0; iy < segs; iy++) for (let ix = 0; ix < segs; ix++) {
+                    if (!flag[iy * segs + ix]) continue;
+                    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                        const y = iy + dy, x = ix + dx;
+                        if (y >= 0 && y < segs && x >= 0 && x < segs) keep[y * segs + x] = 1;
+                    }
+                }
+                let cells = 0;
+                for (let i = 0; i < keep.length; i++) cells += keep[i];
+                const idx = new (src.constructor)(cells * 6);
+                let o = 0;
+                for (let k = 0; k < keep.length; k++) if (keep[k]) { for (let j = 0; j < 6; j++) idx[o++] = src[k * 6 + j]; }
+                const sg = new THREE.BufferGeometry();
+                for (const name in g.attributes) sg.setAttribute(name, g.attributes[name]);   // shared vertex data
+                sg.setIndex(new THREE.BufferAttribute(idx, 1));
+                this._stripGeo = sg;
+                this._stripCells = cells;
+            }
+            for (let s of this.shells) {
+                const interior = s.mat.uniforms.uInterior.value > 0.5;
+                s.mesh.geometry = (interior || !this._stripGeo) ? this.customGeo : this._stripGeo;
+            }
         }
 
         setBlades(on) {
@@ -750,6 +796,7 @@
                     out[(n - 1 - y) * n + x] = Math.round(255 * (1 - Math.min(v / width, 1)));
                 }
             }
+            this._edgeData = out; this._edgeN = n;
             const old = this._edgeTex;
             const tex = new THREE.DataTexture(out, n, n, THREE.RedFormat, THREE.UnsignedByteType);
             tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
@@ -758,6 +805,7 @@
             this._edgeTex = tex;
             for (let s of this.shells) if (s.mat && s.mat.uniforms.uEdgeMap) s.mat.uniforms.uEdgeMap.value = tex;
             if (old && old.dispose) old.dispose();
+            this._buildStrip();
             this._buildBlades();
         }
 
@@ -768,7 +816,7 @@
             for (let s of this.shells) {
                 if (s.mesh.visible) {
                     visible++;
-                    tris += segs * segs * 2;
+                    tris += s.mesh.geometry === this._stripGeo ? this._stripCells * 2 : segs * segs * 2;
                 }
             }
             return { total: this.shells.length, visible, extraTris: tris };
@@ -783,6 +831,7 @@
                 s.mat.dispose();
             }
             this.shells = [];
+            if (this._stripGeo) { this._stripGeo.dispose(); this._stripGeo = null; }
 
             this._buildBlades();   // the number of blades follows the quality
             let preset = QUALITY[this.quality];
@@ -817,6 +866,7 @@
                 this.scene.add(mesh);
                 this.shells.push({ layer, mesh, mat });
             }
+            this._buildStrip();
             console.log('[Shells] Built', this.shells.length,
                 'meshes (' + preset.layers + ' 3D layers) on master geo');
         }
@@ -834,7 +884,7 @@
                     uDeepH:    { value: this.deepHeight },
                     uSemiH:    { value: this.semiHeight },
                     uEdgeMap:  { value: this._edgeTex },
-                    uInteriorLayers: { value: preset.interior || 2 },
+                    uInterior: { value: this._isInteriorLayer(layer, total) ? 1 : 0 },
                     uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
                     uWindDir:  { value: new THREE.Vector2(1, 0) },
                     uWindStr:  { value: 0.3 },
