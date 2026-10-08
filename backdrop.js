@@ -35,6 +35,14 @@
     // so its width and depth are whatever the mesh happens to be. We therefore read the loaded mesh itself: the convex hull of
     // every vertex seen from above, in metres at scale 1. A placed figure is that hull * o.scale, turned the way the renderer turns it.
     // fpCache holds a hull per type; a type whose model has not loaded yet gets none, and the old rough circle is used meanwhile.
+    const EXT_DIRS = (function () {
+        const out = [];
+        for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+            if (x || y || z) { const l = Math.hypot(x, y, z); out.push([x / l, y / l, z / l]); }
+        }
+        for (let k = 0; k < 16; k++) out.push([Math.cos(k * Math.PI / 8), 0, Math.sin(k * Math.PI / 8)]);
+        return out;
+    })();
     const fpCache = {};
     const fpAsked = {};
     function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
@@ -54,19 +62,32 @@
         if (!model || model === 'LOADING' || !model.isObject3D) return null;
         model.updateWorldMatrix(true, true);
         const pts = [];   // [localX, localY, localZ, offsetX, offsetZ]
-        let total = 0;
+        let total = 0, reach = 0;
         model.traverse(function (m) { if (m.isMesh && m.geometry && m.geometry.attributes.position) total += m.geometry.attributes.position.count; });
-        const stride = Math.max(1, Math.ceil(total / 8000));   // a mountain can have a million vertices; the outline does not need them all
         model.traverse(function (m) {
             if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
-            const pos = m.geometry.attributes.position, e = m.matrixWorld.elements;
+            const pos = m.geometry.attributes.position, e = m.matrixWorld.elements, n = pos.count;
             const sx = Math.hypot(e[0], e[1], e[2]), sy = Math.hypot(e[4], e[5], e[6]), sz = Math.hypot(e[8], e[9], e[10]);
-            for (let i = 0; i < pos.count; i += stride) pts.push([pos.getX(i) * sx, pos.getY(i) * sy, pos.getZ(i) * sz, e[12], e[14]]);
+            const ox = e[12], oz = e[14];
+            // Vertex order is not spatial, so a plain stride can skip the very points that make the outline. Every sub-mesh gets its own
+            // share of the sample, and a pass over ALL its vertices keeps the extreme vertex in each of a fan of directions
+            // (the cube's 26 and a ring of horizontal ones) plus the one furthest from the mesh's own centre line.
+            const stride = Math.max(1, Math.ceil(n / Math.max(300, Math.round(8000 * n / Math.max(1, total)))));
+            for (let i = 0; i < n; i += stride) pts.push([pos.getX(i) * sx, pos.getY(i) * sy, pos.getZ(i) * sz, ox, oz]);
+            const best = new Float64Array(EXT_DIRS.length).fill(-Infinity), at = new Int32Array(EXT_DIRS.length);
+            let far = -1, farAt = 0;
+            for (let i = 0; i < n; i++) {
+                const x = pos.getX(i) * sx, y = pos.getY(i) * sy, z = pos.getZ(i) * sz;
+                for (let k = 0; k < EXT_DIRS.length; k++) { const d = EXT_DIRS[k], v = x * d[0] + y * d[1] + z * d[2]; if (v > best[k]) { best[k] = v; at[k] = i; } }
+                const r = x * x + z * z;
+                if (r > far) { far = r; farAt = i; }
+            }
+            for (let k = 0; k < EXT_DIRS.length; k++) if (best[k] > -Infinity) pts.push([pos.getX(at[k]) * sx, pos.getY(at[k]) * sy, pos.getZ(at[k]) * sz, ox, oz]);
+            pts.push([pos.getX(farAt) * sx, pos.getY(farAt) * sy, pos.getZ(farAt) * sz, ox, oz]);
+            reach = Math.max(reach, Math.hypot(ox, oz) + Math.sqrt(Math.max(0, far)));   // furthest a vertex gets from the centre, turned about Y
         });
         if (pts.length < 3) return null;
-        const fp = { pts: pts, model: model, sx: model.scale.x, cache: {}, reach: 0 };
-        // furthest a vertex can be from the centre when the figure is only turned about Y (what "Runt om hela" does)
-        pts.forEach(function (p) { fp.reach = Math.max(fp.reach, Math.hypot(p[3], p[4]) + Math.hypot(p[0], p[2])); });
+        const fp = { pts: pts, model: model, sx: model.scale.x, cache: {}, reach: reach };
         const flat = outlineFor(fp, 0, 0, 0);
         fp.w = flat.w; fp.d = flat.d;
         return fp;
@@ -94,7 +115,12 @@
         const fp = computeFootprint(type);
         if (fp) { fpCache[type] = fp; return fp; }
         // not loaded yet: ask for it once; the map redraws twice a second and picks it up
-        if (!fpAsked[type] && typeof root.loadAsset === 'function' && reg(type)) { fpAsked[type] = true; try { root.loadAsset(type); } catch (err) { /* stays a circle */ } }
+        // (a failed download leaves customModels[type] empty again, so ask again after a few seconds rather than never)
+        const now = Date.now();
+        if ((!fpAsked[type] || now - fpAsked[type] > 4000) && live !== 'LOADING' && typeof root.loadAsset === 'function' && reg(type)) {
+            fpAsked[type] = now;
+            try { root.loadAsset(type); } catch (err) { /* stays a circle */ }
+        }
         return null;
     }
     // Outline of a placed figure at scale 1, relative to its centre, turned the way rebuildInstancePool turns it (Euler YXZ)
