@@ -78,7 +78,7 @@
     // slices is built first, and only the points that fall outside it are added to the final hull.
     const SECTORS = 2048;
     function outlineFor(fp, rot, tilt, roll) {
-        const key = rot.toFixed(3) + '|' + tilt.toFixed(3) + '|' + roll.toFixed(3), hit = fp.cache.get(key);
+        const key = rot + '|' + tilt + '|' + roll, hit = fp.cache.get(key);   // exact angles: a rounded key would hand one figure another's outline
         if (hit) { fp.cache.delete(key); fp.cache.set(key, hit); return hit; }   // most recently used goes last
         const cz = Math.cos(roll), sz = Math.sin(roll), cx = Math.cos(tilt), sx = Math.sin(tilt), cy = Math.cos(rot), sy = Math.sin(rot);
         const out = [0, 0];
@@ -172,19 +172,21 @@
         }
         return inside;
     }
-    // Does the figure's base reach over the course plate? Exact for the convex outline (separating-axis test)
+    // Does the figure's base reach over the course plate? Exact and linear in the outline's corners: for a convex outline and a box, if they
+    // do not overlap there is a separating line along one of the box's sides or along one of the outline's edges (with the outline behind it)
     function coversPlate(o) {
         const half = plateHalf(), poly = outlineOf(o);
         if (!poly) return Math.hypot(Math.max(0, Math.abs(o.x) - half), Math.max(0, Math.abs(o.z) - half)) < radiusOf(o);
-        const axes = [[1, 0], [0, 1]];
-        for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; axes.push([-(b[1] - a[1]), b[0] - a[0]]); }
-        const corners = [[-half, -half], [half, -half], [half, half], [-half, half]];
-        return axes.every(function (ax) {
-            let p0 = Infinity, p1 = -Infinity, r0 = Infinity, r1 = -Infinity;
-            poly.forEach(function (p) { const d = p[0] * ax[0] + p[1] * ax[1]; p0 = Math.min(p0, d); p1 = Math.max(p1, d); });
-            corners.forEach(function (p) { const d = p[0] * ax[0] + p[1] * ax[1]; r0 = Math.min(r0, d); r1 = Math.max(r1, d); });
-            return p1 > r0 && r1 > p0;
-        });
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        poly.forEach(function (p) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); });
+        if (x0 >= half || x1 <= -half || z0 >= half || z1 <= -half) return false;
+        // the hull runs counter-clockwise, so an edge a->b has its outside on the (dz, -dx) side; the plate (centred on 0) lies fully beyond
+        // that edge when its smallest value along the normal, -half * (|nx| + |nz|), is at least the edge's own
+        for (let i = 0; i < poly.length; i++) {
+            const a = poly[i], b = poly[(i + 1) % poly.length], nx = b[1] - a[1], nz = -(b[0] - a[0]);
+            if (-half * (Math.abs(nx) + Math.abs(nz)) >= a[0] * nx + a[1] * nz) return false;
+        }
+        return true;
     }
 
     // ---- fog: far figures must stay visible at dawn and dusk -------------------------------------------
