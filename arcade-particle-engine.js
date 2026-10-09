@@ -142,7 +142,12 @@
     // ---------------------------------------------------------------
     const WEATHER_PARTICLES = {
         CLEAR: null,  // No weather particles
-        OVERCAST: null,  // Just dimmer light, no particles
+        OVERCAST: {      // no particles: a little haze and dimmer light (null would be the same as CLEAR)
+            type: null,
+            label: '☁️ Overcast',
+            fogMultiplier: 1.1,
+            lightDimming: 0.85
+        },
         RAIN: {
             type: 'streak',
             colors: [[0.6, 0.7, 0.85], [0.5, 0.6, 0.8], [0.55, 0.65, 0.82]],
@@ -338,6 +343,8 @@
         }
 
         let preset = BIOME_PARTICLES[biomeKey.toUpperCase()];
+        // DESERT_AUTUMN and DESERT_WINTER are desert seasons: sand dust, not the leaves or snow the name match below would pick
+        if (!preset && biomeKey.toUpperCase().indexOf('DESERT') === 0) preset = BIOME_PARTICLES.DESERT;
         if (!preset) {
             let key = Object.keys(BIOME_PARTICLES).find(k => biomeKey.toUpperCase().includes(k));
             if (key) preset = BIOME_PARTICLES[key];
