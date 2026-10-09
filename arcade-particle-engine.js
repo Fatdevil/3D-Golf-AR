@@ -422,13 +422,20 @@
 
         // Apply light dimming (ambient)
         if (weatherPreset.lightDimming && window.G && window.G.scene) {
-            window.G.scene.traverse(obj => {
-                if (obj.isAmbientLight) {
-                    // Store original if not stored
-                    if (obj._originalIntensity === undefined) obj._originalIntensity = obj.intensity;
-                    obj.intensity = obj._originalIntensity * weatherPreset.lightDimming;
-                }
-            });
+            // the time of day sets the undimmed light of the current hour again: the dimming starts from that, not from an
+            // intensity remembered from another hour (a noon value would brighten a night scene)
+            if (typeof window.setTimeOfDay === 'function' && window.currentTimeOfDay !== undefined) {
+                window.setTimeOfDay(window.currentTimeOfDay);
+                window.G.scene.traverse(obj => { if (obj.isAmbientLight) obj.intensity *= weatherPreset.lightDimming; });
+            } else {
+                window.G.scene.traverse(obj => {
+                    if (obj.isAmbientLight) {
+                        // Store original if not stored
+                        if (obj._originalIntensity === undefined) obj._originalIntensity = obj.intensity;
+                        obj.intensity = obj._originalIntensity * weatherPreset.lightDimming;
+                    }
+                });
+            }
         }
     }
 

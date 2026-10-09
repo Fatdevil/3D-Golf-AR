@@ -1218,11 +1218,15 @@ function serve() {
       window.ParticleEngine.setWeather('CLEAR'); const fogClear = scene.fog.near, ambClear = amb();
       window.ParticleEngine.setWeather('OVERCAST'); const fogOver = scene.fog.near, ambOver = amb();
       const w = window.ParticleEngine.getWeather();
-      window.ParticleEngine.setWeather('CLEAR');
+      // the dimming starts from the light of the current hour, not from one remembered from another hour (noon light on a night scene)
+      window.setTimeOfDay(12); window.ParticleEngine.setWeather('OVERCAST');
+      window.setTimeOfDay(0); window.ParticleEngine.setWeather('CLEAR'); const night = amb();
+      window.ParticleEngine.setWeather('OVERCAST'); const nightOver = amb();
+      window.setTimeOfDay(12); window.ParticleEngine.setWeather('CLEAR');
       console.log = lg;
-      return { seasons: seasons, w: w, hazier: fogOver < fogClear, dimmer: ambOver < ambClear, fogClear: +fogClear.toFixed(1), fogOver: +fogOver.toFixed(1), ambClear: +ambClear.toFixed(2), ambOver: +ambOver.toFixed(2) };
+      return { seasons: seasons, w: w, nightOk: Math.abs(nightOver - night * 0.85) < 0.01, night: +night.toFixed(3), nightOver: +nightOver.toFixed(3), hazier: fogOver < fogClear, dimmer: ambOver < ambClear, fogClear: +fogClear.toFixed(1), fogOver: +fogOver.toFixed(1), ambClear: +ambClear.toFixed(2), ambOver: +ambOver.toFixed(2) };
     });
-    checks.push({ name: 'seasons and weather: the desert seasons get sand dust (not leaves or snow), autumn and winter keep theirs, and overcast is hazier and dimmer than clear', ok: /Sand/.test(sw.seasons.DESERT) && /Sand/.test(sw.seasons.DESERT_AUTUMN) && /Sand/.test(sw.seasons.DESERT_WINTER) && /Snow/.test(sw.seasons.WINTER) && sw.seasons.AUTUMN === 'none' && sw.w === 'OVERCAST' && sw.hazier && sw.dimmer, detail: JSON.stringify(sw) });
+    checks.push({ name: 'seasons and weather: the desert seasons get sand dust (not leaves or snow), autumn and winter keep theirs, and overcast is hazier and dimmer than clear, at night too', ok: /Sand/.test(sw.seasons.DESERT) && /Sand/.test(sw.seasons.DESERT_AUTUMN) && /Sand/.test(sw.seasons.DESERT_WINTER) && /Snow/.test(sw.seasons.WINTER) && sw.seasons.AUTUMN === 'none' && sw.w === 'OVERCAST' && sw.hazier && sw.dimmer && sw.nightOk, detail: JSON.stringify(sw) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
