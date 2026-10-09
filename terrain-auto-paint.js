@@ -142,7 +142,7 @@
         // ── Read terrain colors from BIOME CONFIG (not presets!) ─────────────
         // This ensures recolorTerrain can correctly remap these pixels on biome switch
         const biome = window.CURRENT_BIOME_CONFIG;
-        const grassHex = (biome && biome.roughColor) || '#4a782b';
+        const grassHex = (biome && biome.roughColor) || '#4c7d32';
         const grassRGB = hexToRGB(grassHex);
         const semiRGB  = (biome && biome.semiColor) ? hexToRGB(biome.semiColor) : null; // BUG-3 FIX: pre-compute outside loop
         const protectThreshold = options.protectThreshold || 3500; // color dist² max

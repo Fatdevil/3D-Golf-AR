@@ -398,7 +398,7 @@
             if (!biome) return true;
 
             let cfg = window.CURRENT_BIOME_CONFIG || {};
-            let gh = cfg.greenColor || '#98ce68', fh = cfg.foregreenColor || '#8bc45d';
+            let gh = cfg.greenColor || '#8acf72', fh = cfg.foregreenColor || '#9acb67';
             let gR = parseInt(gh.slice(1,3),16), gG = parseInt(gh.slice(3,5),16), gB = parseInt(gh.slice(5,7),16);
             let fR = parseInt(fh.slice(1,3),16), fG = parseInt(fh.slice(3,5),16), fB = parseInt(fh.slice(5,7),16);
 

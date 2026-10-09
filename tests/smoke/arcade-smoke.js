@@ -97,7 +97,9 @@ function serve() {
     function check(name, ok, detail) { out.push({ name: name, ok: !!ok, detail: detail || '' }); }
     window.confirm = function () { return true; };
     setMode('TEST'); window.GREEN_STIMP = 10;
-    const d = window.terrainBiomeData; for (let i = 0; i < d.length; i += 4) { d[i] = 152; d[i + 1] = 206; d[i + 2] = 104; }
+    // the whole map is putting green, in the green of the active palette (not a fixed colour: the palette changes)
+    const gc = window.CURRENT_BIOME_CONFIG.greenColor, gr = parseInt(gc.slice(1, 3), 16), gg = parseInt(gc.slice(3, 5), 16), gb = parseInt(gc.slice(5, 7), 16);
+    const d = window.terrainBiomeData; for (let i = 0; i < d.length; i += 4) { d[i] = gr; d[i + 1] = gg; d[i + 2] = gb; }
     const pos = planeGeo.attributes.position.array; for (let i = 0; i < planeGeo.attributes.position.count; i++) pos[i * 3 + 2] = 0;
     const h = courseHoles[0]; h.flag = { x: 0, z: -8 };
     if (!h.flagMesh) { h.flagMesh = new THREE.Object3D(); scene.add(h.flagMesh); }

@@ -216,7 +216,7 @@
 
         // Base ground color re-fill based on biome
         if (window.pCtx && window.CURRENT_BIOME_CONFIG) {
-            let baseColor = window.CURRENT_BIOME_CONFIG.fescueColor || '#2d4c1a';
+            let baseColor = window.CURRENT_BIOME_CONFIG.fescueColor || '#315b2b';
             if (biome === 'DESERT') baseColor = window.CURRENT_BIOME_CONFIG.wasteColor || '#c2853a';
             else if (biome === 'MOON') baseColor = window.CURRENT_BIOME_CONFIG.roughColor || '#334155';
             
@@ -344,7 +344,7 @@
             }, -0.5);
 
             let waterColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.waterColor) || '#38bdf8';
-            let greenColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.greenColor) || '#98ce68';
+            let greenColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.greenColor) || '#8acf72';
             let bunkerColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.bunkerColor) || '#e0d8a4';
             drawCanvasFeature(cx, cy, outerR, outerR, waterColor);
             drawCanvasFeature(cx, cy, innerR * 1.15, innerR * 1.15, bunkerColor);
@@ -473,7 +473,7 @@
                 }
                 pos.setZ(i, z);
             }
-            drawCanvasFeature(gx, gy, pr * 0.7, pr * 0.7, (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.greenColor) || '#98ce68');
+            drawCanvasFeature(gx, gy, pr * 0.7, pr * 0.7, (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.greenColor) || '#8acf72');
         }
 
         // 12. Stadium Bowl Fairway
@@ -516,7 +516,7 @@
 
             let waterColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.waterColor) || '#38bdf8';
             drawCanvasFeature(0, 150, 260, 140, waterColor);
-            drawCanvasFeature(0, 70, 34, 65, (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.fairwayColor) || '#7db952');
+            drawCanvasFeature(0, 70, 34, 65, (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.fairwayColor) || '#79b84f');
         }
 
         // 14. Ridge Spine Runner
