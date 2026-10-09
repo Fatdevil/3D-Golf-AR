@@ -1227,6 +1227,17 @@ function serve() {
       return { seasons: seasons, w: w, nightOk: Math.abs(nightOver - night * 0.85) < 0.01, night: +night.toFixed(3), nightOver: +nightOver.toFixed(3), hazier: fogOver < fogClear, dimmer: ambOver < ambClear, fogClear: +fogClear.toFixed(1), fogOver: +fogOver.toFixed(1), ambClear: +ambClear.toFixed(2), ambOver: +ambOver.toFixed(2) };
     });
     checks.push({ name: 'seasons and weather: the desert seasons get sand dust (not leaves or snow), autumn and winter keep theirs, and overcast is hazier and dimmer than clear, at night too', ok: /Sand/.test(sw.seasons.DESERT) && /Sand/.test(sw.seasons.DESERT_AUTUMN) && /Sand/.test(sw.seasons.DESERT_WINTER) && /Snow/.test(sw.seasons.WINTER) && sw.seasons.AUTUMN === 'none' && sw.w === 'OVERCAST' && sw.hazier && sw.dimmer && sw.nightOk, detail: JSON.stringify(sw) });
+    // the daylight is a little yellow in the summer worlds (the greens read fresher), white in winter, and the night keeps its blue light
+    const sun = await pp.evaluate(function () {
+      const d = window.G.dirLight.color, col = function () { return [+d.r.toFixed(3), +d.g.toFixed(3), +d.b.toFixed(3)]; };
+      window.changeBiome('GLOBAL'); window.setTimeOfDay(12); const summer = col();
+      window.changeBiome('WINTER'); const winter = col();   // a biome change moves the warmth by itself
+      window.changeBiome('GLOBAL'); const back = col();
+      window.setTimeOfDay(0); const night = col();
+      window.setTimeOfDay(12);
+      return { summer: summer, winter: winter, back: back, night: night };
+    });
+    checks.push({ name: 'warm sun: yellow noon light in the summer world, white in winter, back again with the biome, blue night light kept', ok: sun.summer[0] === 1 && sun.summer[1] < 0.97 && sun.summer[2] < sun.summer[1] - 0.1 && sun.winter.every(function (v) { return v > 0.999; }) && sun.back.join() === sun.summer.join() && sun.night[2] > sun.night[0] + 0.3, detail: JSON.stringify(sun) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 

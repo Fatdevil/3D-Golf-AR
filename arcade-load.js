@@ -1029,6 +1029,7 @@
                         window.CURRENT_BIOME_CONFIG = td.config;
                         if(td.biomeId) {
                             window.ACTIVE_BIOME = td.biomeId;
+                            if (typeof window.refreshSunLight === 'function') window.refreshSunLight();
                             let select = document.getElementById('biome-select');
                             if(select) select.value = td.biomeId;
                         }
