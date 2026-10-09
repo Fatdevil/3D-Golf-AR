@@ -1178,6 +1178,16 @@ function serve() {
     });
     checks.push({ name: 'sculpt: the 3D grass follows the ground during the stroke (not only on release)', ok: live.during > live.before + 2.5 && Math.abs(live.during - live.ground) < 0.3 && live.farRise > 1, detail: JSON.stringify(live) });
     checks.push({ name: 'grass texture on the deep rough: off by default, loads and reaches all shells when switched on, switches off again', ok: gt.defaultOff && gt.on && gt.second && gt.backToFirst && gt.liftLive && gt.liftKept && gt.off && gt.w === 1024 && gt.errs.length === 0, detail: JSON.stringify(gt) });
+    // rebuilding the edge strip must not make the renderer delete the vertex buffers it shares with the full-grid shells
+    // (the grass then stopped following the sculpted ground after a page reload)
+    const sd = await pp.evaluate(async function () {
+      const sh = window._terrainShells; sh.setEdgeWeighted(true);
+      const old = sh._stripGeo; if (!old) return { hadStrip: false };
+      let attrsAtDispose = -1; old.addEventListener('dispose', function () { attrsAtDispose = Object.keys(old.attributes).length; });
+      sh._buildStrip();
+      return { hadStrip: true, attrsAtDispose: attrsAtDispose, replaced: sh._stripGeo !== old, newStripOk: !!sh._stripGeo && sh._stripGeo.attributes.position === sh.customGeo.attributes.position };
+    });
+    checks.push({ name: 'edge strip: rebuilding it does not dispose the vertex buffers shared with the full-grid shells', ok: sd.hadStrip && sd.attrsAtDispose === 0 && sd.replaced && sd.newStripOk, detail: JSON.stringify(sd) });
     // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };

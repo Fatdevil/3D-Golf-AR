@@ -767,10 +767,22 @@
             return 1e4;
         }
 
+        // The strip shares its vertex attributes with customGeo. Disposing a geometry makes the renderer delete the GPU buffers of
+        // all its attributes, so disposing the strip as it is would delete customGeo's position buffer under the full-grid meshes:
+        // their vertex arrays kept pointing at the old buffer, and the grass stopped following any later sculpting. Only the strip's
+        // own index may be freed.
+        _disposeStrip() {
+            const sg = this._stripGeo;
+            if (!sg) return;
+            for (const name of Object.keys(sg.attributes)) sg.deleteAttribute(name);
+            sg.dispose();
+            this._stripGeo = null;
+        }
+
         // The upper shells only need geometry where the border is: a second index buffer over the same vertices, with just
         // the grid cells at (or next to) a border. The lowest shells keep the whole grid. Fewer triangles, not just fewer pixels.
         _buildStrip() {
-            if (this._stripGeo) { this._stripGeo.dispose(); this._stripGeo = null; }
+            this._disposeStrip();
             const g = this.customGeo, data = this._edgeData, cls = this._cls;
             if (g && this.edgeWeighted && data && cls) {
                 const segs = g.parameters.widthSegments, n = this._edgeN, src = g.index.array;
@@ -1036,7 +1048,7 @@
                 s.mat.dispose();
             }
             this.shells = [];
-            if (this._stripGeo) { this._stripGeo.dispose(); this._stripGeo = null; }
+            this._disposeStrip();
 
             this._scheduleBladeBuild();   // the number of blades follows the quality
             let preset = QUALITY[this.quality];
