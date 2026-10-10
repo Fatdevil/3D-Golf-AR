@@ -28,6 +28,13 @@ window.GolfPhysics = (function() {
         return 0.056 * (10.0 / s);
     }
 
+    // Rullfriktionens mu för underlaget bollen rullar på: stimp-formeln på green, annars den inkodade rullbromsen (rollingDecel / g).
+    function rollMu(state) {
+        if (state.terrainType === 'GREEN' && typeof window !== 'undefined' && window.GREEN_STIMP) return greenMu(window.GREEN_STIMP);
+        let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
+        return currentDecel / 9.81;
+    }
+
     // En nästan horisontell markträff är en putt (eller en boll som redan rullar): putterns loft och slagets friktion ger bollen
     // framåtrullande spinn direkt, så den börjar rulla utan studs, spin-bite och glidfas. Annars förlorar en putt ca hälften av sin sträcka.
     // Måttet är farten rakt in i marken, inte infallsvinkeln: en långsam putt faller någon centimeter och får en brant vinkel ändå.
@@ -37,6 +44,12 @@ window.GolfPhysics = (function() {
     // vanlig studs- och spinnfysik.
     const PUTT_MAX_LAUNCH_DEG = 4;
     const PUTT_MAX_SPIN_RPM = 800;
+
+    // Spin-bite (se markstudsen) kan aldrig ta mer fart av bollen än friktionen hinner under själva nedslaget: farten längs marken ändras högst
+    // BITE_FRICTION_MU * (1 + studskoefficient) * farten rakt in i marken (Coulomb, glidande kontakt). Utan taket vänder en lågfartschip med
+    // fullt wedgespinn (t.ex. 10-20 % kraft med lobwedge) och rullar flera meter bakåt förbi startpunkten. Ett fullslag glider inte på
+    // samma sätt (farten in i marken är så hög att taket aldrig nås), så det är orört.
+    const BITE_FRICTION_MU = 0.40;
 
     // Hjälpfunktioner för miljö och vektorer
     function calculateAirDensity(altFeet, tempC) {
@@ -138,16 +151,8 @@ window.GolfPhysics = (function() {
             let normalForceMag = Math.abs(gDotN); // m/s^2 trycket mot marken
             
             // Rullfriktion härleds antingen från statisk kod (Fairway/Rough) eller dynamisk Stimp (Green)
-            let mu = 0.5; // Standard/Fallback
-            if (state.terrainType === 'GREEN' && typeof window !== 'undefined' && window.GREEN_STIMP) {
-                // Werner & Greig empirisk ekvation + USGA Fysik korrektion (a = mu * g)
-                // Stimp 10 (feet) kräver acceleration på ~0.55m/s^2, vilket ger mu = 0.056
-                mu = greenMu(window.GREEN_STIMP); // Spot-on Trackman/USGA matematik
-            } else {
-                // Omvandla den inkodade rullbromsen (rollingDecel) tillbaka till ett mu-värde för kompatibilitet.
-                let currentDecel = state.rollingDecel !== undefined ? state.rollingDecel : GROUND.rollingDecel;
-                mu = currentDecel / 9.81;
-            }
+            // Werner & Greig på green (stimp 10 kräver acceleration på ~0.55 m/s^2, mu = 0.056), annars den inkodade rullbromsen.
+            let mu = rollMu(state);
 
             let spinTractionMag = 0;
 
@@ -860,6 +865,13 @@ window.GolfPhysics = (function() {
                     // Energi överförs mellan translation (spinoff) och rotation (bite)
                     let deltaVY = rollsAtOnce ? 0 : -(vContactY) / 3.5 * GRIP;
                     let deltaVX = rollsAtOnce ? 0 : -(vContactX) / 3.5 * GRIP;
+                    let biteMag = Math.sqrt(deltaVX * deltaVX + deltaVY * deltaVY);
+                    let biteMax = BITE_FRICTION_MU * (1 + cRestitution) * Math.abs(vDotN);
+                    if (biteMag > biteMax) {
+                        let biteScale = biteMax / biteMag;
+                        deltaVY *= biteScale;
+                        deltaVX *= biteScale;
+                    }
 
                     bounceVel[1] += deltaVY;
                     bounceVel[0] += deltaVX;
@@ -965,8 +977,15 @@ window.GolfPhysics = (function() {
                 }
 
                 if (speedXY < GROUND.stopSpeed) {
-                    state.phase = "stopped";
-                    state.vel = [0, 0, 0];
+                    // Bollen blir bara liggande om rullmotståndet håller emot lutningen. På en lutning som är brantare än mu (green: ca 5,6 % vid
+                    // stimp 10) vänder den i stället och rullar tillbaka, i stället för att fastna i vändpunkten när farten passerar noll.
+                    let N = freshT.normal;
+                    let gNormal = Math.abs(GRAVITY) * N[2];   // tyngdens del mot underlaget
+                    let gAlongSlope = vecMag([gNormal * N[0], gNormal * N[1], gNormal * N[2] + GRAVITY]);   // g minus normaldelen = ner längs lutningen
+                    if (gAlongSlope <= rollMu(state) * gNormal) {
+                        state.phase = "stopped";
+                        state.vel = [0, 0, 0];
+                    }
                 }
             }
 
@@ -981,10 +1000,19 @@ window.GolfPhysics = (function() {
                 let dY = state.pos[1] - envCtx.cupPositionLocal[1];
                 let distToCenter = Math.sqrt(dX*dX + dY*dY);
 
+                // Bollen ska bara bedömas en gång per inträde i koppens radie: en boll som passerar mitten för snabbt för att fångas och sedan
+                // saktar in får inte fångas på utgångskanten (den lämnar koppen vågrätt, fångas om och fastnar). Flaggan nollas när den lämnat radien.
+                if (distToCenter >= 0.054) state.cupEntryJudged = false;
+
                 // Är vi i närheten av koppen ovanifrån (margin of error för hopp)
-                if (state.pos[2] <= (tInfo.z + 0.08) && !isBelowGround && distToCenter < 0.054) {
+                if (state.pos[2] <= (tInfo.z + 0.08) && !isBelowGround && distToCenter < 0.054 && !state.cupEntryJudged) {
+                    state.cupEntryJudged = true;
                     let speedXY = vecMag([state.vel[0], state.vel[1], 0]);
-                    let offsetFactor = distToCenter / 0.054; 
+                    // Hur nära mitten bollen går avgörs av färdlinjens avstånd till hålets mitt, inte av avståndet just när bollen upptäcks:
+                    // en rullande boll upptäcks första gången alltid vid kanten (avstånd ca 0,054), även om den går rakt mot mitten.
+                    let lineOffset = distToCenter;
+                    if (speedXY > 0.05) lineOffset = Math.abs(dX * state.vel[1] - dY * state.vel[0]) / speedXY;
+                    let offsetFactor = Math.min(1, lineOffset / 0.054);
                     
                     let captureThreshold = 1.63 - (offsetFactor * 0.7); 
                     
