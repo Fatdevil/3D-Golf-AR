@@ -113,5 +113,21 @@ function putt(arrivalMs, offset) {                   // cup 3 m bort; farten vid
   check('2,2 m/s hålar aldrig', !putt(2.2, 0) && !putt(2.2, 0.03));
 }
 
+console.log('\nHålning: ingen putt fastnar vid koppen (en boll som passerat mitten fångas inte om på utgångskanten)');
+{
+  const a = G.greenMu(10) * 9.81;
+  let stuck = [], total = 0;
+  for (const arrival of [0.8, 1.0, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.0, 2.4]) {
+    for (const off of [0, 0.01, 0.02, 0.03, 0.05, 0.07]) {
+      const v0 = Math.sqrt(arrival * arrival + 2 * a * 3);
+      const r = sim({ startPos: [0, 0, 0.022], ballSpeedMph: v0 / 0.44704, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: 0 }, greenEnv(0, [off, 3, 0]));
+      const f = r.path[r.path.length - 1];
+      total++;
+      if (f.time >= 24.9 || (f.phase !== 'stopped' && f.phase !== 'holed')) stuck.push(arrival + ' m/s, ' + off * 100 + ' cm (fas ' + f.phase + ', ' + f.time.toFixed(1) + ' s)');
+    }
+  }
+  check('alla ' + total + ' puttar över hålet slutar i stopped/holed före tidsgränsen', stuck.length === 0, stuck.length ? '(fastnade: ' + stuck.join('; ') + ')' : '');
+}
+
 console.log(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
 process.exit(failed ? 1 : 0);

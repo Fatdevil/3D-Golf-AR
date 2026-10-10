@@ -1000,8 +1000,13 @@ window.GolfPhysics = (function() {
                 let dY = state.pos[1] - envCtx.cupPositionLocal[1];
                 let distToCenter = Math.sqrt(dX*dX + dY*dY);
 
+                // Bollen ska bara bedömas en gång per inträde i koppens radie: en boll som passerar mitten för snabbt för att fångas och sedan
+                // saktar in får inte fångas på utgångskanten (den lämnar koppen vågrätt, fångas om och fastnar). Flaggan nollas när den lämnat radien.
+                if (distToCenter >= 0.054) state.cupEntryJudged = false;
+
                 // Är vi i närheten av koppen ovanifrån (margin of error för hopp)
-                if (state.pos[2] <= (tInfo.z + 0.08) && !isBelowGround && distToCenter < 0.054) {
+                if (state.pos[2] <= (tInfo.z + 0.08) && !isBelowGround && distToCenter < 0.054 && !state.cupEntryJudged) {
+                    state.cupEntryJudged = true;
                     let speedXY = vecMag([state.vel[0], state.vel[1], 0]);
                     // Hur nära mitten bollen går avgörs av färdlinjens avstånd till hålets mitt, inte av avståndet just när bollen upptäcks:
                     // en rullande boll upptäcks första gången alltid vid kanten (avstånd ca 0,054), även om den går rakt mot mitten.
