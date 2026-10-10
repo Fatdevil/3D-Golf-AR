@@ -31,6 +31,9 @@ const SwingEngine = (function() {
         PUTT:   { maxSpeed:  22, baseLaunchAngle:  1.5, baseSpin:   300, maxSpread:  3, name: 'Putter',  icon: '🥅' },
     };
 
+    // Andel av klubbens spinn som finns kvar vid 0 % kraft (spinn = baseSpin * (denna + (1 - denna) * kraft))
+    const SPIN_AT_ZERO_POWER = 0.2;
+
     // SVG constants — circumference of r=100 ring
     const CIRC = 2 * Math.PI * 100; // 628.32
 
@@ -148,7 +151,9 @@ const SwingEngine = (function() {
 
         // All other clubs
         const speedMph = club.maxSpeed * effectivePower;
-        const spinMult = 0.7 + 0.3 * effectivePower;
+        // Spinnet följer klubbhuvudets fart: full kraft ger klubbens fulla spinn, en chip på 10-20 % ca en fjärdedel till en tredjedel.
+        // Förut gav 10 % kraft ändå 73 % av spinnet (7900 rpm på en 10 mph-chip), långt mer än farten kan ge.
+        const spinMult = SPIN_AT_ZERO_POWER + (1 - SPIN_AT_ZERO_POWER) * effectivePower;
         const spinRpm  = club.baseSpin * spinMult;
 
         const vlaOffset = (Math.abs(effectivePower - 0.85) > 0.2) ? -1.5 : 0;
@@ -446,7 +451,7 @@ const SwingEngine = (function() {
     // Public API
     // -----------------------------------------------------------
     return { onTap, selectClub, enableSwingMode, disableSwingMode,
-             updateSwingInfoBar, autoSelectClub, CLUB_PROFILES };
+             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, CLUB_PROFILES };
 })();
 
 // Expose for devtools access

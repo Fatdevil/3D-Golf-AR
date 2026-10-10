@@ -1,6 +1,6 @@
 /**
  * Inspel, chippar och puttar på greenen (physics.js only, no browser).
- * Chipparna har spelets egna ingångsvärden (arcade-swing-engine: klubbornas toppfart, loft och spinn skalas med kraften).
+ * Chipparna har spelets egna ingångsvärden: de kommer från arcade-swing-engine.js (tests/load_swing_engine.js).
  * Run: node tests/test_green_shots.js
  */
 global.window = { GREEN_STIMP: 10, matchSettings: { greenFirmness: 'NORMAL' } };
@@ -19,12 +19,11 @@ function greenEnv(slope, cup) {
   if (cup) env.cupPositionLocal = cup;
   return env;
 }
-// spelets kraft -> slag (samma formler som mapCircleToPhysics)
-const CLUBS = { LW: [72, 36, 10800], SW: [85, 32, 10200], PW: [103, 26, 9300] };
+// spelets kraft -> slag: swing-motorns egen mappning (rakt mot måls mitt, inget slumpbrus)
+const SWING = require('./load_swing_engine.js')();
 function gameShot(club, power) {
-  const c = CLUBS[club];
-  return { ballSpeedMph: Math.max(c[0] * power, 10), launchAngleDeg: c[1] + (Math.abs(power - 0.85) > 0.2 ? -1.5 : 0),
-           totalSpinRpm: c[2] * (0.7 + 0.3 * power), spinAxisDeg: 0, azimDeg: 0, startPos: [0, 0, 0], isLiveData: false };
+  const d = SWING.mapCircleToPhysics(power, 0, club, 0);
+  return Object.assign({}, d, { startPos: [0, 0, 0] });
 }
 function chip(club, power, firmness, slope) {
   window.matchSettings.greenFirmness = firmness || 'NORMAL';
@@ -62,11 +61,11 @@ for (const firm of ['SOFT', 'NORMAL', 'FIRM']) {
 
 console.log('\nGreenens hårdhet: hårdare green ger längre utrullning');
 {
-  const soft = chip('PW', 0.55, 'SOFT'), norm = chip('PW', 0.55, 'NORMAL'), firm = chip('PW', 0.55, 'FIRM');
+  const soft = chip('SW', 0.7, 'SOFT'), norm = chip('SW', 0.7, 'NORMAL'), firm = chip('SW', 0.7, 'FIRM');
   const roll = r => r.end - r.carry;
-  check('PW 55 %: SOFT < NORMAL < FIRM i utrullning', roll(soft) < roll(norm) && roll(norm) < roll(firm),
+  check('SW 70 %: SOFT < NORMAL < FIRM i utrullning', roll(soft) < roll(norm) && roll(norm) < roll(firm),
         '(' + roll(soft).toFixed(1) + ' < ' + roll(norm).toFixed(1) + ' < ' + roll(firm).toFixed(1) + ' m)');
-  check('PW 55 % NORMAL rullar framåt (1-15 m)', roll(norm) > 1 && roll(norm) < 15);
+  check('SW 70 % NORMAL rullar framåt 1-8 m', roll(norm) > 1 && roll(norm) < 8, '(' + roll(norm).toFixed(1) + ' m)');
 }
 
 console.log('\nFullslag med mycket spinn: backspinn bromsar, men bara någon meter');
