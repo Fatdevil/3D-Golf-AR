@@ -54,8 +54,9 @@
     if (dv.getUint32(0, true) !== 0x46546C67) throw new Error('Inte en GLB-fil (saknar "glTF" i början). Är det en .gltf eller en annan filtyp?');
     var version = dv.getUint32(4, true), total = dv.getUint32(8, true);
     if (version !== 2) throw new Error('GLB version ' + version + ' stöds inte (bara 2).');
+    if (total < 20 || total > bytes.byteLength) throw new Error('GLB-filen är trasig (rubriken säger ' + total + ' byte men filen har ' + bytes.byteLength + ').');
     var off = 12, json = null, bin = null;
-    while (off + 8 <= bytes.byteLength) {
+    while (off + 8 <= total) {
       var len = dv.getUint32(off, true), type = dv.getUint32(off + 4, true), start = off + 8;
       if (start + len > bytes.byteLength) throw new Error('GLB-filen är trasig (en bit är längre än filen).');
       if (type === 0x4E4F534A && !json) json = JSON.parse(utf8(bytes.subarray(start, start + len)));
@@ -63,6 +64,7 @@
       off = start + len + ((4 - (len % 4)) % 4);
     }
     if (!json) throw new Error('GLB-filen har ingen JSON-del.');
+    if (!json.asset || String(json.asset.version || '0')[0] < '2') throw new Error('glTF-versionen i JSON-delen saknas eller är under 2.0 (spelets laddare avvisar den).');
     return { json: json, bin: bin, bytes: bytes, declaredLength: total };
   }
 
@@ -114,6 +116,7 @@
     var CS = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 }, TN = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16 };
     function bad(msg) { if (out.length < 5) out.push(msg); else if (out.length === 5) out.push('...'); }
     buffers.forEach(function (b, i) {
+      if (typeof b.uri === 'string' && b.uri.indexOf('data:') !== 0) bad('buffer ' + i + ' ligger i en extern fil (' + b.uri.slice(0, 40) + ')');
       if (b.uri === undefined && i === 0 && (!bin || bin.length < b.byteLength)) bad('buffer ' + i + ' är ' + b.byteLength + ' byte enligt JSON men binärdelen har ' + (bin ? bin.length : 0));
     });
     views.forEach(function (v, i) {
@@ -347,7 +350,10 @@
     try { parsed = parseGlb(buffer); } catch (e) {
       return Promise.resolve({ kind: kind, verdict: 'fail', loadable: false, facts: null, checks: [{ id: 'format', level: 'fail', message: e.message }] });
     }
-    var f = measure(parsed);
+    var f;
+    try { f = measure(parsed); } catch (e) {
+      return Promise.resolve({ kind: kind, verdict: 'fail', loadable: false, facts: null, checks: [{ id: 'format', level: 'fail', message: 'Filens JSON är felaktigt uppbyggd (' + e.message + ').' }] });
+    }
     var imagesToSample = f.images.filter(function (im) { return im.used && im.roles.indexOf('base') >= 0 && im.data; });
     var colourPromise;
     if (opts.sampleImage && imagesToSample.length) {

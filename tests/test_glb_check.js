@@ -66,6 +66,19 @@ function makeGlb(o) {
     r = await run({ tris: 600, json: { meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }, { attributes: { POSITION: 0 }, indices: 1, material: 0 }, { attributes: { POSITION: 0 }, indices: 1, material: 0 }] }] } }, { kind: 'plant' });
     check('each primitive counts as a draw call', r.facts.meshes === 3, String(r.facts.meshes));
 
+    r = await run({ tris: 600, json: { buffers: [{ byteLength: 12, uri: 'foo.bin' }] } }, { kind: 'plant' });
+    check('external buffer file is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
+
+    const lie = makeGlb({ tris: 600 }); lie.writeUInt32LE(lie.length + 1000, 8);
+    r = await G.check(lie, { kind: 'plant' });
+    check('header length beyond the file fails', r.verdict === 'fail' && !r.loadable, r.verdict);
+
+    r = await run({ tris: 600, json: { asset: { version: '1.0' } } }, { kind: 'plant' });
+    check('glTF 1.0 JSON fails', r.verdict === 'fail' && !r.loadable, r.verdict);
+
+    r = await run({ tris: 600, json: { meshes: [{}] } }, { kind: 'plant' });
+    check('malformed JSON structure is a fail, not an exception', r.verdict === 'fail' && !r.loadable, r.verdict);
+
     r = await G.check(makeGlb({ tris: 100 }).subarray(0, 40), {});
     check('truncated file is a fail, not a crash', r.verdict === 'fail', r.verdict);
 

@@ -744,19 +744,21 @@
             fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
             document.getElementById('log').innerText = `Vald fil: ${baseName} (${fileSizeMB} MB)`;
 
+            const selection = ++glbSelectionSeq;   // a slower read of an earlier file must not overwrite this one
             const reader = new FileReader();
             reader.onload = function(event) {
+                if (selection !== glbSelectionSeq) return;
                 base64Data = event.target.result;
                 loadModelFromBase64(base64Data);
             };
             reader.readAsDataURL(file);
 
             lastGlbBuffer = null; lastGlbResult = null; glbCheckSeq++;   // nothing from the previous file may decide for this one
-            pendingGlbCheck = file.arrayBuffer().then(function(buf) { lastGlbBuffer = buf; return runGlbCheck(); });
+            pendingGlbCheck = file.arrayBuffer().then(function(buf) { if (selection !== glbSelectionSeq) return; lastGlbBuffer = buf; return runGlbCheck(); });
         });
 
         // --- GLB-kontroll: samma mått som tools/check-glb.js (se glb-check.js) ---
-        let lastGlbBuffer = null, lastGlbResult = null, glbCheckSeq = 0, pendingGlbCheck = Promise.resolve();
+        let glbSelectionSeq = 0, lastGlbBuffer = null, lastGlbResult = null, glbCheckSeq = 0, pendingGlbCheck = Promise.resolve();
                 function sampleImage(bytes, mime) {
             return createImageBitmap(new Blob([bytes], { type: mime })).then(function(bmp) {
                 const k = Math.min(1, 128 / Math.max(bmp.width, bmp.height));
