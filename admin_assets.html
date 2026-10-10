@@ -1786,8 +1786,11 @@
                 });
 
                 // Fetch Base64 data
+                const selection = ++glbSelectionSeq;   // a library asset is a new selection too: older local reads and older library responses are dropped
+                lastGlbBuffer = null; lastGlbResult = null; glbCheckSeq++;
                 const res = await fetch('/api/assets/' + assetInfo.id + '/download');
                 const data = await res.json();
+                if (selection !== glbSelectionSeq) return;
                 
                 if (data.file_data) {
                     base64Data = data.file_data;
@@ -1795,7 +1798,7 @@
                     try { // the stored file is checked like a new one
                         const bin = atob(base64Data.split(',').pop()), u8 = new Uint8Array(bin.length);
                         for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-                        lastGlbBuffer = u8.buffer; runGlbCheck();
+                        lastGlbBuffer = u8.buffer; pendingGlbCheck = runGlbCheck();
                     } catch (e) { lastGlbBuffer = null; lastGlbResult = null; }
                     document.getElementById('log').innerText = "Loaded from Cloud: " + assetInfo.name;
                 } else {

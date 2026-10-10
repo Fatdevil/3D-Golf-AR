@@ -91,6 +91,13 @@ function makeGlb(o) {
         { kind: 'plant', sampleImage: () => Promise.reject(new Error('bad image')) });
     check('texture that cannot be decoded is not loadable', r.verdict === 'fail' && !r.loadable && has(r, 'decode', 'fail'), r.verdict);
 
+    r = await run({ tris: 600, json: { buffers: [{ byteLength: 99999, uri: 'data:application/octet-stream;base64,AAAA' }] } }, { kind: 'plant' });
+    check('data URI buffer shorter than declared is not loadable', r.verdict === 'fail' && has(r, 'binary', 'fail'), r.verdict);
+
+    r = await G.check(makeGlb({ tris: 600, json: { images: [{ bufferView: 0, mimeType: 'image/png' }], textures: [{ source: 0 }] }, material: { normalTexture: { index: 0 }, pbrMetallicRoughness: { baseColorFactor: [0.5, 0.4, 0.2, 1] } } }),
+        { kind: 'plant', sampleImage: () => Promise.reject(new Error('bad image')) });
+    check('undecodable normal map is not loadable', r.verdict === 'fail' && has(r, 'decode', 'fail'), r.verdict);
+
     r = await G.check(makeGlb({ tris: 100 }).subarray(0, 40), {});
     check('truncated file is a fail, not a crash', r.verdict === 'fail', r.verdict);
 

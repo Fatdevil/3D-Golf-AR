@@ -115,14 +115,21 @@
     var buffers = j.buffers || [], views = j.bufferViews || [], accessors = j.accessors || [];
     var CS = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 }, TN = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16 };
     function bad(msg) { if (out.length < 5) out.push(msg); else if (out.length === 5) out.push('...'); }
+    var real = buffers.map(function (b) { return b.byteLength; });   // bytes each buffer really holds
     buffers.forEach(function (b, i) {
+      if (typeof b.uri === 'string' && b.uri.indexOf('data:') === 0) {
+        var comma = b.uri.indexOf(','), payload = comma < 0 ? '' : b.uri.slice(comma + 1);
+        if (comma < 0 || b.uri.slice(0, comma).indexOf(';base64') < 0) { bad('buffer ' + i + ' har en data-URI som inte är base64'); return; }
+        real[i] = Math.floor(payload.length * 3 / 4) - (payload.slice(-2) === '==' ? 2 : payload.slice(-1) === '=' ? 1 : 0);
+        if (real[i] < b.byteLength) bad('buffer ' + i + ' är ' + b.byteLength + ' byte enligt JSON men data-URI:n har ' + real[i]);
+      }
       if (typeof b.uri === 'string' && b.uri.indexOf('data:') !== 0) bad('buffer ' + i + ' ligger i en extern fil (' + b.uri.slice(0, 40) + ')');
       if (b.uri === undefined && i === 0 && (!bin || bin.length < b.byteLength)) bad('buffer ' + i + ' är ' + b.byteLength + ' byte enligt JSON men binärdelen har ' + (bin ? bin.length : 0));
     });
     views.forEach(function (v, i) {
       var b = buffers[v.buffer];
       if (!b) bad('bufferView ' + i + ' pekar på en buffer som inte finns');
-      else if ((v.byteOffset || 0) + v.byteLength > b.byteLength) bad('bufferView ' + i + ' går utanför sin buffer');
+      else if ((v.byteOffset || 0) + v.byteLength > Math.min(b.byteLength, real[v.buffer])) bad('bufferView ' + i + ' går utanför sin buffer');
     });
     accessors.forEach(function (a, i) {
       if (a.bufferView === undefined) return;
@@ -357,10 +364,11 @@
     try { f = measure(parsed); } catch (e) {
       return Promise.resolve({ kind: kind, verdict: 'fail', loadable: false, facts: null, checks: [{ id: 'format', level: 'fail', message: 'Filens JSON är felaktigt uppbyggd (' + e.message + ').' }] });
     }
-    var imagesToSample = f.images.filter(function (im) { return im.used && im.roles.indexOf('base') >= 0 && im.data; });
+    var usedImages = f.images.filter(function (im) { return im.used && im.data; });   // every one is decoded: the loader decodes them all
+    var imagesToSample = usedImages.filter(function (im) { return im.roles.indexOf('base') >= 0; });   // only these count for the colour shares
     var colourPromise, decodeFailures = 0;
-    if (opts.sampleImage && imagesToSample.length) {
-      colourPromise = Promise.all(imagesToSample.map(function (im) { return Promise.resolve(opts.sampleImage(im.data, im.mime)).catch(function () { decodeFailures++; return null; }); }))
+    if (opts.sampleImage && usedImages.length) {
+      colourPromise = Promise.all(usedImages.map(function (im) { return Promise.resolve(opts.sampleImage(im.data, im.mime)).then(function (px) { return imagesToSample.indexOf(im) >= 0 ? px : null; }).catch(function () { decodeFailures++; return null; }); }))
         .then(function (list) { list = list.filter(Boolean); return list.length ? colourShares(list) : null; });
     } else if (!f.images.length) {
       // no texture: the colour is the material's own
