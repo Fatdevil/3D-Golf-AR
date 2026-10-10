@@ -445,6 +445,7 @@
         <div class="form-group">
             <label>GLB File</label>
             <input type="file" id="file-input" accept=".glb">
+            <div id="glb-report" style="display:none; margin-top:8px; font-size:11px; line-height:1.45; border:1px solid #334155; border-radius:6px; padding:8px; max-height:260px; overflow:auto;"></div>
         </div>
 
         <div class="row">
@@ -749,7 +750,36 @@
                 loadModelFromBase64(base64Data);
             };
             reader.readAsDataURL(file);
+
+            file.arrayBuffer().then(function(buf) { lastGlbBuffer = buf; runGlbCheck(); });
         });
+
+        // --- GLB-kontroll: samma mått som tools/check-glb.js (se glb-check.js) ---
+        let lastGlbBuffer = null, lastGlbResult = null;
+                function sampleImage(bytes, mime) {
+            return createImageBitmap(new Blob([bytes], { type: mime })).then(function(bmp) {
+                const k = Math.min(1, 128 / Math.max(bmp.width, bmp.height));
+                const c = document.createElement('canvas');
+                c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+                const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0, c.width, c.height);
+                return { width: c.width, height: c.height, data: ctx.getImageData(0, 0, c.width, c.height).data };
+            });
+        }
+        function runGlbCheck() {
+            const box = document.getElementById('glb-report');
+            if (!lastGlbBuffer || !window.GlbCheck) { box.style.display = 'none'; return Promise.resolve(); }
+            const kind = GlbCheck.KIND_OF_SUBCAT[document.getElementById('asset-subcat').value] || 'tree';
+            return GlbCheck.check(new Uint8Array(lastGlbBuffer), { kind: kind, sampleImage: sampleImage }).then(function(r) {
+                lastGlbResult = r;
+                const col = { ok: '#4ade80', warn: '#fbbf24', fail: '#f87171', info: '#94a3b8' };
+                const mark = { ok: '✓', warn: '!', fail: '✗', info: '·' };
+                const head = { ok: 'Modellen klarar kontrollen', warn: 'Modellen fungerar men har varningar', fail: 'Modellen är för tung eller kan inte laddas' }[r.verdict];
+                const esc = function(t) { return String(t).replace(/[&<>]/g, function(ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]; }); };
+                box.innerHTML = '<div style="font-weight:800; color:' + col[r.verdict] + '; margin-bottom:4px;">' + head + ' (' + kind + ')</div>' +
+                    r.checks.map(function(c) { return '<div style="color:' + col[c.level] + ';">' + mark[c.level] + ' ' + esc(c.message) + '</div>'; }).join('');
+                box.style.display = 'block';
+            }).catch(function(e) { box.style.display = 'block'; box.textContent = 'Kontrollen kraschade: ' + e.message; });
+        }
 
         function loadModelFromBase64(b64) {
             const dracoLoader = new THREE.DRACOLoader();
@@ -1756,6 +1786,11 @@
                 if (data.file_data) {
                     base64Data = data.file_data;
                     loadModelFromBase64(base64Data);
+                    try { // the stored file is checked like a new one
+                        const bin = atob(base64Data.split(',').pop()), u8 = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                        lastGlbBuffer = u8.buffer; runGlbCheck();
+                    } catch (e) { lastGlbBuffer = null; lastGlbResult = null; }
                     document.getElementById('log').innerText = "Loaded from Cloud: " + assetInfo.name;
                 } else {
                     document.getElementById('log').innerText = "❌ Missing 3D data";
@@ -1794,6 +1829,7 @@
 
         // Automatisk ifyllnad: Ändrar du kategori till Rock, så ställs fysiken om till Sphere
         document.getElementById('asset-subcat').addEventListener('change', function(e) {
+            runGlbCheck();
             const val = e.target.value;
             const physSelect = document.getElementById('physics-type');
             if (val === 'TREES') physSelect.value = 'tree';
@@ -1813,6 +1849,11 @@
             if (!base64Data) return alert("Please load a .glb file first!");
             const pass = document.getElementById('admin-pass').value;
             if (!pass) return alert("Password required");
+
+            if (lastGlbResult && lastGlbResult.verdict === 'fail') {
+                const bad = lastGlbResult.checks.filter(function(c) { return c.level === 'fail'; }).map(function(c) { return '- ' + c.message; }).join('\n');
+                if (!confirm('GLB-kontrollen hittade fel:\n\n' + bad + '\n\nPublicera ändå?')) return;
+            }
 
             const id = document.getElementById('asset-id').value;
             const name = document.getElementById('asset-name').value;
@@ -1938,5 +1979,6 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         });
     </script>
+<script src="glb-check.js?v=1"></script>
 </body>
 </html>
