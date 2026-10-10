@@ -104,6 +104,15 @@ function makeGlb(o) {
     r = await run({ tris: 600, json: { materials: [] } }, { kind: 'plant' });
     check('primitive pointing at a missing material is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
 
+    r = await run({ tris: 600, json: { buffers: [{ byteLength: 1, uri: 'data:application/octet-stream;base64,AA=' }] } }, { kind: 'plant' });
+    check('bad base64 padding is not loadable', r.verdict === 'fail' && has(r, 'binary', 'fail'), r.verdict);
+
+    r = await run({ tris: 600, json: { buffers: [{ byteLength: 7000 }, { byteLength: 4 }] } }, { kind: 'plant' });
+    check('second buffer without uri is not loadable', r.verdict === 'fail' && has(r, 'binary', 'fail'), r.verdict);
+
+    r = await G.check(makeGlb({ tris: 600, material: { pbrMetallicRoughness: { baseColorTexture: { index: 3 } } } }), { kind: 'plant' });
+    check('material pointing at a missing texture is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
+
     r = await G.check(makeGlb({ tris: 100 }).subarray(0, 40), {});
     check('truncated file is a fail, not a crash', r.verdict === 'fail', r.verdict);
 

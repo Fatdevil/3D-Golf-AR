@@ -120,10 +120,12 @@
       if (typeof b.uri === 'string' && b.uri.indexOf('data:') === 0) {
         var comma = b.uri.indexOf(','), payload = comma < 0 ? '' : b.uri.slice(comma + 1);
         if (comma < 0 || b.uri.slice(0, comma).indexOf(';base64') < 0) { bad('buffer ' + i + ' har en data-URI som inte är base64'); return; }
-        if (!/^[A-Za-z0-9+\/]*={0,2}$/.test(payload) || payload.length % 4 === 1) { bad('buffer ' + i + ' har ogiltig base64 i sin data-URI'); return; }
-        real[i] = Math.floor(payload.length * 3 / 4) - (payload.slice(-2) === '==' ? 2 : payload.slice(-1) === '=' ? 1 : 0);
+        var p64 = payload.length % 4 === 0 ? payload.replace(/={1,2}$/, '') : payload;   // atob: padding only on a full group
+        if (!/^[A-Za-z0-9+\/]*$/.test(p64) || p64.length % 4 === 1) { bad('buffer ' + i + ' har ogiltig base64 i sin data-URI'); return; }
+        real[i] = Math.floor(p64.length * 3 / 4);
         if (real[i] < b.byteLength) bad('buffer ' + i + ' är ' + b.byteLength + ' byte enligt JSON men data-URI:n har ' + real[i]);
       }
+      if (b.uri === undefined && i > 0) bad('buffer ' + i + ' saknar uri och en GLB kan bara ha sin första buffer i BIN-delen');
       if (typeof b.uri === 'string' && b.uri.indexOf('data:') !== 0) bad('buffer ' + i + ' ligger i en extern fil (' + b.uri.slice(0, 40) + ')');
       if (b.uri === undefined && i === 0 && (!bin || bin.length < b.byteLength)) bad('buffer ' + i + ' är ' + b.byteLength + ' byte enligt JSON men binärdelen har ' + (bin ? bin.length : 0));
     });
@@ -191,10 +193,11 @@
     // materials, and which texture does what
     var role = {};   // image index -> { base, normal, mr, occlusion, emissive }
     function useTex(ti, what) {
-      if (ti === undefined || ti === null || !texs[ti]) return;
+      if (ti === undefined || ti === null) return;
+      if (!texs[ti]) { f.invalid.push('ett material pekar på textur ' + ti + ' som inte finns'); return; }
       var t = texs[ti], src = t.source;
       if (src === undefined && t.extensions) { var e = t.extensions.EXT_texture_webp || t.extensions.KHR_texture_basisu; if (e) src = e.source; }
-      if (src === undefined) return;
+      if (src === undefined || !imgs[src]) { f.invalid.push('textur ' + ti + ' saknar en giltig bild'); return; }
       (role[src] = role[src] || {})[what] = true;
     }
     (usedMat[-1] ? f.usedMaterials.concat([-1]) : f.usedMaterials).forEach(function (mi) {   // -1: GLTFLoader's shared default material
