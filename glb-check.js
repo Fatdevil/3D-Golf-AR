@@ -120,6 +120,7 @@
       if (typeof b.uri === 'string' && b.uri.indexOf('data:') === 0) {
         var comma = b.uri.indexOf(','), payload = comma < 0 ? '' : b.uri.slice(comma + 1);
         if (comma < 0 || b.uri.slice(0, comma).indexOf(';base64') < 0) { bad('buffer ' + i + ' har en data-URI som inte är base64'); return; }
+        if (!/^[A-Za-z0-9+\/]*={0,2}$/.test(payload) || payload.length % 4 === 1) { bad('buffer ' + i + ' har ogiltig base64 i sin data-URI'); return; }
         real[i] = Math.floor(payload.length * 3 / 4) - (payload.slice(-2) === '==' ? 2 : payload.slice(-1) === '=' ? 1 : 0);
         if (real[i] < b.byteLength) bad('buffer ' + i + ' är ' + b.byteLength + ' byte enligt JSON men data-URI:n har ' + real[i]);
       }
@@ -170,6 +171,7 @@
           if (attrs.NORMAL === undefined) f.noNormals++;
           if (attrs.COLOR_0 !== undefined) f.vertexColors = true;
           if (p.extensions && p.extensions.KHR_draco_mesh_compression) f.draco = true;
+          if (p.material !== undefined && !mats[p.material]) f.invalid.push('en primitive pekar på material ' + p.material + ' som inte finns');
           usedMat[p.material === undefined ? -1 : p.material] = true;
           if (pos && pos.min && pos.max && (pos.componentType === 5126 || !pos.normalized)) {
             for (var c = 0; c < 8; c++) {

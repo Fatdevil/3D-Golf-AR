@@ -98,6 +98,12 @@ function makeGlb(o) {
         { kind: 'plant', sampleImage: () => Promise.reject(new Error('bad image')) });
     check('undecodable normal map is not loadable', r.verdict === 'fail' && has(r, 'decode', 'fail'), r.verdict);
 
+    r = await run({ tris: 600, json: { buffers: [{ byteLength: 9, uri: 'data:application/octet-stream;base64,!!!!!!!!!!!!' }] } }, { kind: 'plant' });
+    check('invalid base64 in a data URI buffer is not loadable', r.verdict === 'fail' && has(r, 'binary', 'fail'), r.verdict);
+
+    r = await run({ tris: 600, json: { materials: [] } }, { kind: 'plant' });
+    check('primitive pointing at a missing material is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
+
     r = await G.check(makeGlb({ tris: 100 }).subarray(0, 40), {});
     check('truncated file is a fail, not a crash', r.verdict === 'fail', r.verdict);
 

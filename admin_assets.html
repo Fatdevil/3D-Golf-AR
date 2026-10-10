@@ -745,6 +745,7 @@
             document.getElementById('log').innerText = `Vald fil: ${baseName} (${fileSizeMB} MB)`;
 
             const selection = ++glbSelectionSeq;   // a slower read of an earlier file must not overwrite this one
+            base64Data = null;   // the previous model must not be published while this one is being read
             const reader = new FileReader();
             reader.onload = function(event) {
                 if (selection !== glbSelectionSeq) return;
@@ -1788,6 +1789,7 @@
                 // Fetch Base64 data
                 const selection = ++glbSelectionSeq;   // a library asset is a new selection too: older local reads and older library responses are dropped
                 lastGlbBuffer = null; lastGlbResult = null; glbCheckSeq++;
+                base64Data = null;   // Publish is blocked until this asset has downloaded and been checked
                 const res = await fetch('/api/assets/' + assetInfo.id + '/download');
                 const data = await res.json();
                 if (selection !== glbSelectionSeq) return;
@@ -1855,7 +1857,7 @@
 
         // --- SPARA TILL BACKEND ---
         document.getElementById('btn-save').addEventListener('click', async () => {
-            if (!base64Data) return alert("Please load a .glb file first!");
+            if (!base64Data) return alert("Please load a .glb file first (or wait until it has finished loading)!");
             const pass = document.getElementById('admin-pass').value;
             if (!pass) return alert("Password required");
 
