@@ -28,11 +28,11 @@
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-swing-engine.js?v=4"></script>
 <script src="arcade-perlin.js"></script>
-<script src="terrain-auto-paint.js?v=7"></script>
-<script src="terrain-chunks.js?v=7"></script>
-<script src="terrain-shells.js?v=46"></script>
+<script src="terrain-auto-paint.js?v=8"></script>
+<script src="terrain-chunks.js?v=8"></script>
+<script src="terrain-shells.js?v=47"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
-<script src="arcade-scene-engine.js?v=9"></script>
+<script src="arcade-scene-engine.js?v=11"></script>
 <script src="arcade-tracer-engine.js"></script>
 <script src="arcade-audio-engine.js"></script>
 <script src="arcade-particle-engine.js?v=2"></script>
@@ -1154,12 +1154,12 @@
                 <div id="pal-bunker" class="palette-btn" style="background:#e0d8a4; color:#fff; position:relative;" onclick="setPaletteColor('bunker', this)">Bunker <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('bunker')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
                 <div id="pal-waste" class="palette-btn" style="background:#c2af7c; color:#fff; position:relative;" onclick="setPaletteColor('waste', this)">Waste <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('waste')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
                 <div id="pal-tee" class="palette-btn" style="display:none; background:#7cb54c; color:#fff; position:relative;" onclick="setPaletteColor('tee', this)">Tee Box <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('tee')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
-                <div id="pal-green" class="palette-btn" style="display:none; background:#98ce68; color:#fff; position:relative;" onclick="setPaletteColor('green', this)">Green <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('green')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
-                <div id="pal-foregreen" class="palette-btn" style="background:#8bc45d; color:#fff; position:relative;" onclick="setPaletteColor('foregreen', this)">Foregreen <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('foregreen')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
-                <div id="pal-fairway" class="palette-btn" style="background:#7db952; color:#fff; position:relative;" onclick="setPaletteColor('fairway', this)">Fairway <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fairway')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
-                <div id="pal-semi" class="palette-btn" style="background:#6b9e3d; color:#fff; position:relative;" onclick="setPaletteColor('semi', this)">Semi-Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('semi')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
-                <div id="pal-rough" class="palette-btn" style="background:#4a782b; color:#fff; position:relative;" onclick="setPaletteColor('rough', this)">Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('rough')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
-                <div id="pal-fescue" class="palette-btn" style="background:#2d4c1a; color:#fff; position:relative;" onclick="setPaletteColor('fescue', this)">Deep Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fescue')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-green" class="palette-btn" style="display:none; background:#8acf72; color:#fff; position:relative;" onclick="setPaletteColor('green', this)">Green <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('green')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-foregreen" class="palette-btn" style="background:#9acb67; color:#fff; position:relative;" onclick="setPaletteColor('foregreen', this)">Foregreen <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('foregreen')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-fairway" class="palette-btn" style="background:#79b84f; color:#fff; position:relative;" onclick="setPaletteColor('fairway', this)">Fairway <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fairway')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-semi" class="palette-btn" style="background:#659a3f; color:#fff; position:relative;" onclick="setPaletteColor('semi', this)">Semi-Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('semi')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-rough" class="palette-btn" style="background:#4c7d32; color:#fff; position:relative;" onclick="setPaletteColor('rough', this)">Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('rough')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
+                <div id="pal-fescue" class="palette-btn" style="background:#315b2b; color:#fff; position:relative;" onclick="setPaletteColor('fescue', this)">Deep Rough <span class="color-edit-icon" onclick="event.stopPropagation(); window.openColorPicker('fescue')" style="position:absolute; top:2px; right:4px; font-size:10px; cursor:pointer; display:none;">⚙️</span></div>
                 
             </div>
         </div>
@@ -1483,12 +1483,12 @@
                 <div id="sb-paint-controls">
                     <div style="color:#64748b; font-size:9px; font-weight:bold; text-transform:uppercase; margin-bottom:4px; text-align:left;" data-i18n="sb_surface_type">Yta / Färg</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
-                        <button id="sp-green" onclick="setSmartPaintSurface('green')" class="sp-btn" style="background:#98ce68; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_type_green">Green</button>
-                        <button id="sp-foregreen" onclick="setSmartPaintSurface('foregreen')" class="sp-btn" style="background:#8bc45d; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_foregreen">Foregreen</button>
-                        <button id="sp-fairway" onclick="setSmartPaintSurface('fairway')" class="sp-btn" style="background:#7db952; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_type_fairway">Fairway</button>
-                        <button id="sp-semi" onclick="setSmartPaintSurface('semi')" class="sp-btn" style="background:#6b9e3d; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_semi_rough">Semi-rough</button>
-                        <button id="sp-rough" onclick="setSmartPaintSurface('rough')" class="sp-btn" style="background:#4a782b; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_rough">Rough</button>
-                        <button id="sp-fescue" onclick="setSmartPaintSurface('fescue')" class="sp-btn" style="background:#2d4c1a; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_deep_rough">Deep Rough</button>
+                        <button id="sp-green" onclick="setSmartPaintSurface('green')" class="sp-btn" style="background:#8acf72; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_type_green">Green</button>
+                        <button id="sp-foregreen" onclick="setSmartPaintSurface('foregreen')" class="sp-btn" style="background:#9acb67; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_foregreen">Foregreen</button>
+                        <button id="sp-fairway" onclick="setSmartPaintSurface('fairway')" class="sp-btn" style="background:#79b84f; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_type_fairway">Fairway</button>
+                        <button id="sp-semi" onclick="setSmartPaintSurface('semi')" class="sp-btn" style="background:#659a3f; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_semi_rough">Semi-rough</button>
+                        <button id="sp-rough" onclick="setSmartPaintSurface('rough')" class="sp-btn" style="background:#4c7d32; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_rough">Rough</button>
+                        <button id="sp-fescue" onclick="setSmartPaintSurface('fescue')" class="sp-btn" style="background:#315b2b; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_deep_rough">Deep Rough</button>
                         <button id="sp-bunker" onclick="setSmartPaintSurface('bunker')" class="sp-btn" style="background:#e0d8a4; color:#0f172a; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_sand">Sand</button>
                         <button id="sp-waste" onclick="setSmartPaintSurface('waste')" class="sp-btn" style="background:#c2af7c; color:#fff; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="sb_waste">Waste</button>
                         <button id="sp-water" onclick="setSmartPaintSurface('water')" class="sp-btn" style="background:#38bdf8; color:#0f172a; border:none; padding:5px 3px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer;" data-i18n="tool_water">Water</button>
@@ -1497,7 +1497,7 @@
                     <div style="background:#1e293b; padding:5px 8px; border-radius:6px; margin-bottom:4px;">
                         <div style="display:flex; align-items:center; gap:6px;">
                             <span style="color:#94a3b8; font-size:8px; font-weight:bold; text-transform:uppercase;" data-i18n="sb_custom">Custom:</span>
-                            <input type="color" id="sp-custom-color" value="#7db952" oninput="setSmartPaintSurface('custom')" style="width:28px; height:20px; border:none; cursor:pointer; border-radius:3px;">
+                            <input type="color" id="sp-custom-color" value="#79b84f" oninput="setSmartPaintSurface('custom')" style="width:28px; height:20px; border:none; cursor:pointer; border-radius:3px;">
                             <button id="sp-custom" onclick="setSmartPaintSurface('custom')" class="sp-btn" style="background:#334155; color:#94a3b8; border:none; padding:4px 8px; font-size:9px; border-radius:4px; font-weight:bold; cursor:pointer; flex:1;" data-i18n="sb_use_custom">Use Custom</button>
                         </div>
                     </div>
@@ -1554,7 +1554,7 @@
                     
                     if (mode === 'POLYGON' && typeof window.clearSmartGreen === 'function') window.clearSmartGreen();
                     
-                    var hex = window._smartPaintColor || '#8bc45d';
+                    var hex = window._smartPaintColor || '#9acb67';
                     if (window.setBrushColor) {
                         window.setBrushColor(hex);
                     }
@@ -2424,8 +2424,8 @@
                     <!-- Step 1 banner -->
                     <div style="background:rgba(125,185,82,0.1); border:1px solid rgba(125,185,82,0.35); border-radius:8px; padding:8px 10px;">
                         <div style="display:flex; align-items:center; gap:5px; margin-bottom:4px;">
-                            <span style="background:#7db952; color:#0f172a; font-size:9px; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">1</span>
-                            <span style="color:#7db952; font-size:10.5px; font-weight:700;" data-i18n="sf_step_draw">Rita formen</span>
+                            <span style="background:#79b84f; color:#0f172a; font-size:9px; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">1</span>
+                            <span style="color:#79b84f; font-size:10.5px; font-weight:700;" data-i18n="sf_step_draw">Rita formen</span>
                         </div>
                         <div style="color:#94a3b8; font-size:9px; line-height:1.4;" data-i18n="sf_draw_hint">Klicka för att sätta ut fairway-punkter. Dra valfri punkt för att justera formen. Högerklicka för att radera.</div>
                     </div>
@@ -2448,7 +2448,7 @@
                     </div>
 
                     <!-- Primary Action Button: Create Fairway -->
-                    <button type="button" id="sf-build-fairway-btn" onclick="window.executeSmartFairway()" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(125,185,82,0.3); transition:all 0.2s;">
+                    <button type="button" id="sf-build-fairway-btn" onclick="window.executeSmartFairway()" style="width:100%; background:linear-gradient(135deg, #79b84f, #4ade80); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(125,185,82,0.3); transition:all 0.2s;">
                         🏌️ <span id="sf-build-fairway-btn-text" data-i18n="sb_build_fairway">Skapa fairway</span>
                     </button>
                 </div>
@@ -2459,7 +2459,7 @@
                 <div id="sf-panel-built" style="display:none;">
                     <!-- 3-Tab Workflow Bar (1. Form, 2. Bredd & Terräng, 3. Klippning) -->
                     <div style="display:flex; background:#0b1120; border:1px solid #1e293b; border-radius:10px; padding:3px; margin-bottom:10px; gap:4px;">
-                        <button type="button" id="sf-tab-form" onclick="window.FairwayStudio.setTab('form')" style="flex:1; background:#7db952; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(125,185,82,0.35);">
+                        <button type="button" id="sf-tab-form" onclick="window.FairwayStudio.setTab('form')" style="flex:1; background:#79b84f; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(125,185,82,0.35);">
                             <span style="font-size:12px;">📐</span>
                             <span>1. Form</span>
                         </button>
@@ -2476,7 +2476,7 @@
                     <!-- TAB 1: FORM -->
                     <div id="sf-content-form">
                         <!-- Contextual Tip Banner -->
-                        <div style="background:#1e293b; border-left:3px solid #7db952; border-radius:4px; padding:6px 8px; margin-bottom:8px;">
+                        <div style="background:#1e293b; border-left:3px solid #79b84f; border-radius:4px; padding:6px 8px; margin-bottom:8px;">
                             <div style="color:#cbd5e1; font-size:9px; line-height:1.4;" data-i18n="sf_form_tip">
                                 💡 <b>Dra</b> de vita golfbollarna för att ändra formen. <b>Klicka på linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.
                             </div>
@@ -2485,7 +2485,7 @@
                         <!-- Fairway Size Area Display Card -->
                         <div style="background:#1e293b; border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
                             <span style="color:#94a3b8; font-size:9px; font-weight:700; text-transform:uppercase;" data-i18n="sf_area_label">Areal</span>
-                            <span id="sf-area-val" style="color:#7db952; font-weight:800; font-size:11px;">~0 m²</span>
+                            <span id="sf-area-val" style="color:#79b84f; font-weight:800; font-size:11px;">~0 m²</span>
                         </div>
 
                         <!-- Form Tab Actions: Delete Fairway -->
@@ -2494,7 +2494,7 @@
                         </button>
 
                         <!-- Step 1 -> Step 2 Guidance Button -->
-                        <button type="button" onclick="window.FairwayStudio.setTab('bredd')" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(125,185,82,0.25); transition:transform 0.1s;">
+                        <button type="button" onclick="window.FairwayStudio.setTab('bredd')" style="width:100%; background:linear-gradient(135deg, #79b84f, #4ade80); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(125,185,82,0.25); transition:transform 0.1s;">
                             <span data-i18n="sf_to_step2">Steg 2: Justera rufs & vågor</span> ➔
                         </button>
                     </div>
@@ -2505,27 +2505,27 @@
                         <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
                                 <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_semi_rough">Semi-Rough</span>
-                                <span id="sf-semirough-val" style="color:#6b9e3d; font-weight:700; font-size:9.5px;">2.0m</span>
+                                <span id="sf-semirough-val" style="color:#659a3f; font-weight:700; font-size:9.5px;">2.0m</span>
                             </div>
-                            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); let el=document.getElementById('sf-semirough-val'); if(el) el.textContent=v.toFixed(1)+'m';" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'semiRoughWidth')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'semiRoughWidth')" style="width:100%; accent-color:#6b9e3d; cursor:pointer;">
+                            <input type="range" id="sf-semirough-width" min="0" max="5" value="2.0" step="0.5" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); let el=document.getElementById('sf-semirough-val'); if(el) el.textContent=v.toFixed(1)+'m';" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'semiRoughWidth')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'semiRoughWidth')" style="width:100%; accent-color:#659a3f; cursor:pointer;">
                         </div>
 
                         <!-- Rough Width & Toggle -->
                         <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:10px; border:1px solid #334155;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
                                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                                    <input type="checkbox" id="sf-rough-cb" checked onchange="if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('roughEnabled', this.checked); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="accent-color:#4a782b; cursor:pointer;">
+                                    <input type="checkbox" id="sf-rough-cb" checked onchange="if(typeof window.updateLiveFairway==='function') window.updateLiveFairway('roughEnabled', this.checked); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500);" style="accent-color:#4c7d32; cursor:pointer;">
                                     <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sb_rough">Rough</span>
                                 </label>
-                                <span id="sf-rough-val" style="color:#4a782b; font-weight:700; font-size:9.5px;">5m</span>
+                                <span id="sf-rough-val" style="color:#4c7d32; font-weight:700; font-size:9.5px;">5m</span>
                             </div>
-                            <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); let el=document.getElementById('sf-rough-val'); if(el) el.textContent=v.toFixed(0)+'m';" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'roughWidth')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'roughWidth')" style="width:100%; accent-color:#4a782b; cursor:pointer;">
+                            <input type="range" id="sf-rough-width" min="0" max="20" value="5" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); let el=document.getElementById('sf-rough-val'); if(el) el.textContent=v.toFixed(0)+'m';" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'roughWidth')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'roughWidth')" style="width:100%; accent-color:#4c7d32; cursor:pointer;">
                         </div>
 
                         <!-- Terrain Waviness / Difficulty Cards -->
                         <div style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase; margin-bottom:4px;" data-i18n="sf_terrain_profile_title">Böljande Mark (Terrängprofil)</div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:10px;">
-                            <button type="button" id="sf-diff-flat" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='FLAT'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:rgba(125,185,82,0.25); color:#7db952; border:1px solid #7db952; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
+                            <button type="button" id="sf-diff-flat" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='FLAT'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:rgba(125,185,82,0.25); color:#79b84f; border:1px solid #79b84f; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
                                 Platt <span style="font-size:8px; opacity:0.8;">Naturlig</span>
                             </button>
                             <button type="button" id="sf-diff-easy" onclick="let h=window.courseHoles[window.currentHoleIndex]; let fd=window.getActiveFairway(h); if(fd){ fd.difficulty='EASY'; window.applyFairwayPipeline(h,false,true,fd); if(window.FairwayStudio) window.FairwayStudio.sync(); if(typeof window.debounceSaveCourse==='function') window.debounceSaveCourse(1500); }" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; padding:6px 4px; font-size:10px; font-weight:700; cursor:pointer; text-align:center;">
@@ -2543,19 +2543,19 @@
                         <div style="background:#1e293b; padding:6px 8px; border-radius:6px; margin-bottom:10px; border:1px solid #334155;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
                                 <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sf_max_slope">Max lutning tvärs (sidled)</span>
-                                <span id="sf-max-slope-val" style="color:#7db952; font-weight:700; font-size:9.5px;">Av</span>
+                                <span id="sf-max-slope-val" style="color:#79b84f; font-weight:700; font-size:9.5px;">Av</span>
                             </div>
-                            <input type="range" id="sf-max-slope" min="0" max="20" value="0" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); window._fairwayMaxSlopePct=v; let el=document.getElementById('sf-max-slope-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Av':'Off');" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'maxSlopePct')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'maxSlopePct')" style="width:100%; accent-color:#7db952; cursor:pointer;">
+                            <input type="range" id="sf-max-slope" min="0" max="20" value="0" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); window._fairwayMaxSlopePct=v; let el=document.getElementById('sf-max-slope-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Av':'Off');" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'maxSlopePct')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'maxSlopePct')" style="width:100%; accent-color:#79b84f; cursor:pointer;">
                             <div style="display:flex; justify-content:space-between; margin:6px 0 2px;">
                                 <span style="color:#94a3b8; font-size:8.5px; font-weight:700; text-transform:uppercase;" data-i18n="sf_max_slope_along">Max lutning längs (uppför/nedför)</span>
-                                <span id="sf-max-along-val" style="color:#7db952; font-weight:700; font-size:9.5px;">Som tvärs</span>
+                                <span id="sf-max-along-val" style="color:#79b84f; font-weight:700; font-size:9.5px;">Som tvärs</span>
                             </div>
-                            <input type="range" id="sf-max-along" min="0" max="30" value="0" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); window._fairwayMaxSlopeAlongPct=v; let el=document.getElementById('sf-max-along-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Som tvärs':'Same as across');" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'maxSlopeAlongPct')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'maxSlopeAlongPct')" style="width:100%; accent-color:#7db952; cursor:pointer;">
+                            <input type="range" id="sf-max-along" min="0" max="30" value="0" step="1" oninput="window._sfDrag=this.id; let v=parseFloat(this.value); window._fairwayMaxSlopeAlongPct=v; let el=document.getElementById('sf-max-along-val'); if(el) el.textContent=(v>0)?(v.toFixed(0)+'%'):((window.getGolfLanguage&&window.getGolfLanguage()==='sv')?'Som tvärs':'Same as across');" onpointerdown="window._sfDrag=this.id" onchange="window.sfSliderCommit(this,'maxSlopeAlongPct')" onpointerup="window._sfDrag=null" onpointercancel="window.sfSliderCommit(this,'maxSlopeAlongPct')" style="width:100%; accent-color:#79b84f; cursor:pointer;">
                             <div style="color:#64748b; font-size:8px; margin-top:2px;" data-i18n="sf_max_slope_hint">Planar ut en kulle under fairwayn så den blir spelbar. Tips: 6 % tvärs och 15 % längs.</div>
                         </div>
 
                         <!-- Step 2 -> Step 3 Guidance Button -->
-                        <button type="button" onclick="window.FairwayStudio.setTab('klippning')" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(125,185,82,0.25); transition:transform 0.1s;">
+                        <button type="button" onclick="window.FairwayStudio.setTab('klippning')" style="width:100%; background:linear-gradient(135deg, #79b84f, #4ade80); color:#0f172a; border:none; padding:8px 8px; font-size:10.5px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 10px rgba(125,185,82,0.25); transition:transform 0.1s;">
                             <span data-i18n="sf_to_step3">Steg 3: Klippmönster & finish</span> ➔
                         </button>
                     </div>
@@ -2594,13 +2594,13 @@
                             <div style="display:flex; align-items:flex-start; gap:6px;">
                                 <span style="font-size:12px; line-height:1.2;">ℹ️</span>
                                 <div style="color:#94a3b8; font-size:8.5px; line-height:1.4;">
-                                    <b style="color:#7db952;">Bollrull & Fairway:</b> Fairwayens fasthet och rullhastighet styrs av banans globala förhållanden inför varje match.
+                                    <b style="color:#79b84f;">Bollrull & Fairway:</b> Fairwayens fasthet och rullhastighet styrs av banans globala förhållanden inför varje match.
                                 </div>
                             </div>
                         </div>
 
                         <!-- Finish Button -->
-                        <button type="button" onclick="if(typeof setTool==='function') setTool('INSPECT')" style="width:100%; background:linear-gradient(135deg, #7db952, #4ade80); color:#0f172a; border:none; padding:9px 8px; font-size:11px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 12px rgba(125,185,82,0.3); transition:transform 0.1s;">
+                        <button type="button" onclick="if(typeof setTool==='function') setTool('INSPECT')" style="width:100%; background:linear-gradient(135deg, #79b84f, #4ade80); color:#0f172a; border:none; padding:9px 8px; font-size:11px; border-radius:8px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 3px 12px rgba(125,185,82,0.3); transition:transform 0.1s;">
                             ✔ <span data-i18n="sf_finish">Klar med fairwayen!</span>
                         </button>
                     </div>
@@ -4004,7 +4004,7 @@
     
 
 </script>
-<script src="arcade-biomes.js?v=1"></script>
+<script src="arcade-biomes.js?v=2"></script>
 <script>
     
     window.CURRENT_BIOME_CONFIG = {
@@ -4013,12 +4013,12 @@
         bunkerColor: '#e0d8a4',
         wasteColor: '#c2af7c',
         teeColor: '#7cb54c',
-        greenColor: '#98ce68',
-        foregreenColor: '#8bc45d',
-        fairwayColor: '#7db952',
-        semiColor: '#6b9e3d',
-        roughColor: '#4a782b',
-        fescueColor: '#2d4c1a',
+        greenColor: '#8acf72',
+        foregreenColor: '#9acb67',
+        fairwayColor: '#79b84f',
+        semiColor: '#659a3f',
+        roughColor: '#4c7d32',
+        fescueColor: '#315b2b',
         waterColor: '#38bdf8',
         oceanColor: '#1e3a5f',
         horizonColor: '#cce7ff'
@@ -4411,6 +4411,7 @@
     
     window.changeBiome = function(val) {
         window.ACTIVE_BIOME = val;
+        if (typeof window.refreshSunLight === 'function') window.refreshSunLight();   // the sun is warmer in the summer worlds
         
         let labelEl = document.getElementById('biome-current-label');
         if (labelEl) {
@@ -5039,7 +5040,7 @@
     const pCtx = paintCanvas.getContext('2d', { willReadFrequently: true });
     window.pCtx = pCtx;
     
-    pCtx.fillStyle = '#4a782b';
+    pCtx.fillStyle = '#4c7d32';
     pCtx.fillRect(0, 0, 4096, 4096);
     
     const mapTex = new THREE.CanvasTexture(paintCanvas);
@@ -5089,7 +5090,7 @@
         let tData = window.terrainBiomeData;
         // BUG-FIX: Use dynamic biome colors instead of hardcoded GLOBAL green (152,206,104)
         let cfg = window.CURRENT_BIOME_CONFIG || {};
-        let gHex = cfg.greenColor || '#98ce68';
+        let gHex = cfg.greenColor || '#8acf72';
         let gR = parseInt(gHex.slice(1,3),16), gG = parseInt(gHex.slice(3,5),16), gB = parseInt(gHex.slice(5,7),16);
         for(let i=0; i < tData.length; i+=4) {
             let r = tData[i], g = tData[i+1], b = tData[i+2];
@@ -5133,21 +5134,21 @@
         let cfg = window.CURRENT_BIOME_CONFIG || {};
 
         // Parse all 4 grass biome colors
-        let rHex = cfg.roughColor || '#4a782b';
+        let rHex = cfg.roughColor || '#4c7d32';
         let rR = parseInt(rHex.slice(1,3),16), rG = parseInt(rHex.slice(3,5),16), rB = parseInt(rHex.slice(5,7),16);
-        let dHex = cfg.fescueColor || '#2d4c1a';
+        let dHex = cfg.fescueColor || '#315b2b';
         let dR = parseInt(dHex.slice(1,3),16), dG = parseInt(dHex.slice(3,5),16), dB = parseInt(dHex.slice(5,7),16);
-        let sHex = cfg.semiColor || '#6b9e3d';
+        let sHex = cfg.semiColor || '#659a3f';
         let sR = parseInt(sHex.slice(1,3),16), sG = parseInt(sHex.slice(3,5),16), sB = parseInt(sHex.slice(5,7),16);
-        let fHex = cfg.foregreenColor || '#8bc45d';
+        let fHex = cfg.foregreenColor || '#9acb67';
         let fR = parseInt(fHex.slice(1,3),16), fG = parseInt(fHex.slice(3,5),16), fB = parseInt(fHex.slice(5,7),16);
         // Bunker sand color
         let bHex = cfg.bunkerColor || '#e0d8a4';
         let bR = parseInt(bHex.slice(1,3),16), bG = parseInt(bHex.slice(3,5),16), bB = parseInt(bHex.slice(5,7),16);
         // Exclusion colors: green and fairway should NEVER get 3D grass/sand
-        let gHex = cfg.greenColor || '#98ce68';
+        let gHex = cfg.greenColor || '#8acf72';
         let gR = parseInt(gHex.slice(1,3),16), gG = parseInt(gHex.slice(3,5),16), gB = parseInt(gHex.slice(5,7),16);
-        let wHex = cfg.fairwayColor || '#7db952';
+        let wHex = cfg.fairwayColor || '#79b84f';
         let wR = parseInt(wHex.slice(1,3),16), wG = parseInt(wHex.slice(3,5),16), wB = parseInt(wHex.slice(5,7),16);
 
         // Threshold per biome type
@@ -5257,7 +5258,7 @@
     window.terrainShaderUniforms = {
         uPlayMode: { value: 0.0 },
         uObColor: { value: new THREE.Color(0xef4444) },
-        uRoughColor: { value: new THREE.Color(0x4a782b) },
+        uRoughColor: { value: new THREE.Color(0x4c7d32) },
         uGridMode: { value: 0.0 },
         uShowRings: { value: 0.0 },
         uTeePos: { value: new THREE.Vector2(0, 0) },
@@ -5598,10 +5599,10 @@
     
     // Default colors to fescue
     window.surroundMat.userData = {
-        colorN: { value: new THREE.Color(0x2d4c1a) },
-        colorE: { value: new THREE.Color(0x2d4c1a) },
-        colorS: { value: new THREE.Color(0x2d4c1a) },
-        colorW: { value: new THREE.Color(0x2d4c1a) },
+        colorN: { value: new THREE.Color(0x315b2b) },
+        colorE: { value: new THREE.Color(0x315b2b) },
+        colorS: { value: new THREE.Color(0x315b2b) },
+        colorW: { value: new THREE.Color(0x315b2b) },
         blendPower: { value: 1.5 }
     };
     
@@ -5766,7 +5767,7 @@
             }
             if (!hexStr && key === 'horizonColor') hexStr = '#ffffff';
             if (!hexStr && key === 'skyColor') hexStr = '#87ceeb';
-            if (!hexStr) hexStr = '#2d4c1a'; // Ultimate fallback
+            if (!hexStr) hexStr = '#315b2b'; // Ultimate fallback
 
             return new THREE.Color(parseInt(hexStr.replace('#', '0x')));
         };
@@ -6070,12 +6071,12 @@
         let _sand = hexToRgbArr(cfg.bunkerColor) || [224,216,164];
         let _waste = hexToRgbArr(cfg.wasteColor) || [194,175,124];
         let _tee = hexToRgbArr(cfg.teeColor) || [124,181,76];
-        let _green = hexToRgbArr(cfg.greenColor) || [152,206,104];
-        let _foregreen = hexToRgbArr(cfg.foregreenColor) || [139,196,93];
-        let _fairway = hexToRgbArr(cfg.fairwayColor) || [125,185,82];
-        let _semi = hexToRgbArr(cfg.semiColor) || [107,158,61];
-        let _rough = hexToRgbArr(cfg.roughColor) || [74,120,43];
-        let _fescue = hexToRgbArr(cfg.fescueColor) || [45,76,26];
+        let _green = hexToRgbArr(cfg.greenColor) || [138,207,114];
+        let _foregreen = hexToRgbArr(cfg.foregreenColor) || [154,203,103];
+        let _fairway = hexToRgbArr(cfg.fairwayColor) || [121,184,79];
+        let _semi = hexToRgbArr(cfg.semiColor) || [101,154,63];
+        let _rough = hexToRgbArr(cfg.roughColor) || [76,125,50];
+        let _fescue = hexToRgbArr(cfg.fescueColor) || [49,91,43];
         let _water = hexToRgbArr(cfg.waterColor) || [56,189,248];
 
         let dOB = cDist(r,g,b, _ob[0],_ob[1],_ob[2]);
@@ -7698,7 +7699,7 @@
 <script>
 
 </script>
-<script src="arcade-load.js?v=5"></script>
+<script src="arcade-load.js?v=7"></script>
 <script>
     
     let isFlying = false;
@@ -9078,12 +9079,12 @@
             bunker:    { name: 'SAND',       hex: cfg.bunkerColor   || '#e0d8a4' },
             waste:     { name: 'WASTE',      hex: cfg.wasteColor    || '#c2af7c' },
             tee:       { name: 'TEE',        hex: cfg.teeColor      || '#7cb54c' },
-            green:     { name: 'GREEN',      hex: cfg.greenColor    || '#98ce68' },
-            foregreen: { name: 'FOREGREEN',  hex: cfg.foregreenColor|| '#8bc45d' },
-            fairway:   { name: 'FAIRWAY',    hex: cfg.fairwayColor  || '#7db952' },
-            semi:      { name: 'SEMI-ROUGH', hex: cfg.semiColor     || '#6b9e3d' },
-            rough:     { name: 'ROUGH',      hex: cfg.roughColor    || '#4a782b' },
-            fescue:    { name: 'DEEP ROUGH', hex: cfg.fescueColor   || '#2d4c1a' },
+            green:     { name: 'GREEN',      hex: cfg.greenColor    || '#8acf72' },
+            foregreen: { name: 'FOREGREEN',  hex: cfg.foregreenColor|| '#9acb67' },
+            fairway:   { name: 'FAIRWAY',    hex: cfg.fairwayColor  || '#79b84f' },
+            semi:      { name: 'SEMI-ROUGH', hex: cfg.semiColor     || '#659a3f' },
+            rough:     { name: 'ROUGH',      hex: cfg.roughColor    || '#4c7d32' },
+            fescue:    { name: 'DEEP ROUGH', hex: cfg.fescueColor   || '#315b2b' },
             water:     { name: 'WATER',      hex: cfg.waterColor    || '#38bdf8' }
         };
         
@@ -10513,7 +10514,7 @@
                     let hasActiveFw = curHole && (curHole.activeFairwayIndex !== null && curHole.activeFairwayIndex !== undefined) && curHole.fairways && curHole.fairways[curHole.activeFairwayIndex];
                     if (hasActiveFw && curHole.fairways[curHole.activeFairwayIndex].points && curHole.fairways[curHole.activeFairwayIndex].points.length >= 3) {
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
-                        showBuildToast(curLang === 'en' ? 'ℹ️ Fairway is active. Drag golf balls, or click [+ New Fairway] to add another!' : 'ℹ️ Fairway är aktiv. Dra golfbollarna, eller klicka på [➕ Ny Fairway] för att rita en till!', '#7db952');
+                        showBuildToast(curLang === 'en' ? 'ℹ️ Fairway is active. Drag golf balls, or click [+ New Fairway] to add another!' : 'ℹ️ Fairway är aktiv. Dra golfbollarna, eller klicka på [➕ Ny Fairway] för att rita en till!', '#79b84f');
                         return;
                     }
                 }
@@ -11739,7 +11740,7 @@
         if (window.waterBaseZ) window.waterBaseZ.fill(-99);
         if (window.syncWaterVisual) window.syncWaterVisual();
         
-        let deepRoughColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.fescueColor) || '#2d4c1a';
+        let deepRoughColor = (window.CURRENT_BIOME_CONFIG && window.CURRENT_BIOME_CONFIG.fescueColor) || '#315b2b';
         pCtx.fillStyle = deepRoughColor;
         pCtx.fillRect(0,0,4096,4096);
         mapTex.needsUpdate = true;
@@ -13103,8 +13104,8 @@
                 } else if (sSurf === 'custom') {
                     let cfg = window.CURRENT_BIOME_CONFIG || {};
                     let hex = '#' + targetPaintColor.getHexString();
-                    if (hex === (cfg.roughColor || '#4a782b')) maskColor = 'rgb(255, 0, 0)';
-                    else if (hex === (cfg.fescueColor || '#2d4c1a')) maskColor = 'rgb(0, 255, 0)';
+                    if (hex === (cfg.roughColor || '#4c7d32')) maskColor = 'rgb(255, 0, 0)';
+                    else if (hex === (cfg.fescueColor || '#315b2b')) maskColor = 'rgb(0, 255, 0)';
                     else if (hex === (cfg.bunkerColor || '#e0d8a4')) maskColor = 'rgb(0, 128, 0)';
                     else maskColor = 'rgb(0, 0, 0)';
                 }
@@ -15137,14 +15138,14 @@ window.triggerExplosion = function(x, y, z) {
             window._smartPaintSurface = surface;
             var cfg = window.CURRENT_BIOME_CONFIG || {};
             var customEl = document.getElementById('sp-custom-color');
-            var customColor = (customEl && customEl.value) ? customEl.value : '#7db952';
+            var customColor = (customEl && customEl.value) ? customEl.value : '#79b84f';
             var colorMap = {
-                foregreen: cfg.foregreenColor || '#8bc45d',
-                fairway: cfg.fairwayColor || '#7db952',
-                semi: cfg.semiColor || '#6b9e3d',
-                rough: cfg.roughColor || '#4a782b',
-                fescue: cfg.fescueColor || '#2d4c1a',
-                green: cfg.greenColor || '#98ce68',
+                foregreen: cfg.foregreenColor || '#9acb67',
+                fairway: cfg.fairwayColor || '#79b84f',
+                semi: cfg.semiColor || '#659a3f',
+                rough: cfg.roughColor || '#4c7d32',
+                fescue: cfg.fescueColor || '#315b2b',
+                green: cfg.greenColor || '#8acf72',
                 bunker: cfg.bunkerColor || '#e0d8a4',
                 waste: cfg.wasteColor || '#c2af7c',
                 water: cfg.waterColor || '#38bdf8',
@@ -15152,7 +15153,7 @@ window.triggerExplosion = function(x, y, z) {
                 custom: customColor
             };
             var nameMap = {foregreen:'Foregreen', fairway:'Fairway', semi:'Semi-rough', rough:'Rough', fescue:'Deep Rough', green:'Green', bunker:'Sand', waste:'Waste', water:'Water', ob:'OB', custom:'Custom'};
-            var color = colorMap[surface] || '#7db952';
+            var color = colorMap[surface] || '#79b84f';
             window._smartPaintColor = color;
             
             if (window.setBrushColor) {
@@ -15426,7 +15427,7 @@ window.triggerExplosion = function(x, y, z) {
             // Dynamic Contextual Header & Colors
             const config = {
                 GREEN: { icon: '⛳', titleKey: 'sb_green_header', title: 'Din green', color: '#4ade80', btnKey: 'sb_build_green', btnDefault: '⛳ Build Green', btnBg: 'linear-gradient(135deg, #4ade80, #22c55e)' },
-                FAIRWAY: { icon: '🏌️', titleKey: 'sb_fairway_header', title: 'Fairway & Rough', color: '#7db952', btnKey: 'sb_build_fairway', btnDefault: '🏌️ Build Fairway', btnBg: 'linear-gradient(135deg, #7db952, #6b9e3d)' },
+                FAIRWAY: { icon: '🏌️', titleKey: 'sb_fairway_header', title: 'Fairway & Rough', color: '#79b84f', btnKey: 'sb_build_fairway', btnDefault: '🏌️ Build Fairway', btnBg: 'linear-gradient(135deg, #79b84f, #659a3f)' },
                 BUNKER: { icon: '🏖️', titleKey: 'sb_bunker_header', title: 'Bunker & Sand', color: '#f59e0b', btnKey: 'sb_build_bunker', btnDefault: '🏖️ Build Bunker', btnBg: 'linear-gradient(135deg, #f59e0b, #d97706)' },
                 TEE: { icon: '🟦', titleKey: 'sb_tee_header', title: 'Tee Box & Markörer', color: '#38bdf8', btnKey: 'sb_build_tee', btnDefault: '🟦 Build Tee Box', btnBg: 'linear-gradient(135deg, #38bdf8, #0ea5e9)' },
                 AIM: { icon: '🟦', titleKey: 'sb_tee_header', title: 'Tee Box & Markörer', color: '#38bdf8', btnKey: '', btnDefault: '', btnBg: '' }
@@ -15854,15 +15855,15 @@ window.triggerExplosion = function(x, y, z) {
     </script>
 
 <script src="green-studio.js?v=31"></script>
-<script src="fairway-studio.js?v=6"></script>
+<script src="fairway-studio.js?v=7"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
-<script src="smart-builder.js?v=67"></script>
+<script src="smart-builder.js?v=68"></script>
 <script src="voice-commands.js?v=1"></script>
 <script src="studio-reanchor.js?v=5"></script>
 <script src="hole-generator.js?v=29"></script>
 <script src="blueprint.js?v=20"></script>
-<script src="backdrop.js?v=12"></script>
+<script src="backdrop.js?v=13"></script>
 <script src="guide.js?v=18"></script>
 <script src="arcade-lm-bridge.js"></script>
 

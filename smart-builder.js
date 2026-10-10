@@ -1164,7 +1164,7 @@ window.captureBunkerSnapshot = function(hole, points, margin) {
 };
 
 function sbHexToRgb(h) {
-    if (!h) return [74, 120, 43];
+    if (!h) return [76,125,50];
     let hex = h.replace('#', '');
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
     let num = parseInt(hex, 16);
@@ -1187,7 +1187,7 @@ function getBaseGroundColor(hole) {
         let surrKey = surr.N || surr.E || surr.S || surr.W;
         if (cfg[surrKey]) return cfg[surrKey];
     }
-    return cfg.fescueColor || cfg.roughColor || '#4a782b';
+    return cfg.fescueColor || cfg.roughColor || '#4c7d32';
 }
 window.getBaseGroundColor = getBaseGroundColor;
 
@@ -2591,9 +2591,9 @@ function paintFairwayTexture(fd) {
     if (!fd || !fd.points || fd.points.length < 3 || !window._arcadePCtx) return;
     let ctx = window._arcadePCtx;
     let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let fairwayColor = cfg.fairwayColor || '#7db952';
-    let semiRoughColor = cfg.semiColor || '#6b9e3d';
-    let roughColor = cfg.roughColor || '#4a782b';
+    let fairwayColor = cfg.fairwayColor || '#79b84f';
+    let semiRoughColor = cfg.semiColor || '#659a3f';
+    let roughColor = cfg.roughColor || '#4c7d32';
     let densePts = getDenseFairwayPoints(fd.points);
     let S = window.TERRAIN_SIZE;
 
@@ -2749,9 +2749,9 @@ window.applyFairwayPipeline = function(hole, isInitial, updateTexture, targetFai
         window.restoreFairwayBase(hole, false, targetFairway);
 
     let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let fairwayColor = cfg.fairwayColor || '#7db952';
-    let semiRoughColor = cfg.semiColor || '#6b9e3d';
-    let roughColor = cfg.roughColor || '#4a782b';
+    let fairwayColor = cfg.fairwayColor || '#79b84f';
+    let semiRoughColor = cfg.semiColor || '#659a3f';
+    let roughColor = cfg.roughColor || '#4c7d32';
 
     // === PAINT PASS ===
     // 1) put the original pixels back under each targeted fairway's previous footprint
@@ -3125,7 +3125,7 @@ window.cleanGhostFairways = function(holeIndex) {
     window.saveUndoState();
 
     let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let roughColor = cfg.roughColor || '#4a782b';
+    let roughColor = cfg.roughColor || '#4c7d32';
 
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     function includePt(x, z) {
@@ -3175,12 +3175,12 @@ window.cleanGhostFairways = function(holeIndex) {
         let d = imgData.data;
 
         function hexToRgb(h) {
-            if (!h) return [74, 120, 43];
+            if (!h) return [76,125,50];
             h = h.replace('#', '');
             return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)];
         }
-        let fwRgb = hexToRgb(cfg.fairwayColor || '#7db952');
-        let semiRgb = hexToRgb(cfg.semiColor || '#6b9e3d');
+        let fwRgb = hexToRgb(cfg.fairwayColor || '#79b84f');
+        let semiRgb = hexToRgb(cfg.semiColor || '#659a3f');
         let baseGroundColor = getBaseGroundColor(hole);
         let baseRgb = hexToRgb(baseGroundColor);
 
@@ -4859,8 +4859,8 @@ window.captureGreenSnapshot = function(hole, points, margin) {
 function healGreenSurroundings(hole, gd, densePts) {
     if (!gd || !gd.bbox || !window._arcadePCtx) return;
     let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let roughHex = cfg.roughColor || '#4a782b';
-    let fescueHex = cfg.fescueColor || '#2d4c1a';
+    let roughHex = cfg.roughColor || '#4c7d32';
+    let fescueHex = cfg.fescueColor || '#315b2b';
 
     let [targetFescueR, targetFescueG, targetFescueB] = sbHexToRgb(fescueHex);
     let [rR, rG, rB] = sbHexToRgb(roughHex);
@@ -5064,8 +5064,8 @@ window.repaintGreenTextureOnly = function(hole) {
     if (!gd.points || gd.points.length < 3) return;
 
     let cfg = window.CURRENT_BIOME_CONFIG || {};
-    let greenColor = cfg.greenColor || '#98ce68';
-    let foregreenColor = cfg.foregreenColor || '#8bc45d';
+    let greenColor = cfg.greenColor || '#8acf72';
+    let foregreenColor = cfg.foregreenColor || '#9acb67';
 
     let tension = (gd.tension !== undefined) ? gd.tension : 0.5;
     let densePts = (gd.densePts && gd.densePts.length >= 3) ? gd.densePts : ((typeof getDenseGreenPoints === 'function') ? getDenseGreenPoints(gd.points, tension) : gd.points);
@@ -6047,12 +6047,12 @@ window.executeSplineSmartGreen = function() {
         let surface = window._smartPaintSurface || 'foregreen';
         let cfg = window.CURRENT_BIOME_CONFIG;
         var liveColorMap = {
-            foregreen: cfg.foregreenColor || '#8bc45d',
-            fairway: cfg.fairwayColor || '#7db952',
-            semi: cfg.semiColor || '#6b9e3d',
-            rough: cfg.roughColor || '#4a782b',
-            fescue: cfg.fescueColor || '#2d4c1a',
-            green: cfg.greenColor || '#98ce68',
+            foregreen: cfg.foregreenColor || '#9acb67',
+            fairway: cfg.fairwayColor || '#79b84f',
+            semi: cfg.semiColor || '#659a3f',
+            rough: cfg.roughColor || '#4c7d32',
+            fescue: cfg.fescueColor || '#315b2b',
+            green: cfg.greenColor || '#8acf72',
             bunker: cfg.bunkerColor || '#e0d8a4',
             waste: cfg.wasteColor || '#c2af7c',
             water: cfg.waterColor || '#38bdf8',
@@ -6061,9 +6061,9 @@ window.executeSplineSmartGreen = function() {
         let color;
         if (surface === 'custom') {
             let customEl = document.getElementById('sp-custom-color');
-            color = customEl ? customEl.value : (window._smartPaintColor || '#8bc45d');
+            color = customEl ? customEl.value : (window._smartPaintColor || '#9acb67');
         } else {
-            color = liveColorMap[surface] || window._smartPaintColor || '#8bc45d';
+            color = liveColorMap[surface] || window._smartPaintColor || '#9acb67';
         }
 
         // Build closed curve from points
@@ -6109,8 +6109,8 @@ window.executeSplineSmartGreen = function() {
             else if (surface === 'foregreen') maskColor = 'rgb(128, 0, 0)';
             else if (surface === 'custom') {
                 let cfg = window.CURRENT_BIOME_CONFIG || {};
-                if (color === (cfg.roughColor || '#4a782b')) maskColor = 'rgb(255, 0, 0)';
-                else if (color === (cfg.fescueColor || '#2d4c1a')) maskColor = 'rgb(0, 255, 0)';
+                if (color === (cfg.roughColor || '#4c7d32')) maskColor = 'rgb(255, 0, 0)';
+                else if (color === (cfg.fescueColor || '#315b2b')) maskColor = 'rgb(0, 255, 0)';
                 else if (color === (cfg.bunkerColor || '#e0d8a4')) maskColor = 'rgb(0, 128, 0)';
                 else maskColor = 'rgb(0, 0, 0)';
             }

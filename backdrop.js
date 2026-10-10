@@ -230,7 +230,7 @@
         if (!hex && key === 'oceanColor') hex = biome.waterColor || '#1e3a5f';
         if (!hex && key === 'horizonColor') hex = '#ffffff';
         if (!hex && key === 'skyColor') hex = '#87ceeb';
-        if (!hex) hex = '#2d4c1a';
+        if (!hex) hex = '#315b2b';
         const n = parseInt(String(hex).replace('#', ''), 16);
         return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
     }

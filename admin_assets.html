@@ -231,33 +231,33 @@
             <div style="display:flex; gap:10px;">
                 <div class="form-group" style="flex:1;">
                     <label>Green</label>
-                    <input type="color" id="theme-green" value="#98ce68" style="width:100%; height:30px; cursor:pointer;">
+                    <input type="color" id="theme-green" value="#8acf72" style="width:100%; height:30px; cursor:pointer;">
                 </div>
                 <div class="form-group" style="flex:1;">
                     <label>Foregreen</label>
-                    <input type="color" id="theme-foregreen" value="#8bc45d" style="width:100%; height:30px; cursor:pointer;">
+                    <input type="color" id="theme-foregreen" value="#9acb67" style="width:100%; height:30px; cursor:pointer;">
                 </div>
             </div>
             
             <div style="display:flex; gap:10px;">
                 <div class="form-group" style="flex:1;">
                     <label>Fairway</label>
-                    <input type="color" id="theme-fairway" value="#7db952" style="width:100%; height:30px; cursor:pointer;">
+                    <input type="color" id="theme-fairway" value="#79b84f" style="width:100%; height:30px; cursor:pointer;">
                 </div>
                 <div class="form-group" style="flex:1;">
                     <label>Semi-Rough</label>
-                    <input type="color" id="theme-semi" value="#6b9e3d" style="width:100%; height:30px; cursor:pointer;">
+                    <input type="color" id="theme-semi" value="#659a3f" style="width:100%; height:30px; cursor:pointer;">
                 </div>
             </div>
             
             <div style="display:flex; gap:10px;">
                 <div class="form-group" style="flex:1;">
                     <label>Rough</label>
-                    <input type="color" id="theme-rough" value="#4a782b" style="width:100%; height:30px; cursor:pointer;">
+                    <input type="color" id="theme-rough" value="#4c7d32" style="width:100%; height:30px; cursor:pointer;">
                 </div>
                 <div class="form-group" style="flex:1;">
                     <label>Fescue</label>
-                    <input type="color" id="theme-fescue" value="#2d4c1a" style="width:100%; height:30px; cursor:pointer;">
+                    <input type="color" id="theme-fescue" value="#315b2b" style="width:100%; height:30px; cursor:pointer;">
                 </div>
             </div>
             
@@ -1436,12 +1436,12 @@
         document.getElementById('theme-bunker').value = config.bunkerColor || '#e0d8a4';
         document.getElementById('theme-waste').value = config.wasteColor || '#c2af7c';
         document.getElementById('theme-tee').value = config.teeColor || '#7cb54c';
-        document.getElementById('theme-green').value = config.greenColor || '#98ce68';
-        document.getElementById('theme-foregreen').value = config.foregreenColor || '#8bc45d';
-        document.getElementById('theme-fairway').value = config.fairwayColor || '#7db952';
-        document.getElementById('theme-semi').value = config.semiColor || '#6b9e3d';
-        document.getElementById('theme-rough').value = config.roughColor || '#4a782b';
-        document.getElementById('theme-fescue').value = config.fescueColor || '#2d4c1a';
+        document.getElementById('theme-green').value = config.greenColor || '#8acf72';
+        document.getElementById('theme-foregreen').value = config.foregreenColor || '#9acb67';
+        document.getElementById('theme-fairway').value = config.fairwayColor || '#79b84f';
+        document.getElementById('theme-semi').value = config.semiColor || '#659a3f';
+        document.getElementById('theme-rough').value = config.roughColor || '#4c7d32';
+        document.getElementById('theme-fescue').value = config.fescueColor || '#315b2b';
         document.getElementById('theme-water').value = config.waterColor || '#38bdf8';
         
         // Instant preview in the canvas!
@@ -1454,19 +1454,19 @@
             
             if(typeof paletteCtx !== 'undefined' && paletteCtx) {
                 // Fyll bakgrund
-                paletteCtx.fillStyle = config.roughColor || '#4a782b';
+                paletteCtx.fillStyle = config.roughColor || '#4c7d32';
                 paletteCtx.fillRect(0, 0, 1024, 1024);
                 
                 let colors = [
                     { name: "OB", col: config.obColor || '#ef4444' },
                     { name: "Waste", col: config.wasteColor || '#c2af7c' },
                     { name: "Bunker", col: config.bunkerColor || '#e0d8a4' },
-                    { name: "Fescue", col: config.fescueColor || '#2d4c1a' },
-                    { name: "Rough", col: config.roughColor || '#4a782b' },
-                    { name: "Semi-Rough", col: config.semiColor || '#6b9e3d' },
-                    { name: "Fairway", col: config.fairwayColor || '#7db952' },
-                    { name: "Foregreen", col: config.foregreenColor || '#8bc45d' },
-                    { name: "Green", col: config.greenColor || '#98ce68' },
+                    { name: "Fescue", col: config.fescueColor || '#315b2b' },
+                    { name: "Rough", col: config.roughColor || '#4c7d32' },
+                    { name: "Semi-Rough", col: config.semiColor || '#659a3f' },
+                    { name: "Fairway", col: config.fairwayColor || '#79b84f' },
+                    { name: "Foregreen", col: config.foregreenColor || '#9acb67' },
+                    { name: "Green", col: config.greenColor || '#8acf72' },
                     { name: "Tee Box", col: config.teeColor || '#7cb54c' },
                     { name: "Water", col: config.waterColor || '#38bdf8' }
                 ];

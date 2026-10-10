@@ -122,7 +122,7 @@
                 let content = document.getElementById('sf-content-' + t);
                 if (tabBtn) {
                     if (t === tabName) {
-                        tabBtn.style.background = '#7db952';
+                        tabBtn.style.background = '#79b84f';
                         tabBtn.style.color = '#0f172a';
                         tabBtn.style.boxShadow = '0 2px 8px rgba(125, 185, 82, 0.35)';
                     } else {
@@ -319,7 +319,7 @@
                         }
 
                         btn.style.cssText = isSelected 
-                            ? 'flex:1 1 auto; min-width:48px; background:#7db952; color:#0f172a; border:1px solid #4ade80; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; box-shadow:0 0 6px rgba(125,185,82,0.4); transition:all 0.15s;'
+                            ? 'flex:1 1 auto; min-width:48px; background:#79b84f; color:#0f172a; border:1px solid #4ade80; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; box-shadow:0 0 6px rgba(125,185,82,0.4); transition:all 0.15s;'
                             : 'flex:1 1 auto; min-width:48px; background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:5px; padding:5px 6px; font-size:9.5px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; transition:all 0.15s;';
                         btn.innerHTML = label;
                         btn.onclick = () => {
@@ -476,7 +476,7 @@
                                 window._smartShapeClosed = true;
                                 let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                                 if (typeof window.showBuildToast === 'function') {
-                                    window.showBuildToast(isSv ? '🔒 Fairwayformen är stängd! Klicka på [Bygg Fairway] för att skapa.' : '🔒 Fairway shape closed! Click [Build Fairway] to create.', '#7db952');
+                                    window.showBuildToast(isSv ? '🔒 Fairwayformen är stängd! Klicka på [Bygg Fairway] för att skapa.' : '🔒 Fairway shape closed! Click [Build Fairway] to create.', '#79b84f');
                                 }
                                 if (typeof window.updateSmartGreenPreview === 'function') window.updateSmartGreenPreview();
                                 if (window.controls) window.controls.enabled = false;
@@ -527,7 +527,7 @@
                         this.sync();
                         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                         if (typeof window.showBuildToast === 'function') {
-                            window.showBuildToast(isSv ? '➕ Ny punkt infogad på linjen!' : '➕ New point inserted on line!', '#7db952');
+                            window.showBuildToast(isSv ? '➕ Ny punkt infogad på linjen!' : '➕ New point inserted on line!', '#79b84f');
                         }
                         return true;
                     }
@@ -610,7 +610,7 @@
 
                         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
                         if (typeof window.showBuildToast === 'function') {
-                            window.showBuildToast(isSv ? '➕ Ny nod tillagd på fairwayen!' : '➕ New fairway handle added!', '#7db952');
+                            window.showBuildToast(isSv ? '➕ Ny nod tillagd på fairwayen!' : '➕ New fairway handle added!', '#79b84f');
                         }
                         return true;
                     }
@@ -995,9 +995,9 @@
                 let card = document.getElementById('sf-diff-' + d);
                 if (card) {
                     let match = (d.toUpperCase() === diff.toUpperCase());
-                    card.style.borderColor = match ? '#7db952' : '#334155';
+                    card.style.borderColor = match ? '#79b84f' : '#334155';
                     card.style.background = match ? 'rgba(125, 185, 82, 0.25)' : '#1e293b';
-                    card.style.color = match ? '#7db952' : '#94a3b8';
+                    card.style.color = match ? '#79b84f' : '#94a3b8';
                 }
             });
 
@@ -1008,7 +1008,7 @@
                 let card = document.getElementById('sf-mow-' + p);
                 if (card) {
                     let match = (p.toUpperCase() === mp.toUpperCase());
-                    card.style.borderColor = match ? '#7db952' : '#334155';
+                    card.style.borderColor = match ? '#79b84f' : '#334155';
                     card.style.background = match ? 'rgba(125, 185, 82, 0.25)' : '#1e293b';
                 }
             });

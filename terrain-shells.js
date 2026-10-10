@@ -413,10 +413,10 @@
 
             // Track hex colors to auto-update on biome change
             let cfg = window.CURRENT_BIOME_CONFIG || {};
-            this._lastRoughHex = cfg.roughColor || '#4a782b';
-            this._lastDeepHex = cfg.fescueColor || '#2d4c1a';
-            this._lastSemiHex = cfg.semiColor || '#6b9e3d';
-            this._lastForeHex = cfg.foregreenColor || '#8bc45d';
+            this._lastRoughHex = cfg.roughColor || '#4c7d32';
+            this._lastDeepHex = cfg.fescueColor || '#315b2b';
+            this._lastSemiHex = cfg.semiColor || '#659a3f';
+            this._lastForeHex = cfg.foregreenColor || '#9acb67';
             this._lastSandHex = cfg.bunkerColor || '#e0d8a4';
         }
 
@@ -433,10 +433,10 @@
 
             // Track and update colors if CURRENT_BIOME_CONFIG changed (for Autumn, Winter, custom color picker)
             let cfg = window.CURRENT_BIOME_CONFIG || {};
-            let rHex = cfg.roughColor || '#4a782b';
-            let dHex = cfg.fescueColor || '#2d4c1a';
-            let sHex = cfg.semiColor || '#6b9e3d';
-            let fHex = cfg.foregreenColor || '#8bc45d';
+            let rHex = cfg.roughColor || '#4c7d32';
+            let dHex = cfg.fescueColor || '#315b2b';
+            let sHex = cfg.semiColor || '#659a3f';
+            let fHex = cfg.foregreenColor || '#9acb67';
             let bHex = cfg.bunkerColor || '#e0d8a4';
             if (rHex !== this._lastRoughHex || dHex !== this._lastDeepHex || sHex !== this._lastSemiHex || fHex !== this._lastForeHex || bHex !== this._lastSandHex) {
                 this._lastRoughHex = rHex;
@@ -1137,10 +1137,10 @@
 
         _updateColors() {
             let cfg = window.CURRENT_BIOME_CONFIG || {};
-            this._hexToVec(cfg.roughColor || '#4a782b', this._roughCol);
-            this._hexToVec(cfg.fescueColor || '#2d4c1a', this._deepCol);
-            this._hexToVec(cfg.semiColor || '#6b9e3d', this._semiCol);
-            this._hexToVec(cfg.foregreenColor || '#8bc45d', this._foreCol);
+            this._hexToVec(cfg.roughColor || '#4c7d32', this._roughCol);
+            this._hexToVec(cfg.fescueColor || '#315b2b', this._deepCol);
+            this._hexToVec(cfg.semiColor || '#659a3f', this._semiCol);
+            this._hexToVec(cfg.foregreenColor || '#9acb67', this._foreCol);
             this._hexToVec(cfg.bunkerColor || '#e0d8a4', this._sandCol);
         }
 

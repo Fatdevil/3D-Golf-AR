@@ -97,7 +97,9 @@ function serve() {
     function check(name, ok, detail) { out.push({ name: name, ok: !!ok, detail: detail || '' }); }
     window.confirm = function () { return true; };
     setMode('TEST'); window.GREEN_STIMP = 10;
-    const d = window.terrainBiomeData; for (let i = 0; i < d.length; i += 4) { d[i] = 152; d[i + 1] = 206; d[i + 2] = 104; }
+    // the whole map is putting green, in the green of the active palette (not a fixed colour: the palette changes)
+    const gc = window.CURRENT_BIOME_CONFIG.greenColor, gr = parseInt(gc.slice(1, 3), 16), gg = parseInt(gc.slice(3, 5), 16), gb = parseInt(gc.slice(5, 7), 16);
+    const d = window.terrainBiomeData; for (let i = 0; i < d.length; i += 4) { d[i] = gr; d[i + 1] = gg; d[i + 2] = gb; }
     const pos = planeGeo.attributes.position.array; for (let i = 0; i < planeGeo.attributes.position.count; i++) pos[i * 3 + 2] = 0;
     const h = courseHoles[0]; h.flag = { x: 0, z: -8 };
     if (!h.flagMesh) { h.flagMesh = new THREE.Object3D(); scene.add(h.flagMesh); }
@@ -1227,6 +1229,19 @@ function serve() {
       return { seasons: seasons, w: w, nightOk: Math.abs(nightOver - night * 0.85) < 0.01, night: +night.toFixed(3), nightOver: +nightOver.toFixed(3), hazier: fogOver < fogClear, dimmer: ambOver < ambClear, fogClear: +fogClear.toFixed(1), fogOver: +fogOver.toFixed(1), ambClear: +ambClear.toFixed(2), ambOver: +ambOver.toFixed(2) };
     });
     checks.push({ name: 'seasons and weather: the desert seasons get sand dust (not leaves or snow), autumn and winter keep theirs, and overcast is hazier and dimmer than clear, at night too', ok: /Sand/.test(sw.seasons.DESERT) && /Sand/.test(sw.seasons.DESERT_AUTUMN) && /Sand/.test(sw.seasons.DESERT_WINTER) && /Snow/.test(sw.seasons.WINTER) && sw.seasons.AUTUMN === 'none' && sw.w === 'OVERCAST' && sw.hazier && sw.dimmer && sw.nightOk, detail: JSON.stringify(sw) });
+    // the daylight is a little yellow in the summer worlds (the greens read fresher), white in winter, and the night keeps its blue light
+    const sun = await pp.evaluate(function () {
+      const d = window.G.dirLight.color, col = function () { return [+d.r.toFixed(3), +d.g.toFixed(3), +d.b.toFixed(3)]; };
+      window.changeBiome('GLOBAL'); window.setTimeOfDay(12); const summer = col();
+      window.changeBiome('WINTER'); const winter = col();   // a biome change moves the warmth by itself
+      window.changeBiome('GLOBAL'); const back = col();
+      window.setTimeOfDay(0); const night = col();
+      window.setTimeOfDay(12);
+      window.changeBiome('DESERT_AUTUMN'); const autumn = col(); window.changeBiome('DESERT_SUNSET'); const sunset = col();   // the old name of the same biome
+      window.changeBiome('GLOBAL');
+      return { summer: summer, winter: winter, back: back, night: night, autumn: autumn, sunset: sunset };
+    });
+    checks.push({ name: 'warm sun: yellow noon light in the summer world, white in winter, back again with the biome, the night light is exactly the night preset, and the old DESERT_SUNSET name warms like DESERT_AUTUMN', ok: sun.summer[0] === 1 && sun.summer[1] < 0.97 && sun.summer[2] < sun.summer[1] - 0.1 && sun.winter.every(function (v) { return v > 0.999; }) && sun.back.join() === sun.summer.join() && sun.night[2] > sun.night[0] + 0.3 && Math.abs(sun.night[0] - 68 / 255) < 0.003 && Math.abs(sun.night[1] - 102 / 255) < 0.003 && Math.abs(sun.night[2] - 170 / 255) < 0.003 && sun.autumn[2] < 1 && sun.sunset.join() === sun.autumn.join(), detail: JSON.stringify(sun) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 

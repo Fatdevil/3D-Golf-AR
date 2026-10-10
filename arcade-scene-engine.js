@@ -43,6 +43,23 @@
         function lerpVal(a, b, t) { return a + (b - a) * t; }
         function lerpArr(a, b, t) { return a.map((v, i) => lerpVal(v, b[i], t)); }
 
+        // --- WARM SUN ---
+        // The daylight is a little yellow in the summer worlds: the same palette then reads fresher and more lime (the colours are not
+        // changed, so the surface detection and the grass masks are not touched). It follows the strength of the sun (none at night),
+        // and the winter and moon worlds keep their cold or white light.
+        const SUN_TINT = { dir: [255, 238, 200], amb: [255, 249, 232] };
+        const BIOME_WARMTH = { GLOBAL: 1, ALL: 1, AUTUMN: 0.5, DESERT: 0.5, DESERT_AUTUMN: 0.3, DESERT_SUNSET: 0.3 };   // not listed: 0 (DESERT_SUNSET is the old name of DESERT_AUTUMN in saved courses)
+        window.getSunWarmth = function () {
+            let w = BIOME_WARMTH[window.ACTIVE_BIOME || 'GLOBAL'];
+            return w === undefined ? 0 : w;
+        };
+        // 1 at the strength of the noon sun, 0 at the night's moonlight (the night preset's light is not 0, so it is measured from that floor)
+        function sunStrength(p) {
+            let lo = TIME_PRESETS[0].dirInt, hi = TIME_PRESETS[12].dirInt;
+            return Math.min(1, Math.max(0, (p.dirInt - lo) / (hi - lo)));
+        }
+        function warmLight(col, tint, w) { return col.map((v, i) => v * (1 - w * (1 - tint[i] / 255))); }
+
         function getInterpolatedPreset(hour) {
             let h = ((hour % 24) + 24) % 24;
             let lo = 0, hi = 24;
@@ -77,6 +94,15 @@
             if(window.setTimeOfDay) window.setTimeOfDay(window.currentTimeOfDay);
         };
 
+        // the light colours only (a biome change moves the warmth): not the sky, the fog or the intensities
+        window.refreshSunLight = function () {
+            let p = getInterpolatedPreset(window.currentTimeOfDay);
+            let warm = window.getSunWarmth() * sunStrength(p);
+            let ambC = warmLight(p.ambColor, SUN_TINT.amb, warm), dirC = warmLight(p.dirColor, SUN_TINT.dir, warm);
+            if (G.ambientLight) G.ambientLight.color.setRGB(ambC[0]/255, ambC[1]/255, ambC[2]/255);
+            if (G.dirLight) G.dirLight.color.setRGB(dirC[0]/255, dirC[1]/255, dirC[2]/255);
+        };
+
         // --- SET TIME OF DAY ---
         window.setTimeOfDay = function(hour) {
             window.currentTimeOfDay = hour;
@@ -101,17 +127,19 @@
             scene.fog.far = Math.max(baseFogFar, sceneryMaxDist * 1.3);
 
             // 3. Ambient light
+            let warm = window.getSunWarmth() * sunStrength(p);   // 1 at noon, 0 at night
+            let ambC = warmLight(p.ambColor, SUN_TINT.amb, warm), dirC = warmLight(p.dirColor, SUN_TINT.dir, warm);
             let al = G.ambientLight;
             if (al) {
                 al.intensity = p.ambient;
-                al.color.setRGB(p.ambColor[0]/255, p.ambColor[1]/255, p.ambColor[2]/255);
+                al.color.setRGB(ambC[0]/255, ambC[1]/255, ambC[2]/255);
             }
 
             // 4. Directional light (sun)
             let dl = G.dirLight;
             if (dl) {
                 dl.intensity = p.dirInt;
-                dl.color.setRGB(p.dirColor[0]/255, p.dirColor[1]/255, p.dirColor[2]/255);
+                dl.color.setRGB(dirC[0]/255, dirC[1]/255, dirC[2]/255);
                 let angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
                 dl.position.set(Math.cos(angle) * 100, Math.max(10, p.sunY), Math.sin(angle) * 100);
             }
