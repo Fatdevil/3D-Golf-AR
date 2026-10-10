@@ -445,6 +445,7 @@
         <div class="form-group">
             <label>GLB File</label>
             <input type="file" id="file-input" accept=".glb">
+            <div id="glb-report" style="display:none; margin-top:8px; font-size:11px; line-height:1.45; border:1px solid #334155; border-radius:6px; padding:8px; max-height:260px; overflow:auto;"></div>
         </div>
 
         <div class="row">
@@ -743,13 +744,49 @@
             fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
             document.getElementById('log').innerText = `Vald fil: ${baseName} (${fileSizeMB} MB)`;
 
+            const selection = ++glbSelectionSeq;   // a slower read of an earlier file must not overwrite this one
+            base64Data = null;   // the previous model must not be published while this one is being read
             const reader = new FileReader();
             reader.onload = function(event) {
+                if (selection !== glbSelectionSeq) return;
                 base64Data = event.target.result;
                 loadModelFromBase64(base64Data);
             };
             reader.readAsDataURL(file);
+
+            lastGlbBuffer = null; lastGlbResult = null; glbCheckSeq++;   // nothing from the previous file may decide for this one
+            pendingGlbCheck = file.arrayBuffer().then(function(buf) { if (selection !== glbSelectionSeq) return; lastGlbBuffer = buf; return runGlbCheck(); });
         });
+
+        // --- GLB-kontroll: samma mått som tools/check-glb.js (se glb-check.js) ---
+        let glbSelectionSeq = 0, lastGlbBuffer = null, lastGlbResult = null, glbCheckSeq = 0, pendingGlbCheck = Promise.resolve();
+                function sampleImage(bytes, mime) {
+            return createImageBitmap(new Blob([bytes], { type: mime })).then(function(bmp) {
+                const k = Math.min(1, 128 / Math.max(bmp.width, bmp.height));
+                const c = document.createElement('canvas');
+                c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+                const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0, c.width, c.height);
+                return { width: c.width, height: c.height, data: ctx.getImageData(0, 0, c.width, c.height).data };
+            });
+        }
+        function runGlbCheck() {
+            const box = document.getElementById('glb-report'), seq = ++glbCheckSeq;
+            lastGlbResult = null;   // the old verdict belongs to an old file/category
+            if (!lastGlbBuffer || !window.GlbCheck) { box.style.display = 'none'; pendingGlbCheck = Promise.resolve(); return pendingGlbCheck; }
+            const kind = GlbCheck.KIND_OF_SUBCAT[document.getElementById('asset-subcat').value] || 'tree';
+            pendingGlbCheck = GlbCheck.check(new Uint8Array(lastGlbBuffer), { kind: kind, sampleImage: sampleImage }).then(function(r) {
+                if (seq !== glbCheckSeq) return;   // a newer check has started
+                lastGlbResult = r;
+                const col = { ok: '#4ade80', warn: '#fbbf24', fail: '#f87171', info: '#94a3b8' };
+                const mark = { ok: '✓', warn: '!', fail: '✗', info: '·' };
+                const head = { ok: 'Modellen klarar kontrollen', warn: 'Modellen fungerar men har varningar', fail: 'Modellen är för tung eller kan inte laddas' }[r.verdict];
+                const esc = function(t) { return String(t).replace(/[&<>]/g, function(ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]; }); };
+                box.innerHTML = '<div style="font-weight:800; color:' + col[r.verdict] + '; margin-bottom:4px;">' + head + ' (' + kind + ')</div>' +
+                    r.checks.map(function(c) { return '<div style="color:' + col[c.level] + ';">' + mark[c.level] + ' ' + esc(c.message) + '</div>'; }).join('');
+                box.style.display = 'block';
+            }).catch(function(e) { if (seq === glbCheckSeq) { box.style.display = 'block'; box.textContent = 'Kontrollen kraschade: ' + e.message; } });
+            return pendingGlbCheck;
+        }
 
         function loadModelFromBase64(b64) {
             const dracoLoader = new THREE.DRACOLoader();
@@ -1750,12 +1787,21 @@
                 });
 
                 // Fetch Base64 data
+                const selection = ++glbSelectionSeq;   // a library asset is a new selection too: older local reads and older library responses are dropped
+                lastGlbBuffer = null; lastGlbResult = null; glbCheckSeq++;
+                base64Data = null;   // Publish is blocked until this asset has downloaded and been checked
                 const res = await fetch('/api/assets/' + assetInfo.id + '/download');
                 const data = await res.json();
+                if (selection !== glbSelectionSeq) return;
                 
                 if (data.file_data) {
                     base64Data = data.file_data;
                     loadModelFromBase64(base64Data);
+                    try { // the stored file is checked like a new one
+                        const bin = atob(base64Data.split(',').pop()), u8 = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                        lastGlbBuffer = u8.buffer; pendingGlbCheck = runGlbCheck();
+                    } catch (e) { lastGlbBuffer = null; lastGlbResult = null; }
                     document.getElementById('log').innerText = "Loaded from Cloud: " + assetInfo.name;
                 } else {
                     document.getElementById('log').innerText = "❌ Missing 3D data";
@@ -1794,6 +1840,7 @@
 
         // Automatisk ifyllnad: Ändrar du kategori till Rock, så ställs fysiken om till Sphere
         document.getElementById('asset-subcat').addEventListener('change', function(e) {
+            runGlbCheck();
             const val = e.target.value;
             const physSelect = document.getElementById('physics-type');
             if (val === 'TREES') physSelect.value = 'tree';
@@ -1810,9 +1857,16 @@
 
         // --- SPARA TILL BACKEND ---
         document.getElementById('btn-save').addEventListener('click', async () => {
-            if (!base64Data) return alert("Please load a .glb file first!");
+            if (!base64Data) return alert("Please load a .glb file first (or wait until it has finished loading)!");
             const pass = document.getElementById('admin-pass').value;
             if (!pass) return alert("Password required");
+
+            let seqAtClick;
+            do { seqAtClick = glbCheckSeq; await pendingGlbCheck; } while (seqAtClick !== glbCheckSeq);   // wait for the check of the current file and category
+            if (lastGlbResult && lastGlbResult.verdict === 'fail') {
+                const bad = lastGlbResult.checks.filter(function(c) { return c.level === 'fail'; }).map(function(c) { return '- ' + c.message; }).join('\n');
+                if (!confirm('GLB-kontrollen hittade fel:\n\n' + bad + '\n\nPublicera ändå?')) return;
+            }
 
             const id = document.getElementById('asset-id').value;
             const name = document.getElementById('asset-name').value;
@@ -1938,5 +1992,6 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         });
     </script>
+<script src="glb-check.js?v=1"></script>
 </body>
 </html>

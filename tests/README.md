@@ -3,6 +3,7 @@
 | Command | What it does |
 |---|---|
 | `npm test` | Runs every `tests/test_*.js` (physics, roll, putt distances, azimuth, green math, sculpt math). Fails on a non-zero exit or a ❌/REGRESSION line. `KNOWN` in `tests/run.js` lists failures that exist today. |
+| `node tools/check-glb.js <fil.glb>` | Kontrollerar GLB-modeller mot spelets budget (trianglar, filstorlek, texturer, material, form). Testet `tests/test_glb_check.js` ingår i `npm test`. |
 | `npm --prefix tests install` and `npm --prefix tests run setup` | One-time setup of the smoke test: the libraries, then the Chromium browser (kept out of the root `package.json` so Railway does not install them). Skip `setup` if you point `CHROMIUM_PATH` at an existing Chromium. |
 | `npm run smoke` | Opens `arcade.html` in headless Chromium and compares it with `tests/smoke/baseline.json`: no new page errors, no lost `window` globals, the shared top-level variables still exist, plus behaviour checks (putt line holes out, putt power, Tour Pro odds). |
 | `node tests/test_voice_commands.js` | (ingår i `npm test`) Röstkommandon: svenska och engelska fraser blir rätt kommando, vanligt prat blir inget. Smoke-testet prövar dessutom knappen mot en låtsasigenkännare. |
