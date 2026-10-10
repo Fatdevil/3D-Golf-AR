@@ -21,6 +21,13 @@ window.GolfPhysics = (function() {
         stopSpeed: 0.05 // Sänkt från 0.50. 0.50 kapade av rullningen alldeles för tidigt (~1.1 mph). 0.05 låter bollen rulla ut naturligt.
     };
 
+    // Rullbroms (m/s^2, mu * g) per underlag. Gäller från nedslaget och byts när bollen rullar över på ett annat underlag.
+    // GREEN styrs i stället av stimp (greenMu); värdet här är bara ett reservvärde.
+    const ROLL_DECEL = {
+        'GREEN': 0.5, 'TEE': 1.18, 'FAIRWAY': 1.18, 'FOREGREEN': 0.88, 'SEMI-ROUGH': 2.16, 'ROUGH': 3.92,
+        'FESCUE': 4.50, 'DEEP ROUGH': 5.89, 'SAND': 6.38, 'WASTE': 2.16
+    };
+
     // Rullfriktion på green ur stimp (Werner & Greig): en boll som släpps med 1,83 m/s rullar stimp fot, a = v^2/(2d) => mu = 0,056 vid stimp 10.
     // Delas med swing-motorn så att puttkraften och rullningen räknar på samma sätt. Stimp begränsas till 6-14.
     function greenMu(stimp) {
@@ -725,35 +732,35 @@ window.GolfPhysics = (function() {
 
                 let baseCor = GROUND.restitution;
                 let cFriction = GROUND.bounceFriction;
-                let cRollingDecel = GROUND.rollingDecel;
+                let cRollingDecel = ROLL_DECEL[impactTerrainType] !== undefined ? ROLL_DECEL[impactTerrainType] : GROUND.rollingDecel;
                 
                 if (impactTerrainType === 'GREEN') {
                     // Mjukhet baserad på inställningar
                     let firmness = (typeof window !== 'undefined' && window.matchSettings) ? window.matchSettings.greenFirmness : 'NORMAL';
                     if (firmness === 'SOFT') {
-                        baseCor = 0.52; cFriction = 0.20; cRollingDecel = 0.5;
+                        baseCor = 0.52; cFriction = 0.20;
                     } else if (firmness === 'FIRM') {
-                        baseCor = 0.72; cFriction = 0.10; cRollingDecel = 0.5;
+                        baseCor = 0.72; cFriction = 0.10;
                     } else {
                         // NORMAL fallback
-                        baseCor = 0.62; cFriction = 0.15; cRollingDecel = 0.5;
+                        baseCor = 0.62; cFriction = 0.15;
                     }
                 } else if (impactTerrainType === 'TEE' || impactTerrainType === 'FAIRWAY') {
-                    baseCor = 0.58; cFriction = 0.15; cRollingDecel = 1.18; // roll_mu 0.12
+                    baseCor = 0.58; cFriction = 0.15; // roll_mu 0.12
                 } else if (impactTerrainType === 'FOREGREEN') {
-                    baseCor = 0.60; cFriction = 0.14; cRollingDecel = 0.88; // Between green and fairway (apron cut)
+                    baseCor = 0.60; cFriction = 0.14; // Between green and fairway (apron cut)
                 } else if (impactTerrainType === 'SEMI-ROUGH') {
-                    baseCor = 0.50; cFriction = 0.20; cRollingDecel = 2.16; // roll_mu 0.22
+                    baseCor = 0.50; cFriction = 0.20; // roll_mu 0.22
                 } else if (impactTerrainType === 'ROUGH') {
-                    baseCor = 0.43; cFriction = 0.25; cRollingDecel = 3.92; // roll_mu 0.40
+                    baseCor = 0.43; cFriction = 0.25; // roll_mu 0.40
                 } else if (impactTerrainType === 'FESCUE') {
-                    baseCor = 0.38; cFriction = 0.30; cRollingDecel = 4.50; // roll_mu 0.46 — between rough and deep rough
+                    baseCor = 0.38; cFriction = 0.30; // roll_mu 0.46 — between rough and deep rough
                 } else if (impactTerrainType === 'DEEP ROUGH') {
-                    baseCor = 0.35; cFriction = 0.35; cRollingDecel = 5.89; // roll_mu 0.60
+                    baseCor = 0.35; cFriction = 0.35; // roll_mu 0.60
                 } else if (impactTerrainType === 'SAND') {
-                    baseCor = 0.30; cFriction = 0.50; cRollingDecel = 6.38; // roll_mu 0.65
+                    baseCor = 0.30; cFriction = 0.50; // roll_mu 0.65
                 } else if (impactTerrainType === 'WASTE') {
-                    baseCor = 0.32; cFriction = 0.25; cRollingDecel = 2.16; // roll_mu 0.22
+                    baseCor = 0.32; cFriction = 0.25; // roll_mu 0.22
                 }
                 
                 // Variabel COR-ekvation (Sports Engineering 2023)
@@ -943,6 +950,13 @@ window.GolfPhysics = (function() {
                         continue;
                     }
                     
+                    // Rullar bollen över på ett annat underlag bromsar det underlaget från och med nu (rough, green, fairway osv), inte det
+                    // bollen landade på. finalTerrainType är oförändrad: den är nedslagsunderlaget som spelet läser av.
+                    if (freshT.type && freshT.type !== state.terrainType && ROLL_DECEL[freshT.type] !== undefined) {
+                        state.terrainType = freshT.type;
+                        state.rollingDecel = ROLL_DECEL[freshT.type];
+                    }
+
                     state.pos[2] = freshT.z; // Fix: Clamp to ground
                     
                     // Projicera hastigheten längs markens lutning
