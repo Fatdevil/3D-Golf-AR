@@ -57,6 +57,15 @@ function makeGlb(o) {
     r = await G.check(Buffer.from('not a glb at all, really not'), {});
     check('garbage is a fail, not a crash', r.verdict === 'fail' && !r.loadable, r.verdict);
 
+    r = await run({ tris: 600, json: { buffers: [{ byteLength: 99999999 }] } }, { kind: 'plant' });
+    check('JSON promising more binary than the file has is not loadable', r.verdict === 'fail' && !r.loadable && has(r, 'binary', 'fail'), r.verdict);
+
+    r = await run({ tris: 600, json: { accessors: [{ bufferView: 0, componentType: 5126, count: 99999, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 1] }, { bufferView: 1, componentType: 5125, count: 1800, type: 'SCALAR' }] } }, { kind: 'plant' });
+    check('accessor reading outside its bufferView is not loadable', r.verdict === 'fail' && has(r, 'binary', 'fail'), r.verdict);
+
+    r = await run({ tris: 600, json: { meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }, { attributes: { POSITION: 0 }, indices: 1, material: 0 }, { attributes: { POSITION: 0 }, indices: 1, material: 0 }] }] } }, { kind: 'plant' });
+    check('each primitive counts as a draw call', r.facts.meshes === 3, String(r.facts.meshes));
+
     r = await G.check(makeGlb({ tris: 100 }).subarray(0, 40), {});
     check('truncated file is a fail, not a crash', r.verdict === 'fail', r.verdict);
 

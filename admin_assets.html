@@ -751,11 +751,12 @@
             };
             reader.readAsDataURL(file);
 
-            file.arrayBuffer().then(function(buf) { lastGlbBuffer = buf; runGlbCheck(); });
+            lastGlbBuffer = null; lastGlbResult = null; glbCheckSeq++;   // nothing from the previous file may decide for this one
+            pendingGlbCheck = file.arrayBuffer().then(function(buf) { lastGlbBuffer = buf; return runGlbCheck(); });
         });
 
         // --- GLB-kontroll: samma mått som tools/check-glb.js (se glb-check.js) ---
-        let lastGlbBuffer = null, lastGlbResult = null;
+        let lastGlbBuffer = null, lastGlbResult = null, glbCheckSeq = 0, pendingGlbCheck = Promise.resolve();
                 function sampleImage(bytes, mime) {
             return createImageBitmap(new Blob([bytes], { type: mime })).then(function(bmp) {
                 const k = Math.min(1, 128 / Math.max(bmp.width, bmp.height));
@@ -766,10 +767,12 @@
             });
         }
         function runGlbCheck() {
-            const box = document.getElementById('glb-report');
-            if (!lastGlbBuffer || !window.GlbCheck) { box.style.display = 'none'; return Promise.resolve(); }
+            const box = document.getElementById('glb-report'), seq = ++glbCheckSeq;
+            lastGlbResult = null;   // the old verdict belongs to an old file/category
+            if (!lastGlbBuffer || !window.GlbCheck) { box.style.display = 'none'; pendingGlbCheck = Promise.resolve(); return pendingGlbCheck; }
             const kind = GlbCheck.KIND_OF_SUBCAT[document.getElementById('asset-subcat').value] || 'tree';
-            return GlbCheck.check(new Uint8Array(lastGlbBuffer), { kind: kind, sampleImage: sampleImage }).then(function(r) {
+            pendingGlbCheck = GlbCheck.check(new Uint8Array(lastGlbBuffer), { kind: kind, sampleImage: sampleImage }).then(function(r) {
+                if (seq !== glbCheckSeq) return;   // a newer check has started
                 lastGlbResult = r;
                 const col = { ok: '#4ade80', warn: '#fbbf24', fail: '#f87171', info: '#94a3b8' };
                 const mark = { ok: '✓', warn: '!', fail: '✗', info: '·' };
@@ -778,7 +781,8 @@
                 box.innerHTML = '<div style="font-weight:800; color:' + col[r.verdict] + '; margin-bottom:4px;">' + head + ' (' + kind + ')</div>' +
                     r.checks.map(function(c) { return '<div style="color:' + col[c.level] + ';">' + mark[c.level] + ' ' + esc(c.message) + '</div>'; }).join('');
                 box.style.display = 'block';
-            }).catch(function(e) { box.style.display = 'block'; box.textContent = 'Kontrollen kraschade: ' + e.message; });
+            }).catch(function(e) { if (seq === glbCheckSeq) { box.style.display = 'block'; box.textContent = 'Kontrollen kraschade: ' + e.message; } });
+            return pendingGlbCheck;
         }
 
         function loadModelFromBase64(b64) {
@@ -1850,6 +1854,8 @@
             const pass = document.getElementById('admin-pass').value;
             if (!pass) return alert("Password required");
 
+            let seqAtClick;
+            do { seqAtClick = glbCheckSeq; await pendingGlbCheck; } while (seqAtClick !== glbCheckSeq);   // wait for the check of the current file and category
             if (lastGlbResult && lastGlbResult.verdict === 'fail') {
                 const bad = lastGlbResult.checks.filter(function(c) { return c.level === 'fail'; }).map(function(c) { return '- ' + c.message; }).join('\n');
                 if (!confirm('GLB-kontrollen hittade fel:\n\n' + bad + '\n\nPublicera ändå?')) return;

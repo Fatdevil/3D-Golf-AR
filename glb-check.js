@@ -108,16 +108,39 @@
     return { width: 0, height: 0, type: mime || '?', alpha: false };
   }
 
+  // the numbers below come from the JSON; make sure the binary part really holds what the JSON says (GLTFLoader fails on a short buffer)
+  function validateBinary(j, bin, out) {
+    var buffers = j.buffers || [], views = j.bufferViews || [], accessors = j.accessors || [];
+    var CS = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 }, TN = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16 };
+    function bad(msg) { if (out.length < 5) out.push(msg); else if (out.length === 5) out.push('...'); }
+    buffers.forEach(function (b, i) {
+      if (b.uri === undefined && i === 0 && (!bin || bin.length < b.byteLength)) bad('buffer ' + i + ' är ' + b.byteLength + ' byte enligt JSON men binärdelen har ' + (bin ? bin.length : 0));
+    });
+    views.forEach(function (v, i) {
+      var b = buffers[v.buffer];
+      if (!b) bad('bufferView ' + i + ' pekar på en buffer som inte finns');
+      else if ((v.byteOffset || 0) + v.byteLength > b.byteLength) bad('bufferView ' + i + ' går utanför sin buffer');
+    });
+    accessors.forEach(function (a, i) {
+      if (a.bufferView === undefined) return;
+      var v = views[a.bufferView];
+      if (!v) return bad('accessor ' + i + ' pekar på en bufferView som inte finns');
+      var elem = (CS[a.componentType] || 4) * (TN[a.type] || 1), stride = v.byteStride || elem;
+      if (a.count > 0 && (a.byteOffset || 0) + (a.count - 1) * stride + elem > v.byteLength) bad('accessor ' + i + ' läser utanför sin bufferView');
+    });
+  }
+
   // ---------------------------------------------------------------- the measurements
   function measure(parsed) {
     var j = parsed.json, bin = parsed.bin, bytes = parsed.bytes;
     var accessors = j.accessors || [], meshes = j.meshes || [], nodes = j.nodes || [], mats = j.materials || [], texs = j.textures || [], imgs = j.images || [], views = j.bufferViews || [];
     var f = { fileBytes: bytes.byteLength, nodes: nodes.length, meshNodes: 0, primitives: 0, triangles: 0, vertices: 0, nonTriangle: 0, noNormals: 0, vertexColors: false,
       skins: (j.skins || []).length, animations: (j.animations || []).length, cameras: (j.cameras || []).length, bounds: null, usedMaterials: [], images: [], materials: [],
-      extensionsUsed: j.extensionsUsed || [], extensionsRequired: j.extensionsRequired || [], draco: false, externalUris: 0, lights: false };
+      extensionsUsed: j.extensionsUsed || [], extensionsRequired: j.extensionsRequired || [], draco: false, externalUris: 0, lights: false, invalid: [] };
+    validateBinary(j, bin, f.invalid);
     if (f.extensionsUsed.indexOf('KHR_lights_punctual') >= 0) f.lights = true;
 
-    // walk the default scene like the game does (every node with a mesh is one sub-mesh, a mesh used by two nodes counts twice)
+    // walk the default scene like the game does (every primitive of every mesh node is one sub-mesh, a mesh used by two nodes counts twice)
     var sceneIdx = j.scene !== undefined ? j.scene : 0, roots = (j.scenes && j.scenes[sceneIdx] && j.scenes[sceneIdx].nodes) || (nodes.length ? nodes.map(function (_, i) { return i; }) : []);
     var hasParent = {};
     nodes.forEach(function (n) { (n.children || []).forEach(function (c) { hasParent[c] = true; }); });
@@ -128,9 +151,9 @@
       var n = nodes[idx]; if (!n) return;
       var m = mul(parentM, localMatrix(n));
       if (n.mesh !== undefined && meshes[n.mesh]) {
-        f.meshNodes++;
         meshes[n.mesh].primitives.forEach(function (p) {
           f.primitives++;
+          f.meshNodes++;   // GLTFLoader makes one Mesh per primitive and the game one InstancedMesh per Mesh
           var attrs = p.attributes || {}, pos = accessors[attrs.POSITION], mode = p.mode === undefined ? 4 : p.mode;
           var vcount = pos ? pos.count : 0, icount = p.indices !== undefined && accessors[p.indices] ? accessors[p.indices].count : vcount;
           if (mode === 4) f.triangles += Math.floor(icount / 3); else if (mode === 5 || mode === 6) f.triangles += Math.max(0, icount - 2); else f.nonTriangle++;
@@ -241,6 +264,7 @@
     if (f.draco) add('draco', 'info', 'Draco-komprimerad: laddas med avkodaren från Google (kräver nätverk första gången).');
     if (f.externalUris) { add('external', 'fail', f.externalUris + ' extern(a) bildfil(er) i modellen: en GLB ska vara en enda fil med allt inbakat.'); loadable = false; }
     if (f.nonTriangle) { add('prim', 'fail', f.nonTriangle + ' delar är linjer eller punkter, inte trianglar: de ritas inte som en yta.'); }
+    if (f.invalid.length) { add('binary', 'fail', 'Filen är trasig: ' + f.invalid.join('; ') + '. Spelets laddare klarar inte den.'); loadable = false; }
     if (f.meshNodes === 0) { add('empty', 'fail', 'Modellen har ingen geometri i sin scen.'); loadable = false; }
 
     // cost
