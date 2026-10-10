@@ -135,10 +135,11 @@
       else if ((v.byteOffset || 0) + v.byteLength > Math.min(b.byteLength, real[v.buffer])) bad('bufferView ' + i + ' går utanför sin buffer');
     });
     accessors.forEach(function (a, i) {
+      if (!CS[a.componentType] || !TN[a.type]) return bad('accessor ' + i + ' har en okänd componentType eller type');
       if (a.bufferView === undefined) return;
       var v = views[a.bufferView];
       if (!v) return bad('accessor ' + i + ' pekar på en bufferView som inte finns');
-      var elem = (CS[a.componentType] || 4) * (TN[a.type] || 1), stride = v.byteStride || elem;
+      var elem = CS[a.componentType] * TN[a.type], stride = v.byteStride || elem;
       if (a.count > 0 && (a.byteOffset || 0) + (a.count - 1) * stride + elem > v.byteLength) bad('accessor ' + i + ' läser utanför sin bufferView');
     });
   }
@@ -167,6 +168,7 @@
           f.primitives++;
           f.meshNodes++;   // GLTFLoader makes one Mesh per primitive and the game one InstancedMesh per Mesh
           var attrs = p.attributes || {}, pos = accessors[attrs.POSITION], mode = p.mode === undefined ? 4 : p.mode;
+          if (!pos && !(p.extensions && p.extensions.KHR_draco_mesh_compression)) f.invalid.push('en primitive saknar giltig POSITION');
           var vcount = pos ? pos.count : 0, icount = p.indices !== undefined && accessors[p.indices] ? accessors[p.indices].count : vcount;
           if (mode === 4) f.triangles += Math.floor(icount / 3); else if (mode === 5 || mode === 6) f.triangles += Math.max(0, icount - 2); else f.nonTriangle++;
           f.vertices += vcount;
@@ -190,13 +192,28 @@
     if (boundsKnown && isFinite(lo[0])) f.bounds = { min: lo, max: hi, size: [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]] };
     f.usedMaterials = Object.keys(usedMat).map(Number).filter(function (k) { return k >= 0; });
 
+    function bufferBytes(i) {   // buffer 0 without uri is the BIN chunk; a base64 data URI is decoded; anything else is not available
+      var b = (j.buffers || [])[i];
+      if (!b) return null;
+      if (b.uri === undefined) return i === 0 ? bin : null;
+      if (typeof b.uri === 'string' && b.uri.indexOf('data:') === 0 && b.uri.indexOf(';base64,') > 0) {
+        try {
+          var raw = b.uri.slice(b.uri.indexOf(',') + 1);
+          return typeof Buffer !== 'undefined' ? new Uint8Array(Buffer.from(raw, 'base64')) : Uint8Array.from(atob(raw), function (ch) { return ch.charCodeAt(0); });
+        } catch (e) { return null; }
+      }
+      return null;
+    }
+
     // materials, and which texture does what
     var role = {};   // image index -> { base, normal, mr, occlusion, emissive }
     function useTex(ti, what) {
       if (ti === undefined || ti === null) return;
       if (!texs[ti]) { f.invalid.push('ett material pekar på textur ' + ti + ' som inte finns'); return; }
       var t = texs[ti], src = t.source;
-      if (src === undefined && t.extensions) { var e = t.extensions.EXT_texture_webp || t.extensions.KHR_texture_basisu; if (e) src = e.source; }
+      var webp = t.extensions && t.extensions.EXT_texture_webp, basis = t.extensions && t.extensions.KHR_texture_basisu;
+      if (webp && webp.source !== undefined) src = webp.source;   // a WebP-capable browser makes GLTFLoader use the extension's image, not the fallback
+      else if (src === undefined && basis) src = basis.source;
       if (src === undefined || !imgs[src]) { f.invalid.push('textur ' + ti + ' saknar en giltig bild'); return; }
       (role[src] = role[src] || {})[what] = true;
     }
@@ -218,8 +235,9 @@
 
     imgs.forEach(function (im, i) {
       var data = null, size = 0;
-      if (im.bufferView !== undefined && views[im.bufferView] && bin) {
-        var v = views[im.bufferView]; size = v.byteLength; data = bin.subarray(v.byteOffset || 0, (v.byteOffset || 0) + v.byteLength);
+      var vw = im.bufferView !== undefined ? views[im.bufferView] : null, src0 = vw ? bufferBytes(vw.buffer) : null;   // the image lives in the buffer its view names
+      if (vw && src0) {
+        var v = vw; size = v.byteLength; data = src0.subarray(v.byteOffset || 0, (v.byteOffset || 0) + v.byteLength);
       } else if (typeof im.uri === 'string' && im.uri.indexOf('data:') === 0) {
         var comma = im.uri.indexOf(','), b64 = im.uri.slice(comma + 1);
         data = typeof Buffer !== 'undefined' ? new Uint8Array(Buffer.from(b64, 'base64')) : Uint8Array.from(atob(b64), function (ch) { return ch.charCodeAt(0); });

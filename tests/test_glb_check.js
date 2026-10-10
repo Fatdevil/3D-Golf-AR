@@ -113,6 +113,16 @@ function makeGlb(o) {
     r = await G.check(makeGlb({ tris: 600, material: { pbrMetallicRoughness: { baseColorTexture: { index: 3 } } } }), { kind: 'plant' });
     check('material pointing at a missing texture is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
 
+    r = await run({ tris: 600, json: { accessors: [{ bufferView: 0, componentType: 9999, count: 602, type: 'VEC3' }, { bufferView: 1, componentType: 5125, count: 1800, type: 'SCALAR' }] } }, { kind: 'plant' });
+    check('unknown accessor encoding is not loadable', r.verdict === 'fail' && has(r, 'binary', 'fail'), r.verdict);
+
+    r = await run({ tris: 600, json: { meshes: [{ primitives: [{ attributes: {}, indices: 1, material: 0 }] }] } }, { kind: 'plant' });
+    check('primitive without POSITION is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
+
+    const webp = await G.check(makeGlb({ tris: 600, json: { images: [{ bufferView: 0, mimeType: 'image/png' }, { bufferView: 1, mimeType: 'image/webp' }], textures: [{ source: 0, extensions: { EXT_texture_webp: { source: 1 } } }], extensionsUsed: ['EXT_texture_webp'] }, material: { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } }),
+        { kind: 'plant', sampleImage: (bytes, mime) => mime === 'image/webp' ? Promise.reject(new Error('bad webp')) : Promise.resolve({ width: 1, height: 1, data: [10, 200, 10, 255] }) });
+    check('WebP extension image is the one that is checked', webp.verdict === 'fail' && has(webp, 'decode', 'fail'), webp.verdict);
+
     r = await G.check(makeGlb({ tris: 100 }).subarray(0, 40), {});
     check('truncated file is a fail, not a crash', r.verdict === 'fail', r.verdict);
 
