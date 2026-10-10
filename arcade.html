@@ -4004,7 +4004,7 @@
     
 
 </script>
-<script src="arcade-biomes.js?v=2"></script>
+<script src="arcade-biomes.js?v=3"></script>
 <script>
     
     window.CURRENT_BIOME_CONFIG = {
@@ -4455,6 +4455,7 @@
         // Applicera färgerna från valt tema, eller Global som fallback
         let targetBiome = (val === 'ALL') ? 'GLOBAL' : val;
         let config = window.CLOUD_BIOMES[targetBiome];
+        let configId = targetBiome;
         
         // Spara den gamla konfigurationen för att kunna byta ut pixlar
         let oldConfig = Object.assign({}, window.CURRENT_BIOME_CONFIG);
@@ -4462,8 +4463,14 @@
         // Om inget specifikt tema finns ännu, hämta global eller behåll nuvarande
         if(!config && targetBiome !== 'GLOBAL') {
             config = window.CLOUD_BIOMES['GLOBAL'] || window.CURRENT_BIOME_CONFIG;
+            configId = 'GLOBAL';
         } else if (!config) {
             config = window.CURRENT_BIOME_CONFIG;
+        }
+        // A database row replaces the whole built-in palette, and the admin page did not save oceanColor and horizonColor: what the row lacks
+        // comes from the built-in palette of the same name (not from the biome that was active before, which made the horizon follow along)
+        if (config && window.BUILTIN_BIOMES && window.BUILTIN_BIOMES[configId]) {
+            config = Object.assign({}, window.BUILTIN_BIOMES[configId], config);
         }
         
         if (config) {

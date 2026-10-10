@@ -117,3 +117,8 @@
         oceanColor: '#1e1b4b',
         horizonColor: '#0f172a'      // Dark cosmic horizon
     };
+
+    // A copy of the built-in palettes. A database row (fetchCloudBiomes) replaces a whole palette, and the admin page has not always saved every
+    // colour: what a row lacks is filled in from here (see changeBiome), not from the biome that happened to be active before.
+    window.BUILTIN_BIOMES = {};
+    Object.keys(window.CLOUD_BIOMES).forEach(function (k) { window.BUILTIN_BIOMES[k] = Object.assign({}, window.CLOUD_BIOMES[k]); });

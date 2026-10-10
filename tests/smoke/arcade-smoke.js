@@ -1242,6 +1242,18 @@ function serve() {
       return { summer: summer, winter: winter, back: back, night: night, autumn: autumn, sunset: sunset };
     });
     checks.push({ name: 'warm sun: yellow noon light in the summer world, white in winter, back again with the biome, the night light is exactly the night preset, and the old DESERT_SUNSET name warms like DESERT_AUTUMN', ok: sun.summer[0] === 1 && sun.summer[1] < 0.97 && sun.summer[2] < sun.summer[1] - 0.1 && sun.winter.every(function (v) { return v > 0.999; }) && sun.back.join() === sun.summer.join() && sun.night[2] > sun.night[0] + 0.3 && Math.abs(sun.night[0] - 68 / 255) < 0.003 && Math.abs(sun.night[1] - 102 / 255) < 0.003 && Math.abs(sun.night[2] - 170 / 255) < 0.003 && sun.autumn[2] < 1 && sun.sunset.join() === sun.autumn.join(), detail: JSON.stringify(sun) });
+    // a database row (saved from the admin page) can lack oceanColor and horizonColor: they come from the built-in palette of the same name,
+    // not from the biome that was active before (the horizon of autumn stayed on after going back to summer)
+    const rowFill = await pp.evaluate(function () {
+      const B = window.CLOUD_BIOMES, orig = B.GLOBAL, cur = function () { return [window.CURRENT_BIOME_CONFIG.horizonColor, window.CURRENT_BIOME_CONFIG.oceanColor]; };
+      const row = {}; Object.keys(orig).forEach(function (k) { if (k !== 'oceanColor' && k !== 'horizonColor') row[k] = orig[k]; });
+      B.GLOBAL = row;
+      window.changeBiome('AUTUMN'); const autumn = cur();
+      window.changeBiome('GLOBAL'); const back = cur();
+      B.GLOBAL = orig; window.changeBiome('GLOBAL');
+      return { autumn: autumn, back: back, builtin: [window.BUILTIN_BIOMES.GLOBAL.horizonColor, window.BUILTIN_BIOMES.GLOBAL.oceanColor], hasCopy: !!window.BUILTIN_BIOMES };
+    });
+    checks.push({ name: 'biome rows: a database row without ocean and horizon colours gets the built-in ones (summer after autumn is summer again)', ok: rowFill.hasCopy && rowFill.autumn[0] !== rowFill.back[0] && rowFill.back.join() === rowFill.builtin.join(), detail: JSON.stringify(rowFill) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
