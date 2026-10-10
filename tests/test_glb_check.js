@@ -79,6 +79,18 @@ function makeGlb(o) {
     r = await run({ tris: 600, json: { meshes: [{}] } }, { kind: 'plant' });
     check('malformed JSON structure is a fail, not an exception', r.verdict === 'fail' && !r.loadable, r.verdict);
 
+    r = await run({ tris: 600, json: { scenes: [] } }, { kind: 'plant' });
+    check('no default scene is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
+    r = await run({ tris: 600, json: { scene: 5 } }, { kind: 'plant' });
+    check('scene index outside the list is not loadable', r.verdict === 'fail' && !r.loadable, r.verdict);
+
+    r = await G.check(makeGlb({ tris: 600, material: {} }), { kind: 'plant' });
+    check('default material counts as a material', r.facts.materials === 1, String(r.facts.materials));
+
+    r = await G.check(makeGlb({ tris: 600, json: { images: [{ bufferView: 0, mimeType: 'image/png' }], textures: [{ source: 0 }] }, material: { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } }),
+        { kind: 'plant', sampleImage: () => Promise.reject(new Error('bad image')) });
+    check('texture that cannot be decoded is not loadable', r.verdict === 'fail' && !r.loadable && has(r, 'decode', 'fail'), r.verdict);
+
     r = await G.check(makeGlb({ tris: 100 }).subarray(0, 40), {});
     check('truncated file is a fail, not a crash', r.verdict === 'fail', r.verdict);
 

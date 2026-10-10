@@ -144,10 +144,9 @@
     if (f.extensionsUsed.indexOf('KHR_lights_punctual') >= 0) f.lights = true;
 
     // walk the default scene like the game does (every primitive of every mesh node is one sub-mesh, a mesh used by two nodes counts twice)
-    var sceneIdx = j.scene !== undefined ? j.scene : 0, roots = (j.scenes && j.scenes[sceneIdx] && j.scenes[sceneIdx].nodes) || (nodes.length ? nodes.map(function (_, i) { return i; }) : []);
-    var hasParent = {};
-    nodes.forEach(function (n) { (n.children || []).forEach(function (c) { hasParent[c] = true; }); });
-    if (!(j.scenes && j.scenes.length)) roots = nodes.map(function (_, i) { return i; }).filter(function (i) { return !hasParent[i]; });
+    // GLTFLoader gives gltf.scene = scenes[json.scene || 0]; without that scene the game has nothing to place
+    var sceneIdx = j.scene || 0, theScene = j.scenes && j.scenes[sceneIdx], roots = (theScene && theScene.nodes) || [];
+    if (!theScene) f.invalid.push('modellen har ingen standardscen (scenes saknas eller scene pekar utanför listan)');
     var lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], boundsKnown = true, usedMat = {};
 
     function visit(idx, parentM) {
@@ -189,7 +188,7 @@
       if (src === undefined) return;
       (role[src] = role[src] || {})[what] = true;
     }
-    f.usedMaterials.concat(usedMat[-1] ? [] : []).forEach(function (mi) {
+    (usedMat[-1] ? f.usedMaterials.concat([-1]) : f.usedMaterials).forEach(function (mi) {   // -1: GLTFLoader's shared default material
       var mt = mats[mi] || {}, pbr = mt.pbrMetallicRoughness || {};
       f.materials.push({ index: mi, name: mt.name || '', baseColorFactor: pbr.baseColorFactor || [1, 1, 1, 1], baseColorTexture: !!pbr.baseColorTexture, normalTexture: !!mt.normalTexture,
         metallicRoughnessTexture: !!pbr.metallicRoughnessTexture, occlusionTexture: !!mt.occlusionTexture, emissiveTexture: !!mt.emissiveTexture,
@@ -199,6 +198,10 @@
       if (pbr.metallicRoughnessTexture) useTex(pbr.metallicRoughnessTexture.index, 'mr');
       if (mt.occlusionTexture) useTex(mt.occlusionTexture.index, 'occlusion');
       if (mt.emissiveTexture) useTex(mt.emissiveTexture.index, 'emissive');
+      Object.keys(mt.extensions || {}).forEach(function (en) {   // maps of the supported material extensions (clearcoat, transmission, ...) are uploaded too
+        var ext = mt.extensions[en] || {};
+        Object.keys(ext).forEach(function (key) { if (/Texture$/.test(key) && ext[key] && typeof ext[key].index === 'number') useTex(ext[key].index, 'ext'); });
+      });
     });
 
     imgs.forEach(function (im, i) {
@@ -355,9 +358,9 @@
       return Promise.resolve({ kind: kind, verdict: 'fail', loadable: false, facts: null, checks: [{ id: 'format', level: 'fail', message: 'Filens JSON är felaktigt uppbyggd (' + e.message + ').' }] });
     }
     var imagesToSample = f.images.filter(function (im) { return im.used && im.roles.indexOf('base') >= 0 && im.data; });
-    var colourPromise;
+    var colourPromise, decodeFailures = 0;
     if (opts.sampleImage && imagesToSample.length) {
-      colourPromise = Promise.all(imagesToSample.map(function (im) { return Promise.resolve(opts.sampleImage(im.data, im.mime)).catch(function () { return null; }); }))
+      colourPromise = Promise.all(imagesToSample.map(function (im) { return Promise.resolve(opts.sampleImage(im.data, im.mime)).catch(function () { decodeFailures++; return null; }); }))
         .then(function (list) { list = list.filter(Boolean); return list.length ? colourShares(list) : null; });
     } else if (!f.images.length) {
       // no texture: the colour is the material's own
@@ -367,6 +370,10 @@
     var skipped = (!opts.sampleImage && imagesToSample.length) ? 'ingen bildavkodare här' : null;
     return colourPromise.then(function (colours) {
       var res = judge(f, profile, Object.assign({}, opts, { colourSkipped: colours ? null : skipped }), colours);
+      if (decodeFailures) {   // the loader decodes the same image and rejects the model if it cannot
+        res.checks.unshift({ id: 'decode', level: 'fail', message: decodeFailures + ' textur(er) kunde inte avkodas av webbläsaren: spelets laddare klarar dem inte heller.' });
+        res.verdict = 'fail'; res.loadable = false;
+      }
       var facts = { fileBytes: f.fileBytes, triangles: f.triangles, vertices: f.vertices, meshes: f.meshNodes, materials: f.materials.length, textures: f.images.length,
         maxTexture: Math.max.apply(null, [0].concat(f.images.map(function (im) { return Math.max(im.width, im.height); }))), bounds: f.bounds, colours: colours, draco: f.draco,
         extensionsUsed: f.extensionsUsed, extensionsRequired: f.extensionsRequired };
