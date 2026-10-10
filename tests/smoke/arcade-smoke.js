@@ -1237,9 +1237,11 @@ function serve() {
       window.changeBiome('GLOBAL'); const back = col();
       window.setTimeOfDay(0); const night = col();
       window.setTimeOfDay(12);
-      return { summer: summer, winter: winter, back: back, night: night };
+      window.changeBiome('DESERT_AUTUMN'); const autumn = col(); window.changeBiome('DESERT_SUNSET'); const sunset = col();   // the old name of the same biome
+      window.changeBiome('GLOBAL');
+      return { summer: summer, winter: winter, back: back, night: night, autumn: autumn, sunset: sunset };
     });
-    checks.push({ name: 'warm sun: yellow noon light in the summer world, white in winter, back again with the biome, blue night light kept', ok: sun.summer[0] === 1 && sun.summer[1] < 0.97 && sun.summer[2] < sun.summer[1] - 0.1 && sun.winter.every(function (v) { return v > 0.999; }) && sun.back.join() === sun.summer.join() && sun.night[2] > sun.night[0] + 0.3, detail: JSON.stringify(sun) });
+    checks.push({ name: 'warm sun: yellow noon light in the summer world, white in winter, back again with the biome, the night light is exactly the night preset, and the old DESERT_SUNSET name warms like DESERT_AUTUMN', ok: sun.summer[0] === 1 && sun.summer[1] < 0.97 && sun.summer[2] < sun.summer[1] - 0.1 && sun.winter.every(function (v) { return v > 0.999; }) && sun.back.join() === sun.summer.join() && sun.night[2] > sun.night[0] + 0.3 && Math.abs(sun.night[0] - 68 / 255) < 0.003 && Math.abs(sun.night[1] - 102 / 255) < 0.003 && Math.abs(sun.night[2] - 170 / 255) < 0.003 && sun.autumn[2] < 1 && sun.sunset.join() === sun.autumn.join(), detail: JSON.stringify(sun) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
