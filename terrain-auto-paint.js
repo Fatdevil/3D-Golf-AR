@@ -493,6 +493,8 @@
 
         // Save pre-snow snapshot (so we can remove snow later)
         _preSnowSnapshot = pCtx.getImageData(0, 0, canvasW, canvasH);
+        // The ground under the snow: arcade-surface.js reads this so snow never changes the surface type
+        window._preSnowSurfaceData = _preSnowSnapshot.data;
 
         const t0 = performance.now();
 
@@ -629,6 +631,7 @@
         if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
 
         _preSnowSnapshot = null;
+        window._preSnowSurfaceData = null;
         window._snowLayerActive = false;
         console.log('❄️ Snow layer removed');
     }
