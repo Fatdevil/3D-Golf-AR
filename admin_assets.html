@@ -11,11 +11,12 @@
     <script src="arcade-biomes.js?v=3"></script>   <!-- the built-in palettes (window.BUILTIN_BIOMES): shown for a biome that has no database row yet -->
     <style>
         body { margin: 0; padding: 0; background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; overflow: hidden; }
-        #canvas-container { flex: 1; position: relative; }
-        #library-sidebar { width: 300px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #334155; }
-        #sidebar { width: 400px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #334155; }
+        #canvas-container { flex: 1 1 0; min-width: 0; position: relative; overflow: hidden; }
+        #canvas-container > canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }   /* the canvas must not set the minimum width of its column: the side panels were squeezed when the window got narrower */
+        #library-sidebar { flex: 0 0 300px; width: 300px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #334155; }
+        #sidebar { flex: 0 0 400px; width: 400px; background-color: #1e293b; padding: 20px; box-sizing: border-box; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #334155; }
         h1 { margin: 0 0 10px 0; font-size: 20px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
-        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
         label { font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; }
         input, select, button { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 4px; font-family: inherit; font-size: 14px; }
         input[type="range"] { padding: 0; }
@@ -23,7 +24,10 @@
         button { background: #38bdf8; color: #0f172a; font-weight: bold; cursor: pointer; border: none; padding: 12px; margin-top: 10px; transition: background 0.2s; }
         button:hover { background: #0ea5e9; }
         .row { display: flex; gap: 10px; }
-        .row > div { flex: 1; }
+        #library-sidebar [id^="tab-btn-"] { white-space: nowrap; padding-left: 2px !important; padding-right: 2px !important; }
+        .row > div { flex: 1; min-width: 0; }
+        .form-group input:not([type="checkbox"]):not([type="radio"]), .form-group select { box-sizing: border-box; width: 100%; max-width: 100%; }
+        @media (max-width: 1100px) { #library-sidebar { flex-basis: 240px; width: 240px; padding: 14px; } #sidebar { flex-basis: 320px; width: 320px; padding: 14px; } }
         #log { font-size: 12px; padding: 10px; background: #000; border-radius: 4px; min-height: 20px; color: #4ade80; }
         
         /* Library Styles */
@@ -474,7 +478,7 @@
             <div class="form-group" style="align-items:flex-start;">
                 <label>Thumbnail</label>
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <img id="thumb-preview" src="" alt="None" style="width:40px; height:40px; border-radius:4px; border:1px solid #475569; object-fit:cover; background:#000;">
+                    <img id="thumb-preview" src="" alt="" style="width:40px; height:40px; border-radius:4px; border:1px solid #475569; object-fit:cover; background:#000;">
                     <button id="btn-snap" onclick="snapThumbnail()" style="margin:0; padding:6px 10px; font-size:12px; border-radius:4px;">📸 CAPTURE</button>
                 </div>
             </div>
@@ -972,6 +976,7 @@
             loadSelectedThemeUI();
             logMsg("Switched to Theme Settings.");
         }
+        window.dispatchEvent(new Event('resize'));   // the 3D view got wider or narrower: the right panel is shown on Assets only
     }
 
     // --- STARTER PLATES FUNCTIONS ---
