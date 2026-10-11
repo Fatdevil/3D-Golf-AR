@@ -110,6 +110,22 @@ function serve() {
     const pts = window.puttBreakPath(0, 0, h), info = window._breakLineInfo || {};
     check('puttBreakPath returns a line', pts && pts.length >= 6);
     check('puttBreakPath line holes out on a flat green', info.holed === true, JSON.stringify(info));
+    // aim line: a putt along the bearing the planned line aims at ends in the cup; aimed 10 degrees off it does not
+    const aimOn = window.puttPathForAim(0, 0, h, info.aimOffsetDeg, 160), aimOff = window.puttPathForAim(0, 0, h, info.aimOffsetDeg + 10, 160);
+    const endD = function (a) { return a ? Math.hypot(a[a.length - 3] - 0, a[a.length - 1] + 8) : 99; };
+    check('aim line along the planned aim ends in the cup', aimOn && aimOn.length <= 480 && endD(aimOn) < 0.1, 'ends ' + endD(aimOn).toFixed(2) + ' m from the cup');
+    check('aim line 10 degrees off the aim misses the cup', aimOff && endD(aimOff) > 0.5, 'ends ' + endD(aimOff).toFixed(2) + ' m from the cup');
+    // putt assist: Full builds the planned line, Slope only and None do not; None also switches the slope view off
+    const savedMode = appMode, savedState = playState;
+    appMode = 'PLAY'; window.ballPos = window.ballPos || window.ballMesh.position.clone(); window.ballPos.copy(window.ballMesh.position); playState = 'ROUND_IDLE';
+    window.setPuttAssist('FULL'); const gFull = !!window.breakGuideMesh;
+    window.setPuttAssist('SLOPE'); const gSlope = !!window.breakGuideMesh;
+    window.cycleGreenSlopeMode('GRID'); const slopeKept = window._greenSlopeMode === 'GRID';
+    window.setPuttAssist('OFF'); const gOff = !!window.breakGuideMesh, offMode = window._greenSlopeMode;
+    window.cycleGreenSlopeMode('GRID'); const stillOff = window._greenSlopeMode === 'OFF';
+    window.setPuttAssist('FULL'); window.clearBreakLine(); appMode = savedMode; playState = savedState; window.matchSettings.puttAssist = 'FULL';
+    check('putt assist: Full draws the planned line, Slope only and None do not', gFull && !gSlope && !gOff);
+    check('putt assist: Slope only keeps the slope view, None switches it off and keeps it off', slopeKept && offMode === 'OFF' && stillOff);
     // power: a putt aimed for 6 m rolls 6 m (±5 %)
     const cfg = { startPos: [0, 0, 0.022], ballSpeedMph: 5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: 0, isLiveData: false, isTeeShot: false };
     const v = window.calibratePuttSpeed(cfg, 6, 22);

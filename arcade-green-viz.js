@@ -479,6 +479,7 @@
         if (typeof window.clearBreakLine === 'function') {
             window.clearBreakLine();
         }
+        if (window.getPuttAssist() !== 'FULL') return;   // putt assist: only the full level shows the planned line
         
         let hole = courseHoles[playingHoleIndex];
         if (!hole || !hole.flag) return;
@@ -582,7 +583,9 @@
     // The break line is a putt played with the real physics: the pace a player would give a putt to this hole (distance + the
     // usual overroll), aimed so that it is the line that drops in (or, on a very hard break, passes closest). Returns three.js
     // points [x,y,z,...] along the rolling ball, or null when the physics is not available.
-    window.puttBreakPath = function (ballX, ballZ, hole) {
+    // The putt a player would hit from the ball to this hole: where the cup is, where the ball starts, the bearing straight at the cup,
+    // and a launch config for any aim measured from that bearing. Shared by the planned line and the aim line.
+    function puttContext(ballX, ballZ, hole) {
         if (!window.GolfPhysics || typeof physicsTerrainAt !== 'function') return null;
         const cupZ = hole.flagMesh ? hole.flagMesh.position.y : (physicsTerrainAt(hole.flag.x, -hole.flag.z).z);
         const cup = [hole.flag.x, -hole.flag.z, cupZ];
@@ -591,12 +594,49 @@
         const baseAz = Math.atan2(cup[0] - start[0], cup[1] - start[1]) * 180 / Math.PI;
         window.GREEN_STIMP = (window.matchSettings && window.matchSettings.greenStimp) ? window.matchSettings.greenStimp : 10.0;
         const env = { getTerrainAt: physicsTerrainAt, wind: [0, 0, 0], cupPositionLocal: cup };
+        const cfgAt = function (azOff) {
+            return { startPos: start, ballSpeedMph: 3, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0,
+                     azimDeg: baseAz + azOff, isLiveData: false, isTeeShot: false };
+        };
+        return { cup: cup, start: start, dist: dist, baseAz: baseAz, env: env, cfgAt: cfgAt };
+    }
+
+    // The aim line: a putt hit along the bearing the player is aiming at (azimDeg, degrees clockwise from -z like a shot), at the pace
+    // for this hole, played with the real physics. Unlike the planned line it does not look for the aim that drops in: it shows where
+    // this aim ends up, to the cup when it is holed and otherwise to where the ball comes to rest. Returns three.js points, at most
+    // maxPts, or null when the physics is not available.
+    let pace = null;   // { key, v }: the pace puttPathForAim last sized
+    window.puttPathForAim = function (ballX, ballZ, hole, azimDeg, maxPts) {
+        const ctx = puttContext(ballX, ballZ, hole);
+        if (!ctx) return null;
         const quiet = console.log; console.log = function () {};
         try {
-            const cfgAt = function (azOff) {
-                return { startPos: start, ballSpeedMph: 3, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0,
-                         azimDeg: baseAz + azOff, isLiveData: false, isTeeShot: false };
-            };
+            // the pace is sized once per ball position, straight at the cup, and kept while only the aim moves (the player's stroke does
+            // not change when the aim does; sizing it again for every aim would also make a miss roll as far as a hit)
+            const paceKey = ctx.start[0].toFixed(2) + '|' + ctx.start[1].toFixed(2) + '|' + ctx.cup[0].toFixed(2) + '|' + ctx.cup[1].toFixed(2) + '|' + window.GREEN_STIMP;
+            if (!pace || pace.key !== paceKey) pace = { key: paceKey, v: window.calibratePuttSpeed(ctx.cfgAt(0), ctx.dist + 0.45, 22) };
+            const c = ctx.cfgAt(azimDeg - ctx.baseAz);
+            c.ballSpeedMph = pace.v;
+            const r = window.GolfPhysics.simulateFlight(c, ctx.env);
+            const path = r.path, last = path.length - 1;
+            const stride = Math.max(1, Math.ceil(last / ((maxPts || 150) - 1)));
+            const pts = [];
+            for (let i = 0; i < last; i += stride) pts.push(path[i].x, path[i].z + 0.04, -path[i].y);
+            pts.push(path[last].x, path[last].z + 0.04, -path[last].y);
+            return pts.length >= 6 ? pts : null;
+        } catch (e) {
+            return null;
+        } finally {
+            console.log = quiet;
+        }
+    };
+
+    window.puttBreakPath = function (ballX, ballZ, hole) {
+        const ctx = puttContext(ballX, ballZ, hole);
+        if (!ctx) return null;
+        const cup = ctx.cup, start = ctx.start, dist = ctx.dist, cfgAt = ctx.cfgAt, env = ctx.env;
+        const quiet = console.log; console.log = function () {};
+        try {
             // pace: for every aim, the speed that takes the ball (distance + overroll) from where it started, as a player
             // sizes up the putt by distance; the last pace is the first guess for the next aim
             let v = window.calibratePuttSpeed(cfgAt(0), dist + 0.45, 22);
@@ -660,6 +700,37 @@
         }
     };
 
+    // Putt assist for the round, chosen in the round settings: 'FULL' (planned line, aim line and slope view), 'SLOPE' (slope grid/heatmap
+    // only, no lines) or 'OFF' (none of them). Outside a round (build mode, Green Studio, tests) everything is available.
+    window.getPuttAssist = function () {
+        const m = window.matchSettings, lvl = m && m.puttAssist;
+        const inRound = typeof appMode !== 'undefined' && appMode === 'PLAY';
+        return inRound && (lvl === 'SLOPE' || lvl === 'OFF') ? lvl : 'FULL';
+    };
+
+    // Brings the screen in line with the level: lines drawn or removed, slope view switched off when the level has none
+    window.applyPuttAssist = function () {
+        const lvl = window.getPuttAssist();
+        if (lvl === 'FULL') {
+            if (typeof playState !== 'undefined' && playState === 'ROUND_IDLE' && window.ballMesh && typeof courseHoles !== 'undefined') window.buildBreakLine();
+        } else {
+            window.clearBreakLine();
+            if (window.breakLineMesh) window.breakLineMesh.visible = false;
+        }
+        if (lvl === 'OFF' && window._greenSlopeMode && window._greenSlopeMode !== 'OFF') window.cycleGreenSlopeMode('OFF');
+        if (typeof window.syncGreenSlopeUI === 'function') window.syncGreenSlopeUI();
+    };
+
+    window.setPuttAssist = function (level) {
+        if (level !== 'SLOPE' && level !== 'OFF') level = 'FULL';
+        if (window.matchSettings) window.matchSettings.puttAssist = level;
+        ['set-putt-assist', 'ir-putt-assist'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el && el.value !== level) el.value = level;
+        });
+        window.applyPuttAssist();
+    };
+
     window.clearBreakLine = function() {
         if (window.breakGuideMesh) {
             scene.remove(window.breakGuideMesh);
@@ -689,4 +760,5 @@
         }
         window._breakLinePositions = null;
         window._breakLinePosAttr = null;
+        window._aimLineKey = null;   // the aim line is redrawn into the new buffer
     };
