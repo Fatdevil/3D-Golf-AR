@@ -30,6 +30,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `arcade-feature-flags.js` | Free/Premium feature gating |
 | `arcade-api-service.js` | Centraliserat HTTP API-lager med auth headers |
 | `arcade-storage-service.js` | localStorage-abstraktion (drafts, compressed levels) |
+| `arcade-surface.js` | Underlagsklassificering (pixel → GREEN/FAIRWAY/…), delas av `localGetTerrainAt` (lie) och `physicsTerrainAt` (bollfysik); snö ändrar aldrig underlaget |
 | `arcade-swing-engine.js` | Swing meter UI + timing-logik |
 | `arcade-scene-engine.js` | Three.js scen-setup (ljus, skybox, fog) |
 | `arcade-tracer-engine.js` | Bollspår-rendering (Classic, Phantom, Pro Dot + premium) |
