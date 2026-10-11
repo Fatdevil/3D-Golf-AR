@@ -352,5 +352,5 @@ Förut hade ett träd en stamradie och en kronradie, för hand i admin. Nu kan e
 - **Kommandorad:** `node tools/fit-hitbox.js [--height 15] [--json] fil.glb` skriver ut profilen (`tools/glb-mesh.js` läser trianglarna ur GLB:n; inte för Draco).
 - **Test:** `tests/test_hitbox_fit.js` (syntetiska träd, rotation mot three.js, skala, modellerna i repot, propHitAt) och en rökkontroll i `tests/smoke/arcade-smoke.js` som skjuter in i en profilstam med den riktiga skottfysiken.
 
-Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cirkel (nästa steg vore en ellips eller kontur per skikt); kronan saktar bara ner bollen via den befintliga `CANOPY`-grenen, som idag bara reagerar för tillgångar med typen `TREE` (se `physics.js`).
+Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cirkel (nästa steg vore en ellips eller kontur per skikt); kronan saktar ner bollen via den befintliga `CANOPY`-grenen i `physics.js`, som reagerar på delen (`part`) och alltså gäller alla träd, även egna tillgångar.
 
