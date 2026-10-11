@@ -50,6 +50,8 @@ check('a flared foot does not hide the stem', !pr0.trunk.guessed && near(pr0.tru
 const ox = 10, oz = 20, tx = ox + p.trunk.cx, tz = oz + p.trunk.cz;
 let h = HF.hit(p, 1, 0, ox, oz, tx + 0.2, tz, 1.5);
 check('ball inside the trunk: TRUNK, normal away from the trunk, safe spot outside it', h && h.part === 'TRUNK' && h.nx > 0.9 && Math.hypot(h.sx - tx, h.sz - tz) > p.trunk.r, JSON.stringify(h));
+h = HF.hit(p, 1, 0, ox, oz, tx, tz, 1.5);
+check('ball exactly on the trunk axis still gets an outward normal and a safe spot', h && h.part === 'TRUNK' && Math.hypot(h.nx, h.nz) > 0.99 && Math.hypot(h.sx - tx, h.sz - tz) > p.trunk.r, JSON.stringify(h));
 h = HF.hit(p, 1, 0, ox, oz, tx + 1.5, tz, 1.5);
 check('ball beside the trunk, below the crown: no hit', h === null, JSON.stringify(h));
 h = HF.hit(p, 1, 0, ox, oz, ox + mid.cx, oz + mid.cz, 8);
@@ -103,6 +105,10 @@ let t = win.propHitAt(at('T', 0, 0, 1), 0.2, 0, 2), c = win.propHitAt(at('T', 0,
 check('tree (unchanged): trunk low and near, canopy high', t && t.part === 'TRUNK' && t.n && c && c.part === 'CANOPY' && !c.n);
 const pr = win.propHitAt(at('P', ox, oz, 1, 0), tx + 0.2, tz, 1.5), pc = win.propHitAt(at('P', ox, oz, 1, 0), ox + mid.cx, oz + mid.cz, 8);
 check('profile: trunk with a normal and safe spot in physics order, canopy without', pr && pr.part === 'TRUNK' && pr.n.length === 3 && pr.n[2] === 0 && pr.safePos.length === 2 && pc && pc.part === 'CANOPY' && !pc.n && pc.height === p.height, JSON.stringify([pr, pc]));
+win.customModels = { P: { userData: { bakedYOffset: 1 } } };
+const baked = at('P', ox, oz, 2, 0);   // the asset's own yOffset (1 m, baked into the model) scales with the prop (x2): the base is 2 m up
+check('the asset yOffset baked into the model moves the hitbox with it, scaled', !win.propHitAt(baked, tx + 0.4, tz, 1.5) && !!win.propHitAt(Object.assign({}, baked), ox + 2 * p.trunk.cx + 0.2, oz + 2 * p.trunk.cz, 3.5), '');
+win.customModels = {};
 const lifted = Object.assign(at('P', ox, oz, 1, 0), { yOffset: 2 });
 check('a prop standing 2 m up is hit 2 m higher (the model and the ball share one height)', !win.propHitAt(lifted, tx + 0.2, tz, 1.5) && !!win.propHitAt(lifted, tx + 0.2, tz, 3.5), '');
 check('an object without physics or of an unknown type is no obstacle', win.propHitAt(at('NOPE', 0, 0, 1), 0, 0, 1) === null);

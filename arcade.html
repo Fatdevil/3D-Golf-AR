@@ -4865,6 +4865,7 @@
                 
                 let container = new THREE.Group();
                 container.add(model);
+                container.userData.bakedYOffset = yOffset;   // the asset's yOffset is part of the model's position from here on (prop-collision.js needs it)
                 
                 container.traverse(function(node) {
                     if (node.isMesh) {

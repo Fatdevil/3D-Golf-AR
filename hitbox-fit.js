@@ -173,9 +173,9 @@
     function at(cx, cz) { return [ox + (cx * cs + cz * sn) * s, oz + (-cx * sn + cz * cs) * s]; }
     var tr = p.trunk;
     if (tr && zb < tr.h * s) {
-      var tp = at(tr.cx, tr.cz), tdx = bx - tp[0], tdz = bz - tp[1], td = Math.hypot(tdx, tdz) || 0.001;
+      var tp = at(tr.cx, tr.cz), tdx = bx - tp[0], tdz = bz - tp[1], td = Math.hypot(tdx, tdz);
       if (td < tr.r * s) {
-        var nx = tdx / td, nz = tdz / td, rr = tr.r * s + 0.05;
+        var nx = td > 1e-9 ? tdx / td : 1, nz = td > 1e-9 ? tdz / td : 0, rr = tr.r * s + 0.05;   // exactly on the axis: any outward direction will do
         return { part: 'TRUNK', nx: nx, nz: nz, sx: tp[0] + nx * rr, sz: tp[1] + nz * rr };
       }
     }

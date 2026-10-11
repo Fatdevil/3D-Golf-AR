@@ -35,8 +35,10 @@
         }
       }
     } else if (phys.type === 'profile' && root.HitboxFit) {
-      // the model stands yOffset above (or below) the ground where it is placed, so the ball's height is measured from there
-      const h = root.HitboxFit.hit(phys, obj.scale, obj.rot || 0, obj.x, obj.z, threeX, threeZ, z - (obj.yOffset || 0)), height = phys.height * obj.scale;
+      // The model stands higher or lower than where it is placed: the asset's own yOffset is baked into the loaded model (and scaled with the
+      // prop, see rebuildInstancePool) and the prop adds its own yOffset on top. The ball's height is measured from the model's base.
+      const model = root.customModels && root.customModels[obj.type], baked = (model && model.userData && model.userData.bakedYOffset) || 0;
+      const h = root.HitboxFit.hit(phys, obj.scale, obj.rot || 0, obj.x, obj.z, threeX, threeZ, z - baked * obj.scale - (obj.yOffset || 0)), height = phys.height * obj.scale;
       if (h) {
         if (h.part === 'TRUNK') return { type: obj.type, height: height, part: 'TRUNK', n: [h.nx, -h.nz, 0], safePos: [h.sx, -h.sz] };
         return { type: obj.type, height: height, part: 'CANOPY' };
