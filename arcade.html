@@ -22,6 +22,8 @@
 <!-- Hämta vår grymma Fysikmotor! -->
 <script src="i18n.js?v=38"></script>
 <script src="physics.js?v=8"></script>
+<script src="hitbox-fit.js?v=1"></script>
+<script src="prop-collision.js?v=1"></script>
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
 <script src="arcade-api-service.js"></script>
@@ -9199,53 +9201,8 @@
                 z = z - physicsTerrainAt(x, y).z;
                 
                 for(let i=0; i<window.placedTrees.length; i++) {
-                    let obj = window.placedTrees[i];
-                    
-                    let dx = obj.x - threeX;
-                    let dz = obj.z - threeZ;
-                    let distSq = dx*dx + dz*dz;
-                    let dist = Math.sqrt(distSq) || 0.001;
-
-                    let nxThree = -dx / dist; 
-                    let nzThree = -dz / dist;
-                    let nxPhys = nxThree;
-                    let nyPhys = -nzThree;
-                    
-                    let assetDef = window.ASSET_REGISTRY && window.ASSET_REGISTRY[obj.type] ? window.ASSET_REGISTRY[obj.type] : null;
-                    if (assetDef && assetDef.physics) {
-                        let phys = assetDef.physics;
-                        
-                        if (phys.type === 'sphere') {
-                            let rad = phys.radius * obj.scale;
-                            if (distSq < rad*rad && z < rad) {
-                                let sX = obj.x + nxThree * (rad + 0.05);
-                                let sZ = obj.z + nzThree * (rad + 0.05);
-                                return { type: obj.type, height: rad, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                            }
-                        } else if (phys.type === 'cylinder') {
-                            let rad = phys.radius * obj.scale;
-                            let h = phys.height * obj.scale;
-                            if (distSq < rad*rad && z < h) {
-                                let sX = obj.x + nxThree * (rad + 0.05);
-                                let sZ = obj.z + nzThree * (rad + 0.05);
-                                return { type: obj.type, height: h, n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                            }
-                        } else if (phys.type === 'tree') {
-                            let trunkRadius = phys.trunkRadius * obj.scale;
-                            let treeHeight = phys.height * obj.scale;
-                            let canopyRadius = phys.canopyRadius * obj.scale;
-                            
-                            if (distSq < canopyRadius*canopyRadius) {
-                                if (distSq < trunkRadius*trunkRadius && z < treeHeight*0.4) {
-                                    let sX = obj.x + nxThree * (trunkRadius + 0.05);
-                                    let sZ = obj.z + nzThree * (trunkRadius + 0.05);
-                                    return { type: obj.type, height: treeHeight, part: 'TRUNK', n: [nxPhys, nyPhys, 0], safePos: [sX, -sZ] };
-                                } else if (z > treeHeight*0.3 && z < treeHeight) {
-                                    return { type: obj.type, height: treeHeight, part: 'CANOPY' };
-                                }
-                            }
-                        }
-                    }
+                    let hit = window.propHitAt(window.placedTrees[i], threeX, threeZ, z);   // prop-collision.js
+                    if (hit) return hit;
                 }
                 
                 // === SPLINE OBJECTS COLLISION (Fences, Walls, OB Stakes) ===

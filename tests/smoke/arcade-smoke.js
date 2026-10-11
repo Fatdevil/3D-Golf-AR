@@ -135,6 +135,18 @@ function serve() {
     delete window.ASSET_REGISTRY._T_CLOUD; delete window.ASSET_REGISTRY._T_POLY;
     check('new cloud prop is placed at 1x, not at the admin boost', bCloud === 1, String(bCloud));
     check('other assets keep their saved brightness; a default saved from the edit panel wins', bPoly === 0.6 && bSaved === 1.4, bPoly + ' ' + bSaved);
+    // a collision profile fitted to a model, in the real shot physics: a low shot into the trunk of such a tree stops short, past it flies on
+    window.ASSET_REGISTRY._T_PROFILE = { subcat: 'TREES', physics: { type: 'profile', height: 10, reach: 3, crownY: 5, trunk: { r: 0.5, cx: 0, cz: 0, h: 5, guessed: false }, slices: [{ y0: 0, y1: 5, r: 0.5, cx: 0, cz: 0 }, { y0: 5, y1: 10, r: 3, cx: 0, cz: 0 }] } };
+    const shoot = function (treeX) {
+      const tree = { type: '_T_PROFILE', x: treeX, z: -10, scale: 1, rot: 0 };
+      const env = { getTerrainAt: function () { return { z: 0, normal: [0, 0, 1], type: 'FAIRWAY' }; }, wind: [0, 0, 0], checkCollisionCallback: function (x, y, zz) { return window.propHitAt(tree, x, -y, zz); } };
+      const quiet = console.log; console.log = function () {};
+      try { const r = window.GolfPhysics.simulateFlight({ startPos: [0, 0, 0.1], ballSpeedMph: 70, launchAngleDeg: 3, totalSpinRpm: 0, spinAxisDeg: 0, azimDeg: 0, isLiveData: false, isTeeShot: false }, env); const e = r.path[r.path.length - 1]; return e.y; }
+      finally { console.log = quiet; }
+    };
+    const stopped = shoot(0), clear = shoot(30);
+    delete window.ASSET_REGISTRY._T_PROFILE;
+    check('profile tree: a low shot into its trunk is stopped, the same shot past it flies on', stopped < 12 && clear > 25, 'into the trunk ended at ' + stopped.toFixed(1) + ' m, past it at ' + clear.toFixed(1) + ' m');
     // power: a putt aimed for 6 m rolls 6 m (±5 %)
     const cfg = { startPos: [0, 0, 0.022], ballSpeedMph: 5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: 0, isLiveData: false, isTeeShot: false };
     const v = window.calibratePuttSpeed(cfg, 6, 22);

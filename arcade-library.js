@@ -1050,10 +1050,14 @@
             // Scale physics dimensions proportionally
             if (window.ASSET_REGISTRY[type].physics) {
                 let phys = window.ASSET_REGISTRY[type].physics;
-                if (phys.radius !== undefined) phys.radius *= currentScale;
-                if (phys.trunkRadius !== undefined) phys.trunkRadius *= currentScale;
-                if (phys.canopyRadius !== undefined) phys.canopyRadius *= currentScale;
-                if (phys.height !== undefined) phys.height *= currentScale;
+                if (phys.type === 'profile' && window.HitboxFit) {
+                    window.ASSET_REGISTRY[type].physics = window.HitboxFit.scale(phys, currentScale);   // a fitted profile: every length follows the scale
+                } else {
+                    if (phys.radius !== undefined) phys.radius *= currentScale;
+                    if (phys.trunkRadius !== undefined) phys.trunkRadius *= currentScale;
+                    if (phys.canopyRadius !== undefined) phys.canopyRadius *= currentScale;
+                    if (phys.height !== undefined) phys.height *= currentScale;
+                }
             }
 
             // Save back to active user preset in database

@@ -807,6 +807,7 @@
     function footprintAtUnitScale(def) {
         let ph = def.physics || {}, r;
         if (ph.type === 'tree') r = Math.max(ph.trunkRadius || 0, 0.4);
+        else if (ph.type === 'profile') r = Math.max((ph.trunk && ph.trunk.r) || 0, 0.4);   // fitted to the model: same footprint rule as a tree
         else if (ph.radius) r = ph.radius;
         else r = 2;
         if (BIG_SUBCATS.indexOf(def.subcat) >= 0) r = Math.max(r, 0.5 * (def.targetHeight || 0));
