@@ -31,6 +31,7 @@
   // the admin page's subcategory -> a kind
   var KIND_OF_SUBCAT = { TREES: 'tree', PLANTS: 'plant', ROCKS: 'rock', LANDSCAPE: 'landscape', BLOCKS: 'prop' };
   var TOTAL_BUDGET_MB = 40;   // arcade.html: MAX_ASSET_BUDGET_MB (all assets of a biome)
+  var TOTAL_GPU_BUDGET_MB = 128;   // a suggestion, not measured on a device: the decoded textures of all assets of a biome (global + the biome) on a mid-range phone
 
   // glTF extensions the game's loader handles: GLTFLoader r128 plus the Draco decoder. Meshopt and KTX2 need decoders the game does not set.
   var SUPPORTED_EXT = ['KHR_draco_mesh_compression', 'KHR_lights_punctual', 'KHR_materials_clearcoat', 'KHR_materials_pbrSpecularGlossiness',
@@ -207,7 +208,9 @@
 
     // materials, and which texture does what
     var role = {};   // image index -> { base, normal, mr, occlusion, emissive }
-    function useTex(ti, what) {
+    var texObjs = {};   // image index -> the texture indices that use it (outside the dropped metal/rough maps): GLTFLoader makes one texture object, and one GPU upload, per index
+    var useSeq = 0;
+    function useTex(ti, what, info) {
       if (ti === undefined || ti === null) return;
       if (!texs[ti]) { f.invalid.push('ett material pekar på textur ' + ti + ' som inte finns'); return; }
       var t = texs[ti], src = t.source;
@@ -216,20 +219,23 @@
       else if (src === undefined && basis) src = basis.source;
       if (src === undefined || !imgs[src]) { f.invalid.push('textur ' + ti + ' saknar en giltig bild'); return; }
       (role[src] = role[src] || {})[what] = true;
+      // GLTFLoader clones the texture for every use that carries KHR_texture_transform; plain uses share the one object of their texture index
+      var transformed = info && info.extensions && info.extensions.KHR_texture_transform;
+      if (what !== 'mr') (texObjs[src] = texObjs[src] || {})[transformed ? ti + '#' + (useSeq++) : ti] = true;
     }
     (usedMat[-1] ? f.usedMaterials.concat([-1]) : f.usedMaterials).forEach(function (mi) {   // -1: GLTFLoader's shared default material
       var mt = mats[mi] || {}, pbr = mt.pbrMetallicRoughness || {};
       f.materials.push({ index: mi, name: mt.name || '', baseColorFactor: pbr.baseColorFactor || [1, 1, 1, 1], baseColorTexture: !!pbr.baseColorTexture, normalTexture: !!mt.normalTexture,
         metallicRoughnessTexture: !!pbr.metallicRoughnessTexture, occlusionTexture: !!mt.occlusionTexture, emissiveTexture: !!mt.emissiveTexture,
         alphaMode: mt.alphaMode || 'OPAQUE', doubleSided: !!mt.doubleSided, extensions: Object.keys(mt.extensions || {}) });
-      if (pbr.baseColorTexture) useTex(pbr.baseColorTexture.index, 'base');
-      if (mt.normalTexture) useTex(mt.normalTexture.index, 'normal');
-      if (pbr.metallicRoughnessTexture) useTex(pbr.metallicRoughnessTexture.index, 'mr');
-      if (mt.occlusionTexture) useTex(mt.occlusionTexture.index, 'occlusion');
-      if (mt.emissiveTexture) useTex(mt.emissiveTexture.index, 'emissive');
+      if (pbr.baseColorTexture) useTex(pbr.baseColorTexture.index, 'base', pbr.baseColorTexture);
+      if (mt.normalTexture) useTex(mt.normalTexture.index, 'normal', mt.normalTexture);
+      if (pbr.metallicRoughnessTexture) useTex(pbr.metallicRoughnessTexture.index, 'mr', pbr.metallicRoughnessTexture);
+      if (mt.occlusionTexture) useTex(mt.occlusionTexture.index, 'occlusion', mt.occlusionTexture);
+      if (mt.emissiveTexture) useTex(mt.emissiveTexture.index, 'emissive', mt.emissiveTexture);
       Object.keys(mt.extensions || {}).forEach(function (en) {   // maps of the supported material extensions (clearcoat, transmission, ...) are uploaded too
         var ext = mt.extensions[en] || {};
-        Object.keys(ext).forEach(function (key) { if (/Texture$/.test(key) && ext[key] && typeof ext[key].index === 'number') useTex(ext[key].index, 'ext'); });
+        Object.keys(ext).forEach(function (key) { if (/Texture$/.test(key) && ext[key] && typeof ext[key].index === 'number') useTex(ext[key].index, 'ext', ext[key]); });
       });
     });
 
@@ -244,7 +250,7 @@
         size = data.length;
       } else if (typeof im.uri === 'string') f.externalUris++;
       var info = data ? imageInfo(data, im.mimeType) : { width: 0, height: 0, type: im.mimeType || '?', alpha: false };
-      f.images.push({ index: i, bytes: size, mime: im.mimeType || '', width: info.width, height: info.height, alpha: info.alpha, roles: Object.keys(role[i] || {}), data: data, used: !!role[i] });
+      f.images.push({ index: i, bytes: size, mime: im.mimeType || '', width: info.width, height: info.height, alpha: info.alpha, roles: Object.keys(role[i] || {}), data: data, used: !!role[i], textureObjects: Math.max(1, Object.keys(texObjs[i] || {}).length) });
     });
     return f;
   }
@@ -318,7 +324,7 @@
     f.images.forEach(function (im) {
       maxDim = Math.max(maxDim, im.width, im.height);
       var isDead = im.used && im.roles.length && im.roles.every(function (r) { return r === 'mr'; });
-      if (im.used && !isDead) gpu += im.width * im.height * 4 * 1.34;   // the game drops metal/rough maps, unused images are never uploaded
+      if (im.used && !isDead) gpu += im.width * im.height * 4 * 1.34 * im.textureObjects;   // the game drops metal/rough maps, unused images are never uploaded; one upload per texture object
       if (!im.used) unusedBytes += im.bytes;
       else if (isDead) dead += im.bytes;
     });
@@ -370,7 +376,7 @@
     var order = { fail: 0, warn: 1, ok: 2, info: 3 };
     checks.sort(function (a, c) { return order[a.level] - order[c.level]; });
     var verdict = checks.some(function (c) { return c.level === 'fail'; }) ? 'fail' : (checks.some(function (c) { return c.level === 'warn'; }) ? 'warn' : 'ok');
-    return { checks: checks, verdict: verdict, loadable: loadable };
+    return { checks: checks, verdict: verdict, loadable: loadable, gpuBytes: gpu };
   }
 
   // ---------------------------------------------------------------- the public entry
@@ -405,7 +411,7 @@
         res.checks.unshift({ id: 'decode', level: 'fail', message: decodeFailures + ' textur(er) kunde inte avkodas av webbläsaren: spelets laddare klarar dem inte heller.' });
         res.verdict = 'fail'; res.loadable = false;
       }
-      var facts = { fileBytes: f.fileBytes, triangles: f.triangles, vertices: f.vertices, meshes: f.meshNodes, materials: f.materials.length, textures: f.images.length,
+      var facts = { gpuMB: +(res.gpuBytes / MB).toFixed(2), fileBytes: f.fileBytes, triangles: f.triangles, vertices: f.vertices, meshes: f.meshNodes, materials: f.materials.length, textures: f.images.length,
         maxTexture: Math.max.apply(null, [0].concat(f.images.map(function (im) { return Math.max(im.width, im.height); }))), bounds: f.bounds, colours: colours, draco: f.draco,
         extensionsUsed: f.extensionsUsed, extensionsRequired: f.extensionsRequired };
       return { kind: kind, verdict: res.verdict, loadable: res.loadable, facts: facts, checks: res.checks };
@@ -421,5 +427,5 @@
   }
 
   return { check: check, parseGlb: parseGlb, formatReport: formatReport, classify: classify, PROFILES: PROFILES, KIND_OF_SUBCAT: KIND_OF_SUBCAT, SCENE_TRIS: SCENE_TRIS,
-    TOTAL_BUDGET_MB: TOTAL_BUDGET_MB, SUPPORTED_EXT: SUPPORTED_EXT };
+    TOTAL_BUDGET_MB: TOTAL_BUDGET_MB, TOTAL_GPU_BUDGET_MB: TOTAL_GPU_BUDGET_MB, SUPPORTED_EXT: SUPPORTED_EXT };
 });

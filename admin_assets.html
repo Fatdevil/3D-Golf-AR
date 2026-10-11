@@ -183,6 +183,13 @@
                 <div style="width:100%; height:4px; background:#334155; border-radius:2px; margin-top:6px; overflow:hidden;">
                     <div id="weight-bar" style="width:0%; height:100%; background:#4ade80;"></div>
                 </div>
+                <div style="display:flex; justify-content:space-between; color:#38bdf8; font-weight:bold; margin-top:8px;" title="Utpackade texturer i grafikminnet. Räknas ur GLB-kontrollen när modellen sparas; äldre modeller saknar värdet.">
+                    <span>TEXTURMINNE:</span> <span id="weight-gpu">0.0 / 128 MB</span>
+                </div>
+                <div style="width:100%; height:4px; background:#334155; border-radius:2px; margin-top:6px; overflow:hidden;">
+                    <div id="weight-gpu-bar" style="width:0%; height:100%; background:#4ade80;"></div>
+                </div>
+                <div id="weight-gpu-note" style="color:#94a3b8; margin-top:4px;"></div>
             </div>
 
             <div id="library-list" style="display:flex; flex-direction:column; gap:8px;">
@@ -1740,15 +1747,21 @@
             // --- WEIGHT CALCULATION ---
             let globalWeight = 0;
             let biomeWeight = 0;
+            let gpuLoad = 0, gpuUnknown = 0;   // decoded texture memory of the same assets; models saved before it was recorded have no value
             
             allLibraryAssets.forEach(a => {
                 const size = parseFloat(a.config?.fileSizeMB) || 0;
                 const biomes = a.config?.biomes || [];
+                const counted = biomes.includes('GLOBAL') || (filter !== 'ALL' && filter !== 'GLOBAL' && biomes.includes(filter));
                 
                 if (biomes.includes('GLOBAL')) {
                     globalWeight += size;
                 } else if (filter !== 'ALL' && filter !== 'GLOBAL' && biomes.includes(filter)) {
                     biomeWeight += size;
+                }
+                if (counted) {
+                    const gpu = parseFloat(a.config?.gpuMB);
+                    if (isFinite(gpu)) gpuLoad += gpu; else gpuUnknown++;
                 }
             });
             
@@ -1785,6 +1798,14 @@
                     bar.style.background = '#ef4444'; // Red
                     totalSpan.style.color = '#ef4444';
                 }
+
+                const gpuBudget = window.GlbCheck ? GlbCheck.TOTAL_GPU_BUDGET_MB : 128;
+                const gpuSpan = document.getElementById('weight-gpu'), gpuBar = document.getElementById('weight-gpu-bar');
+                gpuSpan.innerText = gpuLoad.toFixed(1) + ' / ' + gpuBudget + ' MB';
+                gpuBar.style.width = Math.min(gpuLoad / gpuBudget * 100, 100) + '%';
+                const gpuCol = gpuLoad < gpuBudget * 0.5 ? '#4ade80' : gpuLoad < gpuBudget * 0.85 ? '#fbbf24' : '#ef4444';
+                gpuBar.style.background = gpuCol; gpuSpan.style.color = gpuCol;
+                document.getElementById('weight-gpu-note').innerText = gpuUnknown ? gpuUnknown + ' modell(er) saknar uppmätt texturminne (sparade före kontrollen): öppna och spara om dem för att räkna med.' : '';
             }
             // -------------------------
 
@@ -1881,10 +1902,12 @@
                 
                 if (data.file_data) {
                     base64Data = data.file_data;
+                    if (isFinite(parseFloat(assetInfo.config?.fileSizeMB))) fileSizeMB = parseFloat(assetInfo.config.fileSizeMB);   // saving this asset again keeps its size in the biome total
                     loadModelFromBase64(base64Data);
                     try { // the stored file is checked like a new one
                         const bin = atob(base64Data.split(',').pop()), u8 = new Uint8Array(bin.length);
                         for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                        fileSizeMB = (u8.length / (1024 * 1024)).toFixed(2);   // the real size of the stored file
                         lastGlbBuffer = u8.buffer; pendingGlbCheck = runGlbCheck();
                     } catch (e) { lastGlbBuffer = null; lastGlbResult = null; }
                     document.getElementById('log').innerText = "Loaded from Cloud: " + assetInfo.name;
@@ -1986,6 +2009,7 @@
                 biomes: Array.from(document.querySelectorAll('.biome-cb:checked')).map(cb => cb.value),
                 fileSizeMB: parseFloat(fileSizeMB)
             };
+            if (lastGlbResult && lastGlbResult.facts && isFinite(lastGlbResult.facts.gpuMB)) config.gpuMB = lastGlbResult.facts.gpuMB;   // decoded textures, for the biome texture-memory bar
 
             document.getElementById('log').innerText = "Uploading to Cloud...";
 
@@ -2082,7 +2106,7 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
         });
     </script>
-<script src="glb-check.js?v=1"></script>
+<script src="glb-check.js?v=2"></script>
 <script src="hitbox-fit.js?v=1"></script>
 </body>
 </html>
