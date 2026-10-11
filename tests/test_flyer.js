@@ -10,10 +10,10 @@ const G = global.window.GolfPhysics;
 const SE = require('./load_swing_engine.js')();
 const YD = 1.09361;
 
-function carry(club, power, terrain, rnd, extra) {
+function carry(club, power, terrain, rnd, extra, wind) {
   Math.random = function () { return rnd; };
   const d = SE.mapCircleToPhysics(power, 0, club, 0);
-  const env = { getTerrainAt: () => ({ z: 0, normal: [0, 0, 1], type: terrain }), checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: 15 };
+  const env = { getTerrainAt: () => ({ z: 0, normal: [0, 0, 1], type: terrain }), checkCollisionCallback: () => null, wind: wind || [0, 0, 0], temperatureC: 15 };
   const log = console.log; console.log = function () {};
   try { return G.simulateFlight(Object.assign({}, d, { startPos: [0, 0, 0], isLiveData: false, isTeeShot: false }, extra || {}), env).metrics.carryMeters * YD; }
   finally { console.log = log; }
@@ -79,6 +79,23 @@ console.log('\nHela kraftskalan: en flyer är aldrig kortare än fairway-slaget 
     if (fl < rfl - 0.5) dLo.push(c + ' ' + p * 100 + ' % deep-flyer kortare än rough-flyer');
   }
   check(nd + ' flyer-slag (deep rough): 0..+20 % mot fairway och minst som rough-flyer', dLo.length === 0 && dHi.length === 0, (dLo.concat(dHi)).length ? '(' + dLo.concat(dHi).slice(0, 3).join('; ') + ')' : '(' + f0(dWorstLo) + ' till ' + f0(dWorstHi) + ')');
+}
+
+console.log('\nVind: en flyer är inte kortare än fairway-slaget i stiltje till måttlig vind (motvind upp till 11 mph, medvind och sidvind 15 mph)');
+{
+  const MS = 0.44704, POWERS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.85, 1.0];
+  const WINDS = [['motvind 5 mph', [0, -5 * MS, 0]], ['motvind 11 mph', [0, -11 * MS, 0]], ['medvind 15 mph', [0, 15 * MS, 0]], ['sidvind 15 mph', [15 * MS, 0, 0]]];
+  for (const [name, w] of WINDS) {
+    let n = 0, lo = 1e9, bad = [];
+    for (const c of ['I7', 'I9', 'PW', 'SW', 'LW']) for (const p of POWERS) {
+      if (SE.mapCircleToPhysics(p, 0, c, 0).launchAngleDeg <= 15) continue;
+      const fw = carry(c, p, 'FAIRWAY', 0.5, null, w), rn = carry(c, p, 'ROUGH', 0.5, null, w), fl = carry(c, p, 'ROUGH', 0.0, null, w);
+      n++; const g = pct(fl, fw); if (g < lo) lo = g;
+      if (g < -1.5 || fl <= rn) bad.push(c + ' ' + p * 100 + ' % ' + f0(g));
+    }
+    check(name + ': ' + n + ' flyer-slag, aldrig mer än 1,5 % under fairway och alltid över vanligt rough-slag', bad.length === 0, bad.length ? '(' + bad.slice(0, 3).join('; ') + ')' : '(lägst ' + lo.toFixed(1) + ' %)');
+  }
+  console.log('     (kraftigare motvind än ca 10 mph tar flyerns fördel: ca -4 % i 20 mph och upp till ca -8 % i 30 mph för långa järn; dokumenterat i physics.js)');
 }
 
 console.log('\nChans och spärrar');

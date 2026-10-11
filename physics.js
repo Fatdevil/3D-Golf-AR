@@ -62,7 +62,9 @@ window.GolfPhysics = (function() {
     // Farten behålls, spinnet minskar; resten gör bollens egen aerodynamik (mindre spinn = mindre luftmotstånd = längre carry).
     // Kalibrerat över hela kraftskalan (10-100 %, alla klubbor som kan få flyer): rough ger +2 till +15 % carry mot fairway, deep rough
     // +4 till +18 %. Farten höjs 2 % eftersom en minskad spinn annars låter ett lågfartsslag korsa gränsen för omvänd Magnus (negativt lyft
-    // under 2250 rpm) och bli kortare än fairway.
+    // under 2250 rpm) och bli kortare än fairway. Gäller stiltje till måttlig vind: i motvind över ca 10 mph tappar flyern sin fördel (i
+    // 11 mph ca -1 % mot fairway för 7-järn på låg kraft, i 20 mph ca -4 %, i 30 mph upp till ca -8 % för långa järn), medan medvind och
+    // sidvind inte ändrar bilden. Slaget är fortfarande oftast bättre än ett vanligt rough-slag.
     const FLYER_CHANCE_ROUGH = 0.15, FLYER_MIN_LAUNCH_ROUGH = 15, FLYER_ROUGH = { speed: 1.02, spin: 0.80 };
     const FLYER_CHANCE_DEEP = 0.25, FLYER_MIN_LAUNCH_DEEP = 20, FLYER_DEEP = { speed: 1.02, spin: 0.75 };
 
