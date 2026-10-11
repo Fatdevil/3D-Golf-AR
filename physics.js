@@ -58,6 +58,16 @@ window.GolfPhysics = (function() {
     // samma sätt (farten in i marken är så hög att taket aldrig nås), så det är orört.
     const BITE_FRICTION_MU = 0.40;
 
+    // Flyer-lie från rough: chans per slag, lägsta utgångsvinkel (en driver/trä flyger inte), och hur mycket fart/spinn som blir kvar.
+    // Farten behålls, spinnet minskar; resten gör bollens egen aerodynamik (mindre spinn = mindre luftmotstånd = längre carry).
+    // Kalibrerat över hela kraftskalan (10-100 %, alla klubbor som kan få flyer): rough ger +2 till +15 % carry mot fairway, deep rough
+    // +4 till +18 %. Farten höjs 2 % eftersom en minskad spinn annars låter ett lågfartsslag korsa gränsen för omvänd Magnus (negativt lyft
+    // under 2250 rpm) och bli kortare än fairway. Gäller stiltje till måttlig vind: i motvind över ca 10 mph tappar flyern sin fördel (i
+    // 11 mph ca -1 % mot fairway för 7-järn på låg kraft, i 20 mph ca -4 %, i 30 mph upp till ca -8 % för långa järn), medan medvind och
+    // sidvind inte ändrar bilden. Slaget är fortfarande oftast bättre än ett vanligt rough-slag.
+    const FLYER_CHANCE_ROUGH = 0.15, FLYER_MIN_LAUNCH_ROUGH = 15, FLYER_ROUGH = { speed: 1.02, spin: 0.80 };
+    const FLYER_CHANCE_DEEP = 0.25, FLYER_MIN_LAUNCH_DEEP = 20, FLYER_DEEP = { speed: 1.02, spin: 0.75 };
+
     // Hjälpfunktioner för miljö och vektorer
     function calculateAirDensity(altFeet, tempC) {
         // Trackman gillar Referens: 0 fot, 25°C -> RHO ≈ 1.184
@@ -335,9 +345,11 @@ window.GolfPhysics = (function() {
             
             if (lieType === 'ROUGH') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
-                if (Math.random() < 0.15 && vla > 15) {
-                    speedMult = 1.02; spinMult = 0.40;
-                    console.log("💥 TRACKMAN FLYER-LIE DETECTED! Zero spin, hot velocity.");
+                if (Math.random() < FLYER_CHANCE_ROUGH && vla > FLYER_MIN_LAUNCH_ROUGH) {
+                    // Flyer: gräs mellan klubba och boll tar bort en del spinn, bollen flyger längre och landar varmare.
+                    // Kalibrerat: carry blir +2 till +15 % mot fairway över hela kraftskalan (var +14 till +37 % vid hög kraft).
+                    speedMult = FLYER_ROUGH.speed; spinMult = FLYER_ROUGH.spin;
+                    console.log("💥 FLYER-LIE (ROUGH): less spin, ball flies long.");
                 } else {
                     // Milder penalty for Arcade: max 15% speed loss for Driver, 5% for Wedge
                     speedMult = 1.0 - (0.15 - (0.10 * vlaFactor)); 
@@ -352,9 +364,10 @@ window.GolfPhysics = (function() {
                 spinMult = 1.0 - (0.65 - (0.45 * vlaFactor));  // 65% spin loss driver, 20% wedge (harder than DEEP ROUGH)
             } else if (lieType === 'DEEP ROUGH') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
-                if (Math.random() < 0.25 && vla > 20) {
-                    speedMult = 1.03; spinMult = 0.30;
-                    console.log("💥 TRACKMAN FLYER-LIE DETECTED (DEEP ROUGH)! Zero spin, hot velocity.");
+                if (Math.random() < FLYER_CHANCE_DEEP && vla > FLYER_MIN_LAUNCH_DEEP) {
+                    // Tyngre gräs ger en kraftigare flyer än rough: +4 till +18 % mot fairway (var +27 till +41 % vid hög kraft).
+                    speedMult = FLYER_DEEP.speed; spinMult = FLYER_DEEP.spin;
+                    console.log("💥 FLYER-LIE (DEEP ROUGH): less spin, ball flies long.");
                 } else {
                     speedMult = 1.0 - (0.25 - (0.15 * vlaFactor));
                     spinMult = 1.0 - (0.60 - (0.40 * vlaFactor));
