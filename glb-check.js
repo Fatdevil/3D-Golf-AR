@@ -31,6 +31,7 @@
   // the admin page's subcategory -> a kind
   var KIND_OF_SUBCAT = { TREES: 'tree', PLANTS: 'plant', ROCKS: 'rock', LANDSCAPE: 'landscape', BLOCKS: 'prop' };
   var TOTAL_BUDGET_MB = 40;   // arcade.html: MAX_ASSET_BUDGET_MB (all assets of a biome)
+  var TOTAL_GPU_BUDGET_MB = 128;   // a suggestion, not measured on a device: the decoded textures of all assets of a biome (global + the biome) on a mid-range phone
 
   // glTF extensions the game's loader handles: GLTFLoader r128 plus the Draco decoder. Meshopt and KTX2 need decoders the game does not set.
   var SUPPORTED_EXT = ['KHR_draco_mesh_compression', 'KHR_lights_punctual', 'KHR_materials_clearcoat', 'KHR_materials_pbrSpecularGlossiness',
@@ -370,7 +371,7 @@
     var order = { fail: 0, warn: 1, ok: 2, info: 3 };
     checks.sort(function (a, c) { return order[a.level] - order[c.level]; });
     var verdict = checks.some(function (c) { return c.level === 'fail'; }) ? 'fail' : (checks.some(function (c) { return c.level === 'warn'; }) ? 'warn' : 'ok');
-    return { checks: checks, verdict: verdict, loadable: loadable };
+    return { checks: checks, verdict: verdict, loadable: loadable, gpuBytes: gpu };
   }
 
   // ---------------------------------------------------------------- the public entry
@@ -405,7 +406,7 @@
         res.checks.unshift({ id: 'decode', level: 'fail', message: decodeFailures + ' textur(er) kunde inte avkodas av webbläsaren: spelets laddare klarar dem inte heller.' });
         res.verdict = 'fail'; res.loadable = false;
       }
-      var facts = { fileBytes: f.fileBytes, triangles: f.triangles, vertices: f.vertices, meshes: f.meshNodes, materials: f.materials.length, textures: f.images.length,
+      var facts = { gpuMB: +(res.gpuBytes / MB).toFixed(2), fileBytes: f.fileBytes, triangles: f.triangles, vertices: f.vertices, meshes: f.meshNodes, materials: f.materials.length, textures: f.images.length,
         maxTexture: Math.max.apply(null, [0].concat(f.images.map(function (im) { return Math.max(im.width, im.height); }))), bounds: f.bounds, colours: colours, draco: f.draco,
         extensionsUsed: f.extensionsUsed, extensionsRequired: f.extensionsRequired };
       return { kind: kind, verdict: res.verdict, loadable: res.loadable, facts: facts, checks: res.checks };
@@ -421,5 +422,5 @@
   }
 
   return { check: check, parseGlb: parseGlb, formatReport: formatReport, classify: classify, PROFILES: PROFILES, KIND_OF_SUBCAT: KIND_OF_SUBCAT, SCENE_TRIS: SCENE_TRIS,
-    TOTAL_BUDGET_MB: TOTAL_BUDGET_MB, SUPPORTED_EXT: SUPPORTED_EXT };
+    TOTAL_BUDGET_MB: TOTAL_BUDGET_MB, TOTAL_GPU_BUDGET_MB: TOTAL_GPU_BUDGET_MB, SUPPORTED_EXT: SUPPORTED_EXT };
 });

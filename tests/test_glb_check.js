@@ -134,6 +134,17 @@ function makeGlb(o) {
         check(f + ' parses and has numbers', res.loadable && res.facts.triangles > 0 && res.facts.fileBytes === fs.statSync(p).size, JSON.stringify(res.facts));
     }
 
+    {   // the decoded texture memory is part of the result (the admin page sums it per biome)
+        const p = path.join(root, 'Oaktree.glb');
+        if (fs.existsSync(p)) {
+            const res = await G.check(fs.readFileSync(p), { kind: 'tree' });
+            check('result carries gpuMB as a number', typeof res.facts.gpuMB === 'number' && res.facts.gpuMB >= 0, String(res.facts.gpuMB));
+        }
+        check('texture-memory budget is exported', G.TOTAL_GPU_BUDGET_MB > 0);
+        const adminHtml = fs.readFileSync(path.join(root, 'admin_assets.html'), 'utf8');
+        check('admin saves gpuMB and sums it in the biome bar', /config\.gpuMB = lastGlbResult\.facts\.gpuMB/.test(adminHtml) && /id="weight-gpu-bar"/.test(adminHtml) && /a\.config\?\.gpuMB/.test(adminHtml));
+    }
+
     const rep = G.formatReport(await run({ tris: 1500 }), { colour: false });
     check('report is text', typeof rep === 'string' && rep.length > 20, rep);
 
