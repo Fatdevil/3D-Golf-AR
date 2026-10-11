@@ -633,6 +633,7 @@
         let currentModel = null;
         let base64Data = null;
         let thumbnailBase64 = null;
+        let loadedModelToken = -1;   // the selection number (glbSelectionSeq) of the model that is shown; differs from the current one while a new file is parsed
         let fittedProfileUnit = null;   // collision profile (hitbox-fit.js) of the loaded model at one metre high; scaled to the target height when drawn and saved
 
         // --- PREVIEW LOGIC ---
@@ -667,6 +668,7 @@
         function fitHitbox() {
             const log = document.getElementById('log');
             if (!window.HitboxFit) { log.innerText = 'hitbox-fit.js did not load.'; return false; }
+            if (loadedModelToken !== glbSelectionSeq) { log.innerText = currentModel ? 'Wait until the new model has loaded.' : 'Load a model first.'; return false; }   // currentModel is still the previous model while a new one is parsed
             const mesh = collectModelMesh();
             if (!mesh) { log.innerText = 'Load a model first.'; return false; }
             try {
@@ -876,6 +878,7 @@
                 }
 
                 currentModel = gltf.scene;
+                loadedModelToken = loadToken;
                 
                 // Normalisera storlek till 1 meter hög
                 const box = new THREE.Box3().setFromObject(currentModel);
