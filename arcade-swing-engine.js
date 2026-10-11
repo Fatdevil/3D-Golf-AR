@@ -34,6 +34,12 @@ const SwingEngine = (function() {
     // Andel av klubbens spinn som finns kvar vid 0 % kraft (spinn = baseSpin * (denna + (1 - denna) * kraft))
     const SPIN_AT_ZERO_POWER = 0.2;
 
+    // Hur mycket spinaxel en miss får, i grader per grad azimut (startlinjefel). Positiv axel kurvar åt höger, så en miss åt höger blir en
+    // push-fade och en miss åt vänster en pull-draw. En riktig fysik ger stor kurva för driver (10 graders axel ca 31 yd), så faktorn
+    // håller missarna nära vad de var innan sidospinnet rättades: över träffpunkterna 0,1-0,9 blir snittmissen för en driver ca 20 %
+    // större (19,5 yd mot 16,3 yd), 7-järn ca 13 % och PW oförändrad. 0 ger bara startlinjefel, 0,8 var den ursprungliga faktorn.
+    const MISS_SPIN_AXIS_PER_DEG = 0.35;
+
     // SVG constants — circumference of r=100 ring
     const CIRC = 2 * Math.PI * 100; // 628.32
 
@@ -162,7 +168,7 @@ const SwingEngine = (function() {
             ballSpeedMph:   Math.max(speedMph, 10),
             launchAngleDeg: club.baseLaunchAngle + vlaOffset,
             totalSpinRpm:   spinRpm,
-            spinAxisDeg:    azimDeg * 0.8, 
+            spinAxisDeg:    azimDeg * MISS_SPIN_AXIS_PER_DEG,
             azimDeg:        azimDeg,
             isLiveData:     false,
             impactData:     { offset: impactOffset, direction: impactDirection }
