@@ -8869,7 +8869,7 @@
         let ss = parseFloat(document.getElementById('in-sidespin').value) || 0;
         
         let totalSpin = Math.sqrt(bs*bs + ss*ss);
-        let spinAxis = Math.atan2(-ss, bs) * (180 / Math.PI);
+        let spinAxis = Math.atan2(ss, bs) * (180 / Math.PI);   // positive sidespin = slice = positive axis (right), as on Trackman
         
         var launchData = {
             ballSpeedMph: vSpeed,
@@ -8896,7 +8896,7 @@
         // component form instead of polar form. Handles both casing variants:
         //   SkyTrak direct protocol: BackSpin, SideSpin (PascalCase)
         //   Some GSPro variants:     backspin, sidespin (camelCase)
-        // Sign convention: -ss follows Trackman standard (positive spinAxis = fade/right).
+        // Sign convention: positive SideSpin = slice = positive spinAxis (curves right), as on Trackman.
         // This is identical to the conversion in fireShot() (manual UI path).
         if (data.totalSpinRpm === undefined || data.totalSpinRpm === null) {
             let bs = data.BackSpin ?? data.backspin ?? null;
@@ -8905,7 +8905,7 @@
                 bs = parseFloat(bs) || 0;
                 ss = parseFloat(ss) || 0;
                 data.totalSpinRpm = Math.sqrt(bs * bs + ss * ss);
-                data.spinAxisDeg  = Math.atan2(-ss, bs) * (180 / Math.PI);
+                data.spinAxisDeg  = Math.atan2(ss, bs) * (180 / Math.PI);
                 console.log('[LM] Normalized BackSpin/SideSpin → totalSpinRpm:', data.totalSpinRpm.toFixed(0), 'spinAxisDeg:', data.spinAxisDeg.toFixed(1));
             }
         }
