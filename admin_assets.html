@@ -519,11 +519,18 @@
         <div class="form-group">
             <label>Collision Shape</label>
             <select id="physics-type">
+                <option value="profile">Profile (fitted to the model)</option>
                 <option value="tree">Tree (Trunk + Canopy)</option>
                 <option value="sphere">Sphere (Rock/Bush)</option>
                 <option value="cylinder">Cylinder (Cactus/Pole)</option>
             </select>
         </div>
+
+        <div id="phys-profile-ctrl" style="display:none; font-size:11px; line-height:1.45; color:#94a3b8; margin-bottom:6px;">
+            <div id="profile-info">No profile yet. Press the button below.</div>
+            <div style="margin-top:4px;"><span style="color:#fbbf24;">Yellow</span> = trunk (the ball bounces off it), <span style="color:#f87171;">red</span> = crown and body (the ball is slowed).</div>
+        </div>
+        <button id="btn-fit-hitbox" type="button" style="margin-top:0; margin-bottom:8px; background:#334155; color:#e2e8f0; padding:8px; font-size:12px;">Fit collision shape to the model</button>
 
         <!-- Dynamic Physics Controls -->
         <div id="phys-tree-ctrl" class="row">
@@ -626,8 +633,54 @@
         let currentModel = null;
         let base64Data = null;
         let thumbnailBase64 = null;
+        let loadedModelToken = -1;   // the selection number (glbSelectionSeq) of the model that is shown; differs from the current one while a new file is parsed
+        let fittedProfileUnit = null;   // collision profile (hitbox-fit.js) of the loaded model at one metre high; scaled to the target height when drawn and saved
 
         // --- PREVIEW LOGIC ---
+        // The triangles of the loaded model in the frame the game sees them (before the preview's own scaling), and the box the game normalises with
+        function collectModelMesh() {
+            const root = currentModel && currentModel.children[0];
+            if (!root) return null;
+            root.updateMatrixWorld(true);
+            const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+            const positions = [], indices = [], v = new THREE.Vector3(), box = new THREE.Box3();
+            root.traverse(function(o) {
+                if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+                const M = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld), pos = o.geometry.attributes.position, base = positions.length / 3;
+                if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+                box.union(o.geometry.boundingBox.clone().applyMatrix4(M));
+                for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(M); positions.push(v.x, v.y, v.z); }
+                const ix = o.geometry.index;
+                if (ix) for (let i = 0; i < ix.count; i++) indices.push(ix.getX(i) + base); else for (let i = 0; i < pos.count; i++) indices.push(base + i);
+            });
+            if (!positions.length) return null;
+            return { positions: positions, indices: indices, bbox: { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] } };
+        }
+
+        function refreshProfileInfo() {
+            const el = document.getElementById('profile-info');
+            if (!el) return;
+            const tH = parseFloat(document.getElementById('target-height').value) || 1;
+            el.textContent = fittedProfileUnit ? HitboxFit.describe(HitboxFit.scale(fittedProfileUnit, tH)) : 'No profile yet. Press the button below.';
+        }
+
+        // Fits the collision shape to the loaded model and switches the shape to "profile"
+        function fitHitbox() {
+            const log = document.getElementById('log');
+            if (!window.HitboxFit) { log.innerText = 'hitbox-fit.js did not load.'; return false; }
+            if (loadedModelToken !== glbSelectionSeq) { log.innerText = currentModel ? 'Wait until the new model has loaded.' : 'Load a model first.'; return false; }   // currentModel is still the previous model while a new one is parsed
+            const mesh = collectModelMesh();
+            if (!mesh) { log.innerText = 'Load a model first.'; return false; }
+            try {
+                fittedProfileUnit = HitboxFit.fit(mesh, { targetHeight: 1, bbox: mesh.bbox });
+            } catch (e) { log.innerText = 'Could not fit the collision shape: ' + e.message; return false; }
+            const sel = document.getElementById('physics-type');
+            sel.value = 'profile';
+            sel.dispatchEvent(new Event('change'));
+            log.innerText = 'Collision shape fitted to the model (' + fittedProfileUnit.triangles + ' triangles).';
+            return true;
+        }
+
         function updateHitbox() {
             // Rensa gamla hitboxen
             while(hitboxGroup.children.length > 0) {
@@ -656,6 +709,21 @@
                 canMesh.position.y = tHeight + yOff - (canR * 0.5); // Något ner från absolut topp
                 hitboxGroup.add(canMesh);
             } 
+            else if (pType === 'profile') {
+                refreshProfileInfo();
+                if (!fittedProfileUnit) return;
+                const p = HitboxFit.scale(fittedProfileUnit, tHeight);
+                const bodyMat = new THREE.MeshBasicMaterial({ color: 0xf87171, wireframe: true, transparent: true, opacity: 0.45 });
+                p.slices.forEach(function(sl) {
+                    if (sl.r <= 0) return;
+                    const m = new THREE.Mesh(new THREE.CylinderGeometry(sl.r, sl.r, sl.y1 - sl.y0, 20, 1, true), bodyMat);
+                    m.position.set(sl.cx, yOff + (sl.y0 + sl.y1) / 2, sl.cz);
+                    hitboxGroup.add(m);
+                });
+                const t = p.trunk, tm = new THREE.Mesh(new THREE.CylinderGeometry(t.r, t.r, t.h, 16), new THREE.MeshBasicMaterial({ color: 0xfbbf24, wireframe: true }));
+                tm.position.set(t.cx, yOff + t.h / 2, t.cz);
+                hitboxGroup.add(tm);
+            }
             else if (pType === 'sphere') {
                 const r = parseFloat(document.getElementById('sphere-radius').value);
                 const geo = new THREE.SphereGeometry(r, 16, 16);
@@ -756,7 +824,8 @@
             reader.onload = function(event) {
                 if (selection !== glbSelectionSeq) return;
                 base64Data = event.target.result;
-                loadModelFromBase64(base64Data);
+                fittedProfileUnit = null;   // the profile of the previous model is not this model's
+                loadModelFromBase64(base64Data, function() { if (document.getElementById('asset-subcat').value === 'TREES') fitHitbox(); else refreshProfileInfo(); });
             };
             reader.readAsDataURL(file);
 
@@ -794,19 +863,22 @@
             return pendingGlbCheck;
         }
 
-        function loadModelFromBase64(b64) {
+        function loadModelFromBase64(b64, onLoaded) {
+            const loadToken = glbSelectionSeq;   // the selection this load belongs to
             const dracoLoader = new THREE.DRACOLoader();
             dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
             const loader = new THREE.GLTFLoader();
             loader.setDRACOLoader(dracoLoader);
             
             loader.load(b64, function(gltf) {
+                if (loadToken !== glbSelectionSeq) return;   // another file or library asset was chosen while this one was parsed
                 // Rensa gamla
                 while(modelGroup.children.length > 0) {
                     modelGroup.remove(modelGroup.children[0]);
                 }
 
                 currentModel = gltf.scene;
+                loadedModelToken = loadToken;
                 
                 // Normalisera storlek till 1 meter hög
                 const box = new THREE.Box3().setFromObject(currentModel);
@@ -830,6 +902,7 @@
                 modelGroup.add(currentModel);
                 updateModelScale();
                 document.getElementById('log').innerText = "Model loaded successfully.";
+                if (typeof onLoaded === 'function') onLoaded();
             });
         }
         
@@ -1766,12 +1839,17 @@
                     if (assetInfo.config.yOffset) document.getElementById('y-offset').value = assetInfo.config.yOffset;
                     if (assetInfo.config.brightness !== undefined) document.getElementById('brightness').value = assetInfo.config.brightness;
                     
+                    fittedProfileUnit = null;   // the profile belongs to the model that was loaded before
                     if (assetInfo.config.physics) {
                         const physType = assetInfo.config.physics.type || 'tree';
                         document.getElementById('physics-type').value = physType;
                         document.getElementById('physics-type').dispatchEvent(new Event('change'));
                         
-                        if (physType === 'tree') {
+                        if (physType === 'profile') {
+                            const ph = assetInfo.config.physics, k = 1 / (ph.height || parseFloat(assetInfo.config.targetHeight) || 1);
+                            fittedProfileUnit = ph.slices && window.HitboxFit ? HitboxFit.scale(ph, k) : null;
+                            updateHitbox();
+                        } else if (physType === 'tree') {
                             if (assetInfo.config.physics.trunkRadius) document.getElementById('tree-trunk').value = assetInfo.config.physics.trunkRadius;
                             if (assetInfo.config.physics.canopyRadius) document.getElementById('tree-canopy').value = assetInfo.config.physics.canopyRadius;
                         } else {
@@ -1838,8 +1916,10 @@
             });
         });
 
+        document.getElementById('btn-fit-hitbox').addEventListener('click', function() { fitHitbox(); });
         document.getElementById('physics-type').addEventListener('change', function(e) {
             const t = e.target.value;
+            document.getElementById('phys-profile-ctrl').style.display = t === 'profile' ? 'block' : 'none';
             document.getElementById('phys-tree-ctrl').style.display = t === 'tree' ? 'flex' : 'none';
             document.getElementById('phys-sphere-ctrl').style.display = (t === 'sphere' || t === 'cylinder') ? 'flex' : 'none';
             updateHitbox();
@@ -1850,7 +1930,7 @@
             runGlbCheck();
             const val = e.target.value;
             const physSelect = document.getElementById('physics-type');
-            if (val === 'TREES') physSelect.value = 'tree';
+            if (val === 'TREES') physSelect.value = fittedProfileUnit ? 'profile' : 'tree';
             else if (val === 'ROCKS') physSelect.value = 'sphere';
             else if (val === 'PLANTS') physSelect.value = 'sphere';
             else if (val === 'LANDSCAPE') physSelect.value = 'sphere';
@@ -1881,7 +1961,10 @@
             
             const pType = document.getElementById('physics-type').value;
             let physicsConf = { type: pType };
-            if (pType === 'tree') {
+            if (pType === 'profile') {
+                if (!fittedProfileUnit) return alert('Fit the collision shape to the model first (button under Collision Shape), or pick another shape.');
+                physicsConf = HitboxFit.scale(fittedProfileUnit, parseFloat(document.getElementById('target-height').value));
+            } else if (pType === 'tree') {
                 physicsConf.trunkRadius = parseFloat(document.getElementById('tree-trunk').value);
                 physicsConf.height = parseFloat(document.getElementById('target-height').value);
                 physicsConf.canopyRadius = parseFloat(document.getElementById('tree-canopy').value);
@@ -2000,5 +2083,6 @@
         });
     </script>
 <script src="glb-check.js?v=1"></script>
+<script src="hitbox-fit.js?v=1"></script>
 </body>
 </html>

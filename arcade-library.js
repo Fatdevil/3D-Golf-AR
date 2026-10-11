@@ -1050,10 +1050,14 @@
             // Scale physics dimensions proportionally
             if (window.ASSET_REGISTRY[type].physics) {
                 let phys = window.ASSET_REGISTRY[type].physics;
-                if (phys.radius !== undefined) phys.radius *= currentScale;
-                if (phys.trunkRadius !== undefined) phys.trunkRadius *= currentScale;
-                if (phys.canopyRadius !== undefined) phys.canopyRadius *= currentScale;
-                if (phys.height !== undefined) phys.height *= currentScale;
+                if (phys.type === 'profile' && window.HitboxFit) {
+                    window.ASSET_REGISTRY[type].physics = window.HitboxFit.scale(phys, currentScale);   // a fitted profile: every length follows the scale
+                } else {
+                    if (phys.radius !== undefined) phys.radius *= currentScale;
+                    if (phys.trunkRadius !== undefined) phys.trunkRadius *= currentScale;
+                    if (phys.canopyRadius !== undefined) phys.canopyRadius *= currentScale;
+                    if (phys.height !== undefined) phys.height *= currentScale;
+                }
             }
 
             // Save back to active user preset in database
@@ -1080,6 +1084,9 @@
             if (window.customModels[type] && currentScale !== 1.0) {
                 // Physically scale the base model
                 window.customModels[type].scale.multiplyScalar(currentScale);
+                if (window.customModels[type].userData && window.customModels[type].userData.bakedYOffset) {
+                    window.customModels[type].userData.bakedYOffset *= currentScale;   // the baked offset is part of the model now scaled
+                }
                 window.customModels[type].updateMatrixWorld(true);
                 
                 // Adjust all existing props to maintain their physical size
