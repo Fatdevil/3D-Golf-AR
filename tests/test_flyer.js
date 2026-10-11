@@ -33,7 +33,7 @@ for (const c of ['I5', 'I7', 'I9', 'PW', 'SW', 'LW']) {
   check(c + ': rough 3-16 % kortare', pct(rn, fw) < -3 && pct(rn, fw) > -16, '(' + f0(pct(rn, fw)) + ')');
 }
 
-console.log('\nFlyer från rough: längre än fairway, men bara några procent upp till ca 15');
+console.log('\nFlyer från rough på full kraft: längre än fairway, men bara några procent upp till ca 15');
 for (const c of ['I5', 'I7', 'I9', 'PW', 'SW', 'LW']) {
   const fw = carry(c, 1, 'FAIRWAY', 0.5), fl = carry(c, 1, 'ROUGH', 0.0), rn = carry(c, 1, 'ROUGH', 0.5);
   check(c + ': flyer +2..+16 % mot fairway och längre än vanligt rough-slag', pct(fl, fw) > 2 && pct(fl, fw) < 16 && fl > rn, '(' + f0(pct(fl, fw)) + ' mot fairway, ' + fl.toFixed(0) + ' yd)');
@@ -47,6 +47,38 @@ console.log('\nFlyer från deep rough: kraftigare än rough men ändå rimlig');
 for (const c of ['I9', 'PW', 'SW', 'LW']) {
   const fw = carry(c, 1, 'FAIRWAY', 0.5), fl = carry(c, 1, 'DEEP ROUGH', 0.0), dn = carry(c, 1, 'DEEP ROUGH', 0.5), rfl = carry(c, 1, 'ROUGH', 0.0);
   check(c + ': deep-flyer +2..+20 % mot fairway, längre än vanligt deep-slag', pct(fl, fw) > 2 && pct(fl, fw) < 20 && fl > dn, '(' + f0(pct(fl, fw)) + ', rough-flyer ' + f0(pct(rfl, fw)) + ')');
+}
+
+console.log('\nHela kraftskalan: en flyer är aldrig kortare än fairway-slaget och aldrig kortare än ett vanligt rough-slag');
+{
+  const POWERS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.85, 1.0];
+  let n = 0, worstLo = 1e9, worstHi = -1e9, badLo = [], badHi = [], notLonger = [], gated = 0;
+  for (const c of ['I5', 'I7', 'I9', 'PW', 'SW', 'LW']) {
+    for (const p of POWERS) {
+      const la = SE.mapCircleToPhysics(p, 0, c, 0).launchAngleDeg;
+      const fw = carry(c, p, 'FAIRWAY', 0.5), rn = carry(c, p, 'ROUGH', 0.5), fl = carry(c, p, 'ROUGH', 0.0);
+      if (la <= 15) { gated++; if (Math.abs(fl - rn) > 0.5) notLonger.push(c + ' ' + p * 100 + ' % ska inte få flyer'); continue; }
+      n++;
+      const g = pct(fl, fw);
+      if (g < worstLo) worstLo = g; if (g > worstHi) worstHi = g;
+      if (g < 0) badLo.push(c + ' ' + p * 100 + ' % ' + f0(g));
+      if (g > 17) badHi.push(c + ' ' + p * 100 + ' % ' + f0(g));
+      if (fl <= rn) notLonger.push(c + ' ' + p * 100 + ' % flyer ' + fl.toFixed(0) + ' <= rough ' + rn.toFixed(0));
+    }
+  }
+  check(n + ' flyer-slag (rough): aldrig kortare än fairway', badLo.length === 0, badLo.length ? '(' + badLo.slice(0, 3).join('; ') + ')' : '(lägst ' + f0(worstLo) + ')');
+  check(n + ' flyer-slag (rough): aldrig mer än +17 % mot fairway', badHi.length === 0, badHi.length ? '(' + badHi.slice(0, 3).join('; ') + ')' : '(högst ' + f0(worstHi) + ')');
+  check('flyer är alltid längre än vanligt rough-slag (och slag under 15° utgångsvinkel får ingen)', notLonger.length === 0, notLonger.length ? '(' + notLonger.slice(0, 3).join('; ') + ')' : '(' + gated + ' slag under gränsen)');
+  let nd = 0, dLo = [], dHi = [], dWorstLo = 1e9, dWorstHi = -1e9;
+  for (const c of ['I9', 'PW', 'SW', 'LW']) for (const p of POWERS) {
+    const la = SE.mapCircleToPhysics(p, 0, c, 0).launchAngleDeg; if (la <= 20) continue;
+    const fw = carry(c, p, 'FAIRWAY', 0.5), fl = carry(c, p, 'DEEP ROUGH', 0.0), rfl = carry(c, p, 'ROUGH', 0.0);
+    nd++; const g = pct(fl, fw);
+    if (g < dWorstLo) dWorstLo = g; if (g > dWorstHi) dWorstHi = g;
+    if (g < 0) dLo.push(c + ' ' + p * 100 + ' % ' + f0(g)); if (g > 20) dHi.push(c + ' ' + p * 100 + ' % ' + f0(g));
+    if (fl < rfl - 0.5) dLo.push(c + ' ' + p * 100 + ' % deep-flyer kortare än rough-flyer');
+  }
+  check(nd + ' flyer-slag (deep rough): 0..+20 % mot fairway och minst som rough-flyer', dLo.length === 0 && dHi.length === 0, (dLo.concat(dHi)).length ? '(' + dLo.concat(dHi).slice(0, 3).join('; ') + ')' : '(' + f0(dWorstLo) + ' till ' + f0(dWorstHi) + ')');
 }
 
 console.log('\nChans och spärrar');

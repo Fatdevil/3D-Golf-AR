@@ -60,8 +60,11 @@ window.GolfPhysics = (function() {
 
     // Flyer-lie från rough: chans per slag, lägsta utgångsvinkel (en driver/trä flyger inte), och hur mycket fart/spinn som blir kvar.
     // Farten behålls, spinnet minskar; resten gör bollens egen aerodynamik (mindre spinn = mindre luftmotstånd = längre carry).
-    const FLYER_CHANCE_ROUGH = 0.15, FLYER_MIN_LAUNCH_ROUGH = 15, FLYER_ROUGH = { speed: 1.0, spin: 0.75 };
-    const FLYER_CHANCE_DEEP = 0.25, FLYER_MIN_LAUNCH_DEEP = 20, FLYER_DEEP = { speed: 1.0, spin: 0.70 };
+    // Kalibrerat över hela kraftskalan (10-100 %, alla klubbor som kan få flyer): rough ger +2 till +15 % carry mot fairway, deep rough
+    // +4 till +18 %. Farten höjs 2 % eftersom en minskad spinn annars låter ett lågfartsslag korsa gränsen för omvänd Magnus (negativt lyft
+    // under 2250 rpm) och bli kortare än fairway.
+    const FLYER_CHANCE_ROUGH = 0.15, FLYER_MIN_LAUNCH_ROUGH = 15, FLYER_ROUGH = { speed: 1.02, spin: 0.80 };
+    const FLYER_CHANCE_DEEP = 0.25, FLYER_MIN_LAUNCH_DEEP = 20, FLYER_DEEP = { speed: 1.02, spin: 0.75 };
 
     // Hjälpfunktioner för miljö och vektorer
     function calculateAirDensity(altFeet, tempC) {
@@ -342,7 +345,7 @@ window.GolfPhysics = (function() {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
                 if (Math.random() < FLYER_CHANCE_ROUGH && vla > FLYER_MIN_LAUNCH_ROUGH) {
                     // Flyer: gräs mellan klubba och boll tar bort en del spinn, bollen flyger längre och landar varmare.
-                    // Kalibrerat så att carry blir ca 4-12 % längre än från fairway (var +14 till +37 %, mer än en riktig flyer).
+                    // Kalibrerat: carry blir +2 till +15 % mot fairway över hela kraftskalan (var +14 till +37 % vid hög kraft).
                     speedMult = FLYER_ROUGH.speed; spinMult = FLYER_ROUGH.spin;
                     console.log("💥 FLYER-LIE (ROUGH): less spin, ball flies long.");
                 } else {
@@ -360,7 +363,7 @@ window.GolfPhysics = (function() {
             } else if (lieType === 'DEEP ROUGH') {
                 let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35)); 
                 if (Math.random() < FLYER_CHANCE_DEEP && vla > FLYER_MIN_LAUNCH_DEEP) {
-                    // Tyngre gräs ger en kraftigare flyer än rough: ca 5-14 % längre än fairway (var +27 till +41 %).
+                    // Tyngre gräs ger en kraftigare flyer än rough: +4 till +18 % mot fairway (var +27 till +41 % vid hög kraft).
                     speedMult = FLYER_DEEP.speed; spinMult = FLYER_DEEP.spin;
                     console.log("💥 FLYER-LIE (DEEP ROUGH): less spin, ball flies long.");
                 } else {
