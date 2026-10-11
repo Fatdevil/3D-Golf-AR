@@ -578,7 +578,7 @@ window.GolfPhysics = (function() {
                             state.vel[1] *= 0.4;
                             state.vel[2] *= 0.5;
                         }
-                    } else if (terrain.type === 'TREE' && terrain.part === 'CANOPY') {
+                    } else if (terrain.part === 'CANOPY') {   // any tree-like prop, not only the built-in 'TREE' (custom assets report their own id)
                         let treeHeight = terrain.height || 15.0;
                         if (state.pos[2] < treeHeight && state.pos[2] > 0.1) {
                             let speed = vecMag(state.vel);
