@@ -9,7 +9,7 @@ eval(physicsCode);
 let bs = 2000;
 let ss = 800;
 let totalSpin = Math.sqrt(bs*bs + ss*ss);
-let spinAxis = Math.atan2(-ss, bs) * (180 / Math.PI);
+let spinAxis = Math.atan2(ss, bs) * (180 / Math.PI);
 
 const launchConfig = {
     ballSpeedMph: 130,

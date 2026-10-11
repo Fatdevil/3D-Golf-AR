@@ -15,7 +15,7 @@ const flatEnv = {
 
 function testShot(name, ballSpeed, launch, backspin, sidespin, targets) {
     const totalSpin = Math.sqrt(backspin * backspin + sidespin * sidespin);
-    const spinAxis = Math.atan2(-sidespin, backspin) * (180 / Math.PI);
+    const spinAxis = Math.atan2(sidespin, backspin) * (180 / Math.PI);
     
     const result = simulateFlight({
         ballSpeedMph: ballSpeed, launchAngleDeg: launch,

@@ -60,7 +60,7 @@ console.log("Input: 130 mph / 14° / +800 sidespin (slice) / No wind\n");
 const backspin = 2500;
 const sidespin = 800; // positive = slice
 const totalSpin = Math.sqrt(backspin * backspin + sidespin * sidespin);
-const spinAxisDeg = Math.atan2(-sidespin, backspin) * (180 / Math.PI);
+const spinAxisDeg = Math.atan2(sidespin, backspin) * (180 / Math.PI);   // positive sidespin = slice = positive axis (right)
 
 const sliceInput = {
     ballSpeedMph: 130, launchAngleDeg: 14,

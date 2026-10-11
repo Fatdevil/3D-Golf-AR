@@ -430,26 +430,28 @@ window.GolfPhysics = (function() {
         let vZ = speedMS * Math.sin(launchRads);
         let vel = [vX, vY, vZ];
 
-        // Start spinnvektor (KOMPLETT rotation med azimuth)
-        // Backspin-axeln: VINKELRÄT mot flygriktning i XY-planet → ger vertikal Magnus-lyft.
-        // Sidespin-axeln: PARALLELL med flygriktning i XY-planet → ger lateral Magnus-krökning.
-        // Båda måste roteras med azimuth så att Magnus-krafter alltid är relativa till skottets riktning.
+        // Start spinnvektor. Spinaxeln anges som Trackman: grader som axeln lutar från ren backspin mot sidospinn, positiv = högerkurva
+        // (fade/slice för högerhänt), negativ = vänsterkurva (draw/hook). Axeln lutar i planet vinkelrätt mot bollens startfart:
+        //   backspin  = horisontell axel vinkelrätt mot riktningen (lyft, ger ingen sidokraft)
+        //   sidospinn = axel vinkelrätt mot både startfarten och backspinaxeln, alltså i huvudsak lodrät (ger sidokraft)
+        // Förut låg sidospinnet längs flygriktningen: en sådan spinnaxel ger nästan ingen kraft i sidled (kraften byter tecken mellan
+        // uppgång och fall och tar ut sig) och kurvan blev bara ca en tredjedel av en riktig, åt fel håll.
         let wRads = spinFinal * 2 * Math.PI / 60;       // rpm → rad/s
         let spinAxisRads = spinAxisIn * Math.PI / 180;   // deg → rad
         let sBackspin = wRads * Math.cos(spinAxisRads);  // backspin-komponent
-        let sSidespin = wRads * Math.sin(spinAxisRads);  // sidespin-komponent (draw/fade)
-        
-        // Backspin: axel vinkelrät mot flygriktning i XY → ger vertikal Magnus-lyft
-        let sX =  sBackspin * Math.cos(azimRads);
-        let sY = -sBackspin * Math.sin(azimRads);
-        
-        // Sidespin: axel parallell med flygriktning i XY → ger lateral krökning
-        // RELATIVT skottets riktning, inte world-space. Tecken negeras så att
-        // Trackman positiv spinAxis (slice) → höger krökning via Magnus cross-produkt.
-        sX -= sSidespin * Math.sin(azimRads);
-        sY -= sSidespin * Math.cos(azimRads);
-        
-        let sZ = 0; // All spin hanteras i roterade XY-komponenter
+        let sSidespin = wRads * Math.sin(spinAxisRads);  // sidospinn-komponent (draw/fade)
+
+        // Backspinaxel (horisontell, vinkelrät mot riktningen)
+        let bX =  Math.cos(azimRads);
+        let bY = -Math.sin(azimRads);
+        // Sidospinnaxel: vinkelrät mot startfarten i det lodräta plan som riktningen spänner upp (lutad med utgångsvinkeln)
+        let nH = -Math.sin(launchRads), nZ = Math.cos(launchRads);
+        let nX = nH * Math.sin(azimRads), nY = nH * Math.cos(azimRads);
+
+        // Positiv axel = slice = medurs sett uppifrån = negativ rotation runt lodrät axel => höger Magnus-kraft
+        let sX = sBackspin * bX - sSidespin * nX;
+        let sY = sBackspin * bY - sSidespin * nY;
+        let sZ = -sSidespin * nZ;
         let spin = [sX, sY, sZ];
         
         let altFt = (envCtx && envCtx.altitudeFeet !== undefined) ? envCtx.altitudeFeet : 0;
