@@ -1084,6 +1084,9 @@
             if (window.customModels[type] && currentScale !== 1.0) {
                 // Physically scale the base model
                 window.customModels[type].scale.multiplyScalar(currentScale);
+                if (window.customModels[type].userData && window.customModels[type].userData.bakedYOffset) {
+                    window.customModels[type].userData.bakedYOffset *= currentScale;   // the baked offset is part of the model now scaled
+                }
                 window.customModels[type].updateMatrixWorld(true);
                 
                 // Adjust all existing props to maintain their physical size

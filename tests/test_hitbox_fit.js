@@ -117,6 +117,8 @@ check('an object without physics or of an unknown type is no obstacle', win.prop
 const html = fs.readFileSync(path.join(root, 'arcade.html'), 'utf8');
 check('arcade.html loads both scripts before the game code that uses them', html.indexOf('hitbox-fit.js') > 0 && html.indexOf('prop-collision.js') > html.indexOf('hitbox-fit.js') && html.indexOf('prop-collision.js') < html.indexOf('checkCollisionCallback'));
 check('the collision callback asks propHitAt for every placed object', /let hit = window\.propHitAt\(window\.placedTrees\[i\], threeX, threeZ, z\)/.test(html));
+const lib = fs.readFileSync(path.join(root, 'arcade-library.js'), 'utf8');
+check('saving a default scale also scales the baked offset', /bakedYOffset \*= currentScale/.test(lib));
 const admin = fs.readFileSync(path.join(root, 'admin_assets.html'), 'utf8');
 check('the admin page has the profile shape, the fit button and loads the fitter', /<option value="profile">/.test(admin) && /id="btn-fit-hitbox"/.test(admin) && /hitbox-fit\.js/.test(admin));
 
