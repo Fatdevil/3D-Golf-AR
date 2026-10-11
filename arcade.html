@@ -3292,6 +3292,14 @@
                             <option value="OFF">OFF (Manual Putting)</option>
                         </select>
                     </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="color:#94a3b8; font-size:11px; font-weight:600; display:block; margin-bottom:6px;">PUTT ASSIST</label>
+                        <select id="set-putt-assist" style="width:100%; padding:8px 10px; background:#1e293b; color:#fff; border:1px solid #334155; border-radius:8px; font-size:12px; font-weight:600; outline:none;">
+                            <option value="FULL" selected>Full (aim line + slope)</option>
+                            <option value="SLOPE">Slope only (no lines)</option>
+                            <option value="OFF">None (read the green yourself)</option>
+                        </select>
+                    </div>
                     <div style="margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
                         <label style="color:#94a3b8; font-size:11px; font-weight:600;">MULLIGANS</label>
                         <input type="checkbox" id="set-mulligans" checked style="width:18px; height:18px; accent-color:#4ade80;">
@@ -3456,6 +3464,14 @@
                         <button type="button" onclick="let s=13.0; document.getElementById('ir-stimp').value=s; document.getElementById('ir-stimp-val').innerText=s; if(window.matchSettings){window.matchSettings.greenStimp=s; window.GREEN_STIMP=s;}" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; border-radius:4px; padding:4px 0; font-size:9px; font-weight:700; cursor:pointer;">Tour 13</button>
                     </div>
                     <input type="range" id="ir-stimp" min="6" max="14" step="0.5" value="10" oninput="document.getElementById('ir-stimp-val').innerText=this.value; if(window.matchSettings) { window.matchSettings.greenStimp=parseFloat(this.value); window.GREEN_STIMP=parseFloat(this.value); } if(document.getElementById('in-stimp')) document.getElementById('in-stimp').value=this.value;" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">PUTT ASSIST</label>
+                    <select id="ir-putt-assist" onchange="window.setPuttAssist(this.value)" style="width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; font-weight:bold;">
+                        <option value="FULL">Full (aim line + slope)</option>
+                        <option value="SLOPE">Slope only (no lines)</option>
+                        <option value="OFF">None</option>
+                    </select>
                 </div>
                 <div style="margin-bottom:12px;">
                     <label style="color:#94a3b8; font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">GREEN FIRMNESS</label>
@@ -3747,6 +3763,8 @@
                     if (irStimp) { irStimp.value = window.matchSettings.greenStimp || 10; document.getElementById('ir-stimp-val').innerText = irStimp.value; }
                     let irFirm = document.getElementById('ir-firmness');
                     if (irFirm) irFirm.value = window.matchSettings.greenFirmness || 'NORMAL';
+                    let irAssist = document.getElementById('ir-putt-assist');
+                    if (irAssist) irAssist.value = window.matchSettings.puttAssist || 'FULL';
                 }
                 modal.style.display = 'flex';
             }
@@ -6395,6 +6413,7 @@
             else if (mode === 'HEATMAP') gameBtnLabel.textContent = '🌈 Heatmap';
         }
         if (gameBtnEl) {
+            gameBtnEl.style.display = (window.getPuttAssist && window.getPuttAssist() === 'OFF') ? 'none' : 'flex';   // putt assist off: no slope view in the round
             if (mode === 'OFF') {
                 gameBtnEl.style.color = '#94a3b8';
                 gameBtnEl.style.background = 'rgba(15,23,42,0.85)';
@@ -6436,6 +6455,7 @@
     };
 
     window.cycleGreenSlopeMode = function(targetMode) {
+        if (window.getPuttAssist && window.getPuttAssist() === 'OFF') targetMode = 'OFF';   // putt assist off: the slope view stays off
         if (targetMode !== undefined) {
             window._greenSlopeMode = targetMode;
         } else {
@@ -7674,6 +7694,7 @@
         tournamentMode: false,
         gimmeDist: 10,
         autoPutt: 'TOUR_PRO',
+        puttAssist: 'FULL',   // FULL | SLOPE | OFF, see getPuttAssist in arcade-green-viz.js
         mulligans: true,
         autoConcede: 99,
         windStrength: 0,
@@ -7829,6 +7850,7 @@
 
         window.matchSettings.gimmeDist = parseInt(document.getElementById('set-gimme-dist').value);
         window.matchSettings.autoPutt = document.getElementById('set-autoputt-mode').value;
+        window.matchSettings.puttAssist = document.getElementById('set-putt-assist').value;
         window.matchSettings.mulligans = document.getElementById('set-mulligans').checked;
         window.matchSettings.autoConcede = parseInt(document.getElementById('set-concede').value);
         window.matchSettings.windStrength = parseInt(document.getElementById('set-wind').value);
@@ -7840,6 +7862,7 @@
         window.GREEN_STIMP = window.matchSettings.greenStimp; 
         
         document.getElementById('settings-modal').style.display = 'none';
+        if (window.applyPuttAssist) window.applyPuttAssist();
         actuallyStartRound();
     };
 
@@ -13775,8 +13798,10 @@ window.triggerExplosion = function(x, y, z) {
                 }
             }
 
-            // --- GSPro Break Line Indicator (only in putting mode during play, pooled geometry to avoid GPU leak) ---
-            if (!isStudioMode && window.isPuttingMode && window.ballMesh && controls) {
+            // --- Aim line (only in putting mode during play, pooled geometry to avoid GPU leak) ---
+            // A putt played with the real physics along the bearing the shot will take (ball -> aimTarget), at the pace for this hole:
+            // it ends in the cup when this aim drops in, otherwise where the ball comes to rest. Recomputed when the aim or the ball moves.
+            if (!isStudioMode && window.isPuttingMode && window.ballMesh && controls && playState === 'ROUND_IDLE' && window.getPuttAssist() === 'FULL') {
                 if (!window._breakLineGeo) {
                     window._breakLineMaxPts = 160;
                     window._breakLinePositions = new Float32Array(window._breakLineMaxPts * 3);
@@ -13794,63 +13819,36 @@ window.triggerExplosion = function(x, y, z) {
                     window.breakLineMesh.renderOrder = 997;
                     scene.add(window.breakLineMesh);
                 }
-                
-                let aimDir = new THREE.Vector3().subVectors(controls.target, camera.position);
-                aimDir.y = 0;
-                if (aimDir.lengthSq() > 1e-6) aimDir.normalize();
-                else aimDir.set(0, 0, -1);
-                
+
                 let bCurX = window.ballMesh.position.x;
                 let bCurZ = window.ballMesh.position.z;
-                let startH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(bCurX, bCurZ) : window.ballMesh.position.y;
-                
-                let posArray = window._breakLinePositions;
-                let ptCount = 0;
-                posArray[0] = bCurX;
-                posArray[1] = startH + 0.025;
-                posArray[2] = bCurZ;
-                ptCount = 1;
-                
-                let bDirX = aimDir.x;
-                let bDirZ = aimDir.z;
-                let stimp = (window.matchSettings && window.matchSettings.greenStimp) || window.GREEN_STIMP || 10.0;
-                let stimpFactor = Math.max(0.6, Math.min(1.5, stimp / 10.0));
-                let stepDist = 0.10; // 10 cm per step
-                
-                for (let i = 0; i < 150 && ptCount < window._breakLineMaxPts; i++) {
-                    let surf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(bCurX, -bCurZ) : null;
-                    if (!surf || surf.type !== 'GREEN') break;
-                    
-                    let grad = (typeof window.sampleGreenGradient === 'function')
-                        ? window.sampleGreenGradient(bCurX, bCurZ, 0.20)
-                        : { downhillX: 0, downhillZ: 0, slopeMagnitude: 0 };
-                    
-                    // Downhill slope deflection scaled by stimp
-                    let deflectX = grad.downhillX * grad.slopeMagnitude * 0.35 * stimpFactor;
-                    let deflectZ = grad.downhillZ * grad.slopeMagnitude * 0.35 * stimpFactor;
-                    bDirX += deflectX;
-                    bDirZ += deflectZ;
-                    
-                    let dirLen = Math.hypot(bDirX, bDirZ) || 1e-6;
-                    bDirX /= dirLen;
-                    bDirZ /= dirLen;
-                    
-                    bCurX += bDirX * stepDist;
-                    bCurZ += bDirZ * stepDist;
-                    let curH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(bCurX, bCurZ) : surf.z;
-                    
-                    let idx3 = ptCount * 3;
-                    posArray[idx3] = bCurX;
-                    posArray[idx3 + 1] = curH + 0.025;
-                    posArray[idx3 + 2] = bCurZ;
-                    ptCount++;
+                // the bearing the shot will take (arcade shot code: ball -> aimTarget); the camera direction when there is no aim target
+                let aimDX, aimDZ;
+                if (window.aimTarget) { aimDX = window.aimTarget.x - bCurX; aimDZ = window.aimTarget.z - bCurZ; }
+                else { aimDX = controls.target.x - camera.position.x; aimDZ = controls.target.z - camera.position.z; }
+                let aimAz = Math.atan2(aimDX, -aimDZ) * 180 / Math.PI;
+                let stimpNow = (window.matchSettings && window.matchSettings.greenStimp) || window.GREEN_STIMP || 10.0;
+                let aimKey = bCurX.toFixed(2) + '|' + bCurZ.toFixed(2) + '|' + aimAz.toFixed(1) + '|' + stimpNow + '|' + playingHoleIndex;
+                let nowMs = performance.now();
+                if (aimKey !== window._aimLineKey && nowMs - (window._aimLineAt || 0) > 100 && Math.hypot(aimDX, aimDZ) > 1e-3) {
+                    window._aimLineKey = aimKey;
+                    window._aimLineAt = nowMs;
+                    let holeNow = courseHoles[playingHoleIndex];
+                    let ptsNow = (holeNow && holeNow.flag && typeof window.puttPathForAim === 'function')
+                        ? window.puttPathForAim(bCurX, bCurZ, holeNow, aimAz, window._breakLineMaxPts) : null;
+                    if (ptsNow) {
+                        window._breakLinePositions.set(ptsNow);
+                        window._breakLineCount = ptsNow.length / 3;
+                    } else {
+                        window._breakLineCount = 0;
+                    }
+                    window._breakLineGeo.setDrawRange(0, window._breakLineCount);
+                    window._breakLinePosAttr.needsUpdate = true;
                 }
-                
-                window._breakLineGeo.setDrawRange(0, ptCount);
-                window._breakLinePosAttr.needsUpdate = true;
-                window.breakLineMesh.visible = true;
+                window.breakLineMesh.visible = (window._breakLineCount || 0) > 1;
             } else if (window.breakLineMesh && window.breakLineMesh.visible) {
                 window.breakLineMesh.visible = false;
+                window._aimLineKey = null;   // draw again when putting resumes, even if the aim is unchanged
             }
 
             // --- ELEVATION PROFILE (Tour de France style cross-section, play mode only) ---
