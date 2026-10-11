@@ -208,6 +208,7 @@
 
     // materials, and which texture does what
     var role = {};   // image index -> { base, normal, mr, occlusion, emissive }
+    var texObjs = {};   // image index -> the texture indices that use it (outside the dropped metal/rough maps): GLTFLoader makes one texture object, and one GPU upload, per index
     function useTex(ti, what) {
       if (ti === undefined || ti === null) return;
       if (!texs[ti]) { f.invalid.push('ett material pekar på textur ' + ti + ' som inte finns'); return; }
@@ -217,6 +218,7 @@
       else if (src === undefined && basis) src = basis.source;
       if (src === undefined || !imgs[src]) { f.invalid.push('textur ' + ti + ' saknar en giltig bild'); return; }
       (role[src] = role[src] || {})[what] = true;
+      if (what !== 'mr') (texObjs[src] = texObjs[src] || {})[ti] = true;
     }
     (usedMat[-1] ? f.usedMaterials.concat([-1]) : f.usedMaterials).forEach(function (mi) {   // -1: GLTFLoader's shared default material
       var mt = mats[mi] || {}, pbr = mt.pbrMetallicRoughness || {};
@@ -245,7 +247,7 @@
         size = data.length;
       } else if (typeof im.uri === 'string') f.externalUris++;
       var info = data ? imageInfo(data, im.mimeType) : { width: 0, height: 0, type: im.mimeType || '?', alpha: false };
-      f.images.push({ index: i, bytes: size, mime: im.mimeType || '', width: info.width, height: info.height, alpha: info.alpha, roles: Object.keys(role[i] || {}), data: data, used: !!role[i] });
+      f.images.push({ index: i, bytes: size, mime: im.mimeType || '', width: info.width, height: info.height, alpha: info.alpha, roles: Object.keys(role[i] || {}), data: data, used: !!role[i], textureObjects: Math.max(1, Object.keys(texObjs[i] || {}).length) });
     });
     return f;
   }
@@ -319,7 +321,7 @@
     f.images.forEach(function (im) {
       maxDim = Math.max(maxDim, im.width, im.height);
       var isDead = im.used && im.roles.length && im.roles.every(function (r) { return r === 'mr'; });
-      if (im.used && !isDead) gpu += im.width * im.height * 4 * 1.34;   // the game drops metal/rough maps, unused images are never uploaded
+      if (im.used && !isDead) gpu += im.width * im.height * 4 * 1.34 * im.textureObjects;   // the game drops metal/rough maps, unused images are never uploaded; one upload per texture object
       if (!im.used) unusedBytes += im.bytes;
       else if (isDead) dead += im.bytes;
     });

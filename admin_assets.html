@@ -1902,10 +1902,12 @@
                 
                 if (data.file_data) {
                     base64Data = data.file_data;
+                    if (isFinite(parseFloat(assetInfo.config?.fileSizeMB))) fileSizeMB = parseFloat(assetInfo.config.fileSizeMB);   // saving this asset again keeps its size in the biome total
                     loadModelFromBase64(base64Data);
                     try { // the stored file is checked like a new one
                         const bin = atob(base64Data.split(',').pop()), u8 = new Uint8Array(bin.length);
                         for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                        fileSizeMB = (u8.length / (1024 * 1024)).toFixed(2);   // the real size of the stored file
                         lastGlbBuffer = u8.buffer; pendingGlbCheck = runGlbCheck();
                     } catch (e) { lastGlbBuffer = null; lastGlbResult = null; }
                     document.getElementById('log').innerText = "Loaded from Cloud: " + assetInfo.name;

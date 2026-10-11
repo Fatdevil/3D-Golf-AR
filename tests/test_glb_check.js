@@ -57,6 +57,15 @@ function makeGlb(o) {
     r = await G.check(Buffer.from('not a glb at all, really not'), {});
     check('garbage is a fail, not a crash', r.verdict === 'fail' && !r.loadable, r.verdict);
 
+    {   // texture memory: one GPU upload per texture object, so two textures on one image count twice
+        const png = Buffer.alloc(33); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0); png.writeUInt32BE(13, 8); png.write('IHDR', 12); png.writeUInt32BE(256, 16); png.writeUInt32BE(256, 20); png[24] = 8; png[25] = 6;
+        const uri = 'data:image/png;base64,' + png.toString('base64');
+        const one = await G.check(makeGlb({ tris: 600, json: { images: [{ uri: uri }], textures: [{ source: 0 }] }, material: { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } }), { kind: 'plant' });
+        const two = await G.check(makeGlb({ tris: 600, json: { images: [{ uri: uri }], textures: [{ source: 0 }, { source: 0 }] }, material: { normalTexture: { index: 1 }, pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } }), { kind: 'plant' });
+        check('one 256x256 texture counts 0.34 MB x1.34 mip chain', Math.abs(one.facts.gpuMB - 0.34) < 0.02, String(one.facts.gpuMB));
+        check('two textures sharing one image count twice', Math.abs(two.facts.gpuMB - 2 * one.facts.gpuMB) < 0.02, one.facts.gpuMB + ' vs ' + two.facts.gpuMB);
+    }
+
     r = await run({ tris: 600, json: { buffers: [{ byteLength: 99999999 }] } }, { kind: 'plant' });
     check('JSON promising more binary than the file has is not loadable', r.verdict === 'fail' && !r.loadable && has(r, 'binary', 'fail'), r.verdict);
 
@@ -143,6 +152,7 @@ function makeGlb(o) {
         check('texture-memory budget is exported', G.TOTAL_GPU_BUDGET_MB > 0);
         const adminHtml = fs.readFileSync(path.join(root, 'admin_assets.html'), 'utf8');
         check('admin saves gpuMB and sums it in the biome bar', /config\.gpuMB = lastGlbResult\.facts\.gpuMB/.test(adminHtml) && /id="weight-gpu-bar"/.test(adminHtml) && /a\.config\?\.gpuMB/.test(adminHtml));
+        check('opening a library asset restores its file size so saving it again keeps the total', /fileSizeMB = \(u8\.length \/ \(1024 \* 1024\)\)\.toFixed\(2\)/.test(adminHtml));
     }
 
     const rep = G.formatReport(await run({ tris: 1500 }), { colour: false });
