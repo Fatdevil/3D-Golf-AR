@@ -729,7 +729,11 @@
         
         let reg = window.ASSET_REGISTRY[finalType];
         let yOff = reg && reg.yOffset !== undefined ? reg.yOffset : 0.0;
-        let bright = reg && reg.brightness !== undefined ? reg.brightness : 1.0;
+        // How bright a newly placed prop is (a multiplier, 1 = as the model is). A cloud asset's saved `brightness` is the admin page's
+        // "Brightness Boost" (-0.5 to 1, default 0.1: a little extra light on the model), not a multiplier: used as one it made every new
+        // tree 10 % bright, nearly black. Only a default saved from the edit panel (placeBrightness) sets the multiplier of a cloud asset.
+        let bright = reg && reg.placeBrightness !== undefined ? reg.placeBrightness
+                   : (reg && !reg.isCloud && reg.brightness !== undefined ? reg.brightness : 1.0);
         
         return { type: finalType, scale: scale, rot: rot, yOffset: yOff, brightness: bright };
     };
@@ -1037,6 +1041,7 @@
             // Save defaults for new props in registry
             window.ASSET_REGISTRY[type].yOffset = currentYOff;
             window.ASSET_REGISTRY[type].brightness = currentBright;
+            window.ASSET_REGISTRY[type].placeBrightness = currentBright;   // what getPlacementParams hands to the next prop of this type
             
             const oldTargetHeight = window.ASSET_REGISTRY[type].targetHeight || (type.startsWith('POLY_') ? 4.0 : 10.0);
             const newTargetHeight = oldTargetHeight * currentScale;

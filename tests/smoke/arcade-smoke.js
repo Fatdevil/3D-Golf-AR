@@ -126,6 +126,15 @@ function serve() {
     window.setPuttAssist('FULL'); window.clearBreakLine(); appMode = savedMode; playState = savedState; window.matchSettings.puttAssist = 'FULL';
     check('putt assist: Full draws the planned line, Slope only and None do not', gFull && !gSlope && !gOff);
     check('putt assist: Slope only keeps the slope view, None switches it off and keeps it off', slopeKept && offMode === 'OFF' && stillOff);
+    // placing a prop: a cloud asset's saved brightness is the admin page's boost (0.1), not a multiplier (that made new trees nearly black)
+    window.ASSET_REGISTRY._T_CLOUD = { isCloud: true, subcat: 'TREES', brightness: 0.1, yOffset: 0 };
+    window.ASSET_REGISTRY._T_POLY = { subcat: 'TREES', brightness: 0.6, yOffset: 0 };
+    const bCloud = window.getPlacementParams('_T_CLOUD').brightness, bPoly = window.getPlacementParams('_T_POLY').brightness;
+    window.ASSET_REGISTRY._T_CLOUD.placeBrightness = 1.4;
+    const bSaved = window.getPlacementParams('_T_CLOUD').brightness;
+    delete window.ASSET_REGISTRY._T_CLOUD; delete window.ASSET_REGISTRY._T_POLY;
+    check('new cloud prop is placed at 1x, not at the admin boost', bCloud === 1, String(bCloud));
+    check('other assets keep their saved brightness; a default saved from the edit panel wins', bPoly === 0.6 && bSaved === 1.4, bPoly + ' ' + bSaved);
     // power: a putt aimed for 6 m rolls 6 m (±5 %)
     const cfg = { startPos: [0, 0, 0.022], ballSpeedMph: 5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: 0, isLiveData: false, isTeeShot: false };
     const v = window.calibratePuttSpeed(cfg, 6, 22);
