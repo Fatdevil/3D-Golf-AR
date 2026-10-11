@@ -209,7 +209,8 @@
     // materials, and which texture does what
     var role = {};   // image index -> { base, normal, mr, occlusion, emissive }
     var texObjs = {};   // image index -> the texture indices that use it (outside the dropped metal/rough maps): GLTFLoader makes one texture object, and one GPU upload, per index
-    function useTex(ti, what) {
+    var useSeq = 0;
+    function useTex(ti, what, info) {
       if (ti === undefined || ti === null) return;
       if (!texs[ti]) { f.invalid.push('ett material pekar på textur ' + ti + ' som inte finns'); return; }
       var t = texs[ti], src = t.source;
@@ -218,21 +219,23 @@
       else if (src === undefined && basis) src = basis.source;
       if (src === undefined || !imgs[src]) { f.invalid.push('textur ' + ti + ' saknar en giltig bild'); return; }
       (role[src] = role[src] || {})[what] = true;
-      if (what !== 'mr') (texObjs[src] = texObjs[src] || {})[ti] = true;
+      // GLTFLoader clones the texture for every use that carries KHR_texture_transform; plain uses share the one object of their texture index
+      var transformed = info && info.extensions && info.extensions.KHR_texture_transform;
+      if (what !== 'mr') (texObjs[src] = texObjs[src] || {})[transformed ? ti + '#' + (useSeq++) : ti] = true;
     }
     (usedMat[-1] ? f.usedMaterials.concat([-1]) : f.usedMaterials).forEach(function (mi) {   // -1: GLTFLoader's shared default material
       var mt = mats[mi] || {}, pbr = mt.pbrMetallicRoughness || {};
       f.materials.push({ index: mi, name: mt.name || '', baseColorFactor: pbr.baseColorFactor || [1, 1, 1, 1], baseColorTexture: !!pbr.baseColorTexture, normalTexture: !!mt.normalTexture,
         metallicRoughnessTexture: !!pbr.metallicRoughnessTexture, occlusionTexture: !!mt.occlusionTexture, emissiveTexture: !!mt.emissiveTexture,
         alphaMode: mt.alphaMode || 'OPAQUE', doubleSided: !!mt.doubleSided, extensions: Object.keys(mt.extensions || {}) });
-      if (pbr.baseColorTexture) useTex(pbr.baseColorTexture.index, 'base');
-      if (mt.normalTexture) useTex(mt.normalTexture.index, 'normal');
-      if (pbr.metallicRoughnessTexture) useTex(pbr.metallicRoughnessTexture.index, 'mr');
-      if (mt.occlusionTexture) useTex(mt.occlusionTexture.index, 'occlusion');
-      if (mt.emissiveTexture) useTex(mt.emissiveTexture.index, 'emissive');
+      if (pbr.baseColorTexture) useTex(pbr.baseColorTexture.index, 'base', pbr.baseColorTexture);
+      if (mt.normalTexture) useTex(mt.normalTexture.index, 'normal', mt.normalTexture);
+      if (pbr.metallicRoughnessTexture) useTex(pbr.metallicRoughnessTexture.index, 'mr', pbr.metallicRoughnessTexture);
+      if (mt.occlusionTexture) useTex(mt.occlusionTexture.index, 'occlusion', mt.occlusionTexture);
+      if (mt.emissiveTexture) useTex(mt.emissiveTexture.index, 'emissive', mt.emissiveTexture);
       Object.keys(mt.extensions || {}).forEach(function (en) {   // maps of the supported material extensions (clearcoat, transmission, ...) are uploaded too
         var ext = mt.extensions[en] || {};
-        Object.keys(ext).forEach(function (key) { if (/Texture$/.test(key) && ext[key] && typeof ext[key].index === 'number') useTex(ext[key].index, 'ext'); });
+        Object.keys(ext).forEach(function (key) { if (/Texture$/.test(key) && ext[key] && typeof ext[key].index === 'number') useTex(ext[key].index, 'ext', ext[key]); });
       });
     });
 

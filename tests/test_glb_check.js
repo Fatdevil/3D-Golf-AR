@@ -63,6 +63,9 @@ function makeGlb(o) {
         const one = await G.check(makeGlb({ tris: 600, json: { images: [{ uri: uri }], textures: [{ source: 0 }] }, material: { pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } }), { kind: 'plant' });
         const two = await G.check(makeGlb({ tris: 600, json: { images: [{ uri: uri }], textures: [{ source: 0 }, { source: 0 }] }, material: { normalTexture: { index: 1 }, pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } }), { kind: 'plant' });
         check('one 256x256 texture counts 0.34 MB x1.34 mip chain', Math.abs(one.facts.gpuMB - 0.34) < 0.02, String(one.facts.gpuMB));
+        const tt = { extensions: { KHR_texture_transform: { scale: [2, 2] } } };
+        const clones = await G.check(makeGlb({ tris: 600, json: { images: [{ uri: uri }], textures: [{ source: 0 }], extensionsUsed: ['KHR_texture_transform'] }, material: { normalTexture: Object.assign({ index: 0 }, tt), pbrMetallicRoughness: { baseColorTexture: Object.assign({ index: 0 }, tt) } } }), { kind: 'plant' });
+        check('one texture used with KHR_texture_transform in two slots is cloned twice', Math.abs(clones.facts.gpuMB - 2 * one.facts.gpuMB) < 0.02, one.facts.gpuMB + ' vs ' + clones.facts.gpuMB);
         check('two textures sharing one image count twice', Math.abs(two.facts.gpuMB - 2 * one.facts.gpuMB) < 0.02, one.facts.gpuMB + ' vs ' + two.facts.gpuMB);
     }
 
