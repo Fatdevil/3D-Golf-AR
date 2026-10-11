@@ -17,6 +17,7 @@
   var SLICES = 12;
   var THIN = 0.4;            // a band narrower than this share of the widest band is stem, not crown
   var STEM_MAX = 0.6;        // the stem never reaches higher than this share of the height
+  var FLARE_MAX = 2;         // up to this many wide bands (roots, a flared foot) may come before the stem
 
   function round3(v) { return Math.round(v * 1000) / 1000; }
 
@@ -119,15 +120,20 @@
     }
 
     // the stem: the thin bands from the ground up. A cone or a bush has none, then the trunk is a thin pole in the middle.
-    var stemEnd = 0;
+    // roots or a flared foot may make the first one or two bands wide: the stem is the first run of thin bands, starting no later than the third band
+    var stemStart = 0;
+    while (stemStart < FLARE_MAX && stemStart < N && slices[stemStart].r > THIN * rMax) stemStart++;
+    var stemEnd = stemStart;
     while (stemEnd < N && slices[stemEnd].r <= THIN * rMax && slices[stemEnd].y1 <= STEM_MAX * H + 1e-9) stemEnd++;
+    if (stemEnd === stemStart) stemEnd = 0;   // no thin band at the bottom: a cone or a bush
     var trunk;
     if (stemEnd >= 1) {
       var rs = [], tx = 0, tz = 0;
-      for (k = 0; k < stemEnd; k++) { rs.push(slices[k].r); tx += slices[k].cx; tz += slices[k].cz; }
+      for (k = stemStart; k < stemEnd; k++) { rs.push(slices[k].r); tx += slices[k].cx; tz += slices[k].cz; }
+      var nStem = stemEnd - stemStart;
       rs.sort(function (p, q) { return p - q; });   // the middle one: a flared foot or the first branches must not make the whole stem fat
       var tr = rs.length % 2 ? rs[(rs.length - 1) / 2] : (rs[rs.length / 2 - 1] + rs[rs.length / 2]) / 2;
-      trunk = { r: tr, cx: tx / stemEnd, cz: tz / stemEnd, h: slices[stemEnd - 1].y1, guessed: false };
+      trunk = { r: tr, cx: tx / nStem, cz: tz / nStem, h: slices[stemEnd - 1].y1, guessed: false };
     } else {
       trunk = { r: Math.max(0.12 * rMax, 0.05), cx: slices[0].cx, cz: slices[0].cz, h: 0.4 * H, guessed: true };
     }

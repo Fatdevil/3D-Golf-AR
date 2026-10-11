@@ -41,6 +41,11 @@ const mid = p.slices.find(s => s.y0 <= 8 && s.y1 >= 8);
 check('tree: the crown band is as wide as the crown and sits where the crown is (the model is centred on its box)', near(mid.r, 3, 0.4) && near(mid.cx, 2 - bboxCx, 0.4), JSON.stringify(mid));
 check('tree: the trunk sits where the stem is', near(p.trunk.cx, 0 - bboxCx, 0.3), JSON.stringify(p.trunk));
 
+// roots: a flared foot (wide first band) must not hide the stem above it
+const rooted = merge(lathe([[0, 2.0], [1, 0.5], [5, 0.4]], 0, 0, 16), lathe([[5, 0.01], [6, 2.4], [8, 3], [10, 2.4], [11, 0.01]], 0, 0, 24));
+const pr0 = HF.fit(rooted, { targetHeight: 11 });
+check('a flared foot does not hide the stem', !pr0.trunk.guessed && near(pr0.trunk.r, 0.45, 0.15) && pr0.trunk.h >= 4.5, JSON.stringify(pr0.trunk));
+
 // the hit test: object at (10, 20), scale 1, not turned
 const ox = 10, oz = 20, tx = ox + p.trunk.cx, tz = oz + p.trunk.cz;
 let h = HF.hit(p, 1, 0, ox, oz, tx + 0.2, tz, 1.5);
@@ -98,6 +103,8 @@ let t = win.propHitAt(at('T', 0, 0, 1), 0.2, 0, 2), c = win.propHitAt(at('T', 0,
 check('tree (unchanged): trunk low and near, canopy high', t && t.part === 'TRUNK' && t.n && c && c.part === 'CANOPY' && !c.n);
 const pr = win.propHitAt(at('P', ox, oz, 1, 0), tx + 0.2, tz, 1.5), pc = win.propHitAt(at('P', ox, oz, 1, 0), ox + mid.cx, oz + mid.cz, 8);
 check('profile: trunk with a normal and safe spot in physics order, canopy without', pr && pr.part === 'TRUNK' && pr.n.length === 3 && pr.n[2] === 0 && pr.safePos.length === 2 && pc && pc.part === 'CANOPY' && !pc.n && pc.height === p.height, JSON.stringify([pr, pc]));
+const lifted = Object.assign(at('P', ox, oz, 1, 0), { yOffset: 2 });
+check('a prop standing 2 m up is hit 2 m higher (the model and the ball share one height)', !win.propHitAt(lifted, tx + 0.2, tz, 1.5) && !!win.propHitAt(lifted, tx + 0.2, tz, 3.5), '');
 check('an object without physics or of an unknown type is no obstacle', win.propHitAt(at('NOPE', 0, 0, 1), 0, 0, 1) === null);
 
 // ---- the wiring in arcade.html

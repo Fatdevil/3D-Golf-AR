@@ -862,12 +862,14 @@
         }
 
         function loadModelFromBase64(b64, onLoaded) {
+            const loadToken = glbSelectionSeq;   // the selection this load belongs to
             const dracoLoader = new THREE.DRACOLoader();
             dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
             const loader = new THREE.GLTFLoader();
             loader.setDRACOLoader(dracoLoader);
             
             loader.load(b64, function(gltf) {
+                if (loadToken !== glbSelectionSeq) return;   // another file or library asset was chosen while this one was parsed
                 // Rensa gamla
                 while(modelGroup.children.length > 0) {
                     modelGroup.remove(modelGroup.children[0]);
