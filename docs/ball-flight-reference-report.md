@@ -5,7 +5,7 @@
 ## 1. Sammanfattning
 
 1. **Carry, driver:** utgångsvinkeln saknas i underlaget, så ingen avvikelse går att ange. Med de källbelagda bollfarten och spinnet (171 mph, 2 545 rpm) ger motorn 277 yd vid 3°, 282 yd vid 5° och högst 288 yd vid 11°, alltså -1,6 % till +2,3 % mot källans 282 yd beroende på vilken vinkel man antar (tabell C). Siffran 288 yd är ett optimerat maximum över vinklar och inte en jämförelse med källbelagda indata.
-2. **Carry, järn:** med källbelagda indata ger 7-järnet 162 yd (15 °C, havsnivå) mot 176 yd i källan, alltså -8 %. Varmare och högre miljö (25 °C, 1 000 ft) minskar avvikelsen till -4,8 %, men förklarar den inte helt. Ingen utgångsvinkel räcker: högsta carry motorn når med 123 mph och 7 124 rpm är 164 yd (-6,6 %), och för PW 125 yd mot 142 yd (-12 %).
+2. **Carry, järn (villkorat, blandade källor):** bollfart, spinn och carry (123 mph, 7 124 rpm, 176 yd) kommer ur samma tabell (2023 års snitt), men utgångsvinkeln 16,2° kommer ur en annan, odaterad källa med oklart urval. Raderna för 7-järnet i tabell A är därför en blandad jämförelse och ingen enskild dokumenterad Tour-grupp: med 16,2° ger motorn 162 yd (15 °C, havsnivå) mot 176 yd, alltså -8 %, och -4,8 % vid 25 °C och 1 000 ft. Den vinkeloberoende gränsen är säkrare: ingen utgångsvinkel räcker, eftersom högsta carry motorn når med 123 mph och 7 124 rpm är 164 yd (-6,6 %). För PW är högsta carry 125 yd mot 142 yd (-12 %); de gränserna använder bara bollfart, spinn och carry ur den gemensamma tabellen.
 3. **Bollbanans form:** källan TrackMan säger att toppen för driver och PW skiljer sig med bara cirka 3 yd/m. Motorn ger cirka 30 yd när driverns vinkel antas vara 10° till 11° och PW:s 24° till 26° (tabell G). Skillnaden beror på de antagna vinklarna, som inte är källbelagda: för att skillnaden ska bli cirka 3 yd skulle driverns utgångsvinkel behöva vara cirka 3° eller lägre (tabell C), långt under vad jag förväntar mig för en modern driver, men det förväntandet är inte heller källbelagt här. Det är den tydligaste avvikelsen, men den är villkorad.
 4. **Landningsvinkel och tid i luften:** underlaget saknar flygtid, och för landningsvinkel har jag bara en tumregel från 2016. Jag drar ingen slutsats om dem.
 5. **Underlagets gräns:** TrackMans Tour-snitt anger inga miljöförhållanden (temperatur, höjd, vind) och blandar tävling och range. Avvikelserna ovan kan därför inte räknas om till koefficienter. Rapporten visar var motorn och datan skiljer sig åt, och är ett underlag för att besluta vad som ska kontrolleras härnäst.
@@ -46,13 +46,13 @@ Hämtade 2026-10-12.
 
 ## 4. Resultat
 
-## A. Sourced Tour inputs run through the engine (no wind, flat, no lie)
+## A. Mixed-source 7-iron inputs run through the engine (ball speed, spin and carry from one table; the launch angle from another, undated source; no wind, flat, no lie)
 
 | Club | Ball mph | Spin rpm | Launch used | Env | Engine carry yd | Tour carry yd | Diff |
 |---|---|---|---|---|---|---|---|
-| 7-iron | 123 | 7124 | 16.2 (sourced) | 15 C, 0 ft (engine default) | 162.0 | 176 | -8.0 % |
-| 7-iron | 123 | 7124 | 16.2 (sourced) | 25 C, 0 ft | 164.7 | 176 | -6.4 % |
-| 7-iron | 123 | 7124 | 16.2 (sourced) | 25 C, 1000 ft | 167.6 | 176 | -4.8 % |
+| 7-iron | 123 | 7124 | 16.2 (mixed source) | 15 C, 0 ft (engine default) | 162.0 | 176 | -8.0 % |
+| 7-iron | 123 | 7124 | 16.2 (mixed source) | 25 C, 0 ft | 164.7 | 176 | -6.4 % |
+| 7-iron | 123 | 7124 | 16.2 (mixed source) | 25 C, 1000 ft | 167.6 | 176 | -4.8 % |
 
 ## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft)
 
@@ -160,7 +160,7 @@ Skillnaden är högst 0,01 yd i carry och 0,01 yd i topp, så integratorn är in
 
 - Att krafterna, enheterna och koefficienterna i modellen är rätt. Integrationens stabilitet bevisar inte det.
 - Någon jämförelse av tid i luften och landningsvinkel mot kontrollerade data.
-- Utgångsvinkel för driver och PW. Utan den går bara carry-skillnaden för 7-järnet att ange säkert.
+- Utgångsvinkel för driver och PW. Utan den går ingen carry-skillnad att ange säkert: för 7-järnet är vinkeln från en annan, odaterad källa (blandad jämförelse), så bara den vinkeloberoende maximigränsen (tabell B) är säker.
 - Vilka miljöförhållanden Tour-snitten gäller: de anges inte, och datan blandar tävling och range. Känsligheten ovan visar att temperatur och höjd ger några procent, inte 8 till 12.
 - Att siffrorna är riktiga: de kommer från en sekundärkälla och ska kontrolleras mot TrackMans nedladdning.
 - Flygtid. Underlaget saknar den, så motorns tid i luften går inte att jämföra med något.

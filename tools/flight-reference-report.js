@@ -40,10 +40,10 @@ const TOUR = [  // Golf Monthly's table of Trackman's 2023 PGA Tour averages (se
 ];
 const ENVS = [{ n: '15 C, 0 ft (engine default)', t: 15, alt: 0 }, { n: '25 C, 0 ft', t: 25, alt: 0 }, { n: '25 C, 1000 ft', t: 25, alt: 1000 }];
 
-console.log('## A. Sourced Tour inputs run through the engine (no wind, flat, no lie)\n');
+console.log('## A. Mixed-source 7-iron inputs run through the engine (ball speed, spin and carry from one table; the launch angle from another, undated source; no wind, flat, no lie)\n');
 console.log('| Club | Ball mph | Spin rpm | Launch used | Env | Engine carry yd | Tour carry yd | Diff |');
 console.log('|---|---|---|---|---|---|---|---|');
-for (const t of TOUR) if (t.launch) for (const e of ENVS) { const o = fly(t.ball, t.launch, t.spin, e); console.log(`| ${t.club} | ${t.ball} | ${t.spin} | ${t.launch} (sourced) | ${e.n} | ${f1(o.carry)} | ${t.carry} | ${((o.carry / t.carry - 1) * 100).toFixed(1)} % |`); }
+for (const t of TOUR) if (t.launch) for (const e of ENVS) { const o = fly(t.ball, t.launch, t.spin, e); console.log(`| ${t.club} | ${t.ball} | ${t.spin} | ${t.launch} (mixed source) | ${e.n} | ${f1(o.carry)} | ${t.carry} | ${((o.carry / t.carry - 1) * 100).toFixed(1)} % |`); }
 
 console.log('\n## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft)\n');
 console.log('| Club | Ball mph | Spin rpm | Max engine carry yd | At launch deg | Tour carry yd | Diff at best launch |');
