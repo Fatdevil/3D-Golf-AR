@@ -7,7 +7,8 @@
 //  - window.currentTracerStyle
 //  - window.setTracerStyle(styleName)
 //  - window.updateTracerForTimeOfDay(hour)
-//  - window.getTracerVertexColor(vertexFn, index, total)
+//  - window.getTracerVertexColor(vertexFn, index, total)   -> [r, g, b] or [r, g, b, alpha]
+//  - window.applyTracerTailFade(colors, count)             -> fading tail for the Phantom style (vertex alpha)
 //  - window.TRACER_STYLES
 // ================================================================
 (function() {
@@ -45,8 +46,18 @@
                 let hue = ((t * 360 + performance.now() * 0.05) % 360) / 360;
                 return hslToRgb(hue, 1.0, 0.5);
             }
-            case 'fade': return [0.53, 0.53, 0.8];
+            case 'fade': return [0.53, 0.53, 0.8, 1];   // the alpha is set by applyTracerTailFade as the vertex ages
             default: return null;
+        }
+    };
+
+    // Phantom: the trail dims toward its tail. A vertex is one physics tick (5 ms) and the alpha follows its age behind the newest vertex:
+    // 1 at the head, TAIL_FLOOR once it is TAIL_SECONDS old (a faint ghost of the whole flight stays). colors is the rgba array (4 per vertex).
+    const TICK_SECONDS = 0.005, TAIL_SECONDS = 3.0, TAIL_FLOOR = 0.08;
+    window.applyTracerTailFade = function(colors, count) {
+        for (let j = 0; j < count; j++) {
+            const age = (count - 1 - j) * TICK_SECONDS;
+            colors[j * 4 + 3] = Math.max(TAIL_FLOOR, 1 - age / TAIL_SECONDS);
         }
     };
 
@@ -121,7 +132,8 @@
     window.tracerFadeMode = 'FADE'; // Default: fade out
     window._tracerFadeTimer = -1; // -1 = not fading, 0+ = fading progress
     window._tracerBaseOpacity = 0.9;
-    const FADE_DURATION = 180; // frames (~3 sec at 60fps)
+    const FADE_DURATION_MS = 3000;   // wall-clock time: the same on a 30, 60 or 120 Hz screen
+    window.TRACER_FADE_DURATION_MS = FADE_DURATION_MS;
 
     window.setTracerFadeMode = function(mode) {
         window.tracerFadeMode = mode;
@@ -139,17 +151,20 @@
         }
     };
 
+    // _tracerFadeTimer: -1 = not fading, otherwise the milliseconds the fade has run
     window.startTracerFade = function() {
         if (window.tracerFadeMode === 'FADE') {
             window._tracerFadeTimer = 0;
+            window._tracerFadeStartMs = performance.now();
             window._tracerBaseOpacity = window.tracerMat ? window.tracerMat.opacity : 0.9;
         }
     };
 
     window.updateTracerFade = function() {
         if (window._tracerFadeTimer < 0) return;
-        window._tracerFadeTimer++;
-        let t = Math.min(window._tracerFadeTimer / FADE_DURATION, 1.0);
+        const elapsed = Math.max(0, performance.now() - window._tracerFadeStartMs);
+        window._tracerFadeTimer = elapsed;
+        let t = Math.min(elapsed / FADE_DURATION_MS, 1.0);
         let opacity = window._tracerBaseOpacity * (1.0 - t);
         if (window.tracerMat) window.tracerMat.opacity = opacity;
         if (window.glowTracerMat) window.glowTracerMat.opacity = opacity * 0.3;

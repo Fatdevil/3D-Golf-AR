@@ -361,3 +361,10 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - **Lutning:** en rullande boll får `ROLLING_SLOPE_FACTOR` = 5/7 av tyngden längs lutningen (en del av energin går åt till att snurra bollen); en glidande boll (skid) får full tyngd. Bollen blir liggande på lutningar under mu / (5/7), ca 7,8 % på green vid stimp 10. Bryt, brytlinje och sikteslinje går alla genom samma fysik, så de ändras tillsammans.
 - **Hålet:** radie 54 mm. En boll fångas om farten är högst `1,63 - 0,7 * (linjens avstånd från mitten / radien)` m/s. En boll som går över gränsen men högst 2,2 m/s och mer än 30 % av radien från mitten kantar hålet: den böjer av 10 + 35 * (avstånd/radie) grader bort från mitten, behåller 75 % av farten och läggs direkt över hålet så att den inte fångas igen. Snabbare bollar går över.
 - Testerna: `tests/test_putt.js` (sträckor), `tests/test_putt_break.js` (bryt mot en oberoende integration av en rullande boll, kantning och fångst).
+
+## Bollens spårlinje (tracer)
+
+- `arcade.html` (flygloopen) skriver en punkt per fysiktick (5 ms) till `tracerPositions`/`tracerColors` (högst 6 000 punkter; simuleringen stannar efter 25 s, alltså 5 000). Färgbufferten är rgba (4 per punkt) så att en stil kan tona ut svansen med vertex-alfa.
+- Bollen interpoleras mellan två tick, de skrivna punkterna är hela tick: därför ritas en extra punkt på bollens exakta plats i varje bild (aldrig sparad), annars släpar linjen upp till farten x 5 ms efter (37 cm vid 75 m/s).
+- `arcade-tracer-engine.js`: fade efter landning följer klocktid (`TRACER_FADE_DURATION_MS` = 3 000 ms, oberoende av bildhastighet), och Phantom tonar ut mot svansen (`applyTracerTailFade`: alfa 1 vid bollen, 0,08 vid 3 s ålder).
+- `tests/test_tracer.js` testar fade-tiden och svansen.
