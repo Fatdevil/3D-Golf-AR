@@ -8,7 +8,9 @@ html, body {
     background: #87CEEB;
     font-family: 'Inter', sans-serif;
 }
-canvas {
+/* Only the renderer's canvas (a direct child of <body>). A bare `canvas` rule also pinned the 2D elevation-profile canvas to the whole
+   viewport with a sky-blue background, which hid the course whenever a putt was lined up. */
+body > canvas {
     display: block;
     position: fixed; /* Locked to viewport to eliminate scroll shifts */
     top: 0;
