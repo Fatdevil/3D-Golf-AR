@@ -368,3 +368,9 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - Bollen interpoleras mellan två tick, de skrivna punkterna är hela tick: därför ritas en extra punkt på bollens exakta plats i varje bild (aldrig sparad), annars släpar linjen upp till farten x 5 ms efter (37 cm vid 75 m/s).
 - `arcade-tracer-engine.js`: fade efter landning följer klocktid (`TRACER_FADE_DURATION_MS` = 3 000 ms, oberoende av bildhastighet), och Phantom tonar ut mot svansen (`applyTracerTailFade`: alfa 1 vid bollen, 0,08 vid 3 s ålder).
 - `tests/test_tracer.js` testar fade-tiden och svansen.
+
+## Sikte i game mode (2026-10)
+- Siktet är `window.aimTarget`; slaget går längs boll → aimTarget (`executeArcadeShot`, `atan2(dX, -dZ)`). Matten (bäring, vridning, när ett handsatt sikte behålls, tap vs drag) ligger i `arcade-aim.js` (`window.AimMath`, testad i `tests/test_aim.js`).
+- Man siktar genom att **trycka på marken i 3D-vyn** (kort tryck utan drag; drag är kamera), på minimapen, med **piltangenter** (±1°, Shift ±5°) eller AIM-knapparna ◀ ▶ till vänster. **F** / ⚑ Flag sätter siktet på flaggan (på rangen rakt fram).
+- Ett handsatt sikte (`window.aimManual`) ligger kvar efter slaget så länge det är minst 10 m bort och på flaggans sida om bollen (`resetAimTarget(true)`); ny spelare, nytt hål, mulligan och drop nollställer det alltid.
+- Målmarkör (ring + stolpe) och streckad siktlinje ritas varje bildruta; minimapens "x° RIGHT/LEFT" och AIM-panelen visar vridningen bort från flaggan.

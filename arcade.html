@@ -252,6 +252,17 @@
         </div>
     </div>
     
+    <!-- AIM CONTROLS: fine-tune the aim left/right, back to the flag -->
+    <div id="aim-controls" style="display:none; position:fixed; left:12px; top:56%; transform:translateY(-50%); z-index:101; flex-direction:column; align-items:center; gap:6px; font-family:'Inter', sans-serif; user-select:none;">
+        <div style="color:#fff; font-size:10px; font-weight:bold; letter-spacing:1px; opacity:0.8;">AIM</div>
+        <div style="display:flex; gap:6px; align-items:center;">
+            <button id="aim-btn-left" onclick="aimNudge(-1)" title="Aim 1° left (Arrow Left, Shift = 5°)" style="width:44px; height:44px; background:rgba(40,40,40,0.9); color:#fff; border:1px solid #777; border-radius:8px; font-size:20px; cursor:pointer;">◀</button>
+            <button id="aim-btn-right" onclick="aimNudge(1)" title="Aim 1° right (Arrow Right, Shift = 5°)" style="width:44px; height:44px; background:rgba(40,40,40,0.9); color:#fff; border:1px solid #777; border-radius:8px; font-size:20px; cursor:pointer;">▶</button>
+        </div>
+        <div id="aim-offset" style="color:#fcd34d; font-size:13px; font-weight:900; background:rgba(40,40,40,0.9); border:1px solid #777; border-radius:6px; padding:3px 8px;">0.0°</div>
+        <button id="aim-btn-flag" onclick="aimAtFlag()" title="Aim at the flag (F)" style="height:36px; padding:0 12px; background:rgba(40,40,40,0.9); color:#fff; border:1px solid #777; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer;">⚑ Flag</button>
+    </div>
+
     <!-- AIM TARGET BILLBOARD (Växlar mellan skärm och 3D rymd) -->
     <div id="aim-billboard" style="display:none; position:absolute; pointer-events:none; background:rgba(40,40,40,0.9); border:1px solid #777; border-radius:8px; padding:6px 12px; color:#fff; font-family:'Inter', sans-serif; text-align:center; transform:translate(-50%, -100%); z-index:100; box-shadow:0 4px 10px rgba(0,0,0,0.5);">
         <div id="aim-bb-dist" style="font-size:22px; font-weight:900;">288</div>
@@ -3918,6 +3929,7 @@
     let currentEditCode = null;
     
 </script>
+<script src="arcade-aim.js?v=1"></script>
 <script src="arcade-rules.js?v=1"></script>
 <script>
 
@@ -5003,7 +5015,27 @@
     window.aimTracerLine = new THREE.LineDashedMaterial({ color: 0xffff00, dashSize: 1, gapSize: 1, transparent: true, opacity: 0.6 });
     const aimLineMesh = new THREE.Line(window.aimTracerGeo, window.aimTracerLine);
     aimLineMesh.computeLineDistances();
+    aimLineMesh.frustumCulled = false;   // the points are rewritten every frame; the first (empty) bounds would cull it
+    aimLineMesh.visible = false;
     scene.add(aimLineMesh);
+    // marker on the ground where the shot is aimed: a ring and a pole, drawn over the terrain and sized to stay readable at any distance
+    window.aimMarker = new THREE.Group();
+    (function () {
+        let mat = new THREE.MeshBasicMaterial({ color: 0xffe14d, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false });
+        let ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 1.0, 40), mat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.renderOrder = 999;
+        let poleGeo = new THREE.BufferGeometry();
+        poleGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 0, 7, 0]), 3));
+        let pole = new THREE.Line(poleGeo, new THREE.LineBasicMaterial({ color: 0xffe14d, transparent: true, opacity: 0.8, depthTest: false }));
+        pole.renderOrder = 999;
+        pole.frustumCulled = false;
+        ring.frustumCulled = false;
+        window.aimMarker.add(ring);
+        window.aimMarker.add(pole);
+        window.aimMarker.visible = false;
+        scene.add(window.aimMarker);
+    })();
     
     // Orthographic Camera for Minimap
     const mapSize = 150; 
@@ -6028,11 +6060,41 @@
     scene.add(gridPlane);
     window._gridPlane = gridPlane;
 
-    window.resetAimTarget = function() {
+    // Aim goes back to the flag. keepManual (after the player's own shot) lets a hand-set aim stand while it is still a place to play towards.
+    window.aimManual = false;
+    window.resetAimTarget = function(keepManual) {
         let hole = courseHoles[playingHoleIndex];
+        if (keepManual && window.aimManual && hole && hole.flag && window.aimTarget && window.ballMesh && window.AimMath &&
+            window.AimMath.keepManualAim(window.ballMesh.position, window.aimTarget, hole.flag)) return;
+        window.aimManual = false;
         if (hole && hole.flag) {
             window.aimTarget = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         }
+    };
+
+    // A hand-set aim point (tap on the ground, minimap, arrow keys). The AUTO camera swings round behind the ball on its own.
+    window.setAimPoint = function(x, y, z) {
+        if (!window.aimTarget) window.aimTarget = new THREE.Vector3();
+        window.aimTarget.set(x, y, z);
+        window.aimManual = true;
+    };
+    window.aimNudge = function(deg) {
+        if (!window.aimTarget || !window.ballMesh || !window.AimMath) return;
+        if ((appMode !== 'PLAY' && appMode !== 'TEST') || playState !== 'ROUND_IDLE') return;
+        let p = window.AimMath.rotateAim(window.ballMesh.position, window.aimTarget, deg);
+        let surf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(p.x, -p.z) : null;
+        window.setAimPoint(p.x, (surf && typeof surf.z === 'number') ? surf.z : window.aimTarget.y, p.z);
+    };
+    window.aimAtFlag = function() {
+        if ((appMode !== 'PLAY' && appMode !== 'TEST') || playState !== 'ROUND_IDLE') return;
+        window.aimManual = false;
+        let rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
+        if (rangeHole) {   // on the range there is no flag: straight down the range
+            let rt = rangeHole.tees.range, dir = rt.rot || 0;
+            window.aimTarget.set(rt.x + Math.sin(dir) * 200, rt.y, rt.z + Math.cos(dir) * 200);
+            return;
+        }
+        window.resetAimTarget();
     };
 
     window.localGetTerrainAt = function(px, py) {
@@ -8062,6 +8124,7 @@
         let hole = courseHoles[playingHoleIndex];
         let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
         window.aimTarget = fv.clone();
+        window.aimManual = false;
         
         let dir = new THREE.Vector3().subVectors(fv, window.ballMesh.position).normalize();
         
@@ -9947,7 +10010,7 @@
             window.isPuttingMode = isPutt;
             gameCamPhase = isPutt ? 'PUTT_AIM' : 'IDLE_AIM';
             
-            if (window.aimTarget) window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z);
+            if (window.aimTarget) { window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z); window.aimManual = false; }
             window.pinMesh = hole.flagMesh;
         }
         
@@ -12345,6 +12408,39 @@
         controls.update();
     });
     
+    // --- TAP THE GROUND TO AIM, ARROW KEYS TO FINE-TUNE, F = FLAG ---
+    (function () {
+        let down = null;
+        const canAim = () => (appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying && window.aimTarget && window.ballMesh && !window.ballLocked;
+        renderer.domElement.addEventListener('pointerdown', (e) => {
+            down = (e.button === 0 || e.pointerType === 'touch') ? { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId } : null;
+        }, false);
+        renderer.domElement.addEventListener('pointerup', (e) => {
+            if (!down || e.pointerId !== down.id) return;
+            let d = down; down = null;
+            if (!canAim() || !window.AimMath.isTap(d, { x: e.clientX, y: e.clientY, t: performance.now() })) return;
+            let rect = renderer.domElement.getBoundingClientRect();
+            let rc = new THREE.Raycaster();
+            rc.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
+            let hits = rc.intersectObject(plane);
+            if (hits.length === 0) return;
+            let pt = hits[0].point;
+            if (Math.hypot(pt.x - window.ballMesh.position.x, pt.z - window.ballMesh.position.z) < 1.5) return;   // a tap on the ball itself is not an aim
+            window.setAimPoint(pt.x, pt.y, pt.z);
+        }, false);
+        window.addEventListener('keydown', (e) => {
+            if (!canAim() || e.ctrlKey || e.metaKey || e.altKey) return;
+            let t = e.target && e.target.tagName;
+            if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                window.aimNudge((e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 5 : 1));
+            } else if (e.key.toLowerCase() === 'f') {
+                window.aimAtFlag();
+            }
+        });
+    })();
+
     // --- MINIMAP CLICK TO AIM ---
     document.addEventListener('DOMContentLoaded', () => {
         const mmc = document.getElementById('minimap-container');
@@ -12364,7 +12460,7 @@
                 let hits = raycaster.intersectObject(plane);
                 
                 if (hits.length > 0) {
-                    window.aimTarget.copy(hits[0].point);
+                    window.setAimPoint(hits[0].point.x, hits[0].point.y, hits[0].point.z);
                     // Rota kameran mot nya siktet
                     let aimDir = new THREE.Vector3().subVectors(window.aimTarget, window.ballMesh.position).normalize();
                     if (window.isPuttingMode) {
@@ -14221,6 +14317,7 @@ window.triggerExplosion = function(x, y, z) {
                         
                         // Reset aim target along range direction
                         if (window.aimTarget) {
+                            window.aimManual = false;
                             window.aimTarget.set(
                                 rangeTee.x + Math.sin(dir) * 200,
                                 rangeTee.y,
@@ -14430,8 +14527,8 @@ window.triggerExplosion = function(x, y, z) {
                                 controls.enabled = true;
                             }
                             
-                            // Reset Aim mot nästa slag (Flaggan eller Fairway)
-                            window.resetAimTarget();
+                            // Reset Aim mot nästa slag (Flaggan eller Fairway); a hand-set aim stays while it is still ahead
+                            window.resetAimTarget(true);
                             
                             // Evaluate who plays next (this player is not done)
                             evaluateNextTurn();
@@ -14689,6 +14786,25 @@ window.triggerExplosion = function(x, y, z) {
         
         // --- GSPRO AIM BILLBOARD PROJECTION ---
         let bb = document.getElementById('aim-billboard');
+        let aimActive = (appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget && window.ballMesh;
+        window.aimMarker.visible = !!aimActive;
+        aimLineMesh.visible = !!aimActive;
+        let aimPanel = document.getElementById('aim-controls');
+        if (aimPanel) aimPanel.style.display = aimActive ? 'flex' : 'none';
+        if (aimActive) {
+            let bp = window.ballMesh.position, ap = window.aimTarget;
+            window.aimMarker.position.set(ap.x, ap.y + 0.05, ap.z);
+            let ms = Math.min(Math.max(camera.position.distanceTo(ap) * 0.012, 0.5), 6);
+            window.aimMarker.scale.set(ms, ms, ms);
+            let la = window.aimTracerGeo.attributes.position.array;
+            la[0] = bp.x; la[1] = bp.y + 0.1; la[2] = bp.z;
+            la[3] = ap.x; la[4] = ap.y + 0.1; la[5] = ap.z;
+            window.aimTracerGeo.attributes.position.needsUpdate = true;
+            aimLineMesh.computeLineDistances();
+            let hl = courseHoles[playingHoleIndex];
+            let offEl = document.getElementById('aim-offset');
+            if (offEl && hl && hl.flag && window.AimMath) offEl.innerText = window.AimMath.formatOffset(window.AimMath.offsetFromFlagDeg(bp, ap, hl.flag));
+        }
         if ((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget) {
             bb.style.display = 'block';
             let pos = window.aimTarget.clone();
@@ -14866,8 +14982,9 @@ window.triggerExplosion = function(x, y, z) {
                     let degUp = (Math.atan2(dY, flatD) * 180 / Math.PI).toFixed(1);
                     document.getElementById('minimap-updown').innerText = Math.abs(degUp) + (degUp >= 0 ? "° UP" : "° DN");
                     
-                    // Left/Right? Eftersom kameran följer Siktet är vi alltid 0.0°!
-                    document.getElementById('minimap-leftright').innerText = "0.0° RIGHT";
+                    // sideways turn of the aim away from the flag line
+                    let mmHole = courseHoles[playingHoleIndex];
+                    if (mmHole && mmHole.flag && window.AimMath) document.getElementById('minimap-leftright').innerText = window.AimMath.formatOffset(window.AimMath.offsetFromFlagDeg(window.ballMesh.position, window.aimTarget, mmHole.flag)).replace(/ R$/, ' RIGHT').replace(/ L$/, ' LEFT');
                     
                     if (typeof localGetTerrainAt === 'function') {
                         let surf = localGetTerrainAt(window.aimTarget.x, -window.aimTarget.z);
