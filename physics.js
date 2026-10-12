@@ -58,6 +58,11 @@ window.GolfPhysics = (function() {
     // samma sätt (farten in i marken är så hög att taket aldrig nås), så det är orört.
     const BITE_FRICTION_MU = 0.40;
 
+    // En rullande boll (inte en glidande) får bara 5/7 av tyngdkraften längs lutningen: en del av energin går åt till att få bollen att snurra
+    // (solid klot, I = 2/5 m r^2, a = g sin(v) / (1 + 2/5)). Rullmotståndet (stimp) är redan en uppmätt retardation och rörs inte. Glidfasen
+    // (skid) är en glidande boll och får full tyngd.
+    const ROLLING_SLOPE_FACTOR = 5 / 7;
+
     // Flyer-lie från rough: chans per slag, lägsta utgångsvinkel (en driver/trä flyger inte), och hur mycket fart/spinn som blir kvar.
     // Farten behålls, spinnet minskar; resten gör bollens egen aerodynamik (mindre spinn = mindre luftmotstånd = längre carry).
     // Kalibrerat över hela kraftskalan (10-100 %, alla klubbor som kan få flyer): rough ger +2 till +15 % carry mot fairway, deep rough
@@ -163,6 +168,7 @@ window.GolfPhysics = (function() {
                 G[1] - gDotN * N[1],
                 G[2] - gDotN * N[2]
             ];
+            if (state.phase === "roll") gParallel = vecScale(gParallel, ROLLING_SLOPE_FACTOR);   // rullande boll, se ROLLING_SLOPE_FACTOR
             
             let vSpeed = vecMag(currentV);
             let normalForceMag = Math.abs(gDotN); // m/s^2 trycket mot marken
@@ -1006,12 +1012,12 @@ window.GolfPhysics = (function() {
                 }
 
                 if (speedXY < GROUND.stopSpeed) {
-                    // Bollen blir bara liggande om rullmotståndet håller emot lutningen. På en lutning som är brantare än mu (green: ca 5,6 % vid
+                    // Bollen blir bara liggande om rullmotståndet håller emot lutningen. På en lutning som är brantare än mu / (5/7) (green: ca 7,8 % vid
                     // stimp 10) vänder den i stället och rullar tillbaka, i stället för att fastna i vändpunkten när farten passerar noll.
                     let N = freshT.normal;
                     let gNormal = Math.abs(GRAVITY) * N[2];   // tyngdens del mot underlaget
                     let gAlongSlope = vecMag([gNormal * N[0], gNormal * N[1], gNormal * N[2] + GRAVITY]);   // g minus normaldelen = ner längs lutningen
-                    if (gAlongSlope <= rollMu(state) * gNormal) {
+                    if (gAlongSlope * (state.phase === "roll" ? ROLLING_SLOPE_FACTOR : 1) <= rollMu(state) * gNormal) {
                         state.phase = "stopped";
                         state.vel = [0, 0, 0];
                     }
@@ -1053,10 +1059,20 @@ window.GolfPhysics = (function() {
                     } else if (speedXY > captureThreshold && speedXY <= 2.2 && offsetFactor > 0.3) {
                         // LIP OUT!
                         console.log("😥 LIP OUT! Fart: " + speedXY.toFixed(2) + " m/s, Offset: " + offsetFactor.toFixed(2));
-                        state.vel[0] = state.vel[0] * 0.4 + (dX * 18.0);
-                        state.vel[1] = state.vel[1] * 0.4 + (dY * 18.0);
-                        state.pos[0] += (dX / distToCenter) * 0.02;
-                        state.pos[1] += (dY / distToCenter) * 0.02;
+                        // En boll som kantar hålet böjer av åt det håll den gick förbi (bort från mitten), 20-45 grader beroende på hur nära kanten
+                        // den går, och behåller det mesta av farten. Den läggs över hålet direkt (till andra sidan kanten) så att den inte fångas på nytt.
+                        const lipUx = state.vel[0] / speedXY, lipUy = state.vel[1] / speedXY;
+                        const lipNx = -lipUy, lipNy = lipUx;   // vänster om färdriktningen
+                        const lipSide = (dX * lipNx + dY * lipNy) >= 0 ? 1 : -1;
+                        const lipAng = (10 + 35 * offsetFactor) * Math.PI / 180;
+                        const lipDx = Math.cos(lipAng) * lipUx + lipSide * Math.sin(lipAng) * lipNx;
+                        const lipDy = Math.cos(lipAng) * lipUy + lipSide * Math.sin(lipAng) * lipNy;
+                        state.vel[0] = lipDx * speedXY * 0.75;
+                        state.vel[1] = lipDy * speedXY * 0.75;
+                        const lipAlong = dX * lipDx + dY * lipDy;   // negativt när bollen pekar in över hålet
+                        const lipHop = (lipAlong < 0 ? -2 * lipAlong : 0) + 0.02;
+                        state.pos[0] += lipDx * lipHop;
+                        state.pos[1] += lipDy * lipHop;
                         // BUG-06 FIX: A ball in skid phase gliding into the cup should
                         // not receive an upward vel[2] = +0.5 bounce — it is already
                         // ground-hugging. Only apply the upward kick for flight/bounce phases.
