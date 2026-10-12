@@ -7030,10 +7030,10 @@
 
     const MAX_TRACER_POINTS = 6000;
     const tracerPositions = new Float32Array(MAX_TRACER_POINTS * 3);
-    const tracerColors = new Float32Array(MAX_TRACER_POINTS * 3); // Per-vertex colors
+    const tracerColors = new Float32Array(MAX_TRACER_POINTS * 4); // Per-vertex colors (r, g, b, alpha: a 4-component colour attribute turns on vertex alpha)
     const tracerGeo = new THREE.BufferGeometry();
     tracerGeo.setAttribute('position', new THREE.BufferAttribute(tracerPositions, 3));
-    tracerGeo.setAttribute('color', new THREE.BufferAttribute(tracerColors, 3));
+    tracerGeo.setAttribute('color', new THREE.BufferAttribute(tracerColors, 4));
     tracerGeo.setDrawRange(0, 0);
     const tracerMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 3, vertexColors: false, depthTest: false, depthWrite: false });
     window.tracerMat = tracerMat; // Expose for tracer engine
@@ -7083,9 +7083,9 @@
         
         let mat;
         if (useVertexColors) {
-            let colArr = new Float32Array(tracerPointsCount * 3);
-            colArr.set(tracerColors.subarray(0, tracerPointsCount * 3));
-            geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+            let colArr = new Float32Array(tracerPointsCount * 4);
+            colArr.set(tracerColors.subarray(0, tracerPointsCount * 4));
+            geo.setAttribute('color', new THREE.BufferAttribute(colArr, 4));
             mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false });
         } else {
             mat = new THREE.LineBasicMaterial({ color: style ? style.core : 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
@@ -14046,15 +14046,32 @@ window.triggerExplosion = function(x, y, z) {
                     if (style && style.vertexFn) {
                         let vc = window.getTracerVertexColor(style.vertexFn, tracerPointsCount, flightData.path.length);
                         if (vc) {
-                            tracerColors[tracerPointsCount * 3] = vc[0];
-                            tracerColors[tracerPointsCount * 3 + 1] = vc[1];
-                            tracerColors[tracerPointsCount * 3 + 2] = vc[2];
+                            tracerColors[tracerPointsCount * 4] = vc[0];
+                            tracerColors[tracerPointsCount * 4 + 1] = vc[1];
+                            tracerColors[tracerPointsCount * 4 + 2] = vc[2];
+                            tracerColors[tracerPointsCount * 4 + 3] = vc.length > 3 ? vc[3] : 1;
                         }
                     }
                     tracerPointsCount++;
                 }
             }
             window._lastProcessedTick = newTick + 1;
+
+            // The tail of a fading style (Phantom) dims with the age of each vertex (5 ms per physics tick)
+            let tStyleNow = window.TRACER_STYLES[window.currentTracerStyle || 'CLASSIC'];
+            if (tStyleNow && tStyleNow.vertexFn === 'fade' && window.applyTracerTailFade) window.applyTracerTailFade(tracerColors, tracerPointsCount);
+
+            // The ball is interpolated between two physics ticks, the committed vertices are whole ticks: draw one more vertex at the ball itself,
+            // so the tracer reaches the ball (up to 37 cm behind it at driver speed otherwise). It is rewritten every frame, never committed.
+            let tracerDrawCount = tracerPointsCount;
+            if (tracerPointsCount > 0 && tracerPointsCount < MAX_TRACER_POINTS) {
+                let bp = window.ballMesh.position;
+                tracerPositions[tracerPointsCount * 3] = bp.x;
+                tracerPositions[tracerPointsCount * 3 + 1] = bp.y;
+                tracerPositions[tracerPointsCount * 3 + 2] = bp.z;
+                for (let c = 0; c < 4; c++) tracerColors[tracerPointsCount * 4 + c] = tracerColors[(tracerPointsCount - 1) * 4 + c];
+                tracerDrawCount = tracerPointsCount + 1;
+            }
 
             // === AUDIO: Bounce sound on phase transition ===
             if (window.AudioEngine && flightData.path[newTick]) {
@@ -14068,7 +14085,7 @@ window.triggerExplosion = function(x, y, z) {
             
             flightTracer.geometry.attributes.position.needsUpdate = true;
             if (flightTracer.geometry.attributes.color) flightTracer.geometry.attributes.color.needsUpdate = true;
-            flightTracer.geometry.setDrawRange(0, tracerPointsCount);
+            flightTracer.geometry.setDrawRange(0, tracerDrawCount);
             // T01 FIX: Recompute line distances for dashed material (PRO_DOT)
             if (flightTracer.material instanceof THREE.LineDashedMaterial) {
                 flightTracer.computeLineDistances();
