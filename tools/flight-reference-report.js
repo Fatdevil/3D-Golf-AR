@@ -33,17 +33,19 @@ function fly(v, la, sp, env, phys) {
 const f1 = x => x.toFixed(1), f0 = x => x.toFixed(0);
 function solveLaunch(v, sp, carryTarget, env) { let lo = 3, hi = 40; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fly(v, mid, sp, env).carry < carryTarget) lo = mid; else hi = mid; } return (lo + hi) / 2; }
 
-const TOUR = [  // Golf Monthly's table of Trackman's 2023 PGA Tour averages (see the report for the source)
-  { club: 'Driver', clubSpeed: 115, ball: 171, spin: 2545, carry: 282, launch: null },
-  { club: '7-iron', clubSpeed: 92, ball: 123, spin: 7124, carry: 176, launch: 16.2 },   // launch: Golf Digest citing Trackman, "a shade over 16 degrees", undated
-  { club: 'PW', clubSpeed: 84, ball: 104, spin: 9316, carry: 142, launch: null },
+const TOUR = [  // ball speed, spin and carry: Golf Monthly's table of TrackMan's 2023 Tour averages (see the report).
+  // launch: the angles a reviewer reported from TrackMan's own PDF of the 2024 averages (not opened by the author of this report; the driver's 10.4 deg
+  // is confirmed by a second, secondary source, Top Shelf Golf citing TrackMan's May 2024 update). They belong to the same rows as the other columns.
+  { club: 'Driver', clubSpeed: 115, ball: 171, spin: 2545, carry: 282, launch: 10.4 },
+  { club: '7-iron', clubSpeed: 92, ball: 123, spin: 7124, carry: 176, launch: 16.1 },
+  { club: 'PW', clubSpeed: 84, ball: 104, spin: 9316, carry: 142, launch: 23.7 },
 ];
 const ENVS = [{ n: '15 C, 0 ft (engine default)', t: 15, alt: 0 }, { n: '25 C, 0 ft', t: 25, alt: 0 }, { n: '25 C, 1000 ft', t: 25, alt: 1000 }];
 
-console.log('## A. Mixed-source 7-iron inputs run through the engine (ball speed, spin and carry from one table; the launch angle from another, undated source; no wind, flat, no lie)\n');
+console.log('## A. Tour rows run through the engine (ball speed, spin, carry: the Golf Monthly table of the 2023 TrackMan averages; launch angle: as reported from the TrackMan PDF, driver confirmed by a second source; no wind, flat, no lie)\n');
 console.log('| Club | Ball mph | Spin rpm | Launch used | Env | Engine carry yd | Tour carry yd | Diff |');
 console.log('|---|---|---|---|---|---|---|---|');
-for (const t of TOUR) if (t.launch) for (const e of ENVS) { const o = fly(t.ball, t.launch, t.spin, e); console.log(`| ${t.club} | ${t.ball} | ${t.spin} | ${t.launch} (mixed source) | ${e.n} | ${f1(o.carry)} | ${t.carry} | ${((o.carry / t.carry - 1) * 100).toFixed(1)} % |`); }
+for (const t of TOUR) for (const e of ENVS) { const o = fly(t.ball, t.launch, t.spin, e); console.log(`| ${t.club} | ${t.ball} | ${t.spin} | ${t.launch} (reported) | ${e.n} | ${f1(o.carry)} | ${t.carry} | ${((o.carry / t.carry - 1) * 100).toFixed(1)} % |`); }
 
 console.log('\n## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft)\n');
 console.log('| Club | Ball mph | Spin rpm | Max engine carry yd | At launch deg | Tour carry yd | Diff at best launch |');
@@ -80,4 +82,4 @@ console.log(`\nLargest difference from the 5 ms step: carry ${worstCarry.toFixed
 console.log('\n## G. Apex height: Trackman says driver and PW apex differ by only about 3 yd/m (Trackman apex-height article, 2023 averages). The engine, 15 C, plausible launch angles:\n');
 console.log('| Case | Driver apex yd | PW apex yd | Difference yd | Sourced difference |');
 console.log('|---|---|---|---|---|');
-for (const [dl, pl] of [[10, 24], [10.5, 25], [11, 26]]) { const d = fly(171, dl, 2545), p = fly(104, pl, 9316); console.log(`| launch ${dl} / ${pl} deg | ${f1(d.apex)} | ${f1(p.apex)} | ${f1(d.apex - p.apex)} | about 3 |`); }
+for (const [dl, pl] of [[10.4, 23.7], [10, 24], [11, 26]]) { const d = fly(171, dl, 2545), p = fly(104, pl, 9316); console.log(`| launch ${dl} / ${pl} deg | ${f1(d.apex)} | ${f1(p.apex)} | ${f1(d.apex - p.apex)} | about 3 |`); }

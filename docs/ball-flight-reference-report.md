@@ -4,12 +4,13 @@
 
 ## 1. Sammanfattning
 
-1. **Carry, driver:** utgångsvinkeln saknas i underlaget, så ingen avvikelse går att ange. Med de källbelagda bollfarten och spinnet (171 mph, 2 545 rpm) ger motorn 277 yd vid 3°, 282 yd vid 5° och högst 288 yd vid 11°, alltså -1,6 % till +2,3 % mot källans 282 yd beroende på vilken vinkel man antar (tabell C). Siffran 288 yd är ett optimerat maximum över vinklar och inte en jämförelse med källbelagda indata.
-2. **Carry, järn (villkorat, blandade källor):** bollfart, spinn och carry (123 mph, 7 124 rpm, 176 yd) kommer ur samma tabell (2023 års snitt), men utgångsvinkeln 16,2° kommer ur en annan, odaterad källa med oklart urval. Raderna för 7-järnet i tabell A är därför en blandad jämförelse och ingen enskild dokumenterad Tour-grupp: med 16,2° ger motorn 162 yd (15 °C, havsnivå) mot 176 yd, alltså -8 %, och -4,8 % vid 25 °C och 1 000 ft. Den vinkeloberoende gränsen är säkrare: ingen utgångsvinkel räcker, eftersom högsta carry motorn når med 123 mph och 7 124 rpm är 164 yd (-6,6 %). För PW är högsta carry 125 yd mot 142 yd (-12 %); de gränserna använder bara bollfart, spinn och carry ur den gemensamma tabellen.
-3. **Bollbanans form:** källan TrackMan säger att toppen för driver och PW skiljer sig med bara cirka 3 yd/m. Motorn ger cirka 30 yd när driverns vinkel antas vara 10° till 11° och PW:s 24° till 26° (tabell G). Skillnaden beror på de antagna vinklarna, som inte är källbelagda: för att skillnaden ska bli cirka 3 yd skulle driverns utgångsvinkel behöva vara cirka 3° eller lägre (tabell C), långt under vad jag förväntar mig för en modern driver, men det förväntandet är inte heller källbelagt här. Det är den tydligaste avvikelsen, men den är villkorad.
-4. **Landningsvinkel och tid i luften:** underlaget saknar flygtid, och för landningsvinkel har jag bara en tumregel från 2016. Jag drar ingen slutsats om dem.
-5. **Underlagets gräns:** TrackMans Tour-snitt anger inga miljöförhållanden (temperatur, höjd, vind) och blandar tävling och range. Avvikelserna ovan kan därför inte räknas om till koefficienter. Rapporten visar var motorn och datan skiljer sig åt, och är ett underlag för att besluta vad som ska kontrolleras härnäst.
-6. **Spelets egna indata** (`CLUB_PROFILES`) kompenserar delvis: 7-järnet matas med 128 mph och 18,5° i stället för Tour-snittets 123 mph och cirka 16°. En omkalibrering av fysiken måste därför räkna om klubbprofilerna, annars ändras alla slags distanser i spelet.
+1. **Carry, driver:** med den rapporterade utgångsvinkeln 10,4° ger motorn 288 yd mot källans 282 yd (+2,3 % vid 15 °C och havsnivå, +4,2 % vid 25 °C och +6,1 % vid 25 °C och 1 000 ft). Motorn ligger alltså över källan och avvikelsen växer med varmare och högre miljö.
+2. **Carry, järn:** 7-järnet (123 mph, 16,1°, 7 124 rpm) ger 162 yd mot 176 yd, alltså -8,0 % (-4,8 % vid 25 °C och 1 000 ft), och PW (104 mph, 23,7°, 9 316 rpm) ger 117 yd mot 142 yd, alltså -17,7 % (-15,5 % vid 25 °C och 1 000 ft). Ingen utgångsvinkel räcker för järnen: högsta carry motorn når är 164 yd för 7-järnet och 125 yd för PW (tabell B, vinkeloberoende).
+3. **Bollbanans form:** källan TrackMan säger att toppen för driver och PW skiljer sig med bara cirka 3 yd/m. Med de rapporterade vinklarna (10,4° och 23,7°) ger motorn 49 yd för driver och 18 yd för PW, alltså en skillnad på 31 yd (tabell G). Det är den tydligaste avvikelsen. TrackMans PDF anger också topp och landningsvinkel per klubba; jag har inte kunnat läsa dem och har därför inte jämfört dem (se avsnitt 8).
+4. **Mönstret:** motorn ligger över källan för driver (+2 till +6 %) och under för järn (-5 till -8 % för 7-järn, -16 till -18 % för PW). Avvikelsen har alltså olika tecken beroende på klubba, vilket pekar på en formfråga i lyft- och motståndskurvorna och inte på en jämn skalning. Det är en observation ur en enda tabell med okända miljöförhållanden, inte en slutsats om vilka koefficienter som är fel.
+5. **Landningsvinkel och tid i luften:** underlaget saknar flygtid, och för landningsvinkel har jag bara en tumregel från 2016 (PDF:ens värden är inte lästa). Jag drar ingen slutsats om dem.
+6. **Underlagets gräns:** TrackMans Tour-snitt anger inga miljöförhållanden (temperatur, höjd, vind) och blandar tävling och range. Avvikelserna ovan kan därför inte räknas om till koefficienter. Rapporten visar var motorn och datan skiljer sig åt, och är ett underlag för att besluta vad som ska kontrolleras härnäst.
+7. **Spelets egna indata** (`CLUB_PROFILES`) kompenserar delvis: 7-järnet matas med 128 mph och 18,5° i stället för Tour-snittets 123 mph och cirka 16°. En omkalibrering av fysiken måste därför räkna om klubbprofilerna, annars ändras alla slags distanser i spelet.
 
 ## 2. Källor och vad de ger
 
@@ -24,14 +25,16 @@ Hämtade 2026-10-12.
 | Klubbhuvudets fart, bollfart, spinn, carry: driver | 115 mph, 171 mph, 2 545 rpm, 282 yd | [Golf Monthly](https://www.golfmonthly.com/tour/how-far-pga-tour-players-hit-every-club-in-the-bag) (återger TrackMans uppdaterade Tour-snitt) | 2023 års data (TrackMans Tour-snitt, urval enligt ovan), TrackMan-inlägg maj 2024 enligt sökresultatet |
 | samma: 7-järn | 92 mph, 123 mph, 7 124 rpm, 176 yd | samma | samma |
 | samma: PW | 84 mph, 104 mph, 9 316 rpm, 142 yd | samma | samma |
-| Utgångsvinkel 7-järn | "strax över 16°" (använt: 16,2°) | [Golf Digest](https://www.golfdigest.com/story/worried-your-irons-aren-t-spinning-enough--think-again) som citerar TrackMan | odaterad, urvalet oklart |
+| Utgångsvinkel: driver 10,4°, 7-järn 16,1°, PW 23,7° | så som en granskare återgav dem ur [TrackMans PDF med 2024 års PGA-snitt](https://blog.trackmangolf.jp/wp-content/uploads/2024/05/PGA-tour-averages-50-x-70_2024_JP-1.pdf) (samma rader som övriga kolumner). **Jag har inte kunnat öppna PDF:en** (DNS-fel härifrån). Drivervinkeln 10,4° och spinnet 2 545 rpm bekräftas av en sekundärkälla ([Top Shelf Golf](https://topshelfgolf.com/blogs/golf/golf-swing-speed-chart), som anger TrackMans uppdatering från maj 2024). 7-järnets och PW:s vinklar är oberoende bekräftade bara av att Golf Digest anger 7-järnets vinkel som strax över 16° (odaterat). | TrackMan, maj 2024 (enligt Top Shelf Golf) | PDF:ens egna kolumner för topp och landningsvinkel är inte lästa |
 | Toppens skillnad driver mot PW | cirka 3 yd/m | [TrackMan, Apex Height](https://www.trackman.com/blog/apex-height) | "senaste Tour-snitten" (urvalet enligt TrackMans sida ovan) |
 | Topp driver | cirka 35 yd | Golf Monthly (samma artikel, sökresultatet) | 2023 års data |
 | Topp, alla klubbor | "cirka 30 yd" | [Golf.com](https://golf.com/gear/this-is-how-high-pro-golfers-hit-their-clubs/) | odaterad, troligen äldre |
 | Landningsvinkel | driver cirka 40°, wedge cirka 50° | [Golf News Net](https://thegolfnewsnet.com/golfnewsnetteam/2016/10/24/what-do-trackman-numbers-mean-interpret-results-launch-monitor-100881/) | 2016, tumregel |
 | Flygtid | **saknas i underlaget** | - | - |
-| Utgångsvinkel driver och PW | **ingen källa hittad** | - | - |
+| Topp och landningsvinkel per klubba | finns enligt granskaren i PDF:en, **inte lästa av mig** | - | - |
 | Miljöförhållanden (temperatur, höjd, vind, bana) | **saknas i underlaget** | - | - |
+
+**Källkonflikt:** en annan sida (NEO Golf, "2024 season") anger andra siffror (driver 275 yd, PW 136 yd). Jag har inte kunnat avgöra vilket dataset den bygger på; rapporten använder 2023 års TrackMan-snitt ovan.
 
 **Rättelse mot min tidigare rapport i chatten:** de Tour-värden jag då angav (driver 275, 7-järn 172, PW 136 yd) kom ur minnet och motsvarar äldre data. Med 2023 års data är de 282, 176 och 142 yd. Avvikelserna "9 till 16 % för kort" är därför ersatta av siffrorna här.
 
@@ -46,13 +49,19 @@ Hämtade 2026-10-12.
 
 ## 4. Resultat
 
-## A. Mixed-source 7-iron inputs run through the engine (ball speed, spin and carry from one table; the launch angle from another, undated source; no wind, flat, no lie)
+## A. Tour rows run through the engine (ball speed, spin, carry: the Golf Monthly table of the 2023 TrackMan averages; launch angle: as reported from the TrackMan PDF, driver confirmed by a second source; no wind, flat, no lie)
 
 | Club | Ball mph | Spin rpm | Launch used | Env | Engine carry yd | Tour carry yd | Diff |
 |---|---|---|---|---|---|---|---|
-| 7-iron | 123 | 7124 | 16.2 (mixed source) | 15 C, 0 ft (engine default) | 162.0 | 176 | -8.0 % |
-| 7-iron | 123 | 7124 | 16.2 (mixed source) | 25 C, 0 ft | 164.7 | 176 | -6.4 % |
-| 7-iron | 123 | 7124 | 16.2 (mixed source) | 25 C, 1000 ft | 167.6 | 176 | -4.8 % |
+| Driver | 171 | 2545 | 10.4 (reported) | 15 C, 0 ft (engine default) | 288.3 | 282 | 2.3 % |
+| Driver | 171 | 2545 | 10.4 (reported) | 25 C, 0 ft | 293.7 | 282 | 4.2 % |
+| Driver | 171 | 2545 | 10.4 (reported) | 25 C, 1000 ft | 299.3 | 282 | 6.1 % |
+| 7-iron | 123 | 7124 | 16.1 (reported) | 15 C, 0 ft (engine default) | 161.9 | 176 | -8.0 % |
+| 7-iron | 123 | 7124 | 16.1 (reported) | 25 C, 0 ft | 164.6 | 176 | -6.5 % |
+| 7-iron | 123 | 7124 | 16.1 (reported) | 25 C, 1000 ft | 167.5 | 176 | -4.8 % |
+| PW | 104 | 9316 | 23.7 (reported) | 15 C, 0 ft (engine default) | 116.9 | 142 | -17.7 % |
+| PW | 104 | 9316 | 23.7 (reported) | 25 C, 0 ft | 118.4 | 142 | -16.6 % |
+| PW | 104 | 9316 | 23.7 (reported) | 25 C, 1000 ft | 119.9 | 142 | -15.5 % |
 
 ## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft)
 
@@ -88,11 +97,11 @@ Hämtade 2026-10-12.
 
 | Case | Driver apex yd | PW apex yd | Difference yd | Sourced difference |
 |---|---|---|---|---|
+| launch 10.4 / 23.7 deg | 49.4 | 18.1 | 31.3 | about 3 |
 | launch 10 / 24 deg | 48.2 | 18.5 | 29.7 | about 3 |
-| launch 10.5 / 25 deg | 49.7 | 19.6 | 30.1 | about 3 |
 | launch 11 / 26 deg | 51.3 | 20.8 | 30.5 | about 3 |
 
-Driverns utgångsvinkel är inte källbelagd. Carryn varierar från 277 yd vid 3° till 288 yd vid 11° (tabell C) och toppen från 26 yd till 51 yd, så varken driverns carry-skillnad eller toppskillnaden i tabell G kan anges som ett definitivt fel utan en källbelagd vinkel. Vid 5° ger motorn 282,5 yd och 32,6 yd topp, nära källans 282 yd och cirka 35 yd; vid 3° ger den en topp på 26 yd.
+Driverns carry varierar från 277 yd vid 3° till 288 yd vid 11° (tabell C) och toppen från 26 yd till 51 yd, så resultaten för driver är känsliga för utgångsvinkeln. Rapporten använder därför den rapporterade vinkeln 10,4° som huvudfall och visar svepet i tabell C.
 
 ## 5. Spelets egna indata
 
@@ -160,7 +169,7 @@ Skillnaden är högst 0,01 yd i carry och 0,01 yd i topp, så integratorn är in
 
 - Att krafterna, enheterna och koefficienterna i modellen är rätt. Integrationens stabilitet bevisar inte det.
 - Någon jämförelse av tid i luften och landningsvinkel mot kontrollerade data.
-- Utgångsvinkel för driver och PW. Utan den går ingen carry-skillnad att ange säkert: för 7-järnet är vinkeln från en annan, odaterad källa (blandad jämförelse), så bara den vinkeloberoende maximigränsen (tabell B) är säker.
+- De rapporterade utgångsvinklarna (driver 10,4°, 7-järn 16,1°, PW 23,7°): de är återgivna av en granskare ur TrackMans PDF som jag inte har kunnat öppna. Drivervinkeln bekräftas av en sekundärkälla, de övriga inte. Topp och landningsvinkel per klubba står enligt granskaren i samma PDF och är inte jämförda här.
 - Vilka miljöförhållanden Tour-snitten gäller: de anges inte, och datan blandar tävling och range. Känsligheten ovan visar att temperatur och höjd ger några procent, inte 8 till 12.
 - Att siffrorna är riktiga: de kommer från en sekundärkälla och ska kontrolleras mot TrackMans nedladdning.
 - Flygtid. Underlaget saknar den, så motorns tid i luften går inte att jämföra med något.
@@ -171,7 +180,7 @@ Rapporten är en dokumenterad kontroll: den visar var motorn och TrackMans Tour-
 
 Vad som krävs innan en fysikändring kan motiveras:
 
-1. Läs TrackMans egen nedladdningsbara tabell och byt ut sekundärkällan (alla klubbor: bollfart, utgångsvinkel, spinn, topp, landningsvinkel, carry).
+1. Öppna TrackMans egen PDF eller nedladdningsbara tabell, verifiera alla siffror ovan mot den och lägg till topp och landningsvinkel per klubba i jämförelsen (alla klubbor: bollfart, utgångsvinkel, spinn, topp, landningsvinkel, carry).
 2. Skaffa data med kända miljöförhållanden och flygtid, eller en dokumenterad modell för hur Tour-snitten ska normaliseras.
 3. Bestäm om `CLUB_PROFILES`, yard-etiketterna i klubblistan och `autoSelectClub` ska räknas om samtidigt som fysiken, och ersätt testmålen i `test_physics.js` med en daterad tabell.
 4. Först då: en separat, testad fysikändring med före/efter mot samma tabell.
