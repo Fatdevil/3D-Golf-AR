@@ -46,9 +46,9 @@ console.log('\nfinalTerrainType är fortfarande nedslagsunderlaget som spelet l�
   check('green -> rough ger finalTerrainType GREEN', r.finalType === 'GREEN', '(' + r.finalType + ')');
 }
 
-console.log('\nBrant uppförslutning (8 %): rough håller bollen, green släpper den');
+console.log('\nBrant uppförslutning (12 %, brantare än gränsen för en rullande boll: mu / (5/7) = ca 7,8 %): rough håller bollen, green släpper den');
 {
-  const gr = roll(3, env('GREEN', 'GREEN', 0.3, 0.08)), rough = roll(3, env('GREEN', 'ROUGH', 0.3, 0.08));
+  const gr = roll(3, env('GREEN', 'GREEN', 0.3, 0.12)), rough = roll(3, env('GREEN', 'ROUGH', 0.3, 0.12));
   check('ren green: bollen rullar tillbaka förbi start', gr.y < 0, '(slut ' + m(gr) + ')');
   check('green -> rough: bollen blir liggande i rough', rough.phase === 'stopped' && rough.y > 0.3 && Math.abs(rough.y - rough.maxY) < 0.05 && rough.time < 24,
         '(max ' + rough.maxY.toFixed(2) + ', slut ' + m(rough) + ', ' + rough.phase + ')');

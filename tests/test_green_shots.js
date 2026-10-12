@@ -92,10 +92,10 @@ function uphillStop(slope) {                        // en putt som inte når top
 }
 {
   const mu = G.greenMu(10);                          // 0,056
-  const gentle = uphillStop(0.03), steep = uphillStop(0.08);
-  check('3 % (flackare än mu ' + mu.toFixed(3) + '): bollen stannar vid toppen', Math.abs(gentle.end - gentle.maxY) < 0.02,
+  const gentle = uphillStop(0.03), steep = uphillStop(0.12);
+  check('3 % (flackare än mu ' + mu.toFixed(3) + ' / (5/7) = 7,8 % lutning): bollen stannar vid toppen', Math.abs(gentle.end - gentle.maxY) < 0.02,
         '(max ' + gentle.maxY.toFixed(2) + ', slut ' + gentle.end.toFixed(2) + ' m)');
-  check('8 % (brantare än mu): bollen rullar tillbaka förbi start', steep.end < 0 && steep.end < steep.maxY - 0.5,
+  check('12 % (brantare än 7,8 %): bollen rullar tillbaka förbi start', steep.end < 0 && steep.end < steep.maxY - 0.5,
         '(max ' + steep.maxY.toFixed(2) + ', slut ' + steep.end.toFixed(2) + ' m)');
 }
 
