@@ -47,5 +47,7 @@ check('a kept aim is tied to the player and hole it was set for', /aimManualOwne
 check('landing and next-turn setup both go through resetAimTarget(true)', (html.match(/resetAimTarget\(true\)/g) || []).length >= 3 && !/SMART AUTO-AIM EFTER SLAG ---\s*if \(window\.aimTarget\) \{\s*window\.aimTarget\.set/.test(html));
 check('readouts measure against aimReference (flag or range direction)', (html.match(/window\.aimReference\(\)/g) || []).length >= 3);
 
+check('AIM panel takes clicks (#ui-layer is pointer-events:none)', /id="aim-controls" style="[^"]*pointer-events:auto/.test(html));
+
 console.log(failed ? '\n' + failed + ' failed' : '\nall aim checks passed');
 process.exit(failed ? 1 : 0);
