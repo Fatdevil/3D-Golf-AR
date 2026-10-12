@@ -132,7 +132,25 @@ Driver och wedge klarar sina tester. 7-järnets test faller (159 mot 178 till 19
 
 ## 7. Integratorn
 
-Samma tre slag med 5, 2,5 och 1,25 ms steg ger samma resultat inom 0,02 yd: driver 282,12 / 282,12 / 282,12, 7-järn 155,93 / 155,94 / 155,94, PW 114,04 på alla. Integratorn är inte felkällan.
+Skriptet räknar om tre slag med 5, 2,5 och 1,25 ms steg (varje körning är `physics.js` med ett annat steg, utvärderat ur källkoden i minnet; filen ändras inte). Skriptet stannar med ett fel om raden `const dt = 0.005;` inte finns exakt en gång, så ett ändrat steg missas inte tyst.
+
+### Integrator step: the same shots with the step halved twice (15 C, 0 ft, no wind), each run on physics.js with another step
+
+| Shot | Step ms | Carry yd | Apex yd | Flight s |
+|---|---|---|---|---|
+| Driver 171 mph, 11 deg, 2545 rpm | 5 | 288.43 | 51.27 | 8.34 |
+| Driver 171 mph, 11 deg, 2545 rpm | 2.5 | 288.43 | 51.26 | 8.34 |
+| Driver 171 mph, 11 deg, 2545 rpm | 1.25 | 288.43 | 51.26 | 8.34 |
+| 7-iron 123 mph, 16.2 deg, 7124 rpm | 5 | 161.99 | 25.65 | 4.94 |
+| 7-iron 123 mph, 16.2 deg, 7124 rpm | 2.5 | 162.00 | 25.65 | 4.94 |
+| 7-iron 123 mph, 16.2 deg, 7124 rpm | 1.25 | 162.00 | 25.66 | 4.94 |
+| PW 104 mph, 25 deg, 9316 rpm | 5 | 118.66 | 19.62 | 3.94 |
+| PW 104 mph, 25 deg, 9316 rpm | 2.5 | 118.67 | 19.62 | 3.94 |
+| PW 104 mph, 25 deg, 9316 rpm | 1.25 | 118.67 | 19.62 | 3.94 |
+
+Largest difference from the 5 ms step: carry 0.010 yd, apex 0.006 yd. The 5 ms step is the one physics.js uses (driver carry 288.43 yd).
+
+Skillnaden är högst 0,01 yd i carry och 0,01 yd i topp, så integratorn är inte felkällan. Det visar bara att integrationen är stabil, inte att krafterna och koefficienterna är rätt.
 
 ## 8. Vad rapporten inte visar
 

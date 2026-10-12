@@ -1,17 +1,30 @@
 // Reproduces the numbers in docs/ball-flight-reference-report.md. Read-only: it only calls physics.js and the swing engine, and changes nothing.
 // Run from the repo root: node tools/flight-reference-report.js
 const R = require('path').resolve(__dirname, '..');
+const fs = require('fs'), vm = require('vm');
 global.window = { GREEN_STIMP: 10, matchSettings: {} };
 require(R + '/physics.js');
 const G = global.window.GolfPhysics, YD = 1.09361, FT = 3.28084;
 Math.random = () => 0.5;
+
+// physics.js with another integrator step, evaluated from its source in memory (the file itself is never changed). The step is the line
+// `const dt = 0.005;` in simulateFlight; the script stops if that line is not found exactly once, so a changed step is never silently skipped.
+const STEP_LINE = 'const dt = 0.005;';
+function physicsWithStep(dt) {
+  const src = fs.readFileSync(R + '/physics.js', 'utf8');
+  if (src.split(STEP_LINE).length !== 2) throw new Error('Expected exactly one "' + STEP_LINE + '" in physics.js; update the integrator sweep (section F).');
+  const win = { GREEN_STIMP: 10, matchSettings: {} };
+  vm.runInNewContext(src.replace(STEP_LINE, 'const dt = ' + dt + ';'), { window: win, console: console, Math: Math });
+  return win.GolfPhysics;
+}
 const SE = require(R + '/tests/load_swing_engine.js')();
 
-function fly(v, la, sp, env) {
+function fly(v, la, sp, env, phys) {
   env = env || {};
+  phys = phys || G;
   const e = { getTerrainAt: () => ({ z: 0, normal: [0, 0, 1], type: 'FAIRWAY' }), checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: env.t === undefined ? 15 : env.t, altitudeFeet: env.alt || 0 };
   const log = console.log; console.log = () => {};
-  const r = G.simulateFlight({ startPos: [0, 0, 0], azimDeg: 0, spinAxisDeg: 0, ballSpeedMph: v, launchAngleDeg: la, totalSpinRpm: sp, isLiveData: true, isTeeShot: false }, e);
+  const r = phys.simulateFlight({ startPos: [0, 0, 0], azimDeg: 0, spinAxisDeg: 0, ballSpeedMph: v, launchAngleDeg: la, totalSpinRpm: sp, isLiveData: true, isTeeShot: false }, e);
   console.log = log;
   const p = r.path; let i = 1; while (i < p.length && p[i].phase === 'flight') i++;
   const q = p[i - 1];
@@ -53,7 +66,16 @@ console.log('| Test | Ball mph | Launch | Spin | Engine carry yd | Test target |
 console.log('|---|---|---|---|---|---|');
 for (const [n, v, la, sp, tg] of [['Driver', 130, 14, 2000, '210-220'], ['7-iron', 120, 16, 7000, '178-192 (failing)'], ['Wedge', 103, 35, 9000, '125-135']]) { const o = fly(v, la, sp, { t: 25 }); console.log(`| ${n} | ${v} | ${la} | ${sp} | ${f1(o.carry)} (25 C) | ${tg} |`); }
 
-console.log('\n## F. Integrator step (carry yd at 5 / 2.5 / 1.25 ms) - see the separate run: 282.12 / 282.12 / 282.12 (driver), 155.93 / 155.94 / 155.94 (7i), 114.04 x3 (PW).');
+console.log('\n## F. Integrator step: the same shots with the step halved twice (15 C, 0 ft, no wind), each run on physics.js with another step\n');
+console.log('| Shot | Step ms | Carry yd | Apex yd | Flight s |');
+console.log('|---|---|---|---|---|');
+let worstCarry = 0, worstApex = 0;
+for (const [n, v, la, sp] of [['Driver 171 mph, 11 deg, 2545 rpm', 171, 11, 2545], ['7-iron 123 mph, 16.2 deg, 7124 rpm', 123, 16.2, 7124], ['PW 104 mph, 25 deg, 9316 rpm', 104, 25, 9316]]) {
+  const base = fly(v, la, sp, {}, physicsWithStep(0.005));
+  for (const dt of [0.005, 0.0025, 0.00125]) { const o = fly(v, la, sp, {}, physicsWithStep(dt)); worstCarry = Math.max(worstCarry, Math.abs(o.carry - base.carry)); worstApex = Math.max(worstApex, Math.abs(o.apex - base.apex)); console.log(`| ${n} | ${dt * 1000} | ${o.carry.toFixed(2)} | ${o.apex.toFixed(2)} | ${o.hang.toFixed(2)} |`); }
+}
+const check = fly(171, 11, 2545, {}, G);
+console.log(`\nLargest difference from the 5 ms step: carry ${worstCarry.toFixed(3)} yd, apex ${worstApex.toFixed(3)} yd. The 5 ms step is the one physics.js uses (driver carry ${check.carry.toFixed(2)} yd).`);
 
 console.log('\n## G. Apex height: Trackman says driver and PW apex differ by only about 3 yd/m (Trackman apex-height article, 2023 averages). The engine, 15 C, plausible launch angles:\n');
 console.log('| Case | Driver apex yd | PW apex yd | Difference yd | Sourced difference |');
