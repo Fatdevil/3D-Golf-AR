@@ -53,7 +53,7 @@ for (const t of TOUR) { let best = { carry: 0, la: 0 }; for (let la = 3; la <= 4
 console.log('\n## C. Launch-angle sensitivity (15 C, 0 ft)\n');
 console.log('| Club | Launch | Carry yd | Apex yd | Landing deg | Flight s |');
 console.log('|---|---|---|---|---|---|');
-for (const [n, v, sp, las] of [['Driver', 171, 2545, [9, 10, 11, 12, 13]], ['7-iron', 123, 7124, [15, 16, 17, 18]], ['PW', 104, 9316, [22, 24, 26, 28]]]) for (const la of las) { const o = fly(v, la, sp); console.log(`| ${n} | ${la} | ${f1(o.carry)} | ${f1(o.apex)} | ${f0(o.land)} | ${o.hang.toFixed(1)} |`); }
+for (const [n, v, sp, las] of [['Driver', 171, 2545, [3, 5, 7, 9, 10, 11, 12, 13, 15]], ['7-iron', 123, 7124, [15, 16, 17, 18]], ['PW', 104, 9316, [22, 24, 26, 28]]]) for (const la of las) { const o = fly(v, la, sp); console.log(`| ${n} | ${la} | ${f1(o.carry)} | ${f1(o.apex)} | ${f0(o.land)} | ${o.hang.toFixed(1)} |`); }
 
 console.log('\n## D. What the game feeds the engine (CLUB_PROFILES at full power, arm 0, 15 C) against the yard labels in the UI and the Tour carry\n');
 console.log('| Club | Ball mph | Launch | Spin | Engine carry yd | UI label yd | Tour carry yd |');

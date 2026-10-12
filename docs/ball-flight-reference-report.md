@@ -4,9 +4,9 @@
 
 ## 1. Sammanfattning
 
-1. **Carry, driver:** motorn ger 288 yd med de källbelagda indata (171 mph, 2 545 rpm) mot 282 yd i källan, alltså +2 %. Det är inom vad miljön kan förklara.
+1. **Carry, driver:** utgångsvinkeln saknas i underlaget, så ingen avvikelse går att ange. Med de källbelagda bollfarten och spinnet (171 mph, 2 545 rpm) ger motorn 277 yd vid 3°, 282 yd vid 5° och högst 288 yd vid 11°, alltså -1,6 % till +2,3 % mot källans 282 yd beroende på vilken vinkel man antar (tabell C). Siffran 288 yd är ett optimerat maximum över vinklar och inte en jämförelse med källbelagda indata.
 2. **Carry, järn:** med källbelagda indata ger 7-järnet 162 yd (15 °C, havsnivå) mot 176 yd i källan, alltså -8 %. Varmare och högre miljö (25 °C, 1 000 ft) minskar avvikelsen till -4,8 %, men förklarar den inte helt. Ingen utgångsvinkel räcker: högsta carry motorn når med 123 mph och 7 124 rpm är 164 yd (-6,6 %), och för PW 125 yd mot 142 yd (-12 %).
-3. **Bollbanans form:** källan Trackman säger att toppen för driver och PW skiljer sig med bara cirka 3 yd/m. Motorn ger cirka 30 yd. Det är den tydligaste avvikelsen och den kräver inte att utgångsvinkeln är exakt känd.
+3. **Bollbanans form:** källan TrackMan säger att toppen för driver och PW skiljer sig med bara cirka 3 yd/m. Motorn ger cirka 30 yd när driverns vinkel antas vara 10° till 11° och PW:s 24° till 26° (tabell G). Skillnaden beror på de antagna vinklarna, som inte är källbelagda: för att skillnaden ska bli cirka 3 yd skulle driverns utgångsvinkel behöva vara cirka 3° eller lägre (tabell C), långt under vad jag förväntar mig för en modern driver, men det förväntandet är inte heller källbelagt här. Det är den tydligaste avvikelsen, men den är villkorad.
 4. **Landningsvinkel och tid i luften:** underlaget saknar flygtid, och för landningsvinkel har jag bara en tumregel från 2016. Jag drar ingen slutsats om dem.
 5. **Underlagets gräns:** TrackMans Tour-snitt anger inga miljöförhållanden (temperatur, höjd, vind) och blandar tävling och range. Avvikelserna ovan kan därför inte räknas om till koefficienter. Rapporten visar var motorn och datan skiljer sig åt, och är ett underlag för att besluta vad som ska kontrolleras härnäst.
 6. **Spelets egna indata** (`CLUB_PROFILES`) kompenserar delvis: 7-järnet matas med 128 mph och 18,5° i stället för Tour-snittets 123 mph och cirka 16°. En omkalibrering av fysiken måste därför räkna om klubbprofilerna, annars ändras alla slags distanser i spelet.
@@ -58,7 +58,7 @@ Hämtade 2026-10-12.
 
 | Club | Ball mph | Spin rpm | Max engine carry yd | At launch deg | Tour carry yd | Diff at best launch |
 |---|---|---|---|---|---|---|
-| Driver | 171 | 2545 | 288.4 | 11 | 282 | 2.3 % |
+| Driver (launch not sourced: optimized maximum) | 171 | 2545 | 288.4 | 11 | 282 | 2.3 % |
 | 7-iron | 123 | 7124 | 164.4 | 22.5 | 176 | -6.6 % |
 | PW | 104 | 9316 | 124.9 | 35 | 142 | -12.1 % |
 
@@ -66,11 +66,15 @@ Hämtade 2026-10-12.
 
 | Club | Launch | Carry yd | Apex yd | Landing deg | Flight s |
 |---|---|---|---|---|---|
+| Driver | 3 | 277.4 | 26.3 | 35 | 6.9 |
+| Driver | 5 | 282.5 | 32.6 | 39 | 7.3 |
+| Driver | 7 | 285.8 | 38.9 | 42 | 7.7 |
 | Driver | 9 | 287.7 | 45.1 | 44 | 8.0 |
 | Driver | 10 | 288.2 | 48.2 | 46 | 8.2 |
 | Driver | 11 | 288.4 | 51.3 | 47 | 8.3 |
 | Driver | 12 | 288.4 | 54.3 | 48 | 8.5 |
 | Driver | 13 | 288.1 | 57.4 | 48 | 8.6 |
+| Driver | 15 | 286.7 | 63.4 | 50 | 8.9 |
 | 7-iron | 15 | 160.7 | 23.7 | 41 | 4.8 |
 | 7-iron | 16 | 161.8 | 25.3 | 42 | 4.9 |
 | 7-iron | 17 | 162.7 | 26.9 | 44 | 5.0 |
@@ -88,7 +92,7 @@ Hämtade 2026-10-12.
 | launch 10.5 / 25 deg | 49.7 | 19.6 | 30.1 | about 3 |
 | launch 11 / 26 deg | 51.3 | 20.8 | 30.5 | about 3 |
 
-Driverns carry är nästan oberoende av utgångsvinkeln mellan 9° och 13° (287,7 till 288,4 yd) medan toppen ändras med 12 yd. Därför går inte driverns utgångsvinkel att räkna fram ur carryn, och en toppskillnad ur tabell G beror inte på exakt vinkel.
+Driverns utgångsvinkel är inte källbelagd. Carryn varierar från 277 yd vid 3° till 288 yd vid 11° (tabell C) och toppen från 26 yd till 51 yd, så varken driverns carry-skillnad eller toppskillnaden i tabell G kan anges som ett definitivt fel utan en källbelagd vinkel. Vid 5° ger motorn 282,5 yd och 32,6 yd topp, nära källans 282 yd och cirka 35 yd; vid 3° ger den en topp på 26 yd.
 
 ## 5. Spelets egna indata
 
