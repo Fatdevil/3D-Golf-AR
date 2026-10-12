@@ -118,7 +118,7 @@ Driverns carry varierar från 277 yd vid 3° till 288 yd vid 11° (tabell C) och
 | SW | 85 | 32 | 10200 | 92.4 | 90 | - |
 | LW | 72 | 36 | 10800 | 73.4 | 60 | - |
 
-Engine-carryn i kolumnen "Engine carry" är för 15 °C och full kraft. "UI label" är de yard-etiketter som visas i klubblistan (`arcade.html:3225-3249`) och som styr `autoSelectClub` (`arcade-swing-engine.js:68-80`, trösklar i meter: 201, 174, 151, 133, 114, 91, 55). De stämmer inte med vad motorn gör vid full kraft för de långa klubborna (driver: 220 mot 282 yd).
+Engine-carryn i kolumnen "Engine carry" är för 15 °C och full kraft. "UI label" är de yard-etiketter som visas i klubblistan (`arcade.html:3225-3249`). Etiketterna styr inte klubbvalet: `autoSelectClub` (`arcade-swing-engine.js:68-80`) använder egna, hårdkodade gränser i meter (201, 174, 151, 133, 114, 91, 55 m) som inte är härledda ur etiketterna (till exempel är 174 m ungefär 190 yd medan 3-trä-etiketten säger 200 yd). De två uppsättningarna är oberoende värden och måste uppdateras var för sig. Etiketterna stämmer inte heller med vad motorn gör vid full kraft för de långa klubborna (driver: 220 mot 282 yd).
 
 `CLUB_PROFILES` är märkt "Trackman PGA Tour averages (verified)" (`arcade-swing-engine.js:18`). Jämfört med 2023 års snitt är 7-järnets bollfart 128 mot 123 mph och utgångsvinkeln 18,5° mot cirka 16°. Jag har inte kunnat verifiera "verified" mot någon källa.
 
@@ -182,5 +182,5 @@ Vad som krävs innan en fysikändring kan motiveras:
 
 1. Öppna TrackMans egen PDF eller nedladdningsbara tabell, verifiera alla siffror ovan mot den och lägg till topp och landningsvinkel per klubba i jämförelsen (alla klubbor: bollfart, utgångsvinkel, spinn, topp, landningsvinkel, carry).
 2. Skaffa data med kända miljöförhållanden och flygtid, eller en dokumenterad modell för hur Tour-snitten ska normaliseras.
-3. Bestäm om `CLUB_PROFILES`, yard-etiketterna i klubblistan och `autoSelectClub` ska räknas om samtidigt som fysiken, och ersätt testmålen i `test_physics.js` med en daterad tabell.
+3. Bestäm om `CLUB_PROFILES`, yard-etiketterna i klubblistan (`arcade.html`) och klubbvalsgränserna i `autoSelectClub` (separata värden som uppdateras var för sig) ska räknas om samtidigt som fysiken, och ersätt testmålen i `test_physics.js` med en daterad tabell.
 4. Först då: en separat, testad fysikändring med före/efter mot samma tabell.
