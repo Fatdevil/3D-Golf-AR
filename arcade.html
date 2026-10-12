@@ -6064,7 +6064,9 @@
     window.aimManual = false;
     window.resetAimTarget = function(keepManual) {
         let hole = courseHoles[playingHoleIndex];
-        if (keepManual && window.aimManual && hole && hole.flag && window.aimTarget && window.ballMesh && window.AimMath &&
+        // only for the player and hole the aim was set for
+        if (keepManual && window.aimManual && window.aimManualOwner && window.aimManualOwner.player === window.activePlayerIndex && window.aimManualOwner.hole === playingHoleIndex &&
+            hole && hole.flag && window.aimTarget && window.ballMesh && window.AimMath &&
             window.AimMath.keepManualAim(window.ballMesh.position, window.aimTarget, hole.flag)) return;
         window.aimManual = false;
         if (hole && hole.flag) {
@@ -6077,6 +6079,17 @@
         if (!window.aimTarget) window.aimTarget = new THREE.Vector3();
         window.aimTarget.set(x, y, z);
         window.aimManual = true;
+        window.aimManualOwner = { player: window.activePlayerIndex, hole: playingHoleIndex };
+    };
+    // What the aim is measured against: the flag, or straight down the range (a range has no flag)
+    window.aimReference = function() {
+        let rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
+        if (rangeHole) {
+            let rt = rangeHole.tees.range, dir = rt.rot || 0;
+            return { x: rt.x + Math.sin(dir) * 200, y: rt.y, z: rt.z + Math.cos(dir) * 200 };
+        }
+        let hole = courseHoles[playingHoleIndex];
+        return (hole && hole.flag) || null;
     };
     window.aimNudge = function(deg) {
         if (!window.aimTarget || !window.ballMesh || !window.AimMath) return;
@@ -6088,10 +6101,9 @@
     window.aimAtFlag = function() {
         if ((appMode !== 'PLAY' && appMode !== 'TEST') || playState !== 'ROUND_IDLE') return;
         window.aimManual = false;
-        let rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
-        if (rangeHole) {   // on the range there is no flag: straight down the range
-            let rt = rangeHole.tees.range, dir = rt.rot || 0;
-            window.aimTarget.set(rt.x + Math.sin(dir) * 200, rt.y, rt.z + Math.cos(dir) * 200);
+        let ref = window.aimReference();
+        if (window._isRangeMode && ref) {   // on the range there is no flag: straight down the range
+            window.aimTarget.set(ref.x, ref.y, ref.z);
             return;
         }
         window.resetAimTarget();
@@ -8123,8 +8135,7 @@
 
         let hole = courseHoles[playingHoleIndex];
         let fv = new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z);
-        window.aimTarget = fv.clone();
-        window.aimManual = false;
+        window.resetAimTarget(true);   // the same player on the same hole keeps a hand-set aim that is still ahead
         
         let dir = new THREE.Vector3().subVectors(fv, window.ballMesh.position).normalize();
         
@@ -14411,9 +14422,8 @@ window.triggerExplosion = function(x, y, z) {
                         }
                         
                         // --- SMART AUTO-AIM EFTER SLAG ---
-                        if (window.aimTarget) {
-                            window.aimTarget.set(hole.flag.x, hole.flag.y, hole.flag.z);
-                        }
+                        // (a hand-set aim stays while it is still ahead of the ball, see resetAimTarget)
+                        window.resetAimTarget(true);
                         
                         // Transition camera to aim phase
                         if (window.camFollowMode === 'AUTO') {
@@ -14801,9 +14811,9 @@ window.triggerExplosion = function(x, y, z) {
             la[3] = ap.x; la[4] = ap.y + 0.1; la[5] = ap.z;
             window.aimTracerGeo.attributes.position.needsUpdate = true;
             aimLineMesh.computeLineDistances();
-            let hl = courseHoles[playingHoleIndex];
+            let aimRef = window.aimReference();
             let offEl = document.getElementById('aim-offset');
-            if (offEl && hl && hl.flag && window.AimMath) offEl.innerText = window.AimMath.formatOffset(window.AimMath.offsetFromFlagDeg(bp, ap, hl.flag));
+            if (offEl && aimRef && window.AimMath) offEl.innerText = window.AimMath.formatOffset(window.AimMath.offsetFromFlagDeg(bp, ap, aimRef));
         }
         if ((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget) {
             bb.style.display = 'block';
@@ -14983,8 +14993,8 @@ window.triggerExplosion = function(x, y, z) {
                     document.getElementById('minimap-updown').innerText = Math.abs(degUp) + (degUp >= 0 ? "° UP" : "° DN");
                     
                     // sideways turn of the aim away from the flag line
-                    let mmHole = courseHoles[playingHoleIndex];
-                    if (mmHole && mmHole.flag && window.AimMath) document.getElementById('minimap-leftright').innerText = window.AimMath.formatOffset(window.AimMath.offsetFromFlagDeg(window.ballMesh.position, window.aimTarget, mmHole.flag)).replace(/ R$/, ' RIGHT').replace(/ L$/, ' LEFT');
+                    let mmRef = window.aimReference();
+                    if (mmRef && window.AimMath) document.getElementById('minimap-leftright').innerText = window.AimMath.formatOffset(window.AimMath.offsetFromFlagDeg(window.ballMesh.position, window.aimTarget, mmRef)).replace(/ R$/, ' RIGHT').replace(/ L$/, ' LEFT');
                     
                     if (typeof localGetTerrainAt === 'function') {
                         let surf = localGetTerrainAt(window.aimTarget.x, -window.aimTarget.z);

@@ -43,5 +43,9 @@ check('after a shot the aim reset keeps a hand-set aim', /resetAimTarget\(true\)
 check('shot bearing is still atan2(dX, -dZ) of ball -> aimTarget', /aimOffsetDeg = Math\.atan2\(dX, -dZ\)/.test(html));
 check('minimap click and tap go through setAimPoint', /window\.setAimPoint\(hits\[0\]\.point\.x/.test(html) && /window\.setAimPoint\(pt\.x/.test(html));
 
+check('a kept aim is tied to the player and hole it was set for', /aimManualOwner\.player === window\.activePlayerIndex && window\.aimManualOwner\.hole === playingHoleIndex/.test(html));
+check('landing and next-turn setup both go through resetAimTarget(true)', (html.match(/resetAimTarget\(true\)/g) || []).length >= 3 && !/SMART AUTO-AIM EFTER SLAG ---\s*if \(window\.aimTarget\) \{\s*window\.aimTarget\.set/.test(html));
+check('readouts measure against aimReference (flag or range direction)', (html.match(/window\.aimReference\(\)/g) || []).length >= 3);
+
 console.log(failed ? '\n' + failed + ' failed' : '\nall aim checks passed');
 process.exit(failed ? 1 : 0);
