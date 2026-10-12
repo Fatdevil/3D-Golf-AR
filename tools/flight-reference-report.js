@@ -47,10 +47,10 @@ console.log('| Club | Ball mph | Spin rpm | Launch used | Env | Engine carry yd 
 console.log('|---|---|---|---|---|---|---|---|');
 for (const t of TOUR) for (const e of ENVS) { const o = fly(t.ball, t.launch, t.spin, e); console.log(`| ${t.club} | ${t.ball} | ${t.spin} | ${t.launch} (reported) | ${e.n} | ${f1(o.carry)} | ${t.carry} | ${((o.carry / t.carry - 1) * 100).toFixed(1)} % |`); }
 
-console.log('\n## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft)\n');
+console.log('\n## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft); independent of the launch angles in table A\n');
 console.log('| Club | Ball mph | Spin rpm | Max engine carry yd | At launch deg | Tour carry yd | Diff at best launch |');
 console.log('|---|---|---|---|---|---|---|');
-for (const t of TOUR) { let best = { carry: 0, la: 0 }; for (let la = 3; la <= 40; la += 0.5) { const o = fly(t.ball, la, t.spin); if (o.carry > best.carry) best = { carry: o.carry, la: la }; } console.log(`| ${t.club} | ${t.ball} | ${t.spin} | ${f1(best.carry)} | ${best.la} | ${t.carry} | ${((best.carry / t.carry - 1) * 100).toFixed(1)} % |`); }
+for (const t of TOUR) { let best = { carry: 0, la: 0 }; for (let la = 3; la <= 40; la += 0.5) { const o = fly(t.ball, la, t.spin); if (o.carry > best.carry) best = { carry: o.carry, la: la }; } console.log(`| ${t.club} (max over launch angle) | ${t.ball} | ${t.spin} | ${f1(best.carry)} | ${best.la} | ${t.carry} | ${((best.carry / t.carry - 1) * 100).toFixed(1)} % |`); }
 
 console.log('\n## C. Launch-angle sensitivity (15 C, 0 ft)\n');
 console.log('| Club | Launch | Carry yd | Apex yd | Landing deg | Flight s |');

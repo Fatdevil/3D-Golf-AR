@@ -63,13 +63,13 @@ Hämtade 2026-10-12.
 | PW | 104 | 9316 | 23.7 (reported) | 25 C, 0 ft | 118.4 | 142 | -16.6 % |
 | PW | 104 | 9316 | 23.7 (reported) | 25 C, 1000 ft | 119.9 | 142 | -15.5 % |
 
-## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft)
+## B. Highest carry the engine can reach with the sourced ball speed and spin, over every launch angle 3-40 deg (15 C, 0 ft); independent of the launch angles in table A
 
 | Club | Ball mph | Spin rpm | Max engine carry yd | At launch deg | Tour carry yd | Diff at best launch |
 |---|---|---|---|---|---|---|
-| Driver (launch not sourced: optimized maximum) | 171 | 2545 | 288.4 | 11 | 282 | 2.3 % |
-| 7-iron | 123 | 7124 | 164.4 | 22.5 | 176 | -6.6 % |
-| PW | 104 | 9316 | 124.9 | 35 | 142 | -12.1 % |
+| Driver (max over launch angle) | 171 | 2545 | 288.4 | 11 | 282 | 2.3 % |
+| 7-iron (max over launch angle) | 123 | 7124 | 164.4 | 22.5 | 176 | -6.6 % |
+| PW (max over launch angle) | 104 | 9316 | 124.9 | 35 | 142 | -12.1 % |
 
 ## C. Launch-angle sensitivity (15 C, 0 ft)
 
