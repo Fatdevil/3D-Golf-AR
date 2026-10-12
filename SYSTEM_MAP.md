@@ -27,6 +27,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | Fil | Syfte |
 |-----|-------|
 | `arcade-auth.js` | Device ID auth (UUID i localStorage) |
+| `arcade-aim.js` | Sikte: bäring, vridning, tap vs drag (ren matte, `window.AimMath`) |
 | `arcade-feature-flags.js` | Free/Premium feature gating |
 | `arcade-api-service.js` | Centraliserat HTTP API-lager med auth headers |
 | `arcade-storage-service.js` | localStorage-abstraktion (drafts, compressed levels) |
