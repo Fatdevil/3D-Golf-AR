@@ -37,8 +37,15 @@
         .club-selector { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
         .club-selector::-webkit-scrollbar { display: none; }
         .club-btn { background: rgba(30,41,59,0.8); border: 1px solid var(--border-glass); border-radius: 12px; padding: 12px 20px; color: white; font-weight: 600; font-size: 16px; flex-shrink: 0; transition: 0.2s; }
-        .club-btn.active { background: var(--primary); border-color: var(--primary); color: #0f172a; }
+        .club-btn.active, .club-btn.selected { background: var(--primary); border-color: var(--primary); color: #0f172a; }
         
+        /* SHOT SHAPE (draw / straight / fade), wired to SwingEngine.setShotShape */
+        .shape-selector { display: flex; justify-content: center; }
+        .shape-btn { min-width: 84px; min-height: 44px; padding: 10px 16px; background: rgba(30,41,59,0.8); border: 1px solid var(--border-glass); border-right: none; color: rgba(255,255,255,0.7); font-family: inherit; font-size: 15px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+        .shape-btn:first-child { border-radius: 12px 0 0 12px; }
+        .shape-btn:last-child { border-radius: 0 12px 12px 0; border-right: 1px solid var(--border-glass); }
+        .shape-btn.selected { background: var(--primary); border-color: var(--primary); color: #0f172a; }
+
         /* SWING METER CONTAINER */
         #swing-ui-container { height: 60px; position: relative; background: rgba(0,0,0,0.5); border-radius: 30px; border: 2px solid rgba(255,255,255,0.2); overflow: hidden; display: flex; justify-content: center; align-items: center; }
         
@@ -125,13 +132,21 @@
         </div>
         
         <div class="bottom-controls">
+            <div class="shape-selector" id="ui-shape">
+                <button class="shape-btn" data-shape="-1" aria-label="Draw, kurvar åt vänster" onclick="SwingEngine.setShotShape(-1)">↶ Draw</button>
+                <button class="shape-btn selected" data-shape="0" aria-label="Rak" onclick="SwingEngine.setShotShape(0)">Rak</button>
+                <button class="shape-btn" data-shape="1" aria-label="Fade, kurvar åt höger" onclick="SwingEngine.setShotShape(1)">Fade ↷</button>
+            </div>
             <div class="club-selector" id="ui-clubs">
-                <div class="club-btn active">Dr</div>
-                <div class="club-btn">3W</div>
-                <div class="club-btn">5i</div>
-                <div class="club-btn">7i</div>
-                <div class="club-btn">PW</div>
-                <div class="club-btn">Pt</div>
+                <div class="club-btn selected" data-club="DRIVER" onclick="SwingEngine.selectClub('DRIVER')">Dr</div>
+                <div class="club-btn" data-club="W3" onclick="SwingEngine.selectClub('W3')">3W</div>
+                <div class="club-btn" data-club="I5" onclick="SwingEngine.selectClub('I5')">5i</div>
+                <div class="club-btn" data-club="I7" onclick="SwingEngine.selectClub('I7')">7i</div>
+                <div class="club-btn" data-club="I9" onclick="SwingEngine.selectClub('I9')">9i</div>
+                <div class="club-btn" data-club="PW" onclick="SwingEngine.selectClub('PW')">PW</div>
+                <div class="club-btn" data-club="SW" onclick="SwingEngine.selectClub('SW')">SW</div>
+                <div class="club-btn" data-club="LW" onclick="SwingEngine.selectClub('LW')">LW</div>
+                <div class="club-btn" data-club="PUTT" onclick="SwingEngine.selectClub('PUTT')">Pt</div>
             </div>
             <!-- Removed #swing-ui-container, replaced with absolute trigger button -->
         </div>

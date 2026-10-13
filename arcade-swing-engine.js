@@ -40,6 +40,11 @@ const SwingEngine = (function() {
     // större (19,5 yd mot 16,3 yd), 7-järn ca 13 % och PW oförändrad. 0 ger bara startlinjefel, 0,8 var den ursprungliga faktorn.
     const MISS_SPIN_AXIS_PER_DEG = 0.35;
 
+    // Avsiktlig kurva (fade/draw): spinaxel i grader (Trackman-konvention, positiv = fade/höger) som spelaren väljer med formknappen.
+    // Wedgar får mest eftersom de spinner mest och en pitch ska kunna kicka åt sidan på greenen, långa klubbar får mindre så att kurvan
+    // inte blir orimligt stor (en driver med 8 graders axel kurvar redan ett tiotal meter).
+    const SHAPE_AXIS_DEG = { DRIVER: 8, W3: 9, I5: 9, I7: 12, I9: 12, PW: 15, SW: 15, LW: 15, PUTT: 0 };
+
     // SVG constants — circumference of r=100 ring
     const CIRC = 2 * Math.PI * 100; // 628.32
 
@@ -51,6 +56,7 @@ const SwingEngine = (function() {
     let _enabled    = false;
     let _clubKey    = 'DRIVER';
     let _pendingClub = null;    // a suggestion that came in during a swing: applied when the swing is over (the club must not change under the player's hands)
+    let _shape = 0;             // avsiktlig kurva: -1 draw, 0 rak, 1 fade
     let _manualClub = false;    // the player picked the club: it stays until the next shot, the suggestion no longer overrides it
     let _phase      = 'idle';   // 'idle' | 'power' | 'direction' | 'fired'
     let _powerPct   = 0;        // 0.0–1.0, captured on tap 1
@@ -96,13 +102,20 @@ const SwingEngine = (function() {
     // 100 % power rolls the ball to the hole plus this much past it (about 17 inches, the pace a putt should die at)
     const PUTT_OVERROLL_M = 0.45;
 
+    // Spinaxel för vald form: -1 draw, 0 rak, 1 fade. Putter och okända värden ger 0.
+    function shapeAxisDeg(clubKey, shape) {
+        const sgn = shape > 0 ? 1 : shape < 0 ? -1 : 0;
+        return sgn * (SHAPE_AXIS_DEG[clubKey] || 0);
+    }
+
     // -----------------------------------------------------------
     // mapCircleToPhysics — converts tap results to launchData
     // powerPct:  0.0 (empty) → 1.0 (perfect full power)
+    // shape:     valfritt, avsiktlig kurva: -1 = draw, 0 = rak (standard), 1 = fade. Läggs ovanpå spinaxeln som missen ger.
     // armDeg:    0–360, 0 = top (perfect direction)
     //            offset from top: positive = right, negative = left
     // -----------------------------------------------------------
-    function mapCircleToPhysics(powerPct, armDeg, clubKey, distToHoleM) {
+    function mapCircleToPhysics(powerPct, armDeg, clubKey, distToHoleM, shape) {
         const club  = CLUB_PROFILES[clubKey];
         const stimp = window.GREEN_STIMP || 10.0;
 
@@ -170,7 +183,7 @@ const SwingEngine = (function() {
             ballSpeedMph:   Math.max(speedMph, 10),
             launchAngleDeg: club.baseLaunchAngle + vlaOffset,
             totalSpinRpm:   spinRpm,
-            spinAxisDeg:    azimDeg * MISS_SPIN_AXIS_PER_DEG,
+            spinAxisDeg:    azimDeg * MISS_SPIN_AXIS_PER_DEG + shapeAxisDeg(clubKey, shape),
             azimDeg:        azimDeg,
             isLiveData:     false,
             impactData:     { offset: impactOffset, direction: impactDirection }
@@ -386,7 +399,7 @@ const SwingEngine = (function() {
             // Build launchData and fire
             const distToHoleM = aimDistanceM();   // (the name is old: it is the distance to the aim point)
 
-            const launchData = mapCircleToPhysics(_powerPct, _armDeg, _clubKey, distToHoleM);
+            const launchData = mapCircleToPhysics(_powerPct, _armDeg, _clubKey, distToHoleM, _shape);
             const quality    = _getQuality(_powerPct, _armDeg);
             _showFlash(quality);
 
@@ -407,6 +420,14 @@ const SwingEngine = (function() {
         if (!CLUB_PROFILES[key]) return;
         _manualClub = true;   // used to be undone at once: updateSwingInfoBar put the suggested club back
         _applyClub(key);
+    }
+
+    // Välj avsiktlig kurva: -1 draw, 0 rak, 1 fade. Gäller alla slag tills spelaren ändrar den.
+    function setShotShape(shape) {
+        _shape = shape > 0 ? 1 : shape < 0 ? -1 : 0;
+        document.querySelectorAll('.shape-btn').forEach(btn => {
+            btn.classList.toggle('selected', Number(btn.dataset.shape) === _shape);
+        });
     }
 
     function _applyClub(key) {
@@ -492,7 +513,7 @@ const SwingEngine = (function() {
     // Public API
     // -----------------------------------------------------------
     return { onTap, selectClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
-             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, CLUB_PROFILES };
+             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, CLUB_PROFILES };
 })();
 
 // Expose for devtools access

@@ -181,9 +181,14 @@ window.GolfPhysics = (function() {
 
             // Fix 2: Spin-induced roll braking (applies in both roll and skid phases)
             // Determine if spin is backspin or topspin relative to travel direction
-            let v_spin = [-state.spin[1] * RADIUS, state.spin[0] * RADIUS, 0];
+            // Kontaktpunktens spinnhastighet: -R * (spin x N). På lutande green drar även sidospinn (lodrät axel) i bollen.
+            let v_spin = [
+                -RADIUS * (state.spin[1] * N[2] - state.spin[2] * N[1]),
+                -RADIUS * (state.spin[2] * N[0] - state.spin[0] * N[2]),
+                -RADIUS * (state.spin[0] * N[1] - state.spin[1] * N[0])
+            ];
             let dirXY = vSpeed > 0.001 ? [currentV[0]/vSpeed, currentV[1]/vSpeed] : [0,0];
-            let spinDotDir = v_spin[0] * dirXY[0] + v_spin[1] * dirXY[1];
+            let spinDotDir = v_spin[0] * dirXY[0] + v_spin[1] * dirXY[1] + v_spin[2] * (vSpeed > 0.001 ? currentV[2]/vSpeed : 0);
             
             // If spinDotDir > 0, the contact point is moving forward faster than pure sliding -> BACKSPIN
             if (spinDotDir > 0.5) { // Only apply aggressive braking for noticeable backspin
@@ -887,25 +892,31 @@ window.GolfPhysics = (function() {
                         else if (firmness === 'FIRM') GRIP = 0.92;  // Less grip — ball skips
                         else GRIP = 0.98;                           // NORMAL
                     }
-                    let vContactY = V[1] + (state.spin[0] * RADIUS);
-                    let vContactX = V[0] - (state.spin[1] * RADIUS);
-                    
+                    // Kontaktpunktens glidfart mot ytan i 3D: v_kontakt = vTan - R * (spin x N). Spinn runt vilken axel som helst ger
+                    // alltså glid, och på lutande green lutar normalen så att även sidospinn (lodrät axel) får ett tangentiellt bidrag.
+                    // På plan mark (N = [0,0,1]) blir detta exakt samma som tidigare: (Vx - R*spinY, Vy + R*spinX).
+                    const sp = state.spin;
+                    let vContact = [
+                        vTan[0] - RADIUS * (sp[1] * N[2] - sp[2] * N[1]),
+                        vTan[1] - RADIUS * (sp[2] * N[0] - sp[0] * N[2]),
+                        vTan[2] - RADIUS * (sp[0] * N[1] - sp[1] * N[0])
+                    ];
+
                     // Energi överförs mellan translation (spinoff) och rotation (bite)
-                    let deltaVY = rollsAtOnce ? 0 : -(vContactY) / 3.5 * GRIP;
-                    let deltaVX = rollsAtOnce ? 0 : -(vContactX) / 3.5 * GRIP;
-                    let biteMag = Math.sqrt(deltaVX * deltaVX + deltaVY * deltaVY);
+                    let biteK = rollsAtOnce ? 0 : -GRIP / 3.5;
+                    let dV = vecScale(vContact, biteK);
+                    let biteMag = vecMag(dV);
                     let biteMax = BITE_FRICTION_MU * (1 + cRestitution) * Math.abs(vDotN);
-                    if (biteMag > biteMax) {
-                        let biteScale = biteMax / biteMag;
-                        deltaVY *= biteScale;
-                        deltaVX *= biteScale;
-                    }
+                    if (biteMag > biteMax) dV = vecScale(dV, biteMax / biteMag);
 
-                    bounceVel[1] += deltaVY;
-                    bounceVel[0] += deltaVX;
+                    bounceVel = vecAdd(bounceVel, dV);
 
-                    state.spin[0] += (2.5 * deltaVY / RADIUS);
-                    state.spin[1] -= (2.5 * deltaVX / RADIUS); 
+                    // Friktionsimpulsen vrider bollen: dOmega = -(2.5 / R) * (N x dV)
+                    state.spin = [
+                        sp[0] - (2.5 / RADIUS) * (N[1] * dV[2] - N[2] * dV[1]),
+                        sp[1] - (2.5 / RADIUS) * (N[2] * dV[0] - N[0] * dV[2]),
+                        sp[2] - (2.5 / RADIUS) * (N[0] * dV[1] - N[1] * dV[0])
+                    ];
 
                     state.vel = bounceVel;
                     // Green firmness affects spin retention per bounce:

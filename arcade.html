@@ -3238,6 +3238,13 @@
         </div>
     </div>
 
+    <!-- Shot shape: intentional draw / straight / fade -->
+    <div id="shape-selector">
+        <button class="shape-btn" data-shape="-1" onclick="SwingEngine.setShotShape(-1)" title="Draw: kurvar åt vänster, kickar vänster på greenen">↶ Draw</button>
+        <button class="shape-btn selected" data-shape="0" onclick="SwingEngine.setShotShape(0)" title="Rak">Rak</button>
+        <button class="shape-btn" data-shape="1" onclick="SwingEngine.setShotShape(1)" title="Fade: kurvar åt höger, kickar höger på greenen">Fade ↷</button>
+    </div>
+
     <!-- Club selector swipebar -->
     <div id="club-selector">
         <button class="club-btn selected" data-club="DRIVER"  onclick="SwingEngine.selectClub('DRIVER')">
