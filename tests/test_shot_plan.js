@@ -119,6 +119,7 @@ check('a new shot ends the club pick (SwingEngine.newShot on landing)', /SwingEn
 check('the search runs in short timer slices, not inside one frame', /j\.gen\.next\(\)/.test(html) && /setTimeout\(function \(\) \{ pump\(j\); \}, 0\)/.test(html) && /JOB_BUDGET_MS/.test(html) && !/SP\.pickClub\(|SP\.powerFor\(|SP\.describe\(/.test(html));
 check('the preview measures along the aim line and reports sideways drift', /fwd\(last\)/.test(html) && /lateral: \(last\.x/.test(html));
 check('a short aim off the green still suggests the putter', /if \(!manual\) SE\.suggestClub\('PUTT'\)/.test(html));
+check('the plan is recomputed when the green settings change, and the preview uses the stimp the shot will use', /matchSettings\.greenStimp : 10, window\.matchSettings \? window\.matchSettings\.greenFirmness/.test(html) && /window\.GREEN_STIMP = window\.matchSettings\.greenStimp/.test(html) && /window\.GREEN_STIMP = stimp/.test(html));
 check('the flat, calm run keeps the surface under the ball', /type: ctx\.startType/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall shot-plan checks passed');

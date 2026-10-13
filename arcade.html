@@ -6143,9 +6143,10 @@
                     checkCollisionCallback: function () { return null; }, hasTreeCollision: function () { return false; },
                     getTerrainAt: mode === 'flatCalm' ? function () { return { z: ctx.startZ, normal: [0, 0, 1], type: ctx.startType }; } : physicsTerrainAt
                 };
-                const log = console.log, rnd = Math.random;
+                const log = console.log, rnd = Math.random, stimp = window.GREEN_STIMP;
                 console.log = function () {};          // the physics logs every flight in detail
                 Math.random = function () { return 0.5; };   // no flyer lottery in a preview
+                if (window.matchSettings && window.matchSettings.greenStimp) window.GREEN_STIMP = window.matchSettings.greenStimp;   // what executeArcadeShot sets for the shot
                 try {
                     const res = window.GolfPhysics.simulateFlight({
                         startPos: ctx.startPos, azimDeg: ctx.azim, spinAxisDeg: 0, ballSpeedMph: d.ballSpeedMph,
@@ -6158,7 +6159,7 @@
                     let land = last;
                     for (let i = 1; i < path.length; i++) if (path[i].phase !== 'flight') { land = path[i]; break; }   // where the ball first came down
                     return { carry: fwd(land), total: fwd(last), lateral: (last.x - ctx.startPos[0]) * cx - (last.y - ctx.startPos[1]) * sx };
-                } finally { console.log = log; Math.random = rnd; }
+                } finally { console.log = log; Math.random = rnd; window.GREEN_STIMP = stimp; }
             };
         }
 
@@ -6212,7 +6213,8 @@
             const sk = [Math.round(b.x * 2), Math.round(b.z * 2), Math.round(b.y * 5), Math.round(a.x * 2), Math.round(a.z * 2),
                 window.SwingEngine.isManualClub() ? window.SwingEngine.getClub() : 'auto', window.activePlayerIndex, playingHoleIndex].join(',');
             const ek = [Math.round((window.currentWindMph || 0) / 2), Math.round((window.currentWindDir || 0) / 15),
-                window.matchSettings ? window.matchSettings.altitude : 0, window.matchSettings ? window.matchSettings.temperatureC : 15].join(',');
+                window.matchSettings ? window.matchSettings.altitude : 0, window.matchSettings ? window.matchSettings.temperatureC : 15,
+                window.matchSettings ? window.matchSettings.greenStimp : 10, window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL'].join(',');
             if (sk !== shotKey) { shotKey = sk; envKey = ek; envDirty = false; doneKey = ''; changedAt = now; job = null; if (window.shotPlan) window.shotPlan.stale = true; return; }
             if (ek !== envKey) { envKey = ek; envDirty = true; }
             if (job) return;   // being worked out in timer slices (pump)
