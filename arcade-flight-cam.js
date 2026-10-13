@@ -102,14 +102,25 @@
         // trees on the way: a lift added to the height of the arc, worked out from sample points of the arc, widened and softened so that the camera
         // rises smoothly before a tree and not at it
         if (obstacles.length) {
-            const N = 48, need = [];
+            // sample the arc densely enough that no obstacle can fall between two samples: the narrowest footprint (radius + the camera's reach)
+            // must be hit by at least two samples even where the eased arc moves fastest (1.875 times the average speed)
+            let minFoot = 1e9;
+            for (let i = 0; i < obstacles.length; i++) minFoot = Math.min(minFoot, obstacles[i].r + CAM_R);
+            const arcLen = len + 2 * p.arcA + 2 * p.arcB;
+            const N = clamp(Math.ceil(arcLen * 1.9 / (0.5 * minFoot)), 48, 2000), need = [];
             for (let i = 0; i <= N; i++) {
                 const q = arcPoint(p, i / N, 0);
                 need.push(Math.max(0, clearAt(obstacles, ground, q.x, q.z) - q.y));
             }
-            let env = need.map((v, i) => { let m = 0; for (let k = -3; k <= 3; k++) m = Math.max(m, need[clamp(i + k, 0, N)]); return m; });
-            for (let pass = 0; pass < 3; pass++) env = env.map((v, i) => (env[Math.max(0, i - 1)] + v + env[Math.min(N, i + 1)]) / 3);
-            env = env.map((v, i) => Math.max(v, need[i] * 0.999));   // the blur must not lower a lift below what a tree needs
+            const sp = arcLen / N;   // average metres between samples
+            const w = Math.min(Math.floor(N / 2), Math.max(3, Math.ceil(12 / sp)));   // the camera starts to rise 12 m before a tree
+            let env = need.map((v, i) => { let m = 0; for (let k = -w; k <= w; k++) m = Math.max(m, need[clamp(i + k, 0, N)]); return m; });
+            const R = Math.max(1, Math.ceil(5 / sp));   // softening over about 5 m each side, twice
+            for (let pass = 0; pass < 2; pass++) {
+                const src = env;
+                env = src.map((v, i) => { let sum = 0, n = 0; for (let k = -R; k <= R; k++) { sum += src[clamp(i + k, 0, N)]; n++; } return sum / n; });
+            }
+            env = env.map((v, i) => Math.max(v, need[i] * 0.999));   // the softening must not lower the lift below what a tree needs
             env[0] = 0; env[N] = 0;
             p.lift = env;
         }

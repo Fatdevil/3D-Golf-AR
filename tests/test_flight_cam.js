@@ -162,6 +162,12 @@ const clearOK = TR.frames.every(f => TREES.every(o => Math.hypot(f.st.pos.x - o.
 check('the camera stays above every tree it passes over (top + 1.8 m), also at the landing view', clearOK);
 check('...and the lift is smooth: the camera never climbs faster than 120 m/s', (() => { let w = 0; for (let i = 1; i < TR.frames.length; i++) w = Math.max(w, Math.abs(TR.frames[i].st.pos.y - TR.frames[i - 1].st.pos.y) / (TR.frames[i].real - TR.frames[i - 1].real)); return w <= 120; })());
 check('...and the ball is still on screen (98 %) and the turning stays smooth (3 rad/s) with the trees', (() => { const v = visibility(TR, 16 / 9, TR.an.tLand + 0.5); let m = 0; for (let i = 1; i < TR.frames.length; i++) m = Math.max(m, angSpeed(TR.frames[i - 1], TR.frames[i], TR.frames[i].real - TR.frames[i - 1].real)); return v.ok >= 0.98 && m <= 3.0; })());
+// a narrow tall pole (a cactus) between the old 48 samples: the lift must still be planned, not a last-moment jump
+const POLES = (() => { const a = D60.plan, out = [], N0 = 48; for (let i = 5; i < 44; i += 7) { const e = (i + 0.5) / N0; out.push({ x: a.H.x + (a.L.x - a.H.x) * e + a.side.x * a.arcA * Math.sin(Math.PI * e), z: a.H.z + (a.L.z - a.H.z) * e + a.side.z * a.arcA * Math.sin(Math.PI * e), r: 0.5, top: 36 }); } return out; })();   // poles on the arc itself, halfway between two of the old samples
+const PR = play('driver', 60, { obstacles: POLES });
+check('narrow poles on a long arc are all planned for (the camera is above each pole top when it passes one)', PR.frames.every(f => POLES.every(o => Math.hypot(f.st.pos.x - o.x, f.st.pos.z - o.z) >= o.r + 1.5 || f.st.pos.y >= o.top + 1.8 - 1e-6)));
+check('...with a smooth lift (no vertical jump of more than 2.5 m between two frames at 60 fps)', (() => { let w = 0; for (let i = 1; i < PR.frames.length; i++) w = Math.max(w, Math.abs(PR.frames[i].st.pos.y - PR.frames[i - 1].st.pos.y)); return w <= 2.5; })());
+check('the lift is sampled densely for narrow obstacles (the plan has many more samples than 48)', PR.plan.lift.length > 100, PR.plan.lift.length);
 check('without trees nothing changes (no lift)', D60.plan.lift === null && play('driver', 60, { obstacles: [] }).plan.lift === null);
 
 // ---- the pin stays in the picture after an approach
@@ -205,6 +211,7 @@ check('with a pin well to the side the picture is better with the pin framing th
 check('the page gives the rig the trees and the pin', /obstacles: /.test(html) && /pin: /.test(html));
 check('a tap or a key skips the flight (after the first half second)', /window\.skipFlight = function/.test(html) && /performance\.now\(\) - window\._flightStartTime < 500/.test(html));
 
+check('a skip key is not also pressed on the focused button (preventDefault on key down and key up)', /e\.preventDefault\(\);\s*skipKeyDown = true;/.test(html) && /window\.addEventListener\('keyup'/.test(html));
 check('only a tap skips the flight (a free-camera drag starts with a press and must not)', /skipDown = isFlying \?/.test(html) && /window\.AimMath\.isTap\(d, \{ x: e\.clientX/.test(html) && !/addEventListener\('pointerdown', \(\) => \{ if \(isFlying\) window\.skipFlight/.test(html));
 check('the skip hint is shown for every flight (not only the directed camera), and a skip resets the camera speed history', /let skipHint = document\.getElementById\('skip-hint'\);\s*if \(skipHint\) skipHint\.style\.display = \(performance\.now\(\) - window\._flightStartTime > 800/.test(html) && /window\._flightRig\.prevBall = null/.test(html) && !/st\.fov\) > 0\.005\) \{[^}]*\}\s*let skipHint/.test(html));
 check('a skipped flight still hits the blocks on the rest of its path', /for \(let i = Math\.max\(0, flightTick \| 0\); i < path\.length; i \+= 3\)/.test(html) && /hitTargetBlock\(b\)/.test(html) && /if\(d < t\.radius\) hitTargetBlock\(t\);/.test(html));

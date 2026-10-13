@@ -12645,11 +12645,20 @@
             let d = skipDown; skipDown = null;
             if (d && e.pointerId === d.id && isFlying && window.AimMath.isTap(d, { x: e.clientX, y: e.clientY, t: performance.now() })) window.skipFlight();
         }, false);
+        // (a skip key is taken by the skip: a focused button must not also be pressed, e.g. the swing button that keeps focus after a swing)
+        let skipKeyDown = false;
         window.addEventListener('keydown', (e) => {
             if (!isFlying || (e.code !== 'Space' && e.key !== 'Enter' && e.key !== 'Escape')) return;
             let t = e.target && e.target.tagName;
             if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+            e.preventDefault();
+            skipKeyDown = true;
             window.skipFlight();
+        });
+        window.addEventListener('keyup', (e) => {   // a button is pressed by Space on key up
+            if (!skipKeyDown || (e.code !== 'Space' && e.key !== 'Enter' && e.key !== 'Escape')) return;
+            skipKeyDown = false;
+            e.preventDefault();
         });
     })();
 
