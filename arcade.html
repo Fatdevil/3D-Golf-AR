@@ -3936,6 +3936,7 @@
 </script>
 <script src="arcade-aim.js?v=1"></script>
 <script src="arcade-shot-plan.js?v=1"></script>
+<script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-rules.js?v=1"></script>
 <script>
 
@@ -9531,6 +9532,9 @@
         window._rollStartTick = null; // Reset roll acceleration tracker
         window._flightAccumMs = 0;
         window._smoothLookTarget = null; // Reset smooth camera lookAt target
+        window._flightRig = null;        // the directed flight camera is made when the flight starts to play (below)
+        window._aimLookBlend = null;
+        window._aimHoldUntil = 0;
         isFlying = true;
         
         // Save previous trace if "Show All Traces" is enabled
@@ -14225,6 +14229,14 @@ window.triggerExplosion = function(x, y, z) {
                 window._lastProcessedTick = 0;
                 window._flightAccumMs = 0;
                 window._lastFrameTime = now;
+                // the directed flight camera (arcade-flight-cam.js): made from the whole flight, which is known before the ball moves.
+                // Putts and rollers get null: they keep the chase camera below.
+                window._flightRig = null;
+                if (window.FlightCam && window.camFollowMode === 'AUTO' && gameCamPhase === 'FLIGHT_FOLLOW') {
+                    if (window._flightBaseFov === undefined || window._flightBaseFov === null) window._flightBaseFov = camera.fov;
+                    window._flightRig = window.FlightCam.create(flightData.path, { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+                        { fov: window._flightBaseFov, ground: function (x, z) { return physicsTerrainAt(x, -z).z; } });
+                }
             }
             
             var frameDeltaMs = Math.min(now - (window._lastFrameTime || now), 50); // cap at 50ms
@@ -14246,6 +14258,8 @@ window.triggerExplosion = function(x, y, z) {
                 }
             }
             
+            // slow motion around the landing of a full shot (the camera plan knows when)
+            if (window._flightRig) speedMultiplier *= window.FlightCam.speedAt(window._flightRig.plan, window._flightAccumMs / 1000);
             window._flightAccumMs += frameDeltaMs * speedMultiplier;
             
             // Physics dt = 0.005s = 5ms per tick
@@ -14333,6 +14347,12 @@ window.triggerExplosion = function(x, y, z) {
             // === UNIFIED FLIGHT CAMERA ===
             if (window.camFollowMode === 'FREE') {
                 // Free cam: user controls via OrbitControls
+            } else if (gameCamPhase === 'FLIGHT_FOLLOW' && window._flightRig) {
+                // directed camera: tee cam (pan, tilt, zoom) until the apex, then an arc to a landing view that is reached before touch-down
+                let st = window.FlightCam.step(window._flightRig, frameDeltaMs / 1000, window._flightAccumMs / 1000, window.ballMesh.position);
+                camera.position.set(st.pos.x, st.pos.y, st.pos.z);
+                camera.lookAt(st.look.x, st.look.y, st.look.z);
+                if (Math.abs(camera.fov - st.fov) > 0.005) { camera.fov = st.fov; camera.updateProjectionMatrix(); }
             } else if (gameCamPhase === 'FLIGHT_FOLLOW') {
                 let shotDir = new THREE.Vector3(0, 0, -1);
                 if (window.aimTarget && window.shotStartPos) {
@@ -14558,6 +14578,11 @@ window.triggerExplosion = function(x, y, z) {
                             gameCamPhase = isPutt ? 'PUTT_AIM' : 'IDLE_AIM';
                             window.isPuttingMode = isPutt;
                             landingSettleTimer = CAM.SETTLE_DURATION; // Smooth transition delay
+                            if (window._flightRig && window._flightRig.look) {
+                                // directed camera: the look point glides to the aim point instead of snapping, and a short result beat first
+                                window._aimLookBlend = new THREE.Vector3(window._flightRig.look.x, window._flightRig.look.y, window._flightRig.look.z);
+                                window._aimHoldUntil = performance.now() + 600;
+                            }
                         }
                     }
                     
@@ -14700,11 +14725,24 @@ window.triggerExplosion = function(x, y, z) {
                 new THREE.Vector3(-aimDir.x * camD, camH, -aimDir.z * camD)
             );
             
-            camera.position.x += (targetPos.x - camera.position.x) * CAM.AIM_LERP;
-            camera.position.y += (targetPos.y - camera.position.y) * CAM.AIM_LERP;
-            camera.position.z += (targetPos.z - camera.position.z) * CAM.AIM_LERP;
-            controls.target.copy(window.aimTarget);
+            let holdBeat = window._aimHoldUntil && performance.now() < window._aimHoldUntil;   // the result beat after a directed flight
+            if (!holdBeat) {
+                camera.position.x += (targetPos.x - camera.position.x) * CAM.AIM_LERP;
+                camera.position.y += (targetPos.y - camera.position.y) * CAM.AIM_LERP;
+                camera.position.z += (targetPos.z - camera.position.z) * CAM.AIM_LERP;
+            }
+            if (window._aimLookBlend) {   // the look point glides from the ball to the aim point (it used to snap)
+                if (!holdBeat) window._aimLookBlend.lerp(window.aimTarget, 1 - Math.exp(-dt / 0.45));
+                controls.target.copy(window._aimLookBlend);
+                if (window._aimLookBlend.distanceToSquared(window.aimTarget) < 0.25) window._aimLookBlend = null;
+            } else controls.target.copy(window.aimTarget);
             controls.enabled = true;
+        }
+        // the lens goes back to its normal width after a directed flight
+        if (!isFlying && window._flightBaseFov != null) {
+            if (Math.abs(camera.fov - window._flightBaseFov) < 0.05) { camera.fov = window._flightBaseFov; window._flightBaseFov = null; }
+            else camera.fov += (window._flightBaseFov - camera.fov) * (1 - Math.exp(-dt / 0.35));
+            camera.updateProjectionMatrix();
         }
 
         // === HOLE FLYOVER CAMERA ===
