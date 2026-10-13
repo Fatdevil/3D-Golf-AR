@@ -16,22 +16,23 @@ function sim(input, env) {
 // Lutningen (sidled, stigning per meter åt höger) gäller bara landningsområdet, y >= SLOPE_FROM_Y. Utgångsläget är plant så att
 // lutningen inte ändrar utslagets spinaxel/riktning (simulateFlight korrigerar för lutning vid utgångsläget): bara bollens studs och rull påverkas.
 const SLOPE_FROM_Y = 40;
-function greenEnv(slopeX) {
+function greenEnv(slopeX, fromY) {
+  if (fromY === undefined) fromY = SLOPE_FROM_Y;
   const len = Math.hypot(slopeX, 1);
   const tilted = [-slopeX / len, 0, 1 / len], flat = [0, 0, 1];
-  return { getTerrainAt: (x, y) => y >= SLOPE_FROM_Y ? { z: slopeX * x, normal: tilted, type: 'GREEN' } : { z: 0, normal: flat, type: 'GREEN' },
+  return { getTerrainAt: (x, y) => y >= fromY ? { z: slopeX * x, normal: tilted, type: 'GREEN' } : { z: 0, normal: flat, type: 'GREEN' },
            checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: 15 };
 }
 // Ett lob wedge-slag (70 mph, 36°, 10 500 rpm) som GSPro skickar det (yards/mph, rpm); ball = BallData-fält
-function gsproShot(ball) {
+function gsproShot(ball, launch) {
   return { DeviceID: 'X', Units: 'Yards', ShotNumber: 1, APIversion: '1',
-    BallData: Object.assign({ Speed: 70, VLA: 36, HLA: 0 }, ball),
+    BallData: Object.assign(launch || { Speed: 70, VLA: 36, HLA: 0 }, ball),
     ShotDataOptions: { ContainsBallData: true, ContainsClubData: false, IsHeartBeat: false } };
 }
-function lmShot(ball, slopeX) {
-  const norm = P.normalizeShot(gsproShot(ball));
+function lmShot(ball, slopeX, fromY, shot) {
+  const norm = P.normalizeShot(gsproShot(ball, shot));
   const input = Object.assign({}, norm, { isLiveData: true, startPos: [0, 0, 0] });
-  const r = sim(input, greenEnv(slopeX || 0));
+  const r = sim(input, greenEnv(slopeX || 0, fromY));
   const land = r.path.find(p => p.phase !== 'flight');
   const end = r.path[r.path.length - 1];
   return { norm, landX: land.x, landY: land.y, endX: end.x, endY: end.y, phase: end.phase };
@@ -72,18 +73,33 @@ console.log('\nMer sidospinn från monitorn ger större kick');
   check('500 < 1000 < 2000 rpm sidospinn', k(500) < k(1000) && k(1000) < k(2000), '(' + [500, 1000, 2000].map(k).map(v => v.toFixed(2)).join(' < ') + ' m)');
 }
 
-console.log('\nLutande green: efter landningen rullar monitorns fade vidare efter lutningen');
+console.log('\nLutande green, studsen: första nedslaget på en lutande yta ändrar fade-kicken');
 {
   const shotOn = slope => lmShot({ BackSpin: 10500, SideSpin: 1500 }, slope);
   const flat = shotOn(0), down = shotOn(-0.03), up = shotOn(0.03);
-  const roll = r => r.endX - r.landX;   // förflyttning i sidled efter första markkontakten
+  const kick = r => r.endX - r.landX;   // förflyttning i sidled efter första markkontakten
   check('landningen påverkas inte av lutningen (den börjar först vid landningsområdet)',
         Math.abs(down.landX - flat.landX) < 0.1 && Math.abs(up.landX - flat.landX) < 0.1,
         '(' + down.landX.toFixed(2) + ' / ' + flat.landX.toFixed(2) + ' / ' + up.landX.toFixed(2) + ' m)');
-  check('fade nedför höger-sluttning rullar längre åt höger efter landning än på plan', roll(down) > roll(flat) + 0.3,
-        '(' + roll(down).toFixed(2) + ' vs ' + roll(flat).toFixed(2) + ' m)');
-  check('fade uppför höger-sluttning rullar kortare åt höger efter landning än på plan', roll(up) < roll(flat) - 0.3,
-        '(' + roll(up).toFixed(2) + ' vs ' + roll(flat).toFixed(2) + ' m)');
+  check('fade nedför höger-sluttning kickar längre åt höger än på plan', kick(down) > kick(flat) + 0.3,
+        '(' + kick(down).toFixed(2) + ' vs ' + kick(flat).toFixed(2) + ' m)');
+  check('fade uppför höger-sluttning kickar kortare åt höger än på plan', kick(up) < kick(flat) - 0.3,
+        '(' + kick(up).toFixed(2) + ' vs ' + kick(flat).toFixed(2) + ' m)');
+}
+
+console.log('\nLutande green, rullen: bump-and-run från monitorn rullar nedför en sluttning som börjar efter landningen');
+{
+  // Låg bana (40 mph, 10°, 2 000 rpm + lite fade) som landar och rullar långt. Lutningen börjar 1 m efter landningen, så nedslaget
+  // är plant och det som drar bollen i sidled är bara lutningens acceleration under rullen (gParallel i evaluateState).
+  const LAUNCH = { Speed: 40, VLA: 10, HLA: 0 }, BALL = { BackSpin: 2000, SideSpin: 300 };
+  const flat = lmShot(BALL, 0, 1e9, LAUNCH);
+  const fromY = flat.landY + 1;
+  const down = lmShot(BALL, -0.03, fromY, LAUNCH), up = lmShot(BALL, 0.03, fromY, LAUNCH);
+  check('landningen är plan och lika i alla fall', Math.abs(down.landX - flat.landX) < 0.05 && Math.abs(up.landX - flat.landX) < 0.05);
+  check('rullar nedför höger-sluttning (åt höger) mer än 3 m från plan bana', down.endX > flat.endX + 3,
+        '(' + down.endX.toFixed(2) + ' vs ' + flat.endX.toFixed(2) + ' m)');
+  check('rullar nedför vänster-sluttning (åt vänster) mer än 3 m från plan bana', up.endX < flat.endX - 3,
+        '(' + up.endX.toFixed(2) + ' vs ' + flat.endX.toFixed(2) + ' m)');
 }
 
 console.log(failed ? '\n' + failed + ' FAILED' : '\nAll passed');

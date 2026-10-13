@@ -16,10 +16,11 @@ function sim(input, env) {
 // utgångsläget är plant så att lutningen inte ändrar utslagets spinaxel/riktning (simulateFlight korrigerar för lutning vid
 // utgångsläget): bara bollens studs och rull påverkas.
 const SLOPE_FROM_Y = 40;
-function greenEnv(slopeX, slopeY) {
+function greenEnv(slopeX, slopeY, fromY) {
+  if (fromY === undefined) fromY = SLOPE_FROM_Y;
   const len = Math.hypot(slopeX, slopeY, 1);
   const tilted = [-slopeX / len, -slopeY / len, 1 / len], flat = [0, 0, 1];
-  return { getTerrainAt: (x, y) => y >= SLOPE_FROM_Y ? { z: slopeX * x + slopeY * (y - SLOPE_FROM_Y), normal: tilted, type: 'GREEN' } : { z: 0, normal: flat, type: 'GREEN' },
+  return { getTerrainAt: (x, y) => y >= fromY ? { z: slopeX * x + slopeY * (y - fromY), normal: tilted, type: 'GREEN' } : { z: 0, normal: flat, type: 'GREEN' },
            checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: 15 };
 }
 function pitch(club, axis, firmness, slopeX, slopeY) {
@@ -59,7 +60,7 @@ console.log('\nMer sidospinn ger större kick');
   check('SW: kick växer med spinaxeln (10° < 20° < 30°)', k(10) < k(20) && k(20) < k(30), '(' + [10, 20, 30].map(k).map(v => v.toFixed(2)).join(' < ') + ' m)');
 }
 
-console.log('\nLutande green: efter landningen rullar kicken vidare efter lutningen');
+console.log('\nLutande green, studsen: nedslaget på en lutande yta ändrar kicken');
 {
   const roll = r => r.endX - r.landX;                // förflyttning i sidled efter första markkontakten
   const flat = pitch('SW', 0, 'NORMAL', 0, 0);
@@ -67,14 +68,30 @@ console.log('\nLutande green: efter landningen rullar kicken vidare efter lutnin
   check('landningen påverkas inte av lutningen (den börjar först vid landningsområdet)',
         Math.abs(tiltR.landX - flat.landX) < 0.1 && Math.abs(tiltL.landX - flat.landX) < 0.1,
         '(' + tiltL.landX.toFixed(2) + ' / ' + flat.landX.toFixed(2) + ' / ' + tiltR.landX.toFixed(2) + ' m)');
-  check('Rak boll på sidolutning rullar nedför efter landning (höger-sluttning -> höger)', roll(tiltR) > roll(flat) + 0.3 && roll(tiltL) < roll(flat) - 0.3,
+  check('Rak boll på sidolutning kickar nedför vid studsen (höger-sluttning -> höger)', roll(tiltR) > roll(flat) + 0.3 && roll(tiltL) < roll(flat) - 0.3,
         '(' + roll(tiltL).toFixed(2) + ' / ' + roll(flat).toFixed(2) + ' / ' + roll(tiltR).toFixed(2) + ' m)');
   const fadeDown = pitch('SW', 20, 'NORMAL', -0.03, 0), fadeUp = pitch('SW', 20, 'NORMAL', 0.03, 0), fadeFlat = pitch('SW', 20, 'NORMAL', 0, 0);
-  check('Fade nedför höger-sluttning rullar längre åt höger efter landning än på plan', roll(fadeDown) > roll(fadeFlat) + 0.3, '(' + roll(fadeDown).toFixed(2) + ' vs ' + roll(fadeFlat).toFixed(2) + ' m)');
-  check('Fade uppför höger-sluttning rullar kortare åt höger efter landning än på plan', roll(fadeUp) < roll(fadeFlat) - 0.3, '(' + roll(fadeUp).toFixed(2) + ' vs ' + roll(fadeFlat).toFixed(2) + ' m)');
+  check('Fade nedför höger-sluttning kickar längre åt höger än på plan', roll(fadeDown) > roll(fadeFlat) + 0.3, '(' + roll(fadeDown).toFixed(2) + ' vs ' + roll(fadeFlat).toFixed(2) + ' m)');
+  check('Fade uppför höger-sluttning kickar kortare åt höger än på plan', roll(fadeUp) < roll(fadeFlat) - 0.3, '(' + roll(fadeUp).toFixed(2) + ' vs ' + roll(fadeFlat).toFixed(2) + ' m)');
   const back = pitch('SW', 0, 'NORMAL', 0, -0.03), front = pitch('SW', 0, 'NORMAL', 0, 0.03);
-  check('Sluttning framåt/bakåt påverkar utrullningen i längdled efter landning', back.endY - back.landY > front.endY - front.landY + 0.3,
+  check('Sluttning framåt/bakåt påverkar utcheckningen i längdled', back.endY - back.landY > front.endY - front.landY + 0.3,
         '(' + (back.endY - back.landY).toFixed(2) + ' vs ' + (front.endY - front.landY).toFixed(2) + ' m)');
+}
+
+console.log('\nLutande green, rullen: bump-and-run rullar nedför en sluttning som börjar efter landningen');
+{
+  // Låg bana med lite fade som landar och rullar långt. Lutningen börjar 1 m efter landningen, så nedslaget är plant och det som drar
+  // bollen i sidled är bara lutningens acceleration under rullen (gParallel i evaluateState).
+  window.matchSettings.greenFirmness = 'NORMAL';
+  const bump = slope => { const fromY = bump.fromY === undefined ? 1e9 : bump.fromY;
+    const r = sim({ startPos: [0, 0, 0], ballSpeedMph: 40, launchAngleDeg: 10, totalSpinRpm: 2000, spinAxisDeg: 8.5, azimDeg: 0, isLiveData: true }, greenEnv(slope, 0, fromY));
+    return { landX: r.path.find(p => p.phase !== 'flight').x, landY: r.path.find(p => p.phase !== 'flight').y, endX: r.path[r.path.length - 1].x }; };
+  const flat = bump(0);
+  bump.fromY = flat.landY + 1;
+  const down = bump(-0.03), up = bump(0.03);
+  check('landningen är plan och lika i alla fall', Math.abs(down.landX - flat.landX) < 0.05 && Math.abs(up.landX - flat.landX) < 0.05);
+  check('rullar nedför höger-sluttning (åt höger) mer än 3 m från plan bana', down.endX > flat.endX + 3, '(' + down.endX.toFixed(2) + ' vs ' + flat.endX.toFixed(2) + ' m)');
+  check('rullar nedför vänster-sluttning (åt vänster) mer än 3 m från plan bana', up.endX < flat.endX - 3, '(' + up.endX.toFixed(2) + ' vs ' + flat.endX.toFixed(2) + ' m)');
 }
 
 console.log('\nSpelets formval: SwingEngine.mapCircleToPhysics(..., shape) ger avsiktlig fade/draw');
