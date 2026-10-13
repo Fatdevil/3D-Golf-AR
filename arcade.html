@@ -9431,7 +9431,11 @@
 
         // a putt from the swing meter carries the distance it should roll: turn it into the speed that does it under this ball
         if (data.puttTargetDistM) {
-            launchConfig.ballSpeedMph = window.calibratePuttSpeed(launchConfig, data.puttTargetDistM, 22);
+            // on the green the pace is the one the aim line is drawn with (calibrated along the cup, not along the dragged bearing)
+            let puttHole = courseHoles[playingHoleIndex];
+            let cupPace = (window.isPuttingMode && puttHole && puttHole.flag && window.ballMesh && typeof window.puttPaceAlongCup === 'function')
+                ? window.puttPaceAlongCup(window.ballMesh.position.x, window.ballMesh.position.z, puttHole, data.puttTargetDistM) : null;
+            launchConfig.ballSpeedMph = cupPace || window.calibratePuttSpeed(launchConfig, data.puttTargetDistM, 22);
             data.ballSpeedMph = launchConfig.ballSpeedMph;
             // the speed panels were filled in before the search: show the speed the ball really gets
             if (document.getElementById('hud-bs')) document.getElementById('hud-bs').innerText = data.ballSpeedMph.toFixed(1) + ' mph';
@@ -12634,9 +12638,42 @@
             let hits = rc.intersectObject(plane);
             if (hits.length === 0) return;
             let pt = hits[0].point;
-            if (Math.hypot(pt.x - window.ballMesh.position.x, pt.z - window.ballMesh.position.z) < 1.5) return;   // a tap on the ball itself is not an aim
+            if (Math.hypot(pt.x - window.ballMesh.position.x, pt.z - window.ballMesh.position.z) < (window.isPuttingMode ? 0.25 : 1.5)) return;   // a tap on the ball itself is not an aim
             window.setAimPoint(pt.x, pt.y, pt.z);
         }, false);
+        // PUTTING: the aim marker can be dragged along the green; the break line follows live. The press must start on the marker
+        // (so a drag elsewhere still orbits the camera) and takes the pointer from the camera controls while it lasts.
+        let dragAim = null;
+        const groundAt = (e) => {
+            let rect = renderer.domElement.getBoundingClientRect();
+            let rc = new THREE.Raycaster();
+            rc.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
+            let hits = rc.intersectObject(plane);
+            return hits.length ? hits[0].point : null;
+        };
+        renderer.domElement.addEventListener('pointerdown', (e) => {
+            if (!(e.button === 0 || e.pointerType === 'touch') || !canAim() || !window.isPuttingMode || !window.aimTarget) return;
+            let rect = renderer.domElement.getBoundingClientRect();
+            let sp = window.aimTarget.clone().project(camera);
+            let sx = rect.left + (sp.x + 1) / 2 * rect.width, sy = rect.top + (1 - sp.y) / 2 * rect.height;
+            if (sp.z > 1 || Math.hypot(e.clientX - sx, e.clientY - sy) > (e.pointerType === 'touch' ? 48 : 28)) return;
+            dragAim = { id: e.pointerId };
+            window._aimDragging = true;
+            try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) {}   // the release is seen even outside the canvas
+            controls.enabled = false;
+            e.stopImmediatePropagation();
+        }, true);
+        renderer.domElement.addEventListener('pointermove', (e) => {
+            if (!dragAim || e.pointerId !== dragAim.id) return;
+            if (!canAim()) { dragAim = null; window._aimDragging = false; controls.enabled = true; return; }
+            let pt = groundAt(e);
+            if (!pt || Math.hypot(pt.x - window.ballMesh.position.x, pt.z - window.ballMesh.position.z) < 0.25) return;
+            window.setAimPoint(pt.x, pt.y, pt.z);
+        }, false);
+        const endDragAim = (e) => { if (dragAim && e.pointerId === dragAim.id) { dragAim = null; window._aimDragging = false; controls.enabled = true; } };
+        renderer.domElement.addEventListener('pointerup', endDragAim, false);
+        renderer.domElement.addEventListener('pointercancel', endDragAim, false);
+        renderer.domElement.addEventListener('lostpointercapture', endDragAim, false);
         window.addEventListener('keydown', (e) => {
             if (!canAim() || e.ctrlKey || e.metaKey || e.altKey) return;
             let t = e.target && e.target.tagName;
@@ -14834,7 +14871,7 @@ window.triggerExplosion = function(x, y, z) {
                 new THREE.Vector3(-aimDir.x * camD, camH, -aimDir.z * camD)
             );
             
-            let holdBeat = window._aimHoldUntil && performance.now() < window._aimHoldUntil;   // the result beat after a directed flight
+            let holdBeat = (window._aimHoldUntil && performance.now() < window._aimHoldUntil) || window._aimDragging;   // the result beat after a directed flight; the camera stands still while the aim marker is dragged
             if (!holdBeat) {
                 camera.position.x += (targetPos.x - camera.position.x) * CAM.AIM_LERP;
                 camera.position.y += (targetPos.y - camera.position.y) * CAM.AIM_LERP;
@@ -14842,10 +14879,10 @@ window.triggerExplosion = function(x, y, z) {
             }
             if (window._aimLookBlend) {   // the look point glides from the ball to the aim point (it used to snap)
                 if (!holdBeat) window._aimLookBlend.lerp(window.aimTarget, 1 - Math.exp(-dt / 0.45));
-                controls.target.copy(window._aimLookBlend);
+                if (!window._aimDragging) controls.target.copy(window._aimLookBlend);
                 if (window._aimLookBlend.distanceToSquared(window.aimTarget) < 0.25) window._aimLookBlend = null;
-            } else controls.target.copy(window.aimTarget);
-            controls.enabled = true;
+            } else if (!window._aimDragging) controls.target.copy(window.aimTarget);
+            controls.enabled = !window._aimDragging;
         }
         if (!isFlying && window._ballBeacon && window._ballBeacon.visible) window._ballBeacon.visible = false;
         if (!isFlying) { let skipHint = document.getElementById('skip-hint'); if (skipHint && skipHint.style.display !== 'none') skipHint.style.display = 'none'; }
@@ -15081,7 +15118,7 @@ window.triggerExplosion = function(x, y, z) {
         if (aimActive) {
             let bp = window.ballMesh.position, ap = window.aimTarget;
             window.aimMarker.position.set(ap.x, ap.y + 0.05, ap.z);
-            let ms = Math.min(Math.max(camera.position.distanceTo(ap) * 0.012, 0.5), 6);
+            let ms = Math.min(Math.max(camera.position.distanceTo(ap) * 0.012, window.isPuttingMode ? 0.2 : 0.5), 6);
             window.aimMarker.scale.set(ms, ms, ms);
             let la = window.aimTracerGeo.attributes.position.array;
             la[0] = bp.x; la[1] = bp.y + 0.1; la[2] = bp.z;

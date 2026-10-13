@@ -7,9 +7,10 @@
 let failed = 0;
 function check(name, ok, detail) { console.log((ok ? 'PASS  ' : '❌ FAIL  ') + name + (ok ? '' : '  ' + detail)); if (!ok) failed++; }
 
+let putting = false;
 class V3 { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } }
 const ball = { x: 0, y: 0, z: 0, distanceTo(v) { return Math.hypot(this.x - v.x, this.y - v.y, this.z - v.z); } };
-const win = { ballMesh: { position: ball }, courseHoles: [{ flag: { x: 0, y: 0, z: -120 } }], playingHoleIndex: 0, aimTarget: { x: 0, y: 0, z: -120 } };
+const win = { ballMesh: { position: ball }, courseHoles: [{ flag: { x: 0, y: 0, z: -120 } }], playingHoleIndex: 0, get isPuttingMode() { return putting; }, aimTarget: { x: 0, y: 0, z: -120 } };
 const stub = () => ({ tagName: 'DIV', textContent: '', style: {}, classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } }, getAttribute() { return null; }, setAttribute() {}, addEventListener() {} });
 const labels = new Proxy({}, { get: (o, id) => (o[id] = o[id] || stub()) });   // every element the info bar and the swing overlay touch
 const SE = require('./load_swing_engine.js')({ window: win, globals: { THREE: { Vector3: V3 }, performance: performance }, document: { getElementById: (id) => labels[id] || null } });
@@ -39,6 +40,11 @@ win.aimTarget.z = -6;
 check('the shot distance (the putter power is built on it) is the distance to the aim point, not to the pin', Math.abs(SE.aimDistanceM() - 6) < 1e-9, SE.aimDistanceM());
 win.aimTarget.z = -120;
 check('aimed at the pin it is the pin distance (as before)', Math.abs(SE.aimDistanceM() - 120) < 1e-9);
+
+// on the green the aim point is only the bearing (the high side of a break): the pace is for the cup, like the aim line
+putting = true; win.aimTarget.z = -6; win.aimTarget.x = 3;
+check('putting: the pace is for the cup (120 m here) whatever side the aim point is on', Math.abs(SE.aimDistanceM() - 120) < 1e-9, SE.aimDistanceM());
+putting = false; win.aimTarget.z = -120; win.aimTarget.x = 0;
 check('onTap builds the shot from that distance', /const distToHoleM = aimDistanceM\(\)/.test(require('fs').readFileSync(__dirname + '/../arcade-swing-engine.js', 'utf8')));
 
 // a suggestion that arrives during a swing waits for the swing to be over

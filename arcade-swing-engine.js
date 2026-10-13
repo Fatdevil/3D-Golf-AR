@@ -310,6 +310,11 @@ const SwingEngine = (function() {
     // The putter's power is calibrated to this, so a putt picked for a short aim point rolls to that point, not to a far pin.
     function aimDistanceM() {
         if (!window.ballMesh) return 50;
+        // a putt's pace is for the cup: the aim point is only the bearing (the high side of a break), the same pace the aim line is drawn with
+        if (window.isPuttingMode && window.courseHoles && window.playingHoleIndex !== undefined) {
+            const h = window.courseHoles[window.playingHoleIndex];
+            if (h && h.flag) return Math.hypot(h.flag.x - window.ballMesh.position.x, h.flag.z - window.ballMesh.position.z);
+        }
         if (window.aimTarget) return window.ballMesh.position.distanceTo(window.aimTarget);
         if (window.courseHoles && window.playingHoleIndex !== undefined) {
             const h = window.courseHoles[window.playingHoleIndex];

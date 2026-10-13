@@ -8,7 +8,7 @@ module.exports = function loadSwingEngine(extra) {
   extra = extra || {};
   const el = { classList: { add() {}, remove() {}, contains() { return false; } }, style: {}, setAttribute() {}, addEventListener() {}, appendChild() {}, textContent: '' };
   const win = { location: { search: '' }, innerWidth: 1280, addEventListener() {}, GREEN_STIMP: 10 };
-  Object.assign(win, extra.window || {});
+  Object.defineProperties(win, Object.getOwnPropertyDescriptors(extra.window || {}));   // (descriptors: a getter stays live)
   const ctx = vm.createContext(Object.assign({
     window: win, navigator: { maxTouchPoints: 0 }, URLSearchParams: URLSearchParams, console: { log() {}, warn() {}, error() {} },
     document: Object.assign({ body: el, getElementById() { return null; }, querySelector() { return null; }, querySelectorAll() { return []; }, addEventListener() {} }, extra.document || {}),
