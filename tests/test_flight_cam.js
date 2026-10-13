@@ -179,11 +179,34 @@ check('ball and pin are in the picture together in 90 % of the frames after the 
 check('...and that is not worse than without the pin framing', pins.every(x => x.with >= x.without - 0.02), JSON.stringify(pins));
 check('with a pin well to the side the picture is better with the pin framing than without (0 -> 1)', pins.slice(2).every(x => x.without < 0.5 && x.with >= 0.9), JSON.stringify(pins.slice(2)));
 
+// the pin framing is for approach shots only: a chip or a drive that ends near the pin keeps its own look
+(function () {
+  const near = (name) => { const an0 = FC.analyze(FLIGHTS[name].path); const pin = { x: an0.land.x + an0.dir.x * 8, y: 0, z: an0.land.z + an0.dir.z * 8 };
+    return FC.create(FLIGHTS[name].path, { x: 0, y: 2, z: 5 }, { pin: pin }).plan.pinNear; };
+  check('a chip or a drive that lands near the pin does not get the approach framing (pinNear only for approach)', near('chip') === false && near('driver') === false && near('wedge') === true, near('chip') + ' ' + near('driver') + ' ' + near('wedge'));
+})();
+// a skipped flight: the ball jumps, and the camera must not take the jump for speed (look-ahead along the travel direction): without the reset the
+// look point is thrown towards a point far beyond the ball in the first frames, a jerk of the picture
+(function () {
+  const path = FLIGHTS.wedge.path, an0 = FC.analyze(path), end = ballAt(path, an0.tEnd);
+  const moved = (reset) => {
+    const rig = FC.create(path, { x: 0, y: 2, z: 5 }, { fov: 60 });
+    for (let t = 0; t < 0.6; t += 1 / 60) FC.step(rig, 1 / 60, t, ballAt(path, t));
+    const before = { x: rig.look.x, y: rig.look.y, z: rig.look.z };
+    if (reset) rig.prevBall = null;   // what skipFlight does
+    let st; for (let i = 0; i < 3; i++) st = FC.step(rig, 1 / 60, an0.tEnd, end);
+    return Math.hypot(st.look.x - before.x, st.look.z - before.z);
+  };
+  const withReset = moved(true), without = moved(false);
+  check('after a jump the look point moves calmly when the speed history is reset (without it it is thrown 1.5 times as far in 3 frames)', without > withReset * 1.5, 'with reset ' + withReset.toFixed(1) + ' m, without ' + without.toFixed(1) + ' m');
+})();
+
 // ---- the page uses the new parts
 check('the page gives the rig the trees and the pin', /obstacles: /.test(html) && /pin: /.test(html));
 check('a tap or a key skips the flight (after the first half second)', /window\.skipFlight = function/.test(html) && /performance\.now\(\) - window\._flightStartTime < 500/.test(html));
 
 check('only a tap skips the flight (a free-camera drag starts with a press and must not)', /skipDown = isFlying \?/.test(html) && /window\.AimMath\.isTap\(d, \{ x: e\.clientX/.test(html) && !/addEventListener\('pointerdown', \(\) => \{ if \(isFlying\) window\.skipFlight/.test(html));
+check('the skip hint is shown for every flight (not only the directed camera), and a skip resets the camera speed history', /let skipHint = document\.getElementById\('skip-hint'\);\s*if \(skipHint\) skipHint\.style\.display = \(performance\.now\(\) - window\._flightStartTime > 800/.test(html) && /window\._flightRig\.prevBall = null/.test(html) && !/st\.fov\) > 0\.005\) \{[^}]*\}\s*let skipHint/.test(html));
 check('a skipped flight still hits the blocks on the rest of its path', /for \(let i = Math\.max\(0, flightTick \| 0\); i < path\.length; i \+= 3\)/.test(html) && /hitTargetBlock\(b\)/.test(html) && /if\(d < t\.radius\) hitTargetBlock\(t\);/.test(html));
 check('the block score is declared (hitting a block used to throw: points was never declared)', /\n    let points = 0;/.test(html));
 check('the height of a tree for the camera includes the baked model offset', /top: \(o\.y \|\| 0\) \+ h \+ baked \* sc \+ \(o\.yOffset \|\| 0\)/.test(html));

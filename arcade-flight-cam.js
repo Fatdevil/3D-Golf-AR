@@ -97,7 +97,7 @@
                     arcA: clamp(P.arc * len, 0, 25), arcB: clamp(0.06 * len, 0, 12), ground: ground, obstacles: obstacles,
                     slowMo: P.slow !== null && an.tLand >= 1.5, slowSpeed: P.slow === null ? 1 : P.slow, zoomMin: P.zoomMin,
                     pin: opts.pin || null, pinNear: false, lift: null };
-        if (p.pin) p.pinNear = Math.hypot(p.pin.x - an.land.x, p.pin.z - an.land.z) <= PIN_NEAR;
+        if (p.pin && prof === 'approach') p.pinNear = Math.hypot(p.pin.x - an.land.x, p.pin.z - an.land.z) <= PIN_NEAR;   // approach shots only: chips and drives keep their own look
 
         // trees on the way: a lift added to the height of the arc, worked out from sample points of the arc, widened and softened so that the camera
         // rises smoothly before a tree and not at it

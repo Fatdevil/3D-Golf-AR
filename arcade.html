@@ -6279,6 +6279,7 @@
             }
         }
         window._flightAccumMs = Math.max(window._flightAccumMs || 0, (path.length - 1) * 5.0);
+        if (window._flightRig) window._flightRig.prevBall = null;   // the ball jumps: the camera must not read the jump as speed (look-ahead)
     };
 
     window.localGetTerrainAt = function(px, py) {
@@ -14425,8 +14426,6 @@ window.triggerExplosion = function(x, y, z) {
                 camera.position.set(st.pos.x, st.pos.y, st.pos.z);
                 camera.lookAt(st.look.x, st.look.y, st.look.z);
                 if (Math.abs(camera.fov - st.fov) > 0.005) { camera.fov = st.fov; camera.updateProjectionMatrix(); }
-                let skipHint = document.getElementById('skip-hint');
-                if (skipHint) skipHint.style.display = (performance.now() - window._flightStartTime > 800 && (appMode === 'PLAY' || appMode === 'TEST')) ? 'block' : 'none';
                 // from the tee the real ball is under a pixel: a glowing dot of a fixed size on screen shows it (fades out when the ball is big enough)
                 if (!window._ballBeacon) {
                     let cv = document.createElement('canvas'); cv.width = cv.height = 64;
@@ -14471,6 +14470,10 @@ window.triggerExplosion = function(x, y, z) {
                 camera.lookAt(window._smoothLookTarget);
             }
             
+            // the "tap to skip" text during every flight that can be skipped (directed camera, chase camera and free camera alike)
+            let skipHint = document.getElementById('skip-hint');
+            if (skipHint) skipHint.style.display = (performance.now() - window._flightStartTime > 800 && (appMode === 'PLAY' || appMode === 'TEST')) ? 'block' : 'none';
+
             // --- REAL-TIME HUD UPDATE ---
             if (window.shotStartPos && flightData.path[newTick]) {
                 let curP = flightData.path[newTick];
