@@ -130,6 +130,7 @@ check('a short aim off the green still suggests the putter', /if \(!manual\) SE\
 check('the plan is recomputed when the green settings change, and the preview uses the stimp the shot will use', /matchSettings\.greenStimp : 10, window\.matchSettings \? window\.matchSettings\.greenFirmness/.test(html) && /window\.GREEN_STIMP = ctx\.stimp/.test(html) && /window\.GREEN_STIMP = stimp/.test(html));
 check('a job uses one green firmness too (the physics reads it from matchSettings), restored after each flight', /window\.matchSettings\.greenFirmness = ctx\.firm/.test(html) && /window\.matchSettings\.greenFirmness = firm;/.test(html));
 check('a job uses one wind (a copy taken when it starts), not the live wind that changes every 500 ms', /wind: \(window\.currentWindVec \|\| \[0, 0, 0\]\)\.slice\(\)/.test(html) && /wind: mode === 'real' \? ctx\.wind/.test(html) && !/wind: mode === 'real' \? window\.currentWindVec/.test(html));
+check('club hysteresis only within the same shot and only after an automatic pick', /prev\.ctxKey === ctxKey/.test(html) && /!prev\.manual/.test(html) && /plan\.ctxKey = job\.ctxKey/.test(html));
 check('the flat, calm run keeps the surface under the ball', /type: ctx\.startType/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall shot-plan checks passed');

@@ -6185,12 +6185,17 @@
                 wind: (window.currentWindVec || [0, 0, 0]).slice(),
                 stimp: window.matchSettings ? window.matchSettings.greenStimp : 0
             };
-            const gen = SP.planG(makeSim(ctx), dist, manual ? { club: club } : { startClub: start, prevClub: window.shotPlan && window.shotPlan.club });
-            return { gen: gen, sk: sk, manual: manual, dist: dist };
+            // the club suggested before is kept only for the same shot (player, hole, ball position) and only if it was an automatic pick:
+            // a driver the player chose, or another player's club, must not stay the recommendation for the next approach
+            const ctxKey = [window.activePlayerIndex, playingHoleIndex, Math.round(b.x * 2), Math.round(b.z * 2), Math.round(b.y * 5)].join(',');
+            const prev = window.shotPlan;
+            const prevClub = prev && !prev.manual && prev.ctxKey === ctxKey ? prev.club : undefined;
+            const gen = SP.planG(makeSim(ctx), dist, manual ? { club: club } : { startClub: start, prevClub: prevClub });
+            return { gen: gen, sk: sk, manual: manual, dist: dist, ctxKey: ctxKey };
         }
 
         function finishJob(job, plan) {
-            plan.target = job.dist; plan.manual = job.manual; plan.stale = false;
+            plan.target = job.dist; plan.manual = job.manual; plan.ctxKey = job.ctxKey; plan.stale = false;
             window.shotPlan = plan;
             if (!job.manual) window.SwingEngine.suggestClub(plan.club);
         }
