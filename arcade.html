@@ -6249,13 +6249,14 @@
         let m = 80, out = [], reg = window.ASSET_REGISTRY || {};
         for (const o of (window.placedTrees || [])) {
             if (o.x < minX - m || o.x > maxX + m || o.z < minZ - m || o.z > maxZ + m) continue;
-            let ph = reg[o.type] && reg[o.type].physics;
-            if (!ph) continue;
-            let sc = o.scale || 1, r, h;
-            if (ph.type === 'tree') { r = ph.canopyRadius * sc; h = ph.height * sc; }
-            else if (ph.type === 'cylinder') { r = ph.radius * sc; h = ph.height * sc; }
-            else if (ph.type === 'sphere') { r = ph.radius * sc; h = ph.radius * sc; }
-            else if (ph.type === 'profile') { r = (ph.reach || 3) * sc; h = ph.height * sc; }
+            let def = reg[o.type], ph = def && def.physics;
+            if (!def) continue;
+            let sc = o.scale || 1, th = (def.targetHeight || 0) * sc, r, h;   // th: the height the model is drawn at (the physics shapes can be smaller than that)
+            if (!ph) { h = th; r = 0.25 * th; }   // no physics (a cloud prop with the defaults): drawn but never hit; a guess at its width
+            else if (ph.type === 'tree') { r = ph.canopyRadius * sc; h = Math.max(ph.height * sc, th); }
+            else if (ph.type === 'cylinder') { r = ph.radius * sc; h = Math.max(ph.height * sc, th); }
+            else if (ph.type === 'sphere') { r = ph.radius * sc; h = Math.max(2 * ph.radius * sc, th); }   // the radius is half the largest size: the model can be up to twice as high
+            else if (ph.type === 'profile') { r = (ph.reach || 3) * sc; h = Math.max(ph.height * sc, th); }
             else continue;
             if (!(h >= 3) || !(r > 0)) continue;   // low things (bushes, rocks) are cleared by the ground clearance anyway
             // the model stands higher by its baked offset (scaled with the prop) and the prop's own offset (as in prop-collision.js)
