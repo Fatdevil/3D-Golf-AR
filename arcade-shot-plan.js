@@ -37,7 +37,7 @@
         const low = yield* flight(sim, club, MIN_POWER, 'real');
         if (low.total >= targetTotal) return { club: club, power: MIN_POWER, carry: low.carry, total: low.total, reachable: true, converged: true, short: 0, over: true, off: low.total - targetTotal };
         // regula falsi (distance grows smoothly with power, so the secant lands within a few flights); the bracket keeps it safe
-        let lo = MIN_POWER, hi = topPower, tLo = low.total, tHi = full.total, best = { power: topPower, r: full };
+        let lo = MIN_POWER, hi = topPower, tLo = low.total, tHi = full.total, best = Math.abs(low.total - targetTotal) < Math.abs(full.total - targetTotal) ? { power: MIN_POWER, r: low } : { power: topPower, r: full };   // both ends are candidates too
         for (let i = 0; i < STEPS; i++) {
             let p = lo + (targetTotal - tLo) * (hi - lo) / (tHi - tLo);
             p = Math.min(hi - 0.02 * (hi - lo), Math.max(lo + 0.02 * (hi - lo), p));

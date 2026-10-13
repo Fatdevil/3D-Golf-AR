@@ -60,6 +60,10 @@ r = SP.pickClub(fake, 5, 'W3');
 check('nothing is short enough: the shortest club is kept (over), not the driver', r.club === 'LW' && r.over === true, JSON.stringify(r));
 r = SP.pickClub(fake, 5, 'LW');
 check('...also when the search starts with the shortest club', r.club === 'LW' && r.over === true, JSON.stringify(r));
+// the gentlest swing is the closest result: every harder swing carries a hazard and ends far long
+const hazard = (club, power) => { const t = power <= 0.26 ? 69 : 200; return { carry: t, total: t }; };
+r = SP.powerFor(hazard, 'I7', 70);
+check('the low end of the search is a candidate: the minimum-power swing that lands within tolerance is kept', r.reachable && r.converged && r.power === 0.25 && Math.abs(r.total - 69) < 1e-9, JSON.stringify(r));
 // a full swing that ends short (a bunker, a roll back) while a softer one reaches the target: the club is not given up
 const dip = (club, power) => { const t = power > 0.9 ? 40 : REACH[club] * Math.pow(power, 1.5); return { carry: t, total: t }; };
 r = SP.powerFor(dip, 'I7', 110);
