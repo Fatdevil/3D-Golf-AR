@@ -53,6 +53,13 @@ check('describe passes converged and off on', (() => { const d = SP.describe(cli
   check("stepwise with the player's own club does not change the club", s2.value.club === 'I7');
 })();
 
+// a target the starting club already overshoots at minimum power: shorter clubs, never longer ones
+r = SP.pickClub(fake, 25, 'W3');
+check('too long for the start club at minimum power: steps down, not up to the driver', r.club !== 'DRIVER' && SP.ORDER.indexOf(r.club) < SP.ORDER.indexOf('W3') && r.reachable && Math.abs(r.total - 25) < 1, JSON.stringify(r));
+r = SP.pickClub(fake, 5, 'W3');
+check('nothing is short enough: the shortest club is kept (over), not the driver', r.club === 'LW' && r.over === true, JSON.stringify(r));
+r = SP.pickClub(fake, 5, 'LW');
+check('...also when the search starts with the shortest club', r.club === 'LW' && r.over === true, JSON.stringify(r));
 // a full swing that ends short (a bunker, a roll back) while a softer one reaches the target: the club is not given up
 const dip = (club, power) => { const t = power > 0.9 ? 40 : REACH[club] * Math.pow(power, 1.5); return { carry: t, total: t }; };
 r = SP.powerFor(dip, 'I7', 110);
@@ -116,6 +123,7 @@ check('the plan is updated every frame, also while the aim point is off screen',
 check('the preview uses the physics of the shot: real terrain, no trees, calm and flat variants', /getTerrainAt: mode === 'flatCalm'[\s\S]{0,160}physicsTerrainAt/.test(html) && /wind: mode === 'real' \? window\.currentWindVec : \[0, 0, 0\]/.test(html));
 check('a preview does not roll the flyer dice or log the flight', /Math\.random = function \(\) \{ return 0\.5; \}/.test(html) && /console\.log = function \(\) \{\};/.test(html));
 check('a new shot ends the club pick (SwingEngine.newShot on landing)', /SwingEngine\.newShot\(\)/.test(html));
+check('even the first slice runs from a timer, not the render callback', /setTimeout\(function \(\) \{ pump\(first\); \}, 0\)/.test(html) && !/\n\s+pump\(job\);/.test(html));
 check('the search runs in short timer slices, not inside one frame', /j\.gen\.next\(\)/.test(html) && /setTimeout\(function \(\) \{ pump\(j\); \}, 0\)/.test(html) && /JOB_BUDGET_MS/.test(html) && !/SP\.pickClub\(|SP\.powerFor\(|SP\.describe\(/.test(html));
 check('the preview measures along the aim line and reports sideways drift', /fwd\(last\)/.test(html) && /lateral: \(last\.x/.test(html));
 check('a short aim off the green still suggests the putter', /if \(!manual\) SE\.suggestClub\('PUTT'\)/.test(html));

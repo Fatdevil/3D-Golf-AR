@@ -61,6 +61,17 @@
         }
         let idx = Math.max(0, ORDER.indexOf(startClub));
         let res = yield* powerForG(sim, ORDER[idx], targetTotal);
+        if (res.over) {
+            // even the gentlest swing of this club goes past the target: shorter clubs, never longer ones
+            while (idx > 0 && res.over) {
+                const shorter = yield* powerForG(sim, ORDER[idx - 1], targetTotal);
+                if (shorter.over) { idx--; res = shorter; continue; }
+                if (shorter.reachable && shorter.converged) { idx--; res = shorter; }
+                else if (!shorter.reachable && Math.abs(shorter.off) < Math.abs(res.off)) { idx--; res = shorter; }   // the closer miss
+                break;
+            }
+            if (!fits(res)) return res;   // the shortest club there is, still too long (or the best that can be done)
+        }
         if (!fits(res)) {
             while (idx < ORDER.length - 1 && !fits(res)) { idx++; res = yield* powerForG(sim, ORDER[idx], targetTotal); }
         } else {

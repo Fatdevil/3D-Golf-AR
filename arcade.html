@@ -6225,7 +6225,8 @@
             job = startJob(sk);
             envDirty = false;
             if (!job) { doneKey = sk; computedAt = now; return; }
-            pump(job);
+            const first = job;   // the first slice too runs from a timer, not from the render callback
+            setTimeout(function () { pump(first); }, 0);
         };
     })();
 
