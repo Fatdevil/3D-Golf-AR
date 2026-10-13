@@ -50,6 +50,7 @@ const SwingEngine = (function() {
     // State
     let _enabled    = false;
     let _clubKey    = 'DRIVER';
+    let _manualClub = false;    // the player picked the club: it stays until the next shot, the suggestion no longer overrides it
     let _phase      = 'idle';   // 'idle' | 'power' | 'direction' | 'fired'
     let _powerPct   = 0;        // 0.0–1.0, captured on tap 1
     let _armDeg     = 0;        // 0–360, captured on tap 2
@@ -394,11 +395,28 @@ const SwingEngine = (function() {
     // -----------------------------------------------------------
     function selectClub(key) {
         if (!CLUB_PROFILES[key]) return;
+        _manualClub = true;   // used to be undone at once: updateSwingInfoBar put the suggested club back
+        _applyClub(key);
+    }
+
+    function _applyClub(key) {
         _clubKey = key;
         // Update selector highlight
         document.querySelectorAll('.club-btn').forEach(btn => {
             btn.classList.toggle('selected', btn.dataset.club === key);
         });
+        updateSwingInfoBar(true);
+    }
+
+    // The game's suggestion (distance rule or the shot plan): only while the player has not picked a club
+    function suggestClub(key) {
+        if (_manualClub || !CLUB_PROFILES[key] || key === _clubKey) return;
+        _applyClub(key);
+    }
+
+    // A new shot: the player's club pick is over and the suggestion applies again
+    function newShot() {
+        _manualClub = false;
         updateSwingInfoBar();
     }
 
@@ -406,7 +424,7 @@ const SwingEngine = (function() {
     // updateSwingInfoBar — shows club name + distance to pin
     // Called on club change and on landing (ball position update)
     // -----------------------------------------------------------
-    function updateSwingInfoBar() {
+    function updateSwingInfoBar(noAuto) {
         const club   = CLUB_PROFILES[_clubKey];
         const nameEl = _el('si-club-name');
         const distEl = _el('si-dist-label');
@@ -421,9 +439,13 @@ const SwingEngine = (function() {
                 const distYds = (distM * 1.09361).toFixed(0);
                 distEl.textContent = `${distYds} yds  (${distM.toFixed(0)} m)`;
 
-                // Auto-select club based on distance
-                const suggested = autoSelectClub(distM);
-                if (suggested !== _clubKey) selectClub(suggested);
+                // Auto-select club based on the distance to the aim point (the flag unless the player aimed elsewhere), unless the player picked one
+                if (!noAuto && !_manualClub) {
+                    const aim = window.aimTarget, b = window.ballMesh.position;
+                    const aimM = aim ? Math.hypot(aim.x - b.x, aim.z - b.z) : distM;
+                    const suggested = autoSelectClub(aimM);
+                    if (suggested !== _clubKey) _applyClub(suggested);
+                }
             }
         }
     }
@@ -456,7 +478,7 @@ const SwingEngine = (function() {
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
-    return { onTap, selectClub, enableSwingMode, disableSwingMode,
+    return { onTap, selectClub, suggestClub, newShot, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
              updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, CLUB_PROFILES };
 })();
 
