@@ -50,6 +50,8 @@ const SwingEngine = (function() {
     // State
     let _enabled    = false;
     let _clubKey    = 'DRIVER';
+    let _pendingClub = null;    // a suggestion that came in during a swing: applied when the swing is over (the club must not change under the player's hands)
+    let _manualClub = false;    // the player picked the club: it stays until the next shot, the suggestion no longer overrides it
     let _phase      = 'idle';   // 'idle' | 'power' | 'direction' | 'fired'
     let _powerPct   = 0;        // 0.0–1.0, captured on tap 1
     let _armDeg     = 0;        // 0–360, captured on tap 2
@@ -304,6 +306,18 @@ const SwingEngine = (function() {
         } catch(e) { /* no haptics available */ }
     }
 
+    // The distance the shot is for: to the aim point (the flag unless the player aimed elsewhere), 50 m if nothing is known.
+    // The putter's power is calibrated to this, so a putt picked for a short aim point rolls to that point, not to a far pin.
+    function aimDistanceM() {
+        if (!window.ballMesh) return 50;
+        if (window.aimTarget) return window.ballMesh.position.distanceTo(window.aimTarget);
+        if (window.courseHoles && window.playingHoleIndex !== undefined) {
+            const h = window.courseHoles[window.playingHoleIndex];
+            if (h && h.flag) return window.ballMesh.position.distanceTo(new THREE.Vector3(h.flag.x, h.flag.y, h.flag.z));
+        }
+        return 50;
+    }
+
     // -----------------------------------------------------------
     // onTap — primary user interaction (both phases)
     // -----------------------------------------------------------
@@ -365,15 +379,7 @@ const SwingEngine = (function() {
             _setPhaseLabel('TAP TO SET POWER');
 
             // Build launchData and fire
-            let distToHoleM = 50; // fallback
-            if (window.ballMesh && window.courseHoles && window.playingHoleIndex !== undefined) {
-                const h = window.courseHoles[window.playingHoleIndex];
-                if (h && h.flag) {
-                    distToHoleM = window.ballMesh.position.distanceTo(
-                        new THREE.Vector3(h.flag.x, h.flag.y, h.flag.z)
-                    );
-                }
-            }
+            const distToHoleM = aimDistanceM();   // (the name is old: it is the distance to the aim point)
 
             const launchData = mapCircleToPhysics(_powerPct, _armDeg, _clubKey, distToHoleM);
             const quality    = _getQuality(_powerPct, _armDeg);
@@ -385,7 +391,7 @@ const SwingEngine = (function() {
             }
 
             // Ready for next shot
-            setTimeout(() => { _phase = 'idle'; }, 300);
+            setTimeout(() => { _phase = 'idle'; _flushPendingClub(); }, 300);
         }
     }
 
@@ -394,11 +400,32 @@ const SwingEngine = (function() {
     // -----------------------------------------------------------
     function selectClub(key) {
         if (!CLUB_PROFILES[key]) return;
+        _manualClub = true;   // used to be undone at once: updateSwingInfoBar put the suggested club back
+        _applyClub(key);
+    }
+
+    function _applyClub(key) {
         _clubKey = key;
         // Update selector highlight
         document.querySelectorAll('.club-btn').forEach(btn => {
             btn.classList.toggle('selected', btn.dataset.club === key);
         });
+        updateSwingInfoBar(true);
+    }
+
+    // The game's suggestion (distance rule or the shot plan): only while the player has not picked a club
+    function suggestClub(key) {
+        if (_manualClub || !CLUB_PROFILES[key]) return;
+        if (key === _clubKey) { _pendingClub = null; return; }
+        if (_phase !== 'idle') { _pendingClub = key; return; }   // power or direction tap in progress, or just fired
+        _pendingClub = null;
+        _applyClub(key);
+    }
+    function _flushPendingClub() { if (_pendingClub && _phase === 'idle') suggestClub(_pendingClub); }
+
+    // A new shot: the player's club pick is over and the suggestion applies again
+    function newShot() {
+        _manualClub = false;
         updateSwingInfoBar();
     }
 
@@ -406,7 +433,7 @@ const SwingEngine = (function() {
     // updateSwingInfoBar — shows club name + distance to pin
     // Called on club change and on landing (ball position update)
     // -----------------------------------------------------------
-    function updateSwingInfoBar() {
+    function updateSwingInfoBar(noAuto) {
         const club   = CLUB_PROFILES[_clubKey];
         const nameEl = _el('si-club-name');
         const distEl = _el('si-dist-label');
@@ -421,9 +448,12 @@ const SwingEngine = (function() {
                 const distYds = (distM * 1.09361).toFixed(0);
                 distEl.textContent = `${distYds} yds  (${distM.toFixed(0)} m)`;
 
-                // Auto-select club based on distance
-                const suggested = autoSelectClub(distM);
-                if (suggested !== _clubKey) selectClub(suggested);
+                // Auto-select club based on the distance to the aim point (the flag unless the player aimed elsewhere), unless the player picked one
+                if (!noAuto && !_manualClub) {
+                    const aim = window.aimTarget, b = window.ballMesh.position;
+                    const aimM = aim ? Math.hypot(aim.x - b.x, aim.z - b.z) : distM;
+                    suggestClub(autoSelectClub(aimM));
+                }
             }
         }
     }
@@ -456,7 +486,7 @@ const SwingEngine = (function() {
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
-    return { onTap, selectClub, enableSwingMode, disableSwingMode,
+    return { onTap, selectClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
              updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, CLUB_PROFILES };
 })();
 

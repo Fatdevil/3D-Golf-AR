@@ -271,6 +271,11 @@
             <div id="aim-bb-arrow" style="color:#4ade80;">▲</div>
             <div id="aim-bb-elev">9y</div>
         </div>
+        <div id="aim-bb-plan" style="display:none; margin-top:5px; padding-top:5px; border-top:1px solid #777; font-size:12px; line-height:1.4;">
+            <div id="aim-bb-club" style="font-weight:900; font-size:14px; color:#fcd34d;"></div>
+            <div id="aim-bb-reach" style="color:#e2e8f0;"></div>
+            <div id="aim-bb-fx" style="font-size:11px; color:#94a3b8;"></div>
+        </div>
         <!-- V-shaped pointer down -->
         <div style="position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); border-left:8px solid transparent; border-right:8px solid transparent; border-top:8px solid rgba(40,40,40,0.9);"></div>
     </div>
@@ -3930,6 +3935,7 @@
     
 </script>
 <script src="arcade-aim.js?v=1"></script>
+<script src="arcade-shot-plan.js?v=1"></script>
 <script src="arcade-rules.js?v=1"></script>
 <script>
 
@@ -6109,6 +6115,129 @@
         window.resetAimTarget();
     };
 
+    // === SHOT PLAN ===
+    // Which club and how much power reaches the aim point with this wind and this ground, worked out with the same physics as the shot
+    // (arcade-shot-plan.js has the search). A perfect strike with no start-line error; trees are not in the way in the preview, and the
+    // wind is what blows now. Runs once the aim has been still for a moment (about 10-25 short flights, a flight or so per timer slice).
+    window.shotPlan = null;
+    (function () {
+        let shotKey = '', envKey = '', doneKey = '', envDirty = false, changedAt = 0, computedAt = 0, job = null;
+        const PLAN_DELAY_MS = 220, PLAN_ENV_MS = 2000, JOB_BUDGET_MS = 6;   // a flight takes a few ms: about one per slice
+
+        function previewTee() {
+            let surf = window.localGetTerrainAt ? window.localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z) : null;
+            if (window._isRangeMode) {
+                let type = surf ? surf.type : 'FAIRWAY';
+                return !(type === 'ROUGH' || type === 'DEEP ROUGH' || type === 'SAND' || type === 'FESCUE');   // same rule as executeArcadeShot
+            }
+            let p = window.players && window.players[window.activePlayerIndex];
+            return !!p && (p.strokes || 0) === 0;   // the first stroke of the hole is played from a tee
+        }
+
+        function makeSim(ctx) {   // flatCalm keeps the surface under the ball, so "terrain" is the slope (and where the ball comes down), not the lie
+            return function (club, power, mode) {
+                const d = SwingEngine.mapCircleToPhysics(power, 0, club, ctx.dist);   // arm straight: no miss; the random start-line noise is overridden below
+                const env = {
+                    wind: mode === 'real' ? ctx.wind : [0, 0, 0],   // the wind of the moment the job started: it blows differently every 500 ms, a job must not mix winds
+                    altitudeFeet: ctx.alt, temperatureC: ctx.temp, greenFirmness: ctx.firm, cupPositionLocal: null,
+                    checkCollisionCallback: function () { return null; }, hasTreeCollision: function () { return false; },
+                    getTerrainAt: mode === 'flatCalm' ? function () { return { z: ctx.startZ, normal: [0, 0, 1], type: ctx.startType }; } : physicsTerrainAt
+                };
+                const log = console.log, rnd = Math.random, stimp = window.GREEN_STIMP, firm = window.matchSettings ? window.matchSettings.greenFirmness : undefined;
+                console.log = function () {};          // the physics logs every flight in detail
+                Math.random = function () { return 0.5; };   // no flyer lottery in a preview
+                if (ctx.stimp) window.GREEN_STIMP = ctx.stimp;   // what executeArcadeShot sets for the shot
+                if (window.matchSettings) window.matchSettings.greenFirmness = ctx.firm;   // the physics reads the firmness from the settings, not from env: one value for the whole job
+                try {
+                    const res = window.GolfPhysics.simulateFlight({
+                        startPos: ctx.startPos, azimDeg: ctx.azim, spinAxisDeg: 0, ballSpeedMph: d.ballSpeedMph,
+                        launchAngleDeg: d.launchAngleDeg, totalSpinRpm: d.totalSpinRpm, isLiveData: false, isTeeShot: ctx.tee
+                    }, env);
+                    // measured along the aim line: sideways drift (a crosswind) is not distance, it is reported as lateral
+                    const path = res.path, az = ctx.azim * Math.PI / 180, sx = Math.sin(az), cx = Math.cos(az);
+                    const fwd = function (q) { return (q.x - ctx.startPos[0]) * sx + (q.y - ctx.startPos[1]) * cx; };
+                    const last = path[path.length - 1];
+                    let land = last;
+                    for (let i = 1; i < path.length; i++) if (path[i].phase !== 'flight') { land = path[i]; break; }   // where the ball first came down
+                    return { carry: fwd(land), total: fwd(last), lateral: (last.x - ctx.startPos[0]) * cx - (last.y - ctx.startPos[1]) * sx };
+                } finally { console.log = log; Math.random = rnd; window.GREEN_STIMP = stimp; if (window.matchSettings) window.matchSettings.greenFirmness = firm; }
+            };
+        }
+
+        // The search is a generator that yields after every flight; it is run in short slices (see pump) instead of all ~20 flights at once.
+        function startJob(sk) {
+            const b = window.ballMesh.position, a = window.aimTarget;
+            const dist = Math.hypot(a.x - b.x, a.z - b.z);
+            const SE = window.SwingEngine, SP = window.ShotPlan;
+            const start = SE.autoSelectClub(dist);
+            const manual = SE.isManualClub(), club = SE.getClub();
+            if (start === 'PUTT' || (manual && club === 'PUTT')) {   // short game and putts have their own help, no plan; but the putter is still suggested
+                window.shotPlan = null;
+                if (!manual) SE.suggestClub('PUTT');
+                return null;
+            }
+            const t = physicsTerrainAt(b.x, -b.z), sz = Math.max(b.y, t.z + 0.022);
+            const ctx = {
+                dist: dist, startPos: [b.x, -b.z, sz], startZ: t.z, startType: t.type, azim: window.AimMath.bearingDeg(b, a), tee: previewTee(),
+                alt: window.matchSettings ? window.matchSettings.altitude : 0,
+                temp: (window.matchSettings && window.matchSettings.temperatureC !== undefined) ? window.matchSettings.temperatureC : 15,
+                firm: window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL',
+                wind: (window.currentWindVec || [0, 0, 0]).slice(),
+                stimp: window.matchSettings ? window.matchSettings.greenStimp : 0
+            };
+            // the club suggested before is kept only for the same shot (player, hole, ball position) and only if it was an automatic pick:
+            // a driver the player chose, or another player's club, must not stay the recommendation for the next approach
+            const ctxKey = [window.activePlayerIndex, playingHoleIndex, Math.round(b.x * 2), Math.round(b.z * 2), Math.round(b.y * 5)].join(',');
+            const prev = window.shotPlan;
+            const prevClub = prev && !prev.manual && prev.ctxKey === ctxKey ? prev.club : undefined;
+            const gen = SP.planG(makeSim(ctx), dist, manual ? { club: club } : { startClub: start, prevClub: prevClub });
+            return { gen: gen, sk: sk, manual: manual, dist: dist, ctxKey: ctxKey };
+        }
+
+        function finishJob(job, plan) {
+            plan.target = job.dist; plan.manual = job.manual; plan.ctxKey = job.ctxKey; plan.stale = false;
+            window.shotPlan = plan;
+            if (!job.manual) window.SwingEngine.suggestClub(plan.club);
+        }
+
+        // Runs a job in short timer slices (a flight or so each), independent of the render loop, so a heavy frame does not slow it down and it
+        // never stalls a frame. A job that has been replaced (the aim moved) stops at its next slice.
+        function pump(j) {
+            if (job !== j) return;
+            const t0 = performance.now();
+            do {
+                let n;
+                try { n = j.gen.next(); } catch (e) { console.error('[ShotPlan]', e); window.shotPlan = null; job = null; return; }
+                if (n.done) { finishJob(j, n.value); job = null; doneKey = j.sk; computedAt = performance.now(); return; }
+            } while (performance.now() - t0 < JOB_BUDGET_MS);
+            setTimeout(function () { pump(j); }, 0);
+        }
+
+        window.updateShotPlan = function () {
+            const ok = (appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget && window.ballMesh &&
+                !window.isPuttingMode && window.currentBallSurface !== 'GREEN' && window.SwingEngine && window.ShotPlan && window.GolfPhysics && window.AimMath;
+            if (!ok || document.hidden) { if (!ok) { window.shotPlan = null; job = null; shotKey = envKey = doneKey = ''; envDirty = false; } return; }
+            const b = window.ballMesh.position, a = window.aimTarget, now = performance.now();
+            const sk = [Math.round(b.x * 2), Math.round(b.z * 2), Math.round(b.y * 5), Math.round(a.x * 2), Math.round(a.z * 2),
+                window.SwingEngine.isManualClub() ? window.SwingEngine.getClub() : 'auto', window.activePlayerIndex, playingHoleIndex].join(',');
+            const ek = [Math.round((window.currentWindMph || 0) / 2), Math.round((window.currentWindDir || 0) / 15),
+                window.matchSettings ? window.matchSettings.altitude : 0, window.matchSettings ? window.matchSettings.temperatureC : 15,
+                window.matchSettings ? window.matchSettings.greenStimp : 10, window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL'].join(',');
+            if (sk !== shotKey) { shotKey = sk; envKey = ek; envDirty = false; doneKey = ''; changedAt = now; job = null; if (window.shotPlan) window.shotPlan.stale = true; return; }
+            if (ek !== envKey) { envKey = ek; envDirty = true; }
+            if (job) return;   // being worked out in timer slices (pump)
+            // a new aim, club or ball position waits until it has been still for a moment; wind drifting alone is refreshed every couple of seconds
+            if (doneKey !== sk) { if (now - changedAt < PLAN_DELAY_MS) return; }
+            else if (envDirty) { if (now - computedAt < PLAN_ENV_MS) return; }
+            else return;
+            job = startJob(sk);
+            envDirty = false;
+            if (!job) { doneKey = sk; computedAt = now; return; }
+            const first = job;   // the first slice too runs from a timer, not from the render callback
+            setTimeout(function () { pump(first); }, 0);
+        };
+    })();
+
     window.localGetTerrainAt = function(px, py) {
         if (!window.terrainBiomeData) {
             return { z: 0, normal: [0, 0, 1], type: 'FAIRWAY' };
@@ -8200,9 +8329,7 @@
 
         if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
         // Sync swing club selector with new ball position after landing
-        if (window.SwingEngine && document.body.classList.contains('swing-mode')) {
-            SwingEngine.updateSwingInfoBar();
-        }
+        if (window.SwingEngine) SwingEngine.newShot();   // the player's club pick ends with the shot; the suggestion applies to the next one
 
         if (p.strokes + p.penaltyStrokes >= maxScore && maxConcede !== 99 && !p.holedOut) {
             p.holedOut = true;
@@ -14799,6 +14926,7 @@ window.triggerExplosion = function(x, y, z) {
         let aimActive = (appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget && window.ballMesh;
         window.aimMarker.visible = !!aimActive;
         aimLineMesh.visible = !!aimActive;
+        if (window.updateShotPlan) window.updateShotPlan();   // also while the aim point is off screen: the club suggestion follows the aim
         let aimPanel = document.getElementById('aim-controls');
         if (aimPanel) aimPanel.style.display = aimActive ? 'flex' : 'none';
         if (aimActive) {
@@ -14835,6 +14963,26 @@ window.triggerExplosion = function(x, y, z) {
                 document.getElementById('aim-bb-elev').innerText = Math.abs(elevDiff * 1.09361).toFixed(1) + 'y';
                 document.getElementById('aim-bb-arrow').innerText = elevDiff > 0 ? '▲' : '▼';
                 document.getElementById('aim-bb-arrow').style.color = elevDiff > 0 ? '#4ade80' : '#f87171'; // Grön upp, Röd ner
+
+                // --- SHOT PLAN: club, power, carry/total, what wind and terrain do (worked out above, every frame) ---
+                let planEl = document.getElementById('aim-bb-plan'), pl = window.shotPlan;
+                if (planEl) {
+                    if (!pl) planEl.style.display = 'none';
+                    else {
+                        let u = window.useMeters ? ' m' : ' yd', d0 = (m) => window.formatDistRaw(m, 0);
+                        let sgn = (m) => (m >= 0 ? '+' : '−') + d0(Math.abs(m));
+                        let col = (m) => Math.abs(m) < 0.5 ? '#94a3b8' : (m > 0 ? '#4ade80' : '#f87171');
+                        let cl = SwingEngine.CLUB_PROFILES[pl.club];
+                        let power = pl.over ? 'min power, too long' : (!pl.reachable ? (pl.power >= 0.995 ? 'full power' : Math.round(pl.power * 100) + '% power') + ', ' + d0(pl.short) + u + ' short' : Math.round(pl.power * 100) + '% power' + (pl.converged === false ? ', lands ' + d0(Math.abs(pl.off)) + u + (pl.off < 0 ? ' short' : ' long') : ''));
+                        planEl.style.display = 'block';
+                        planEl.style.opacity = pl.stale ? '0.5' : '1';
+                        document.getElementById('aim-bb-club').innerText = (pl.manual ? '✋ ' : '') + (cl ? cl.name : pl.club) + ' · ' + power;
+                        document.getElementById('aim-bb-reach').innerText = 'Carry ' + d0(pl.carry) + ' · Total ' + d0(pl.total) + u;
+                        let fx = document.getElementById('aim-bb-fx');
+                        let drift = Math.abs(pl.lateral) >= 2 ? ' · ↔ ' + d0(Math.abs(pl.lateral)) + (pl.lateral > 0 ? ' R' : ' L') + ' (aim ' + Math.abs(pl.aimFix).toFixed(1) + '° ' + (pl.aimFix > 0 ? 'R' : 'L') + ')' : '';
+                        fx.innerHTML = '<span style="color:' + col(pl.wind) + '">💨 ' + sgn(pl.wind) + '</span> · <span style="color:' + col(pl.terrain) + '">⛰ ' + sgn(pl.terrain) + '</span> · plays ' + d0(pl.playsLike) + u + drift;
+                    }
+                }
             } else {
                 bb.style.display = 'none';
             }

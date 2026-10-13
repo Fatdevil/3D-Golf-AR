@@ -28,6 +28,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 |-----|-------|
 | `arcade-auth.js` | Device ID auth (UUID i localStorage) |
 | `arcade-aim.js` | Sikte: bäring, vridning, tap vs drag (ren matte, `window.AimMath`) |
+| `arcade-shot-plan.js` | Slagplan: klubb och kraft till siktpunkten, vind- och terrängeffekt (sökning, `window.ShotPlan`) |
 | `arcade-feature-flags.js` | Free/Premium feature gating |
 | `arcade-api-service.js` | Centraliserat HTTP API-lager med auth headers |
 | `arcade-storage-service.js` | localStorage-abstraktion (drafts, compressed levels) |
@@ -375,3 +376,8 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - Man siktar genom att **trycka på marken i 3D-vyn** (kort tryck utan drag; drag är kamera), på minimapen, med **piltangenter** (±1°, Shift ±5°) eller AIM-knapparna ◀ ▶ till vänster. **F** / ⚑ Flag sätter siktet på flaggan (på rangen rakt fram).
 - Ett handsatt sikte (`window.aimManual`) ligger kvar efter slaget så länge det är minst 10 m bort och på flaggans sida om bollen (`resetAimTarget(true)`); ny spelare, nytt hål, mulligan och drop nollställer det alltid.
 - Målmarkör (ring + stolpe) och streckad siktlinje ritas varje bildruta; minimapens "x° RIGHT/LEFT" och AIM-panelen visar vridningen bort från flaggan.
+
+## Slagplan i siktbrickan (2026-10)
+- Brickan vid siktpunkten visar klubb och kraft som når siktet, carry/total, vindens och terrängens effekt (+ hjälper, − stjälper) och "plays X" (den platta, vindstilla distans slaget är värt). `updateShotPlan` i `arcade.html` kör samma fysik som slaget (`simulateFlight`, riktig terräng och vind, perfekt träff, utan träd) och söker kraften i `arcade-shot-plan.js` (`powerFor`, `pickClub`, `describe`). Ca 8–23 korta flygningar, 40–90 ms, körs först när siktet legat stilla 220 ms (vinddrift räknas om högst var 2:a sekund).
+- Klubbval: den kortaste klubb som klarar slaget på högst 97 % kraft; den klubb som föreslogs sist behålls medan den behöver 60–97 %. Förslaget utgår från siktpunkten, inte flaggan. Putt/greenen och ≤ 9 m har egen hjälp och ingen plan.
+- Spelarens eget klubbval (klubbknapparna) står kvar till nästa slag (`SwingEngine.newShot`); förut ångrades det direkt av förslaget (`selectClub` → `updateSwingInfoBar`). Förhandsvisningen är approximativ: vinden som blåser nu, inga träd, ingen slumpad flyer.
