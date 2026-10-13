@@ -69,11 +69,12 @@
     const PIN_NEAR = 35;                                        // an approach whose pin is this close to the landing point keeps the pin in the picture
 
     // The lowest the camera may be at (x, z): above the ground and above any tree it is over (obstacles: { x, z, r, top }, top = absolute height)
-    function clearAt(obstacles, ground, x, z) {
+    // extra widens every footprint (to start rising before a tree and not at it)
+    function clearAt(obstacles, ground, x, z, extra) {
         let y = ground(x, z) + CLEAR;
         for (let i = 0; i < obstacles.length; i++) {
             const o = obstacles[i];
-            if (Math.hypot(x - o.x, z - o.z) < o.r + CAM_R) y = Math.max(y, o.top + TREE_CLEAR);
+            if (Math.hypot(x - o.x, z - o.z) < o.r + CAM_R + (extra || 0)) y = Math.max(y, o.top + TREE_CLEAR);
         }
         return y;
     }
@@ -81,15 +82,17 @@
     // The camera plan. camStart: where the camera is at address. opts: { ground(x, z), obstacles: [{ x, z, r, top }], pin: { x, y, z } }
     function plan(an, camStart, opts) {
         opts = opts || {};
-        const ground = opts.ground || (() => 0), obstacles = opts.obstacles || [];
+        const ground = opts.ground || (() => 0), allObstacles = opts.obstacles || [];
         const prof = profile(an), P = PROFILES[prof] || PROFILES.approach;
         const side = { x: -an.dir.z, y: 0, z: an.dir.x };   // to the right of the shot
         const D = clamp(P.D[0] * an.carry + P.D[1], P.D[2], P.D[3]);
         const Hg = clamp(P.Hg[0] * an.carry + P.Hg[1], P.Hg[2], P.Hg[3]);
+        const H = cp(camStart);
+        H.y = Math.max(H.y, ground(H.x, H.z) + 1.8);
+        // trees the camera already stands in or beside at address are left out: it starts there, and rising to their tops would be a teleport
+        const obstacles = allObstacles.filter(o => Math.hypot(H.x - o.x, H.z - o.z) >= o.r + CAM_R);
         const L = { x: an.land.x - an.dir.x * D + side.x * 0.28 * D, y: 0, z: an.land.z - an.dir.z * D + side.z * 0.28 * D };
         L.y = Math.max(an.land.y + Hg, clearAt(obstacles, ground, L.x, L.z) + 0.6);
-        const H = cp(camStart);
-        H.y = Math.max(H.y, ground(H.x, H.z) + 1.8, clearAt(obstacles, ground, H.x, H.z));
         const tHandStart = clamp(an.tApex * P.hold, 0.25, an.tLand * 0.6);
         const tHandEnd = Math.min(an.tLand - 0.05, Math.max(tHandStart + 0.5, an.tLand - 0.30));
         const len = dist3(H, L);
@@ -121,7 +124,8 @@
                 env = src.map((v, i) => { let sum = 0, n = 0; for (let k = -R; k <= R; k++) { sum += src[clamp(i + k, 0, N)]; n++; } return sum / n; });
             }
             env = env.map((v, i) => Math.max(v, need[i] * 0.999));   // the softening must not lower the lift below what a tree needs
-            env[0] = 0; env[N] = 0;
+            // the ends keep their lift: a tree just beyond the start or just before the landing view is planned for like any other. The tee cam
+            // cranes up to the start lift during its hold (see step), and after the hand-over the camera comes down to the landing track from it
             p.lift = env;
         }
         return p;
@@ -173,6 +177,7 @@
         if (t < p.tHandStart) {
             phase = 'tee';
             rig.pos = cp(p.H);
+            rig.pos.y += liftAt(p, 0) * smooth(t / p.tHandStart);   // crane up during the hold when a tree stands close to the start of the arc
         } else if (t < p.tHandEnd) {
             phase = 'handover';
             const e = smoother((t - p.tHandStart) / (p.tHandEnd - p.tHandStart));
@@ -182,10 +187,12 @@
             phase = 'landing';
             const off = { x: p.L.x - p.an.land.x, y: p.L.y - p.an.land.y, z: p.L.z - p.an.land.z };   // keep the landing view's offset to the ball
             const tgt = { x: ball.x + off.x, y: ball.y + off.y, z: ball.z + off.z };
-            tgt.y = Math.max(tgt.y, p.obstacles.length ? clearAt(p.obstacles, p.ground, tgt.x, tgt.z) : tgt.y);
+            // trees ahead on the camera's track: the target height rises 12 m before a footprint (the camera follows it smoothly)
+            tgt.y = Math.max(tgt.y, p.obstacles.length ? clearAt(p.obstacles, p.ground, tgt.x, tgt.z, 12) : tgt.y);
             damp3(rig.pos, tgt, rig.posVel, 0.45, dt);
         }
-        rig.pos.y = Math.max(rig.pos.y, clearAt(p.obstacles, p.ground, rig.pos.x, rig.pos.z));   // never into the ground or a treetop
+        // never into the ground or a treetop (the tee cam only keeps off the ground: it stands where the player stands)
+        rig.pos.y = Math.max(rig.pos.y, phase === 'tee' ? p.ground(rig.pos.x, rig.pos.z) + CLEAR : clearAt(p.obstacles, p.ground, rig.pos.x, rig.pos.z));
 
         // zoom
         const d = Math.max(0.5, dist3(ball, rig.pos));

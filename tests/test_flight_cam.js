@@ -168,6 +168,28 @@ const PR = play('driver', 60, { obstacles: POLES });
 check('narrow poles on a long arc are all planned for (the camera is above each pole top when it passes one)', PR.frames.every(f => POLES.every(o => Math.hypot(f.st.pos.x - o.x, f.st.pos.z - o.z) >= o.r + 1.5 || f.st.pos.y >= o.top + 1.8 - 1e-6)));
 check('...with a smooth lift (no vertical jump of more than 2.5 m between two frames at 60 fps)', (() => { let w = 0; for (let i = 1; i < PR.frames.length; i++) w = Math.max(w, Math.abs(PR.frames[i].st.pos.y - PR.frames[i - 1].st.pos.y)); return w <= 2.5; })());
 check('the lift is sampled densely for narrow obstacles (the plan has many more samples than 48)', PR.plan.lift.length > 100, PR.plan.lift.length);
+// trees right beside the start or the landing view, one standing over the camera at address, and a row on the track the camera follows after the landing
+(function () {
+  const a0 = D60.plan, an0 = a0.an;
+  const dHL = (() => { const dx = a0.L.x - a0.H.x, dz = a0.L.z - a0.H.z, l = Math.hypot(dx, dz); return { x: dx / l, z: dz / l }; })();
+  const off = { x: a0.L.x - an0.land.x, z: a0.L.z - an0.land.z };
+  const CASES = {
+    'a tree 6 m beyond the start': [{ x: a0.H.x + dHL.x * 6, z: a0.H.z + dHL.z * 6, r: 1, top: 30 }],
+    'a tree 6 m before the landing view': [{ x: a0.L.x - dHL.x * 6, z: a0.L.z - dHL.z * 6, r: 1, top: 30 }],
+    'a wide tree 3 m before the landing view': [{ x: a0.L.x - dHL.x * 3, z: a0.L.z - dHL.z * 3, r: 3, top: 40 }],
+    'a tree over the camera at address': [{ x: a0.H.x + 1, z: a0.H.z - 1, r: 6, top: 34 }],
+    'trees on the post-landing camera track': [20, 30, 45].map(d => ({ x: an0.land.x + an0.dir.x * d + off.x, z: an0.land.z + an0.dir.z * d + off.z, r: 3, top: 30 }))
+  };
+  for (const name of Object.keys(CASES)) {
+    const obs = CASES[name], R = play('driver', 60, { obstacles: obs }), kept = R.plan.obstacles;
+    let maxJ = 0, viol = 0;
+    for (let i = 1; i < R.frames.length; i++) maxJ = Math.max(maxJ, Math.abs(R.frames[i].st.pos.y - R.frames[i - 1].st.pos.y));
+    for (const f of R.frames) if (f.st.phase !== 'tee') for (const o of kept) if (Math.hypot(f.st.pos.x - o.x, f.st.pos.z - o.z) < o.r + 1.5 && f.st.pos.y < o.top + 1.8 - 1e-6) viol++;
+    check(name + ': no teleport (the camera never moves more than 2.6 m up or down between two frames, and starts where the player stands)', maxJ <= 2.6 && Math.abs(R.frames[0].st.pos.y - R.plan.H.y) < 0.1, 'max ' + maxJ.toFixed(2) + ' m, first frame ' + Math.abs(R.frames[0].st.pos.y - R.plan.H.y).toFixed(2));
+    check(name + ': ...and it keeps clear of the tops (outside the tee cam, which starts beside the tree)', viol === 0, viol + ' frames');
+  }
+  check('a tree the camera stands in at address is left out of the plan (it starts beside it)', play('driver', 60, { obstacles: CASES['a tree over the camera at address'] }).plan.obstacles.length === 0);
+})();
 check('without trees nothing changes (no lift)', D60.plan.lift === null && play('driver', 60, { obstacles: [] }).plan.lift === null);
 
 // ---- the pin stays in the picture after an approach
