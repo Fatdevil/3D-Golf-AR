@@ -28,6 +28,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 |-----|-------|
 | `arcade-auth.js` | Device ID auth (UUID i localStorage) |
 | `arcade-aim.js` | Sikte: bäring, vridning, tap vs drag (ren matte, `window.AimMath`) |
+| `arcade-flight-cam.js` | Flygkamera: tee-kamera med zoom, bana till landningsvy från apex, slow motion (ren, `window.FlightCam`) |
 | `arcade-shot-plan.js` | Slagplan: klubb och kraft till siktpunkten, vind- och terrängeffekt (sökning, `window.ShotPlan`) |
 | `arcade-feature-flags.js` | Free/Premium feature gating |
 | `arcade-api-service.js` | Centraliserat HTTP API-lager med auth headers |
@@ -381,3 +382,10 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - Brickan vid siktpunkten visar klubb och kraft som når siktet, carry/total, vindens och terrängens effekt (+ hjälper, − stjälper) och "plays X" (den platta, vindstilla distans slaget är värt). `updateShotPlan` i `arcade.html` kör samma fysik som slaget (`simulateFlight`, riktig terräng och vind, perfekt träff, utan träd) och söker kraften i `arcade-shot-plan.js` (`powerFor`, `pickClub`, `describe`). Ca 8–23 korta flygningar, 40–90 ms, körs först när siktet legat stilla 220 ms (vinddrift räknas om högst var 2:a sekund).
 - Klubbval: den kortaste klubb som klarar slaget på högst 97 % kraft; den klubb som föreslogs sist behålls medan den behöver 60–97 %. Förslaget utgår från siktpunkten, inte flaggan. Putt/greenen och ≤ 9 m har egen hjälp och ingen plan.
 - Spelarens eget klubbval (klubbknapparna) står kvar till nästa slag (`SwingEngine.newShot`); förut ångrades det direkt av förslaget (`selectClub` → `updateSwingInfoBar`). Förhandsvisningen är approximativ: vinden som blåser nu, inga träd, ingen slumpad flyer.
+
+## Flygkamera (2026-10)
+- Efter ett slag regisseras kameran av `arcade-flight-cam.js` (`FlightCam`) i stället för att jaga bollen: hela flygbanan är känd i förväg, så kameran får en plan. **Tee-kamera** (positionen står still, bara panorering/tiltning/zoom, en snabb inzoomning vid träffen, synfältet 60° → ca 18°) tills apex; **överlämning** längs en båge från apex till en **landningsvy** (bakom, ovanför och lite vid sidan av landningspunkten) som nås före landningen; efter landning följer kameran bollen med samma förskjutning. Allt går på tid (bildruteoberoende, kritiskt dämpade fjädrar), inte på per-bildruta-lerp.
+- **Slow motion** (0,4×) runt landningen av fulla slag (`speedAt`, ca 0,5 s extra), via uppspelningshastigheten i flygloopen. Putt och rullande slag (`profile` = ground) behåller den gamla jaktkameran; chip/korta slag får en närmare landningsvy utan slow motion.
+- En **glödande punkt** (`_ballBeacon`, fast storlek på skärmen) visar bollen från tee där den riktiga bollen är under en pixel; den tonas bort när bollen är stor nog.
+- Efter flygningen: en resultatpaus (600 ms), siktblicken glider till siktpunkten (förut hopp) och linsen går tillbaka till 60°. Gäller bara AUTO-kameran; FREE-kameran är orörd.
+- `tests/test_flight_cam.js` mäter bl.a. att bollen är i bild ≥ 98 % av bildrutorna, vinkelhastighet ≤ 3 rad/s, samma resultat vid 30/60/144 fps, kamerahöjd över marken.
