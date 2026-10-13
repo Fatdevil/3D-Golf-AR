@@ -183,5 +183,9 @@ check('with a pin well to the side the picture is better with the pin framing th
 check('the page gives the rig the trees and the pin', /obstacles: /.test(html) && /pin: /.test(html));
 check('a tap or a key skips the flight (after the first half second)', /window\.skipFlight = function/.test(html) && /performance\.now\(\) - window\._flightStartTime < 500/.test(html));
 
+check('a skipped flight still hits the blocks on the rest of its path', /for \(let i = Math\.max\(0, flightTick \| 0\); i < path\.length; i \+= 3\)/.test(html) && /hitTargetBlock\(b\)/.test(html) && /if\(d < t\.radius\) hitTargetBlock\(t\);/.test(html));
+check('the block score is declared (hitting a block used to throw: points was never declared)', /\n    let points = 0;/.test(html));
+check('the height of a tree for the camera includes the baked model offset', /top: \(o\.y \|\| 0\) \+ h \+ baked \* sc \+ \(o\.yOffset \|\| 0\)/.test(html));
+
 console.log(failed ? '\n' + failed + ' failed' : '\nall flight-camera checks passed');
 process.exit(failed ? 1 : 0);

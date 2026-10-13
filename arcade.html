@@ -6258,7 +6258,9 @@
             else if (ph.type === 'profile') { r = (ph.reach || 3) * sc; h = ph.height * sc; }
             else continue;
             if (!(h >= 3) || !(r > 0)) continue;   // low things (bushes, rocks) are cleared by the ground clearance anyway
-            out.push({ x: o.x, z: o.z, r: r, top: (o.y || 0) + h + (o.yOffset || 0) });
+            // the model stands higher by its baked offset (scaled with the prop) and the prop's own offset (as in prop-collision.js)
+            let mdl = window.customModels && window.customModels[o.type], baked = (mdl && mdl.userData && mdl.userData.bakedYOffset) || 0;
+            out.push({ x: o.x, z: o.z, r: r, top: (o.y || 0) + h + baked * sc + (o.yOffset || 0) });
         }
         return out;
     };
@@ -6268,7 +6270,15 @@
     window.skipFlight = function() {
         if ((appMode !== 'PLAY' && appMode !== 'TEST') || !isFlying || !flightData || !flightData.path || !window._flightStartTime) return;
         if (performance.now() - window._flightStartTime < 500) return;
-        window._flightAccumMs = Math.max(window._flightAccumMs || 0, (flightData.path.length - 1) * 5.0);
+        // the blocks the ball would have flown through on the skipped part still count: sweep the rest of the path (every third tick, about 1 m apart)
+        let path = flightData.path, blocks = window.buildingBlocks || [];
+        for (let i = Math.max(0, flightTick | 0); i < path.length; i += 3) {
+            let q = path[i];
+            for (const b of blocks) {
+                if (b.active && Math.hypot(q.x - b.mesh.position.x, q.z - b.mesh.position.y, -q.y - b.mesh.position.z) < b.radius) hitTargetBlock(b);
+            }
+        }
+        window._flightAccumMs = Math.max(window._flightAccumMs || 0, (path.length - 1) * 5.0);
     };
 
     window.localGetTerrainAt = function(px, py) {
@@ -7341,6 +7351,19 @@
             if (!t.active && t.mesh) { t.active = true; if (!t.mesh.parent) scene.add(t.mesh); }
         });
     };
+    // The ball hits a block: it is taken out of the scene and scores (the same for a ball that flies into it and for one that a skipped flight passes)
+    let points = 0;   // the score of the blocks: it was never declared, so the first block that was hit threw a ReferenceError in the animation loop
+    function hitTargetBlock(t) {
+        t.active = false;
+        scene.remove(t.mesh); // PANG! Block försvinner.
+        
+        points += 500;
+        
+        // Popp-effekt
+        let pop = document.getElementById('score-popup');
+        pop.style.opacity = '1';
+        pop.style.transform = 'translate(-50%, -50%) scale(1)';
+    }
     function createTargetAbsolute(x, y, z, colStr) {
         let exists = targets.find(t => t.mesh && t.mesh.position.x === x 
             && Math.abs(t.mesh.position.y - y) < 0.1 && t.mesh.position.z === z);
@@ -14467,17 +14490,7 @@ window.triggerExplosion = function(x, y, z) {
                 let t = targets[i];
                 if(t.active) {
                     let d = window.ballMesh.position.distanceTo(t.mesh.position);
-                    if(d < t.radius) {
-                        t.active = false;
-                        scene.remove(t.mesh); // PANG! Block försvinner.
-                        
-                        points += 500;
-                        
-                        // Popp-effekt
-                        let pop = document.getElementById('score-popup');
-                        pop.style.opacity = '1';
-                        pop.style.transform = 'translate(-50%, -50%) scale(1)';
-                    }
+                    if(d < t.radius) hitTargetBlock(t);
                 }
             }
             
