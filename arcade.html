@@ -14353,6 +14353,28 @@ window.triggerExplosion = function(x, y, z) {
                 camera.position.set(st.pos.x, st.pos.y, st.pos.z);
                 camera.lookAt(st.look.x, st.look.y, st.look.z);
                 if (Math.abs(camera.fov - st.fov) > 0.005) { camera.fov = st.fov; camera.updateProjectionMatrix(); }
+                // from the tee the real ball is under a pixel: a glowing dot of a fixed size on screen shows it (fades out when the ball is big enough)
+                if (!window._ballBeacon) {
+                    let cv = document.createElement('canvas'); cv.width = cv.height = 64;
+                    let cx = cv.getContext('2d'), gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32);
+                    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,244,200,0.85)'); gr.addColorStop(1, 'rgba(255,220,120,0)');
+                    cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
+                    window._ballBeacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: false }));
+                    window._ballBeacon.renderOrder = 1000;
+                    window._ballBeacon.frustumCulled = false;
+                    scene.add(window._ballBeacon);
+                }
+                {
+                    let beacon = window._ballBeacon, hPx = renderer.domElement.height || window.innerHeight, tanH = Math.tan(camera.fov * Math.PI / 360);
+                    let dBall = camera.position.distanceTo(window.ballMesh.position);
+                    let realPx = 0.0427 / Math.max(0.5, dBall) / (2 * tanH) * hPx;   // how big the ball itself is on screen
+                    let beaconPx = 0.012 * hPx;
+                    beacon.position.copy(window.ballMesh.position);
+                    let sc = beaconPx * 2 * tanH / hPx;
+                    beacon.scale.set(sc, sc, 1);
+                    beacon.material.opacity = Math.min(1, Math.max(0, (beaconPx - realPx) / beaconPx));
+                    beacon.visible = beacon.material.opacity > 0.02;
+                }
             } else if (gameCamPhase === 'FLIGHT_FOLLOW') {
                 let shotDir = new THREE.Vector3(0, 0, -1);
                 if (window.aimTarget && window.shotStartPos) {
@@ -14738,6 +14760,7 @@ window.triggerExplosion = function(x, y, z) {
             } else controls.target.copy(window.aimTarget);
             controls.enabled = true;
         }
+        if (!isFlying && window._ballBeacon && window._ballBeacon.visible) window._ballBeacon.visible = false;
         // the lens goes back to its normal width after a directed flight
         if (!isFlying && window._flightBaseFov != null) {
             if (Math.abs(camera.fov - window._flightBaseFov) < 0.05) { camera.fov = window._flightBaseFov; window._flightBaseFov = null; }

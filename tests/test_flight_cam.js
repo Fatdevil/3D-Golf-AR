@@ -139,5 +139,15 @@ const C = play('chip', 60);
 check('a chip hands over earlier and closer: the landing view is within 20 m of the landing point', Math.hypot(C.plan.L.x - C.an.land.x, C.plan.L.z - C.an.land.z) <= 20, '');
 check('a chip has a hand-over start no later than its apex', C.plan.tHandStart <= C.an.tApex + 1e-9 || C.plan.tHandStart <= C.an.tLand * 0.6 + 1e-9);
 
+// ---- the page uses it
+const html = require('fs').readFileSync(__dirname + '/../arcade.html', 'utf8');
+check('arcade.html loads arcade-flight-cam.js', /<script src="arcade-flight-cam\.js/.test(html));
+check('the rig is made when the flight starts to play, only in AUTO camera mode', /window\.FlightCam && window\.camFollowMode === 'AUTO' && gameCamPhase === 'FLIGHT_FOLLOW'/.test(html) && /window\._flightRig = window\.FlightCam\.create\(flightData\.path/.test(html));
+check('the ball is played back at the slow-motion speed of the plan', /speedMultiplier \*= window\.FlightCam\.speedAt\(window\._flightRig\.plan/.test(html));
+check('the camera follows the rig with the real frame time, and the old chase camera stays for putts (no rig)', /window\.FlightCam\.step\(window\._flightRig, frameDeltaMs \/ 1000/.test(html) && /else if \(gameCamPhase === 'FLIGHT_FOLLOW'\) \{\s*let shotDir/.test(html));
+check('a glowing dot of fixed screen size marks the ball from the tee, hidden when the flight is over', /_ballBeacon/.test(html) && /sizeAttenuation: false/.test(html) && /!isFlying && window\._ballBeacon && window\._ballBeacon\.visible/.test(html));
+check('the lens goes back to its normal width after the flight', /window\._flightBaseFov/.test(html) && /camera\.fov \+= \(window\._flightBaseFov - camera\.fov\)/.test(html));
+check('after the flight there is a result beat and the look point glides to the aim point', /_aimHoldUntil = performance\.now\(\) \+ 600/.test(html) && /_aimLookBlend\.lerp\(window\.aimTarget/.test(html));
+
 console.log(failed ? '\n' + failed + ' failed' : '\nall flight-camera checks passed');
 process.exit(failed ? 1 : 0);
