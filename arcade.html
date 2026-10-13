@@ -6138,7 +6138,7 @@
             return function (club, power, mode) {
                 const d = SwingEngine.mapCircleToPhysics(power, 0, club, ctx.dist);   // arm straight: no miss; the random start-line noise is overridden below
                 const env = {
-                    wind: mode === 'real' ? window.currentWindVec : [0, 0, 0],
+                    wind: mode === 'real' ? ctx.wind : [0, 0, 0],   // the wind of the moment the job started: it blows differently every 500 ms, a job must not mix winds
                     altitudeFeet: ctx.alt, temperatureC: ctx.temp, greenFirmness: ctx.firm, cupPositionLocal: null,
                     checkCollisionCallback: function () { return null; }, hasTreeCollision: function () { return false; },
                     getTerrainAt: mode === 'flatCalm' ? function () { return { z: ctx.startZ, normal: [0, 0, 1], type: ctx.startType }; } : physicsTerrainAt
@@ -6146,7 +6146,7 @@
                 const log = console.log, rnd = Math.random, stimp = window.GREEN_STIMP;
                 console.log = function () {};          // the physics logs every flight in detail
                 Math.random = function () { return 0.5; };   // no flyer lottery in a preview
-                if (window.matchSettings && window.matchSettings.greenStimp) window.GREEN_STIMP = window.matchSettings.greenStimp;   // what executeArcadeShot sets for the shot
+                if (ctx.stimp) window.GREEN_STIMP = ctx.stimp;   // what executeArcadeShot sets for the shot
                 try {
                     const res = window.GolfPhysics.simulateFlight({
                         startPos: ctx.startPos, azimDeg: ctx.azim, spinAxisDeg: 0, ballSpeedMph: d.ballSpeedMph,
@@ -6180,7 +6180,9 @@
                 dist: dist, startPos: [b.x, -b.z, sz], startZ: t.z, startType: t.type, azim: window.AimMath.bearingDeg(b, a), tee: previewTee(),
                 alt: window.matchSettings ? window.matchSettings.altitude : 0,
                 temp: (window.matchSettings && window.matchSettings.temperatureC !== undefined) ? window.matchSettings.temperatureC : 15,
-                firm: window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL'
+                firm: window.matchSettings ? window.matchSettings.greenFirmness : 'NORMAL',
+                wind: (window.currentWindVec || [0, 0, 0]).slice(),
+                stimp: window.matchSettings ? window.matchSettings.greenStimp : 0
             };
             const gen = SP.planG(makeSim(ctx), dist, manual ? { club: club } : { startClub: start, prevClub: window.shotPlan && window.shotPlan.club });
             return { gen: gen, sk: sk, manual: manual, dist: dist };

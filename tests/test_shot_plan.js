@@ -120,14 +120,15 @@ check('a search costs at most ~30 simulations', sims <= 30, sims);
 const html = require('fs').readFileSync(__dirname + '/../arcade.html', 'utf8');
 check('arcade.html loads arcade-shot-plan.js', /<script src="arcade-shot-plan\.js/.test(html));
 check('the plan is updated every frame, also while the aim point is off screen', /window\.updateShotPlan\) window\.updateShotPlan\(\);/.test(html) && !/pos\.z < 1\) \{[^}]*updateShotPlan/.test(html));
-check('the preview uses the physics of the shot: real terrain, no trees, calm and flat variants', /getTerrainAt: mode === 'flatCalm'[\s\S]{0,160}physicsTerrainAt/.test(html) && /wind: mode === 'real' \? window\.currentWindVec : \[0, 0, 0\]/.test(html));
+check('the preview uses the physics of the shot: real terrain, no trees, calm and flat variants', /getTerrainAt: mode === 'flatCalm'[\s\S]{0,160}physicsTerrainAt/.test(html) && /wind: mode === 'real' \? ctx\.wind : \[0, 0, 0\]/.test(html));
 check('a preview does not roll the flyer dice or log the flight', /Math\.random = function \(\) \{ return 0\.5; \}/.test(html) && /console\.log = function \(\) \{\};/.test(html));
 check('a new shot ends the club pick (SwingEngine.newShot on landing)', /SwingEngine\.newShot\(\)/.test(html));
 check('even the first slice runs from a timer, not the render callback', /setTimeout\(function \(\) \{ pump\(first\); \}, 0\)/.test(html) && !/\n\s+pump\(job\);/.test(html));
 check('the search runs in short timer slices, not inside one frame', /j\.gen\.next\(\)/.test(html) && /setTimeout\(function \(\) \{ pump\(j\); \}, 0\)/.test(html) && /JOB_BUDGET_MS/.test(html) && !/SP\.pickClub\(|SP\.powerFor\(|SP\.describe\(/.test(html));
 check('the preview measures along the aim line and reports sideways drift', /fwd\(last\)/.test(html) && /lateral: \(last\.x/.test(html));
 check('a short aim off the green still suggests the putter', /if \(!manual\) SE\.suggestClub\('PUTT'\)/.test(html));
-check('the plan is recomputed when the green settings change, and the preview uses the stimp the shot will use', /matchSettings\.greenStimp : 10, window\.matchSettings \? window\.matchSettings\.greenFirmness/.test(html) && /window\.GREEN_STIMP = window\.matchSettings\.greenStimp/.test(html) && /window\.GREEN_STIMP = stimp/.test(html));
+check('the plan is recomputed when the green settings change, and the preview uses the stimp the shot will use', /matchSettings\.greenStimp : 10, window\.matchSettings \? window\.matchSettings\.greenFirmness/.test(html) && /window\.GREEN_STIMP = ctx\.stimp/.test(html) && /window\.GREEN_STIMP = stimp/.test(html));
+check('a job uses one wind (a copy taken when it starts), not the live wind that changes every 500 ms', /wind: \(window\.currentWindVec \|\| \[0, 0, 0\]\)\.slice\(\)/.test(html) && /wind: mode === 'real' \? ctx\.wind/.test(html) && !/wind: mode === 'real' \? window\.currentWindVec/.test(html));
 check('the flat, calm run keeps the surface under the ball', /type: ctx\.startType/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall shot-plan checks passed');
