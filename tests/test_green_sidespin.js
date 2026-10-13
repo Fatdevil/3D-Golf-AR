@@ -68,5 +68,19 @@ console.log('\nLutande green: kicken rullar vidare efter lutningen');
   check('Sluttning framåt/bakåt påverkar utrullningen i längdled', back.endY - back.landY > front.endY - front.landY);
 }
 
+console.log('\nSpelets formval: SwingEngine.mapCircleToPhysics(..., shape) ger avsiktlig fade/draw');
+{
+  const ax = (club, shape) => SWING.mapCircleToPhysics(1.0, 0, club, 0, shape).spinAxisDeg;
+  check('utan formval är axeln oförändrad (0 vid rak arm)', ax('SW') === 0 && ax('SW', 0) === 0);
+  check('fade ger positiv och draw negativ axel på pitch', ax('SW', 1) > 0 && ax('SW', -1) < 0 && ax('SW', 1) === -ax('SW', -1), '(' + ax('SW', 1) + '°)');
+  check('putter påverkas inte', ax('PUTT', 1) === 0);
+  check('driver får mindre axel än wedge', Math.abs(ax('DRIVER', 1)) < Math.abs(ax('LW', 1)));
+  window.matchSettings.greenFirmness = 'NORMAL';
+  const kick = shape => { const d = Object.assign(SWING.mapCircleToPhysics(1.0, 0, 'SW', 0, shape), { startPos: [0, 0, 0] });
+    const r = sim(d, greenEnv(0, 0)); const l = r.path.find(p => p.phase !== 'flight'); return r.path[r.path.length - 1].x - l.x; };
+  const kf = kick(1), kd = kick(-1);
+  check('vald fade kickar höger på green, vald draw vänster', kf > 0.3 && kd < -0.3, '(' + kf.toFixed(2) + ' / ' + kd.toFixed(2) + ' m)');
+}
+
 console.log(failed ? '\n' + failed + ' FAILED' : '\nAll passed');
 process.exit(failed ? 1 : 0);
