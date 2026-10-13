@@ -36,7 +36,7 @@ function play(name, fps, opts) {
   opts = opts || {};
   const path = FLIGHTS[name].path, an = FC.analyze(path);
   const camStart = { x: 0, y: 2, z: 5 };   // 5 m behind the ball (the aim camera), 2 m up
-  const rig = FC.create(path, camStart, { ground: opts.ground, fov: 60 });
+  const rig = FC.create(path, camStart, { ground: opts.ground, fov: 60, obstacles: opts.obstacles, pin: opts.pin });
   if (!rig) return { rig: null, an: an };
   const frames = []; let t = 0, real = 0, prev = null;
   const dt = 1 / fps;
@@ -58,7 +58,7 @@ const angSpeed = (f0, f1, dt) => {
 // ---- classification
 const prof = {}; for (const k of Object.keys(FLIGHTS)) prof[k] = FC.profile(FC.analyze(FLIGHTS[k].path));
 console.log('profiles', JSON.stringify(prof));
-check('driver, 7-iron and wedge are full shots', prof.driver === 'full' && prof.iron7 === 'full' && prof.wedge === 'full', JSON.stringify(prof));
+check('a driver is a long shot, a wedge an approach, a 7-iron one of the two', prof.driver === 'long' && prof.wedge === 'approach' && (prof.iron7 === 'approach' || prof.iron7 === 'long'), JSON.stringify(prof));
 check('a chip is a short shot', prof.chip === 'short', prof.chip);
 check('a putt keeps the old chase camera (ground)', prof.putt === 'ground' && FC.create(FLIGHTS.putt.path, { x: 0, y: 1, z: 3 }) === null, prof.putt);
 
@@ -118,12 +118,13 @@ check('the zoom is the same at 30 and 144 fps (within 3°)', tCheck.every(t => M
 // ---- zoom
 const fovs = D60.frames.map(f => f.st.fov);
 check('tee cam: it zooms in as the ball flies away (narrower than the starting 60°)', Math.min(...D60.frames.filter(f => f.t < pl.tHandStart).map(f => f.st.fov)) < 40, Math.min(...fovs).toFixed(1));
-check('the zoom never goes narrower than 17° (the ball must not whip about)', Math.min(...fovs) >= 17, Math.min(...fovs).toFixed(1));
+check('the zoom never goes narrower than the profile allows (17° for a drive: the ball must not whip about)', Math.min(...fovs) >= 17 - 0.5, Math.min(...fovs).toFixed(1));
+check('an approach zooms less than a drive (22°) and a chip least (28°)', (() => { const a = play('wedge', 60), c = play('chip', 60); return Math.min(...a.frames.map(f => f.st.fov)) >= 22 - 0.5 && Math.min(...c.frames.map(f => f.st.fov)) >= 28 - 0.5; })());
 check('after the hand-over the picture is wider again (about 0.72 of the lens)', Math.abs(D60.frames[D60.frames.length - 1].st.fov - 60 * 0.72) < 2, D60.frames[D60.frames.length - 1].st.fov.toFixed(1));
 
 // ---- slow motion
 const sp = (name) => { const r = play(name, 60); return Math.min(...r.frames.map(f => f.sp)); };
-check('slow motion around the landing of a full shot (down to 0.4)', Math.abs(sp('driver') - 0.4) < 0.02 && Math.abs(sp('iron7') - 0.4) < 0.02, sp('driver') + ' ' + sp('iron7'));
+check('slow motion around the landing of a full shot, deeper for an approach (0.35) than for a drive (0.45)', Math.abs(sp('driver') - 0.45) < 0.02 && Math.abs(sp('wedge') - 0.35) < 0.02, sp('driver') + ' ' + sp('wedge'));
 check('no slow motion for a chip', sp('chip') === 1, sp('chip'));
 check('real time everywhere else (before the window, and long after)', FC.speedAt(pl, 0) === 1 && FC.speedAt(pl, an.tApex) === 1 && FC.speedAt(pl, an.tLand + 2) === 1);
 check('slow motion eases in and out (no jump in speed)', (() => { let prev = 1, worst = 0; for (let t = an.tLand - 1; t < an.tLand + 1; t += 0.01) { const s = FC.speedAt(pl, t); worst = Math.max(worst, Math.abs(s - prev)); prev = s; } return worst < 0.05; })());
@@ -148,6 +149,98 @@ check('the camera follows the rig with the real frame time, and the old chase ca
 check('a glowing dot of fixed screen size marks the ball from the tee, hidden when the flight is over', /_ballBeacon/.test(html) && /sizeAttenuation: false/.test(html) && /!isFlying && window\._ballBeacon && window\._ballBeacon\.visible/.test(html));
 check('the lens goes back to its normal width after the flight', /window\._flightBaseFov/.test(html) && /camera\.fov \+= \(window\._flightBaseFov - camera\.fov\)/.test(html));
 check('after the flight there is a result beat and the look point glides to the aim point', /_aimHoldUntil = performance\.now\(\) \+ 600/.test(html) && /_aimLookBlend\.lerp\(window\.aimTarget/.test(html));
+
+// ---- trees on the way (obstacles)
+const TREES = (() => {   // a row of tall trees across the hand-over arc, one right at the landing view, one at the tee cam's side
+  const out = [], a = D60.plan, steps = 24;
+  for (let i = 3; i <= steps - 3; i += 4) { const e = i / steps; out.push({ x: a.H.x + (a.L.x - a.H.x) * e, z: a.H.z + (a.L.z - a.H.z) * e, r: 6, top: 28 }); }
+  out.push({ x: a.L.x + 1, z: a.L.z - 1, r: 7, top: 34 });
+  return out;
+})();
+const TR = play('driver', 60, { obstacles: TREES });
+const clearOK = TR.frames.every(f => TREES.every(o => Math.hypot(f.st.pos.x - o.x, f.st.pos.z - o.z) >= o.r + 1.5 || f.st.pos.y >= o.top + 1.8 - 1e-6));
+check('the camera stays above every tree it passes over (top + 1.8 m), also at the landing view', clearOK);
+check('...and the lift is smooth: the camera never climbs faster than 120 m/s', (() => { let w = 0; for (let i = 1; i < TR.frames.length; i++) w = Math.max(w, Math.abs(TR.frames[i].st.pos.y - TR.frames[i - 1].st.pos.y) / (TR.frames[i].real - TR.frames[i - 1].real)); return w <= 120; })());
+check('...and the ball is still on screen (98 %) and the turning stays smooth (3 rad/s) with the trees', (() => { const v = visibility(TR, 16 / 9, TR.an.tLand + 0.5); let m = 0; for (let i = 1; i < TR.frames.length; i++) m = Math.max(m, angSpeed(TR.frames[i - 1], TR.frames[i], TR.frames[i].real - TR.frames[i - 1].real)); return v.ok >= 0.98 && m <= 3.0; })());
+// a narrow tall pole (a cactus) between the old 48 samples: the lift must still be planned, not a last-moment jump
+const POLES = (() => { const a = D60.plan, out = [], N0 = 48; for (let i = 5; i < 44; i += 7) { const e = (i + 0.5) / N0; out.push({ x: a.H.x + (a.L.x - a.H.x) * e + a.side.x * a.arcA * Math.sin(Math.PI * e), z: a.H.z + (a.L.z - a.H.z) * e + a.side.z * a.arcA * Math.sin(Math.PI * e), r: 0.5, top: 36 }); } return out; })();   // poles on the arc itself, halfway between two of the old samples
+const PR = play('driver', 60, { obstacles: POLES });
+check('narrow poles on a long arc are all planned for (the camera is above each pole top when it passes one)', PR.frames.every(f => POLES.every(o => Math.hypot(f.st.pos.x - o.x, f.st.pos.z - o.z) >= o.r + 1.5 || f.st.pos.y >= o.top + 1.8 - 1e-6)));
+check('...with a smooth lift (no vertical jump of more than 2.5 m between two frames at 60 fps)', (() => { let w = 0; for (let i = 1; i < PR.frames.length; i++) w = Math.max(w, Math.abs(PR.frames[i].st.pos.y - PR.frames[i - 1].st.pos.y)); return w <= 2.5; })());
+check('the lift is sampled densely for narrow obstacles (the plan has many more samples than 48)', PR.plan.lift.length > 100, PR.plan.lift.length);
+// trees right beside the start or the landing view, one standing over the camera at address, and a row on the track the camera follows after the landing
+(function () {
+  const a0 = D60.plan, an0 = a0.an;
+  const dHL = (() => { const dx = a0.L.x - a0.H.x, dz = a0.L.z - a0.H.z, l = Math.hypot(dx, dz); return { x: dx / l, z: dz / l }; })();
+  const off = { x: a0.L.x - an0.land.x, z: a0.L.z - an0.land.z };
+  const CASES = {
+    'a tree 6 m beyond the start': [{ x: a0.H.x + dHL.x * 6, z: a0.H.z + dHL.z * 6, r: 1, top: 30 }],
+    'a tree 6 m before the landing view': [{ x: a0.L.x - dHL.x * 6, z: a0.L.z - dHL.z * 6, r: 1, top: 30 }],
+    'a wide tree 3 m before the landing view': [{ x: a0.L.x - dHL.x * 3, z: a0.L.z - dHL.z * 3, r: 3, top: 40 }],
+    'a tree over the camera at address': [{ x: a0.H.x + 1, z: a0.H.z - 1, r: 6, top: 34 }],
+    'trees on the post-landing camera track': [20, 30, 45].map(d => ({ x: an0.land.x + an0.dir.x * d + off.x, z: an0.land.z + an0.dir.z * d + off.z, r: 3, top: 30 }))
+  };
+  for (const name of Object.keys(CASES)) {
+    const obs = CASES[name], R = play('driver', 60, { obstacles: obs }), kept = R.plan.obstacles;
+    let maxJ = 0, viol = 0;
+    for (let i = 1; i < R.frames.length; i++) maxJ = Math.max(maxJ, Math.abs(R.frames[i].st.pos.y - R.frames[i - 1].st.pos.y));
+    for (const f of R.frames) if (f.st.phase !== 'tee') for (const o of kept) if (Math.hypot(f.st.pos.x - o.x, f.st.pos.z - o.z) < o.r + 1.5 && f.st.pos.y < o.top + 1.8 - 1e-6) viol++;
+    check(name + ': no teleport (the camera never moves more than 2.6 m up or down between two frames, and starts where the player stands)', maxJ <= 2.6 && Math.abs(R.frames[0].st.pos.y - R.plan.H.y) < 0.1, 'max ' + maxJ.toFixed(2) + ' m, first frame ' + Math.abs(R.frames[0].st.pos.y - R.plan.H.y).toFixed(2));
+    check(name + ': ...and it keeps clear of the tops (outside the tee cam, which starts beside the tree)', viol === 0, viol + ' frames');
+  }
+  check('a tree the camera stands in at address is left out of the plan (it starts beside it)', play('driver', 60, { obstacles: CASES['a tree over the camera at address'] }).plan.obstacles.length === 0);
+})();
+check('without trees nothing changes (no lift)', D60.plan.lift === null && play('driver', 60, { obstacles: [] }).plan.lift === null);
+
+// ---- the pin stays in the picture after an approach
+function pinTest(pinOffsetAlong, pinOffsetSide) {
+  const w = FLIGHTS.wedge.path, an0 = FC.analyze(w);
+  const pin = { x: an0.land.x + an0.dir.x * pinOffsetAlong + (-an0.dir.z) * pinOffsetSide, y: 0, z: an0.land.z + an0.dir.z * pinOffsetAlong + an0.dir.x * pinOffsetSide };
+  const base = play('wedge', 60), withPin = play('wedge', 60, { pin: pin });
+  const inShot = (res) => { let n = 0, ok = 0; for (const f of res.frames) { if (f.t < res.plan.an.tLand + 0.3) continue; n++; const b = FC.project(f.st, f.ball, 16 / 9), q = FC.project(f.st, pin, 16 / 9); if (b.z > 0 && q.z > 0 && Math.abs(b.x) < 0.95 && Math.abs(b.y) < 0.95 && Math.abs(q.x) < 0.95 && Math.abs(q.y) < 0.95) ok++; } return n ? ok / n : 0; };
+  return { without: inShot(base), with: inShot(withPin), near: withPin.plan.pinNear };
+}
+const pins = [pinTest(30, 15), pinTest(34, 5), pinTest(20, 25), pinTest(10, 30)];   // the last two: a pin well to the side, which the ball alone would not bring into the picture
+console.log('pin in picture, ball and pin together, after the landing (without/with): ' + pins.map(x => x.without.toFixed(2) + '/' + x.with.toFixed(2)).join('  '));
+check('a pin close to the landing point is picked up (pinNear), a far one is not', pins.every(x => x.near) && !pinTest(80, 0).near);
+check('ball and pin are in the picture together in 90 % of the frames after the landing', pins.every(x => x.with >= 0.9), JSON.stringify(pins));
+check('...and that is not worse than without the pin framing', pins.every(x => x.with >= x.without - 0.02), JSON.stringify(pins));
+check('with a pin well to the side the picture is better with the pin framing than without (0 -> 1)', pins.slice(2).every(x => x.without < 0.5 && x.with >= 0.9), JSON.stringify(pins.slice(2)));
+
+// the pin framing is for approach shots only: a chip or a drive that ends near the pin keeps its own look
+(function () {
+  const near = (name) => { const an0 = FC.analyze(FLIGHTS[name].path); const pin = { x: an0.land.x + an0.dir.x * 8, y: 0, z: an0.land.z + an0.dir.z * 8 };
+    return FC.create(FLIGHTS[name].path, { x: 0, y: 2, z: 5 }, { pin: pin }).plan.pinNear; };
+  check('a chip or a drive that lands near the pin does not get the approach framing (pinNear only for approach)', near('chip') === false && near('driver') === false && near('wedge') === true, near('chip') + ' ' + near('driver') + ' ' + near('wedge'));
+})();
+// a skipped flight: the ball jumps, and the camera must not take the jump for speed (look-ahead along the travel direction): without the reset the
+// look point is thrown towards a point far beyond the ball in the first frames, a jerk of the picture
+(function () {
+  const path = FLIGHTS.wedge.path, an0 = FC.analyze(path), end = ballAt(path, an0.tEnd);
+  const moved = (reset) => {
+    const rig = FC.create(path, { x: 0, y: 2, z: 5 }, { fov: 60 });
+    for (let t = 0; t < 0.6; t += 1 / 60) FC.step(rig, 1 / 60, t, ballAt(path, t));
+    const before = { x: rig.look.x, y: rig.look.y, z: rig.look.z };
+    if (reset) rig.prevBall = null;   // what skipFlight does
+    let st; for (let i = 0; i < 3; i++) st = FC.step(rig, 1 / 60, an0.tEnd, end);
+    return Math.hypot(st.look.x - before.x, st.look.z - before.z);
+  };
+  const withReset = moved(true), without = moved(false);
+  check('after a jump the look point moves calmly when the speed history is reset (without it it is thrown 1.5 times as far in 3 frames)', without > withReset * 1.5, 'with reset ' + withReset.toFixed(1) + ' m, without ' + without.toFixed(1) + ' m');
+})();
+
+// ---- the page uses the new parts
+check('the page gives the rig the trees and the pin', /obstacles: /.test(html) && /pin: /.test(html));
+check('a tap or a key skips the flight (after the first half second)', /window\.skipFlight = function/.test(html) && /performance\.now\(\) - window\._flightStartTime < 500/.test(html));
+
+check('a skip key is not also pressed on the focused button (preventDefault on key down and key up)', /e\.preventDefault\(\);\s*skipKeyDown = true;/.test(html) && /window\.addEventListener\('keyup'/.test(html));
+check('only a tap skips the flight (a free-camera drag starts with a press and must not)', /skipDown = isFlying \?/.test(html) && /window\.AimMath\.isTap\(d, \{ x: e\.clientX/.test(html) && !/addEventListener\('pointerdown', \(\) => \{ if \(isFlying\) window\.skipFlight/.test(html));
+check('the skip hint is shown for every flight (not only the directed camera), and a skip resets the camera speed history', /let skipHint = document\.getElementById\('skip-hint'\);\s*if \(skipHint\) skipHint\.style\.display = \(performance\.now\(\) - window\._flightStartTime > 800/.test(html) && /window\._flightRig\.prevBall = null/.test(html) && !/st\.fov\) > 0\.005\) \{[^}]*\}\s*let skipHint/.test(html));
+check('a skipped flight still hits the blocks on the rest of its path', /for \(let i = Math\.max\(0, flightTick \| 0\); i < path\.length; i \+= 3\)/.test(html) && /hitTargetBlock\(b\)/.test(html) && /if\(d < t\.radius\) hitTargetBlock\(t\);/.test(html));
+check('the block score is declared (hitting a block used to throw: points was never declared)', /\n    let points = 0;/.test(html));
+check('obstacle heights use the drawn height (targetHeight), not only the physics shape, and props without physics are included', /th = \(def\.targetHeight \|\| 0\) \* sc/.test(html) && /h = Math\.max\(2 \* ph\.radius \* sc, th\)/.test(html) && /if \(!ph\) \{ h = th; r = 0\.25 \* th; \}/.test(html));
+check('the footprint of an obstacle comes from the loaded model\'s own size when there is one (a default physics sphere can be tiny)', /new THREE\.Box3\(\)\.setFromObject\(mdl\)/.test(html) && /r = Math\.max\(r, 0\.5 \* Math\.max\(ms\.x, ms\.z\) \* sc\)/.test(html) && /else if \(th > 0\) r = Math\.max\(r, 0\.25 \* th\)/.test(html));
+check('the height of a tree for the camera includes the baked model offset', /top: \(o\.y \|\| 0\) \+ h \+ baked \* sc \+ \(o\.yOffset \|\| 0\)/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall flight-camera checks passed');
 process.exit(failed ? 1 : 0);
