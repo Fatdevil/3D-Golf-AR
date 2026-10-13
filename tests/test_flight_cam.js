@@ -239,6 +239,7 @@ check('the skip hint is shown for every flight (not only the directed camera), a
 check('a skipped flight still hits the blocks on the rest of its path', /for \(let i = Math\.max\(0, flightTick \| 0\); i < path\.length; i \+= 3\)/.test(html) && /hitTargetBlock\(b\)/.test(html) && /if\(d < t\.radius\) hitTargetBlock\(t\);/.test(html));
 check('the block score is declared (hitting a block used to throw: points was never declared)', /\n    let points = 0;/.test(html));
 check('obstacle heights use the drawn height (targetHeight), not only the physics shape, and props without physics are included', /th = \(def\.targetHeight \|\| 0\) \* sc/.test(html) && /h = Math\.max\(2 \* ph\.radius \* sc, th\)/.test(html) && /if \(!ph\) \{ h = th; r = 0\.25 \* th; \}/.test(html));
+check('the footprint of an obstacle comes from the loaded model\'s own size when there is one (a default physics sphere can be tiny)', /new THREE\.Box3\(\)\.setFromObject\(mdl\)/.test(html) && /r = Math\.max\(r, 0\.5 \* Math\.max\(ms\.x, ms\.z\) \* sc\)/.test(html) && /else if \(th > 0\) r = Math\.max\(r, 0\.25 \* th\)/.test(html));
 check('the height of a tree for the camera includes the baked model offset', /top: \(o\.y \|\| 0\) \+ h \+ baked \* sc \+ \(o\.yOffset \|\| 0\)/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall flight-camera checks passed');

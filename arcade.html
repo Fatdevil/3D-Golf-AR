@@ -6246,7 +6246,14 @@
     window.buildCameraObstacles = function(path) {
         let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
         for (let i = 0; i < path.length; i += 20) { let px = path[i].x, pz = -path[i].y; minX = Math.min(minX, px); maxX = Math.max(maxX, px); minZ = Math.min(minZ, pz); maxZ = Math.max(maxZ, pz); }
-        let m = 80, out = [], reg = window.ASSET_REGISTRY || {};
+        let m = 80, out = [], reg = window.ASSET_REGISTRY || {}, sizes = {};
+        // the loaded model's own size (x, y, z at scale 1): the physics shapes can be a default (a sphere of radius 1 for a tree drawn 10 m high)
+        const modelSize = (type) => {
+            if (sizes[type] !== undefined) return sizes[type];
+            let mdl = window.customModels && window.customModels[type], res = null;
+            try { if (mdl) { let bb = new THREE.Box3().setFromObject(mdl), v = new THREE.Vector3(); bb.getSize(v); if (v.y > 0) res = v; } } catch (e) { res = null; }
+            return (sizes[type] = res);
+        };
         for (const o of (window.placedTrees || [])) {
             if (o.x < minX - m || o.x > maxX + m || o.z < minZ - m || o.z > maxZ + m) continue;
             let def = reg[o.type], ph = def && def.physics;
@@ -6258,6 +6265,9 @@
             else if (ph.type === 'sphere') { r = ph.radius * sc; h = Math.max(2 * ph.radius * sc, th); }   // the radius is half the largest size: the model can be up to twice as high
             else if (ph.type === 'profile') { r = (ph.reach || 3) * sc; h = Math.max(ph.height * sc, th); }
             else continue;
+            let ms = modelSize(o.type);
+            if (ms) { r = Math.max(r, 0.5 * Math.max(ms.x, ms.z) * sc); h = Math.max(h, ms.y * sc); }   // the drawn size wins where it is larger
+            else if (th > 0) r = Math.max(r, 0.25 * th);   // size unknown: a guess at the width from the height
             if (!(h >= 3) || !(r > 0)) continue;   // low things (bushes, rocks) are cleared by the ground clearance anyway
             // the model stands higher by its baked offset (scaled with the prop) and the prop's own offset (as in prop-collision.js)
             let mdl = window.customModels && window.customModels[o.type], baked = (mdl && mdl.userData && mdl.userData.bakedYOffset) || 0;
