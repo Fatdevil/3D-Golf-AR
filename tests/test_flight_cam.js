@@ -36,7 +36,7 @@ function play(name, fps, opts) {
   opts = opts || {};
   const path = FLIGHTS[name].path, an = FC.analyze(path);
   const camStart = { x: 0, y: 2, z: 5 };   // 5 m behind the ball (the aim camera), 2 m up
-  const rig = FC.create(path, camStart, { ground: opts.ground, fov: 60 });
+  const rig = FC.create(path, camStart, { ground: opts.ground, fov: 60, obstacles: opts.obstacles, pin: opts.pin });
   if (!rig) return { rig: null, an: an };
   const frames = []; let t = 0, real = 0, prev = null;
   const dt = 1 / fps;
@@ -58,7 +58,7 @@ const angSpeed = (f0, f1, dt) => {
 // ---- classification
 const prof = {}; for (const k of Object.keys(FLIGHTS)) prof[k] = FC.profile(FC.analyze(FLIGHTS[k].path));
 console.log('profiles', JSON.stringify(prof));
-check('driver, 7-iron and wedge are full shots', prof.driver === 'full' && prof.iron7 === 'full' && prof.wedge === 'full', JSON.stringify(prof));
+check('a driver is a long shot, a wedge an approach, a 7-iron one of the two', prof.driver === 'long' && prof.wedge === 'approach' && (prof.iron7 === 'approach' || prof.iron7 === 'long'), JSON.stringify(prof));
 check('a chip is a short shot', prof.chip === 'short', prof.chip);
 check('a putt keeps the old chase camera (ground)', prof.putt === 'ground' && FC.create(FLIGHTS.putt.path, { x: 0, y: 1, z: 3 }) === null, prof.putt);
 
@@ -118,12 +118,13 @@ check('the zoom is the same at 30 and 144 fps (within 3°)', tCheck.every(t => M
 // ---- zoom
 const fovs = D60.frames.map(f => f.st.fov);
 check('tee cam: it zooms in as the ball flies away (narrower than the starting 60°)', Math.min(...D60.frames.filter(f => f.t < pl.tHandStart).map(f => f.st.fov)) < 40, Math.min(...fovs).toFixed(1));
-check('the zoom never goes narrower than 17° (the ball must not whip about)', Math.min(...fovs) >= 17, Math.min(...fovs).toFixed(1));
+check('the zoom never goes narrower than the profile allows (17° for a drive: the ball must not whip about)', Math.min(...fovs) >= 17 - 0.5, Math.min(...fovs).toFixed(1));
+check('an approach zooms less than a drive (22°) and a chip least (28°)', (() => { const a = play('wedge', 60), c = play('chip', 60); return Math.min(...a.frames.map(f => f.st.fov)) >= 22 - 0.5 && Math.min(...c.frames.map(f => f.st.fov)) >= 28 - 0.5; })());
 check('after the hand-over the picture is wider again (about 0.72 of the lens)', Math.abs(D60.frames[D60.frames.length - 1].st.fov - 60 * 0.72) < 2, D60.frames[D60.frames.length - 1].st.fov.toFixed(1));
 
 // ---- slow motion
 const sp = (name) => { const r = play(name, 60); return Math.min(...r.frames.map(f => f.sp)); };
-check('slow motion around the landing of a full shot (down to 0.4)', Math.abs(sp('driver') - 0.4) < 0.02 && Math.abs(sp('iron7') - 0.4) < 0.02, sp('driver') + ' ' + sp('iron7'));
+check('slow motion around the landing of a full shot, deeper for an approach (0.35) than for a drive (0.45)', Math.abs(sp('driver') - 0.45) < 0.02 && Math.abs(sp('wedge') - 0.35) < 0.02, sp('driver') + ' ' + sp('wedge'));
 check('no slow motion for a chip', sp('chip') === 1, sp('chip'));
 check('real time everywhere else (before the window, and long after)', FC.speedAt(pl, 0) === 1 && FC.speedAt(pl, an.tApex) === 1 && FC.speedAt(pl, an.tLand + 2) === 1);
 check('slow motion eases in and out (no jump in speed)', (() => { let prev = 1, worst = 0; for (let t = an.tLand - 1; t < an.tLand + 1; t += 0.01) { const s = FC.speedAt(pl, t); worst = Math.max(worst, Math.abs(s - prev)); prev = s; } return worst < 0.05; })());
@@ -148,6 +149,39 @@ check('the camera follows the rig with the real frame time, and the old chase ca
 check('a glowing dot of fixed screen size marks the ball from the tee, hidden when the flight is over', /_ballBeacon/.test(html) && /sizeAttenuation: false/.test(html) && /!isFlying && window\._ballBeacon && window\._ballBeacon\.visible/.test(html));
 check('the lens goes back to its normal width after the flight', /window\._flightBaseFov/.test(html) && /camera\.fov \+= \(window\._flightBaseFov - camera\.fov\)/.test(html));
 check('after the flight there is a result beat and the look point glides to the aim point', /_aimHoldUntil = performance\.now\(\) \+ 600/.test(html) && /_aimLookBlend\.lerp\(window\.aimTarget/.test(html));
+
+// ---- trees on the way (obstacles)
+const TREES = (() => {   // a row of tall trees across the hand-over arc, one right at the landing view, one at the tee cam's side
+  const out = [], a = D60.plan, steps = 24;
+  for (let i = 3; i <= steps - 3; i += 4) { const e = i / steps; out.push({ x: a.H.x + (a.L.x - a.H.x) * e, z: a.H.z + (a.L.z - a.H.z) * e, r: 6, top: 28 }); }
+  out.push({ x: a.L.x + 1, z: a.L.z - 1, r: 7, top: 34 });
+  return out;
+})();
+const TR = play('driver', 60, { obstacles: TREES });
+const clearOK = TR.frames.every(f => TREES.every(o => Math.hypot(f.st.pos.x - o.x, f.st.pos.z - o.z) >= o.r + 1.5 || f.st.pos.y >= o.top + 1.8 - 1e-6));
+check('the camera stays above every tree it passes over (top + 1.8 m), also at the landing view', clearOK);
+check('...and the lift is smooth: the camera never climbs faster than 120 m/s', (() => { let w = 0; for (let i = 1; i < TR.frames.length; i++) w = Math.max(w, Math.abs(TR.frames[i].st.pos.y - TR.frames[i - 1].st.pos.y) / (TR.frames[i].real - TR.frames[i - 1].real)); return w <= 120; })());
+check('...and the ball is still on screen (98 %) and the turning stays smooth (3 rad/s) with the trees', (() => { const v = visibility(TR, 16 / 9, TR.an.tLand + 0.5); let m = 0; for (let i = 1; i < TR.frames.length; i++) m = Math.max(m, angSpeed(TR.frames[i - 1], TR.frames[i], TR.frames[i].real - TR.frames[i - 1].real)); return v.ok >= 0.98 && m <= 3.0; })());
+check('without trees nothing changes (no lift)', D60.plan.lift === null && play('driver', 60, { obstacles: [] }).plan.lift === null);
+
+// ---- the pin stays in the picture after an approach
+function pinTest(pinOffsetAlong, pinOffsetSide) {
+  const w = FLIGHTS.wedge.path, an0 = FC.analyze(w);
+  const pin = { x: an0.land.x + an0.dir.x * pinOffsetAlong + (-an0.dir.z) * pinOffsetSide, y: 0, z: an0.land.z + an0.dir.z * pinOffsetAlong + an0.dir.x * pinOffsetSide };
+  const base = play('wedge', 60), withPin = play('wedge', 60, { pin: pin });
+  const inShot = (res) => { let n = 0, ok = 0; for (const f of res.frames) { if (f.t < res.plan.an.tLand + 0.3) continue; n++; const b = FC.project(f.st, f.ball, 16 / 9), q = FC.project(f.st, pin, 16 / 9); if (b.z > 0 && q.z > 0 && Math.abs(b.x) < 0.95 && Math.abs(b.y) < 0.95 && Math.abs(q.x) < 0.95 && Math.abs(q.y) < 0.95) ok++; } return n ? ok / n : 0; };
+  return { without: inShot(base), with: inShot(withPin), near: withPin.plan.pinNear };
+}
+const pins = [pinTest(30, 15), pinTest(34, 5), pinTest(20, 25), pinTest(10, 30)];   // the last two: a pin well to the side, which the ball alone would not bring into the picture
+console.log('pin in picture, ball and pin together, after the landing (without/with): ' + pins.map(x => x.without.toFixed(2) + '/' + x.with.toFixed(2)).join('  '));
+check('a pin close to the landing point is picked up (pinNear), a far one is not', pins.every(x => x.near) && !pinTest(80, 0).near);
+check('ball and pin are in the picture together in 90 % of the frames after the landing', pins.every(x => x.with >= 0.9), JSON.stringify(pins));
+check('...and that is not worse than without the pin framing', pins.every(x => x.with >= x.without - 0.02), JSON.stringify(pins));
+check('with a pin well to the side the picture is better with the pin framing than without (0 -> 1)', pins.slice(2).every(x => x.without < 0.5 && x.with >= 0.9), JSON.stringify(pins.slice(2)));
+
+// ---- the page uses the new parts
+check('the page gives the rig the trees and the pin', /obstacles: /.test(html) && /pin: /.test(html));
+check('a tap or a key skips the flight (after the first half second)', /window\.skipFlight = function/.test(html) && /performance\.now\(\) - window\._flightStartTime < 500/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall flight-camera checks passed');
 process.exit(failed ? 1 : 0);

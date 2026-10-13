@@ -263,6 +263,9 @@
         <button id="aim-btn-flag" onclick="aimAtFlag()" title="Aim at the flag (F)" style="height:36px; padding:0 12px; background:rgba(40,40,40,0.9); color:#fff; border:1px solid #777; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer;">⚑ Flag</button>
     </div>
 
+    <!-- shown during a flight: tap (or Space/Enter/Esc) skips it -->
+    <div id="skip-hint" style="display:none; position:fixed; bottom:28px; left:50%; transform:translateX(-50%); z-index:101; pointer-events:none; font-family:'Inter', sans-serif; font-size:12px; font-weight:bold; letter-spacing:1px; color:#fff; background:rgba(40,40,40,0.6); border-radius:14px; padding:6px 14px;">TAP TO SKIP</div>
+
     <!-- AIM TARGET BILLBOARD (Växlar mellan skärm och 3D rymd) -->
     <div id="aim-billboard" style="display:none; position:absolute; pointer-events:none; background:rgba(40,40,40,0.9); border:1px solid #777; border-radius:8px; padding:6px 12px; color:#fff; font-family:'Inter', sans-serif; text-align:center; transform:translate(-50%, -100%); z-index:100; box-shadow:0 4px 10px rgba(0,0,0,0.5);">
         <div id="aim-bb-dist" style="font-size:22px; font-weight:900;">288</div>
@@ -6238,6 +6241,35 @@
             setTimeout(function () { pump(first); }, 0);
         };
     })();
+
+    // Trees (and other tall props) near the flight, as simple upright cylinders { x, z, r, top } for the flight camera to keep clear of
+    window.buildCameraObstacles = function(path) {
+        let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
+        for (let i = 0; i < path.length; i += 20) { let px = path[i].x, pz = -path[i].y; minX = Math.min(minX, px); maxX = Math.max(maxX, px); minZ = Math.min(minZ, pz); maxZ = Math.max(maxZ, pz); }
+        let m = 80, out = [], reg = window.ASSET_REGISTRY || {};
+        for (const o of (window.placedTrees || [])) {
+            if (o.x < minX - m || o.x > maxX + m || o.z < minZ - m || o.z > maxZ + m) continue;
+            let ph = reg[o.type] && reg[o.type].physics;
+            if (!ph) continue;
+            let sc = o.scale || 1, r, h;
+            if (ph.type === 'tree') { r = ph.canopyRadius * sc; h = ph.height * sc; }
+            else if (ph.type === 'cylinder') { r = ph.radius * sc; h = ph.height * sc; }
+            else if (ph.type === 'sphere') { r = ph.radius * sc; h = ph.radius * sc; }
+            else if (ph.type === 'profile') { r = (ph.reach || 3) * sc; h = ph.height * sc; }
+            else continue;
+            if (!(h >= 3) || !(r > 0)) continue;   // low things (bushes, rocks) are cleared by the ground clearance anyway
+            out.push({ x: o.x, z: o.z, r: r, top: (o.y || 0) + h + (o.yOffset || 0) });
+        }
+        return out;
+    };
+
+    // Skip the rest of a flight: the ball is put at the end of its path (the landing is then handled as usual). Not in the first half second, so
+    // that the last tap of the swing cannot skip it.
+    window.skipFlight = function() {
+        if ((appMode !== 'PLAY' && appMode !== 'TEST') || !isFlying || !flightData || !flightData.path || !window._flightStartTime) return;
+        if (performance.now() - window._flightStartTime < 500) return;
+        window._flightAccumMs = Math.max(window._flightAccumMs || 0, (flightData.path.length - 1) * 5.0);
+    };
 
     window.localGetTerrainAt = function(px, py) {
         if (!window.terrainBiomeData) {
@@ -12581,6 +12613,14 @@
                 window.aimAtFlag();
             }
         });
+        // a tap on the picture or Space/Enter/Escape skips the flight
+        renderer.domElement.addEventListener('pointerdown', () => { if (isFlying) window.skipFlight(); }, false);
+        window.addEventListener('keydown', (e) => {
+            if (!isFlying || (e.code !== 'Space' && e.key !== 'Enter' && e.key !== 'Escape')) return;
+            let t = e.target && e.target.tagName;
+            if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+            window.skipFlight();
+        });
     })();
 
     // --- MINIMAP CLICK TO AIM ---
@@ -14234,8 +14274,11 @@ window.triggerExplosion = function(x, y, z) {
                 window._flightRig = null;
                 if (window.FlightCam && window.camFollowMode === 'AUTO' && gameCamPhase === 'FLIGHT_FOLLOW') {
                     if (window._flightBaseFov === undefined || window._flightBaseFov === null) window._flightBaseFov = camera.fov;
+                    let pinHole = courseHoles[playingHoleIndex];
                     window._flightRig = window.FlightCam.create(flightData.path, { x: camera.position.x, y: camera.position.y, z: camera.position.z },
-                        { fov: window._flightBaseFov, ground: function (x, z) { return physicsTerrainAt(x, -z).z; } });
+                        { fov: window._flightBaseFov, ground: function (x, z) { return physicsTerrainAt(x, -z).z; },
+                          obstacles: window.buildCameraObstacles(flightData.path),   // the camera stays above the trees it passes over
+                          pin: (!window._isRangeMode && pinHole && pinHole.flag) ? { x: pinHole.flag.x, y: pinHole.flag.y, z: pinHole.flag.z } : null });   // an approach keeps the pin in the picture
                 }
             }
             
@@ -14353,6 +14396,8 @@ window.triggerExplosion = function(x, y, z) {
                 camera.position.set(st.pos.x, st.pos.y, st.pos.z);
                 camera.lookAt(st.look.x, st.look.y, st.look.z);
                 if (Math.abs(camera.fov - st.fov) > 0.005) { camera.fov = st.fov; camera.updateProjectionMatrix(); }
+                let skipHint = document.getElementById('skip-hint');
+                if (skipHint) skipHint.style.display = (performance.now() - window._flightStartTime > 800 && (appMode === 'PLAY' || appMode === 'TEST')) ? 'block' : 'none';
                 // from the tee the real ball is under a pixel: a glowing dot of a fixed size on screen shows it (fades out when the ball is big enough)
                 if (!window._ballBeacon) {
                     let cv = document.createElement('canvas'); cv.width = cv.height = 64;
@@ -14761,6 +14806,7 @@ window.triggerExplosion = function(x, y, z) {
             controls.enabled = true;
         }
         if (!isFlying && window._ballBeacon && window._ballBeacon.visible) window._ballBeacon.visible = false;
+        if (!isFlying) { let skipHint = document.getElementById('skip-hint'); if (skipHint && skipHint.style.display !== 'none') skipHint.style.display = 'none'; }
         // the lens goes back to its normal width after a directed flight
         if (!isFlying && window._flightBaseFov != null) {
             if (Math.abs(camera.fov - window._flightBaseFov) < 0.05) { camera.fov = window._flightBaseFov; window._flightBaseFov = null; }
