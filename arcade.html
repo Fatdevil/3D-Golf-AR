@@ -6143,10 +6143,11 @@
                     checkCollisionCallback: function () { return null; }, hasTreeCollision: function () { return false; },
                     getTerrainAt: mode === 'flatCalm' ? function () { return { z: ctx.startZ, normal: [0, 0, 1], type: ctx.startType }; } : physicsTerrainAt
                 };
-                const log = console.log, rnd = Math.random, stimp = window.GREEN_STIMP;
+                const log = console.log, rnd = Math.random, stimp = window.GREEN_STIMP, firm = window.matchSettings ? window.matchSettings.greenFirmness : undefined;
                 console.log = function () {};          // the physics logs every flight in detail
                 Math.random = function () { return 0.5; };   // no flyer lottery in a preview
                 if (ctx.stimp) window.GREEN_STIMP = ctx.stimp;   // what executeArcadeShot sets for the shot
+                if (window.matchSettings) window.matchSettings.greenFirmness = ctx.firm;   // the physics reads the firmness from the settings, not from env: one value for the whole job
                 try {
                     const res = window.GolfPhysics.simulateFlight({
                         startPos: ctx.startPos, azimDeg: ctx.azim, spinAxisDeg: 0, ballSpeedMph: d.ballSpeedMph,
@@ -6159,7 +6160,7 @@
                     let land = last;
                     for (let i = 1; i < path.length; i++) if (path[i].phase !== 'flight') { land = path[i]; break; }   // where the ball first came down
                     return { carry: fwd(land), total: fwd(last), lateral: (last.x - ctx.startPos[0]) * cx - (last.y - ctx.startPos[1]) * sx };
-                } finally { console.log = log; Math.random = rnd; window.GREEN_STIMP = stimp; }
+                } finally { console.log = log; Math.random = rnd; window.GREEN_STIMP = stimp; if (window.matchSettings) window.matchSettings.greenFirmness = firm; }
             };
         }
 

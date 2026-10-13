@@ -128,6 +128,7 @@ check('the search runs in short timer slices, not inside one frame', /j\.gen\.ne
 check('the preview measures along the aim line and reports sideways drift', /fwd\(last\)/.test(html) && /lateral: \(last\.x/.test(html));
 check('a short aim off the green still suggests the putter', /if \(!manual\) SE\.suggestClub\('PUTT'\)/.test(html));
 check('the plan is recomputed when the green settings change, and the preview uses the stimp the shot will use', /matchSettings\.greenStimp : 10, window\.matchSettings \? window\.matchSettings\.greenFirmness/.test(html) && /window\.GREEN_STIMP = ctx\.stimp/.test(html) && /window\.GREEN_STIMP = stimp/.test(html));
+check('a job uses one green firmness too (the physics reads it from matchSettings), restored after each flight', /window\.matchSettings\.greenFirmness = ctx\.firm/.test(html) && /window\.matchSettings\.greenFirmness = firm;/.test(html));
 check('a job uses one wind (a copy taken when it starts), not the live wind that changes every 500 ms', /wind: \(window\.currentWindVec \|\| \[0, 0, 0\]\)\.slice\(\)/.test(html) && /wind: mode === 'real' \? ctx\.wind/.test(html) && !/wind: mode === 'real' \? window\.currentWindVec/.test(html));
 check('the flat, calm run keeps the surface under the ball', /type: ctx\.startType/.test(html));
 
