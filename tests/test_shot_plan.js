@@ -53,6 +53,14 @@ check('describe passes converged and off on', (() => { const d = SP.describe(cli
   check("stepwise with the player's own club does not change the club", s2.value.club === 'I7');
 })();
 
+// a full swing that ends short (a bunker, a roll back) while a softer one reaches the target: the club is not given up
+const dip = (club, power) => { const t = power > 0.9 ? 40 : REACH[club] * Math.pow(power, 1.5); return { carry: t, total: t }; };
+r = SP.powerFor(dip, 'I7', 110);
+check('a full swing that falls short does not rule the club out when a softer swing reaches', r.reachable && r.power <= 0.85 && Math.abs(r.total - 110) < 2, JSON.stringify(r));
+r = SP.powerFor(dip, 'PW', 140);
+check('...but a club that cannot reach at any power is still unreachable', r.reachable === false && r.short > 0, JSON.stringify(r));
+check('describe carries lateral and the aim correction (turn the aim against the drift)', (() => { const d = SP.describe((c, p, m) => Object.assign({}, fake(c, p), { lateral: m === 'real' ? 10 : 0 }), { club: 'I7', power: 0.9, reachable: true }); return d.lateral === 10 && d.aimFix < 0; })());
+
 // ---- part 2: the real physics
 const MPH = 0.44704;
 function realSim(opts) {
@@ -66,8 +74,10 @@ function realSim(opts) {
     let res;
     try { res = G.simulateFlight({ startPos: [0, 0, 0.3], azimDeg: 0, spinAxisDeg: 0, ballSpeedMph: d.ballSpeedMph, launchAngleDeg: d.launchAngleDeg, totalSpinRpm: d.totalSpinRpm, isLiveData: false, isTeeShot: true }, env); }
     finally { console.log = log; }
-    const m = res.metrics;
-    return { carry: m.carryMeters, total: m.totalMeters };
+    // forward (+y) and sideways (+x = right) displacement, like the game's preview: a crosswind is not distance
+    const last = res.path[res.path.length - 1];
+    let land = last; for (let i = 1; i < res.path.length; i++) if (res.path[i].phase !== 'flight') { land = res.path[i]; break; }
+    return { carry: land.y, total: last.y, lateral: last.x };
   };
 }
 const calm = realSim();
@@ -81,6 +91,10 @@ const dt = SP.describe(tail, pt), dh = SP.describe(head, ph);
 check('describe: tailwind helps (wind > 0), headwind hurts (wind < 0)', dt.wind > 1 && dh.wind < -1, dt.wind.toFixed(1) + ' / ' + dh.wind.toFixed(1));
 check('describe: a flat, calm shot has no wind and no terrain effect', (() => { const d = SP.describe(calm, pc); return Math.abs(d.wind) < 1e-6 && Math.abs(d.terrain) < 1e-6; })());
 check('describe: "plays like" is shorter in a tailwind than the target', dt.playsLike < 140 + 1 && dh.playsLike > 140 - 1 && dt.playsLike !== dh.playsLike, dt.playsLike.toFixed(1) + ' / ' + dh.playsLike.toFixed(1));
+const side = realSim({ wind: [8, 0, 0] }), ps = SP.powerFor(side, 'I7', 140), ds = SP.describe(side, ps);
+check('a crosswind drifts the ball sideways (right for wind towards +x), measured as lateral', ds.lateral > 5, ds.lateral.toFixed(1));
+check('...and does not count as distance: the power is about the calm one', Math.abs(ps.power - pc.power) < 0.03, ps.power.toFixed(3) + ' vs ' + pc.power.toFixed(3));
+check('...the aim correction turns the aim against the drift', ds.aimFix < -1, ds.aimFix.toFixed(2));
 const up = realSim({ slope: 0.1 });
 const du = SP.describe(up, SP.powerFor(up, 'I7', 120));
 check('describe: ground that rises towards the target takes distance (terrain < 0)', du.terrain < -1, du.terrain.toFixed(1));
@@ -99,6 +113,8 @@ check('the preview uses the physics of the shot: real terrain, no trees, calm an
 check('a preview does not roll the flyer dice or log the flight', /Math\.random = function \(\) \{ return 0\.5; \}/.test(html) && /console\.log = function \(\) \{\};/.test(html));
 check('a new shot ends the club pick (SwingEngine.newShot on landing)', /SwingEngine\.newShot\(\)/.test(html));
 check('the search runs in short timer slices, not inside one frame', /j\.gen\.next\(\)/.test(html) && /setTimeout\(function \(\) \{ pump\(j\); \}, 0\)/.test(html) && /JOB_BUDGET_MS/.test(html) && !/SP\.pickClub\(|SP\.powerFor\(|SP\.describe\(/.test(html));
+check('the preview measures along the aim line and reports sideways drift', /fwd\(last\)/.test(html) && /lateral: \(last\.x/.test(html));
+check('a short aim off the green still suggests the putter', /if \(!manual\) SE\.suggestClub\('PUTT'\)/.test(html));
 check('the flat, calm run keeps the surface under the ball', /type: ctx\.startType/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall shot-plan checks passed');

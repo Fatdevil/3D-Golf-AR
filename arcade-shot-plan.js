@@ -3,6 +3,7 @@
 //   'real'      the conditions of the shot (wind, terrain, altitude, temperature)
 //   'noWind'    the same terrain without wind
 //   'flatCalm'  flat ground and no wind
+// carry and total are measured along the aim line (forward progress), lateral is the sideways drift, so a crosswind does not pass for distance.
 // so the plan can say "plays like X" and how much of the difference comes from the wind and how much from the terrain.
 (function (root) {
     const ORDER = ['LW', 'SW', 'PW', 'I9', 'I7', 'I5', 'W3', 'DRIVER'];   // shortest to longest
@@ -11,6 +12,7 @@
     const KEEP_MIN = 0.6;        // the club that was suggested before stays while it still needs 60-97 % (no jumping between clubs on a metre)
     const STEPS = 8;             // most flights in the search; it stops early once the ball is within TOLERANCE
     const TOLERANCE = 0.5;       // metres
+    const PROBE_POWER = 0.85;    // the softer swing tried when a full swing falls short
     const CONVERGED_M = 2, CONVERGED_REL = 0.03;   // a result this close (2 m or 3 % of the distance, the larger) counts as hitting the target
 
     // The searches are generators that yield after every flight, so the game can run a few flights per frame instead of all at once
@@ -21,12 +23,21 @@
     // The power at which this club ends up at targetTotal metres (total = carry + roll); the distance grows with power.
     // converged is false when no flight got close (a cliff in the ground: water, a ridge): the best try is then not what the plan promises.
     function* powerForG(sim, club, targetTotal) {
-        const full = yield* flight(sim, club, 1, 'real');
-        if (full.total < targetTotal) return { club: club, power: 1, carry: full.carry, total: full.total, reachable: false, converged: true, short: targetTotal - full.total, over: false, off: full.total - targetTotal };
+        let full = yield* flight(sim, club, 1, 'real');
+        let topPower = 1;
+        if (full.total < targetTotal) {
+            // distance does not always grow with power (a full swing can end in a bunker or roll back down a slope): before giving the club up, try a softer swing
+            const soft = yield* flight(sim, club, PROBE_POWER, 'real');
+            if (soft.total < targetTotal) {
+                const far = soft.total > full.total ? { p: PROBE_POWER, r: soft } : { p: 1, r: full };
+                return { club: club, power: far.p, carry: far.r.carry, total: far.r.total, reachable: false, converged: true, short: targetTotal - far.r.total, over: false, off: far.r.total - targetTotal };
+            }
+            full = soft; topPower = PROBE_POWER;
+        }
         const low = yield* flight(sim, club, MIN_POWER, 'real');
         if (low.total >= targetTotal) return { club: club, power: MIN_POWER, carry: low.carry, total: low.total, reachable: true, converged: true, short: 0, over: true, off: low.total - targetTotal };
         // regula falsi (distance grows smoothly with power, so the secant lands within a few flights); the bracket keeps it safe
-        let lo = MIN_POWER, hi = 1, tLo = low.total, tHi = full.total, best = { power: 1, r: full };
+        let lo = MIN_POWER, hi = topPower, tLo = low.total, tHi = full.total, best = { power: topPower, r: full };
         for (let i = 0; i < STEPS; i++) {
             let p = lo + (targetTotal - tLo) * (hi - lo) / (tHi - tLo);
             p = Math.min(hi - 0.02 * (hi - lo), Math.max(lo + 0.02 * (hi - lo), p));
@@ -70,6 +81,8 @@
         return {
             club: res.club, power: res.power, reachable: res.reachable, converged: res.converged, over: res.over, short: res.short, off: res.off,
             carry: real.carry, total: real.total,
+            lateral: real.lateral || 0,             // metres the ball ends right (+) or left (-) of the aim line
+            aimFix: real.total > 1 ? -Math.atan2(real.lateral || 0, real.total) * 180 / Math.PI : 0,   // degrees to turn the aim (+ right) to bring it back
             wind: real.total - noWind.total,        // metres the wind adds (+) or takes (-)
             terrain: noWind.total - flat.total,     // metres the slope and lie add (+) or take (-)
             playsLike: flat.total                   // the flat, calm distance this swing is worth

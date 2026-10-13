@@ -6151,7 +6151,13 @@
                         startPos: ctx.startPos, azimDeg: ctx.azim, spinAxisDeg: 0, ballSpeedMph: d.ballSpeedMph,
                         launchAngleDeg: d.launchAngleDeg, totalSpinRpm: d.totalSpinRpm, isLiveData: false, isTeeShot: ctx.tee
                     }, env);
-                    return { carry: res.metrics.carryMeters, total: res.metrics.totalMeters };
+                    // measured along the aim line: sideways drift (a crosswind) is not distance, it is reported as lateral
+                    const path = res.path, az = ctx.azim * Math.PI / 180, sx = Math.sin(az), cx = Math.cos(az);
+                    const fwd = function (q) { return (q.x - ctx.startPos[0]) * sx + (q.y - ctx.startPos[1]) * cx; };
+                    const last = path[path.length - 1];
+                    let land = last;
+                    for (let i = 1; i < path.length; i++) if (path[i].phase !== 'flight') { land = path[i]; break; }   // where the ball first came down
+                    return { carry: fwd(land), total: fwd(last), lateral: (last.x - ctx.startPos[0]) * cx - (last.y - ctx.startPos[1]) * sx };
                 } finally { console.log = log; Math.random = rnd; }
             };
         }
@@ -6163,7 +6169,11 @@
             const SE = window.SwingEngine, SP = window.ShotPlan;
             const start = SE.autoSelectClub(dist);
             const manual = SE.isManualClub(), club = SE.getClub();
-            if (start === 'PUTT' || (manual && club === 'PUTT')) { window.shotPlan = null; return null; }   // short game and putts have their own help
+            if (start === 'PUTT' || (manual && club === 'PUTT')) {   // short game and putts have their own help, no plan; but the putter is still suggested
+                window.shotPlan = null;
+                if (!manual) SE.suggestClub('PUTT');
+                return null;
+            }
             const t = physicsTerrainAt(b.x, -b.z), sz = Math.max(b.y, t.z + 0.022);
             const ctx = {
                 dist: dist, startPos: [b.x, -b.z, sz], startZ: t.z, startType: t.type, azim: window.AimMath.bearingDeg(b, a), tee: previewTee(),
@@ -14958,7 +14968,8 @@ window.triggerExplosion = function(x, y, z) {
                         document.getElementById('aim-bb-club').innerText = (pl.manual ? '✋ ' : '') + (cl ? cl.name : pl.club) + ' · ' + power;
                         document.getElementById('aim-bb-reach').innerText = 'Carry ' + d0(pl.carry) + ' · Total ' + d0(pl.total) + u;
                         let fx = document.getElementById('aim-bb-fx');
-                        fx.innerHTML = '<span style="color:' + col(pl.wind) + '">💨 ' + sgn(pl.wind) + '</span> · <span style="color:' + col(pl.terrain) + '">⛰ ' + sgn(pl.terrain) + '</span> · plays ' + d0(pl.playsLike) + u;
+                        let drift = Math.abs(pl.lateral) >= 2 ? ' · ↔ ' + d0(Math.abs(pl.lateral)) + (pl.lateral > 0 ? ' R' : ' L') + ' (aim ' + Math.abs(pl.aimFix).toFixed(1) + '° ' + (pl.aimFix > 0 ? 'R' : 'L') + ')' : '';
+                        fx.innerHTML = '<span style="color:' + col(pl.wind) + '">💨 ' + sgn(pl.wind) + '</span> · <span style="color:' + col(pl.terrain) + '">⛰ ' + sgn(pl.terrain) + '</span> · plays ' + d0(pl.playsLike) + u + drift;
                     }
                 }
             } else {
