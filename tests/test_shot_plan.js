@@ -35,6 +35,24 @@ check('describe splits the difference into wind and terrain', (() => {
   return Math.abs(d.wind - 8) < 1e-9 && Math.abs(d.terrain + 5) < 1e-9 && Math.abs(d.playsLike - fake('I7', 0.9).total) < 1e-9;
 })());
 
+// a cliff in the ground (water short of the target, land beyond it): no power lands near 70 m
+const cliff = (club, power) => { const t = power < 0.8 ? 40 * power : 60 + 60 * power; return { carry: t, total: t }; };
+r = SP.powerFor(cliff, 'I7', 70);
+check('a search that cannot get close says so (converged: false) instead of promising the target', r.reachable && r.converged === false && Math.abs(r.off) > 5, JSON.stringify(r));
+check('a club that does not converge does not fit: pickClub moves on', SP.pickClub((c, p) => c === 'I7' ? cliff(c, p) : fake(c, p), 70, 'I7').club !== 'I7');
+check('describe passes converged and off on', (() => { const d = SP.describe(cliff, r); return d.converged === false && typeof d.off === 'number'; })());
+// the searches can be run a flight at a time (one yield per flight), with the same result
+(function () {
+  let n = 0; const counted = (c, p, m) => { n++; return fake(c, p, m); };
+  const g = SP.planG(counted, 120, { startClub: 'I9' });
+  let steps = 0, st = g.next(); while (!st.done) { steps++; st = g.next(); }
+  const plain = SP.describe(fake, SP.pickClub(fake, 120, 'I9'));
+  check('stepwise: one yield per flight', steps === n, steps + ' vs ' + n);
+  check('stepwise gives the same plan as the plain call', st.value.club === plain.club && Math.abs(st.value.power - plain.power) < 1e-9 && Math.abs(st.value.total - plain.total) < 1e-9);
+  const mine = SP.planG(fake, 100, { club: 'I7' }); let s2 = mine.next(); while (!s2.done) s2 = mine.next();
+  check("stepwise with the player's own club does not change the club", s2.value.club === 'I7');
+})();
+
 // ---- part 2: the real physics
 const MPH = 0.44704;
 function realSim(opts) {
@@ -80,6 +98,7 @@ check('the plan is updated every frame, also while the aim point is off screen',
 check('the preview uses the physics of the shot: real terrain, no trees, calm and flat variants', /getTerrainAt: mode === 'flatCalm'[\s\S]{0,160}physicsTerrainAt/.test(html) && /wind: mode === 'real' \? window\.currentWindVec : \[0, 0, 0\]/.test(html));
 check('a preview does not roll the flyer dice or log the flight', /Math\.random = function \(\) \{ return 0\.5; \}/.test(html) && /console\.log = function \(\) \{\};/.test(html));
 check('a new shot ends the club pick (SwingEngine.newShot on landing)', /SwingEngine\.newShot\(\)/.test(html));
+check('the search runs in short timer slices, not inside one frame', /j\.gen\.next\(\)/.test(html) && /setTimeout\(function \(\) \{ pump\(j\); \}, 0\)/.test(html) && /JOB_BUDGET_MS/.test(html) && !/SP\.pickClub\(|SP\.powerFor\(|SP\.describe\(/.test(html));
 check('the flat, calm run keeps the surface under the ball', /type: ctx\.startType/.test(html));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall shot-plan checks passed');

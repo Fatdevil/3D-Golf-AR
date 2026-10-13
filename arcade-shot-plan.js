@@ -11,42 +11,50 @@
     const KEEP_MIN = 0.6;        // the club that was suggested before stays while it still needs 60-97 % (no jumping between clubs on a metre)
     const STEPS = 8;             // most flights in the search; it stops early once the ball is within TOLERANCE
     const TOLERANCE = 0.5;       // metres
+    const CONVERGED_M = 2, CONVERGED_REL = 0.03;   // a result this close (2 m or 3 % of the distance, the larger) counts as hitting the target
+
+    // The searches are generators that yield after every flight, so the game can run a few flights per frame instead of all at once
+    // (xxxG); the plain versions run one to the end. sim() itself is synchronous.
+    function drain(g) { let n = g.next(); while (!n.done) n = g.next(); return n.value; }
+    function* flight(sim, club, power, mode) { const r = sim(club, power, mode); yield; return r; }
 
     // The power at which this club ends up at targetTotal metres (total = carry + roll); the distance grows with power.
-    function powerFor(sim, club, targetTotal) {
-        const full = sim(club, 1, 'real');
-        if (full.total < targetTotal) return { club: club, power: 1, carry: full.carry, total: full.total, reachable: false, short: targetTotal - full.total, over: false };
-        const low = sim(club, MIN_POWER, 'real');
-        if (low.total >= targetTotal) return { club: club, power: MIN_POWER, carry: low.carry, total: low.total, reachable: true, short: 0, over: true };
+    // converged is false when no flight got close (a cliff in the ground: water, a ridge): the best try is then not what the plan promises.
+    function* powerForG(sim, club, targetTotal) {
+        const full = yield* flight(sim, club, 1, 'real');
+        if (full.total < targetTotal) return { club: club, power: 1, carry: full.carry, total: full.total, reachable: false, converged: true, short: targetTotal - full.total, over: false, off: full.total - targetTotal };
+        const low = yield* flight(sim, club, MIN_POWER, 'real');
+        if (low.total >= targetTotal) return { club: club, power: MIN_POWER, carry: low.carry, total: low.total, reachable: true, converged: true, short: 0, over: true, off: low.total - targetTotal };
         // regula falsi (distance grows smoothly with power, so the secant lands within a few flights); the bracket keeps it safe
         let lo = MIN_POWER, hi = 1, tLo = low.total, tHi = full.total, best = { power: 1, r: full };
         for (let i = 0; i < STEPS; i++) {
             let p = lo + (targetTotal - tLo) * (hi - lo) / (tHi - tLo);
             p = Math.min(hi - 0.02 * (hi - lo), Math.max(lo + 0.02 * (hi - lo), p));
-            const r = sim(club, p, 'real');
+            const r = yield* flight(sim, club, p, 'real');
             if (Math.abs(r.total - targetTotal) < Math.abs(best.r.total - targetTotal)) best = { power: p, r: r };
             if (Math.abs(r.total - targetTotal) <= TOLERANCE) break;
             if (r.total < targetTotal) { lo = p; tLo = r.total; } else { hi = p; tHi = r.total; }
         }
-        return { club: club, power: best.power, carry: best.r.carry, total: best.r.total, reachable: true, short: 0, over: false };
+        const off = best.r.total - targetTotal;
+        return { club: club, power: best.power, carry: best.r.carry, total: best.r.total, reachable: true, converged: Math.abs(off) <= Math.max(CONVERGED_M, CONVERGED_REL * targetTotal), short: 0, over: false, off: off };
     }
 
-    const fits = (r) => r.reachable && !r.over && r.power <= MAX_COMFORT;
+    const fits = (r) => r.reachable && r.converged && !r.over && r.power <= MAX_COMFORT;
 
     // The shortest club that does the shot at a comfortable power. startClub is where the search starts (the old distance rule),
     // prevClub is the club suggested last time: it is kept while it still fits.
-    function pickClub(sim, targetTotal, startClub, prevClub) {
+    function* pickClubG(sim, targetTotal, startClub, prevClub) {
         if (prevClub && ORDER.indexOf(prevClub) >= 0) {
-            const r = powerFor(sim, prevClub, targetTotal);
+            const r = yield* powerForG(sim, prevClub, targetTotal);
             if (fits(r) && r.power >= KEEP_MIN) return r;
         }
         let idx = Math.max(0, ORDER.indexOf(startClub));
-        let res = powerFor(sim, ORDER[idx], targetTotal);
+        let res = yield* powerForG(sim, ORDER[idx], targetTotal);
         if (!fits(res)) {
-            while (idx < ORDER.length - 1 && !fits(res)) { idx++; res = powerFor(sim, ORDER[idx], targetTotal); }
+            while (idx < ORDER.length - 1 && !fits(res)) { idx++; res = yield* powerForG(sim, ORDER[idx], targetTotal); }
         } else {
             while (idx > 0) {
-                const shorter = powerFor(sim, ORDER[idx - 1], targetTotal);
+                const shorter = yield* powerForG(sim, ORDER[idx - 1], targetTotal);
                 if (!fits(shorter)) break;
                 idx--; res = shorter;
             }
@@ -55,12 +63,12 @@
     }
 
     // The plan for one club at the power it needs: carry, total, what the wind did, what the terrain did (both + = helps), and "plays like".
-    function describe(sim, res) {
-        const real = sim(res.club, res.power, 'real');
-        const noWind = sim(res.club, res.power, 'noWind');
-        const flat = sim(res.club, res.power, 'flatCalm');
+    function* describeG(sim, res) {
+        const real = yield* flight(sim, res.club, res.power, 'real');
+        const noWind = yield* flight(sim, res.club, res.power, 'noWind');
+        const flat = yield* flight(sim, res.club, res.power, 'flatCalm');
         return {
-            club: res.club, power: res.power, reachable: res.reachable, over: res.over, short: res.short,
+            club: res.club, power: res.power, reachable: res.reachable, converged: res.converged, over: res.over, short: res.short, off: res.off,
             carry: real.carry, total: real.total,
             wind: real.total - noWind.total,        // metres the wind adds (+) or takes (-)
             terrain: noWind.total - flat.total,     // metres the slope and lie add (+) or take (-)
@@ -68,7 +76,20 @@
         };
     }
 
-    const ShotPlan = { ORDER: ORDER, MAX_COMFORT: MAX_COMFORT, KEEP_MIN: KEEP_MIN, powerFor: powerFor, pickClub: pickClub, describe: describe };
+    // the whole plan as one generator: the club (picked, or the player's own) at the power it needs, described
+    function* planG(sim, targetTotal, opts) {
+        opts = opts || {};
+        const res = opts.club ? yield* powerForG(sim, opts.club, targetTotal) : yield* pickClubG(sim, targetTotal, opts.startClub, opts.prevClub);
+        return yield* describeG(sim, res);
+    }
+
+    const ShotPlan = {
+        ORDER: ORDER, MAX_COMFORT: MAX_COMFORT, KEEP_MIN: KEEP_MIN,
+        powerForG: powerForG, pickClubG: pickClubG, describeG: describeG, planG: planG,
+        powerFor: function (sim, club, t) { return drain(powerForG(sim, club, t)); },
+        pickClub: function (sim, t, start, prev) { return drain(pickClubG(sim, t, start, prev)); },
+        describe: function (sim, res) { return drain(describeG(sim, res)); }
+    };
     root.ShotPlan = ShotPlan;
     if (typeof module !== 'undefined' && module.exports) module.exports = ShotPlan;
 })(typeof window !== 'undefined' ? window : globalThis);
