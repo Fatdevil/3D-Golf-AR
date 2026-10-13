@@ -14871,7 +14871,7 @@ window.triggerExplosion = function(x, y, z) {
                 new THREE.Vector3(-aimDir.x * camD, camH, -aimDir.z * camD)
             );
             
-            let holdBeat = window._aimHoldUntil && performance.now() < window._aimHoldUntil;   // the result beat after a directed flight
+            let holdBeat = (window._aimHoldUntil && performance.now() < window._aimHoldUntil) || window._aimDragging;   // the result beat after a directed flight; the camera stands still while the aim marker is dragged
             if (!holdBeat) {
                 camera.position.x += (targetPos.x - camera.position.x) * CAM.AIM_LERP;
                 camera.position.y += (targetPos.y - camera.position.y) * CAM.AIM_LERP;
@@ -14879,9 +14879,9 @@ window.triggerExplosion = function(x, y, z) {
             }
             if (window._aimLookBlend) {   // the look point glides from the ball to the aim point (it used to snap)
                 if (!holdBeat) window._aimLookBlend.lerp(window.aimTarget, 1 - Math.exp(-dt / 0.45));
-                controls.target.copy(window._aimLookBlend);
+                if (!window._aimDragging) controls.target.copy(window._aimLookBlend);
                 if (window._aimLookBlend.distanceToSquared(window.aimTarget) < 0.25) window._aimLookBlend = null;
-            } else controls.target.copy(window.aimTarget);
+            } else if (!window._aimDragging) controls.target.copy(window.aimTarget);
             controls.enabled = !window._aimDragging;
         }
         if (!isFlying && window._ballBeacon && window._ballBeacon.visible) window._ballBeacon.visible = false;
