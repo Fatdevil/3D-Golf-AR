@@ -59,6 +59,10 @@ r = SP.powerFor(dip, 'I7', 110);
 check('a full swing that falls short does not rule the club out when a softer swing reaches', r.reachable && r.power <= 0.85 && Math.abs(r.total - 110) < 2, JSON.stringify(r));
 r = SP.powerFor(dip, 'PW', 140);
 check('...but a club that cannot reach at any power is still unreachable', r.reachable === false && r.short > 0, JSON.stringify(r));
+const dip2 = (club, power) => { const t = power > 0.9 ? 30 : 80 * power; return { carry: t, total: t }; };   // the soft swing goes farther (68 m) than the full one (30 m), both short of 120
+r = SP.powerFor(dip2, 'I7', 120);
+check('unreachable: the farthest try is reported with its own power (not "full")', r.reachable === false && r.power === 0.85 && Math.abs(r.total - 68) < 1e-9 && Math.abs(r.short - 52) < 1e-9, JSON.stringify(r));
+check('the billboard labels the unreachable case from the plan power', /pl\.power >= 0\.995 \? 'full power' : Math\.round\(pl\.power \* 100\) \+ '% power'/.test(require('fs').readFileSync(__dirname + '/../arcade.html', 'utf8')));
 check('describe carries lateral and the aim correction (turn the aim against the drift)', (() => { const d = SP.describe((c, p, m) => Object.assign({}, fake(c, p), { lateral: m === 'real' ? 10 : 0 }), { club: 'I7', power: 0.9, reachable: true }); return d.lateral === 10 && d.aimFix < 0; })());
 
 // ---- part 2: the real physics

@@ -14962,7 +14962,7 @@ window.triggerExplosion = function(x, y, z) {
                         let sgn = (m) => (m >= 0 ? '+' : '−') + d0(Math.abs(m));
                         let col = (m) => Math.abs(m) < 0.5 ? '#94a3b8' : (m > 0 ? '#4ade80' : '#f87171');
                         let cl = SwingEngine.CLUB_PROFILES[pl.club];
-                        let power = pl.over ? 'min power, too long' : (!pl.reachable ? 'full power, ' + d0(pl.short) + u + ' short' : Math.round(pl.power * 100) + '% power' + (pl.converged === false ? ', lands ' + d0(Math.abs(pl.off)) + u + (pl.off < 0 ? ' short' : ' long') : ''));
+                        let power = pl.over ? 'min power, too long' : (!pl.reachable ? (pl.power >= 0.995 ? 'full power' : Math.round(pl.power * 100) + '% power') + ', ' + d0(pl.short) + u + ' short' : Math.round(pl.power * 100) + '% power' + (pl.converged === false ? ', lands ' + d0(Math.abs(pl.off)) + u + (pl.off < 0 ? ' short' : ' long') : ''));
                         planEl.style.display = 'block';
                         planEl.style.opacity = pl.stale ? '0.5' : '1';
                         document.getElementById('aim-bb-club').innerText = (pl.manual ? '✋ ' : '') + (cl ? cl.name : pl.club) + ' · ' + power;
