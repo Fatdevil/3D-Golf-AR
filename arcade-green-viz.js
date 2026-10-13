@@ -631,6 +631,15 @@
         }
     };
 
+    // The speed that rolls targetDist along the line straight at the cup from this ball: the pace of the aim line, whatever bearing the
+    // shot is hit along (on a slope the roll distance depends on the direction). Null when the physics is not available.
+    window.puttPaceAlongCup = function (ballX, ballZ, hole, targetDist) {
+        const ctx = puttContext(ballX, ballZ, hole);
+        if (!ctx) return null;
+        const quiet = console.log; console.log = function () {};
+        try { return window.calibratePuttSpeed(ctx.cfgAt(0), targetDist, 22); } catch (e) { return null; } finally { console.log = quiet; }
+    };
+
     window.puttBreakPath = function (ballX, ballZ, hole) {
         const ctx = puttContext(ballX, ballZ, hole);
         if (!ctx) return null;

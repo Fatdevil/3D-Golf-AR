@@ -9431,7 +9431,11 @@
 
         // a putt from the swing meter carries the distance it should roll: turn it into the speed that does it under this ball
         if (data.puttTargetDistM) {
-            launchConfig.ballSpeedMph = window.calibratePuttSpeed(launchConfig, data.puttTargetDistM, 22);
+            // on the green the pace is the one the aim line is drawn with (calibrated along the cup, not along the dragged bearing)
+            let puttHole = courseHoles[playingHoleIndex];
+            let cupPace = (window.isPuttingMode && puttHole && puttHole.flag && window.ballMesh && typeof window.puttPaceAlongCup === 'function')
+                ? window.puttPaceAlongCup(window.ballMesh.position.x, window.ballMesh.position.z, puttHole, data.puttTargetDistM) : null;
+            launchConfig.ballSpeedMph = cupPace || window.calibratePuttSpeed(launchConfig, data.puttTargetDistM, 22);
             data.ballSpeedMph = launchConfig.ballSpeedMph;
             // the speed panels were filled in before the search: show the speed the ball really gets
             if (document.getElementById('hud-bs')) document.getElementById('hud-bs').innerText = data.ballSpeedMph.toFixed(1) + ' mph';
@@ -12655,6 +12659,7 @@
             if (sp.z > 1 || Math.hypot(e.clientX - sx, e.clientY - sy) > (e.pointerType === 'touch' ? 48 : 28)) return;
             dragAim = { id: e.pointerId };
             window._aimDragging = true;
+            try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) {}   // the release is seen even outside the canvas
             controls.enabled = false;
             e.stopImmediatePropagation();
         }, true);
@@ -12668,6 +12673,7 @@
         const endDragAim = (e) => { if (dragAim && e.pointerId === dragAim.id) { dragAim = null; window._aimDragging = false; controls.enabled = true; } };
         renderer.domElement.addEventListener('pointerup', endDragAim, false);
         renderer.domElement.addEventListener('pointercancel', endDragAim, false);
+        renderer.domElement.addEventListener('lostpointercapture', endDragAim, false);
         window.addEventListener('keydown', (e) => {
             if (!canAim() || e.ctrlKey || e.metaKey || e.altKey) return;
             let t = e.target && e.target.tagName;
