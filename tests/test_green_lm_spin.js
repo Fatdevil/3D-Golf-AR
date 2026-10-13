@@ -13,10 +13,14 @@ function sim(input, env) {
   const log = console.log; console.log = function () {};
   try { return G.simulateFlight(input, env); } finally { console.log = log; }
 }
+// Lutningen (sidled, stigning per meter åt höger) gäller bara landningsområdet, y >= SLOPE_FROM_Y. Utgångsläget är plant så att
+// lutningen inte ändrar utslagets spinaxel/riktning (simulateFlight korrigerar för lutning vid utgångsläget): bara bollens studs och rull påverkas.
+const SLOPE_FROM_Y = 40;
 function greenEnv(slopeX) {
   const len = Math.hypot(slopeX, 1);
-  const normal = [-slopeX / len, 0, 1 / len];
-  return { getTerrainAt: (x) => ({ z: slopeX * x, normal, type: 'GREEN' }), checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: 15 };
+  const tilted = [-slopeX / len, 0, 1 / len], flat = [0, 0, 1];
+  return { getTerrainAt: (x, y) => y >= SLOPE_FROM_Y ? { z: slopeX * x, normal: tilted, type: 'GREEN' } : { z: 0, normal: flat, type: 'GREEN' },
+           checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: 15 };
 }
 // Ett lob wedge-slag (70 mph, 36°, 10 500 rpm) som GSPro skickar det (yards/mph, rpm); ball = BallData-fält
 function gsproShot(ball) {
@@ -68,12 +72,18 @@ console.log('\nMer sidospinn från monitorn ger större kick');
   check('500 < 1000 < 2000 rpm sidospinn', k(500) < k(1000) && k(1000) < k(2000), '(' + [500, 1000, 2000].map(k).map(v => v.toFixed(2)).join(' < ') + ' m)');
 }
 
-console.log('\nLutande green: monitorns fade rullar vidare efter lutningen');
+console.log('\nLutande green: efter landningen rullar monitorns fade vidare efter lutningen');
 {
-  const flat = lmShot({ BackSpin: 10500, SideSpin: 1500 }, 0);
-  const down = lmShot({ BackSpin: 10500, SideSpin: 1500 }, -0.03), up = lmShot({ BackSpin: 10500, SideSpin: 1500 }, 0.03);
-  check('fade nedför höger-sluttning går längre åt höger än på plan', down.endX > flat.endX, '(' + down.endX.toFixed(2) + ' vs ' + flat.endX.toFixed(2) + ' m)');
-  check('fade uppför höger-sluttning stannar tidigare åt höger än på plan', up.endX < flat.endX, '(' + up.endX.toFixed(2) + ' vs ' + flat.endX.toFixed(2) + ' m)');
+  const shotOn = slope => lmShot({ BackSpin: 10500, SideSpin: 1500 }, slope);
+  const flat = shotOn(0), down = shotOn(-0.03), up = shotOn(0.03);
+  const roll = r => r.endX - r.landX;   // förflyttning i sidled efter första markkontakten
+  check('landningen påverkas inte av lutningen (den börjar först vid landningsområdet)',
+        Math.abs(down.landX - flat.landX) < 0.1 && Math.abs(up.landX - flat.landX) < 0.1,
+        '(' + down.landX.toFixed(2) + ' / ' + flat.landX.toFixed(2) + ' / ' + up.landX.toFixed(2) + ' m)');
+  check('fade nedför höger-sluttning rullar längre åt höger efter landning än på plan', roll(down) > roll(flat) + 0.3,
+        '(' + roll(down).toFixed(2) + ' vs ' + roll(flat).toFixed(2) + ' m)');
+  check('fade uppför höger-sluttning rullar kortare åt höger efter landning än på plan', roll(up) < roll(flat) - 0.3,
+        '(' + roll(up).toFixed(2) + ' vs ' + roll(flat).toFixed(2) + ' m)');
 }
 
 console.log(failed ? '\n' + failed + ' FAILED' : '\nAll passed');
