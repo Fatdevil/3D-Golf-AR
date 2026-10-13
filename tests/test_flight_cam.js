@@ -183,6 +183,7 @@ check('with a pin well to the side the picture is better with the pin framing th
 check('the page gives the rig the trees and the pin', /obstacles: /.test(html) && /pin: /.test(html));
 check('a tap or a key skips the flight (after the first half second)', /window\.skipFlight = function/.test(html) && /performance\.now\(\) - window\._flightStartTime < 500/.test(html));
 
+check('only a tap skips the flight (a free-camera drag starts with a press and must not)', /skipDown = isFlying \?/.test(html) && /window\.AimMath\.isTap\(d, \{ x: e\.clientX/.test(html) && !/addEventListener\('pointerdown', \(\) => \{ if \(isFlying\) window\.skipFlight/.test(html));
 check('a skipped flight still hits the blocks on the rest of its path', /for \(let i = Math\.max\(0, flightTick \| 0\); i < path\.length; i \+= 3\)/.test(html) && /hitTargetBlock\(b\)/.test(html) && /if\(d < t\.radius\) hitTargetBlock\(t\);/.test(html));
 check('the block score is declared (hitting a block used to throw: points was never declared)', /\n    let points = 0;/.test(html));
 check('the height of a tree for the camera includes the baked model offset', /top: \(o\.y \|\| 0\) \+ h \+ baked \* sc \+ \(o\.yOffset \|\| 0\)/.test(html));

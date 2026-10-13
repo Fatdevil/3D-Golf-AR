@@ -12637,7 +12637,13 @@
             }
         });
         // a tap on the picture or Space/Enter/Escape skips the flight
-        renderer.domElement.addEventListener('pointerdown', () => { if (isFlying) window.skipFlight(); }, false);
+        // (a tap only: a drag with the free camera starts with a press and must not skip the flight)
+        let skipDown = null;
+        renderer.domElement.addEventListener('pointerdown', (e) => { skipDown = isFlying ? { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId } : null; }, false);
+        renderer.domElement.addEventListener('pointerup', (e) => {
+            let d = skipDown; skipDown = null;
+            if (d && e.pointerId === d.id && isFlying && window.AimMath.isTap(d, { x: e.clientX, y: e.clientY, t: performance.now() })) window.skipFlight();
+        }, false);
         window.addEventListener('keydown', (e) => {
             if (!isFlying || (e.code !== 'Space' && e.key !== 'Enter' && e.key !== 'Escape')) return;
             let t = e.target && e.target.tagName;
