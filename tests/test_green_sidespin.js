@@ -12,11 +12,15 @@ function sim(input, env) {
   const log = console.log; console.log = function () {};
   try { return G.simulateFlight(input, env); } finally { console.log = log; }
 }
-// slopeX: stigning per meter åt höger, slopeY: stigning per meter framåt
+// slopeX: stigning per meter åt höger, slopeY: stigning per meter framåt. Lutningen gäller bara landningsområdet (y >= SLOPE_FROM_Y);
+// utgångsläget är plant så att lutningen inte ändrar utslagets spinaxel/riktning (simulateFlight korrigerar för lutning vid
+// utgångsläget): bara bollens studs och rull påverkas.
+const SLOPE_FROM_Y = 40;
 function greenEnv(slopeX, slopeY) {
   const len = Math.hypot(slopeX, slopeY, 1);
-  const normal = [-slopeX / len, -slopeY / len, 1 / len];
-  return { getTerrainAt: (x, y) => ({ z: slopeX * x + slopeY * y, normal, type: 'GREEN' }), checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: 15 };
+  const tilted = [-slopeX / len, -slopeY / len, 1 / len], flat = [0, 0, 1];
+  return { getTerrainAt: (x, y) => y >= SLOPE_FROM_Y ? { z: slopeX * x + slopeY * (y - SLOPE_FROM_Y), normal: tilted, type: 'GREEN' } : { z: 0, normal: flat, type: 'GREEN' },
+           checkCollisionCallback: () => null, wind: [0, 0, 0], temperatureC: 15 };
 }
 function pitch(club, axis, firmness, slopeX, slopeY) {
   window.matchSettings.greenFirmness = firmness || 'NORMAL';
@@ -55,17 +59,22 @@ console.log('\nMer sidospinn ger större kick');
   check('SW: kick växer med spinaxeln (10° < 20° < 30°)', k(10) < k(20) && k(20) < k(30), '(' + [10, 20, 30].map(k).map(v => v.toFixed(2)).join(' < ') + ' m)');
 }
 
-console.log('\nLutande green: kicken rullar vidare efter lutningen');
+console.log('\nLutande green: efter landningen rullar kicken vidare efter lutningen');
 {
+  const roll = r => r.endX - r.landX;                // förflyttning i sidled efter första markkontakten
   const flat = pitch('SW', 0, 'NORMAL', 0, 0);
   const tiltR = pitch('SW', 0, 'NORMAL', -0.03, 0), tiltL = pitch('SW', 0, 'NORMAL', 0.03, 0);
-  check('Rak boll på sidolutning rullar nedför (höger-sluttning -> höger)', tiltR.endX > flat.endX + 0.3 && tiltL.endX < flat.endX - 0.3,
-        '(' + tiltL.endX.toFixed(2) + ' / ' + flat.endX.toFixed(2) + ' / ' + tiltR.endX.toFixed(2) + ' m)');
+  check('landningen påverkas inte av lutningen (den börjar först vid landningsområdet)',
+        Math.abs(tiltR.landX - flat.landX) < 0.1 && Math.abs(tiltL.landX - flat.landX) < 0.1,
+        '(' + tiltL.landX.toFixed(2) + ' / ' + flat.landX.toFixed(2) + ' / ' + tiltR.landX.toFixed(2) + ' m)');
+  check('Rak boll på sidolutning rullar nedför efter landning (höger-sluttning -> höger)', roll(tiltR) > roll(flat) + 0.3 && roll(tiltL) < roll(flat) - 0.3,
+        '(' + roll(tiltL).toFixed(2) + ' / ' + roll(flat).toFixed(2) + ' / ' + roll(tiltR).toFixed(2) + ' m)');
   const fadeDown = pitch('SW', 20, 'NORMAL', -0.03, 0), fadeUp = pitch('SW', 20, 'NORMAL', 0.03, 0), fadeFlat = pitch('SW', 20, 'NORMAL', 0, 0);
-  check('Fade nedför höger-sluttning går längre åt höger än på plan', fadeDown.endX > fadeFlat.endX, '(' + fadeDown.endX.toFixed(2) + ' vs ' + fadeFlat.endX.toFixed(2) + ' m)');
-  check('Fade uppför höger-sluttning stannar tidigare åt höger än på plan', fadeUp.endX < fadeFlat.endX, '(' + fadeUp.endX.toFixed(2) + ' vs ' + fadeFlat.endX.toFixed(2) + ' m)');
+  check('Fade nedför höger-sluttning rullar längre åt höger efter landning än på plan', roll(fadeDown) > roll(fadeFlat) + 0.3, '(' + roll(fadeDown).toFixed(2) + ' vs ' + roll(fadeFlat).toFixed(2) + ' m)');
+  check('Fade uppför höger-sluttning rullar kortare åt höger efter landning än på plan', roll(fadeUp) < roll(fadeFlat) - 0.3, '(' + roll(fadeUp).toFixed(2) + ' vs ' + roll(fadeFlat).toFixed(2) + ' m)');
   const back = pitch('SW', 0, 'NORMAL', 0, -0.03), front = pitch('SW', 0, 'NORMAL', 0, 0.03);
-  check('Sluttning framåt/bakåt påverkar utrullningen i längdled', back.endY - back.landY > front.endY - front.landY);
+  check('Sluttning framåt/bakåt påverkar utrullningen i längdled efter landning', back.endY - back.landY > front.endY - front.landY + 0.3,
+        '(' + (back.endY - back.landY).toFixed(2) + ' vs ' + (front.endY - front.landY).toFixed(2) + ' m)');
 }
 
 console.log('\nSpelets formval: SwingEngine.mapCircleToPhysics(..., shape) ger avsiktlig fade/draw');
