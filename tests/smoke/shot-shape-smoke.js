@@ -162,6 +162,31 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  // ---- arcade_mobile.html on a short landscape phone: the SWING button must clear the top bar and the two rows ----
+  console.log('\narcade_mobile.html (landscape 568x320)');
+  {
+    const o = await open('/arcade_mobile.html', { width: 568, height: 320 });
+    const page = o.page;
+    await shot(page, 'mobile_landscape.png');
+    const g = await page.evaluate(function () {
+      const r = function (el) { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; };
+      const hit = function (a, b) { return a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t; };
+      const swing = r(document.getElementById('main-swing-btn'));
+      const top = r(document.querySelector('.top-bar'));
+      const shapes = Array.from(document.querySelectorAll('#ui-shape .shape-btn')).map(function (b) { return { rect: r(b), tap: document.elementFromPoint((r(b).l + r(b).r) / 2, (r(b).t + r(b).b) / 2) === b }; });
+      // the club row scrolls sideways and clips its buttons: only the part inside the row is on screen
+      const row = r(document.getElementById('ui-clubs'));
+      const clubs = Array.from(document.querySelectorAll('#ui-clubs .club-btn')).map(r).map(function (x) { return { l: Math.max(x.l, row.l), r: Math.min(x.r, row.r), t: x.t, b: x.b }; }).filter(function (x) { return x.r > x.l; });
+      return { swing: swing, overTop: hit(swing, top), overShape: shapes.some(function (s) { return hit(swing, s.rect); }), overClub: clubs.some(function (c) { return hit(swing, c); }),
+               shapesTappable: shapes.every(function (s) { return s.tap; }), shapesOnscreen: shapes.every(function (s) { return s.rect.b <= innerHeight && s.rect.l >= 0 && s.rect.r <= innerWidth; }), swingOnscreen: swing.r <= innerWidth && swing.b <= innerHeight && swing.l >= 0 && swing.t >= 0 };
+    });
+    check('landscape: the SWING button does not cover the top bar', !g.overTop, JSON.stringify(g.swing));
+    check('landscape: the SWING button does not cover the shape or club buttons', !g.overShape && !g.overClub);
+    check('landscape: the shape buttons are tappable and everything fits on the screen', g.shapesTappable && g.shapesOnscreen && g.swingOnscreen, JSON.stringify({ tap: g.shapesTappable, shapes: g.shapesOnscreen, swing: g.swingOnscreen }));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
   await browser.close();
   srv.close();
   const failed = results.filter(function (x) { return !x; }).length;
