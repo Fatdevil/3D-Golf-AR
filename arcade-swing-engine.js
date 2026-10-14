@@ -45,6 +45,21 @@ const SwingEngine = (function() {
     // inte blir orimligt stor (en driver med 8 graders axel kurvar redan ett tiotal meter).
     const SHAPE_AXIS_DEG = { DRIVER: 8, W3: 9, I5: 9, I7: 12, I9: 12, PW: 15, SW: 15, LW: 15, PUTT: 0 };
 
+    // Startlinje för avsiktlig kurva: en fade startar till vänster om siktet och kurvar tillbaka, en draw tvärtom. Vinkeln är den som
+    // kurvan tar bollen i sidled vid landning (uppmätt i physics.js med axlarna ovan, plan fairway, vindstilla), så att en rätt träffad
+    // fade landar på siktlinjen. Kurvan växer med fart och flygtid, alltså med kraften: grader vid kraft SHAPE_START_POWERS.
+    const SHAPE_START_POWERS = [0.3, 0.5, 0.7, 0.85, 1.0];
+    const SHAPE_START_DEG = {
+        DRIVER: [0.37, 1.14, 2.75, 4.02, 5.17],
+        W3:     [0.18, 1.69, 3.86, 5.39, 6.70],
+        I5:     [0.42, 1.67, 3.39, 4.49, 5.45],
+        I7:     [0.31, 1.21, 2.49, 3.37, 4.16],
+        I9:     [0.07, 0.46, 0.98, 1.37, 1.76],
+        PW:     [0.08, 0.21, 0.55, 0.84, 1.14],
+        SW:     [0.06, 0.16, 0.30, 0.41, 0.51],
+        LW:     [0.05, 0.13, 0.24, 0.33, 0.42]
+    };
+
     // SVG constants — circumference of r=100 ring
     const CIRC = 2 * Math.PI * 100; // 628.32
 
@@ -108,10 +123,26 @@ const SwingEngine = (function() {
         return sgn * (SHAPE_AXIS_DEG[clubKey] || 0);
     }
 
+    // Startlinjens förskjutning i grader för vald form och effektiv kraft: fade (1) startar åt vänster (negativ), draw (-1) åt höger.
+    function shapeStartDeg(clubKey, shape, power) {
+        const sgn = shape > 0 ? 1 : shape < 0 ? -1 : 0;
+        const table = SHAPE_START_DEG[clubKey];
+        if (!sgn || !table) return 0;
+        const pw = SHAPE_START_POWERS, p = Math.max(0, Math.min(1, power));
+        let deg;
+        if (p <= pw[0]) deg = table[0] * p / pw[0];
+        else {
+            let i = 1;
+            while (i < pw.length - 1 && p > pw[i]) i++;
+            deg = table[i - 1] + (table[i] - table[i - 1]) * (p - pw[i - 1]) / (pw[i] - pw[i - 1]);
+        }
+        return -sgn * deg;
+    }
+
     // -----------------------------------------------------------
     // mapCircleToPhysics — converts tap results to launchData
     // powerPct:  0.0 (empty) → 1.0 (perfect full power)
-    // shape:     valfritt, avsiktlig kurva: -1 = draw, 0 = rak (standard), 1 = fade. Läggs ovanpå spinaxeln som missen ger.
+    // shape:     valfritt, avsiktlig kurva: -1 = draw, 0 = rak (standard), 1 = fade. Läggs ovanpå spinaxeln som missen ger och förskjuter startlinjen så att en rätt träffad fade/draw landar på siktlinjen.
     // armDeg:    0–360, 0 = top (perfect direction)
     //            offset from top: positive = right, negative = left
     // -----------------------------------------------------------
@@ -184,7 +215,7 @@ const SwingEngine = (function() {
             launchAngleDeg: club.baseLaunchAngle + vlaOffset,
             totalSpinRpm:   spinRpm,
             spinAxisDeg:    azimDeg * MISS_SPIN_AXIS_PER_DEG + shapeAxisDeg(clubKey, shape),
-            azimDeg:        azimDeg,
+            azimDeg:        azimDeg + shapeStartDeg(clubKey, shape, effectivePower),
             isLiveData:     false,
             impactData:     { offset: impactOffset, direction: impactDirection }
         };
@@ -513,7 +544,7 @@ const SwingEngine = (function() {
     // Public API
     // -----------------------------------------------------------
     return { onTap, selectClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
-             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, CLUB_PROFILES };
+             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, shapeStartDeg, CLUB_PROFILES };
 })();
 
 // Expose for devtools access
