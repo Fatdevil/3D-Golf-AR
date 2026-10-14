@@ -236,6 +236,7 @@
     <script src="physics.js"></script>
     <script src="arcade-api-service.js"></script>
     <script src="arcade-game-core.js"></script>
+    <script src="arcade-surface.js?v=1"></script>
     <script src="arcade-swing-engine.js"></script>
 
     <script>
@@ -349,8 +350,10 @@
                 return h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
             };
 
-            // The surface under a point in physics coordinates (x, y; physics Y is -Z in the scene), read from the course's painted map.
-            // Rough colour thresholds for now; a page can replace window._terrainTypeAt.
+            // The surface under a point in physics coordinates (x, y; physics Y is -Z in the scene), read from the painted map of the course
+            // with the course's own palette (theme_data.config; the standard palette when it has none): the same classifier as arcade.html.
+            // Without a painted map everything is fairway. A page can replace window._terrainTypeAt.
+            let paletteConfig = {};
             window._terrainTypeAt = function (x, y) {
                 if (!window.biomeDataCache) return 'FAIRWAY';
                 const TERRAIN_SIZE = 900;
@@ -359,12 +362,7 @@
                 const ix = Math.max(0, Math.min(4095, Math.floor(gx)));
                 const iy = Math.max(0, Math.min(4095, Math.floor(gy)));
                 const idx = (iy * 4096 + ix) * 4;
-                const r = window.biomeDataCache[idx], g = window.biomeDataCache[idx + 1], b = window.biomeDataCache[idx + 2];
-                if (b > 180) return 'WATER';
-                if (r > 200 && g > 200) return 'SAND';
-                if (g < 120) return 'ROUGH';
-                if (g > 210 && b > 110) return 'GREEN';
-                return 'FAIRWAY';
+                return window.SurfaceClassifier.classify(window.biomeDataCache[idx], window.biomeDataCache[idx + 1], window.biomeDataCache[idx + 2], paletteConfig);
             };
 
             window.courseHoles = [];
@@ -375,6 +373,11 @@
             
             window.biomeDataCache = null;
             if (coursePayload) {
+                try {
+                    let td = coursePayload.theme_data;
+                    if (typeof td === 'string') td = JSON.parse(td);
+                    if (td && td.config && typeof td.config === 'object') paletteConfig = td.config;
+                } catch (e) { console.warn('Could not read the course palette', e); }
                 if (coursePayload.terrain_biomemap) {
                     let img = new Image();
                     img.onload = () => {
@@ -595,7 +598,9 @@
             // The ball has stopped: the engine applies the rules (holed, water / OB, gimme, auto-putt, concede) and reports with events
             function resolveShot() {
                 const player = window.GolfEngine.getActivePlayer(), m = flightData.metrics;
-                const terrain = m.finalTerrainType || 'FAIRWAY';
+                // water and out of bounds come from the physics; otherwise the surface the ball rests on (it may have rolled from the fairway onto the green)
+                const last = flightData.positions[flightData.positions.length - 1];
+                const terrain = (m.finalTerrainType === 'WATER' || m.finalTerrainType === 'OB') ? m.finalTerrainType : window._terrainTypeAt(last.x, last.y);
                 const isGreen = terrain === 'GREEN', isFringe = terrain === 'FOREGREEN';
                 let entry = null;
                 if (terrain === 'WATER' || terrain === 'OB') entry = entryPointOf(flightData.positions);

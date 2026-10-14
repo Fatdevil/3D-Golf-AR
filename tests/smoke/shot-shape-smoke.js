@@ -47,6 +47,8 @@ const COURSES = {
     { par: 4, tees: { yellow: { x: 0, y: 0, z: 150 } }, flag: { x: 100, y: 0, z: -100 } },
     { par: 3, tees: { yellow: { x: 50, y: 0, z: 100 } }, flag: { x: 50, y: 0, z: 60 } }
   ] },
+  // a course with its own palette (theme_data comes as a JSON string): its greens are magenta
+  PALETTECOURSE: { share_code: 'PALETTECOURSE', theme_data: JSON.stringify({ config: { greenColor: '#ff00ff' } }), holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] },
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
@@ -501,9 +503,9 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
 
     // gimme: within 10 ft of the flag on the green
     await page.evaluate(function () { window._terrainTypeAt = function () { return 'GREEN'; }; });
-    await hit({ x: 50, z: 61.5, terrain: 'GREEN' });
+    await hit({ x: 50, z: 61.5, terrain: 'FAIRWAY' });   // the physics keeps the surface it landed on; the ball rolled onto the green
     st = await snap();
-    check('gimme: the putt is added, the hole done (3 strokes + 1 putt + 2 penalty = 6), the last hole offers Finish round', st.holedOut && st.scores[1] === 6 && st.btn === 'Finish round', JSON.stringify(st));
+    check('gimme from the resting surface (landed on fairway, rolled onto the green): the putt is added, the hole done (3 strokes + 1 putt + 2 penalty = 6), the last hole offers Finish round', st.holedOut && st.scores[1] === 6 && st.btn === 'Finish round', JSON.stringify(st));
     await page.click('#popup-btn');
     await page.waitForTimeout(600);
     const end = await page.evaluate(function () {
@@ -534,6 +536,32 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       return { holedOut: GolfEngine.getActivePlayer().holedOut, strokes: GolfEngine.getActivePlayer().strokes, title: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, btn: document.getElementById('popup-btn').innerText };
     });
     check('a real 3 m putt on the real physics drops: the cup is wired to the physics (before, a ball could never be holed)', holed.holedOut && holed.strokes === 1 && holed.title === 'HOLE IN ONE!' && holed.btn === 'Finish round', JSON.stringify(holed));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // ---- the surfaces: the course's own palette decides what the ball lies on ----
+  console.log('\narcade_mobile.html (surfaces)');
+  for (const c of [{ code: 'TESTCOURSE', label: 'standard palette', green: '#8acf72', notGreen: null }, { code: 'PALETTECOURSE', label: "the course's own palette (green is #ff00ff)", green: '#ff00ff', notGreen: '#8acf72' }]) {
+    const o = await open('/arcade_mobile.html?course=' + c.code, { width: 390, height: 844 });
+    const page = o.page;
+    const r = await page.evaluate(function (cfg) {
+      const data = new Uint8ClampedArray(4096 * 4096 * 4);
+      window.biomeDataCache = data;
+      const hex = function (h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; };
+      const probe = function (x, color) {   // paint the pixel under (x, y = -10) and read it back through the game's own lookup
+        const y = -10, ix = Math.floor((x + 450) / 900 * 4096), iy = Math.floor((-y + 450) / 900 * 4096), i = (iy * 4096 + ix) * 4, c = hex(color);
+        data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255;
+        return window._terrainTypeAt(x, y);
+      };
+      const out = { green: probe(0, cfg.green), ob: probe(3, '#ef4444'), water: probe(6, '#38bdf8'), sand: probe(9, '#e0d8a4'), fairway: probe(12, '#79b84f'), rough: probe(15, '#4c7d32') };
+      if (cfg.notGreen) out.stdGreen = probe(18, cfg.notGreen);
+      window.biomeDataCache = null;
+      return out;
+    }, c);
+    check(c.label + ': green is GREEN, the painted OB is OB (it used to read as fairway), water, sand, fairway and rough are told apart',
+          r.green === 'GREEN' && r.ob === 'OB' && r.water === 'WATER' && r.sand === 'SAND' && r.fairway === 'FAIRWAY' && r.rough === 'ROUGH', JSON.stringify(r));
+    if (c.notGreen) check("the standard green colour is not a green on a course with another palette", r.stdGreen !== 'GREEN', r.stdGreen);
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
