@@ -373,6 +373,9 @@ const SwingEngine = (function() {
     function onTap() {
         if (!_enabled) return;
 
+        // a page that animates the flight itself (arcade_mobile.html) says when the ball is still on its way: no new swing then
+        if (_phase === 'idle' && typeof window.isBallFlying === 'function' && window.isBallFlying()) return;
+
         if (_phase === 'idle') {
             // Hide LM data panel and distance panel if visible from previous shot
             const lmPanel = document.getElementById('lm-data-panel');
@@ -541,10 +544,42 @@ const SwingEngine = (function() {
     }
 
     // -----------------------------------------------------------
+    // Input mode: how a shot is created. All three end in triggerRealShot(launchData).
+    //   SWING    a tap / click on the swing circle (phones, and desktop play): club, shape and a swing with misses
+    //   LM       a launch monitor: the shots arrive from the bridge, no controls on the screen
+    //   NUMBERS  typed values, exact and without noise: the lab for testing the physics (range / test mode)
+    // The choice is kept in localStorage once the player makes it. Without one: SWING on a touch or narrow screen, else NUMBERS in the
+    // lab (test mode, driving range) and SWING in play.
+    // -----------------------------------------------------------
+    const INPUT_MODES = ['SWING', 'LM', 'NUMBERS'];
+    let _inputMode = null;
+
+    function _storedInputMode() {
+        try { const m = localStorage.getItem('golfos_input_mode'); return INPUT_MODES.indexOf(m) >= 0 ? m : null; } catch (e) { return null; }
+    }
+
+    function setInputMode(mode, remember) {
+        if (INPUT_MODES.indexOf(mode) < 0) return;
+        _inputMode = mode;
+        if (remember !== false) { try { localStorage.setItem('golfos_input_mode', mode); } catch (e) { /* private mode */ } }
+        document.body.classList.toggle('input-lm', mode === 'LM');
+        document.body.classList.toggle('input-numbers', mode === 'NUMBERS');
+        document.querySelectorAll('.input-btn').forEach(function (b) { b.classList.toggle('selected', b.dataset.input === mode); });
+        if (mode === 'SWING') enableSwingMode(); else disableSwingMode();
+    }
+
+    // Called when the page leaves build mode (play, test): the player's choice, else the default for the screen and the mode
+    function applyInputMode(ctx) {
+        const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0), narrow = window.innerWidth < 768;
+        const lab = !!(ctx && ctx.lab);
+        setInputMode(_storedInputMode() || ((touch || narrow) ? 'SWING' : (lab ? 'NUMBERS' : 'SWING')), false);
+    }
+
+    // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
     return { onTap, selectClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
-             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, shapeStartDeg, CLUB_PROFILES };
+             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, shapeStartDeg, setInputMode, applyInputMode, getInputMode: () => _inputMode, CLUB_PROFILES };
 })();
 
 // Expose for devtools access

@@ -1,4 +1,5 @@
-// Browser smoke test for the shot-shape buttons (draw / straight / fade) and the mobile club row.
+// Browser smoke test for the play interface: the shot-shape buttons (draw / straight / fade), the club row, the input mode picker
+// (swing / launch monitor / numbers) and the mobile page's shot direction and flight handling.
 //   npm --prefix tests install && npm --prefix tests run setup    (once; or set CHROMIUM_PATH)
 //   npm run smoke:shape
 // arcade.html (touch viewport, swing mode) and arcade_mobile.html: the buttons are visible and tappable (nothing on top of them),
@@ -37,10 +38,14 @@ function chromePath() {
   return undefined;
 }
 
+// a flat test course served for /api/courses/<code>: tee 150 m south of the origin, the flag 100 m to the right and 100 m north (21.8 degrees off the north line)
+const COURSE = { share_code: 'TESTCOURSE', holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 150 } }, flag: { x: 100, y: 0, z: -100 } }] };
+
 function serve() {
   return new Promise(function (resolve) {
     const srv = http.createServer(function (req, res) {
       const p = decodeURIComponent(req.url.split('?')[0]);
+      if (p.indexOf('/api/courses/') === 0) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COURSE)); }
       const f = path.join(ROOT, p === '/' ? 'hub.html' : p);
       if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
       res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
@@ -52,6 +57,16 @@ function serve() {
 const results = [];
 function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS  ' : '  FAIL  ') + name + (detail ? '  ' + detail : '')); }
 
+// test mode only starts on a course with a hole (a tee and a flag): the new empty course gets one first
+const ENTER_TEST = function () {
+  const h = courseHoles[0];
+  h.tees = h.tees || {}; h.tees.yellow = { x: 0, y: 0, z: 0 }; h.flag = { x: 0, y: 0, z: -100 };
+  if (!h.flagMesh) { h.flagMesh = new THREE.Object3D(); scene.add(h.flagMesh); }
+  window.confirm = function () { return true; };
+  setMode('TEST');
+  document.getElementById('play-tools').style.display = 'flex';
+};
+
 // arcade_mobile.html loads Lucide from unpkg and calls lucide.createIcons() first in its main script: without it the page never boots
 const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
 
@@ -61,11 +76,15 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
   let browser;
   try { browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }); } catch (e) { console.error('Could not start Chromium: ' + e.message.split('\n')[0] + '\nRun: npm --prefix tests run setup   (or set CHROMIUM_PATH)'); srv.close(); process.exit(2); }
 
-  async function open(url, viewport) {
-    const ctx = await browser.newContext({ viewport: viewport, hasTouch: true, isMobile: true, serviceWorkers: 'block' });
+  // opts.touch false = a desktop browser (mouse, no touch)
+  async function open(url, viewport, opts) {
+    const touch = !(opts && opts.touch === false);
+    const ctx = await browser.newContext({ viewport: viewport, hasTouch: touch, isMobile: touch, serviceWorkers: 'block' });
     await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
       const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
-      if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
+      // OrbitControls: keep the instance on window so a test can read the camera azimuth
+      const extra = k === 'OrbitControls.js' ? ';(function(){var O=THREE.OrbitControls;THREE.OrbitControls=function(){var c=new O(...arguments);window.__ctl=c;return c};THREE.OrbitControls.prototype=O.prototype;})();' : '';
+      if (k) r.fulfill({ body: fs.readFileSync(CDN[k]) + extra, contentType: 'application/javascript' }); else r.abort();
     });
     await ctx.route(/^https:\/\/unpkg\.com\/lucide/, function (r) { r.fulfill({ body: LUCIDE_STUB, contentType: 'application/javascript' }); });
     await ctx.route(/^https:\/\/(?!cdn|unpkg\.com\/lucide)/, function (r) { r.abort(); });
@@ -183,6 +202,145 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     check(vp.name + ': the SWING button does not cover the top bar', !g.overTop, JSON.stringify(g.swing));
     check(vp.name + ': the SWING button does not cover the shape or club buttons', !g.overShape && !g.overClub);
     check(vp.name + ': the shape buttons are tappable and everything fits on the screen', g.shapesTappable && g.shapesOnscreen && g.swingOnscreen, JSON.stringify({ tap: g.shapesTappable, shapes: g.shapesOnscreen, swing: g.swingOnscreen }));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // ---- the input mode picker: swing / launch monitor / numbers ----
+  console.log('\ninput modes (desktop browser)');
+  {
+    const o = await open('/arcade.html?mode=range', { width: 1280, height: 720 }, { touch: false });
+    const page = o.page;
+    const state = function () {
+      return page.evaluate(function () {
+        const vis = function (sel) { const el = document.querySelector(sel); if (!el) return false; const r = el.getBoundingClientRect(); return getComputedStyle(el).display !== 'none' && r.width > 0 && r.height > 0; };
+        return { mode: SwingEngine.getInputMode(), swing: document.body.classList.contains('swing-mode'), numbers: vis('#manual-tools'), clubs: vis('#club-selector'), shapes: vis('#shape-selector'), pick: vis('#hb-input-mode'), saved: localStorage.getItem('golfos_input_mode') };
+      });
+    };
+    await page.evaluate(function () { localStorage.removeItem('golfos_input_mode'); });
+    let st = await state();
+    check('build mode: no swing UI and no input picker', !st.swing && !st.pick, JSON.stringify(st));
+    await page.evaluate(ENTER_TEST);
+    st = await state();
+    check('lab (test mode) on a desktop browser: numbers by default, no swing UI', st.mode === 'NUMBERS' && st.numbers && !st.swing && !st.clubs && st.saved === null, JSON.stringify(st));
+    await page.evaluate(function () { toggleHamburgerMenu(); });
+    st = await state();
+    check('the menu shows the input picker outside build mode', st.pick, JSON.stringify(st));
+    await page.click('#hb-input-mode .input-btn[data-input="SWING"]');
+    st = await state();
+    check('Swing: the swing circle UI is on (clubs, shapes) and the numbers are hidden', st.mode === 'SWING' && st.swing && st.clubs && st.shapes && !st.numbers && st.saved === 'SWING', JSON.stringify(st));
+    await shot(page, 'desktop_swing.png');
+    await page.click('#hb-input-mode .input-btn[data-input="LM"]');
+    st = await state();
+    check('Launch monitor: no controls on the screen (neither swing UI nor numbers)', st.mode === 'LM' && !st.swing && !st.clubs && !st.numbers && st.saved === 'LM', JSON.stringify(st));
+    await page.click('#hb-input-mode .input-btn[data-input="NUMBERS"]');
+    st = await state();
+    check('Numbers: the typed values are back and the swing UI is off', st.mode === 'NUMBERS' && st.numbers && !st.swing && !st.clubs && st.saved === 'NUMBERS', JSON.stringify(st));
+    const sel = await page.evaluate(function () { return Array.from(document.querySelectorAll('#hb-input-mode .input-btn.selected')).map(function (b) { return b.dataset.input; }); });
+    check('exactly one picker button is highlighted', sel.length === 1 && sel[0] === 'NUMBERS', JSON.stringify(sel));
+    await page.evaluate(function () { SwingEngine.setInputMode('SWING'); });
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForTimeout(6000);
+    await page.evaluate(ENTER_TEST);
+    st = await state();
+    check('the choice is remembered after a reload', st.mode === 'SWING' && st.swing, JSON.stringify(st));
+    await page.evaluate(function () { setMode('BUILD'); });
+    st = await state();
+    check('back in build mode the swing UI and the picker are gone', !st.swing && !st.pick, JSON.stringify(st));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  console.log('\ninput modes (phone)');
+  {
+    const o = await open('/arcade.html?mode=range', { width: 412, height: 800 });
+    const page = o.page;
+    await page.evaluate(function () { localStorage.removeItem('golfos_input_mode'); });
+    await page.evaluate(ENTER_TEST);
+    const st = await page.evaluate(function () { return { mode: SwingEngine.getInputMode(), swing: document.body.classList.contains('swing-mode') }; });
+    check('on a phone the swing UI is the default, in test mode too', st.mode === 'SWING' && st.swing, JSON.stringify(st));
+    // no new swing while the ball is still on its way (a page that animates the flight says so with isBallFlying)
+    const tap = await page.evaluate(async function () {
+      const active = function () { return document.getElementById('swing-overlay').classList.contains('active'); };
+      window.isBallFlying = function () { return true; };
+      SwingEngine.onTap(); const duringFlight = active();
+      window.isBallFlying = function () { return false; };
+      SwingEngine.onTap(); const afterLanding = active();
+      return { duringFlight: duringFlight, afterLanding: afterLanding };
+    });
+    check('a tap while the ball is flying does not start a swing; once it has landed it does', tap.duringFlight === false && tap.afterLanding === true, JSON.stringify(tap));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // ---- arcade_mobile.html: the shot goes where the camera looks, one shot at a time, the shot data never covers the buttons ----
+  console.log('\narcade_mobile.html (shots)');
+  {
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 390, height: 844 });
+    const page = o.page;
+    await page.evaluate(function () {
+      const sim = GolfPhysics.simulateFlight; window.__sims = [];
+      GolfPhysics.simulateFlight = function (inp, env) {
+        const l = console.log; console.log = function () {}; let r; try { r = sim.call(this, inp, env); } finally { console.log = l; }
+        window.__sims.push({ inp: JSON.parse(JSON.stringify(inp)), path: r.path.map(function (p) { return [p.x, p.y]; }) }); return r;
+      };
+    });
+    const flightVsView = function () {
+      return page.evaluate(function () {
+        const c = window.__ctl, look = [c.target.x - c.object.position.x, c.target.z - c.object.position.z];
+        window.isBallFlying() === false && window.triggerRealShot({ ballSpeedMph: 100, launchAngleDeg: 25, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 0, isLiveData: false, impactData: { offset: 0.1, direction: 1 } });
+        const L = window.__sims[window.__sims.length - 1], p0 = L.path[0], p1 = L.path[L.path.length - 1];
+        return { view: Math.atan2(look[0], -look[1]) * 180 / Math.PI, flight: Math.atan2(p1[0] - p0[0], p1[1] - p0[1]) * 180 / Math.PI };
+      });
+    };
+    const d = await flightVsView();
+    check('an untouched camera aims at the hole: the flight follows the view (the hole is 21.8 deg off the north line)', Math.abs(d.view - 21.8) < 0.5 && Math.abs(d.flight - d.view) < 0.5, JSON.stringify(d));
+    const sims = await page.evaluate(function () { return window.__sims.length; });
+    await page.waitForTimeout(500);
+    await page.evaluate(function () { window.triggerRealShot({ ballSpeedMph: 100, launchAngleDeg: 25, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 0, isLiveData: false }); });
+    check('a second shot while the ball is flying is ignored', (await page.evaluate(function () { return window.__sims.length; })) === sims);
+    const lm = await page.evaluate(function () {
+      return Array.from(document.querySelectorAll('#ui-shape .shape-btn, #ui-clubs .club-btn')).filter(function (b) {
+        const r = b.getBoundingClientRect(); if (r.right > innerWidth || r.left < 0) return false;
+        const top = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2); return !(top === b || b.contains(top));
+      }).map(function (b) { return b.dataset.shape || b.dataset.club; });
+    });
+    check('the launch monitor panel (visible after a shot) does not cover the shape or club buttons', lm.length === 0, JSON.stringify(lm));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // the camera turned by dragging: a new page so the ball is back at the tee
+  {
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 390, height: 844 });
+    const page = o.page;
+    await page.evaluate(function () {
+      const sim = GolfPhysics.simulateFlight; window.__sims = [];
+      GolfPhysics.simulateFlight = function (inp, env) {
+        const l = console.log; console.log = function () {}; let r; try { r = sim.call(this, inp, env); } finally { console.log = l; }
+        window.__sims.push({ path: r.path.map(function (p) { return [p.x, p.y]; }) }); return r;
+      };
+    });
+    for (const drag of [120, -120]) {
+      await page.mouse.move(195, 300); await page.mouse.down(); await page.mouse.move(195 + drag, 300, { steps: 10 }); await page.mouse.up();
+      await page.waitForTimeout(400);
+      const d = await page.evaluate(function () {
+        const c = window.__ctl, look = [c.target.x - c.object.position.x, c.target.z - c.object.position.z];
+        window.__sims.length = 0; window.triggerRealShot({ ballSpeedMph: 100, launchAngleDeg: 25, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 0, isLiveData: false });
+        const L = window.__sims[0], p0 = L.path[0], p1 = L.path[L.path.length - 1];
+        return { view: Math.atan2(look[0], -look[1]) * 180 / Math.PI, flight: Math.atan2(p1[0] - p0[0], p1[1] - p0[1]) * 180 / Math.PI };
+      });
+      check('camera dragged ' + (drag > 0 ? 'right' : 'left') + ': the flight follows the view, not its mirror image', Math.abs(d.flight - d.view) < 0.5, JSON.stringify(d));
+      await page.evaluate(function () { window.location.reload(); });
+      await page.waitForTimeout(6000);
+      await page.evaluate(function () {
+        const sim = GolfPhysics.simulateFlight; window.__sims = [];
+        GolfPhysics.simulateFlight = function (inp, env) {
+          const l = console.log; console.log = function () {}; let r; try { r = sim.call(this, inp, env); } finally { console.log = l; }
+          window.__sims.push({ path: r.path.map(function (p) { return [p.x, p.y]; }) }); return r;
+        };
+      });
+    }
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }

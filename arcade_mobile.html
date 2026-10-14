@@ -79,7 +79,7 @@
         }
 
         /* LAUNCH MONITOR DATA PANEL */
-        #lm-data-panel { position: absolute; bottom: 20px; left: 10px; width: auto; display: none; opacity: 0; flex-direction: column; gap: 8px; z-index: 60; transition: opacity 0.4s, transform 0.4s; transform: translateX(-20px); font-family: 'Outfit', sans-serif; }
+        #lm-data-panel { pointer-events: none; position: absolute; bottom: 20px; left: 10px; width: auto; display: none; opacity: 0; flex-direction: column; gap: 8px; z-index: 60; transition: opacity 0.4s, transform 0.4s; transform: translateX(-20px); font-family: 'Outfit', sans-serif; }
         #lm-data-panel.active { display: flex; opacity: 1; transform: translateX(0); }
         .lm-header { display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 12px; margin-bottom: 2px; }
         .lm-title { color: #38bdf8; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
@@ -526,6 +526,11 @@
                             document.getElementById('dist-total').innerText = flightData.metrics.totalMeters.toFixed(1);
                         }
                         
+                        setTimeout(() => {
+                            const lm = document.getElementById('lm-data-panel');
+                            if (lm && !isFlying) lm.classList.remove('active');
+                        }, 4000);
+
                         let player = window.GolfEngine.getActivePlayer();
                         player.strokes++;
                         window.GolfEngine.emit('GolfEvent_BallStopped', { player });
@@ -601,26 +606,25 @@
             document.getElementById('main-swing-btn').addEventListener('pointerdown', safeTap);
             document.getElementById('swing-overlay').addEventListener('pointerdown', safeTap);
 
+            // the swing engine asks before it starts a swing: no new shot while the ball is still on its way
+            window.isBallFlying = () => isFlying;
+
             window.triggerRealShot = function(physicsData) {
+                if (isFlying) return;
                 console.log("BOOM! Firing Shot:", physicsData);
                 document.getElementById('swing-overlay').classList.remove('active');
                 
-                let camAzim = controls.getAzimuthalAngle(); 
-                let forward = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), camAzim);
-                
-                // Set startPos directly in physicsData so it knows where to spawn the ball
-                physicsData.startPos = [ball.position.x, ball.position.y, ball.position.z];
-                
-                // We add the camAzim to the physicsData.azimDeg.
+                // The shot goes along the camera's view direction. OrbitControls' azimuth is where the camera sits around the ball
+                // (0 = behind it, looking along -Z); the physics azimuth is the bearing of the flight (0 = -Z, positive = right), so it is the negative.
+                // The camera starts out behind the ball, looking at the hole, so an untouched camera aims at the hole.
+                let camAzim = controls.getAzimuthalAngle();
+
                 // Physics: X (right), Y (forward), Z (up).
                 // ThreeJS: X (right), Y (up), Z (depth, negative is forward).
-                // So physics startPos is [X, -Z, Y].
+                // So the physics start position is [X, -Z, Y].
                 physicsData.startPos = [ball.position.x, -ball.position.z, ball.position.y];
-                
-                let holeAzim = Math.atan2(holePos.x - ball.position.x, holePos.z - ball.position.z);
-                let aimOffset = camAzim - holeAzim; 
-                physicsData.azimDeg = (physicsData.azimDeg || 0) + (aimOffset * 180 / Math.PI) + 180; 
-                
+                physicsData.azimDeg = (physicsData.azimDeg || 0) - camAzim * 180 / Math.PI;
+
                 const simResult = window.GolfPhysics.simulateFlight(physicsData, {
                     getTerrainAt: (x, y, z) => {
                         let ty = window.getTerrainHeight ? window.getTerrainHeight(x, -y) : 0;
@@ -704,10 +708,7 @@
                     const panel = document.getElementById('lm-data-panel');
                     panel.classList.add('active');
                     
-                    // Hide after a while or when next shot starts
-                    setTimeout(() => {
-                        if(isFlying) panel.classList.remove('active');
-                    }, 8000);
+                    // it is hidden a few seconds after the ball has stopped (see animate), or when the next swing starts
                 }
             };
         }
