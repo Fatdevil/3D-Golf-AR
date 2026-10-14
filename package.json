@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "test": "node tests/run.js",
     "smoke": "node tests/smoke/arcade-smoke.js",
+    "smoke:shape": "node tests/smoke/shot-shape-smoke.js",
     "e2e": "node tests/e2e/courses-e2e.js"
   },
   "repository": {
