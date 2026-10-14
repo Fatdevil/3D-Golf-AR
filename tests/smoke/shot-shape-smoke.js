@@ -52,9 +52,9 @@ const COURSES = {
   LONGCOURSE: { share_code: 'LONGCOURSE', holes: Array.from({ length: 18 }, (_, i) => ({ par: i === 0 ? '<img src=x onerror="window.__xss=1">' : 4, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } })) },
   // a course with a painted map (a 1 px png as a data URL)
   MAPCOURSE: { share_code: 'MAPCOURSE', terrain_biomemap: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] },
-  // sloped ground (5 %): EASTSLOPE falls toward the east, NORTHSLOPE falls toward the north; the hole is far away, the ball starts at the origin
-  EASTSLOPE: { share_code: 'EASTSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => -0.05 * ((i % 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
-  NORTHSLOPE: { share_code: 'NORTHSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => 0.05 * (Math.floor(i / 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
+  // sloped ground (2 %): EASTSLOPE falls toward the east, NORTHSLOPE falls toward the north; the hole is far away, the ball starts at the origin
+  EASTSLOPE: { share_code: 'EASTSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => -0.02 * ((i % 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
+  NORTHSLOPE: { share_code: 'NORTHSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => 0.02 * (Math.floor(i / 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
@@ -534,7 +534,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     const end = await page.evaluate(function () { return { x: ballMesh.position.x, y: -ballMesh.position.z }; });
     const along = sl.axis === 'x' ? end.y : end.x, across = end[sl.axis];
     check('slope ' + sl.label + ': the normal tilts ' + sl.label + ', the putt travels and breaks ' + sl.label,
-      (sl.axis === 'x' ? n[0] > 0.04 && Math.abs(n[1]) < 0.005 : n[1] > 0.04 && Math.abs(n[0]) < 0.005) && along > 1 && across > 0.1, JSON.stringify({ n: n, end: end }));
+      (sl.axis === 'x' ? n[0] > 0.015 && Math.abs(n[1]) < 0.005 : n[1] > 0.015 && Math.abs(n[0]) < 0.005) && along > 1 && across > 0.1, JSON.stringify({ n: n, end: end }));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
