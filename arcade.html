@@ -29,7 +29,7 @@
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=5"></script>
+<script src="arcade-swing-engine.js?v=7"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -123,6 +123,14 @@
         
         <button class="hb-btn" onclick="window.location.href='arcade_hub.html'">← Return to Hub</button>
         <button class="hb-btn" onclick="toggleHamburgerMenu(); openMatchSettings();">⚙️ Match Settings</button>
+        <div id="hb-input-mode">
+            <div class="hb-section-title" style="cursor:default;">Slagsätt</div>
+            <div class="hb-input-row">
+                <button class="input-btn" data-input="SWING" onclick="SwingEngine.setInputMode('SWING')" title="Slå med swing-cirkeln (klick eller tryck)">Swing</button>
+                <button class="input-btn" data-input="LM" onclick="SwingEngine.setInputMode('LM')" title="Slag från launch monitor">Launch monitor</button>
+                <button class="input-btn" data-input="NUMBERS" onclick="SwingEngine.setInputMode('NUMBERS')" title="Skriv in siffror: exakta slag för att testa fysiken">Siffror</button>
+            </div>
+        </div>
         <button class="hb-btn" id="hb-scorecard-btn" style="display:none;" onclick="toggleHamburgerMenu(); renderScorecard(); let eB=document.getElementById('scorecard-endround-btns'); if(eB) eB.style.display='none'; let cB=document.getElementById('scorecard-footer'); if(cB) cB.style.display='flex'; document.getElementById('scorecard-modal').style.display='flex';">📋 Scorecard</button>
         
         <div class="hb-section-title" onclick="toggleHbSection(this)">Data Tiles (HUD) <span style="transition: transform 0.2s; display: inline-block; transform: rotate(-90deg);">?</span></div>
@@ -9248,6 +9256,8 @@
     }
     // Exposed on window for arcade-swing-engine.js (external module)
     window.triggerRealShot = triggerRealShot;
+    // the swing engine asks before it starts a swing: no new swing while the ball is on its way (triggerRealShot would drop the shot)
+    window.isBallFlying = function () { return isFlying; };
 
     window.shotStartPos = null;
 
@@ -11104,7 +11114,11 @@
         
         if (mode === 'BUILD' && typeof window.disableSwingMode === 'function') {
             window.disableSwingMode();
+        } else if (mode !== 'BUILD' && window.SwingEngine && SwingEngine.applyInputMode) {
+            // play and test: the player's input mode (swing / launch monitor / numbers), else the default for the screen and mode
+            SwingEngine.applyInputMode({ lab: mode === 'TEST' || !!window._isRangeMode });
         }
+        safeSetDisplay('hb-input-mode', mode === 'BUILD' ? 'none' : 'block');
 
         safeSetDisplay('left-toolbar', mode === 'BUILD' ? 'flex' : 'none');
         if (mode !== 'BUILD') safeSetDisplay('left-flyout-toolbar', 'none');

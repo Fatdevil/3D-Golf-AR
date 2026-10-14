@@ -30,8 +30,8 @@
             retryDelay = 5000;
             if(txt) txt.textContent = "LM Brygga Redo";
             if(dot) dot.style.background = "#eab308";
-            if (window.G) window.G.inputMode = 'LAUNCH_MONITOR';
             window.lmConnected = true;
+            if (window.SwingEngine && window.SwingEngine.setBridgeConnected) window.SwingEngine.setBridgeConnected(true);
         };
         ws.onmessage = function(event) {
             try {
@@ -45,6 +45,8 @@
                         setTimeout(() => dot.style.background = "#4ade80", 500);
                     }
                     msg.data.isLiveData = true;
+                    // only while the launch monitor is the chosen input (see SwingEngine.acceptsBridgeShots)
+                    if (window.SwingEngine && window.SwingEngine.acceptsBridgeShots && !window.SwingEngine.acceptsBridgeShots()) return;
                     if (typeof window.triggerRealShot === 'function') {
                         window.triggerRealShot(msg.data);
                     }
@@ -57,8 +59,8 @@
         ws.onclose = function() {
             if(txt) txt.textContent = "LM Brygga Nere";
             if(dot) dot.style.background = "#ef4444";
-            if (window.G) window.G.inputMode = 'SWING_METER';
             window.lmConnected = false;
+            if (window.SwingEngine && window.SwingEngine.setBridgeConnected) window.SwingEngine.setBridgeConnected(false);
             scheduleRetry();
         };
 
