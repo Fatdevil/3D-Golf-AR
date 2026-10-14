@@ -58,6 +58,9 @@ const COURSES = {
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
+const POSTED = [];
+let RESULT_MODE = 'ok';
+
 function serve() {
   return new Promise(function (resolve) {
     const srv = http.createServer(function (req, res) {
@@ -66,6 +69,16 @@ function serve() {
         { share_code: 'TESTCOURSE', name: 'Test <b id="xss">Course</b>', author: 'Anna', hole_count: 2, total_par: 7 },
         { share_code: 'PUTTCOURSE', name: 'Putt Green', author: null, hole_count: 1, total_par: 3 }
       ])); }
+      // the leaderboard: the test reads what was posted and picks the answer
+      if (req.method === 'POST' && /^\/api\/courses\/[^/]+\/results$/.test(p)) {
+        let body = ''; req.on('data', function (c) { body += c; });
+        return req.on('end', function () {
+          POSTED.push({ code: p.split('/')[3], body: JSON.parse(body || '{}'), user: req.headers['x-user-id'] || null });
+          if (RESULT_MODE === 'fail') { res.writeHead(500, { 'Content-Type': 'application/json' }); return res.end('{"error":"Server error"}'); }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, position: 2, flagged: false, handicap: { previous: 18, new: 17.4, differential: 20 } }));
+        });
+      }
       if (p.indexOf('/api/courses/') === 0) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COURSES[p.slice('/api/courses/'.length)] || {})); }
       const f = path.join(ROOT, p === '/' ? 'hub.html' : p);
       if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
@@ -519,7 +532,47 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       return { title: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, rows: document.querySelectorAll('#popup-desc .sc-table tr').length, text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), btn: document.getElementById('popup-btn').innerText };
     });
     check('the round is complete: a scorecard with both holes and the total 8 (2 + 6), Back to menu', end.title === 'ROUND COMPLETE' && end.rows === 4 && /Total 8/.test(end.text) && end.btn === 'Back to menu', JSON.stringify(end));
+    // the finished round is filed on the course's leaderboard: scores per hole, the mode the player used, and the answer is shown
+    await page.waitForFunction(function () { return /Saved/.test(document.getElementById('sc-status').textContent); }, null, { timeout: 15000 }).catch(function () {});
+    const lb = await page.evaluate(function () { return document.getElementById('sc-status').textContent; });
+    const sent = POSTED[POSTED.length - 1];
+    check('the round is submitted once to the course leaderboard (scores 2 and 6, total 8, +1, swing meter) and the position and handicap are shown',
+      POSTED.length === 1 && sent.code === 'TESTCOURSE' && JSON.stringify(sent.body.hole_scores) === '[2,6]' && sent.body.total_score === 8 && sent.body.score_vs_par === 1 && sent.body.input_mode === 'SWING_METER' && /Saved/.test(lb) && /#2/.test(lb) && /17\.4/.test(lb),
+      JSON.stringify({ n: POSTED.length, sent: sent, lb: lb }));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // a leaderboard that cannot be reached: a message and a way to try again; typed numbers and a draft course are not filed
+  {
+    const play = async function (code, setup) {
+      const o = await open('/arcade_mobile.html?course=' + code, { width: 390, height: 844 });
+      if (setup) await o.page.evaluate(setup);
+      // the only hole is finished with a gimme from the green
+      await o.page.evaluate(function () { window._terrainTypeAt = function () { return 'GREEN'; }; window.GolfEngine.getActivePlayer().strokes = 1; });
+      await o.page.evaluate(function () { window.dispatchEvent(new CustomEvent('GolfEvent_RoundCompleted', { detail: { scorecard: GolfEngine.scorecard(Object.assign(GolfEngine.getActivePlayer(), { scores: [3], totalScore: 3 })) } })); });
+      await o.page.waitForTimeout(800);
+      return o;
+    };
+    POSTED.length = 0; RESULT_MODE = 'fail';
+    let o = await play('PUTTCOURSE');
+    let st = await o.page.evaluate(function () { const el = document.getElementById('sc-status'); return { text: el.textContent, retry: !!el.querySelector('button') }; });
+    check('the leaderboard is unreachable: a message and Try again (no silent loss)', /Could not save/.test(st.text) && st.retry && POSTED.length === 1, JSON.stringify({ st: st, n: POSTED.length }));
+    RESULT_MODE = 'ok';
+    await o.page.click('#sc-status button');
+    await o.page.waitForTimeout(800);
+    st = await o.page.evaluate(function () { return document.getElementById('sc-status').textContent; });
+    check('Try again files the round', /Saved/.test(st) && POSTED.length === 2 && POSTED[1].body.input_mode === 'SWING_METER', JSON.stringify({ st: st, n: POSTED.length }));
+    await o.ctx.close();
+
+    POSTED.length = 0;
+    o = await play('PUTTCOURSE', function () { SwingEngine.setInputMode('NUMBERS'); });
+    st = await o.page.evaluate(function () { return document.getElementById('sc-status').textContent; });
+    check('a round with typed numbers is not filed', POSTED.length === 0 && /typed numbers/.test(st), JSON.stringify({ st: st, n: POSTED.length }));
+    await o.ctx.close();
+
+    o = await play('PUTTCOURSE', function () { SwingEngine.setInputMode('LM'); });
+    check('a launch monitor round is filed as LAUNCH_MONITOR', POSTED.length === 1 && POSTED[0].body.input_mode === 'LAUNCH_MONITOR', JSON.stringify(POSTED));
     await o.ctx.close();
   }
 
