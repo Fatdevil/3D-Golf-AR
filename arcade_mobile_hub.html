@@ -239,6 +239,18 @@
         .btn-action:active { transform: scale(0.97); }
         .btn-action:disabled { background: #334155; color: #94a3b8; box-shadow: none; }
 
+        .retry-btn {
+            padding: 14px 28px;
+            border-radius: 12px;
+            border: 1px solid var(--border-glass);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
         .btn-secondary {
             width: 100%;
             padding: 14px;
@@ -384,7 +396,7 @@
             
             updateBottomBar();
             
-            if (viewId === 'view-courses') loadMockCourses();
+            if (viewId === 'view-courses') loadCourses();
         }
 
         function navBack() {
@@ -428,29 +440,60 @@
             }
         }
 
-        // Course Selection
-        function loadMockCourses() {
-            const courses = [
-                { id: '1111', name: 'Pine Valley Reserve', holes: 9, par: 36, img: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&w=150&q=80' },
-                { id: '2222', name: 'Coastal Links', holes: 9, par: 35, img: 'https://images.unsplash.com/photo-1593111774240-d529f12cb416?auto=format&fit=crop&w=150&q=80' }
-            ];
+        // Course Selection: the published courses from the server (GET /api/courses)
+        let courseList = null;   // null = not loaded, [] = none, or the rows
+        let courseListError = false;
 
+        function esc(t) {
+            return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        async function fetchCourses() {
+            courseListError = false;
+            try {
+                const res = await fetch('/api/courses');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const rows = await res.json();
+                courseList = Array.isArray(rows) ? rows : [];
+            } catch (e) {
+                courseList = [];
+                courseListError = true;
+            }
+            loadCourses();
+        }
+
+        function loadCourses() {
             const container = document.getElementById('course-list-container');
             container.innerHTML = '';
 
-            courses.forEach(c => {
-                const isSelected = matchState.courseCode === c.id;
+            if (courseList === null) {
+                container.innerHTML = '<p class="subtitle">Loading courses...</p>';
+                fetchCourses();
+                updateBottomBar();
+                return;
+            }
+            if (courseList.length === 0) {
+                container.innerHTML = courseListError
+                    ? '<p class="subtitle">Could not load the courses. Check your connection.</p><button class="retry-btn" onclick="courseList = null; loadCourses();">Try again</button>'
+                    : '<p class="subtitle">There are no published courses yet.</p>';
+                updateBottomBar();
+                return;
+            }
+
+            courseList.forEach(c => {
+                const isSelected = matchState.courseCode === c.share_code;
                 const card = document.createElement('div');
                 card.className = `course-card ${isSelected ? 'selected' : ''}`;
-                card.onclick = () => selectCourse(c.id);
+                card.onclick = () => selectCourse(c.share_code);
                 card.innerHTML = `
-                    <img src="${c.img}" class="course-img">
+                    <div class="course-img"></div>
                     <div class="course-info">
-                        <div class="course-name">${c.name}</div>
+                        <div class="course-name">${esc(c.name)}</div>
                         <div class="course-meta">
-                            <span><i data-lucide="map" size="14"></i> ${c.holes} Holes</span>
-                            <span><i data-lucide="target" size="14"></i> Par ${c.par}</span>
+                            <span><i data-lucide="map" size="14"></i> ${esc(c.hole_count || '?')} Holes</span>
+                            <span><i data-lucide="target" size="14"></i> Par ${esc(c.total_par || '?')}</span>
                         </div>
+                        ${c.author ? `<div class="course-meta"><span>by ${esc(c.author)}</span></div>` : ''}
                     </div>
                     ${isSelected ? '<i data-lucide="check-circle-2" style="color:var(--primary)"></i>' : ''}
                 `;
@@ -462,7 +505,7 @@
 
         function selectCourse(id) {
             matchState.courseCode = id;
-            loadMockCourses(); // re-render
+            loadCourses(); // re-render
         }
 
         // Settings Toggles

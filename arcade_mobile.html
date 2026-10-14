@@ -49,10 +49,17 @@
         /* SWING METER CONTAINER */
         #swing-ui-container { height: 60px; position: relative; background: rgba(0,0,0,0.5); border-radius: 30px; border: 2px solid rgba(255,255,255,0.2); overflow: hidden; display: flex; justify-content: center; align-items: center; }
         
+        /* SCORECARD (inside the popup) */
+        .sc-scroll { max-height: calc(100vh - 230px); max-height: calc(100dvh - 230px); min-height: 80px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .sc-table { border-collapse: collapse; margin: 0 auto; font-size: 16px; }
+        .sc-table th, .sc-table td { padding: 6px 14px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.12); }
+        .sc-table th { color: rgba(255,255,255,0.6); font-weight: 600; }
+        .sc-table tr.sc-total td { font-weight: 800; color: var(--primary); border-bottom: none; }
+
         /* POPUPS */
         .fullscreen-popup { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,23,42,0.95); z-index: 100; display: none; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; opacity: 0; transition: opacity 0.3s; }
         .popup-title { font-family: 'Outfit', sans-serif; font-size: 48px; font-weight: 800; margin-bottom: 12px; text-align: center; }
-        .popup-desc { font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 32px; }
+        .popup-desc { max-width: 88vw; text-align: center; font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 32px; }
         .btn-primary { background: var(--primary); color: #0f172a; border: none; border-radius: 12px; padding: 16px 32px; font-size: 18px; font-weight: 700; font-family: 'Outfit', sans-serif; }
 
         /* SWING ENGINE CSS */
@@ -126,11 +133,11 @@
         </div>
 
         <div class="top-bar">
-            <div class="hole-info">
+            <div class="hole-info" onclick="window.showScorecard && showScorecard()">
                 <span class="hole-number" id="ui-hole">Hole 1</span>
                 <span class="hole-par" id="ui-par">Par 4 | 420m</span>
             </div>
-            <div class="player-info">
+            <div class="player-info" onclick="window.showScorecard && showScorecard()">
                 <div class="player-name" id="ui-player-name">Player 1</div>
                 <div class="player-score" id="ui-player-score">0</div>
             </div>
@@ -221,7 +228,7 @@
     <div class="fullscreen-popup" id="popup-result">
         <div class="popup-title" id="popup-title">HOLED OUT!</div>
         <div class="popup-desc" id="popup-desc">Score: 4 (Par)</div>
-        <button class="btn-primary" onclick="closePopup()">Continue</button>
+        <button class="btn-primary" id="popup-btn" onclick="popupAction()">Continue</button>
     </div>
 
     <!-- Scripts -->
@@ -230,6 +237,7 @@
     <script src="physics.js"></script>
     <script src="arcade-api-service.js"></script>
     <script src="arcade-game-core.js"></script>
+    <script src="arcade-surface.js?v=1"></script>
     <script src="arcade-swing-engine.js"></script>
 
     <script>
@@ -263,11 +271,9 @@
             const rawData = localStorage.getItem('golf_os_mobile_match');
             const matchData = rawData ? JSON.parse(rawData) : { settings: { gimmeDist: 10, autoPutt: 'TOUR_PRO', autoConcede: 99 }, players: [{ name: 'Player 1', color: '#ef4444' }] };
             
-            let courseCode = matchData.courseCode;
-            if (!courseCode) {
-                const params = new URLSearchParams(window.location.search);
-                courseCode = params.get('course') || '2593d6e5-4a57-41e9-91ee-0a2db7f90117'; 
-            }
+            // the link's course wins over the course of an old match kept in localStorage
+            const params = new URLSearchParams(window.location.search);
+            let courseCode = params.get('course') || matchData.courseCode || '2593d6e5-4a57-41e9-91ee-0a2db7f90117';
 
             let coursePayload = null;
             if (courseCode && window.ArcadeAPI) {
@@ -345,20 +351,47 @@
                 return h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
             };
 
+            // The surface under a point in physics coordinates (x, y; physics Y is -Z in the scene), read from the painted map of the course
+            // with the course's own palette (theme_data.config; the standard palette when it has none): the same classifier as arcade.html.
+            // Without a painted map everything is fairway. A page can replace window._terrainTypeAt.
+            let paletteConfig = {};
+            window._terrainTypeAt = function (x, y) {
+                if (!window.biomeDataCache) return 'FAIRWAY';
+                const TERRAIN_SIZE = 900;
+                const gx = (x + TERRAIN_SIZE / 2) / TERRAIN_SIZE * 4096;
+                const gy = (-y + TERRAIN_SIZE / 2) / TERRAIN_SIZE * 4096;
+                const ix = Math.max(0, Math.min(4095, Math.floor(gx)));
+                const iy = Math.max(0, Math.min(4095, Math.floor(gy)));
+                const idx = (iy * 4096 + ix) * 4;
+                return window.SurfaceClassifier.classify(window.biomeDataCache[idx], window.biomeDataCache[idx + 1], window.biomeDataCache[idx + 2], paletteConfig);
+            };
+
             window.courseHoles = [];
+            let holes = [];
+            const teeOf = h => h.tees && (h.tees.yellow || h.tees.white || h.tees.red || h.tees.black || h.tees.range);
             let startPos = new THREE.Vector3(0, 0, 0);
             let holePos = new THREE.Vector3(0, 0, -50);
             
             window.biomeDataCache = null;
             if (coursePayload) {
+                try {
+                    let td = coursePayload.theme_data;
+                    if (typeof td === 'string') td = JSON.parse(td);
+                    if (td && td.config && typeof td.config === 'object') paletteConfig = td.config;
+                } catch (e) { console.warn('Could not read the course palette', e); }
                 if (coursePayload.terrain_biomemap) {
                     let img = new Image();
+                    // a shot waits for the painted map: the rules read the surface while the shot is resolved
+                    window._biomePending = true;
+                    const biomeDone = () => { window._biomePending = false; if (window._queuedShot) { const q = window._queuedShot; window._queuedShot = null; window.triggerRealShot(q); } };
+                    img.onerror = biomeDone;
                     img.onload = () => {
                         pCtx.drawImage(img, 0, 0);
                         mapTex.needsUpdate = true;
                         try {
                             window.biomeDataCache = pCtx.getImageData(0, 0, 4096, 4096).data;
                         } catch(e) { console.warn("Could not cache biome data (CORS/taint issue)", e); }
+                        biomeDone();
                     };
                     img.src = coursePayload.terrain_biomemap;
                 }
@@ -382,20 +415,15 @@
                 }
                 let holesStr = coursePayload.holes;
                 if (typeof holesStr === 'string') holesStr = JSON.parse(holesStr);
+                // the holes that can be played: a flag and a tee (a range hole only has a range tee)
                 if (holesStr && holesStr.length > 0) {
-                    window.courseHoles = holesStr;
-                    let h1 = holesStr[0];
-                    if (h1.tees && h1.tees.yellow) {
-                        let tz = window.getTerrainHeight(h1.tees.yellow.x, h1.tees.yellow.z);
-                        startPos.set(h1.tees.yellow.x, tz, h1.tees.yellow.z);
-                    }
-                    if (h1.flag) {
-                        let tz = window.getTerrainHeight(h1.flag.x, h1.flag.z);
-                        holePos.set(h1.flag.x, tz, h1.flag.z);
-                    }
-                    document.getElementById('ui-par').innerText = `Par ${h1.par} | ${Math.round(startPos.distanceTo(holePos)*1.09361)}yd`;
+                    holes = holesStr.filter(h => h && h.flag && teeOf(h));
+                    // par is author-controlled: only a plain number goes further (the scorecard is built as HTML)
+                    holes.forEach(h => { const n = Math.round(Number(h.par)); h.par = (n >= 3 && n <= 6) ? n : 4; });
                 }
             }
+            if (holes.length === 0) holes = [{ par: 4, tees: { yellow: { x: 0, z: 0 } }, flag: { x: 0, z: -50 }, practice: true }];
+            window.courseHoles = holes;
             
             // 4. OBJECTS
             const textureLoader = new THREE.TextureLoader();
@@ -422,12 +450,38 @@
             flag.position.y += 1;
             scene.add(flag);
             
-            controls.target.copy(ball.position);
-            // Position camera slightly behind and above ball, looking towards hole
-            let dirToHole = new THREE.Vector3().subVectors(holePos, ball.position).normalize();
-            if (dirToHole.length() < 0.01) dirToHole.set(0, 0, -1);
-            camera.position.copy(ball.position).sub(dirToHole.multiplyScalar(3)).add(new THREE.Vector3(0, 1.5, 0));
-            controls.update();
+            // The camera sits behind the ball, looking at the hole: an untouched camera aims at the hole
+            function resetCameraBehindBall() {
+                const dir = new THREE.Vector3().subVectors(holePos, ball.position);
+                dir.y = 0;
+                if (dir.lengthSq() < 0.0001) dir.set(0, 0, -1);
+                dir.normalize();
+                controls.target.copy(ball.position);
+                camera.position.copy(ball.position).sub(dir.multiplyScalar(3)).add(new THREE.Vector3(0, 1.5, 0));
+                controls.update();
+            }
+
+            function placeBall(x, z) {
+                ball.position.set(x, window.getTerrainHeight(x, z) + 0.06, z);
+                ball.rotation.set(0, 0, 0);
+            }
+
+            // metres from the ball to the flag, in yards for the display
+            const yardsToPin = () => Math.hypot(ball.position.x - holePos.x, ball.position.z - holePos.z) * 1.09361;
+
+            // The hole is up: the tee, the flag, the camera and the texts
+            function loadHole(i) {
+                const h = holes[i], tee = teeOf(h);
+                startPos.set(tee.x, window.getTerrainHeight(tee.x, tee.z), tee.z);
+                holePos.set(h.flag.x, window.getTerrainHeight(h.flag.x, h.flag.z), h.flag.z);
+                h.flag.y = holePos.y;   // the swing engine measures the distance to the pin with it
+                flag.position.copy(holePos);
+                flag.position.y += 1;
+                placeBall(tee.x, tee.z);
+                window.playingHoleIndex = i;
+                resetCameraBehindBall();
+            }
+            loadHole(0);
             
             // 5. GAME LOOP & STATE
             let isFlying = false;
@@ -451,7 +505,7 @@
                         // Physics: p.x (right), p.y (forward), p.z (up)
                         // Three.js: X (right), Y (up), Z (depth, negative is forward)
                         let targetX = p.x;
-                        let targetY = p.z;
+                        let targetY = p.z + 0.038;   // the picture's ball is bigger than the physics ball: lift it so it rests on the ground
                         let targetZ = -p.y;
 
                         let diffX = targetX - ball.position.x;
@@ -531,9 +585,7 @@
                             if (lm && !isFlying) lm.classList.remove('active');
                         }, 4000);
 
-                        let player = window.GolfEngine.getActivePlayer();
-                        player.strokes++;
-                        window.GolfEngine.emit('GolfEvent_BallStopped', { player });
+                        resolveShot();
                     }
                 }
 
@@ -541,30 +593,110 @@
             }
             animate();
             
-            // 6. EVENT LISTENERS
-            window.addEventListener('GolfEvent_HoledOut', (e) => {
-                showPopup('HOLED OUT!', `Score: ${e.detail.total}`, '#10b981');
+            // 6. THE RULES: what a finished shot means, the hole, the scorecard
+            let shotContext = { prevLie: { x: ball.position.x, z: ball.position.z } };
+
+            // Where the ball went into the water / out of bounds: the last point of the path on the course
+            function entryPointOf(path) {
+                for (let i = path.length - 1; i >= 0; i--) {
+                    const t = window._terrainTypeAt(path[i].x, path[i].y);
+                    if (t !== 'WATER' && t !== 'OB') return { x: path[i].x, z: -path[i].y };
+                }
+                return null;
+            }
+
+            // The ball has stopped: the engine applies the rules (holed, water / OB, gimme, auto-putt, concede) and reports with events
+            function resolveShot() {
+                const player = window.GolfEngine.getActivePlayer(), m = flightData.metrics;
+                // water and out of bounds come from the physics; otherwise the surface the ball rests on (it may have rolled from the fairway onto the green)
+                const last = flightData.positions[flightData.positions.length - 1];
+                const terrain = (m.finalTerrainType === 'WATER' || m.finalTerrainType === 'OB') ? m.finalTerrainType : window._terrainTypeAt(last.x, last.y);
+                const isGreen = terrain === 'GREEN', isFringe = terrain === 'FOREGREEN';
+                let entry = null;
+                if (terrain === 'WATER' || terrain === 'OB') entry = entryPointOf(flightData.positions);
+                const ft = yardsToPin() / 1.09361 * 3.28084;
+                window.GolfEngine.handleShotResult(player, ft, isGreen, isFringe, !!m.holed, window.GolfEngine.holePar(), terrain, entry, shotContext.prevLie);
+            }
+
+            const SCORE_NAMES = { '-3': 'ALBATROSS', '-2': 'EAGLE', '-1': 'BIRDIE', '0': 'PAR', '1': 'BOGEY', '2': 'DOUBLE BOGEY', '3': 'TRIPLE BOGEY' };
+            function holeTitle(score, par) {
+                if (score === 1) return 'HOLE IN ONE!';
+                const d = score - par;
+                return SCORE_NAMES[String(d)] || (d < -3 ? 'AMAZING!' : '+' + d);
+            }
+
+            // a hole is done (holed out, gimme / auto-putt, conceded): the score, and on to the next hole or the end of the round
+            function onHoleDone(detail) {
+                const p = window.GolfEngine.getActivePlayer(), score = window.GolfEngine.holeScore(p), par = window.GolfEngine.holePar();
+                const last = window.GolfEngine.getState().holeIndex + 1 >= holes.length;
+                let desc = `Score ${score} (par ${par})`;
+                if (detail && detail.type === 'GIMME') desc += ' - gimme';
+                else if (detail && detail.type === 'AUTO-PUTT') desc += ` - ${detail.putts} putt${detail.putts > 1 ? 's' : ''}`;
+                else if (detail && detail.reason === 'CONCEDE') desc += ' - picked up';
+                showPopup(holeTitle(score, par), desc, '#10b981', last ? 'Finish round' : 'Next hole', () => window.GolfEngine.nextHole());
+                updateUI();
+            }
+            window.addEventListener('GolfEvent_HoledOut', e => onHoleDone(e.detail));
+            window.addEventListener('GolfEvent_GimmeAwarded', e => onHoleDone(e.detail));
+            window.addEventListener('GolfEvent_MatchCompleted', e => onHoleDone(e.detail));
+
+            // water and out of bounds: a penalty stroke, the ball goes back (water: where it went in, OB: the previous spot)
+            window.addEventListener('GolfEvent_PenaltyApplied', e => {
+                const d = e.detail, spot = (d.type === 'WATER' && d.entryPoint) ? d.entryPoint : d.previousLie;
+                placeBall(spot.x, spot.z);
+                resetCameraBehindBall();
+                shotContext.prevLie = { x: spot.x, z: spot.z };
+                updateUI();
+                showPopup(d.type === 'WATER' ? 'WATER!' : 'OUT OF BOUNDS', d.type === 'WATER' ? '+1 penalty stroke. Drop where the ball went in.' : '+1 penalty stroke. Play again from the previous spot.', '#f87171');
+            });
+
+            // a normal stop: the next shot is aimed from where the ball lies, the camera behind it
+            window.addEventListener('GolfEvent_BallStopped', () => {
+                resetCameraBehindBall();
                 updateUI();
             });
-            window.addEventListener('GolfEvent_GimmeAwarded', (e) => {
-                showPopup('GIMME!', `+${e.detail.putts} Putt(s)`, '#fcd34d');
+
+            window.addEventListener('GolfEvent_HoleStarted', e => {
+                loadHole(e.detail.holeIndex);
+                shotContext = { prevLie: { x: ball.position.x, z: ball.position.z } };
+                window.closePopup();
                 updateUI();
             });
-            window.addEventListener('GolfEvent_BallStopped', (e) => {
-                updateUI();
+
+            window.addEventListener('GolfEvent_RoundCompleted', e => {
+                const sc = e.detail.scorecard, d = sc.vsPar;
+                showPopup('ROUND COMPLETE', scorecardHtml(sc) + `<div style="margin-top:12px">Total ${sc.score} (${d === 0 ? 'even' : (d > 0 ? '+' + d : d)})</div>`, '#10b981', 'Back to menu', () => { window.location.href = 'arcade_mobile_hub.html'; }, true);
             });
-            
+
+            function scorecardHtml(sc) {
+                const n = v => (Number.isFinite(Number(v)) ? String(Number(v)) : '-');
+                const rows = sc.rows.map(r => `<tr><td>${n(r.hole)}</td><td>${n(r.par)}</td><td>${r.score === null ? '-' : n(r.score)}</td></tr>`).join('');
+                return `<div class="sc-scroll"><table class="sc-table"><tr><th>Hole</th><th>Par</th><th>Score</th></tr>${rows}<tr class="sc-total"><td>Total</td><td>${n(sc.par)}</td><td>${n(sc.score)}</td></tr></table></div>`;
+            }
+            window.showScorecard = function () {
+                const sc = window.GolfEngine.scorecard(window.GolfEngine.getActivePlayer());
+                showPopup('SCORECARD', scorecardHtml(sc), '#fff', 'Continue', null, true);
+            };
+
             function updateUI() {
                 const p = window.GolfEngine.getActivePlayer();
                 document.getElementById('ui-player-name').innerText = p.name;
-                document.getElementById('ui-player-score').innerText = p.strokes + p.penaltyStrokes;
+                document.getElementById('ui-player-score').innerText = window.GolfEngine.holeScore(p);
+                const idx = window.GolfEngine.getState().holeIndex;
+                document.getElementById('ui-hole').innerText = holes.length > 1 ? `Hole ${idx + 1}/${holes.length}` : 'Hole 1';
+                document.getElementById('ui-par').innerText = `Par ${window.GolfEngine.holePar()} | ${Math.round(yardsToPin())}yd`;
             }
             
-            function showPopup(title, desc, color) {
+            // one popup at a time: title, text (or a table), one button
+            let popupHandler = null;
+            function showPopup(title, desc, color, label, handler, html) {
                 const p = document.getElementById('popup-result');
                 document.getElementById('popup-title').innerText = title;
                 document.getElementById('popup-title').style.color = color;
-                document.getElementById('popup-desc').innerText = desc;
+                const d = document.getElementById('popup-desc');
+                if (html) d.innerHTML = desc; else d.innerText = desc;
+                document.getElementById('popup-btn').innerText = label || 'Continue';
+                popupHandler = handler || null;
                 p.style.display = 'flex';
                 setTimeout(() => p.style.opacity = '1', 50);
             }
@@ -572,10 +704,18 @@
             window.closePopup = function() {
                 const p = document.getElementById('popup-result');
                 p.style.opacity = '0';
-                setTimeout(() => p.style.display = 'none', 300);
+                setTimeout(() => { if (p.style.opacity === '0') p.style.display = 'none'; }, 300);
+            };
+
+            // the popup's button: its own action (next hole, back to the menu), then the popup closes
+            window.popupAction = function () {
+                const h = popupHandler;
+                popupHandler = null;
+                if (h) h(); else window.closePopup();
             };
             
-            updateUI();
+            // the round starts: hole 1 is up (the HOLE_STARTED listener loads it)
+            window.GolfEngine.startRound(holes.map(h => ({ par: h.par })));
 
             // 7. SWING ENGINE INTEGRATION
             window.playingHoleIndex = 0;
@@ -611,7 +751,12 @@
 
             window.triggerRealShot = function(physicsData) {
                 if (isFlying) return;
+                if (window._biomePending) { window._queuedShot = physicsData; return; }
                 console.log("BOOM! Firing Shot:", physicsData);
+                // the stroke counts when the ball is struck, a penalty comes on top; the shot starts from here (OB: play again from here)
+                window.GolfEngine.getActivePlayer().strokes++;
+                shotContext.prevLie = { x: ball.position.x, z: ball.position.z };
+                updateUI();
                 document.getElementById('swing-overlay').classList.remove('active');
                 
                 // The shot goes along the camera's view direction. OrbitControls' azimuth is where the camera sits around the ball
@@ -622,34 +767,17 @@
                 // Physics: X (right), Y (forward), Z (up).
                 // ThreeJS: X (right), Y (up), Z (depth, negative is forward).
                 // So the physics start position is [X, -Z, Y].
-                physicsData.startPos = [ball.position.x, -ball.position.z, ball.position.y];
+                // The physics ball is a regulation ball (radius 21 mm) resting on the ground; the picture is a bigger ball (60 mm, easier to see on a phone).
+                // The physics starts from the ground height, not from the centre of the big ball (that would drop it 4 cm and bounce a putt).
+                physicsData.startPos = [ball.position.x, -ball.position.z, window.getTerrainHeight(ball.position.x, ball.position.z) + 0.022];
                 physicsData.azimDeg = (physicsData.azimDeg || 0) - camAzim * 180 / Math.PI;
 
                 const simResult = window.GolfPhysics.simulateFlight(physicsData, {
+                    // the cup, in physics coordinates (x, -z, height): without it a ball can never be holed
+                    cupPositionLocal: [holePos.x, -holePos.z, holePos.y],
                     getTerrainAt: (x, y, z) => {
                         let ty = window.getTerrainHeight ? window.getTerrainHeight(x, -y) : 0;
-                        let tType = 'FAIRWAY';
-                        
-                        if (window.biomeDataCache) {
-                            let TERRAIN_SIZE = 900;
-                            // Map world coordinates to 0-4096 pixel space
-                            let gx = (x + TERRAIN_SIZE/2) / TERRAIN_SIZE * 4096;
-                            let gy = (-y + TERRAIN_SIZE/2) / TERRAIN_SIZE * 4096; // Physics Y maps to ThreeJS -Z
-                            let ix = Math.max(0, Math.min(4095, Math.floor(gx)));
-                            let iy = Math.max(0, Math.min(4095, Math.floor(gy)));
-                            
-                            let idx = (iy * 4096 + ix) * 4;
-                            let r = window.biomeDataCache[idx];
-                            let g = window.biomeDataCache[idx+1];
-                            let b = window.biomeDataCache[idx+2];
-                            
-                            if (b > 180) tType = 'WATER';
-                            else if (r > 200 && g > 200) tType = 'SAND';
-                            else if (g < 120) tType = 'ROUGH';
-                            else if (g > 210 && b > 110) tType = 'GREEN';
-                        }
-                        
-                        return { z: ty, normal: [0, 0, 1], type: tType };
+                        return { z: ty, normal: [0, 0, 1], type: window._terrainTypeAt(x, y) };
                     }
                 });
                 
@@ -670,7 +798,7 @@
                     spinAxis: physicsData.spinAxisDeg || 0,
                     metrics: {
                         holed: simResult.metrics.holed || false,
-                        finalTerrainType: 'FAIRWAY',
+                        finalTerrainType: simResult.metrics.finalTerrainType || 'FAIRWAY',
                         carryMeters: simResult.metrics.carryDistMeters || 0,
                         totalMeters: simResult.metrics.totalMeters || 0
                     }

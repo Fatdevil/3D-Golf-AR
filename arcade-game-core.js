@@ -12,7 +12,10 @@ const GameEvent = {
     PENALTY_APPLIED: 'GolfEvent_PenaltyApplied',
     OUT_OF_BOUNDS: 'GolfEvent_OutOfBounds',
     TURN_CHANGED: 'GolfEvent_TurnChanged',
-    MATCH_COMPLETED: 'GolfEvent_MatchCompleted'
+    MATCH_COMPLETED: 'GolfEvent_MatchCompleted',
+    BALL_STOPPED: 'GolfEvent_BallStopped',       // a normal stop: no penalty, not holed, no gimme or auto-putt
+    HOLE_STARTED: 'GolfEvent_HoleStarted',       // a new hole is up: { holeIndex, par }
+    ROUND_COMPLETED: 'GolfEvent_RoundCompleted'  // the last hole is done: { scorecard }
 };
 
 const GolfEngine = (function() {
@@ -23,6 +26,7 @@ const GolfEngine = (function() {
         players: [],
         activePlayerIndex: 0,
         holeIndex: 0,
+        holes: [],       // [{ par }] of the course being played (setCourse)
         isFlying: false,
         settings: {
             gimmeDist: 10, // ft
@@ -64,6 +68,54 @@ const GolfEngine = (function() {
         return state.players[state.activePlayerIndex];
     }
 
+    // --- ROUND: holes, scores, the scorecard ---
+    // holes: [{ par }]. The first hole is up and every player starts it fresh.
+    function startRound(holes) {
+        state.holes = (holes || []).map(h => ({ par: (h && h.par) || 4 }));
+        state.holeIndex = 0;
+        state.players.forEach(p => { p.scores = []; p.totalScore = 0; _resetHole(p); });
+        emit(GameEvent.HOLE_STARTED, { holeIndex: 0, par: holePar(0) });
+    }
+
+    function _resetHole(p) {
+        p.strokes = 0; p.penaltyStrokes = 0; p.holedOut = false;
+    }
+
+    function holePar(i) {
+        const h = state.holes[i === undefined ? state.holeIndex : i];
+        return h ? h.par : 4;
+    }
+
+    // what the player has on the current hole: strokes plus penalty strokes
+    function holeScore(p) { return p.strokes + p.penaltyStrokes; }
+
+    // the hole is over for the player: its score goes on the scorecard
+    function _finishHole(p) {
+        p.holedOut = true;
+        p.scores[state.holeIndex] = holeScore(p);
+        p.totalScore = p.scores.reduce((a, b) => a + (b || 0), 0);
+    }
+
+    // the next hole, or null (and ROUND_COMPLETED) after the last one
+    function nextHole() {
+        if (state.holeIndex + 1 >= state.holes.length) {
+            emit(GameEvent.ROUND_COMPLETED, { scorecard: scorecard(getActivePlayer()) });
+            return null;
+        }
+        state.holeIndex++;
+        state.players.forEach(_resetHole);
+        emit(GameEvent.HOLE_STARTED, { holeIndex: state.holeIndex, par: holePar() });
+        return state.holeIndex;
+    }
+
+    // [{ hole, par, score }] for every hole, and the totals of the holes that are done
+    function scorecard(p) {
+        const rows = state.holes.map((h, i) => ({ hole: i + 1, par: h.par, score: p.scores[i] === undefined ? null : p.scores[i] }));
+        const done = rows.filter(r => r.score !== null);
+        const score = done.reduce((a, r) => a + r.score, 0), par = done.reduce((a, r) => a + r.par, 0);
+        return { rows: rows, score: score, par: par, vsPar: score - par, holesPlayed: done.length };
+    }
+
     function updateSettings(newSettings) {
         if (newSettings) {
             state.settings = { ...state.settings, ...newSettings };
@@ -92,7 +144,7 @@ const GolfEngine = (function() {
         let shouldConcede = (player.strokes + player.penaltyStrokes) >= maxScore && maxConcede !== 99;
 
         if (isHoled) {
-            player.holedOut = true;
+            _finishHole(player);
             let total = player.strokes + player.penaltyStrokes;
             emit(GameEvent.HOLED_OUT, { 
                 player, total, par: holePar, isHoleInOne: (total === 1), distanceToPinFt 
@@ -101,8 +153,8 @@ const GolfEngine = (function() {
         }
 
         if (shouldConcede) {
-            player.holedOut = true;
             player.strokes = maxScore - player.penaltyStrokes;
+            _finishHole(player);
             emit(GameEvent.MATCH_COMPLETED, { player, reason: 'CONCEDE', maxScore });
             return;
         }
@@ -110,7 +162,7 @@ const GolfEngine = (function() {
         // Gimme check
         if (isGreen && distanceToPinFt <= state.settings.gimmeDist) {
             player.strokes += 1;
-            player.holedOut = true;
+            _finishHole(player);
             emit(GameEvent.GIMME_AWARDED, { player, distanceToPinFt, putts: 1, type: 'GIMME' });
             return;
         }
@@ -130,7 +182,7 @@ const GolfEngine = (function() {
                 putts = distanceToPinFt < 10 ? 1 : (distanceToPinFt < 40 ? 2 : 3);
             }
             player.strokes += putts;
-            player.holedOut = true;
+            _finishHole(player);
             emit(GameEvent.GIMME_AWARDED, { player, distanceToPinFt, putts, type: 'AUTO-PUTT' });
             return;
         }
@@ -148,6 +200,11 @@ const GolfEngine = (function() {
         getActivePlayer,
         updateSettings,
         handleShotResult,
+        startRound,
+        nextHole,
+        holePar,
+        holeScore,
+        scorecard,
         emit
     };
 
@@ -155,3 +212,6 @@ const GolfEngine = (function() {
 
 window.GolfEngine = GolfEngine;
 window.GameEvent = GameEvent;
+
+// node (the tests): the engine without a browser, with a window that has dispatchEvent
+if (typeof module !== 'undefined' && module.exports) module.exports = { GolfEngine, GameEvent };
