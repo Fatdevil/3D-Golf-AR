@@ -38,14 +38,27 @@ function chromePath() {
   return undefined;
 }
 
-// a flat test course served for /api/courses/<code>: tee 150 m south of the origin, the flag 100 m to the right and 100 m north (21.8 degrees off the north line)
-const COURSE = { share_code: 'TESTCOURSE', holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 150 } }, flag: { x: 100, y: 0, z: -100 } }] };
+// flat test courses served for /api/courses/<code>
+//   TESTCOURSE: hole 1 par 4, tee 150 m south of the origin, the flag 100 m to the right and 100 m north (21.8 degrees off the north line);
+//               hole 2 par 3, tee at (50, 100), flag 40 m north of it
+//   PUTTCOURSE: one par 3 hole, a 3 m putt straight north
+const COURSES = {
+  TESTCOURSE: { share_code: 'TESTCOURSE', holes: [
+    { par: 4, tees: { yellow: { x: 0, y: 0, z: 150 } }, flag: { x: 100, y: 0, z: -100 } },
+    { par: 3, tees: { yellow: { x: 50, y: 0, z: 100 } }, flag: { x: 50, y: 0, z: 60 } }
+  ] },
+  PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
+};
 
 function serve() {
   return new Promise(function (resolve) {
     const srv = http.createServer(function (req, res) {
       const p = decodeURIComponent(req.url.split('?')[0]);
-      if (p.indexOf('/api/courses/') === 0) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COURSE)); }
+      if (p === '/api/courses') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify([
+        { share_code: 'TESTCOURSE', name: 'Test <b id="xss">Course</b>', author: 'Anna', hole_count: 2, total_par: 7 },
+        { share_code: 'PUTTCOURSE', name: 'Putt Green', author: null, hole_count: 1, total_par: 3 }
+      ])); }
+      if (p.indexOf('/api/courses/') === 0) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COURSES[p.slice('/api/courses/'.length)] || {})); }
       const f = path.join(ROOT, p === '/' ? 'hub.html' : p);
       if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
       res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
@@ -415,6 +428,146 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       });
     }
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // ---- the rules on the mobile page: holed, water, out of bounds, gimme, the next hole, the scorecard ----
+  console.log('\narcade_mobile.html (rules)');
+  {
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 390, height: 844 });
+    const page = o.page;
+    // a controlled shot: the physics is replaced by a flight to (x, z) in the scene's coordinates, with the metrics the test names
+    await page.evaluate(function () {
+      const sim = GolfPhysics.simulateFlight;
+      GolfPhysics.simulateFlight = function (inp, env) {
+        if (!window.__fake) return sim.call(this, inp, env);
+        const f = window.__fake; window.__fake = null;
+        const sx = inp.startPos[0], sy = inp.startPos[1], N = 12, path = [];
+        for (let i = 0; i <= N; i++) path.push({ x: sx + (f.x - sx) * i / N, y: sy + (-f.z - sy) * i / N, z: i === 0 || i === N ? 0 : 3, phase: i === N ? 'roll' : (i < 4 ? 'flight' : 'bounce'), time: i * 0.1 });
+        return { path: path, metrics: { holed: !!f.holed, finalTerrainType: f.terrain || 'FAIRWAY', totalMeters: 10, carryMeters: 8 } };
+      };
+    });
+    const hit = async function (fake) {
+      await page.evaluate(function (f) { window.__fake = f; window.triggerRealShot({ ballSpeedMph: 80, launchAngleDeg: 20, totalSpinRpm: 5000, spinAxisDeg: 0, azimDeg: 0, isLiveData: false }); }, fake);
+      await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 30000 });
+      await page.waitForTimeout(150);
+    };
+    const snap = function () {
+      return page.evaluate(function () {
+        const p = GolfEngine.getActivePlayer(), c = window.__ctl, look = [c.target.x - c.object.position.x, c.target.z - c.object.position.z];
+        const h = courseHoles[playingHoleIndex];
+        const toHole = [h.flag.x - ballMesh.position.x, h.flag.z - ballMesh.position.z];
+        const popup = document.getElementById('popup-result');
+        return { strokes: p.strokes, penalty: p.penaltyStrokes, holedOut: p.holedOut, scores: p.scores.slice(), hole: playingHoleIndex,
+                 ball: [+ballMesh.position.x.toFixed(1), +ballMesh.position.z.toFixed(1)],
+                 viewDeg: +(Math.atan2(look[0], -look[1]) * 180 / Math.PI).toFixed(1), holeDeg: +(Math.atan2(toHole[0], -toHole[1]) * 180 / Math.PI).toFixed(1),
+                 popup: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, btn: document.getElementById('popup-btn').innerText,
+                 score: document.getElementById('ui-player-score').innerText, holeText: document.getElementById('ui-hole').innerText, par: document.getElementById('ui-par').innerText };
+      });
+    };
+    let st = await snap();
+    check('hole 1 of 2 is up: par 4, nothing played', st.holeText === 'Hole 1/2' && /^Par 4/.test(st.par) && st.strokes === 0 && st.hole === 0, JSON.stringify(st));
+
+    await hit({ x: 10, z: 40, terrain: 'FAIRWAY' });
+    st = await snap();
+    check('a normal shot: one stroke counted once, the ball lies where it stopped, no popup', st.strokes === 1 && st.penalty === 0 && !st.holedOut && Math.abs(st.ball[0] - 10) < 0.5 && Math.abs(st.ball[1] - 40) < 0.5 && st.popup === null && st.score === '1', JSON.stringify(st));
+    check('after the stop the camera sits behind the ball, aimed at the hole', Math.abs(st.viewDeg - st.holeDeg) < 0.5, JSON.stringify({ view: st.viewDeg, hole: st.holeDeg }));
+    check('the distance to the pin in the header follows the ball', /\| 1(8\d|9\d)yd$/.test(st.par) || /yd$/.test(st.par) && st.par !== 'Par 4 | 420m', st.par);
+
+    await hit({ x: 100, z: -100, holed: true, terrain: 'GREEN' });
+    st = await snap();
+    check('holed: the hole is done with 2 strokes on the card, a popup (eagle on a par 4) with Next hole', st.holedOut && st.scores[0] === 2 && st.popup === 'EAGLE' && st.btn === 'Next hole', JSON.stringify(st));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(500);
+    st = await snap();
+    check('Next hole: hole 2 of 2 is up, par 3, the ball on its tee, strokes back to 0', st.hole === 1 && st.holeText === 'Hole 2/2' && /^Par 3/.test(st.par) && st.strokes === 0 && st.penalty === 0 && !st.holedOut && Math.abs(st.ball[0] - 50) < 0.5 && Math.abs(st.ball[1] - 100) < 0.5 && st.score === '0' && st.popup === null, JSON.stringify(st));
+    check('the new hole is aimed at as well', Math.abs(st.viewDeg - st.holeDeg) < 0.5, JSON.stringify({ view: st.viewDeg, hole: st.holeDeg }));
+
+    // water: the ball goes in beyond z = 80, drops where it crossed the line
+    await page.evaluate(function () { window._terrainTypeAt = function (x, y) { return -y < 80 ? 'WATER' : 'FAIRWAY'; }; });
+    await hit({ x: 50, z: 70, terrain: 'WATER' });
+    st = await snap();
+    check('water: a penalty stroke, the ball dropped where it went in (z about 80), a popup', st.penalty === 1 && st.strokes === 1 && !st.holedOut && st.popup === 'WATER!' && Math.abs(st.ball[1] - 80) < 4 && st.score === '2', JSON.stringify(st));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(500);
+    const dropped = (await snap()).ball;
+
+    // out of bounds: back to where the shot was played from
+    await hit({ x: 70, z: 75, terrain: 'OB' });
+    st = await snap();
+    check('out of bounds: a penalty stroke, the ball back where the shot was played from', st.penalty === 2 && st.popup === 'OUT OF BOUNDS' && Math.abs(st.ball[0] - dropped[0]) < 0.5 && Math.abs(st.ball[1] - dropped[1]) < 0.5, JSON.stringify({ ball: st.ball, from: dropped, penalty: st.penalty }));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(500);
+
+    // gimme: within 10 ft of the flag on the green
+    await page.evaluate(function () { window._terrainTypeAt = function () { return 'GREEN'; }; });
+    await hit({ x: 50, z: 61.5, terrain: 'GREEN' });
+    st = await snap();
+    check('gimme: the putt is added, the hole done (3 strokes + 1 putt + 2 penalty = 6), the last hole offers Finish round', st.holedOut && st.scores[1] === 6 && st.btn === 'Finish round', JSON.stringify(st));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(600);
+    const end = await page.evaluate(function () {
+      const popup = document.getElementById('popup-result');
+      return { title: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, rows: document.querySelectorAll('#popup-desc .sc-table tr').length, text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), btn: document.getElementById('popup-btn').innerText };
+    });
+    check('the round is complete: a scorecard with both holes and the total 8 (2 + 6), Back to menu', end.title === 'ROUND COMPLETE' && end.rows === 4 && /Total 8/.test(end.text) && end.btn === 'Back to menu', JSON.stringify(end));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // the scorecard can be opened during the round, and a real putt (the real physics) can drop
+  {
+    const o = await open('/arcade_mobile.html?course=PUTTCOURSE', { width: 390, height: 844 });
+    const page = o.page;
+    await page.evaluate(function () { window._terrainTypeAt = function () { return 'GREEN'; }; });
+    await page.click('.player-info');
+    await page.waitForTimeout(400);
+    const card = await page.evaluate(function () { return { title: document.getElementById('popup-title').innerText, rows: document.querySelectorAll('#popup-desc .sc-table tr').length }; });
+    check('tapping the score opens the scorecard (one hole)', card.title === 'SCORECARD' && card.rows === 3, JSON.stringify(card));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(500);
+    await page.evaluate(function () { window.triggerRealShot({ ballSpeedMph: 4.5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: 0, isLiveData: false }); });
+    await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 60000 });
+    await page.waitForTimeout(300);
+    const holed = await page.evaluate(function () {
+      const popup = document.getElementById('popup-result');
+      return { holedOut: GolfEngine.getActivePlayer().holedOut, strokes: GolfEngine.getActivePlayer().strokes, title: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, btn: document.getElementById('popup-btn').innerText };
+    });
+    check('a real 3 m putt on the real physics drops: the cup is wired to the physics (before, a ball could never be holed)', holed.holedOut && holed.strokes === 1 && holed.title === 'HOLE IN ONE!' && holed.btn === 'Finish round', JSON.stringify(holed));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // ---- the mobile menu: the real, published courses ----
+  console.log('\narcade_mobile_hub.html (courses)');
+  {
+    const o = await open('/arcade_mobile_hub.html', { width: 390, height: 844 });
+    const page = o.page;
+    await page.evaluate(function () { navTo('view-courses'); });
+    await page.waitForSelector('.course-card', { timeout: 10000 });
+    const list = await page.evaluate(function () {
+      return { names: Array.from(document.querySelectorAll('.course-name')).map(function (n) { return n.textContent; }), meta: document.querySelector('.course-card').innerText.replace(/\s+/g, ' '),
+               injected: !!document.getElementById('xss'), mock: document.body.innerText.indexOf('Pine Valley') >= 0 };
+    });
+    check('the course list comes from the server (GET /api/courses), not from a made-up list', list.names.length === 2 && list.names[1] === 'Putt Green' && !list.mock, JSON.stringify(list.names));
+    check('a course name with HTML in it is shown as text, not run', list.names[0] === 'Test <b id="xss">Course</b>' && !list.injected, JSON.stringify(list.names[0]));
+    check('a card shows holes, par and the author', /2 Holes/.test(list.meta) && /Par 7/.test(list.meta) && /Anna/.test(list.meta), list.meta);
+    const nextDisabled = await page.evaluate(function () { return document.getElementById('main-action-btn').disabled; });
+    await page.click('.course-card:nth-child(2)');
+    const picked = await page.evaluate(function () { return { code: matchState.courseCode, selected: document.querySelectorAll('.course-card.selected').length, disabled: document.getElementById('main-action-btn').disabled }; });
+    check('picking a course selects it by its share code and enables Continue', nextDisabled === true && picked.code === 'PUTTCOURSE' && picked.selected === 1 && picked.disabled === false, JSON.stringify(picked));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+  {
+    const o = await open('/arcade_mobile_hub.html', { width: 390, height: 844 });
+    const page = o.page;
+    await page.route('**/api/courses', function (r) { r.fulfill({ status: 500, body: '{}' }); });
+    await page.evaluate(function () { navTo('view-courses'); });
+    await page.waitForFunction(function () { return /Could not load/.test(document.getElementById('course-list-container').innerText); }, null, { timeout: 10000 });
+    const msg = await page.evaluate(function () { return document.getElementById('course-list-container').innerText.replace(/\s+/g, ' '); });
+    const retryVisible = await page.evaluate(function () { const b = document.querySelector('#course-list-container .retry-btn'); if (!b) return false; const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+    check('the server is down: a message and a visible way to try again (no made-up courses)', /Could not load the courses/.test(msg) && /Try again/.test(msg) && retryVisible, msg);
     await o.ctx.close();
   }
 
