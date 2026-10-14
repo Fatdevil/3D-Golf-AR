@@ -52,8 +52,8 @@ function serve() {
 const results = [];
 function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS  ' : '  FAIL  ') + name + (detail ? '  ' + detail : '')); }
 
-// the page errors that are caused by this test blocking the network, not by the page
-const NETWORK_ERRORS = /lucide is not defined/;
+// arcade_mobile.html loads Lucide from unpkg and calls lucide.createIcons() first in its main script: without it the page never boots
+const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
 
 (async function () {
   const srv = await serve();
@@ -67,10 +67,11 @@ const NETWORK_ERRORS = /lucide is not defined/;
       const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
       if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
     });
-    await ctx.route(/^https:\/\/(?!cdn)/, function (r) { r.abort(); });
+    await ctx.route(/^https:\/\/unpkg\.com\/lucide/, function (r) { r.fulfill({ body: LUCIDE_STUB, contentType: 'application/javascript' }); });
+    await ctx.route(/^https:\/\/(?!cdn|unpkg\.com\/lucide)/, function (r) { r.abort(); });
     const page = await ctx.newPage();
     const errors = [];
-    page.on('pageerror', function (e) { if (!NETWORK_ERRORS.test(e.message)) errors.push(e.message.slice(0, 160) + ' @ ' + String(e.stack).split('\n').slice(1, 3).join(' | ').slice(0, 220)); });
+    page.on('pageerror', function (e) { errors.push(e.message.slice(0, 160) + ' @ ' + String(e.stack).split('\n').slice(1, 3).join(' | ').slice(0, 220)); });
     await page.goto(base + url, { waitUntil: 'load', timeout: 60000 });
     await page.waitForTimeout(6000);
     return { ctx: ctx, page: page, errors: errors };
@@ -144,6 +145,8 @@ const NETWORK_ERRORS = /lucide is not defined/;
     const o = await open('/arcade_mobile.html', { width: 390, height: 844 });
     const page = o.page;
     await shot(page, 'mobile_shape.png');
+    const booted = await page.evaluate(function () { return { shot: typeof window.triggerRealShot, hole: window.playingHoleIndex, engine: typeof window.SwingEngine }; });
+    check('the page booted (initMobileArcade ran: the shot hook and the hole index exist)', booted.shot === 'function' && booted.hole === 0 && booted.engine === 'object', JSON.stringify(booted));
     const row = await shapeRow(page, '#ui-shape .shape-btn');
     check('the three shape buttons are visible, tappable (nothing on top, e.g. the SWING button) and at least 44 px high', Object.keys(row).length === 3 && Object.values(row).every(function (v) { return v.hit && v.onscreen && v.h >= 44; }), JSON.stringify(row));
     const clubs = await page.evaluate(function () { return Array.from(document.querySelectorAll('#ui-clubs .club-btn')).map(function (b) { return b.dataset.club; }); });
