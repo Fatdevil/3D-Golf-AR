@@ -50,6 +50,8 @@ const COURSES = {
   // a course with its own palette (theme_data comes as a JSON string): its greens are magenta
   PALETTECOURSE: { share_code: 'PALETTECOURSE', theme_data: JSON.stringify({ config: { greenColor: '#ff00ff' } }), holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] },
   LONGCOURSE: { share_code: 'LONGCOURSE', holes: Array.from({ length: 18 }, (_, i) => ({ par: i === 0 ? '<img src=x onerror="window.__xss=1">' : 4, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } })) },
+  // a course with a painted map (a 1 px png as a data URL)
+  MAPCOURSE: { share_code: 'MAPCOURSE', terrain_biomemap: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] },
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
@@ -514,6 +516,24 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       return { title: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, rows: document.querySelectorAll('#popup-desc .sc-table tr').length, text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), btn: document.getElementById('popup-btn').innerText };
     });
     check('the round is complete: a scorecard with both holes and the total 8 (2 + 6), Back to menu', end.title === 'ROUND COMPLETE' && end.rows === 4 && /Total 8/.test(end.text) && end.btn === 'Back to menu', JSON.stringify(end));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // a shot taken before the painted map is decoded waits for it (the rules read the surface while the shot is resolved)
+  {
+    // the map image is held back for 8 s
+    const o = await open('/arcade_mobile.html?course=MAPCOURSE', { width: 390, height: 844 }, { init: function () {
+      const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+      Object.defineProperty(HTMLImageElement.prototype, 'src', { configurable: true, get: d.get, set: function (v) { const me = this; if (String(v).indexOf('data:image/png') === 0) setTimeout(function () { d.set.call(me, v); }, 8000); else d.set.call(me, v); } });
+    } });
+    const page = o.page;
+    const shot = function () { window.triggerRealShot({ ballSpeedMph: 4.5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: 0, isLiveData: false }); };
+    await page.evaluate(shot);
+    const early = await page.evaluate(function () { return { strokes: GolfEngine.getActivePlayer().strokes, pending: !!window._biomePending, flying: window.isBallFlying() }; });
+    await page.waitForFunction(function () { return GolfEngine.getActivePlayer().strokes === 1; }, null, { timeout: 30000 });
+    const late = await page.evaluate(function () { return { strokes: GolfEngine.getActivePlayer().strokes, pending: !!window._biomePending, cache: !!window.biomeDataCache }; });
+    check('a shot before the painted map is ready waits for it, then goes', early.pending && early.strokes === 0 && !early.flying && late.strokes === 1 && !late.pending && late.cache, JSON.stringify({ early: early, late: late }));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }

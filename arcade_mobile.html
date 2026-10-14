@@ -381,12 +381,17 @@
                 } catch (e) { console.warn('Could not read the course palette', e); }
                 if (coursePayload.terrain_biomemap) {
                     let img = new Image();
+                    // a shot waits for the painted map: the rules read the surface while the shot is resolved
+                    window._biomePending = true;
+                    const biomeDone = () => { window._biomePending = false; if (window._queuedShot) { const q = window._queuedShot; window._queuedShot = null; window.triggerRealShot(q); } };
+                    img.onerror = biomeDone;
                     img.onload = () => {
                         pCtx.drawImage(img, 0, 0);
                         mapTex.needsUpdate = true;
                         try {
                             window.biomeDataCache = pCtx.getImageData(0, 0, 4096, 4096).data;
                         } catch(e) { console.warn("Could not cache biome data (CORS/taint issue)", e); }
+                        biomeDone();
                     };
                     img.src = coursePayload.terrain_biomemap;
                 }
@@ -746,6 +751,7 @@
 
             window.triggerRealShot = function(physicsData) {
                 if (isFlying) return;
+                if (window._biomePending) { window._queuedShot = physicsData; return; }
                 console.log("BOOM! Firing Shot:", physicsData);
                 // the stroke counts when the ball is struck, a penalty comes on top; the shot starts from here (OB: play again from here)
                 window.GolfEngine.getActivePlayer().strokes++;
