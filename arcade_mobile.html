@@ -351,6 +351,15 @@
                 return h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
             };
 
+            // The ground's tilt for the physics, in physics coordinates (x east, y north, z up): the unit normal from the height under the ball,
+            // read the same way as the ball's height so the two cannot disagree. A slope makes a putt break and a ball roll downhill.
+            window._terrainNormalAt = function (x, y) {
+                const e = TERRAIN_SIZE / TERRAIN_SEGS, H = (px, py) => window.getTerrainHeight(px, -py);
+                const dx = (H(x + e, y) - H(x - e, y)) / (2 * e), dy = (H(x, y + e) - H(x, y - e)) / (2 * e);
+                const len = Math.sqrt(dx * dx + dy * dy + 1);
+                return [-dx / len, -dy / len, 1 / len];
+            };
+
             // The surface under a point in physics coordinates (x, y; physics Y is -Z in the scene), read from the painted map of the course
             // with the course's own palette (theme_data.config; the standard palette when it has none): the same classifier as arcade.html.
             // Without a painted map everything is fairway. A page can replace window._terrainTypeAt.
@@ -777,7 +786,7 @@
                     cupPositionLocal: [holePos.x, -holePos.z, holePos.y],
                     getTerrainAt: (x, y, z) => {
                         let ty = window.getTerrainHeight ? window.getTerrainHeight(x, -y) : 0;
-                        return { z: ty, normal: [0, 0, 1], type: window._terrainTypeAt(x, y) };
+                        return { z: ty, normal: window._terrainNormalAt(x, y), type: window._terrainTypeAt(x, y) };
                     }
                 });
                 

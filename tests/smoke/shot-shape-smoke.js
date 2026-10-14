@@ -52,6 +52,9 @@ const COURSES = {
   LONGCOURSE: { share_code: 'LONGCOURSE', holes: Array.from({ length: 18 }, (_, i) => ({ par: i === 0 ? '<img src=x onerror="window.__xss=1">' : 4, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } })) },
   // a course with a painted map (a 1 px png as a data URL)
   MAPCOURSE: { share_code: 'MAPCOURSE', terrain_biomemap: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] },
+  // sloped ground (2 %): EASTSLOPE falls toward the east, NORTHSLOPE falls toward the north; the hole is far away, the ball starts at the origin
+  EASTSLOPE: { share_code: 'EASTSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => -0.02 * ((i % 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
+  NORTHSLOPE: { share_code: 'NORTHSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => 0.02 * (Math.floor(i / 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
@@ -516,6 +519,22 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       return { title: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, rows: document.querySelectorAll('#popup-desc .sc-table tr').length, text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), btn: document.getElementById('popup-btn').innerText };
     });
     check('the round is complete: a scorecard with both holes and the total 8 (2 + 6), Back to menu', end.title === 'ROUND COMPLETE' && end.rows === 4 && /Total 8/.test(end.text) && end.btn === 'Back to menu', JSON.stringify(end));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // the ground's tilt reaches the physics: a putt across a slope breaks downhill (east slope: a putt north breaks east; north slope: a putt east breaks north)
+  for (const sl of [{ code: 'EASTSLOPE', az: 0, axis: 'x', label: 'east' }, { code: 'NORTHSLOPE', az: 90, axis: 'y', label: 'north' }]) {
+    const o = await open('/arcade_mobile.html?course=' + sl.code, { width: 390, height: 844 });
+    const page = o.page;
+    await page.evaluate(function () { window._terrainTypeAt = function () { return 'GREEN'; }; });
+    const n = await page.evaluate(function () { return window._terrainNormalAt(0, 0); });
+    await page.evaluate(function (az) { window.triggerRealShot({ ballSpeedMph: 3, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: az, isLiveData: false }); }, sl.az);
+    await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 150000 });
+    const end = await page.evaluate(function () { return { x: ballMesh.position.x, y: -ballMesh.position.z }; });
+    const along = sl.axis === 'x' ? end.y : end.x, across = end[sl.axis];
+    check('slope ' + sl.label + ': the normal tilts ' + sl.label + ', the putt travels and breaks ' + sl.label,
+      (sl.axis === 'x' ? n[0] > 0.015 && Math.abs(n[1]) < 0.005 : n[1] > 0.015 && Math.abs(n[0]) < 0.005) && along > 1 && across > 0.1, JSON.stringify({ n: n, end: end }));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
