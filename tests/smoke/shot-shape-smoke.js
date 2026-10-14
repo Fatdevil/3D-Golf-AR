@@ -316,16 +316,18 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.evaluate(ENTER_TEST);
     const st = await page.evaluate(function () { return { mode: SwingEngine.getInputMode(), swing: document.body.classList.contains('swing-mode') }; });
     check('on a phone the swing UI is the default, in test mode too', st.mode === 'SWING' && st.swing, JSON.stringify(st));
-    // no new swing while the ball is still on its way (a page that animates the flight says so with isBallFlying)
+    // no new swing while the ball is still on its way: the page's own flight state (isFlying) answers through isBallFlying
     const tap = await page.evaluate(async function () {
       const active = function () { return document.getElementById('swing-overlay').classList.contains('active'); };
-      window.isBallFlying = function () { return true; };
+      const hasHook = typeof window.isBallFlying === 'function';
+      isFlying = true;
+      const hookWhileFlying = window.isBallFlying();
       SwingEngine.onTap(); const duringFlight = active();
-      window.isBallFlying = function () { return false; };
+      isFlying = false;
       SwingEngine.onTap(); const afterLanding = active();
-      return { duringFlight: duringFlight, afterLanding: afterLanding };
+      return { hasHook: hasHook, hookWhileFlying: hookWhileFlying, duringFlight: duringFlight, afterLanding: afterLanding };
     });
-    check('a tap while the ball is flying does not start a swing; once it has landed it does', tap.duringFlight === false && tap.afterLanding === true, JSON.stringify(tap));
+    check('a tap while the ball is flying does not start a swing; once it has landed it does (on arcade.html too)', tap.hasHook && tap.hookWhileFlying && tap.duringFlight === false && tap.afterLanding === true, JSON.stringify(tap));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }

@@ -9256,6 +9256,8 @@
     }
     // Exposed on window for arcade-swing-engine.js (external module)
     window.triggerRealShot = triggerRealShot;
+    // the swing engine asks before it starts a swing: no new swing while the ball is on its way (triggerRealShot would drop the shot)
+    window.isBallFlying = function () { return isFlying; };
 
     window.shotStartPos = null;
 
