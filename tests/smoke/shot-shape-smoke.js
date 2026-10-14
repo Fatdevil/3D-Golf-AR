@@ -523,16 +523,18 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
-  // the ground's tilt reaches the physics: a ball hit gently rolls downhill (east on one course, north on the other)
-  for (const sl of [{ code: 'EASTSLOPE', axis: 'x', sign: 1, label: 'east' }, { code: 'NORTHSLOPE', axis: 'y', sign: 1, label: 'north' }]) {
+  // the ground's tilt reaches the physics: a putt across a slope breaks downhill (east slope: a putt north breaks east; north slope: a putt east breaks north)
+  for (const sl of [{ code: 'EASTSLOPE', az: 0, axis: 'x', label: 'east' }, { code: 'NORTHSLOPE', az: 90, axis: 'y', label: 'north' }]) {
     const o = await open('/arcade_mobile.html?course=' + sl.code, { width: 390, height: 844 });
     const page = o.page;
-    const n = await page.evaluate(function () { return { n: window._terrainNormalAt(0, 0), e: window._terrainNormalAt(5, 5) }; });
-    await page.evaluate(function () { window.triggerRealShot({ ballSpeedMph: 0.3, launchAngleDeg: 0, totalSpinRpm: 0, spinAxisDeg: 0, azimDeg: 0, isLiveData: false }); });
+    await page.evaluate(function () { window._terrainTypeAt = function () { return 'GREEN'; }; });
+    const n = await page.evaluate(function () { return window._terrainNormalAt(0, 0); });
+    await page.evaluate(function (az) { window.triggerRealShot({ ballSpeedMph: 4.5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: az, isLiveData: false }); }, sl.az);
     await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 60000 });
     const end = await page.evaluate(function () { return { x: ballMesh.position.x, y: -ballMesh.position.z }; });
-    // down the slope: 5 % is a normal tilted 2.9 degrees; the ball must end clearly downhill of where it started
-    check('slope ' + sl.label + ': the normal tilts ' + sl.label + ' and the ball rolls ' + sl.label, (sl.axis === 'x' ? n.n[0] > 0.04 && Math.abs(n.n[1]) < 0.005 : n.n[1] > 0.04 && Math.abs(n.n[0]) < 0.005) && end[sl.axis] * sl.sign > 0.3, JSON.stringify({ n: n.n, end: end }));
+    const along = sl.axis === 'x' ? end.y : end.x, across = end[sl.axis];
+    check('slope ' + sl.label + ': the normal tilts ' + sl.label + ', the putt travels and breaks ' + sl.label,
+      (sl.axis === 'x' ? n[0] > 0.04 && Math.abs(n[1]) < 0.005 : n[1] > 0.04 && Math.abs(n[0]) < 0.005) && along > 1 && across > 0.1, JSON.stringify({ n: n, end: end }));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
