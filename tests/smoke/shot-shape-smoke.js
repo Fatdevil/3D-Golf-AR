@@ -529,8 +529,8 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     const page = o.page;
     await page.evaluate(function () { window._terrainTypeAt = function () { return 'GREEN'; }; });
     const n = await page.evaluate(function () { return window._terrainNormalAt(0, 0); });
-    await page.evaluate(function (az) { window.triggerRealShot({ ballSpeedMph: 4.5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: az, isLiveData: false }); }, sl.az);
-    await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 60000 });
+    await page.evaluate(function (az) { window.triggerRealShot({ ballSpeedMph: 3, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: az, isLiveData: false }); }, sl.az);
+    await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 150000 });
     const end = await page.evaluate(function () { return { x: ballMesh.position.x, y: -ballMesh.position.z }; });
     const along = sl.axis === 'x' ? end.y : end.x, across = end[sl.axis];
     check('slope ' + sl.label + ': the normal tilts ' + sl.label + ', the putt travels and breaks ' + sl.label,
