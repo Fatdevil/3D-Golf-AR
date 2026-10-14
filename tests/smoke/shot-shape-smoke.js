@@ -134,7 +134,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
             f.shot && d.shot && s.shot ? f.shot.spinAxisDeg.toFixed(1) + ' / ' + s.shot.spinAxisDeg.toFixed(1) + ' / ' + d.shot.spinAxisDeg.toFixed(1) : 'no shot reached the physics');
     }
     const putt = await swing('PUTT', 1);
-    check('the putter ignores the shape', !putt.shot || Math.abs(putt.shot.spinAxisDeg) < 20, putt.shot ? 'axis ' + putt.shot.spinAxisDeg.toFixed(1) : 'no shot');
+    check('the putter ignores the shape (a putt reached the physics, with no shape axis)', putt.club === 'PUTT' && !!putt.shot && Math.abs(putt.shot.spinAxisDeg) < 20, putt.shot ? 'axis ' + putt.shot.spinAxisDeg.toFixed(1) : 'no shot reached the physics');
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
