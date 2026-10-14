@@ -80,6 +80,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
   async function open(url, viewport, opts) {
     const touch = !(opts && opts.touch === false);
     const ctx = await browser.newContext({ viewport: viewport, hasTouch: touch, isMobile: touch, serviceWorkers: 'block' });
+    if (opts && opts.init) await ctx.addInitScript(opts.init);
     await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
       const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
       // OrbitControls: keep the instance on window so a test can read the camera azimuth
@@ -244,10 +245,66 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.evaluate(ENTER_TEST);
     st = await state();
     check('the choice is remembered after a reload', st.mode === 'SWING' && st.swing, JSON.stringify(st));
+    // the leaderboard filing follows the picker (arcade-round-result.js reads window.G.inputMode)
+    const filing = await page.evaluate(function () {
+      const out = {};
+      for (const m of ['SWING', 'LM', 'NUMBERS']) { SwingEngine.setInputMode(m); out[m] = window.G.inputMode; }
+      return out;
+    });
+    check('the leaderboard mode follows the picker (swing = swing meter, launch monitor, typed numbers = manual)', filing.SWING === 'SWING_METER' && filing.LM === 'LAUNCH_MONITOR' && filing.NUMBERS === 'MANUAL', JSON.stringify(filing));
     await page.evaluate(function () { setMode('BUILD'); });
     st = await state();
     check('back in build mode the swing UI and the picker are gone', !st.swing && !st.pick, JSON.stringify(st));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // ---- a launch monitor bridge and the input mode ----
+  console.log('\nlaunch monitor bridge');
+  {
+    const o = await open('/arcade.html?mode=range', { width: 1280, height: 720 }, { touch: false, init: 'window._disableLMBridge = true;' });
+    const page = o.page;
+    await page.evaluate(function () { localStorage.removeItem('golfos_input_mode'); });
+    const snap = function () { return page.evaluate(function () { return { mode: SwingEngine.getInputMode(), accepts: SwingEngine.acceptsBridgeShots(), filing: window.G.inputMode }; }); };
+    // connects while the builder is open: nothing changes until play or test starts
+    const before = await snap();
+    await page.evaluate(function () { SwingEngine.setBridgeConnected(true); });
+    let st = await snap();
+    check('a bridge connecting in build mode changes nothing yet', st.mode === before.mode && st.filing === before.filing, JSON.stringify({ before: before, after: st }));
+    await page.evaluate(ENTER_TEST);
+    st = await snap();
+    check('test / play starts with the launch monitor as input while the bridge is connected', st.mode === 'LM' && st.accepts && st.filing === 'LAUNCH_MONITOR', JSON.stringify(st));
+    await page.evaluate(function () { SwingEngine.setInputMode('SWING'); });
+    st = await snap();
+    check('the player picks Swing: bridge shots are ignored and the round counts as a swing meter round', st.mode === 'SWING' && !st.accepts && st.filing === 'SWING_METER', JSON.stringify(st));
+    await page.evaluate(function () { SwingEngine.setBridgeConnected(false); SwingEngine.setBridgeConnected(true); });
+    st = await snap();
+    check('a reconnecting bridge does not override what the player picked', st.mode === 'SWING' && !st.accepts, JSON.stringify(st));
+    await page.evaluate(function () { SwingEngine.setInputMode('LM'); });
+    st = await snap();
+    check('the player picks the launch monitor: its shots are accepted', st.mode === 'LM' && st.accepts && st.filing === 'LAUNCH_MONITOR', JSON.stringify(st));
+    // a bridge that is not there reports 'disconnected' every few seconds: that must not interrupt a swing in progress
+    const swing = await page.evaluate(async function () {
+      SwingEngine.setInputMode('SWING');
+      SwingEngine.onTap();
+      const active = function () { return document.getElementById('swing-overlay').classList.contains('active'); };
+      const started = active();
+      SwingEngine.setBridgeConnected(false); SwingEngine.setBridgeConnected(false); SwingEngine.applyInputMode({ lab: false });
+      return { started: started, stillRunning: active() };
+    });
+    check('redundant "bridge disconnected" reports and re-applying the mode do not interrupt a swing in progress', swing.started && swing.stillRunning, JSON.stringify(swing));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+  {
+    // a bridge that goes away: back to the stored choice or the default
+    const o = await open('/arcade.html?mode=range', { width: 1280, height: 720 }, { touch: false, init: 'window._disableLMBridge = true;' });
+    const page = o.page;
+    await page.evaluate(function () { localStorage.removeItem('golfos_input_mode'); SwingEngine.setBridgeConnected(true); });
+    await page.evaluate(ENTER_TEST);
+    await page.evaluate(function () { SwingEngine.setBridgeConnected(false); });
+    const st = await page.evaluate(function () { return { mode: SwingEngine.getInputMode(), filing: window.G.inputMode }; });
+    check('the bridge disconnects: test mode goes back to numbers on a desktop browser', st.mode === 'NUMBERS' && st.filing === 'MANUAL', JSON.stringify(st));
     await o.ctx.close();
   }
 
@@ -269,6 +326,20 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       return { duringFlight: duringFlight, afterLanding: afterLanding };
     });
     check('a tap while the ball is flying does not start a swing; once it has landed it does', tap.duringFlight === false && tap.afterLanding === true, JSON.stringify(tap));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  console.log('\nstored input mode (phone)');
+  {
+    const o = await open('/arcade.html?mode=range', { width: 412, height: 800 }, { init: "localStorage.setItem('golfos_input_mode', 'NUMBERS')" });
+    const page = o.page;
+    await page.evaluate(ENTER_TEST);
+    const st = await page.evaluate(function () {
+      const vis = function (sel) { const el = document.querySelector(sel); if (!el) return false; const r = el.getBoundingClientRect(); return getComputedStyle(el).display !== 'none' && r.width > 0 && r.height > 0; };
+      return { mode: SwingEngine.getInputMode(), swing: document.body.classList.contains('swing-mode'), clubs: vis('#club-selector'), numbers: vis('#manual-tools') };
+    });
+    check('a stored Numbers choice is respected on a phone: no swing UI, typed values shown', st.mode === 'NUMBERS' && !st.swing && !st.clubs && st.numbers, JSON.stringify(st));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
