@@ -49,6 +49,7 @@ const COURSES = {
   ] },
   // a course with its own palette (theme_data comes as a JSON string): its greens are magenta
   PALETTECOURSE: { share_code: 'PALETTECOURSE', theme_data: JSON.stringify({ config: { greenColor: '#ff00ff' } }), holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] },
+  LONGCOURSE: { share_code: 'LONGCOURSE', holes: Array.from({ length: 18 }, (_, i) => ({ par: i === 0 ? '<img src=x onerror="window.__xss=1">' : 4, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } })) },
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
@@ -526,6 +527,18 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.waitForTimeout(400);
     const card = await page.evaluate(function () { return { title: document.getElementById('popup-title').innerText, rows: document.querySelectorAll('#popup-desc .sc-table tr').length }; });
     check('tapping the score opens the scorecard (one hole)', card.title === 'SCORECARD' && card.rows === 3, JSON.stringify(card));
+    {
+      // an 18 hole course whose first par is markup: no markup runs, and the card scrolls inside a short viewport
+      const l = await open('/arcade_mobile.html?course=LONGCOURSE', { width: 844, height: 390 });
+      await l.page.click('.player-info');
+      await l.page.waitForTimeout(400);
+      const lc = await l.page.evaluate(function () {
+        const sc = document.querySelector('#popup-desc .sc-scroll'), btn = document.getElementById('popup-btn').getBoundingClientRect();
+        return { xss: window.__xss === 1, imgs: document.querySelectorAll('#popup-desc img').length, par0: courseHoles[0].par, scrolls: sc.scrollHeight > sc.clientHeight, btnVisible: btn.bottom <= innerHeight && btn.top >= 0 };
+      });
+      check('scorecard: author markup in par does not run, the 18 hole card scrolls and the button stays on screen', !lc.xss && lc.imgs === 0 && lc.par0 === 4 && lc.scrolls && lc.btnVisible, JSON.stringify(lc));
+      await l.ctx.close();
+    }
     await page.click('#popup-btn');
     await page.waitForTimeout(500);
     await page.evaluate(function () { window.triggerRealShot({ ballSpeedMph: 4.5, launchAngleDeg: 1.5, totalSpinRpm: 300, spinAxisDeg: 0, azimDeg: 0, isLiveData: false }); });

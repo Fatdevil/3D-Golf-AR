@@ -50,6 +50,7 @@
         #swing-ui-container { height: 60px; position: relative; background: rgba(0,0,0,0.5); border-radius: 30px; border: 2px solid rgba(255,255,255,0.2); overflow: hidden; display: flex; justify-content: center; align-items: center; }
         
         /* SCORECARD (inside the popup) */
+        .sc-scroll { max-height: calc(100vh - 230px); max-height: calc(100dvh - 230px); min-height: 80px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
         .sc-table { border-collapse: collapse; margin: 0 auto; font-size: 16px; }
         .sc-table th, .sc-table td { padding: 6px 14px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.12); }
         .sc-table th { color: rgba(255,255,255,0.6); font-weight: 600; }
@@ -410,7 +411,11 @@
                 let holesStr = coursePayload.holes;
                 if (typeof holesStr === 'string') holesStr = JSON.parse(holesStr);
                 // the holes that can be played: a flag and a tee (a range hole only has a range tee)
-                if (holesStr && holesStr.length > 0) holes = holesStr.filter(h => h && h.flag && teeOf(h));
+                if (holesStr && holesStr.length > 0) {
+                    holes = holesStr.filter(h => h && h.flag && teeOf(h));
+                    // par is author-controlled: only a plain number goes further (the scorecard is built as HTML)
+                    holes.forEach(h => { const n = Math.round(Number(h.par)); h.par = (n >= 3 && n <= 6) ? n : 4; });
+                }
             }
             if (holes.length === 0) holes = [{ par: 4, tees: { yellow: { x: 0, z: 0 } }, flag: { x: 0, z: -50 }, practice: true }];
             window.courseHoles = holes;
@@ -659,8 +664,9 @@
             });
 
             function scorecardHtml(sc) {
-                const rows = sc.rows.map(r => `<tr><td>${r.hole}</td><td>${r.par}</td><td>${r.score === null ? '-' : r.score}</td></tr>`).join('');
-                return `<table class="sc-table"><tr><th>Hole</th><th>Par</th><th>Score</th></tr>${rows}<tr class="sc-total"><td>Total</td><td>${sc.par}</td><td>${sc.score}</td></tr></table>`;
+                const n = v => (Number.isFinite(Number(v)) ? String(Number(v)) : '-');
+                const rows = sc.rows.map(r => `<tr><td>${n(r.hole)}</td><td>${n(r.par)}</td><td>${r.score === null ? '-' : n(r.score)}</td></tr>`).join('');
+                return `<div class="sc-scroll"><table class="sc-table"><tr><th>Hole</th><th>Par</th><th>Score</th></tr>${rows}<tr class="sc-total"><td>Total</td><td>${n(sc.par)}</td><td>${n(sc.score)}</td></tr></table></div>`;
             }
             window.showScorecard = function () {
                 const sc = window.GolfEngine.scorecard(window.GolfEngine.getActivePlayer());
