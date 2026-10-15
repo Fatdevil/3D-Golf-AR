@@ -235,6 +235,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="physics.js"></script>
+    <script src="arcade-auth.js"></script>
     <script src="arcade-api-service.js"></script>
     <script src="arcade-game-core.js"></script>
     <script src="arcade-surface.js?v=1"></script>
@@ -674,8 +675,55 @@
 
             window.addEventListener('GolfEvent_RoundCompleted', e => {
                 const sc = e.detail.scorecard, d = sc.vsPar;
-                showPopup('ROUND COMPLETE', scorecardHtml(sc) + `<div style="margin-top:12px">Total ${sc.score} (${d === 0 ? 'even' : (d > 0 ? '+' + d : d)})</div>`, '#10b981', 'Back to menu', () => { window.location.href = 'arcade_mobile_hub.html'; }, true);
+                showPopup('ROUND COMPLETE', scorecardHtml(sc) + `<div style="margin-top:12px">Total ${sc.score} (${d === 0 ? 'even' : (d > 0 ? '+' + d : d)})</div><div id="sc-status" style="margin-top:8px;font-size:15px;color:#94a3b8"></div>`, '#10b981', 'Back to menu', () => { window.location.href = 'arcade_mobile_hub.html'; }, true);
+                submitRound(sc);
             });
+
+            // A finished round goes to the course's leaderboard (and the handicap), like arcade.html does. Not for a practice hole, a draft
+            // course or a round played with typed numbers (the lab: it has no board). The text is built with textContent, never HTML.
+            let roundSubmitted = false;
+            // the round's own key: a retry names the same round, so a record that was saved but whose answer got lost is not filed twice
+            const roundId = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+            async function submitRound(sc) {
+                const say = (t, retry) => {
+                    const el = document.getElementById('sc-status');
+                    if (!el) return;
+                    el.textContent = t;
+                    if (retry) { const b = document.createElement('button'); b.textContent = 'Try again'; b.style.cssText = 'margin-left:10px;padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#0f172a;font-weight:700;font-size:14px'; b.onclick = () => submitRound(sc); el.appendChild(b); }
+                };
+                if (!coursePayload || holes[0].practice || roundSubmitted) return;
+                if (coursePayload.is_draft === true) { say('Draft course: the result is not saved.'); return; }
+                const mode = window.SwingEngine && SwingEngine.getInputMode ? SwingEngine.getInputMode() : null;
+                if (mode === 'NUMBERS') { say('Rounds with typed numbers are not saved to the leaderboard.'); return; }
+                const scores = sc.rows.map(r => r.score);
+                if (scores.length === 0 || scores.some(v => !Number.isFinite(v))) return;
+                say('Saving the result…');
+                // leaving the page while the request is on its way would lose the round: Back to menu waits (and the wait is capped)
+                const back = document.getElementById('popup-btn');
+                if (back) back.disabled = true;
+                try {
+                    const send = async () => {
+                        if (window.GolfAuth && !GolfAuth.isReady) await GolfAuth.init();
+                        const player = window.GolfEngine.getActivePlayer();
+                        const name = (window.GolfAuth && GolfAuth.user && GolfAuth.user.display_name) || player.name || 'Player 1';
+                        return window.ArcadeAPI.submitResult(coursePayload.share_code, {
+                            total_score: sc.score, score_vs_par: sc.vsPar, hole_scores: scores,
+                            input_mode: mode === 'LM' ? 'LAUNCH_MONITOR' : 'SWING_METER', lm_device: null, player_name: name, stats: { round_id: roundId }
+                        });
+                    };
+                    let timer;
+                    const r = await Promise.race([send(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 20000); })]);
+                    clearTimeout(timer);
+                    if (!r || !r.success) throw new Error('not saved');
+                    roundSubmitted = true;
+                    if (r.skipped) { say('Draft course: the result is not saved.'); return; }
+                    let t = 'Saved. Course position #' + Number(r.position);
+                    if (r.handicap && Number.isFinite(Number(r.handicap.new))) t += ' · Handicap ' + Number(r.handicap.new).toFixed(1);
+                    if (r.flagged) t += ' (flagged as unusual)';
+                    say(t);
+                } catch (e) { say('Could not save the result.', true); }
+                finally { if (back) back.disabled = false; }
+            }
 
             function scorecardHtml(sc) {
                 const n = v => (Number.isFinite(Number(v)) ? String(Number(v)) : '-');

@@ -215,6 +215,58 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('two overlapping first publications of one draft end as version 2 (20 courses)', Number(vers.v2) === 20 && Number(vers.n) === 20, JSON.stringify(vers));
     await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-V%']);
 
+    // a finished round is filed once: a retry that names the same round (the first answer got lost) gets the same record back, not a second one
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, hole_count, owner_id) VALUES ($1, 'Res', 'o', '[]'::jsonb, false, 2, $2)", [tag + '-R', deviceId]);
+    const filed = await page.evaluate(async function (c) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const body = JSON.stringify({ total_score: 8, score_vs_par: 1, hole_scores: [2, 6], input_mode: 'SWING_METER', player_name: 'E2E', stats: { round_id: 'e2e-round-0001' } });
+      const post = async function () { return (await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body })).json(); };
+      const a = await post(), b = await post();
+      const other = await (await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body.replace('e2e-round-0001', 'e2e-round-0002') })).json();
+      return { a: a, b: b, other: other };
+    }, tag + '-R');
+    const filedRows = (await pool.query("SELECT count(*) AS n, (SELECT play_count FROM courses WHERE share_code = $1) AS plays FROM course_records WHERE course_code = $1", [tag + '-R'])).rows[0];
+    check('a retried round is filed once (same record back, one row, play count 2 for two rounds)', filed.a.success && filed.b.success && filed.b.duplicate === true && filed.a.record_id === filed.b.record_id && !filed.other.duplicate && filed.other.record_id !== filed.a.record_id && Number(filedRows.n) === 2 && Number(filedRows.plays) === 2, JSON.stringify({ filed: filed, rows: filedRows }));
+    await pool.query("DELETE FROM course_records WHERE course_code = $1", [tag + '-R']);
+    await pool.query("DELETE FROM courses WHERE share_code = $1", [tag + '-R']);
+
+    // the same round arriving several times at once (the client retries after 20 s while the first request may still run): one record, one count
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, hole_count, owner_id) VALUES ($1, 'Res3', 'o', '[]'::jsonb, false, 2, $2)", [tag + '-C', deviceId]);
+    const burst = await page.evaluate(async function (c) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const body = JSON.stringify({ total_score: 8, score_vs_par: 1, hole_scores: [2, 6], input_mode: 'SWING_METER', player_name: 'E2E', stats: { round_id: 'e2e-round-0004' } });
+      const all = await Promise.all([1, 2, 3, 4, 5, 6].map(function () { return fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body }).then(function (r) { return r.json(); }); }));
+      return all.map(function (x) { return { ok: x.success === true, dup: x.duplicate === true, id: x.record_id }; });
+    }, tag + '-C');
+    const burstRows = (await pool.query("SELECT count(*) AS n, (SELECT play_count FROM courses WHERE share_code = $1) AS plays FROM course_records WHERE course_code = $1", [tag + '-C'])).rows[0];
+    check('six simultaneous posts of one round: all answered, one record, play count 1', burst.every(function (x) { return x.ok; }) && burst.filter(function (x) { return !x.dup; }).length === 1 && new Set(burst.map(function (x) { return x.id; })).size === 1 && Number(burstRows.n) === 1 && Number(burstRows.plays) === 1, JSON.stringify({ burst: burst, rows: burstRows }));
+    await pool.query("DELETE FROM course_records WHERE course_code = $1", [tag + '-C']);
+    await pool.query("DELETE FROM courses WHERE share_code = $1", [tag + '-C']);
+
+    // a round is filed together with its counters or not at all: when the play count cannot be updated the record is rolled back, so the retry
+    // of the same round files it properly instead of being answered as a duplicate with the count short
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, hole_count, owner_id) VALUES ($1, 'Res2', 'o', '[]'::jsonb, false, 2, $2)", [tag + '-F', deviceId]);
+    await pool.query("CREATE OR REPLACE FUNCTION e2e_block_plays() RETURNS trigger AS $$ BEGIN IF NEW.share_code LIKE 'E2E-%-F' THEN RAISE EXCEPTION 'e2e: no play count'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql");
+    await pool.query("CREATE TRIGGER e2e_block_plays BEFORE UPDATE ON courses FOR EACH ROW EXECUTE FUNCTION e2e_block_plays()");
+    const partial = await page.evaluate(async function (c) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const body = JSON.stringify({ total_score: 8, score_vs_par: 1, hole_scores: [2, 6], input_mode: 'SWING_METER', player_name: 'E2E', stats: { round_id: 'e2e-round-0003' } });
+      const first = await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body });
+      return { status: first.status };
+    }, tag + '-F');
+    const rowsAfterFail = Number((await pool.query("SELECT count(*) AS n FROM course_records WHERE course_code = $1", [tag + '-F'])).rows[0].n);
+    await pool.query("DROP TRIGGER e2e_block_plays ON courses");
+    await pool.query("DROP FUNCTION e2e_block_plays()");
+    const retried = await page.evaluate(async function (c) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const body = JSON.stringify({ total_score: 8, score_vs_par: 1, hole_scores: [2, 6], input_mode: 'SWING_METER', player_name: 'E2E', stats: { round_id: 'e2e-round-0003' } });
+      return (await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body })).json();
+    }, tag + '-F');
+    const afterRetry = (await pool.query("SELECT count(*) AS n, (SELECT play_count FROM courses WHERE share_code = $1) AS plays FROM course_records WHERE course_code = $1", [tag + '-F'])).rows[0];
+    check('a failed counter update leaves no half-filed round: 500, no record; the retry files it with the play count', partial.status === 500 && rowsAfterFail === 0 && retried.success === true && !retried.duplicate && Number(afterRetry.n) === 1 && Number(afterRetry.plays) === 1, JSON.stringify({ partial: partial, rowsAfterFail: rowsAfterFail, retried: retried, afterRetry: afterRetry }));
+    await pool.query("DELETE FROM course_records WHERE course_code = $1", [tag + '-F']);
+    await pool.query("DELETE FROM courses WHERE share_code = $1", [tag + '-F']);
+
     // Save & play on a new course saves the real draft (not a play copy): the working copy must learn its code
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 7 }); document.getElementById('course-name-input').value = 'E2E Spela'; });
