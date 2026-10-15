@@ -538,7 +538,9 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                      WHERE course_code = $1 AND course_version = $2 AND total_score < $3 AND flagged = false`,
                     [code, courseVersion, d.total_score]
                 );
-                return res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true });
+                // the handicap is derived from the records: redo it, in case the first request stopped before it
+                const hcpDup = d.flagged === true ? null : await updateHandicapIndex(req.userId, pool);
+                return res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true, handicap: { new: hcpDup } });
             }
         }
         
@@ -560,43 +562,49 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             }
         }
         
-        // Save result
-        const result = await pool.query(
-            `INSERT INTO course_records 
-            (course_code, course_version, player_id, player_name, input_mode, lm_device, total_score, score_vs_par, hole_scores, stats, flagged, handicap_at_play, score_differential, net_score)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-            RETURNING id`,
-            [
-                code, courseVersion,
-                req.userId || 'anonymous',
-                player_name || req.body.player_name || 'Anonymous',
-                input_mode || 'SWING_METER',
-                lm_device || null,
-                total_score,
-                score_vs_par || 0,
-                JSON.stringify(hole_scores || []),
-                JSON.stringify(stats || {}),
-                flagged,
-                playerHcpAtPlay, scoreDifferential, netScore
-            ]
-        );
+        // Save result: the record and the counters that go with it are one unit, so a failure can never leave a filed round without its
+        // play count (a retry of the same round would then be answered as a duplicate and the count would stay short).
+        let result;
+        const db = await pool.connect();
+        try {
+            await db.query('BEGIN');
+            result = await db.query(
+                `INSERT INTO course_records 
+                (course_code, course_version, player_id, player_name, input_mode, lm_device, total_score, score_vs_par, hole_scores, stats, flagged, handicap_at_play, score_differential, net_score)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                RETURNING id`,
+                [
+                    code, courseVersion,
+                    req.userId || 'anonymous',
+                    player_name || req.body.player_name || 'Anonymous',
+                    input_mode || 'SWING_METER',
+                    lm_device || null,
+                    total_score,
+                    score_vs_par || 0,
+                    JSON.stringify(hole_scores || []),
+                    JSON.stringify(stats || {}),
+                    flagged,
+                    playerHcpAtPlay, scoreDifferential, netScore
+                ]
+            );
+            // Increment play_count on course
+            await db.query('UPDATE courses SET play_count = COALESCE(play_count, 0) + 1 WHERE share_code = $1', [code]);
+            // Increment builder_score for course owner
+            if (course.owner_id) {
+                await db.query('UPDATE users SET builder_score = builder_score + 1 WHERE id = $1', [course.owner_id]);
+            }
+            await db.query('COMMIT');
+        } catch (e) {
+            try { await db.query('ROLLBACK'); } catch (e2) { /* the connection is gone */ }
+            throw e;
+        } finally {
+            db.release();
+        }
         
-        // Update HCP
+        // Update HCP (derived from the records, recomputed on every round: it can be redone at any time)
         let newHcp = null;
         if (req.userId && req.userId !== 'anonymous' && !flagged) {
             newHcp = await updateHandicapIndex(req.userId, pool);
-        }
-        
-        // Increment play_count on course
-        await pool.query(
-            'UPDATE courses SET play_count = COALESCE(play_count, 0) + 1 WHERE share_code = $1', [code]
-        );
-        
-        // Increment builder_score for course owner
-        if (course.owner_id) {
-            await pool.query(
-                'UPDATE users SET builder_score = builder_score + 1 WHERE id = $1', [course.owner_id]
-            );
         }
         
         // Return leaderboard position

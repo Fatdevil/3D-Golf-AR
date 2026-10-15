@@ -60,6 +60,7 @@ const COURSES = {
 
 const POSTED = [];
 let RESULT_MODE = 'ok';
+let RESULT_DELAY = 0;
 
 function serve() {
   return new Promise(function (resolve) {
@@ -75,8 +76,10 @@ function serve() {
         return req.on('end', function () {
           POSTED.push({ code: p.split('/')[3], body: JSON.parse(body || '{}'), user: req.headers['x-user-id'] || null });
           if (RESULT_MODE === 'fail') { res.writeHead(500, { 'Content-Type': 'application/json' }); return res.end('{"error":"Server error"}'); }
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true, position: 2, flagged: false, handicap: { previous: 18, new: 17.4, differential: 20 } }));
+          setTimeout(function () {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, position: 2, flagged: false, handicap: { previous: 18, new: 17.4, differential: 20 } }));
+          }, RESULT_DELAY);
         });
       }
       if (p.indexOf('/api/courses/') === 0) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COURSES[p.slice('/api/courses/'.length)] || {})); }
@@ -525,8 +528,10 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await hit({ x: 50, z: 61.5, terrain: 'FAIRWAY' });   // the physics keeps the surface it landed on; the ball rolled onto the green
     st = await snap();
     check('gimme from the resting surface (landed on fairway, rolled onto the green): the putt is added, the hole done (3 strokes + 1 putt + 2 penalty = 6), the last hole offers Finish round', st.holedOut && st.scores[1] === 6 && st.btn === 'Finish round', JSON.stringify(st));
+    RESULT_DELAY = 1500;   // the leaderboard answers slowly: Back to menu must wait for the answer
     await page.click('#popup-btn');
     await page.waitForTimeout(600);
+    const whileSaving = await page.evaluate(function () { return { disabled: document.getElementById('popup-btn').disabled, status: document.getElementById('sc-status').textContent }; });
     const end = await page.evaluate(function () {
       const popup = document.getElementById('popup-result');
       return { title: popup.style.display === 'flex' ? document.getElementById('popup-title').innerText : null, rows: document.querySelectorAll('#popup-desc .sc-table tr').length, text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), btn: document.getElementById('popup-btn').innerText };
@@ -535,6 +540,9 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     // the finished round is filed on the course's leaderboard: scores per hole, the mode the player used, and the answer is shown
     await page.waitForFunction(function () { return /Saved/.test(document.getElementById('sc-status').textContent); }, null, { timeout: 15000 }).catch(function () {});
     const lb = await page.evaluate(function () { return document.getElementById('sc-status').textContent; });
+    const afterSaving = await page.evaluate(function () { return document.getElementById('popup-btn').disabled; });
+    RESULT_DELAY = 0;
+    check('Back to menu waits while the result is being saved, then works', whileSaving.disabled === true && /Saving/.test(whileSaving.status) && afterSaving === false, JSON.stringify({ whileSaving: whileSaving, afterSaving: afterSaving }));
     const sent = POSTED[POSTED.length - 1];
     check('the round is submitted once to the course leaderboard (scores 2 and 6, total 8, +1, swing meter) and the position and handicap are shown',
       POSTED.length === 1 && sent.code === 'TESTCOURSE' && JSON.stringify(sent.body.hole_scores) === '[2,6]' && sent.body.total_score === 8 && sent.body.score_vs_par === 1 && sent.body.input_mode === 'SWING_METER' && /Saved/.test(lb) && /#2/.test(lb) && /17\.4/.test(lb),

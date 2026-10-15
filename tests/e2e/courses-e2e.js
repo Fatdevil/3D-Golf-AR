@@ -230,6 +230,30 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await pool.query("DELETE FROM course_records WHERE course_code = $1", [tag + '-R']);
     await pool.query("DELETE FROM courses WHERE share_code = $1", [tag + '-R']);
 
+    // a round is filed together with its counters or not at all: when the play count cannot be updated the record is rolled back, so the retry
+    // of the same round files it properly instead of being answered as a duplicate with the count short
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, hole_count, owner_id) VALUES ($1, 'Res2', 'o', '[]'::jsonb, false, 2, $2)", [tag + '-F', deviceId]);
+    await pool.query("CREATE OR REPLACE FUNCTION e2e_block_plays() RETURNS trigger AS $$ BEGIN IF NEW.share_code LIKE 'E2E-%-F' THEN RAISE EXCEPTION 'e2e: no play count'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql");
+    await pool.query("CREATE TRIGGER e2e_block_plays BEFORE UPDATE ON courses FOR EACH ROW EXECUTE FUNCTION e2e_block_plays()");
+    const partial = await page.evaluate(async function (c) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const body = JSON.stringify({ total_score: 8, score_vs_par: 1, hole_scores: [2, 6], input_mode: 'SWING_METER', player_name: 'E2E', stats: { round_id: 'e2e-round-0003' } });
+      const first = await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body });
+      return { status: first.status };
+    }, tag + '-F');
+    const rowsAfterFail = Number((await pool.query("SELECT count(*) AS n FROM course_records WHERE course_code = $1", [tag + '-F'])).rows[0].n);
+    await pool.query("DROP TRIGGER e2e_block_plays ON courses");
+    await pool.query("DROP FUNCTION e2e_block_plays()");
+    const retried = await page.evaluate(async function (c) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const body = JSON.stringify({ total_score: 8, score_vs_par: 1, hole_scores: [2, 6], input_mode: 'SWING_METER', player_name: 'E2E', stats: { round_id: 'e2e-round-0003' } });
+      return (await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body })).json();
+    }, tag + '-F');
+    const afterRetry = (await pool.query("SELECT count(*) AS n, (SELECT play_count FROM courses WHERE share_code = $1) AS plays FROM course_records WHERE course_code = $1", [tag + '-F'])).rows[0];
+    check('a failed counter update leaves no half-filed round: 500, no record; the retry files it with the play count', partial.status === 500 && rowsAfterFail === 0 && retried.success === true && !retried.duplicate && Number(afterRetry.n) === 1 && Number(afterRetry.plays) === 1, JSON.stringify({ partial: partial, rowsAfterFail: rowsAfterFail, retried: retried, afterRetry: afterRetry }));
+    await pool.query("DELETE FROM course_records WHERE course_code = $1", [tag + '-F']);
+    await pool.query("DELETE FROM courses WHERE share_code = $1", [tag + '-F']);
+
     // Save & play on a new course saves the real draft (not a play copy): the working copy must learn its code
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 7 }); document.getElementById('course-name-input').value = 'E2E Spela'; });

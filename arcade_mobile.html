@@ -698,14 +698,22 @@
                 const scores = sc.rows.map(r => r.score);
                 if (scores.length === 0 || scores.some(v => !Number.isFinite(v))) return;
                 say('Saving the result…');
+                // leaving the page while the request is on its way would lose the round: Back to menu waits (and the wait is capped)
+                const back = document.getElementById('popup-btn');
+                if (back) back.disabled = true;
                 try {
-                    if (window.GolfAuth && !GolfAuth.isReady) await GolfAuth.init();
-                    const player = window.GolfEngine.getActivePlayer();
-                    const name = (window.GolfAuth && GolfAuth.user && GolfAuth.user.display_name) || player.name || 'Player 1';
-                    const r = await window.ArcadeAPI.submitResult(coursePayload.share_code, {
-                        total_score: sc.score, score_vs_par: sc.vsPar, hole_scores: scores,
-                        input_mode: mode === 'LM' ? 'LAUNCH_MONITOR' : 'SWING_METER', lm_device: null, player_name: name, stats: { round_id: roundId }
-                    });
+                    const send = async () => {
+                        if (window.GolfAuth && !GolfAuth.isReady) await GolfAuth.init();
+                        const player = window.GolfEngine.getActivePlayer();
+                        const name = (window.GolfAuth && GolfAuth.user && GolfAuth.user.display_name) || player.name || 'Player 1';
+                        return window.ArcadeAPI.submitResult(coursePayload.share_code, {
+                            total_score: sc.score, score_vs_par: sc.vsPar, hole_scores: scores,
+                            input_mode: mode === 'LM' ? 'LAUNCH_MONITOR' : 'SWING_METER', lm_device: null, player_name: name, stats: { round_id: roundId }
+                        });
+                    };
+                    let timer;
+                    const r = await Promise.race([send(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 20000); })]);
+                    clearTimeout(timer);
                     if (!r || !r.success) throw new Error('not saved');
                     roundSubmitted = true;
                     if (r.skipped) { say('Draft course: the result is not saved.'); return; }
@@ -714,6 +722,7 @@
                     if (r.flagged) t += ' (flagged as unusual)';
                     say(t);
                 } catch (e) { say('Could not save the result.', true); }
+                finally { if (back) back.disabled = false; }
             }
 
             function scorecardHtml(sc) {
