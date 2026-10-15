@@ -268,6 +268,11 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     st = await state();
     check('Swing: the swing circle UI is on (clubs, shapes) and the numbers are hidden', st.mode === 'SWING' && st.swing && st.clubs && st.shapes && !st.numbers && st.saved === 'SWING', JSON.stringify(st));
     await shot(page, 'desktop_swing.png');
+    // the keyboard works on the desktop page as well: Space starts the swing, ',' picks the draw
+    await page.keyboard.press(',');
+    await page.keyboard.press('Space');
+    const kb = await page.evaluate(function () { return { overlay: document.getElementById('swing-overlay').classList.contains('active'), shape: SwingEngine.getShotShape() }; });
+    check('desktop: Space starts the swing and "," has picked the draw', kb.overlay === true && kb.shape === -1, JSON.stringify(kb));
     await page.click('#hb-input-mode .input-btn[data-input="LM"]');
     st = await state();
     check('Launch monitor: no controls on the screen (neither swing UI nor numbers)', st.mode === 'LM' && !st.swing && !st.clubs && !st.numbers && st.saved === 'LM', JSON.stringify(st));
@@ -681,6 +686,68 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     });
     check('four players with 16-character names on a 360 px screen: the last column can be reached (the card scrolls sideways when it is wider than the screen) and each name is kept as a tooltip',
       sc.cols === 6 && /auto|scroll/.test(sc.overflowX) && sc.lastRight <= sc.boxRight + 1 && sc.boxRight <= sc.view && sc.names === 4, JSON.stringify(sc));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
+  // the keyboard: Space / Enter swing, arrow up / down change the club, , / . pick the shape (a tablet with a keyboard, or a desktop)
+  {
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 390, height: 844 });
+    const page = o.page;
+    await page.evaluate(function () {
+      const sim = GolfPhysics.simulateFlight;
+      GolfPhysics.simulateFlight = function (inp, env) {
+        if (!window.__fake) return sim.call(this, inp, env);
+        const f = window.__fake; window.__fake = null;
+        const sx = inp.startPos[0], sy = inp.startPos[1], N = 12, path = [];
+        for (let i = 0; i <= N; i++) path.push({ x: sx + (f.x - sx) * i / N, y: sy + (-f.z - sy) * i / N, z: i === 0 || i === N ? 0 : 3, phase: i === N ? 'roll' : (i < 4 ? 'flight' : 'bounce'), time: i * 0.1 });
+        return { path: path, metrics: { holed: false, finalTerrainType: 'FAIRWAY', totalMeters: 10, carryMeters: 8 } };
+      };
+      window.__fake = { x: 10, z: 40 };
+    });
+    const ui = function () { return page.evaluate(function () { return { club: SwingEngine.getClub(), shape: SwingEngine.getShotShape(), overlay: document.getElementById('swing-overlay').classList.contains('active'), strokes: GolfEngine.getActivePlayer().strokes }; }); };
+    await page.evaluate(function () { SwingEngine.selectClub('I7'); SwingEngine.setShotShape(0); });
+    await page.keyboard.press('ArrowUp');
+    let k = await ui();
+    check('Arrow up: a longer club (7 iron to 5 iron)', k.club === 'I5', JSON.stringify(k));
+    await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+    k = await ui();
+    check('Arrow down three times from the 5 iron: 7 iron, 9 iron, pitching wedge', k.club === 'PW', JSON.stringify(k));
+    for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowUp');
+    k = await ui();
+    check('Arrow up stops at the driver, and does not wrap around', k.club === 'DRIVER', JSON.stringify(k));
+    await page.keyboard.press(',');
+    const draw = (await ui()).shape;
+    await page.keyboard.press('.');
+    const fade = (await ui()).shape;
+    await page.keyboard.press('/');
+    const straight = (await ui()).shape;
+    check('"," draw, "." fade, "/" straight', draw === -1 && fade === 1 && straight === 0, JSON.stringify({ draw: draw, fade: fade, straight: straight }));
+    await page.keyboard.press('Space');
+    k = await ui();
+    check('Space starts the swing (the meter is up)', k.overlay === true, JSON.stringify(k));
+    await page.keyboard.press('ArrowDown');
+    k = await ui();
+    check('the club does not change in the middle of a swing', k.club === 'DRIVER', JSON.stringify(k));
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(function () { return GolfEngine.getActivePlayer().strokes === 1; }, null, { timeout: 15000 }).catch(function () {});
+    k = await ui();
+    check('Space, Space and Enter swing the whole shot: one stroke is counted', k.strokes === 1, JSON.stringify(k));
+    await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 30000 });
+    await page.waitForTimeout(300);
+    // under a popup the keys do nothing
+    await page.evaluate(function () { window.GolfEngine.getActivePlayer().strokes = 0; window.showScorecard(); });
+    await page.keyboard.press('Space');
+    k = await ui();
+    check('under a popup Space does not start a swing', k.overlay === false, JSON.stringify(k));
+    await page.evaluate(function () { closePopup(); });
+    // a text field keeps its keys
+    await page.evaluate(function () { const i = document.createElement('input'); i.id = 'kb-test'; document.body.appendChild(i); i.focus(); });
+    await page.waitForTimeout(400);
+    await page.keyboard.press('Space');
+    k = await ui();
+    check('typing in a text field does not swing', k.overlay === false, JSON.stringify(k));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }

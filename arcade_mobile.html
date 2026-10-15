@@ -870,6 +870,8 @@
 
             // the swing engine asks before it starts a swing: no new shot while the ball is still on its way
             window.isBallFlying = () => isFlying;
+            // the swing keys (a keyboard on a tablet): not under a popup
+            window.swingKeysAllowed = () => !isFlying && document.getElementById('popup-result').style.display !== 'flex';
 
             window.triggerRealShot = function(physicsData) {
                 if (isFlying) return;

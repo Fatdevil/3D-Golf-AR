@@ -29,7 +29,7 @@
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=7"></script>
+<script src="arcade-swing-engine.js?v=8"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -9258,6 +9258,8 @@
     window.triggerRealShot = triggerRealShot;
     // the swing engine asks before it starts a swing: no new swing while the ball is on its way (triggerRealShot would drop the shot)
     window.isBallFlying = function () { return isFlying; };
+    // the swing keys (Space / arrows / , . /) work while a round is up, not in the builder and not while the ball is flying
+    window.swingKeysAllowed = function () { return (appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying; };
 
     window.shotStartPos = null;
 

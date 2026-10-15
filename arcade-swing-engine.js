@@ -519,6 +519,48 @@ const SwingEngine = (function() {
     }
 
     // -----------------------------------------------------------
+    // Keyboard (desktop): Space / Enter = the swing tap (start, lock the power, lock the direction),
+    // Arrow up / down = a longer / shorter club, ',' = draw, '/' = straight, '.' = fade.
+    // Only while the swing mode is on and the page allows it (window.swingKeysAllowed: not in the builder, not under a popup).
+    // Club and shape change between swings, never in the middle of one.
+    // -----------------------------------------------------------
+    const CLUB_ORDER = ['DRIVER', 'W3', 'I5', 'I7', 'I9', 'PW', 'SW', 'LW', 'PUTT'];
+    const SHAPE_KEYS = { ',': -1, '/': 0, '.': 1 };
+    let _tapKeyDown = false;
+
+    function _keysOn(e) {
+        if (!_enabled || e.ctrlKey || e.metaKey || e.altKey) return false;
+        const t = e.target && e.target.tagName;
+        if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return false;
+        return typeof window.swingKeysAllowed === 'function' ? !!window.swingKeysAllowed() : true;
+    }
+
+    function _onKeyDown(e) {
+        if (!_keysOn(e)) return;
+        const tap = e.code === 'Space' || e.key === 'Enter';
+        if (tap) {
+            // a focused button must not also be pressed by the key (Enter on keydown, Space on keyup)
+            e.preventDefault();
+            _tapKeyDown = true;
+            if (!e.repeat) onTap();
+        } else if (_phase === 'idle' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            e.preventDefault();
+            const i = CLUB_ORDER.indexOf(_clubKey), j = Math.max(0, Math.min(CLUB_ORDER.length - 1, i + (e.key === 'ArrowUp' ? -1 : 1)));
+            if (j !== i) selectClub(CLUB_ORDER[j]);
+        } else if (_phase === 'idle' && Object.prototype.hasOwnProperty.call(SHAPE_KEYS, e.key)) {
+            e.preventDefault();
+            setShotShape(SHAPE_KEYS[e.key]);
+        }
+    }
+    function _onKeyUp(e) {
+        if (!_tapKeyDown || !(e.code === 'Space' || e.key === 'Enter')) return;
+        _tapKeyDown = false;
+        e.preventDefault();
+    }
+    window.addEventListener('keydown', _onKeyDown);
+    window.addEventListener('keyup', _onKeyUp);
+
+    // -----------------------------------------------------------
     // enableSwingMode / disableSwingMode
     // RAF guard: cancel any running loop before enabling to prevent
     // multiple parallel _rafLoop chains if toggled on/off rapidly.
