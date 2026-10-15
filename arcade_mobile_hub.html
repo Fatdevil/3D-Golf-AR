@@ -353,12 +353,16 @@
             <div class="setting-group">
                 <h2>Players</h2>
                 <div class="setting-row">
-                    <span class="setting-label" style="display:flex; align-items:center; gap:8px;">
-                        <div style="width:16px; height:16px; border-radius:50%; background:#ef4444;"></div>
-                        Player 1
-                    </span>
-                    <span style="color:var(--text-muted); font-size:14px;">You</span>
+                    <span class="setting-label">Players</span>
+                    <div class="segmented-control" id="players-ctrl">
+                        <button class="segment-btn active" data-count="1" onclick="setPlayerCount(1)">1</button>
+                        <button class="segment-btn" data-count="2" onclick="setPlayerCount(2)">2</button>
+                        <button class="segment-btn" data-count="3" onclick="setPlayerCount(3)">3</button>
+                        <button class="segment-btn" data-count="4" onclick="setPlayerCount(4)">4</button>
+                    </div>
                 </div>
+                <div id="players-list"></div>
+                <p class="subtitle" id="players-note" style="display:none; margin-top:10px; font-size:13px;">Pass the phone: the player farthest from the hole plays next. Only Player 1 (you) is saved to the leaderboard.</p>
             </div>
         </div>
 
@@ -507,6 +511,40 @@
             matchState.courseCode = id;
             loadCourses(); // re-render
         }
+
+
+        // Players: 1-4 on one phone. Player 1 is the owner of the device (the one saved to the leaderboard).
+        const PLAYER_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'];
+        function setPlayerCount(n) {
+            const old = matchState.players;
+            matchState.players = Array.from({ length: n }, (_, i) => ({ name: (old[i] && old[i].name) || ('Player ' + (i + 1)), color: PLAYER_COLORS[i] }));
+            Array.from(document.getElementById('players-ctrl').children).forEach(b => b.classList.toggle('active', Number(b.dataset.count) === n));
+            renderPlayers();
+        }
+        function renderPlayers() {
+            const list = document.getElementById('players-list');
+            list.textContent = '';
+            matchState.players.forEach((pl, i) => {
+                const row = document.createElement('div');
+                row.className = 'setting-row';
+                const dot = document.createElement('div');
+                dot.style.cssText = 'width:16px;height:16px;border-radius:50%;flex:none;background:' + pl.color;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.maxLength = 16;
+                input.value = pl.name;
+                input.setAttribute('aria-label', 'Name of player ' + (i + 1));
+                input.style.cssText = 'flex:1;min-width:0;margin:0 10px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:inherit;font-size:15px';
+                input.oninput = () => { pl.name = input.value.trim() || ('Player ' + (i + 1)); };
+                const tag = document.createElement('span');
+                tag.style.cssText = 'color:var(--text-muted);font-size:14px;flex:none';
+                tag.textContent = i === 0 ? 'You' : 'Guest';
+                row.append(dot, input, tag);
+                list.appendChild(row);
+            });
+            document.getElementById('players-note').style.display = matchState.players.length > 1 ? 'block' : 'none';
+        }
+        renderPlayers();
 
         // Settings Toggles
         function setGimme(dist) {

@@ -130,5 +130,60 @@ out('\nHål och scorekort');
   check('ett hål som inte är spelat har score null och räknas inte i totalen', sc.rows[0].score === null && sc.holesPlayed === 0 && sc.score === 0);
 }
 
+out('\nFlera spelare: turordning, hederslista, scorekort');
+{
+  events.length = 0;
+  E.initPlayers([{ name: 'Anna', color: '#f00' }, { name: 'Bo', color: '#0f0' }, { name: 'Cia', color: '#00f' }]);
+  E.updateSettings({ gimmeDist: 10, autoPutt: 'OFF', autoConcede: 99 });
+  E.startRound([{ par: 4 }, { par: 3 }]);
+  const [A, B, C] = E.getState().players;
+  const dist = { Anna: 0, Bo: 0, Cia: 0 };
+  const d = p => dist[p.name];
+  check('på första tee spelar den som står först i listan (alla lika långt från flaggan)', E.nextPlayer(d) === A && E.getActivePlayer() === A);
+  dist.Anna = 150; dist.Bo = 150; dist.Cia = 150;
+  check('alla på tee: Anna först (turordningen avgör lika avstånd)', E.nextPlayer(d) === A);
+  dist.Anna = 40; dist.Bo = 150; dist.Cia = 150;
+  check('längst från hålet spelar: Anna har slagit, nu Bo (Cia efter honom i ordningen)', E.nextPlayer(d) === B);
+  dist.Bo = 60;
+  check('Bo slog till 60 m: Cia är fortfarande på tee (150 m) och spelar', E.nextPlayer(d) === C);
+  dist.Cia = 20;
+  check('Cia på 20 m, Bo på 60 m, Anna på 40 m: Bo är längst bort och spelar igen', E.nextPlayer(d) === B);
+  events.length = 0;
+  B.strokes = 3; shot(B, { holed: true, ft: 0 });
+  check('Bo har gått i mål: nästa är Anna (40 m) före Cia (20 m); Bo hoppas över', E.playersLeft().length === 2 && E.nextPlayer(d) === A);
+  A.strokes = 2; shot(A, { holed: true, ft: 0 });
+  check('Anna i mål: kvar är Cia', E.playersLeft().length === 1 && E.nextPlayer(d) === C);
+  C.strokes = 4; shot(C, { holed: true, ft: 0 });
+  check('alla i mål: ingen spelare kvar (nextPlayer ger null), hålet är klart', E.playersLeft().length === 0 && E.nextPlayer(d) === null);
+  events.length = 0;
+  E.nextHole();
+  check('hål 2: hederslistan, bästa score slår först (Anna 2, Bo 3, Cia 4)', E.getActivePlayer() === A && E.getState().teeOrder.join() === '0,1,2', E.getState().teeOrder.join());
+  // hål 2: Cia gör bäst
+  dist.Anna = 100; dist.Bo = 100; dist.Cia = 100;
+  A.strokes = 4; shot(A, { holed: true, ft: 0 });
+  B.strokes = 3; shot(B, { holed: true, ft: 0 });
+  C.strokes = 1; shot(C, { holed: true, ft: 0 });
+  events.length = 0;
+  const end = E.nextHole();
+  const ev = events.find(x => x.name === G.ROUND_COMPLETED);
+  check('efter sista hålet: ROUND_COMPLETED med ett scorekort per spelare, "scorecard" är den första spelarens', end === null && !!ev && ev.detail.scorecards.length === 3 && ev.detail.scorecard.score === A.totalScore && ev.detail.scorecards[2].score === 5 && ev.detail.scorecards[2].player.name === 'Cia', JSON.stringify(ev && ev.detail.scorecards.map(x => x.score)));
+}
+{
+  events.length = 0;
+  E.initPlayers([{ name: 'Anna' }, { name: 'Bo' }]);
+  E.updateSettings({ gimmeDist: 10, autoPutt: 'OFF', autoConcede: 99 });
+  E.startRound([{ par: 4 }, { par: 4 }, { par: 4 }]);
+  const [A, B] = E.getState().players;
+  A.strokes = 5; shot(A, { holed: true, ft: 0 });
+  B.strokes = 3; shot(B, { holed: true, ft: 0 });
+  E.nextHole();
+  check('hederslistan: Bo gjorde bäst på hål 1 och slår först på hål 2', E.getActivePlayer() === B && E.getState().teeOrder.join() === '1,0', E.getState().teeOrder.join());
+  A.strokes = 4; shot(A, { holed: true, ft: 0 });
+  B.strokes = 4; shot(B, { holed: true, ft: 0 });
+  E.nextHole();
+  check('lika score på hål 2: ordningen från förra hålet består (Bo före Anna)', E.getActivePlayer() === B && E.getState().teeOrder.join() === '1,0');
+}
+E.initPlayers([{ name: 'P1', color: '#fff' }]);
+
 out(failed ? '\n' + failed + ' FAILED' : '\nAll passed');
 process.exit(failed ? 1 : 0);

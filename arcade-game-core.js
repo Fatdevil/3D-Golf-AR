@@ -25,6 +25,7 @@ const GolfEngine = (function() {
         playState: 'IDLE', // 'IDLE', 'ROUND_IDLE', 'ROUND_FLYING'
         players: [],
         activePlayerIndex: 0,
+        teeOrder: [],    // indices of the players in the order they tee off (the honour goes to the best score of the hole before)
         holeIndex: 0,
         holes: [],       // [{ par }] of the course being played (setCourse)
         isFlying: false,
@@ -62,6 +63,7 @@ const GolfEngine = (function() {
             lie: { x: 0, y: 0, z: 0, type: 'TEE' }
         }));
         state.activePlayerIndex = 0;
+        state.teeOrder = state.players.map((_, i) => i);
     }
 
     function getActivePlayer() {
@@ -73,6 +75,8 @@ const GolfEngine = (function() {
     function startRound(holes) {
         state.holes = (holes || []).map(h => ({ par: (h && h.par) || 4 }));
         state.holeIndex = 0;
+        state.teeOrder = state.players.map((_, i) => i);
+        state.activePlayerIndex = 0;
         state.players.forEach(p => { p.scores = []; p.totalScore = 0; _resetHole(p); });
         emit(GameEvent.HOLE_STARTED, { holeIndex: 0, par: holePar(0) });
     }
@@ -96,14 +100,38 @@ const GolfEngine = (function() {
         p.totalScore = p.scores.reduce((a, b) => a + (b || 0), 0);
     }
 
+    // The player who plays next: of those still playing the hole, the one whose ball is farthest from the flag. distanceOf(player) gives the
+    // distance (metres). Equal distances (everyone on the tee) go by the tee order, so the honour decides.
+    function nextPlayer(distanceOf) {
+        const cands = state.teeOrder.map(i => state.players[i]).filter(p => !p.holedOut);
+        if (cands.length === 0) return null;
+        let best = cands[0], bd = distanceOf(best);
+        for (let k = 1; k < cands.length; k++) {
+            const d = distanceOf(cands[k]);
+            if (d > bd + 0.05) { best = cands[k]; bd = d; }
+        }
+        const changed = state.players[state.activePlayerIndex] !== best;
+        state.activePlayerIndex = state.players.indexOf(best);
+        emit(GameEvent.TURN_CHANGED, { player: best, changed: changed });
+        return best;
+    }
+
+    // the players still to play the hole
+    function playersLeft() { return state.players.filter(p => !p.holedOut); }
+
     // the next hole, or null (and ROUND_COMPLETED) after the last one
     function nextHole() {
         if (state.holeIndex + 1 >= state.holes.length) {
-            emit(GameEvent.ROUND_COMPLETED, { scorecard: scorecard(getActivePlayer()) });
+            emit(GameEvent.ROUND_COMPLETED, { scorecard: scorecard(state.players[0]), scorecards: state.players.map(p => Object.assign({ player: p }, scorecard(p))) });
             return null;
         }
+        // the honour: the best score of the hole just played tees off first, ties keep the order they had
+        const h = state.holeIndex, pos = i => state.teeOrder.indexOf(i);
+        const sc = i => (typeof state.players[i].scores[h] === 'number' ? state.players[i].scores[h] : Infinity);   // no score: last
+        state.teeOrder = state.teeOrder.slice().sort((a, b) => (sc(a) === sc(b) ? 0 : (sc(a) < sc(b) ? -1 : 1)) || (pos(a) - pos(b)));
         state.holeIndex++;
         state.players.forEach(_resetHole);
+        state.activePlayerIndex = state.teeOrder[0];
         emit(GameEvent.HOLE_STARTED, { holeIndex: state.holeIndex, par: holePar() });
         return state.holeIndex;
     }
@@ -198,6 +226,8 @@ const GolfEngine = (function() {
         setPlayState,
         initPlayers,
         getActivePlayer,
+        nextPlayer,
+        playersLeft,
         updateSettings,
         handleShotResult,
         startRound,
