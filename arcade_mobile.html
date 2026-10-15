@@ -324,7 +324,15 @@
             scene.add(dirLight);
             
             // 3. TERRAIN
-            const TERRAIN_SIZE = 900;
+            // The terrain is as wide as arcade.html makes it (600 m, TERRAIN_SIZE there): the course is a grid and a picture without a size,
+            // so the page must use the same one or everything lands in the wrong place (the surface, the height, the slope under a ball).
+            // A course that names its own size (terrain_heightmap.size) is followed.
+            let courseHeightmap = null;
+            try {
+                courseHeightmap = coursePayload && coursePayload.terrain_heightmap;
+                if (typeof courseHeightmap === 'string') courseHeightmap = JSON.parse(courseHeightmap);
+            } catch (e) { console.warn('Could not read the course terrain', e); courseHeightmap = null; }
+            const TERRAIN_SIZE = (courseHeightmap && Number.isFinite(courseHeightmap.size) && courseHeightmap.size >= 100 && courseHeightmap.size <= 5000) ? courseHeightmap.size : 600;
             const TERRAIN_SEGS = 400; 
             const planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
             planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
@@ -378,7 +386,6 @@
             let paletteConfig = {};
             window._terrainTypeAt = function (x, y) {
                 if (!window.biomeDataCache) return 'FAIRWAY';
-                const TERRAIN_SIZE = 900;
                 const gx = (x + TERRAIN_SIZE / 2) / TERRAIN_SIZE * 4096;
                 const gy = (-y + TERRAIN_SIZE / 2) / TERRAIN_SIZE * 4096;
                 const ix = Math.max(0, Math.min(4095, Math.floor(gx)));
@@ -416,8 +423,8 @@
                     };
                     img.src = coursePayload.terrain_biomemap;
                 }
-                if (coursePayload.terrain_heightmap) {
-                    let mapData = (typeof coursePayload.terrain_heightmap === 'string') ? JSON.parse(coursePayload.terrain_heightmap) : coursePayload.terrain_heightmap;
+                if (courseHeightmap) {
+                    let mapData = courseHeightmap;
                     let groundArr = Array.isArray(mapData) ? mapData : mapData.ground;
                     if (groundArr) {
                         let savedSegs = mapData.segs || Math.round(Math.sqrt(groundArr.length) - 1);

@@ -390,6 +390,7 @@
                 ground: hm,
                 water: w_hm,
                 segs: window.TERRAIN_SEGS || 600,
+                size: window.TERRAIN_SIZE || 600,   // metres: the grid and the picture have no size of their own
                 terrainGrid: window._terrainGridSegs || window.TERRAIN_SEGS || 600,
                 waterTableLevel: window.waterTableLevel !== undefined ? window.waterTableLevel : 0,
                 waterType: window.currentWaterType || 'CLEAR'
@@ -827,7 +828,7 @@
                 total_par: totalPar,
                 targets: dumpTargets,
                 trees: dumpTrees,
-                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm, segs: TERRAIN_SEGS, terrainGrid: window._terrainGridSegs || TERRAIN_SEGS, waterTableLevel: window.waterTableLevel, waterType: window.currentWaterType}),
+                terrain_heightmap: JSON.stringify({ground: hm, water: w_hm, segs: TERRAIN_SEGS, size: window.TERRAIN_SIZE || 600, terrainGrid: window._terrainGridSegs || TERRAIN_SEGS, waterTableLevel: window.waterTableLevel, waterType: window.currentWaterType}),
                 terrain_biomemap: biome,
                 terrain_watermask: w_mask,
                 is_draft: options.isDraft,
