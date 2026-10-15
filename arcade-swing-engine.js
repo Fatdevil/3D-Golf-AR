@@ -527,11 +527,20 @@ const SwingEngine = (function() {
     const CLUB_ORDER = ['DRIVER', 'W3', 'I5', 'I7', 'I9', 'PW', 'SW', 'LW', 'PUTT'];
     const SHAPE_KEYS = { ',': -1, '/': 0, '.': 1 };
     let _tapKeyDown = false;
+    // how the focus got where it is: by the keyboard (a key other than the swing keys came last) or by the mouse / a touch
+    let _lastInput = 'mouse', _kbFocusEl = null;
+    window.addEventListener('pointerdown', () => { _lastInput = 'mouse'; }, true);
+    window.addEventListener('keydown', e => { if (!(e.code === 'Space' || e.key === 'Enter')) _lastInput = 'key'; }, true);
+    window.addEventListener('focusin', e => { _kbFocusEl = _lastInput === 'key' ? e.target : null; }, true);
 
     function _keysOn(e) {
         if (!_enabled || e.ctrlKey || e.metaKey || e.altKey) return false;
         const t = e.target && e.target.tagName;
         if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return false;
+        // a control the keyboard user has moved to (Tab) keeps Space / Enter for itself, the swing button excepted. A button that was
+        // clicked with the mouse is not keyboard focus: there Space is the swing (the focus stays on the club button after a click).
+        const el = e.target;
+        if (el && el.closest && _kbFocusEl === el && el.closest('button, a[href], [role="button"], [role="menuitem"], summary') && !el.closest('#swing-launch-btn, #main-swing-btn')) return false;
         return typeof window.swingKeysAllowed === 'function' ? !!window.swingKeysAllowed() : true;
     }
 

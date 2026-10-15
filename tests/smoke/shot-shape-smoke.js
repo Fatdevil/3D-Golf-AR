@@ -321,8 +321,9 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     check('desktop: Space / Enter behind the scorecard dialog do not touch the swing', behind === false);
     // a held firing key does not skip the flight
     await page.evaluate(function () { window.__skips = 0; const f = window.skipFlight; window.skipFlight = function () { window.__skips++; return f.apply(this, arguments); }; });
+    await page.click('#club-selector .club-btn[data-club="I7"]');   // the focus stays on the clicked club button
     await page.keyboard.press('Space');      // start
-    check('desktop: Space (dialog closed) starts the swing', await overlay() === true);
+    check('desktop: Space starts the swing even when the last thing clicked was a club button (mouse focus is not keyboard focus)', await overlay() === true);
     await page.keyboard.press('Space');      // lock the power
     await page.keyboard.down('Space');       // lock the direction: the shot is fired
     await page.waitForFunction(function () { return window.isBallFlying(); }, null, { timeout: 5000 }).catch(function () {});
@@ -345,6 +346,24 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.evaluate(function () { toggleHamburgerMenu(); });
     await page.click('#hb-input-mode .input-btn[data-input="SWING"]');
     await page.evaluate(function () { toggleHamburgerMenu(); });
+    const overlayOn = function () { return page.evaluate(function () { return document.getElementById('swing-overlay').classList.contains('active'); }); };
+    const menuOpen = function () { return page.evaluate(function () { return document.getElementById('hamburger-menu').classList.contains('open'); }); };
+    // the menu is open: its buttons own the keys
+    await page.evaluate(function () { toggleHamburgerMenu(); });
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Enter');
+    const withMenu = await overlayOn();
+    await page.evaluate(function () { toggleHamburgerMenu(); });
+    check('desktop: Space / Enter with the menu open do not touch the swing', withMenu === false);
+    // a button the keyboard user has tabbed to keeps Space: it opens the menu, the swing stays idle
+    await page.keyboard.press('Shift');
+    await page.evaluate(function () { document.getElementById('hamburger-btn').focus(); });
+    const focusVisible = await page.evaluate(function () { return document.getElementById('hamburger-btn').matches(':focus-visible'); });
+    await page.keyboard.press('Space');
+    const opened = await menuOpen();
+    const swingOn = await overlayOn();
+    check('desktop: Space on a keyboard-focused button activates that button (the menu opens) and does not start a swing', focusVisible === true && opened === true && swingOn === false, JSON.stringify({ focusVisible: focusVisible, opened: opened, swingOn: swingOn }));
+    await page.evaluate(function () { toggleHamburgerMenu(); document.activeElement && document.activeElement.blur(); });
     await page.evaluate(function () { window.startFlyover(); });   // the cinematic (5 to 10 s of camera work)
     await page.waitForTimeout(600);
     await page.keyboard.press('Space');

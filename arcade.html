@@ -29,7 +29,7 @@
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=9"></script>
+<script src="arcade-swing-engine.js?v=10"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -9262,6 +9262,9 @@
     // the swing keys (Space / arrows / , . /) work while a round is up, not in the builder and not while the ball is flying
     window.swingKeysAllowed = function () {
         if (!((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying)) return false;
+        // not while the menu is open: its buttons own the keys then
+        let hbMenu = document.getElementById('hamburger-menu');
+        if (hbMenu && hbMenu.classList.contains('open')) return false;
         // not during the hole flyover or the flight camera: the swing is not up then
         if (gameCamPhase === 'HOLE_FLYOVER' || gameCamPhase === 'FLIGHT_FOLLOW') return false;
         // not behind a dialog (scorecard, settings, confirm, leaderboard ...): the keys belong to the dialog then
