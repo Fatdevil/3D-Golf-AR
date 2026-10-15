@@ -29,7 +29,7 @@
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=7"></script>
+<script src="arcade-swing-engine.js?v=10"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -6344,7 +6344,8 @@
         let normX = -dh_dx / len;
         let normZ = -dh_dz / len;
         let normUp = 1.0 / len;
-        let normal = [normX, normZ, normUp];
+        // [0..2] in physics coordinates (x east, y north = -z, z up), like physicsTerrainAt: y is the other way round from the picture's z
+        let normal = [normX, -normZ, normUp];
         normal.x = normX;
         normal.y = normUp; // In Three.js, Y is Up
         normal.z = normZ;  // In Three.js, Z is Depth
@@ -9258,6 +9259,17 @@
     window.triggerRealShot = triggerRealShot;
     // the swing engine asks before it starts a swing: no new swing while the ball is on its way (triggerRealShot would drop the shot)
     window.isBallFlying = function () { return isFlying; };
+    // the swing keys (Space / arrows / , . /) work while a round is up, not in the builder and not while the ball is flying
+    window.swingKeysAllowed = function () {
+        if (!((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying)) return false;
+        // not while the menu is open: its buttons own the keys then
+        let hbMenu = document.getElementById('hamburger-menu');
+        if (hbMenu && hbMenu.classList.contains('open')) return false;
+        // not during the hole flyover or the flight camera: the swing is not up then
+        if (gameCamPhase === 'HOLE_FLYOVER' || gameCamPhase === 'FLIGHT_FOLLOW') return false;
+        // not behind a dialog (scorecard, settings, confirm, leaderboard ...): the keys belong to the dialog then
+        return !Array.from(document.querySelectorAll('[id$="-modal"], [role="dialog"]')).some(el => getComputedStyle(el).display !== 'none');
+    };
 
     window.shotStartPos = null;
 
@@ -12718,6 +12730,8 @@
         let skipKeyDown = false;
         window.addEventListener('keydown', (e) => {
             if (!isFlying || (e.code !== 'Space' && e.key !== 'Enter' && e.key !== 'Escape')) return;
+            // the press that fired the shot, and its key repeats while it is held, must not skip the flight
+            if (e.swingConsumed || e.repeat) return;
             let t = e.target && e.target.tagName;
             if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             e.preventDefault();
