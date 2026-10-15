@@ -29,7 +29,7 @@
 <script src="arcade-api-service.js"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=8"></script>
+<script src="arcade-swing-engine.js?v=9"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -9260,7 +9260,11 @@
     // the swing engine asks before it starts a swing: no new swing while the ball is on its way (triggerRealShot would drop the shot)
     window.isBallFlying = function () { return isFlying; };
     // the swing keys (Space / arrows / , . /) work while a round is up, not in the builder and not while the ball is flying
-    window.swingKeysAllowed = function () { return (appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying; };
+    window.swingKeysAllowed = function () {
+        if (!((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying)) return false;
+        // not behind a dialog (scorecard, settings, confirm, leaderboard ...): the keys belong to the dialog then
+        return !Array.from(document.querySelectorAll('[id$="-modal"], [role="dialog"]')).some(el => getComputedStyle(el).display !== 'none');
+    };
 
     window.shotStartPos = null;
 
@@ -12721,6 +12725,8 @@
         let skipKeyDown = false;
         window.addEventListener('keydown', (e) => {
             if (!isFlying || (e.code !== 'Space' && e.key !== 'Enter' && e.key !== 'Escape')) return;
+            // the press that fired the shot, and its key repeats while it is held, must not skip the flight
+            if (e.swingConsumed || e.repeat) return;
             let t = e.target && e.target.tagName;
             if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
             e.preventDefault();

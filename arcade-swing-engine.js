@@ -541,6 +541,7 @@ const SwingEngine = (function() {
         if (tap) {
             // a focused button must not also be pressed by the key (Enter on keydown, Space on keyup)
             e.preventDefault();
+            e.swingConsumed = true;   // the page's own Space / Enter handlers (skip the flight) must leave this press alone
             _tapKeyDown = true;
             if (!e.repeat) onTap();
         } else if (_phase === 'idle' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {

@@ -302,6 +302,40 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
   }
 
   // ---- a launch monitor bridge and the input mode ----
+  console.log('\nswing keys (desktop browser)');
+  {
+    const o = await open('/arcade.html?mode=range', { width: 1280, height: 720 }, { touch: false });
+    const page = o.page;
+    await page.evaluate(function () { localStorage.removeItem('golfos_input_mode'); });
+    await page.evaluate(ENTER_TEST);
+    await page.evaluate(function () { toggleHamburgerMenu(); });
+    await page.click('#hb-input-mode .input-btn[data-input="SWING"]');
+    await page.evaluate(function () { toggleHamburgerMenu(); });
+    const overlay = function () { return page.evaluate(function () { return document.getElementById('swing-overlay').classList.contains('active'); }); };
+    // behind a dialog the keys belong to the dialog
+    await page.evaluate(function () { document.getElementById('scorecard-modal').style.display = 'flex'; });
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Enter');
+    const behind = await overlay();
+    await page.evaluate(function () { document.getElementById('scorecard-modal').style.display = 'none'; });
+    check('desktop: Space / Enter behind the scorecard dialog do not touch the swing', behind === false);
+    // a held firing key does not skip the flight
+    await page.evaluate(function () { window.__skips = 0; const f = window.skipFlight; window.skipFlight = function () { window.__skips++; return f.apply(this, arguments); }; });
+    await page.keyboard.press('Space');      // start
+    check('desktop: Space (dialog closed) starts the swing', await overlay() === true);
+    await page.keyboard.press('Space');      // lock the power
+    await page.keyboard.down('Space');       // lock the direction: the shot is fired
+    await page.waitForFunction(function () { return window.isBallFlying(); }, null, { timeout: 5000 }).catch(function () {});
+    const flying = await page.evaluate(function () { return window.isBallFlying(); });
+    for (let i = 0; i < 12; i++) { await page.keyboard.down('Space'); await page.waitForTimeout(100); }   // the key stays down: repeats
+    const skips = await page.evaluate(function () { return window.__skips; });
+    await page.keyboard.up('Space');
+    check('desktop: a shot fired with a held Space is in the air and the held key (and its repeats) does not skip the flight', flying === true && skips === 0, JSON.stringify({ flying: flying, skips: skips }));
+    await page.evaluate(function () { window.skipFlight && window.skipFlight(); });
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
   console.log('\nlaunch monitor bridge');
   {
     const o = await open('/arcade.html?mode=range', { width: 1280, height: 720 }, { touch: false, init: 'window._disableLMBridge = true;' });
