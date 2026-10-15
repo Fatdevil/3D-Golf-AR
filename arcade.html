@@ -9262,6 +9262,8 @@
     // the swing keys (Space / arrows / , . /) work while a round is up, not in the builder and not while the ball is flying
     window.swingKeysAllowed = function () {
         if (!((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying)) return false;
+        // not during the hole flyover or the flight camera: the swing is not up then
+        if (gameCamPhase === 'HOLE_FLYOVER' || gameCamPhase === 'FLIGHT_FOLLOW') return false;
         // not behind a dialog (scorecard, settings, confirm, leaderboard ...): the keys belong to the dialog then
         return !Array.from(document.querySelectorAll('[id$="-modal"], [role="dialog"]')).some(el => getComputedStyle(el).display !== 'none');
     };

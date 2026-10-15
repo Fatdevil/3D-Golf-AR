@@ -336,6 +336,26 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  console.log('\nswing keys during the hole flyover');
+  {
+    const o = await open('/arcade.html?mode=range', { width: 1280, height: 720 }, { touch: false });
+    const page = o.page;
+    await page.evaluate(function () { localStorage.removeItem('golfos_input_mode'); });
+    await page.evaluate(ENTER_TEST);
+    await page.evaluate(function () { toggleHamburgerMenu(); });
+    await page.click('#hb-input-mode .input-btn[data-input="SWING"]');
+    await page.evaluate(function () { toggleHamburgerMenu(); });
+    await page.evaluate(function () { window.startFlyover(); });   // the cinematic (5 to 10 s of camera work)
+    await page.waitForTimeout(600);
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Enter');
+    const st = await page.evaluate(function () { return { overlay: document.getElementById('swing-overlay').classList.contains('active'), hud: document.getElementById('flyover-hud').style.display, flying: window.isBallFlying() }; });
+    check('desktop: Space / Enter during the hole flyover do not start, advance or fire the swing', st.hud === 'block' && st.overlay === false && st.flying === false, JSON.stringify(st));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
   console.log('\nlaunch monitor bridge');
   {
     const o = await open('/arcade.html?mode=range', { width: 1280, height: 720 }, { touch: false, init: 'window._disableLMBridge = true;' });
