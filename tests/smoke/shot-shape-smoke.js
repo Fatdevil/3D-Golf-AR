@@ -274,6 +274,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.keyboard.press('Space');
     const kb = await page.evaluate(function () { return { overlay: document.getElementById('swing-overlay').classList.contains('active'), shape: SwingEngine.getShotShape() }; });
     check('desktop: Space starts the swing and "," has picked the draw', kb.overlay === true && kb.shape === -1, JSON.stringify(kb));
+    await page.evaluate(function () { const m = document.getElementById('hamburger-menu'); if (m && !m.classList.contains('open')) toggleHamburgerMenu(); });   // the menu is open again for the picker clicks below
     await page.click('#hb-input-mode .input-btn[data-input="LM"]');
     st = await state();
     check('Launch monitor: no controls on the screen (neither swing UI nor numbers)', st.mode === 'LM' && !st.swing && !st.clubs && !st.numbers && st.saved === 'LM', JSON.stringify(st));
