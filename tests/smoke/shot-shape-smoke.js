@@ -585,6 +585,85 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  // two players on one phone: the farthest from the flag plays, the honour on the next tee, one scorecard for both, only player 1 on the board
+  {
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 390, height: 844 }, { init: function () {
+      localStorage.setItem('golf_os_mobile_match', JSON.stringify({ settings: { gimmeDist: 10, autoPutt: 'OFF', autoConcede: 99 }, players: [{ name: 'Anna', color: '#ef4444' }, { name: 'Bo <b>x</b>', color: '#3b82f6' }] }));
+    } });
+    const page = o.page;
+    POSTED.length = 0;
+    await page.evaluate(function () {
+      const sim = GolfPhysics.simulateFlight;
+      GolfPhysics.simulateFlight = function (inp, env) {
+        if (!window.__fake) return sim.call(this, inp, env);
+        const f = window.__fake; window.__fake = null;
+        const sx = inp.startPos[0], sy = inp.startPos[1], N = 12, path = [];
+        for (let i = 0; i <= N; i++) path.push({ x: sx + (f.x - sx) * i / N, y: sy + (-f.z - sy) * i / N, z: i === 0 || i === N ? 0 : 3, phase: i === N ? 'roll' : (i < 4 ? 'flight' : 'bounce'), time: i * 0.1 });
+        return { path: path, metrics: { holed: !!f.holed, finalTerrainType: f.terrain || 'FAIRWAY', totalMeters: 10, carryMeters: 8 } };
+      };
+      window._terrainTypeAt = function () { return 'FAIRWAY'; };
+    });
+    const hit = async function (fake) {
+      await page.evaluate(function (f) { window.__fake = f; window.triggerRealShot({ ballSpeedMph: 80, launchAngleDeg: 20, totalSpinRpm: 5000, spinAxisDeg: 0, azimDeg: 0, isLiveData: false }); }, fake);
+      await page.waitForFunction(function () { return !window.isBallFlying(); }, null, { timeout: 30000 });
+      await page.waitForTimeout(250);
+    };
+    const who = function () {
+      return page.evaluate(function () {
+        const a = GolfEngine.getActivePlayer(), c = window.__ctl, look = [c.target.x - c.object.position.x, c.target.z - c.object.position.z], h = courseHoles[playingHoleIndex];
+        const toHole = [h.flag.x - ballMesh.position.x, h.flag.z - ballMesh.position.z];
+        return { name: document.getElementById('ui-player-name').textContent, active: a.name, ball: [+ballMesh.position.x.toFixed(1), +ballMesh.position.z.toFixed(1)], toast: document.getElementById('turn-toast').textContent,
+                 shown: window.playerMarkers.map(function (m) { return m.visible ? [+m.position.x.toFixed(1), +m.position.z.toFixed(1)] : null; }),
+                 aimed: Math.abs(Math.atan2(look[0], -look[1]) - Math.atan2(toHole[0], -toHole[1])) < 0.01, popup: document.getElementById('popup-result').style.display === 'flex' ? document.getElementById('popup-title').innerText : null, btn: document.getElementById('popup-btn').innerText };
+      });
+    };
+    let w = await who();
+    check('two players: Anna tees off first (the name in the header and the banner)', w.active === 'Anna' && w.name === 'Anna' && /Anna tees off/.test(w.toast), JSON.stringify(w));
+    await hit({ x: 10, z: 40 });
+    w = await who();
+    check('Anna hit to (10, 40): Bo is on the tee and plays next, the camera behind his ball, Anna\'s ball waits as a marker', w.active === 'Bo <b>x</b>' && w.name === 'Bo <b>x</b>' && Math.abs(w.ball[0]) < 0.5 && Math.abs(w.ball[1] - 150) < 0.5 && w.shown[0] && Math.abs(w.shown[0][0] - 10) < 0.5 && w.shown[1] === null && w.aimed && /Bo <b>x<\/b> tees off/.test(w.toast), JSON.stringify(w));
+    await hit({ x: 90, z: -90 });
+    w = await who();
+    check('Bo hit close (14 m): Anna is farther from the flag and plays, from where she lies', w.active === 'Anna' && Math.abs(w.ball[0] - 10) < 0.5 && Math.abs(w.ball[1] - 40) < 0.5 && w.shown[1] && Math.abs(w.shown[1][0] - 90) < 0.5, JSON.stringify(w));
+    await hit({ x: 60, z: -60 });
+    w = await who();
+    check('Anna hit to 57 m: she is still farther than Bo (14 m) and plays again', w.active === 'Anna' && Math.abs(w.ball[0] - 60) < 0.5, JSON.stringify(w));
+    await hit({ x: 95, z: -95 });
+    w = await who();
+    check('Anna hit to 7 m: now Bo is farther and plays', w.active === 'Bo <b>x</b>' && Math.abs(w.ball[0] - 90) < 0.5, JSON.stringify(w));
+    await hit({ x: 100, z: -100, holed: true, terrain: 'GREEN' });
+    w = await who();
+    check('Bo holed out (2 strokes): a popup for Bo with Next player', /Bo <b>x<\/b>/.test(await page.evaluate(function () { return document.getElementById('popup-desc').textContent; })) && w.btn === 'Next player', JSON.stringify(w));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(500);
+    w = await who();
+    check('Next player: Anna, the only one left on the hole, plays from 7 m', w.active === 'Anna' && Math.abs(w.ball[0] - 95) < 0.5 && w.popup === null, JSON.stringify(w));
+    await hit({ x: 100, z: -100, holed: true, terrain: 'GREEN' });
+    w = await who();
+    check('Anna holed out (4 strokes): everyone is done, the popup offers Next hole', w.btn === 'Next hole', JSON.stringify(w));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(600);
+    w = await who();
+    check('hole 2: the honour goes to Bo (2 against 4): he tees off, both players are on the tee', w.active === 'Bo <b>x</b>' && /tees off/.test(w.toast) && Math.abs(w.ball[0] - 50) < 0.5 && Math.abs(w.ball[1] - 100) < 0.5, JSON.stringify(w));
+    await hit({ x: 50, z: 60, holed: true, terrain: 'GREEN' });
+    await page.click('#popup-btn');
+    await page.waitForTimeout(500);
+    await hit({ x: 50, z: 60, holed: true, terrain: 'GREEN' });
+    w = await who();
+    check('both holed out on the last hole (1 stroke each): Finish round', w.btn === 'Finish round', JSON.stringify(w));
+    await page.click('#popup-btn');
+    await page.waitForTimeout(1500);
+    const fin = await page.evaluate(function () {
+      const d = document.getElementById('popup-desc');
+      return { title: document.getElementById('popup-title').innerText, text: d.textContent.replace(/\s+/g, ' '), heads: Array.prototype.map.call(d.querySelectorAll('th'), function (t) { return t.textContent; }), bold: d.querySelectorAll('b').length, rows: d.querySelectorAll('tr').length, totals: Array.prototype.map.call(d.querySelectorAll('tr.sc-total td'), function (t) { return t.textContent; }).join(',') };
+    });
+    check('round complete: one scorecard with both players (Anna 5, Bo 3), the name shown as text, the winner named',
+      fin.title === 'ROUND COMPLETE' && fin.heads.join('|') === 'Hole|Par|Anna|Bo <b>x</b>' && fin.bold === 0 && fin.rows === 4 && fin.totals === 'Total,7,5,3' && /Bo <b>x<\/b> wins with 3 \(-4\)/.test(fin.text), JSON.stringify(fin));
+    check('only player 1 (the owner of the phone) is filed on the leaderboard: Anna, 4 + 1 = 5', POSTED.length === 1 && POSTED[0].body.total_score === 5 && JSON.stringify(POSTED[0].body.hole_scores) === '[4,1]', JSON.stringify(POSTED));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
   // the ground's tilt reaches the physics: a putt across a slope breaks downhill (east slope: a putt north breaks east; north slope: a putt east breaks north)
   for (const sl of [{ code: 'EASTSLOPE', az: 0, axis: 'x', label: 'east' }, { code: 'NORTHSLOPE', az: 90, axis: 'y', label: 'north' }]) {
     const o = await open('/arcade_mobile.html?course=' + sl.code, { width: 390, height: 844 });
@@ -710,6 +789,29 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     const msg = await page.evaluate(function () { return document.getElementById('course-list-container').innerText.replace(/\s+/g, ' '); });
     const retryVisible = await page.evaluate(function () { const b = document.querySelector('#course-list-container .retry-btn'); if (!b) return false; const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
     check('the server is down: a message and a visible way to try again (no made-up courses)', /Could not load the courses/.test(msg) && /Try again/.test(msg) && retryVisible, msg);
+    await o.ctx.close();
+  }
+
+  // the match setup: one to four players with their own names, saved for the game
+  {
+    const o = await open('/arcade_mobile_hub.html', { width: 390, height: 844 });
+    const page = o.page;
+    await page.evaluate(function () { navTo('view-settings'); });
+    check('one player to begin with: one name field (Player 1, You), no pass-the-phone note', await page.evaluate(function () { return document.querySelectorAll('#players-list input').length === 1 && document.querySelector('#players-list input').value === 'Player 1' && document.getElementById('players-note').style.display === 'none'; }));
+    await page.click('#players-ctrl [data-count="3"]');
+    await page.fill('#players-list .setting-row:nth-child(2) input', 'Bo');
+    await page.fill('#players-list .setting-row:nth-child(1) input', '   ');
+    const m = await page.evaluate(function () { return { inputs: document.querySelectorAll('#players-list input').length, note: document.getElementById('players-note').style.display, active: document.querySelector('#players-ctrl .active').dataset.count, players: matchState.players.map(function (p) { return p.name + p.color; }), tags: Array.prototype.map.call(document.querySelectorAll('#players-list .setting-row span'), function (x) { return x.textContent; }).join() }; });
+    check('three players: three fields with distinct colours, names kept (blank becomes Player 1), Player 1 is You and the others Guests, the note is shown',
+      m.inputs === 3 && m.note === 'block' && m.active === '3' && m.players.join() === 'Player 1#ef4444,Bo#3b82f6,Player 3#10b981' && m.tags === 'You,Guest,Guest', JSON.stringify(m));
+    await page.click('#players-ctrl [data-count="2"]');
+    const kept = await page.evaluate(function () { return matchState.players.map(function (p) { return p.name; }).join(); });
+    check('going down to two players keeps the names that are left', kept === 'Player 1,Bo', kept);
+    await page.evaluate(function () { matchState.courseCode = 'TESTCOURSE'; });
+    await page.evaluate(function () { setTimeout = function () {}; launchGame(); });
+    const saved = await page.evaluate(function () { return JSON.parse(localStorage.getItem('golf_os_mobile_match')).players.map(function (p) { return p.name; }).join(); });
+    check('Tee Off saves the players for the game page', saved === 'Player 1,Bo', saved);
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
 

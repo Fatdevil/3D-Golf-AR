@@ -49,6 +49,11 @@
         /* SWING METER CONTAINER */
         #swing-ui-container { height: 60px; position: relative; background: rgba(0,0,0,0.5); border-radius: 30px; border: 2px solid rgba(255,255,255,0.2); overflow: hidden; display: flex; justify-content: center; align-items: center; }
         
+        /* whose turn it is: a short banner at the top, above the popups */
+        #turn-toast { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); z-index: 200; padding: 10px 22px; border-radius: 999px; background: rgba(15,23,42,0.92); border: 2px solid var(--primary); color: #fff; font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+        #turn-toast.show { opacity: 1; }
+        .sc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
+
         /* SCORECARD (inside the popup) */
         .sc-scroll { max-height: calc(100vh - 230px); max-height: calc(100dvh - 230px); min-height: 80px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
         .sc-table { border-collapse: collapse; margin: 0 auto; font-size: 16px; }
@@ -132,6 +137,7 @@
             </div>
         </div>
 
+        <div id="turn-toast" role="status" aria-live="polite"></div>
         <div class="top-bar">
             <div class="hole-info" onclick="window.showScorecard && showScorecard()">
                 <span class="hole-number" id="ui-hole">Hole 1</span>
@@ -284,7 +290,10 @@
                 } catch(e) { console.error("Course load failed", e); }
             }
 
-            window.GolfEngine.initPlayers(matchData.players);
+            // one to four players on this phone, their names as plain text
+            const matchPlayers = (Array.isArray(matchData.players) && matchData.players.length ? matchData.players : [{ name: 'Player 1', color: '#ef4444' }]).slice(0, 4)
+                .map((pl, i) => ({ id: i, name: String((pl && pl.name) || ('Player ' + (i + 1))).slice(0, 16), color: /^#[0-9a-fA-F]{6}$/.test(pl && pl.color) ? pl.color : ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'][i] }));
+            window.GolfEngine.initPlayers(matchPlayers);
             window.GolfEngine.updateSettings(matchData.settings);
             
             // 2. SCENE SETUP
@@ -452,6 +461,14 @@
             
             scene.add(ball);
             window.ballMesh = ball;
+
+            // the other players' balls wait where they lie, in their colour (the active player's ball is the textured one)
+            const markers = window.GolfEngine.getState().players.map(pl => {
+                const m = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ color: new THREE.Color(pl.color), roughness: 0.5 }));
+                m.visible = false;
+                scene.add(m);
+                return m;
+            });
             
             const flagMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
             const flagGeo = new THREE.CylinderGeometry(0.1, 0.1, 2);
@@ -478,6 +495,7 @@
 
             // metres from the ball to the flag, in yards for the display
             const yardsToPin = () => Math.hypot(ball.position.x - holePos.x, ball.position.z - holePos.z) * 1.09361;
+            const metresToPin = pl => Math.hypot(pl.lie.x - holePos.x, pl.lie.z - holePos.z);
 
             // The hole is up: the tee, the flag, the camera and the texts
             function loadHole(i) {
@@ -489,6 +507,7 @@
                 flag.position.y += 1;
                 placeBall(tee.x, tee.z);
                 window.playingHoleIndex = i;
+                window.GolfEngine.getState().players.forEach(pl => { pl.lie = { x: tee.x, z: tee.z }; pl.prevLie = { x: tee.x, z: tee.z }; });
                 resetCameraBehindBall();
             }
             loadHole(0);
@@ -604,7 +623,38 @@
             animate();
             
             // 6. THE RULES: what a finished shot means, the hole, the scorecard
-            let shotContext = { prevLie: { x: ball.position.x, z: ball.position.z } };
+            // Whose turn it is. The player whose ball is farthest from the flag plays; the ball on the screen is the active player's, the
+            // others' balls stand where they lie. The toast tells who is up (only when there is more than one player).
+            const players = window.GolfEngine.getState().players, multi = players.length > 1;
+            let toastTimer = null;
+            function toast(text) {
+                const t = document.getElementById('turn-toast');
+                t.textContent = text;
+                t.style.borderColor = window.GolfEngine.getActivePlayer().color;
+                t.classList.add('show');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+            }
+            function syncMarkers() {
+                const active = window.GolfEngine.getActivePlayer();
+                players.forEach((pl, i) => {
+                    const m = markers[i], show = pl !== active && !pl.holedOut && !!pl.lie;
+                    m.visible = show;
+                    if (show) m.position.set(pl.lie.x, window.getTerrainHeight(pl.lie.x, pl.lie.z) + 0.06, pl.lie.z);
+                });
+            }
+            window.playerMarkers = markers;
+            // the next player is up: the ball goes to their lie and the camera behind it
+            function beginTurn(announce) {
+                const p = window.GolfEngine.nextPlayer(metresToPin);
+                if (!p) return null;
+                placeBall(p.lie.x, p.lie.z);
+                resetCameraBehindBall();
+                syncMarkers();
+                updateUI();
+                if (multi && announce) toast(p.name + (p.strokes + p.penaltyStrokes === 0 ? ' tees off' : "'s turn"));
+                return p;
+            }
 
             // Where the ball went into the water / out of bounds: the last point of the path on the course
             function entryPointOf(path) {
@@ -625,7 +675,7 @@
                 let entry = null;
                 if (terrain === 'WATER' || terrain === 'OB') entry = entryPointOf(flightData.positions);
                 const ft = yardsToPin() / 1.09361 * 3.28084;
-                window.GolfEngine.handleShotResult(player, ft, isGreen, isFringe, !!m.holed, window.GolfEngine.holePar(), terrain, entry, shotContext.prevLie);
+                window.GolfEngine.handleShotResult(player, ft, isGreen, isFringe, !!m.holed, window.GolfEngine.holePar(), terrain, entry, player.prevLie);
             }
 
             const SCORE_NAMES = { '-3': 'ALBATROSS', '-2': 'EAGLE', '-1': 'BIRDIE', '0': 'PAR', '1': 'BOGEY', '2': 'DOUBLE BOGEY', '3': 'TRIPLE BOGEY' };
@@ -637,13 +687,15 @@
 
             // a hole is done (holed out, gimme / auto-putt, conceded): the score, and on to the next hole or the end of the round
             function onHoleDone(detail) {
-                const p = window.GolfEngine.getActivePlayer(), score = window.GolfEngine.holeScore(p), par = window.GolfEngine.holePar();
+                const p = (detail && detail.player) || window.GolfEngine.getActivePlayer(), score = window.GolfEngine.holeScore(p), par = window.GolfEngine.holePar();
                 const last = window.GolfEngine.getState().holeIndex + 1 >= holes.length;
-                let desc = `Score ${score} (par ${par})`;
+                const others = window.GolfEngine.playersLeft().length > 0;
+                let desc = (multi ? p.name + ': ' : '') + `Score ${score} (par ${par})`;
                 if (detail && detail.type === 'GIMME') desc += ' - gimme';
                 else if (detail && detail.type === 'AUTO-PUTT') desc += ` - ${detail.putts} putt${detail.putts > 1 ? 's' : ''}`;
                 else if (detail && detail.reason === 'CONCEDE') desc += ' - picked up';
-                showPopup(holeTitle(score, par), desc, '#10b981', last ? 'Finish round' : 'Next hole', () => window.GolfEngine.nextHole());
+                if (others) showPopup(holeTitle(score, par), desc, '#10b981', 'Next player', () => { window.closePopup(); beginTurn(true); });
+                else showPopup(holeTitle(score, par), desc, '#10b981', last ? 'Finish round' : 'Next hole', () => window.GolfEngine.nextHole());
                 updateUI();
             }
             window.addEventListener('GolfEvent_HoledOut', e => onHoleDone(e.detail));
@@ -653,29 +705,33 @@
             // water and out of bounds: a penalty stroke, the ball goes back (water: where it went in, OB: the previous spot)
             window.addEventListener('GolfEvent_PenaltyApplied', e => {
                 const d = e.detail, spot = (d.type === 'WATER' && d.entryPoint) ? d.entryPoint : d.previousLie;
-                placeBall(spot.x, spot.z);
-                resetCameraBehindBall();
-                shotContext.prevLie = { x: spot.x, z: spot.z };
-                updateUI();
+                d.player.lie = { x: spot.x, z: spot.z };
+                d.player.prevLie = { x: spot.x, z: spot.z };
+                beginTurn(true);
                 showPopup(d.type === 'WATER' ? 'WATER!' : 'OUT OF BOUNDS', d.type === 'WATER' ? '+1 penalty stroke. Drop where the ball went in.' : '+1 penalty stroke. Play again from the previous spot.', '#f87171');
             });
 
             // a normal stop: the next shot is aimed from where the ball lies, the camera behind it
-            window.addEventListener('GolfEvent_BallStopped', () => {
-                resetCameraBehindBall();
-                updateUI();
+            window.addEventListener('GolfEvent_BallStopped', e => {
+                e.detail.player.lie = { x: ball.position.x, z: ball.position.z };
+                beginTurn(true);
             });
 
             window.addEventListener('GolfEvent_HoleStarted', e => {
                 loadHole(e.detail.holeIndex);
-                shotContext = { prevLie: { x: ball.position.x, z: ball.position.z } };
                 window.closePopup();
-                updateUI();
+                beginTurn(true);
             });
 
             window.addEventListener('GolfEvent_RoundCompleted', e => {
-                const sc = e.detail.scorecard, d = sc.vsPar;
-                showPopup('ROUND COMPLETE', scorecardHtml(sc) + `<div style="margin-top:12px">Total ${sc.score} (${d === 0 ? 'even' : (d > 0 ? '+' + d : d)})</div><div id="sc-status" style="margin-top:8px;font-size:15px;color:#94a3b8"></div>`, '#10b981', 'Back to menu', () => { window.location.href = 'arcade_mobile_hub.html'; }, true);
+                const sc = e.detail.scorecard, all = e.detail.scorecards || [];
+                const vs = d => (d === 0 ? 'even' : (d > 0 ? '+' + d : d));
+                let line;
+                if (multi) {
+                    const best = Math.min(...all.map(x => x.score)), winners = all.filter(x => x.score === best);
+                    line = winners.length === 1 ? esc(winners[0].player.name) + ' wins with ' + best + ' (' + vs(winners[0].vsPar) + ')' : 'Tie at ' + best;
+                } else line = `Total ${sc.score} (${vs(sc.vsPar)})`;
+                showPopup('ROUND COMPLETE', scorecardHtml() + `<div style="margin-top:12px">${line}</div><div id="sc-status" style="margin-top:8px;font-size:15px;color:#94a3b8"></div>`, '#10b981', 'Back to menu', () => { window.location.href = 'arcade_mobile_hub.html'; }, true);
                 submitRound(sc);
             });
 
@@ -704,7 +760,7 @@
                 try {
                     const send = async () => {
                         if (window.GolfAuth && !GolfAuth.isReady) await GolfAuth.init();
-                        const player = window.GolfEngine.getActivePlayer();
+                        const player = window.GolfEngine.getState().players[0];
                         const name = (window.GolfAuth && GolfAuth.user && GolfAuth.user.display_name) || player.name || 'Player 1';
                         return window.ArcadeAPI.submitResult(coursePayload.share_code, {
                             total_score: sc.score, score_vs_par: sc.vsPar, hole_scores: scores,
@@ -725,19 +781,26 @@
                 finally { if (back) back.disabled = false; }
             }
 
-            function scorecardHtml(sc) {
+            // plain text only: names come from the match setup
+            const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            // one table for everybody: hole, par, then a column per player
+            function scorecardHtml() {
                 const n = v => (Number.isFinite(Number(v)) ? String(Number(v)) : '-');
-                const rows = sc.rows.map(r => `<tr><td>${n(r.hole)}</td><td>${n(r.par)}</td><td>${r.score === null ? '-' : n(r.score)}</td></tr>`).join('');
-                return `<div class="sc-scroll"><table class="sc-table"><tr><th>Hole</th><th>Par</th><th>Score</th></tr>${rows}<tr class="sc-total"><td>Total</td><td>${n(sc.par)}</td><td>${n(sc.score)}</td></tr></table></div>`;
+                const cards = players.map(pl => window.GolfEngine.scorecard(pl));
+                const head = multi ? players.map(pl => `<th><span class="sc-dot" style="background:${esc(pl.color)}"></span>${esc(pl.name)}</th>`).join('') : '<th>Score</th>';
+                const rows = cards[0].rows.map((r, i) => `<tr><td>${n(r.hole)}</td><td>${n(r.par)}</td>${cards.map(c => `<td>${c.rows[i].score === null ? '-' : n(c.rows[i].score)}</td>`).join('')}</tr>`).join('');
+                const total = `<tr class="sc-total"><td>Total</td><td>${n(cards[0].par)}</td>${cards.map(c => `<td>${n(c.score)}</td>`).join('')}</tr>`;
+                return `<div class="sc-scroll"><table class="sc-table"><tr><th>Hole</th><th>Par</th>${head}</tr>${rows}${total}</table></div>`;
             }
             window.showScorecard = function () {
-                const sc = window.GolfEngine.scorecard(window.GolfEngine.getActivePlayer());
-                showPopup('SCORECARD', scorecardHtml(sc), '#fff', 'Continue', null, true);
+                showPopup('SCORECARD', scorecardHtml(), '#fff', 'Continue', null, true);
             };
 
             function updateUI() {
                 const p = window.GolfEngine.getActivePlayer();
-                document.getElementById('ui-player-name').innerText = p.name;
+                const nameEl = document.getElementById('ui-player-name');
+                nameEl.innerText = p.name;
+                nameEl.style.color = multi ? p.color : '';
                 document.getElementById('ui-player-score').innerText = window.GolfEngine.holeScore(p);
                 const idx = window.GolfEngine.getState().holeIndex;
                 document.getElementById('ui-hole').innerText = holes.length > 1 ? `Hole ${idx + 1}/${holes.length}` : 'Hole 1';
@@ -811,8 +874,9 @@
                 if (window._biomePending) { window._queuedShot = physicsData; return; }
                 console.log("BOOM! Firing Shot:", physicsData);
                 // the stroke counts when the ball is struck, a penalty comes on top; the shot starts from here (OB: play again from here)
-                window.GolfEngine.getActivePlayer().strokes++;
-                shotContext.prevLie = { x: ball.position.x, z: ball.position.z };
+                const shooter = window.GolfEngine.getActivePlayer();
+                shooter.strokes++;
+                shooter.prevLie = { x: ball.position.x, z: ball.position.z };
                 updateUI();
                 document.getElementById('swing-overlay').classList.remove('active');
                 
