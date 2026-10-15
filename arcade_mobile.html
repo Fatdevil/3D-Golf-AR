@@ -334,6 +334,7 @@
             } catch (e) { console.warn('Could not read the course terrain', e); courseHeightmap = null; }
             const TERRAIN_SIZE = (courseHeightmap && Number.isFinite(courseHeightmap.size) && courseHeightmap.size >= 100 && courseHeightmap.size <= 5000) ? courseHeightmap.size : 600;
             const TERRAIN_SEGS = 400; 
+            window.TERRAIN_SIZE = TERRAIN_SIZE;   // as in arcade.html
             const planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
             planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
             

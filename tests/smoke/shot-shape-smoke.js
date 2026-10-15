@@ -269,6 +269,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     check('Swing: the swing circle UI is on (clubs, shapes) and the numbers are hidden', st.mode === 'SWING' && st.swing && st.clubs && st.shapes && !st.numbers && st.saved === 'SWING', JSON.stringify(st));
     await shot(page, 'desktop_swing.png');
     // the keyboard works on the desktop page as well: Space starts the swing, ',' picks the draw
+    await page.evaluate(function () { const m = document.getElementById('hamburger-menu'); if (m && m.classList.contains('open')) toggleHamburgerMenu(); });   // an open menu owns the keys
     await page.keyboard.press(',');
     await page.keyboard.press('Space');
     const kb = await page.evaluate(function () { return { overlay: document.getElementById('swing-overlay').classList.contains('active'), shape: SwingEngine.getShotShape() }; });
@@ -960,7 +961,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       window.biomeDataCache = data;
       const hex = function (h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; };
       const probe = function (x, color) {   // paint the pixel under (x, y = -10) and read it back through the game's own lookup
-        const y = -10, ix = Math.floor((x + 450) / 900 * 4096), iy = Math.floor((-y + 450) / 900 * 4096), i = (iy * 4096 + ix) * 4, c = hex(color);
+        const T = window.TERRAIN_SIZE, y = -10, ix = Math.floor((x + T / 2) / T * 4096), iy = Math.floor((-y + T / 2) / T * 4096), i = (iy * 4096 + ix) * 4, c = hex(color);
         data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255;
         return window._terrainTypeAt(x, y);
       };
