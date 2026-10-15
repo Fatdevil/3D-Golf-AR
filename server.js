@@ -145,6 +145,12 @@ async function initDB() {
                 played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+        // one record per player, course and round id: the database settles two requests of the same round that arrive together
+        // (the client retries after 20 s while the first request may still be running)
+        try {
+            await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS course_records_round_uniq
+                ON course_records (course_code, player_id, (stats->>'round_id')) WHERE stats->>'round_id' IS NOT NULL`);
+        } catch (e) { console.warn('⚠️ Could not create the round id index:', e.message); }
 
         // Tournaments table
         await pool.query(`
@@ -525,24 +531,27 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         // A retry of a round that was already filed (the answer got lost on the way back) must not file it twice: the client names
         // the round in stats.round_id, and the same player's record with that id is answered again, without touching play count or handicap.
         const roundId = stats && typeof stats.round_id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(stats.round_id) ? stats.round_id : null;
-        if (roundId && req.userId && req.userId !== 'anonymous') {
+        const keyed = !!(roundId && req.userId && req.userId !== 'anonymous');
+        // the answer for a round that is already filed: its record again, nothing counted twice
+        const answerDuplicate = async () => {
             const dup = await pool.query(
                 `SELECT id, total_score, flagged FROM course_records
                  WHERE course_code = $1 AND player_id = $2 AND stats->>'round_id' = $3 LIMIT 1`,
                 [code, req.userId, roundId]
             );
-            if (dup.rows.length > 0) {
-                const d = dup.rows[0];
-                const posDup = await pool.query(
-                    `SELECT COUNT(*) + 1 as position FROM course_records
-                     WHERE course_code = $1 AND course_version = $2 AND total_score < $3 AND flagged = false`,
-                    [code, courseVersion, d.total_score]
-                );
-                // the handicap is derived from the records: redo it, in case the first request stopped before it
-                const hcpDup = d.flagged === true ? null : await updateHandicapIndex(req.userId, pool);
-                return res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true, handicap: { new: hcpDup } });
-            }
-        }
+            if (dup.rows.length === 0) return false;
+            const d = dup.rows[0];
+            const posDup = await pool.query(
+                `SELECT COUNT(*) + 1 as position FROM course_records
+                 WHERE course_code = $1 AND course_version = $2 AND total_score < $3 AND flagged = false`,
+                [code, courseVersion, d.total_score]
+            );
+            // the handicap is derived from the records: redo it, in case the first request stopped before it
+            const hcpDup = d.flagged === true ? null : await updateHandicapIndex(req.userId, pool);
+            res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true, handicap: { new: hcpDup } });
+            return true;
+        };
+        if (keyed && await answerDuplicate()) return;
         
         // Sanity check: flag suspicious scores
         let flagged = false;
@@ -596,6 +605,8 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             await db.query('COMMIT');
         } catch (e) {
             try { await db.query('ROLLBACK'); } catch (e2) { /* the connection is gone */ }
+            // the same round arrived twice at once and the other request filed it first: answer with that record
+            if (keyed && e.code === '23505' && await answerDuplicate()) return;
             throw e;
         } finally {
             db.release();
