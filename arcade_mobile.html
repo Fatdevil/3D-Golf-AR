@@ -55,7 +55,9 @@
         .sc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
 
         /* SCORECARD (inside the popup) */
-        .sc-scroll { max-height: calc(100vh - 230px); max-height: calc(100dvh - 230px); min-height: 80px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .sc-scroll { max-width: 94vw; max-height: calc(100vh - 230px); max-height: calc(100dvh - 230px); min-height: 80px; overflow: auto; -webkit-overflow-scrolling: touch; }
+        .sc-table.sc-multi th, .sc-table.sc-multi td { padding: 6px 8px; }
+        .sc-table.sc-multi th { max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .sc-table { border-collapse: collapse; margin: 0 auto; font-size: 16px; }
         .sc-table th, .sc-table td { padding: 6px 14px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.12); }
         .sc-table th { color: rgba(255,255,255,0.6); font-weight: 600; }
@@ -787,10 +789,10 @@
             function scorecardHtml() {
                 const n = v => (Number.isFinite(Number(v)) ? String(Number(v)) : '-');
                 const cards = players.map(pl => window.GolfEngine.scorecard(pl));
-                const head = multi ? players.map(pl => `<th><span class="sc-dot" style="background:${esc(pl.color)}"></span>${esc(pl.name)}</th>`).join('') : '<th>Score</th>';
+                const head = multi ? players.map(pl => `<th title="${esc(pl.name)}"><span class="sc-dot" style="background:${esc(pl.color)}"></span>${esc(pl.name)}</th>`).join('') : '<th>Score</th>';
                 const rows = cards[0].rows.map((r, i) => `<tr><td>${n(r.hole)}</td><td>${n(r.par)}</td>${cards.map(c => `<td>${c.rows[i].score === null ? '-' : n(c.rows[i].score)}</td>`).join('')}</tr>`).join('');
                 const total = `<tr class="sc-total"><td>Total</td><td>${n(cards[0].par)}</td>${cards.map(c => `<td>${n(c.score)}</td>`).join('')}</tr>`;
-                return `<div class="sc-scroll"><table class="sc-table"><tr><th>Hole</th><th>Par</th>${head}</tr>${rows}${total}</table></div>`;
+                return `<div class="sc-scroll"><table class="sc-table${multi ? ' sc-multi' : ''}"><tr><th>Hole</th><th>Par</th>${head}</tr>${rows}${total}</table></div>`;
             }
             window.showScorecard = function () {
                 showPopup('SCORECARD', scorecardHtml(), '#fff', 'Continue', null, true);

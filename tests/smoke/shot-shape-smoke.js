@@ -664,6 +664,27 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  // four players with long names: the scorecard fits the screen or scrolls sideways, so every column can be read
+  {
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 360, height: 640 }, { init: function () {
+      localStorage.setItem('golf_os_mobile_match', JSON.stringify({ settings: { gimmeDist: 10, autoPutt: 'OFF', autoConcede: 99 }, players: ['Alexandra Svensson', 'Bartholomew Jones', 'Christopher Lund', 'Dorothea Nilsson'].map(function (n, i) { return { name: n, color: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'][i] }; }) }));
+    } });
+    const page = o.page;
+    await page.click('.player-info');
+    await page.waitForTimeout(500);
+    const sc = await page.evaluate(function () {
+      const box = document.querySelector('#popup-desc .sc-scroll'), table = box.querySelector('table');
+      box.scrollLeft = 10000;
+      const cells = table.querySelectorAll('tr:first-child th'), last = cells[cells.length - 1].getBoundingClientRect();
+      return { cols: cells.length, overflowX: getComputedStyle(box).overflowX, scrolls: box.scrollWidth > box.clientWidth, lastRight: Math.round(last.right), boxRight: Math.round(box.getBoundingClientRect().right), view: innerWidth,
+               names: Array.prototype.map.call(cells, function (c) { return c.getAttribute('title'); }).filter(Boolean).length };
+    });
+    check('four players with 16-character names on a 360 px screen: the last column can be reached (the card scrolls sideways when it is wider than the screen) and each name is kept as a tooltip',
+      sc.cols === 6 && /auto|scroll/.test(sc.overflowX) && sc.lastRight <= sc.boxRight + 1 && sc.boxRight <= sc.view && sc.names === 4, JSON.stringify(sc));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+  }
+
   // the ground's tilt reaches the physics: a putt across a slope breaks downhill (east slope: a putt north breaks east; north slope: a putt east breaks north)
   for (const sl of [{ code: 'EASTSLOPE', az: 0, axis: 'x', label: 'east' }, { code: 'NORTHSLOPE', az: 90, axis: 'y', label: 'north' }]) {
     const o = await open('/arcade_mobile.html?course=' + sl.code, { width: 390, height: 844 });
