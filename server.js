@@ -521,6 +521,26 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         const course = courseResult.rows[0];
         const courseVersion = course.version || 1;
         const holeCount = course.hole_count || 3;
+
+        // A retry of a round that was already filed (the answer got lost on the way back) must not file it twice: the client names
+        // the round in stats.round_id, and the same player's record with that id is answered again, without touching play count or handicap.
+        const roundId = stats && typeof stats.round_id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(stats.round_id) ? stats.round_id : null;
+        if (roundId && req.userId && req.userId !== 'anonymous') {
+            const dup = await pool.query(
+                `SELECT id, total_score, flagged FROM course_records
+                 WHERE course_code = $1 AND player_id = $2 AND stats->>'round_id' = $3 LIMIT 1`,
+                [code, req.userId, roundId]
+            );
+            if (dup.rows.length > 0) {
+                const d = dup.rows[0];
+                const posDup = await pool.query(
+                    `SELECT COUNT(*) + 1 as position FROM course_records
+                     WHERE course_code = $1 AND course_version = $2 AND total_score < $3 AND flagged = false`,
+                    [code, courseVersion, d.total_score]
+                );
+                return res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true });
+            }
+        }
         
         // Sanity check: flag suspicious scores
         let flagged = false;

@@ -562,7 +562,8 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.page.click('#sc-status button');
     await o.page.waitForTimeout(800);
     st = await o.page.evaluate(function () { return document.getElementById('sc-status').textContent; });
-    check('Try again files the round', /Saved/.test(st) && POSTED.length === 2 && POSTED[1].body.input_mode === 'SWING_METER', JSON.stringify({ st: st, n: POSTED.length }));
+    check('Try again files the round, named by the same round id as the first try (the server can tell a retry from a new round)',
+      /Saved/.test(st) && POSTED.length === 2 && POSTED[1].body.input_mode === 'SWING_METER' && /^[A-Za-z0-9_-]{8,64}$/.test(POSTED[0].body.stats.round_id) && POSTED[0].body.stats.round_id === POSTED[1].body.stats.round_id, JSON.stringify({ st: st, n: POSTED.length, ids: POSTED.map(function (x) { return x.body.stats; }) }));
     await o.ctx.close();
 
     POSTED.length = 0;

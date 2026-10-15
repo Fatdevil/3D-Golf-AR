@@ -215,6 +215,21 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('two overlapping first publications of one draft end as version 2 (20 courses)', Number(vers.v2) === 20 && Number(vers.n) === 20, JSON.stringify(vers));
     await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-V%']);
 
+    // a finished round is filed once: a retry that names the same round (the first answer got lost) gets the same record back, not a second one
+    await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, hole_count, owner_id) VALUES ($1, 'Res', 'o', '[]'::jsonb, false, 2, $2)", [tag + '-R', deviceId]);
+    const filed = await page.evaluate(async function (c) {
+      const hdr = { 'Content-Type': 'application/json', 'x-user-id': localStorage.getItem('golf_os_device_id') };
+      const body = JSON.stringify({ total_score: 8, score_vs_par: 1, hole_scores: [2, 6], input_mode: 'SWING_METER', player_name: 'E2E', stats: { round_id: 'e2e-round-0001' } });
+      const post = async function () { return (await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body })).json(); };
+      const a = await post(), b = await post();
+      const other = await (await fetch('/api/courses/' + c + '/results', { method: 'POST', headers: hdr, body: body.replace('e2e-round-0001', 'e2e-round-0002') })).json();
+      return { a: a, b: b, other: other };
+    }, tag + '-R');
+    const filedRows = (await pool.query("SELECT count(*) AS n, (SELECT play_count FROM courses WHERE share_code = $1) AS plays FROM course_records WHERE course_code = $1", [tag + '-R'])).rows[0];
+    check('a retried round is filed once (same record back, one row, play count 2 for two rounds)', filed.a.success && filed.b.success && filed.b.duplicate === true && filed.a.record_id === filed.b.record_id && !filed.other.duplicate && filed.other.record_id !== filed.a.record_id && Number(filedRows.n) === 2 && Number(filedRows.plays) === 2, JSON.stringify({ filed: filed, rows: filedRows }));
+    await pool.query("DELETE FROM course_records WHERE course_code = $1", [tag + '-R']);
+    await pool.query("DELETE FROM courses WHERE share_code = $1", [tag + '-R']);
+
     // Save & play on a new course saves the real draft (not a play copy): the working copy must learn its code
     await open('autorun=new_build&template=blank&biome=GLOBAL', 4000);
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 7 }); document.getElementById('course-name-input').value = 'E2E Spela'; });
