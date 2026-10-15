@@ -6344,7 +6344,8 @@
         let normX = -dh_dx / len;
         let normZ = -dh_dz / len;
         let normUp = 1.0 / len;
-        let normal = [normX, normZ, normUp];
+        // [0..2] in physics coordinates (x east, y north = -z, z up), like physicsTerrainAt: y is the other way round from the picture's z
+        let normal = [normX, -normZ, normUp];
         normal.x = normX;
         normal.y = normUp; // In Three.js, Y is Up
         normal.z = normZ;  // In Three.js, Z is Depth
