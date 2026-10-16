@@ -1033,18 +1033,20 @@ app.get('/api/collections/:id/leaderboard', requireDB, async (req, res) => {
         const need = Math.floor(parseInt(col.rows[0].type, 10) / collectionsCore.HOLES_PER_PLATE);
         // an unfinished collection (fewer plates than the type has room for) has no results yet
         if (codes.length === 0 || codes.length !== need) return res.json({ leaderboard: [], plates: codes.length, needed: need });
-        // one record per plate and player in a round (a plate that was sent twice counts once: the latest)
+        // one record per plate and player in a round (a plate that was sent twice counts once: the latest). A player is the seat in the
+        // roster (stats.player_slot), not the name: two players on one device may share both the name and the player id.
         const rows = await pool.query(
-            `SELECT round_id, player_id, player_name, MIN(input_mode) AS input_mode,
+            `SELECT round_id, player_id, slot, MAX(player_name) AS player_name, MIN(input_mode) AS input_mode,
                     SUM(total_score)::int AS total_score, SUM(score_vs_par)::int AS score_vs_par, MAX(played_at) AS played_at
              FROM (
-                 SELECT DISTINCT ON (stats->>'collection_round_id', player_id, player_name, course_code)
-                        stats->>'collection_round_id' AS round_id, player_id, player_name, course_code, input_mode, total_score, score_vs_par, played_at
+                 SELECT DISTINCT ON (stats->>'collection_round_id', player_id, COALESCE(stats->>'player_slot', player_name), course_code)
+                        stats->>'collection_round_id' AS round_id, player_id, COALESCE(stats->>'player_slot', player_name) AS slot, player_name,
+                        course_code, input_mode, total_score, score_vs_par, played_at
                  FROM course_records
                  WHERE stats->>'collection_id' = $1 AND course_code = ANY($2) AND flagged = false AND stats->>'collection_round_id' IS NOT NULL
-                 ORDER BY stats->>'collection_round_id', player_id, player_name, course_code, played_at DESC, id DESC
+                 ORDER BY stats->>'collection_round_id', player_id, COALESCE(stats->>'player_slot', player_name), course_code, played_at DESC, id DESC
              ) per_plate
-             GROUP BY round_id, player_id, player_name
+             GROUP BY round_id, player_id, slot
              HAVING COUNT(*) = $3
              ORDER BY SUM(total_score) ASC, MAX(played_at) ASC
              LIMIT 50`,

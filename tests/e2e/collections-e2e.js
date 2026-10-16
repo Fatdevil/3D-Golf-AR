@@ -43,7 +43,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
 
     // three published plates, one draft, one range
     const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par) VALUES ($1,$2,'t','[]'::jsonb,$3,$4,$5,3,$6)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par]); };
-    await mk('A', { par: 11 }); await mk('B', { par: 12 }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true });
+    await mk('A', { par: 11 }); await mk('B', { par: 12 }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
+    await pool.query('UPDATE courses SET hole_count = 2 WHERE share_code = $1', [tag + '-T']);
     const A = tag + '-A', B = tag + '-B', C = tag + '-C', D = tag + '-D', R = tag + '-R';
     const plate = function (c) { return { plate_code: c, plate_name: 'whatever the page says' }; };
 
@@ -65,6 +66,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('a draft is refused (400)', r.status === 400 && /not published/.test(r.json.error || ''), JSON.stringify(r));
     r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(A), plate(R)] }, owner);
     check('a range is refused (400)', r.status === 400 && /range/.test(r.json.error || ''), JSON.stringify(r));
+    r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(A), plate(tag + '-T')] }, owner);
+    check('a course of two holes is refused as a plate (400)', r.status === 400 && /has 2 holes/.test(r.json.error || ''), JSON.stringify(r));
     r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: 'A' }, owner);
     check('plates that are not a list are refused (400)', r.status === 400, JSON.stringify(r));
     const rowAfter = (await pool.query('SELECT plates, total_par FROM course_collections WHERE id = $1', [id])).rows[0];
@@ -96,11 +99,21 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('GET', '/api/collections/' + id + '/leaderboard');
     check('a plate sent twice in one round counts once, with its latest result (12 + 14 = 26)', (r.json.leaderboard || []).length === 1 && r.json.leaderboard[0].total_score === 26, JSON.stringify(r.json));
 
+    // two players on one device with the same name (same player id): told apart by their seat in the roster
+    const postSlot = function (course, score, slot, plateIndex) {
+      return api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: 0, hole_scores: [1, 1, 1], input_mode: 'SWING_METER', player_name: 'Sam',
+        stats: { collection_id: id, collection_round_id: 'samround01', plate_index: plateIndex, round_id: 'samround01-p' + plateIndex + '-' + slot, player_slot: slot } }, 'e2c-Sam-' + tag);
+    };
+    await postSlot(A, 10, 0, 0); await postSlot(B, 11, 0, 1); await postSlot(A, 20, 1, 0); await postSlot(B, 21, 1, 1);
+    r = await api('GET', '/api/collections/' + id + '/leaderboard');
+    const sams = (r.json.leaderboard || []).filter(function (x) { return x.player_name === 'Sam'; }).map(function (x) { return x.total_score; }).sort();
+    check('two players with the same name on one device are two results (21 and 41), not one mixed up', sams.length === 2 && sams[0] === 21 && sams[1] === 41, JSON.stringify(r.json.leaderboard));
+
     // Lo finishes: two players, ordered by total
     await post(B, 'Lo', 10, 'loround01', 1);
     r = await api('GET', '/api/collections/' + id + '/leaderboard');
     const lb2 = r.json.leaderboard || [];
-    check('both players are there, the lower total first (Lo 19, Kim 26)', lb2.length === 2 && lb2[0].player_name === 'Lo' && lb2[0].total_score === 19 && lb2[1].player_name === 'Kim', JSON.stringify(lb2));
+    check('the lower total first (Lo 19, Kim 26)', lb2.length >= 2 && lb2[0].player_name === 'Lo' && lb2[0].total_score === 19 && lb2.filter(function (x) { return x.player_name === 'Kim'; })[0].total_score === 26 && lb2.indexOf(lb2.filter(function (x) { return x.player_name === 'Kim'; })[0]) > 0, JSON.stringify(lb2));
 
     // a record that names another collection or a plate outside this one does not count
     await post(C, 'Mo', 5, 'moround01', 0); await post(A, 'Mo', 5, 'moround01', 1);

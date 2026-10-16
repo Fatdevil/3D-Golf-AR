@@ -27,7 +27,8 @@
         }
         
         // BUG-L03 FIX: Submit ALL players' results, not just player[0]
-        for (let pi = 0; pi < players.length; pi++) {
+        // All players at once: a plate of a collection is left right after, and a player sent last would not make it
+        const sendPlayer = async function (pi) {
             let pl = players[pi];
             let totalScore = 0;
             let totalPar = 0;
@@ -41,7 +42,7 @@
                 }
             }
             
-            if (holeScores.length === 0) continue;
+            if (holeScores.length === 0) return;
             
             let scoreVsPar = totalScore - totalPar;
             let displayName = (pi === 0 && window.GolfAuth?.user?.display_name) ? window.GolfAuth.user.display_name : (pl.name || 'Player ' + (pi + 1));
@@ -53,9 +54,9 @@
                     hole_scores: holeScores,
                     input_mode: window.G?.inputMode || 'SWING_METER',
                     lm_device: window.lmDeviceName || null,
-                    stats: collStats ? Object.assign({ round_id: collStats.collection_round_id + '-p' + collStats.plate_index + '-' + pi }, collStats) : undefined,
+                    stats: collStats ? Object.assign({ round_id: collStats.collection_round_id + '-p' + collStats.plate_index + '-' + pi, player_slot: pi }, collStats) : undefined,
                     player_name: displayName
-                });
+                }, collStats ? { keepalive: true } : undefined);
                 
                 // Only show leaderboard badge for primary player
                 if (pi === 0 && result.success) {
@@ -88,5 +89,6 @@
             } catch (e) {
                 console.warn('Could not submit round result for player', pi + 1, ':', e);
             }
-        }
+        };
+        await Promise.all(players.map(function (_, pi) { return sendPlayer(pi); }));
     }

@@ -1059,7 +1059,7 @@
             if (typeof cp === 'string') cp = JSON.parse(cp);
             usedPlates = cp.map(p => String(typeof p === 'string' ? p : p.plate_code).toUpperCase());
         }
-        let myCourses = myPublishedCourses().filter(c => !c.is_range && usedPlates.indexOf(String(c.share_code).toUpperCase()) < 0);
+        let myCourses = myPublishedCourses().filter(c => !c.is_range && (!c.hole_count || c.hole_count === 3) && usedPlates.indexOf(String(c.share_code).toUpperCase()) < 0);
 
         let html = '';
         if (myCourses.length === 0) {

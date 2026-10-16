@@ -42,6 +42,8 @@ function checkPlatesExist(plates, found) {
     if (!c) return { error: 'plate ' + plates[i].plate_code + ' does not exist' };
     if (c.is_draft === true) return { error: 'plate ' + plates[i].plate_code + ' is not published' };
     if (c.is_range === true) return { error: 'plate ' + plates[i].plate_code + ' is a range, not a course' };
+    // a plate is three holes: a course of one or two would number, add up and rank as a short collection (no count: an old row, taken as 3)
+    if (c.hole_count && c.hole_count !== HOLES_PER_PLATE) return { error: 'plate ' + plates[i].plate_code + ' has ' + c.hole_count + ' holes, a plate has ' + HOLES_PER_PLATE };
     totalPar += c.total_par || (c.hole_count || HOLES_PER_PLATE) * 4;
     out.push({ plate_code: plates[i].plate_code, plate_name: c.name || plates[i].plate_name || '' });
   }
