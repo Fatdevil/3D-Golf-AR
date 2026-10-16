@@ -1,6 +1,8 @@
     // === LEADERBOARD SYSTEM ===
     
-    async function submitRoundResult() {
+    // opts.silent: no position badge on the scorecard (a plate of a collection that is not the last one: the page is about to move on)
+    async function submitRoundResult(opts) {
+        opts = opts || {};
         if (window._loadedIsDraft) { console.log('Draft preview — skipping leaderboard submit'); return; }
         let params = new URLSearchParams(window.location.search);
         let courseCode = params.get('course') || params.get('edit') || currentEditCode;
@@ -8,6 +10,21 @@
         
         let players = window.players || [];
         if (players.length === 0) return;
+
+        // A plate of a collection is a round of its own on that plate; the collection ties the plates of one go together, so its
+        // leaderboard can add them up. Read before anything is awaited: the last plate clears it right after calling this.
+        let col = window._activeCollection;
+        let collStats = null;
+        if (col && col.id) {
+            let key = 'collection_round_' + col.id;
+            let collRound = null;
+            try { collRound = sessionStorage.getItem(key); } catch (e) {}
+            if (!collRound) {
+                collRound = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+                try { sessionStorage.setItem(key, collRound); } catch (e) {}
+            }
+            collStats = { collection_id: col.id, collection_round_id: collRound, plate_index: window._activePlateIndex || 0 };
+        }
         
         // BUG-L03 FIX: Submit ALL players' results, not just player[0]
         for (let pi = 0; pi < players.length; pi++) {
@@ -36,6 +53,7 @@
                     hole_scores: holeScores,
                     input_mode: window.G?.inputMode || 'SWING_METER',
                     lm_device: window.lmDeviceName || null,
+                    stats: collStats ? Object.assign({ round_id: collStats.collection_round_id + '-p' + collStats.plate_index + '-' + pi }, collStats) : undefined,
                     player_name: displayName
                 });
                 
@@ -43,7 +61,7 @@
                 if (pi === 0 && result.success) {
                     console.log('🏆 Result submitted! Position:', result.position);
                     
-                    let endBtns = document.getElementById('scorecard-endround-btns');
+                    let endBtns = opts.silent ? null : document.getElementById('scorecard-endround-btns');
                     if (endBtns) {
                         let posText = result.position === 1 ? '🥇 #1' : result.position === 2 ? '🥈 #2' : result.position === 3 ? '🥉 #3' : '#' + result.position;
                         let badge = document.createElement('div');
