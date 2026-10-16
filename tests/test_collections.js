@@ -67,6 +67,11 @@ check('spelarlistan rensas när sista plattan är klar och när en ny omgång st
 
 check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken och spelare rensas, vilken sida man än startade från', /if \(plateIndex === 0\) \{\s*try \{ \['collection_scores_', 'collection_round_', 'collection_roster_'\]\.forEach/.test(load) && load.indexOf("if (plateIndex === 0) {") < load.indexOf("window._collectionScores = JSON.parse"));
 
+// --- katalogen ---
+const catalog = read('courses.html');
+check('katalogens samlingskort hämtar samlingens topplista (/api/collections/<id>/leaderboard), vanliga banor sin egen', /course\._isCollection\s*\?\s*`\$\{API_BASE\}\/api\/collections\/\$\{encodeURIComponent\(course\._collectionId\)\}\/leaderboard`/.test(catalog) && /api\/courses\/\$\{encodeURIComponent\(course\.share_code\)\}\/leaderboard/.test(catalog));
+check('katalogen läser svaret { leaderboard: [...] } (inte en lista) och skriver spelarnamn escapade', /data\.leaderboard/.test(catalog) && /name: esc\(r\.player_name/.test(catalog));
+
 // --- servern ---
 const server = read('server.js');
 check('plattväljaren erbjuder bara banor med 3 hål', /!c\.hole_count \|\| c\.hole_count === 3/.test(read('build.html')));
