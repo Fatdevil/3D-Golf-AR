@@ -8476,9 +8476,14 @@
         playingHoleIndex = firstPlayableHole;
         window.playingHoleIndex = playingHoleIndex;
         
+        // A player's seat is kept for the whole round (also across the plates of a collection): the leaderboard and the combined
+        // scorecard add up a player by seat, not by name or by place in this page's list.
+        let usedSlots = window.setupPlayers.filter(sp => sp.slot !== undefined).map(sp => sp.slot);
+        let nextSlot = usedSlots.length ? Math.max(...usedSlots) + 1 : 0;
+        window.setupPlayers.forEach((sp, i) => { if (sp.slot === undefined) sp.slot = usedSlots.length ? nextSlot++ : i; });
         window.players = window.setupPlayers.map(sp => ({
             id: sp.name + "_" + Math.random().toString(36).substring(7),
-            name: sp.name, hcp: sp.hcp,
+            name: sp.name, hcp: sp.hcp, slot: sp.slot,
             tee: sp.tee,
             strokes: 0,
             penaltyStrokes: 0,
@@ -8590,6 +8595,7 @@
                         name: players[pi].name,
                         color: players[pi].color,
                         scores: players[pi].scores ? [...players[pi].scores] : [],
+                        slot: players[pi].slot !== undefined ? players[pi].slot : pi,
                         hcp: players[pi].hcp || null
                     });
                 }
@@ -8602,6 +8608,9 @@
                     sessionStorage.setItem('collection_scores_' + col.id, JSON.stringify(accumulated));
                 }
                 
+                // The next plate is a new page: the players (and their seats) go with the round
+                try { sessionStorage.setItem('collection_roster_' + col.id, JSON.stringify(players.map((p, pi) => ({ name: p.name, tee: p.tee, hcp: p.hcp, slot: p.slot !== undefined ? p.slot : pi })))); } catch (e) {}
+
                 // Show transition popup
                 let pop = document.getElementById('score-popup');
                 const loadingTexts = [
@@ -8639,6 +8648,7 @@
                         name: players[pi].name,
                         color: players[pi].color,
                         scores: players[pi].scores ? [...players[pi].scores] : [],
+                        slot: players[pi].slot !== undefined ? players[pi].slot : pi,
                         hcp: players[pi].hcp || null
                     });
                 }
@@ -8670,7 +8680,7 @@
             submitRoundResult();
             
             // Clean up collection session
-            if (col) { sessionStorage.removeItem('collection_scores_' + col.id); sessionStorage.removeItem('collection_round_' + col.id); }
+            if (col) { sessionStorage.removeItem('collection_scores_' + col.id); sessionStorage.removeItem('collection_round_' + col.id); sessionStorage.removeItem('collection_roster_' + col.id); }
             return;
         }
         
@@ -8688,7 +8698,8 @@
         let globalPars = new Array(totalHoles).fill('-');
         let globalScores = {};
         let players = window.players || [];
-        for(let pi=0; pi<players.length; pi++) globalScores[pi] = new Array(totalHoles).fill(null);
+        const slotOf = (pl, pi) => (pl && pl.slot !== undefined) ? pl.slot : pi;
+        for(let pi=0; pi<players.length; pi++) globalScores[slotOf(players[pi], pi)] = new Array(totalHoles).fill(null);
         
         accumulated.forEach(acc => {
             let offset = acc.plateIndex * MAX_HOLES;
@@ -8698,10 +8709,11 @@
             }
             // Scores
             for(let pi=0; pi<acc.plateScores.length; pi++) {
-                if(!globalScores[pi]) globalScores[pi] = new Array(totalHoles).fill(null);
+                let seat = slotOf(acc.plateScores[pi], pi);
+                if(!globalScores[seat]) globalScores[seat] = new Array(totalHoles).fill(null);
                 let pScores = acc.plateScores[pi].scores;
                 if(pScores) {
-                    for(let i=0; i<pScores.length && (offset+i)<totalHoles; i++) globalScores[pi][offset+i] = pScores[i];
+                    for(let i=0; i<pScores.length && (offset+i)<totalHoles; i++) globalScores[seat][offset+i] = pScores[i];
                 }
             }
         });
@@ -8718,7 +8730,7 @@
                 if(pl && pl.scores) {
                     for(let i=0; i<MAX_HOLES && (offset+i)<totalHoles; i++) {
                         if(pl.scores[i] !== null && pl.scores[i] !== undefined) {
-                            globalScores[pi][offset+i] = pl.scores[i];
+                            globalScores[slotOf(pl, pi)][offset+i] = pl.scores[i];
                         }
                     }
                 }
@@ -8751,7 +8763,7 @@
                 let sTot = 0, hasOut = false;
                 out += `<tr style="color:#fff; border-bottom:1px solid #1e293b;"><td style="color:${p.color||'#fff'}">${p.name||'P'+(pi+1)}</td>`;
                 for(let i=startHole; i<endHole; i++) {
-                    let s = globalScores[pi][i];
+                    let s = (globalScores[slotOf(p, pi)] || [])[i];
                     let par = globalPars[i] !== '-' ? globalPars[i] : 4;
                     let cellColor = '#fff';
                     if(s !== null) {

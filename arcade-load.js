@@ -923,6 +923,13 @@
                                 window._collectionScores = JSON.parse(sessionStorage.getItem('collection_scores_' + collectionId) || '[]');
                                 // Override displayed hole numbers based on plate position
                                 window._holeNumberOffset = plateIndex * MAX_HOLES;
+                                // Plate 2 and on: the players of the round come along (the page started over with one player)
+                                try {
+                                    let roster = JSON.parse(sessionStorage.getItem('collection_roster_' + collectionId) || 'null');
+                                    if (plateIndex > 0 && Array.isArray(roster) && roster.length > 0 && Array.isArray(window.setupPlayers)) {
+                                        window.setupPlayers = roster.slice(0, 4).map(function (p) { return { name: p.name, tee: p.tee || 'yellow', hcp: p.hcp === undefined ? null : p.hcp, slot: p.slot }; });
+                                    }
+                                } catch (e) {}
                                 console.log('📦 Collection loaded:', colRes.name, '| Plate', plateIndex + 1, '/', colRes.plates.length);
                             }
                         } catch(e) { console.warn('Collection load failed:', e); }

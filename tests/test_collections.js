@@ -52,12 +52,18 @@ check('samlingens slagliste och "hål spelade" räknar med MAX_HOLES, inte ett h
 // --- resultatet ---
 const result = read('arcade-round-result.js');
 check('resultatet knyts till samlingen: collection_id, collection_round_id och plate_index', /collection_id:\s*col\.id/.test(result) && /collection_round_id:\s*collRound/.test(result) && /plate_index:/.test(result));
-check('varje spelare och platta får ett eget round_id (ett nytt försök fördubblar inget)', /round_id:\s*collStats\.collection_round_id \+ '-p' \+ collStats\.plate_index \+ '-' \+ pi/.test(result));
-check('alla spelare skickas samtidigt, med keepalive så att sidbytet inte avbryter, och med platsen i listan (player_slot)', /Promise\.all\(players\.map/.test(result) && /keepalive: true/.test(result) && /player_slot: pi/.test(result) && /keepalive: !!\(opts && opts\.keepalive\)/.test(read('arcade-api-service.js')));
+check('varje spelare och platta får ett eget round_id (ett nytt försök fördubblar inget)', /round_id:\s*collStats\.collection_round_id \+ '-p' \+ collStats\.plate_index \+ '-' \+ seat/.test(result));
+check('alla spelare skickas samtidigt, med keepalive så att sidbytet inte avbryter, och med platsen i listan (player_slot)', /Promise\.all\(players\.map/.test(result) && /keepalive: true/.test(result) && /player_slot: seat/.test(result) && /keepalive: !!\(opts && opts\.keepalive\)/.test(read('arcade-api-service.js')));
 check('en bana utan samling skickar ingen stats (som förut)', /stats:\s*collStats\s*\?/.test(result) && /let collStats = null/.test(result));
 const nonFinal = arcade.slice(arcade.indexOf('if (hasNextPlate) {'), arcade.indexOf('// === COLLECTION: Final plate'));
 check('en platta som inte är sista skickas innan sidan går vidare (och sidan väntar högst 3 s på svaret)', /submitRoundResult\(\{ silent: true \}\)/.test(nonFinal) && /Promise\.race\(\[plateSent, new Promise\(r => setTimeout\(r, 3000\)\)\]\)/.test(nonFinal));
 check('samlingens runda-id rensas när sista plattan är skickad och när en ny omgång startas', /removeItem\('collection_round_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_round_' \+ collectionId\)/.test(read('build.html')));
+
+// --- spelarna följer med mellan plattorna ---
+check('spelarna sparas när sidan går vidare och läggs tillbaka på nästa platta (namn, tee, hcp och plats)', /collection_roster_' \+ col\.id, JSON\.stringify\(players\.map/.test(arcade) && /getItem\('collection_roster_' \+ collectionId\)/.test(load) && /plateIndex > 0 && Array\.isArray\(roster\)/.test(load));
+check('varje spelare har en plats (slot) som följer hela rundan, och resultatet använder den', /slot: sp\.slot/.test(arcade) && /let seat = pl\.slot !== undefined \? pl\.slot : pi/.test(result) && /player_slot: seat/.test(result));
+check('samlingens slaglista summerar per plats, inte per plats i den här sidans lista', /slotOf\(/.test(arcade) && (arcade.match(/slotOf\(/g) || []).length >= 4);
+check('spelarlistan rensas när sista plattan är klar och när en ny omgång startas', /removeItem\('collection_roster_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_roster_' \+ collectionId\)/.test(read('build.html')));
 
 // --- servern ---
 const server = read('server.js');
