@@ -53,8 +53,8 @@ const COURSES = {
   // a course with a painted map (a 1 px png as a data URL)
   MAPCOURSE: { share_code: 'MAPCOURSE', terrain_biomemap: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] },
   // sloped ground (2 %): EASTSLOPE falls toward the east, NORTHSLOPE falls toward the north; the hole is far away, the ball starts at the origin
-  EASTSLOPE: { share_code: 'EASTSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => -0.02 * ((i % 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
-  NORTHSLOPE: { share_code: 'NORTHSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => 0.02 * (Math.floor(i / 401) * 2.25 - 450)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
+  EASTSLOPE: { share_code: 'EASTSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => -0.02 * ((i % 401) * 1.5 - 300)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
+  NORTHSLOPE: { share_code: 'NORTHSLOPE', terrain_heightmap: JSON.stringify({ segs: 400, ground: Array.from({ length: 401 * 401 }, (_, i) => 0.02 * (Math.floor(i / 401) * 1.5 - 300)) }), holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -80 } }] },
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
@@ -269,10 +269,12 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     check('Swing: the swing circle UI is on (clubs, shapes) and the numbers are hidden', st.mode === 'SWING' && st.swing && st.clubs && st.shapes && !st.numbers && st.saved === 'SWING', JSON.stringify(st));
     await shot(page, 'desktop_swing.png');
     // the keyboard works on the desktop page as well: Space starts the swing, ',' picks the draw
+    await page.evaluate(function () { const m = document.getElementById('hamburger-menu'); if (m && m.classList.contains('open')) toggleHamburgerMenu(); });   // an open menu owns the keys
     await page.keyboard.press(',');
     await page.keyboard.press('Space');
     const kb = await page.evaluate(function () { return { overlay: document.getElementById('swing-overlay').classList.contains('active'), shape: SwingEngine.getShotShape() }; });
     check('desktop: Space starts the swing and "," has picked the draw', kb.overlay === true && kb.shape === -1, JSON.stringify(kb));
+    await page.evaluate(function () { const m = document.getElementById('hamburger-menu'); if (m && !m.classList.contains('open')) toggleHamburgerMenu(); });   // the menu is open again for the picker clicks below
     await page.click('#hb-input-mode .input-btn[data-input="LM"]');
     st = await state();
     check('Launch monitor: no controls on the screen (neither swing UI nor numbers)', st.mode === 'LM' && !st.swing && !st.clubs && !st.numbers && st.saved === 'LM', JSON.stringify(st));
@@ -825,6 +827,62 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  // one ground for both pages: a course made in arcade.html (a terrain 600 m wide) must read the same under the same point on the mobile page.
+  // The course has a 5 m plateau and a green patch around the flag at (100, -100); a point the same distance from the middle on the other side
+  // is flat fairway. Both pages are asked what lies at the flag and at the points a 600 m and a 900 m terrain would disagree about.
+  console.log('\nterrain size (arcade.html and arcade_mobile.html read the same ground)');
+  {
+    const maker = await browser.newPage();
+    const png = await maker.evaluate(function () {
+      const c = document.createElement('canvas'); c.width = 4096; c.height = 4096;
+      const g = c.getContext('2d');
+      g.fillStyle = '#79b84f'; g.fillRect(0, 0, 4096, 4096);                  // fairway
+      const px = function (w) { return (w + 300) / 600 * 4096; };             // world metres on a 600 m terrain to map pixels
+      g.fillStyle = '#8acf72'; g.fillRect(px(90), px(-110), px(110) - px(90), px(-90) - px(-110));   // green: x 90..110, z -110..-90
+      g.fillStyle = '#e0d8a4'; g.fillRect(px(-60), px(40), px(-40) - px(-60), px(60) - px(40));        // sand: x -60..-40, z 40..60
+      return c.toDataURL('image/png');
+    });
+    await maker.close();
+    const SEGS = 600, ground = new Array((SEGS + 1) * (SEGS + 1));
+    for (let gz = 0; gz <= SEGS; gz++) for (let gx = 0; gx <= SEGS; gx++) {
+      const x = gx - 300, z = gz - 300;
+      ground[gz * (SEGS + 1) + gx] = (x >= 80 && x <= 120 && z >= -120 && z <= -80) ? 5 : 0;      // a 5 m plateau around the flag
+    }
+    COURSES.SIZECOURSE = { share_code: 'SIZECOURSE', terrain_heightmap: JSON.stringify({ ground: ground, segs: SEGS }), terrain_biomemap: png,
+      holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 150 } }, flag: { x: 100, y: 5, z: -100 } }] };
+    // points as the physics asks for them: (x, y) with y = -z
+    const pts = { flag: [100, 100], sandPatch: [-50, -50], plateauEdge: [85, 100], farFairway: [-100, -100] };
+    const A = await open('/arcade.html?course=SIZECOURSE', { width: 1280, height: 720 }, { touch: false });
+    await A.page.waitForFunction(function () { return !!window.terrainBiomeData && typeof window.localGetTerrainAt === 'function'; }, null, { timeout: 60000 }).catch(function () {});
+    await A.page.waitForTimeout(3000);
+    const ar = await A.page.evaluate(function (pts) { const o = {}; for (const k in pts) { const t = window.localGetTerrainAt(pts[k][0], pts[k][1]); o[k] = { type: t.type, z: +t.z.toFixed(2) }; } return o; }, pts);
+    await A.ctx.close();
+    const M = await open('/arcade_mobile.html?course=SIZECOURSE', { width: 390, height: 844 });
+    await M.page.waitForFunction(function () { return !!window.biomeDataCache; }, null, { timeout: 60000 }).catch(function () {});
+    const mo = await M.page.evaluate(function (pts) { const o = {}; for (const k in pts) { o[k] = { type: window._terrainTypeAt(pts[k][0], pts[k][1]), z: +window.getTerrainHeight(pts[k][0], -pts[k][1]).toFixed(2) }; } return o; }, pts);
+    await M.ctx.close();
+    // a course that names its own size (terrain_heightmap.size) is followed: the same green, painted for a 900 m terrain
+    const maker2 = await browser.newPage();
+    const png900 = await maker2.evaluate(function () {
+      const c = document.createElement('canvas'); c.width = 4096; c.height = 4096;
+      const g = c.getContext('2d');
+      g.fillStyle = '#79b84f'; g.fillRect(0, 0, 4096, 4096);
+      const px = function (w) { return (w + 450) / 900 * 4096; };
+      g.fillStyle = '#8acf72'; g.fillRect(px(90), px(-110), px(110) - px(90), px(-90) - px(-110));
+      return c.toDataURL('image/png');
+    });
+    await maker2.close();
+    COURSES.SIZE900 = { share_code: 'SIZE900', terrain_heightmap: JSON.stringify({ ground: new Array(401 * 401).fill(0), segs: 400, size: 900 }), terrain_biomemap: png900,
+      holes: [{ par: 4, tees: { yellow: { x: 0, y: 0, z: 150 } }, flag: { x: 100, y: 0, z: -100 } }] };
+    const M9 = await open('/arcade_mobile.html?course=SIZE900', { width: 390, height: 844 });
+    await M9.page.waitForFunction(function () { return !!window.biomeDataCache; }, null, { timeout: 60000 }).catch(function () {});
+    const at900 = await M9.page.evaluate(function () { return { flag: window._terrainTypeAt(100, 100), off: window._terrainTypeAt(70, 100) }; });
+    await M9.ctx.close();
+    check('a course that says its terrain is 900 m wide is read as 900 m (green at the flag, fairway 30 m to the side)', at900.flag === 'GREEN' && at900.off === 'FAIRWAY', JSON.stringify(at900));
+    check('arcade.html reads the test course as built: green and 5 m plateau at the flag, sand in the sand patch', ar.flag.type === 'GREEN' && ar.flag.z === 5 && ar.sandPatch.type === 'SAND' && ar.farFairway.z === 0, JSON.stringify(ar));
+    check('the mobile page reads the same type and height at every point (same terrain size)', JSON.stringify(ar) === JSON.stringify(mo), JSON.stringify({ arcade: ar, mobile: mo }));
+  }
+
   // the ground's tilt reaches the physics: a putt across a slope breaks downhill (east slope: a putt north breaks east; north slope: a putt east breaks north)
   for (const sl of [{ code: 'EASTSLOPE', az: 0, axis: 'x', label: 'east' }, { code: 'NORTHSLOPE', az: 90, axis: 'y', label: 'north' }]) {
     const o = await open('/arcade_mobile.html?course=' + sl.code, { width: 390, height: 844 });
@@ -904,7 +962,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       window.biomeDataCache = data;
       const hex = function (h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; };
       const probe = function (x, color) {   // paint the pixel under (x, y = -10) and read it back through the game's own lookup
-        const y = -10, ix = Math.floor((x + 450) / 900 * 4096), iy = Math.floor((-y + 450) / 900 * 4096), i = (iy * 4096 + ix) * 4, c = hex(color);
+        const T = window.TERRAIN_SIZE, y = -10, ix = Math.floor((x + T / 2) / T * 4096), iy = Math.floor((-y + T / 2) / T * 4096), i = (iy * 4096 + ix) * 4, c = hex(color);
         data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255;
         return window._terrainTypeAt(x, y);
       };
