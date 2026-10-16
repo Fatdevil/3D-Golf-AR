@@ -65,6 +65,8 @@ check('varje spelare har en plats (slot) som följer hela rundan, och resultatet
 check('samlingens slaglista summerar per plats, inte per plats i den här sidans lista', /slotOf\(/.test(arcade) && (arcade.match(/slotOf\(/g) || []).length >= 4);
 check('spelarlistan rensas när sista plattan är klar och när en ny omgång startas', /removeItem\('collection_roster_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_roster_' \+ collectionId\)/.test(read('build.html')));
 
+check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken och spelare rensas, vilken sida man än startade från', /if \(plateIndex === 0\) \{\s*try \{ \['collection_scores_', 'collection_round_', 'collection_roster_'\]\.forEach/.test(load) && load.indexOf("if (plateIndex === 0) {") < load.indexOf("window._collectionScores = JSON.parse"));
+
 // --- servern ---
 const server = read('server.js');
 check('plattväljaren erbjuder bara banor med 3 hål', /!c\.hole_count \|\| c\.hole_count === 3/.test(read('build.html')));
