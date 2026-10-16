@@ -70,7 +70,8 @@ check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken och spe
 // --- servern ---
 const server = read('server.js');
 check('plattväljaren erbjuder bara banor med 3 hål', /!c\.hole_count \|\| c\.hole_count === 3/.test(read('build.html')));
-check('topplistan skiljer spelare på plats (player_slot), inte på namn', /COALESCE\(stats->>'player_slot', player_name\)/.test(server));
+check('topplistan räknar bara rundor på plattornas nuvarande version', /JOIN courses c ON c\.share_code = r\.course_code AND r\.course_version = COALESCE\(c\.version, 1\)/.test(server));
+check('topplistan skiljer spelare på plats (player_slot), inte på namn', /COALESCE\(r\.stats->>'player_slot', r\.player_name\)/.test(server));
 check('servern kontrollerar plattorna vid sparande och räknar totalpar själv', /checkPlateList\(type, plates\)/.test(server) && /checkPlatesExist\(cleanPlates, found\.rows\)/.test(server) && !/total_par\s*\}\s*=\s*req\.body/.test(server.slice(server.indexOf("app.post('/api/collections'"), server.indexOf("app.get('/api/collections/:id/leaderboard'"))));
 check('servern har en topplista för samlingen', /app\.get\('\/api\/collections\/:id\/leaderboard'/.test(server));
 

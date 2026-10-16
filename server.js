@@ -1039,12 +1039,14 @@ app.get('/api/collections/:id/leaderboard', requireDB, async (req, res) => {
             `SELECT round_id, player_id, slot, MAX(player_name) AS player_name, MIN(input_mode) AS input_mode,
                     SUM(total_score)::int AS total_score, SUM(score_vs_par)::int AS score_vs_par, MAX(played_at) AS played_at
              FROM (
-                 SELECT DISTINCT ON (stats->>'collection_round_id', player_id, COALESCE(stats->>'player_slot', player_name), course_code)
-                        stats->>'collection_round_id' AS round_id, player_id, COALESCE(stats->>'player_slot', player_name) AS slot, player_name,
-                        course_code, input_mode, total_score, score_vs_par, played_at
-                 FROM course_records
-                 WHERE stats->>'collection_id' = $1 AND course_code = ANY($2) AND flagged = false AND stats->>'collection_round_id' IS NOT NULL
-                 ORDER BY stats->>'collection_round_id', player_id, COALESCE(stats->>'player_slot', player_name), course_code, played_at DESC, id DESC
+                 SELECT DISTINCT ON (r.stats->>'collection_round_id', r.player_id, COALESCE(r.stats->>'player_slot', r.player_name), r.course_code)
+                        r.stats->>'collection_round_id' AS round_id, r.player_id, COALESCE(r.stats->>'player_slot', r.player_name) AS slot, r.player_name,
+                        r.course_code, r.input_mode, r.total_score, r.score_vs_par, r.played_at
+                 FROM course_records r
+                 -- only rounds on the plate as it is now: a republished plate (a new version) starts its leaderboard over, as a course's own does
+                 JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
+                 WHERE r.stats->>'collection_id' = $1 AND r.course_code = ANY($2) AND r.flagged = false AND r.stats->>'collection_round_id' IS NOT NULL
+                 ORDER BY r.stats->>'collection_round_id', r.player_id, COALESCE(r.stats->>'player_slot', r.player_name), r.course_code, r.played_at DESC, r.id DESC
              ) per_plate
              GROUP BY round_id, player_id, slot
              HAVING COUNT(*) = $3

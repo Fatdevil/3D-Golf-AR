@@ -120,6 +120,14 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('GET', '/api/collections/' + id + '/leaderboard');
     check('a round on a plate that is not in the collection does not make a result', (r.json.leaderboard || []).every(function (x) { return x.player_name !== 'Mo'; }), JSON.stringify(r.json));
 
+    // a plate that is published again (new version) starts over: rounds on its old version no longer count, and cannot be mixed with new ones
+    await pool.query('UPDATE courses SET version = COALESCE(version, 1) + 1 WHERE share_code = $1', [B]);
+    r = await api('GET', '/api/collections/' + id + '/leaderboard');
+    check('after plate B is republished, rounds on its old version are gone from the collection\'s leaderboard', r.status === 200 && (r.json.leaderboard || []).length === 0, JSON.stringify(r.json));
+    await post(A, 'Lo', 8, 'loround02', 0); await post(B, 'Lo', 9, 'loround02', 1);
+    r = await api('GET', '/api/collections/' + id + '/leaderboard');
+    check('a round on the current versions of both plates counts again (Lo 8 + 9 = 17), and only that', (r.json.leaderboard || []).length === 1 && r.json.leaderboard[0].player_name === 'Lo' && r.json.leaderboard[0].total_score === 17, JSON.stringify(r.json));
+
     r = await api('GET', '/api/collections/NOSUCH/leaderboard');
     check('an unknown collection is a 404', r.status === 404);
 
