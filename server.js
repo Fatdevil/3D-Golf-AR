@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const collectionsCore = require('./collections-core');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -975,9 +976,24 @@ app.get('/api/collections/:id', requireDB, async (req, res) => {
 
 app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
     try {
-        const { id, name, author, type, plates, total_par, cover_image } = req.body;
-        if (!type || !['3','6','9','18'].includes(type)) {
+        const { id, name, author, type, plates, cover_image } = req.body;
+        if (!type || !collectionsCore.TYPES.includes(type)) {
             return res.status(400).json({ error: 'type must be 3, 6, 9, or 18' });
+        }
+
+        // the plates are checked here, not trusted from the page: how many fit, that none is used twice, that each is a published course
+        const shape = collectionsCore.checkPlateList(type, plates);
+        if (shape.error) return res.status(400).json({ error: shape.error });
+        let cleanPlates = shape.plates, totalPar = null;
+        if (cleanPlates.length > 0) {
+            const found = await pool.query(
+                `SELECT share_code, name, total_par, hole_count, COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range
+                 FROM courses WHERE share_code = ANY($1)`, [cleanPlates.map(p => p.plate_code)]
+            );
+            const exist = collectionsCore.checkPlatesExist(cleanPlates, found.rows);
+            if (exist.error) return res.status(400).json({ error: exist.error });
+            cleanPlates = exist.plates;
+            totalPar = exist.totalPar; // worked out from the plates themselves, not from what the page says
         }
 
         if (id) {
@@ -988,7 +1004,7 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
             }
             const result = await pool.query(
                 `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6 WHERE id=$7 RETURNING id`,
-                [name || 'My Course', author || 'Anonymous', type, JSON.stringify(plates || []), total_par || null, cover_image || null, id.toUpperCase()]
+                [name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, id.toUpperCase()]
             );
             if (result.rows.length > 0) return res.json({ success: true, id: result.rows[0].id });
         }
@@ -997,11 +1013,50 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
         const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
         await pool.query(
             `INSERT INTO course_collections (id, name, author, type, plates, total_par, cover_image, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(plates || []), total_par || null, cover_image || null, req.userId || null]
+            [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, req.userId || null]
         );
         res.json({ success: true, id: newId });
     } catch(err) {
         console.error('Collection save error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// The leaderboard of a collection: a player's rounds on every plate of it, played in one go (stats.collection_round_id), added together.
+// A round that stopped after two of three plates is not a result of the collection.
+app.get('/api/collections/:id/leaderboard', requireDB, async (req, res) => {
+    try {
+        const col = await pool.query('SELECT id, type, plates FROM course_collections WHERE id = $1', [req.params.id.toUpperCase()]);
+        if (col.rows.length === 0) return res.status(404).json({ error: 'Collection not found' });
+        const plates = (typeof col.rows[0].plates === 'string' ? JSON.parse(col.rows[0].plates) : col.rows[0].plates) || [];
+        const codes = plates.map(collectionsCore.plateCode);
+        const need = Math.floor(parseInt(col.rows[0].type, 10) / collectionsCore.HOLES_PER_PLATE);
+        // an unfinished collection (fewer plates than the type has room for) has no results yet
+        if (codes.length === 0 || codes.length !== need) return res.json({ leaderboard: [], plates: codes.length, needed: need });
+        // one record per plate and player in a round (a plate that was sent twice counts once: the latest). A player is the seat in the
+        // roster (stats.player_slot), not the name: two players on one device may share both the name and the player id.
+        const rows = await pool.query(
+            `SELECT round_id, player_id, slot, MAX(player_name) AS player_name, MIN(input_mode) AS input_mode,
+                    SUM(total_score)::int AS total_score, SUM(score_vs_par)::int AS score_vs_par, MAX(played_at) AS played_at
+             FROM (
+                 SELECT DISTINCT ON (r.stats->>'collection_round_id', r.player_id, COALESCE(r.stats->>'player_slot', r.player_name), r.course_code)
+                        r.stats->>'collection_round_id' AS round_id, r.player_id, COALESCE(r.stats->>'player_slot', r.player_name) AS slot, r.player_name,
+                        r.course_code, r.input_mode, r.total_score, r.score_vs_par, r.played_at
+                 FROM course_records r
+                 -- only rounds on the plate as it is now: a republished plate (a new version) starts its leaderboard over, as a course's own does
+                 JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
+                 WHERE r.stats->>'collection_id' = $1 AND r.course_code = ANY($2) AND r.flagged = false AND r.stats->>'collection_round_id' IS NOT NULL
+                 ORDER BY r.stats->>'collection_round_id', r.player_id, COALESCE(r.stats->>'player_slot', r.player_name), r.course_code, r.played_at DESC, r.id DESC
+             ) per_plate
+             GROUP BY round_id, player_id, slot
+             HAVING COUNT(*) = $3
+             ORDER BY SUM(total_score) ASC, MAX(played_at) ASC
+             LIMIT 50`,
+            [col.rows[0].id, codes, codes.length]
+        );
+        res.json({ leaderboard: rows.rows, plates: codes.length, needed: need });
+    } catch(err) {
+        console.error('Collection leaderboard error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });

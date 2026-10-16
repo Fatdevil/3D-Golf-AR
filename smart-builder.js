@@ -5951,16 +5951,16 @@ window.executeSplineSmartGreen = function() {
         if(hasTee && hasFlag && hasAim) status = '✅'; // complete
         else if(hasTee || hasFlag) status = '⚠️'; // partial
         let el = document.getElementById('sb-hole-display');
-        if(el) el.textContent = (isSv ? 'Hål ' : 'Hole ') + (window.currentHoleIndex + 1) + ' (Par ' + hole.par + ') ' + status;
+        if(el) el.textContent = (isSv ? 'Hål ' : 'Hole ') + (window.holeNumber ? window.holeNumber(window.currentHoleIndex) : window.currentHoleIndex + 1) + ' (Par ' + hole.par + ') ' + status;
         // Also sync HOLE tool display and topbar
         let holeNum = document.getElementById('hole-ui-num');
-        if(holeNum) holeNum.innerText = (isSv ? 'Hål ' : 'Hole ') + (window.currentHoleIndex + 1);
+        if(holeNum) holeNum.innerText = (isSv ? 'Hål ' : 'Hole ') + (window.holeNumber ? window.holeNumber(window.currentHoleIndex) : window.currentHoleIndex + 1);
         let holePar = document.getElementById('hole-ui-par');
         if(holePar) holePar.innerText = 'Par ' + hole.par;
         let sbPar = document.getElementById('sb-par-display');
         if(sbPar) sbPar.innerText = 'Par ' + hole.par;
         let tbNum = document.getElementById('topbar-hole-num');
-        if(tbNum) tbNum.innerText = (isSv ? 'HÅL ' : 'HOLE ') + (window.currentHoleIndex + 1);
+        if(tbNum) tbNum.innerText = (isSv ? 'HÅL ' : 'HOLE ') + (window.holeNumber ? window.holeNumber(window.currentHoleIndex) : window.currentHoleIndex + 1);
         let tbPar = document.getElementById('topbar-hole-par');
         if(tbPar) tbPar.innerText = 'Par ' + hole.par;
         

@@ -1051,8 +1051,15 @@
         let overlay = document.getElementById('plate-picker-overlay');
         let list = document.getElementById('plate-picker-list');
         
-        // Show my published 3-hole plates
-        let myCourses = myPublishedCourses().filter(c => !c.is_range);
+        // Show my published 3-hole plates (one already in this collection is not offered again)
+        let col = _myCollections.find(c => c.id === collectionId);
+        let usedPlates = [];
+        if (col) {
+            let cp = col.plates || [];
+            if (typeof cp === 'string') cp = JSON.parse(cp);
+            usedPlates = cp.map(p => String(typeof p === 'string' ? p : p.plate_code).toUpperCase());
+        }
+        let myCourses = myPublishedCourses().filter(c => !c.is_range && (!c.hole_count || c.hole_count === 3) && usedPlates.indexOf(String(c.share_code).toUpperCase()) < 0);
 
         let html = '';
         if (myCourses.length === 0) {
@@ -1088,17 +1095,10 @@
         if (typeof plates === 'string') plates = JSON.parse(plates);
         plates.push({ plate_code: plateCode, plate_name: plateName });
 
-        // Calculate total par
-        let totalPar = 0;
-        for (let p of plates) {
-            let code = typeof p === 'string' ? p : p.plate_code;
-            let c = findCourseByCode(code);
-            if (c) totalPar += (c.total_par || 12);
-        }
-
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');
-            await fetch(API_BASE + '/api/collections', {
+            // the server checks the plates and works out the total par itself
+            let saved = await fetch(API_BASE + '/api/collections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-user-id': deviceId },
                 body: JSON.stringify({
@@ -1106,10 +1106,14 @@
                     name: col.name,
                     author: col.author,
                     type: col.type,
-                    plates: plates,
-                    total_par: totalPar
+                    plates: plates
                 })
             });
+            if (!saved.ok) {
+                let why = '';
+                try { why = (await saved.json()).error || ''; } catch (e) {}
+                alert('Kunde inte lägga till plattan' + (why ? ': ' + why : '.'));
+            }
             loadCollections();
         } catch(e) {
             alert('Kunde inte spara plattan.');
@@ -1125,6 +1129,8 @@
         
         // Clear any previous collection scores
         sessionStorage.removeItem('collection_scores_' + collectionId);
+        sessionStorage.removeItem('collection_round_' + collectionId);
+        sessionStorage.removeItem('collection_roster_' + collectionId);
         
         let firstPlate = plates[0];
         let firstCode = typeof firstPlate === 'string' ? firstPlate : firstPlate.plate_code;

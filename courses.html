@@ -993,15 +993,21 @@
         if (isFeatured && course.leaderboard) {
             renderLeaderboardTable(course.leaderboard);
         } else {
-            // Try API
-            fetch(`${API_BASE}/api/courses/${course.share_code}/leaderboard`)
+            // Try API: a collection has its own leaderboard (a player's rounds on all its plates added together)
+            let lbUrl = course._isCollection
+                ? `${API_BASE}/api/collections/${encodeURIComponent(course._collectionId)}/leaderboard`
+                : `${API_BASE}/api/courses/${encodeURIComponent(course.share_code)}/leaderboard`;
+            fetch(lbUrl)
                 .then(res => res.json())
-                .then(records => {
-                    if (records && records.length > 0) {
+                .then(data => {
+                    // the server answers { leaderboard: [...] }
+                    let records = Array.isArray(data) ? data : ((data && data.leaderboard) || []);
+                    if (records.length > 0) {
+                        let esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
                         let formatted = records.slice(0, 5).map(r => ({
-                            name: r.player_name || 'Okänd spelare',
-                            detail: (r.hole_count || 18) + ' hål',
-                            score: r.total_score ? formatScore(r.total_score, r.total_par) : '—'
+                            name: esc(r.player_name || 'Okänd spelare'),
+                            detail: (course.hole_count || r.hole_count || 18) + ' hål',
+                            score: r.total_score ? formatScore(r.total_score, r.score_vs_par !== undefined && r.score_vs_par !== null ? r.total_score - r.score_vs_par : r.total_par) : '—'
                         }));
                         renderLeaderboardTable(formatted);
                     } else {

@@ -920,9 +920,21 @@
                             if (colRes && colRes.plates) {
                                 window._activeCollection = colRes;
                                 window._activePlateIndex = plateIndex;
+                                // Plate 1 is where a collection round starts, whichever page it was started from (build.html, courses.html, a link): what an
+                                // earlier, abandoned go left behind (scores, round token, players) must not carry into this one
+                                if (plateIndex === 0) {
+                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_'].forEach(function (k) { sessionStorage.removeItem(k + collectionId); }); } catch (e) {}
+                                }
                                 window._collectionScores = JSON.parse(sessionStorage.getItem('collection_scores_' + collectionId) || '[]');
                                 // Override displayed hole numbers based on plate position
                                 window._holeNumberOffset = plateIndex * MAX_HOLES;
+                                // Plate 2 and on: the players of the round come along (the page started over with one player)
+                                try {
+                                    let roster = JSON.parse(sessionStorage.getItem('collection_roster_' + collectionId) || 'null');
+                                    if (plateIndex > 0 && Array.isArray(roster) && roster.length > 0 && Array.isArray(window.setupPlayers)) {
+                                        window.setupPlayers = roster.slice(0, 4).map(function (p) { return { name: p.name, tee: p.tee || 'yellow', hcp: p.hcp === undefined ? null : p.hcp, slot: p.slot }; });
+                                    }
+                                } catch (e) {}
                                 console.log('📦 Collection loaded:', colRes.name, '| Plate', plateIndex + 1, '/', colRes.plates.length);
                             }
                         } catch(e) { console.warn('Collection load failed:', e); }

@@ -80,12 +80,14 @@ window.ArcadeAPI = {
      * Submit round result for leaderboard.
      * @param {string} courseCode
      * @param {Object} result — { total_score, score_vs_par, hole_scores, input_mode, lm_device, stats, player_name }
+     * @param {Object} [opts] — { keepalive: true } lets the request finish after the page has moved on
      */
-    async submitResult(courseCode, result) {
+    async submitResult(courseCode, result, opts) {
         const res = await fetch('/api/courses/' + courseCode + '/results', {
             method: 'POST',
             headers: this._headers(),
-            body: JSON.stringify(result)
+            body: JSON.stringify(result),
+            keepalive: !!(opts && opts.keepalive)
         });
         return res.json();
     },

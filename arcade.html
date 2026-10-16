@@ -7409,6 +7409,8 @@
     // Max number of holes supported — change to 9 for 9-hole courses
     const MAX_HOLES = 3;
     window.MAX_HOLES = MAX_HOLES;
+    // the number a hole is shown with: on plate 2 of a collection the first hole is hole 4 (_holeNumberOffset is set when the collection loads)
+    window.holeNumber = function (index) { return (window._holeNumberOffset || 0) + index + 1; };
 
     let courseHoles = [];
     for(let i=0; i<MAX_HOLES; i++) {
@@ -7815,11 +7817,11 @@
         currentHoleIndex = targetIdx;
         let h = courseHoles[currentHoleIndex];
         let hNum = document.getElementById('hole-ui-num');
-        if(hNum) hNum.innerText = "Hole " + (currentHoleIndex + 1);
+        if(hNum) hNum.innerText = "Hole " + window.holeNumber(currentHoleIndex);
         let hPar = document.getElementById('hole-ui-par');
         if(hPar) hPar.innerText = "Par " + (h ? h.par : 4);
         let tbNum = document.getElementById('topbar-hole-num');
-        if(tbNum) tbNum.innerText = "Hole " + (currentHoleIndex + 1);
+        if(tbNum) tbNum.innerText = "Hole " + window.holeNumber(currentHoleIndex);
         let tbPar = document.getElementById('topbar-hole-par');
         if(tbPar) tbPar.innerText = "Par " + (h ? h.par : 4);
         if(typeof window.updateSBHoleDisplay === 'function') window.updateSBHoleDisplay();
@@ -8474,9 +8476,14 @@
         playingHoleIndex = firstPlayableHole;
         window.playingHoleIndex = playingHoleIndex;
         
+        // A player's seat is kept for the whole round (also across the plates of a collection): the leaderboard and the combined
+        // scorecard add up a player by seat, not by name or by place in this page's list.
+        let usedSlots = window.setupPlayers.filter(sp => sp.slot !== undefined).map(sp => sp.slot);
+        let nextSlot = usedSlots.length ? Math.max(...usedSlots) + 1 : 0;
+        window.setupPlayers.forEach((sp, i) => { if (sp.slot === undefined) sp.slot = usedSlots.length ? nextSlot++ : i; });
         window.players = window.setupPlayers.map(sp => ({
             id: sp.name + "_" + Math.random().toString(36).substring(7),
-            name: sp.name, hcp: sp.hcp,
+            name: sp.name, hcp: sp.hcp, slot: sp.slot,
             tee: sp.tee,
             strokes: 0,
             penaltyStrokes: 0,
@@ -8588,6 +8595,7 @@
                         name: players[pi].name,
                         color: players[pi].color,
                         scores: players[pi].scores ? [...players[pi].scores] : [],
+                        slot: players[pi].slot !== undefined ? players[pi].slot : pi,
                         hcp: players[pi].hcp || null
                     });
                 }
@@ -8600,6 +8608,9 @@
                     sessionStorage.setItem('collection_scores_' + col.id, JSON.stringify(accumulated));
                 }
                 
+                // The next plate is a new page: the players (and their seats) go with the round
+                try { sessionStorage.setItem('collection_roster_' + col.id, JSON.stringify(players.map((p, pi) => ({ name: p.name, tee: p.tee, hcp: p.hcp, slot: p.slot !== undefined ? p.slot : pi })))); } catch (e) {}
+
                 // Show transition popup
                 let pop = document.getElementById('score-popup');
                 const loadingTexts = [
@@ -8611,16 +8622,18 @@
                     "Laddar upp drivern..."
                 ];
                 let rndText = loadingTexts[Math.floor(Math.random() * loadingTexts.length)];
-                pop.innerHTML = `✅ ${(pIdx*3)+3} HÅL SPELADE<br><span style="font-size:18px; color:#94a3b8;">${rndText}</span>`;
+                pop.innerHTML = `✅ ${(pIdx + 1) * MAX_HOLES} HÅL SPELADE<br><span style="font-size:18px; color:#94a3b8;">${rndText}</span>`;
                 pop.style.opacity = '1';
                 pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
                 
-                // Auto-navigate to next plate after 2.5 seconds
+                // This plate's round goes to the leaderboard now: leaving the page drops anything sent later
+                let plateSent = submitRoundResult({ silent: true });
+                // Auto-navigate to next plate after 2.5 seconds (and once the result is sent, but not later than 3 seconds more)
                 setTimeout(() => {
                     let nextPlate = col.plates[pIdx + 1];
                     let nextCode = typeof nextPlate === 'string' ? nextPlate : nextPlate.plate_code;
                     let url = 'arcade.html?v=' + Date.now() + '&course=' + nextCode + '&collection=' + col.id + '&plate=' + (pIdx + 1) + '&autorun=setup';
-                    window.location.href = url;
+                    Promise.race([plateSent, new Promise(r => setTimeout(r, 3000))]).then(() => { window.location.href = url; });
                 }, 2500);
                 return;
             }
@@ -8635,6 +8648,7 @@
                         name: players[pi].name,
                         color: players[pi].color,
                         scores: players[pi].scores ? [...players[pi].scores] : [],
+                        slot: players[pi].slot !== undefined ? players[pi].slot : pi,
                         hcp: players[pi].hcp || null
                     });
                 }
@@ -8666,7 +8680,7 @@
             submitRoundResult();
             
             // Clean up collection session
-            if (col) sessionStorage.removeItem('collection_scores_' + col.id);
+            if (col) { sessionStorage.removeItem('collection_scores_' + col.id); sessionStorage.removeItem('collection_round_' + col.id); sessionStorage.removeItem('collection_roster_' + col.id); }
             return;
         }
         
@@ -8684,20 +8698,22 @@
         let globalPars = new Array(totalHoles).fill('-');
         let globalScores = {};
         let players = window.players || [];
-        for(let pi=0; pi<players.length; pi++) globalScores[pi] = new Array(totalHoles).fill(null);
+        const slotOf = (pl, pi) => (pl && pl.slot !== undefined) ? pl.slot : pi;
+        for(let pi=0; pi<players.length; pi++) globalScores[slotOf(players[pi], pi)] = new Array(totalHoles).fill(null);
         
         accumulated.forEach(acc => {
-            let offset = acc.plateIndex * 3;
+            let offset = acc.plateIndex * MAX_HOLES;
             // Pars
             if(acc.platePars) {
                 for(let i=0; i<acc.platePars.length && (offset+i)<totalHoles; i++) globalPars[offset+i] = acc.platePars[i];
             }
             // Scores
             for(let pi=0; pi<acc.plateScores.length; pi++) {
-                if(!globalScores[pi]) globalScores[pi] = new Array(totalHoles).fill(null);
+                let seat = slotOf(acc.plateScores[pi], pi);
+                if(!globalScores[seat]) globalScores[seat] = new Array(totalHoles).fill(null);
                 let pScores = acc.plateScores[pi].scores;
                 if(pScores) {
-                    for(let i=0; i<pScores.length && (offset+i)<totalHoles; i++) globalScores[pi][offset+i] = pScores[i];
+                    for(let i=0; i<pScores.length && (offset+i)<totalHoles; i++) globalScores[seat][offset+i] = pScores[i];
                 }
             }
         });
@@ -8705,16 +8721,16 @@
         // Mix in current plate if we are currently playing it (so it shows live score)
         let pIdx = window._activePlateIndex;
         if(pIdx !== undefined && pIdx !== null) {
-            let offset = pIdx * 3;
-            for(let i=0; i<3 && (offset+i)<totalHoles; i++) {
+            let offset = pIdx * MAX_HOLES;
+            for(let i=0; i<MAX_HOLES && (offset+i)<totalHoles; i++) {
                 if(courseHoles[i]) globalPars[offset+i] = courseHoles[i].par || 4;
             }
             for(let pi=0; pi<players.length; pi++) {
                 let pl = players[pi];
                 if(pl && pl.scores) {
-                    for(let i=0; i<3 && (offset+i)<totalHoles; i++) {
+                    for(let i=0; i<MAX_HOLES && (offset+i)<totalHoles; i++) {
                         if(pl.scores[i] !== null && pl.scores[i] !== undefined) {
-                            globalScores[pi][offset+i] = pl.scores[i];
+                            globalScores[slotOf(pl, pi)][offset+i] = pl.scores[i];
                         }
                     }
                 }
@@ -8747,7 +8763,7 @@
                 let sTot = 0, hasOut = false;
                 out += `<tr style="color:#fff; border-bottom:1px solid #1e293b;"><td style="color:${p.color||'#fff'}">${p.name||'P'+(pi+1)}</td>`;
                 for(let i=startHole; i<endHole; i++) {
-                    let s = globalScores[pi][i];
+                    let s = (globalScores[slotOf(p, pi)] || [])[i];
                     let par = globalPars[i] !== '-' ? globalPars[i] : 4;
                     let cellColor = '#fff';
                     if(s !== null) {
@@ -9156,7 +9172,7 @@
         if (hud) {
             hud.style.display = 'block';
             document.getElementById('flyover-hole-num').innerText = 'HOLE';
-            document.getElementById('flyover-hole-big').innerText = (playingHoleIndex + 1);
+            document.getElementById('flyover-hole-big').innerText = window.holeNumber(playingHoleIndex);
             document.getElementById('flyover-par').innerText = hole.par || 4;
             document.getElementById('flyover-yards').innerText = yards;
             // Fade in info after short delay
