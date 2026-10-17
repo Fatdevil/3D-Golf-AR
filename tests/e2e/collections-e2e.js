@@ -49,7 +49,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const holesOf = lens => JSON.stringify(lens.map(len => ({ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -len } })));
     const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par, course_rating, slope_rating) VALUES ($1,$2,'t',$7::jsonb,$3,$4,$5,3,$6,$8,$9)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par, o.lens ? holesOf(o.lens) : '[]', o.cr || null, o.sr || null]); };
     await mk('A', { par: 11, lens: [150, 400, 250] }); await mk('B', { par: 12, lens: [300, 100, 500] }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
-    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('L1', { par: 12, lens: [200, 200, 200] }); await mk('X1', { par: 12, lens: [300, 300, 300], cr: 10, sr: 113 }); await mk('F1', { par: 12, lens: [200, 200, 200] });
+    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('L1', { par: 12, lens: [200, 200, 200] }); await mk('X1', { par: 12, lens: [300, 300, 300], cr: 10, sr: 113 }); await mk('F1', { par: 12, lens: [200, 200, 200] }); await mk('Z1', { par: 12, lens: [100, 100, 100] }); await mk('Z2', { par: 12, lens: [100, 100, 100] });
     await pool.query('UPDATE courses SET hole_count = 2 WHERE share_code = $1', [tag + '-T']);
     const A = tag + '-A', B = tag + '-B', C = tag + '-C', D = tag + '-D', R = tag + '-R';
     const plate = function (c) { return { plate_code: c, plate_name: 'whatever the page says' }; };
@@ -293,6 +293,21 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     if (raced.json.id) madeCollections.push(raced.json.id);
     const racedRow = (await pool.query('SELECT stroke_index FROM course_collections WHERE id = $1', [raced.json.id])).rows[0];
     check('a collection saved while a plate is being published gets the new holes of the plate, not the old (500 100 300 => 1 3 2)', raced.status === 200 && racedRow && JSON.stringify(racedRow.stroke_index.slice(0, 3)) === JSON.stringify([1, 3, 2]), JSON.stringify(raced) + JSON.stringify(racedRow));
+
+    // two plates of one collection published at the same moment take turns: the second reads the first one's new holes (the collection's row is locked
+    // first; here another publish is held in its refresh by a lock on the collection's row, and commits its plate while ours waits)
+    r = await api('POST', '/api/collections', { name: 'Tva samtidigt', author: 'Test', type: '6', plates: [plate(tag + '-Z1'), plate(tag + '-Z2')] }, owner);
+    const zId = r.json.id; madeCollections.push(zId);
+    const zHolder = await pool.connect();
+    await zHolder.query('BEGIN');
+    await zHolder.query('SELECT 1 FROM course_collections WHERE id = $1 FOR UPDATE', [zId]);
+    const zPublish = api('POST', '/api/courses', { edit_code: tag + '-Z2', name: 'Platta Z2', author: 't', holes: JSON.parse(holesOf([200, 400, 600])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    await wait(900);   // Z2 is stored (not yet committed) and its refresh waits for the collection's lock
+    await zHolder.query('UPDATE courses SET holes = $2::jsonb WHERE share_code = $1', [tag + '-Z1', holesOf([500, 100, 300])]);
+    await zHolder.query('COMMIT'); zHolder.release();
+    r = await zPublish;
+    const zRow = (await pool.query('SELECT stroke_index FROM course_collections WHERE id = $1', [zId])).rows[0];
+    check('two plates of a collection published at the same moment: the collection ends with the new holes of both (500 100 300 | 200 400 600 => 2 6 4 5 3 1), not a mix', r.status === 200 && JSON.stringify(zRow.stroke_index) === JSON.stringify([2, 6, 4, 5, 3, 1]), r.status + ' ' + JSON.stringify(zRow));
 
     // a plate saved again: the collections it is in get their stroke index and ratings from the plates as they are now (B: 600 100 100)
     r = await api('POST', '/api/courses', { edit_code: B, name: 'Platta B', author: 't', holes: JSON.parse(holesOf([600, 100, 100])), is_draft: false, hole_count: 3, total_par: 12 }, owner);

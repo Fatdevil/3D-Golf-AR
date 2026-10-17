@@ -901,7 +901,11 @@ async function refreshCollectionsOf(db, plateCode) {
                                  WHERE upper(CASE WHEN jsonb_typeof(e) = 'string' THEN e #>> '{}' ELSE e->>'plate_code' END) = $1)
                     ELSE false END`, [plateCode.toUpperCase()]);
     for (const c of cols.rows) {
-        const plates = (typeof c.plates === 'string' ? JSON.parse(c.plates) : c.plates) || [];
+        // The collection's row is locked before its plates are read: two plates of it that are published at the same moment take turns, and the second
+        // reads the first one's new holes (its transaction has committed by the time the lock is given), so the last write is never a mix of old and new.
+        const locked = await db.query('SELECT id, plates FROM course_collections WHERE id = $1 FOR UPDATE', [c.id]);
+        if (locked.rows.length === 0) continue;   // deleted while waiting
+        const plates = (typeof locked.rows[0].plates === 'string' ? JSON.parse(locked.rows[0].plates) : locked.rows[0].plates) || [];
         const rows = await loadPlateRows(db, plates.map(collectionsCore.plateCode));
         const r = collectionRatings(rows);
         await db.query('UPDATE course_collections SET stroke_index=$1, course_rating=$2, slope_rating=$3, total_par=$4 WHERE id=$5',

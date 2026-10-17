@@ -88,6 +88,7 @@ check('servern lagrar samlingens slagindex och betyg, räknar om dem i samma tra
 check('handikapphistoriken visar en samlingsrunda ur den ögonblicksbild servern skrev när rundan slutfördes (collection_go), inte ur föränderliga data, och en klient kan inte skicka in en egen', /stats \|\| jsonb_build_object\('collection_go'/.test(server) && /const go = r\.stats && r\.stats\.collection_go/.test(server) && /delete storedStats\.collection_go/.test(server));
 check('betyg som saknas på en äldre samling räknas fram när de behövs (när samlingen läses och när ett resultat kommer in)', /async function ensureCollectionRatings/.test(server) && /coll = await ensureCollectionRatings\(pool, cr\.rows\[0\]\)/.test(server) && /res\.json\(await ensureCollectionRatings\(pool, result\.rows\[0\]\)\)/.test(server));
 check('en samling sparas i en transaktion som läser plattorna med delat lås, så en publicering som pågår inte kan smita förbi', /async function saveCollection\(db, req, shape\)/.test(server) && /FROM courses WHERE share_code = ANY\(\$1\) FOR SHARE/.test(server) && /await db\.query\('BEGIN'\);\s*const out = await saveCollection\(db, req, shape\)/.test(server));
+check('omräkningen när en platta publiceras låser samlingens rad innan plattorna läses', /SELECT id, plates FROM course_collections WHERE id = \$1 FOR UPDATE/.test(server));
 check('servern har en topplista för samlingen', /app\.get\('\/api\/collections\/:id\/leaderboard'/.test(server));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall passed');
