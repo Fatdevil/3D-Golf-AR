@@ -472,16 +472,14 @@ app.get('/api/users/:id/handicap', requireDB, async (req, res) => {
                     collCache[cid] = cr.rows[0] || null;
                 }
                 const coll = collCache[cid];
-                if (coll) {
-                    const seat = String(st.player_slot !== undefined && st.player_slot !== null ? st.player_slot : r.player_name);
-                    const go = await collectionGoRecords(pool, coll, cid, st.collection_round_id, req.params.id, seat, false);
-                    if (go.rows.length > 0) {
-                        row.total_score = go.rows.reduce((sum, g) => sum + g.total_score, 0);
-                        row.score_vs_par = go.rows.reduce((sum, g) => sum + (g.score_vs_par || 0), 0);
-                        row.course_code = null;
-                        row.collection_id = coll.id;
-                        row.collection_name = coll.name;
-                    }
+                const seat = String(st.player_slot !== undefined && st.player_slot !== null ? st.player_slot : r.player_name);
+                const go = await collectionGoRecords(pool, coll, cid, st.collection_round_id, req.params.id, seat, false);
+                if (go.rows.length > 0) {
+                    row.total_score = go.rows.reduce((sum, g) => sum + g.total_score, 0);
+                    row.score_vs_par = go.rows.reduce((sum, g) => sum + (g.score_vs_par || 0), 0);
+                    row.course_code = null;
+                    row.collection_id = cid;
+                    row.collection_name = coll ? coll.name : null;   // null: the collection is gone, the round is still shown whole
                 }
             }
             recent.push(row);
@@ -598,7 +596,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             const cr = await pool.query('SELECT id, type, plates, course_rating, slope_rating FROM course_collections WHERE id = $1', [collId]);
             if (cr.rows.length > 0) {
                 const cp = (typeof cr.rows[0].plates === 'string' ? JSON.parse(cr.rows[0].plates) : cr.rows[0].plates) || [];
-                if (cp.map(collectionsCore.plateCode).indexOf(code) >= 0) coll = cr.rows[0];
+                if (cp.map(collectionsCore.plateCode).indexOf(code) >= 0) coll = await ensureCollectionRatings(pool, cr.rows[0]);
             }
         }
         const collSeat = String(stats && stats.player_slot !== undefined && stats.player_slot !== null ? stats.player_slot : (player_name || req.body.player_name || 'Anonymous'));
@@ -836,12 +834,13 @@ function collectionRatings(plateRows) {
 // The player's latest record on each of the collection's plates in one go (only the collection's own plates, never other courses).
 // currentOnly: just the plates as they are now (the differential of a go); otherwise whatever version they were played on (the history).
 async function collectionGoRecords(db, coll, collId, roundId, userId, seat, currentOnly) {
-    const codes = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).map(collectionsCore.plateCode);
+    // coll null: the collection has been deleted; its rounds are still in the records, and the go is read from them alone
+    const codes = coll ? (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).map(collectionsCore.plateCode) : null;
     const done = await db.query(
         `SELECT DISTINCT ON (r.course_code) r.id, r.total_score, r.score_vs_par
          FROM course_records r LEFT JOIN courses c ON c.share_code = r.course_code
          WHERE r.stats->>'collection_id' = $1 AND r.stats->>'collection_round_id' = $2 AND r.player_id = $3
-           AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.course_code = ANY($5) AND r.flagged = false
+           AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND ($5::text[] IS NULL OR r.course_code = ANY($5)) AND r.flagged = false
            AND ($6 = false OR r.course_version = COALESCE(c.version, 1))
          ORDER BY r.course_code, r.played_at DESC, r.id DESC`, [collId, roundId, userId, seat, codes, !!currentOnly]
     );
@@ -874,6 +873,21 @@ async function loadPlateRows(db, plateCodes) {
     const byCode = {};
     rows.rows.forEach(function (r) { byCode[r.share_code.toUpperCase()] = r; });
     return plateCodes.map(function (c) { return byCode[c]; }).filter(Boolean);
+}
+
+// A collection saved before stroke index and ratings existed has none: they are worked out from its plates the first time they are needed
+// (the row is updated, so it happens once). A collection without plates has nothing to work out.
+async function ensureCollectionRatings(db, coll) {
+    if (coll.course_rating !== null && coll.course_rating !== undefined) return coll;
+    const plates = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates) || [];
+    if (!Array.isArray(plates) || plates.length === 0) return coll;
+    const rows = await loadPlateRows(db, plates.map(collectionsCore.plateCode));
+    if (rows.length === 0) return coll;
+    const r = collectionRatings(rows);
+    await db.query('UPDATE course_collections SET stroke_index=$1, course_rating=$2, slope_rating=$3 WHERE id=$4 AND course_rating IS NULL',
+        [JSON.stringify(r.stroke_index), r.course_rating, r.slope_rating, coll.id]);
+    coll.stroke_index = r.stroke_index; coll.course_rating = r.course_rating; coll.slope_rating = r.slope_rating;
+    return coll;
 }
 
 // A plate was saved again: the collections it is in get their stroke index and ratings from the plates as they are now
@@ -1116,7 +1130,7 @@ app.get('/api/collections/:id', requireDB, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM course_collections WHERE id = $1', [req.params.id.toUpperCase()]);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Collection not found' });
-        res.json(result.rows[0]);
+        res.json(await ensureCollectionRatings(pool, result.rows[0]));
     } catch(err) {
         console.error('Collection fetch error:', err);
         res.status(500).json({ error: 'Database error' });
