@@ -177,6 +177,20 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const multiRows = (await pool.query("SELECT stats->>'player_slot' AS seat, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'multi01' AND score_differential IS NOT NULL", [multiUser])).rows;
     check('three local players on one account: only the account holder\'s go (seat 0) carries a differential, 14 + 15 = 29 on the collection\'s rating', multiRows.length === 1 && multiRows[0].seat === '0' && multiRows[0].d === Math.round((113 / hRow.sr) * (29 - hRow.cr) * 10) / 10, JSON.stringify(multiRows));
 
+    // ordinary courses, several local players on one account: only the account holder (seat 0) counts for the handicap, a guest's round does not;
+    // a client that does not say which seat it is (an older page, another app) is the account holder, as before
+    const ordUser = 'e2c-Ord-' + tag;
+    const ord = (seat, score, extra) => api('POST', '/api/courses/' + H1 + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Spelare' + seat,
+      stats: extra === 'noslot' ? undefined : { player_slot: seat } }, ordUser);
+    const ordHolder = await ord(0, 14), ordGuest1 = await ord(1, 15), ordGuest2 = await ord(2, 16), ordOld = await ord(0, 13, 'noslot');
+    const ordRows = (await pool.query("SELECT player_name, score_differential::float AS d, net_score FROM course_records WHERE player_id = $1 ORDER BY id", [ordUser])).rows;
+    check('several local players on one account, ordinary course: only the account holder (seat 0) gets a differential (113/113 x (14 - 12) = 2); guests are on the leaderboard but not in the handicap',
+      ordRows.length === 4 && ordRows[0].d === 2 && ordRows[1].d === null && ordRows[2].d === null && ordHolder.json.handicap.differential === 2 && ordGuest1.json.handicap.differential === null && ordGuest2.json.handicap.new === null,
+      JSON.stringify(ordRows));
+    check('a client that does not say its seat is the account holder: its round still counts (13 => 1)', ordRows[3].d === 1 && ordOld.json.handicap.differential === 1, JSON.stringify(ordRows[3]));
+    const ordBoard = (await api('GET', '/api/courses/' + H1 + '/leaderboard')).json.leaderboard || [];
+    check('and the guests are on the course\'s leaderboard under their own names', ['Spelare1', 'Spelare2'].every(n => ordBoard.some(x => x.player_name === n)), JSON.stringify(ordBoard.map(x => x.player_name)));
+
     // a result on a course that is NOT in the collection, with the collection's stats on it, is no part of the go
     const xpost = (course, score, retryId) => api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
       stats: { collection_id: hid, collection_round_id: 'forge01', plate_index: 0, round_id: retryId, player_slot: 0 } }, hcpUser);
