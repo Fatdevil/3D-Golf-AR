@@ -1121,6 +1121,7 @@
     // the whole list goes to the server, which checks it again and works out the total par and the ratings
     async function savePlates(col, plates, failText) {
         _savingPlates = true;
+        document.querySelectorAll('.col-play-btn').forEach(function (b) { b.disabled = true; });   // Play would start from the old list
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');
             let saved = await fetch(API_BASE + '/api/collections', {
@@ -1135,7 +1136,9 @@
                     plates: plates
                 })
             });
-            if (!saved.ok) {
+            if (saved.ok) {
+                col.plates = plates;   // kept even if the reload below fails, so the next edit starts from what was saved
+            } else {
                 let why = '';
                 try { why = (await saved.json()).error || ''; } catch (e) {}
                 alert(failText + (why ? ': ' + why : '.'));
@@ -1143,7 +1146,7 @@
         } catch(e) {
             alert(failText + '.');
         }
-        try { await loadCollections(); } finally { _savingPlates = false; }
+        try { await loadCollections(); } finally { _savingPlates = false; renderCollections(); }
     }
 
     async function assignPlate(plateCode, plateName) {
@@ -1178,9 +1181,8 @@
 
     function playCollection(collectionId) {
         let col = _myCollections.find(c => c.id === collectionId);
-        if (!col) return;
-        let plates = col.plates || [];
-        if (typeof plates === 'string') plates = JSON.parse(plates);
+        if (!col || _savingPlates) return;
+        let plates = platesOf(col);
         if (plates.length === 0) return;
         
         // Clear any previous collection scores
