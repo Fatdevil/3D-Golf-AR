@@ -165,6 +165,17 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/courses/' + H1 + '/results', { total_score: 14, score_vs_par: 2, hole_scores: [5, 5, 4], input_mode: 'SWING_METER', player_name: 'Hcp' }, hcpUser);
     check('a round on a plate played on its own still gets its own differential (113/113 x (14 - 12) = 2.0)', r.json.handicap && r.json.handicap.differential === 2, JSON.stringify(r.json.handicap));
 
+    // several local players under one signed-in account: only the account holder (seat 0) gets a differential, a guest's go does not count for the handicap
+    const multiUser = 'e2c-Multi-' + tag;
+    for (const seat of [0, 1, 2]) {
+      for (const [course, score, pi] of [[H1, 14 + seat, 0], [H2, 15 + seat, 1]]) {
+        await api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Gast' + seat,
+          stats: { collection_id: hid, collection_round_id: 'multi01', plate_index: pi, round_id: 'multi01-p' + pi + '-' + seat, player_slot: seat } }, multiUser);
+      }
+    }
+    const multiRows = (await pool.query("SELECT stats->>'player_slot' AS seat, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'multi01' AND score_differential IS NOT NULL", [multiUser])).rows;
+    check('three local players on one account: only the account holder\'s go (seat 0) carries a differential, 14 + 15 = 29 on the collection\'s rating', multiRows.length === 1 && multiRows[0].seat === '0' && multiRows[0].d === Math.round((113 / hRow.sr) * (29 - hRow.cr) * 10) / 10, JSON.stringify(multiRows));
+
     // a result on a course that is NOT in the collection, with the collection's stats on it, is no part of the go
     const xpost = (course, score, retryId) => api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
       stats: { collection_id: hid, collection_round_id: 'forge01', plate_index: 0, round_id: retryId, player_slot: 0 } }, hcpUser);

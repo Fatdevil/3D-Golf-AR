@@ -570,7 +570,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                 [code, courseVersion, d.total_score]
             );
             // the go's differential is derived from the records too: redo it, in case the first request stopped before it
-            if (coll && d.flagged !== true) await finalizeCollectionRound(pool, coll, collId, collRoundId, req.userId, collSeat);
+            if (coll && d.flagged !== true && collSeat === '0') await finalizeCollectionRound(pool, coll, collId, collRoundId, req.userId, collSeat);
             // the handicap is derived from the records: redo it, in case the first request stopped before it
             const hcpDup = d.flagged === true ? null : await updateHandicapIndex(req.userId, pool);
             res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true, handicap: { new: hcpDup } });
@@ -588,6 +588,8 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                 if (cp.map(collectionsCore.plateCode).indexOf(code) >= 0) coll = await ensureCollectionRatings(pool, cr.rows[0]);
             }
         }
+        // The signed-in account is the player in seat 0 (the game submits every local player under the same account: only the account holder's go counts
+        // for the handicap, a guest's does not)
         const collSeat = String(stats && stats.player_slot !== undefined && stats.player_slot !== null ? stats.player_slot : (player_name || req.body.player_name || 'Anonymous'));
         if (keyed && await answerDuplicate()) return;
         
@@ -656,7 +658,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         
         // The last plate of a collection round is in: the round's differential, on the collection's rating, goes on the record that completed it
         let collDifferential = null;
-        if (coll && req.userId && req.userId !== 'anonymous' && !flagged) {
+        if (coll && collSeat === '0' && req.userId && req.userId !== 'anonymous' && !flagged) {
             const fin = await finalizeCollectionRound(pool, coll, collId, collRoundId, req.userId, collSeat);
             if (fin && fin.recordId === result.rows[0].id) collDifferential = fin.differential;
         }
