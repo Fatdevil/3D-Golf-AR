@@ -554,20 +554,15 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                  WHERE course_code = $1 AND course_version = $2 AND total_score < $3 AND flagged = false`,
                 [code, courseVersion, d.total_score]
             );
+            // the go's differential is derived from the records too: redo it, in case the first request stopped before it
+            if (coll && d.flagged !== true) await finalizeCollectionRound(pool, coll, collId, collRoundId, req.userId, collSeat);
             // the handicap is derived from the records: redo it, in case the first request stopped before it
             const hcpDup = d.flagged === true ? null : await updateHandicapIndex(req.userId, pool);
             res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true, handicap: { new: hcpDup } });
             return true;
         };
-        if (keyed && await answerDuplicate()) return;
-        
-        // Sanity check: flag suspicious scores
-        let flagged = false;
-        if (total_score < holeCount) flagged = true;          // Under 1 per hole = suspicious
-        if (total_score > holeCount * 10) flagged = true;     // Over 10 per hole = suspicious
-        
         // A plate of a collection is not a round of its own for the handicap: the whole go counts once, on the collection's rating
-        // (filed below, when the last plate has come in). The collection must exist and list this plate, or the record is an ordinary one.
+        // (filed when the last plate has come in). The collection must exist and list this plate, or the record is an ordinary one.
         let coll = null;
         const collId = stats && typeof stats.collection_id === 'string' && /^[A-Za-z0-9]{1,20}$/.test(stats.collection_id) ? stats.collection_id.toUpperCase() : null;
         const collRoundId = stats && typeof stats.collection_round_id === 'string' && stats.collection_round_id.length <= 64 ? stats.collection_round_id : null;
@@ -578,7 +573,14 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                 if (cp.map(collectionsCore.plateCode).indexOf(code) >= 0) coll = cr.rows[0];
             }
         }
-
+        const collSeat = String(stats && stats.player_slot !== undefined && stats.player_slot !== null ? stats.player_slot : (player_name || req.body.player_name || 'Anonymous'));
+        if (keyed && await answerDuplicate()) return;
+        
+        // Sanity check: flag suspicious scores
+        let flagged = false;
+        if (total_score < holeCount) flagged = true;          // Under 1 per hole = suspicious
+        if (total_score > holeCount * 10) flagged = true;     // Over 10 per hole = suspicious
+        
         // === HCP: Calculate differential ===
         let scoreDifferential = null, playerHcpAtPlay = null, netScore = null;
         if (req.userId && req.userId !== 'anonymous') {
@@ -633,32 +635,11 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             db.release();
         }
         
-        // The last plate of a collection round is in: the round's differential, on the collection's rating, goes on this record
+        // The last plate of a collection round is in: the round's differential, on the collection's rating, goes on the record that completed it
         let collDifferential = null;
-        if (coll && req.userId && req.userId !== 'anonymous' && !flagged && coll.course_rating) {
-            // the whole collection: as many plates as its type has room for (a partly built collection can be played, but its go is no round for the handicap)
-            const have = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).length;
-            const need = Math.floor(parseInt(coll.type, 10) / collectionsCore.HOLES_PER_PLATE);
-            const seat = String(stats.player_slot !== undefined && stats.player_slot !== null ? stats.player_slot : (player_name || req.body.player_name || 'Anonymous'));
-            const keys = [collId, collRoundId, req.userId, seat];
-            // the latest record per plate of this player in this go, on the plates as they are now
-            const done = await pool.query(
-                `SELECT DISTINCT ON (r.course_code) r.id, r.total_score
-                 FROM course_records r JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
-                 WHERE r.stats->>'collection_id' = $1 AND r.stats->>'collection_round_id' = $2 AND r.player_id = $3
-                   AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.flagged = false
-                 ORDER BY r.course_code, r.played_at DESC, r.id DESC`, keys
-            );
-            if (have === need && done.rows.length === need) {
-                const total = done.rows.reduce((sum, r) => sum + r.total_score, 0);
-                collDifferential = calculateScoreDifferential(total, parseFloat(coll.course_rating), parseInt(coll.slope_rating) || 113);
-                // one differential per go: it sits on the record that completed it, and on no other record of the go
-                await pool.query(
-                    `UPDATE course_records SET score_differential = CASE WHEN id = $5 THEN $6::numeric ELSE NULL END
-                     WHERE stats->>'collection_id' = $1 AND stats->>'collection_round_id' = $2 AND player_id = $3
-                       AND COALESCE(stats->>'player_slot', player_name) = $4`, keys.concat([result.rows[0].id, collDifferential])
-                );
-            }
+        if (coll && req.userId && req.userId !== 'anonymous' && !flagged) {
+            const fin = await finalizeCollectionRound(pool, coll, collId, collRoundId, req.userId, collSeat);
+            if (fin && fin.recordId === result.rows[0].id) collDifferential = fin.differential;
         }
 
         // Update HCP (derived from the records, recomputed on every round: it can be redone at any time)
@@ -818,6 +799,34 @@ function collectionRatings(plateRows) {
         slope_rating: calculateSlopeRating(holes),
         total_par: totalPar
     };
+}
+
+// The differential of a go through a whole collection. It is worked out from the records alone and can be redone at any time (a retry of a plate
+// whose first request stopped half way finishes it): the player's latest record on each of the collection's plates, in this go and on the plates as they
+// are now, must be there for every plate the collection has room for. The differential then sits on the newest of those records and on no other
+// record of the go. Records on other courses are never part of it, whatever their stats say.
+async function finalizeCollectionRound(db, coll, collId, roundId, userId, seat) {
+    const codes = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).map(collectionsCore.plateCode);
+    const need = Math.floor(parseInt(coll.type, 10) / collectionsCore.HOLES_PER_PLATE);
+    if (!coll.course_rating || codes.length !== need) return null;
+    const keys = [collId, roundId, userId, seat, codes];
+    const done = await db.query(
+        `SELECT DISTINCT ON (r.course_code) r.id, r.total_score
+         FROM course_records r JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
+         WHERE r.stats->>'collection_id' = $1 AND r.stats->>'collection_round_id' = $2 AND r.player_id = $3
+           AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.course_code = ANY($5) AND r.flagged = false
+         ORDER BY r.course_code, r.played_at DESC, r.id DESC`, keys
+    );
+    if (done.rows.length !== need) return null;
+    const total = done.rows.reduce((sum, r) => sum + r.total_score, 0);
+    const carrier = done.rows.reduce((m, r) => Math.max(m, r.id), 0);
+    const differential = calculateScoreDifferential(total, parseFloat(coll.course_rating), parseInt(coll.slope_rating) || 113);
+    await db.query(
+        `UPDATE course_records SET score_differential = CASE WHEN id = $6 THEN $7::numeric ELSE NULL END
+         WHERE stats->>'collection_id' = $1 AND stats->>'collection_round_id' = $2 AND player_id = $3
+           AND COALESCE(stats->>'player_slot', player_name) = $4 AND course_code = ANY($5)`, keys.concat([carrier, differential])
+    );
+    return { differential: differential, recordId: carrier };
 }
 
 // The plates of a collection, from the database, in the order the collection lists them (a plate that is gone is left out)

@@ -46,7 +46,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const holesOf = lens => JSON.stringify(lens.map(len => ({ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -len } })));
     const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par, course_rating, slope_rating) VALUES ($1,$2,'t',$7::jsonb,$3,$4,$5,3,$6,$8,$9)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par, o.lens ? holesOf(o.lens) : '[]', o.cr || null, o.sr || null]); };
     await mk('A', { par: 11, lens: [150, 400, 250] }); await mk('B', { par: 12, lens: [300, 100, 500] }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
-    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('L1', { par: 12, lens: [200, 200, 200] });
+    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('L1', { par: 12, lens: [200, 200, 200] }); await mk('X1', { par: 12, lens: [300, 300, 300], cr: 10, sr: 113 });
     await pool.query('UPDATE courses SET hole_count = 2 WHERE share_code = $1', [tag + '-T']);
     const A = tag + '-A', B = tag + '-B', C = tag + '-C', D = tag + '-D', R = tag + '-R';
     const plate = function (c) { return { plate_code: c, plate_name: 'whatever the page says' }; };
@@ -162,6 +162,28 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('a plate sent again moves the differential to the newest record: still exactly one for the go (14 + 13 = 27)', rows.filter(x => x.d !== null).length === 1 && rows[rows.length - 1].d === wantD2, JSON.stringify(rows) + ' want ' + wantD2);
     r = await api('POST', '/api/courses/' + H1 + '/results', { total_score: 14, score_vs_par: 2, hole_scores: [5, 5, 4], input_mode: 'SWING_METER', player_name: 'Hcp' }, hcpUser);
     check('a round on a plate played on its own still gets its own differential (113/113 x (14 - 12) = 2.0)', r.json.handicap && r.json.handicap.differential === 2, JSON.stringify(r.json.handicap));
+
+    // a result on a course that is NOT in the collection, with the collection's stats on it, is no part of the go
+    const xpost = (course, score, retryId) => api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
+      stats: { collection_id: hid, collection_round_id: 'forge01', plate_index: 0, round_id: retryId, player_slot: 0 } }, hcpUser);
+    const X1 = tag + '-X1';
+    await xpost(X1, 13, 'forge01-px-0');
+    r = await xpost(H1, 14, 'forge01-p0-0');
+    let fr = (await pool.query("SELECT course_code, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'forge01' ORDER BY id", [hcpUser])).rows;
+    check('a result on another course with the collection\'s stats does not stand in for a plate: one real plate of two gives no differential, and the other course keeps its own (113/113 x (13 - 10) = 3)', r.json.handicap.differential === null && fr.length === 2 && fr[0].d === 3 && fr[1].d === null, JSON.stringify(fr));
+    r = await xpost(H2, 16, 'forge01-p1-0');
+    fr = (await pool.query("SELECT course_code, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'forge01' ORDER BY id", [hcpUser])).rows;
+    const wantF = Math.round((113 / hRow.sr) * (30 - hRow.cr) * 10) / 10;
+    check('with both real plates the go is 14 + 16 on the collection\'s rating, the other course is still left out and keeps its own differential', fr.length === 3 && fr[0].d === 3 && fr[1].d === null && fr[2].d === wantF && r.json.handicap.differential === wantF, JSON.stringify(fr) + ' want ' + wantF);
+
+    // a go whose finishing step did not happen (the request stopped after the record was stored): sending the plate again finishes it
+    await hpost(H1, 14, 'repair01', 0);
+    await hpost(H2, 15, 'repair01', 1);
+    const wantR = Math.round((113 / hRow.sr) * (29 - hRow.cr) * 10) / 10;
+    await pool.query("UPDATE course_records SET score_differential = NULL WHERE player_id = $1 AND stats->>'collection_round_id' = 'repair01'", [hcpUser]);
+    r = await hpost(H2, 15, 'repair01', 1);
+    rows = await diffs('repair01');
+    check('sending a plate again after its finishing step was lost repairs the go: answered as a duplicate, and the differential is back on the newest record', r.json.duplicate === true && rows.length === 2 && rows[0].d === null && rows[1].d === wantR, JSON.stringify(rows) + ' want ' + wantR + ' ' + JSON.stringify(r.json));
 
     // a partly built collection (one plate of the two its type has room for) can be played, but its go is no round for the handicap
     r = await api('POST', '/api/collections', { name: 'Halv', author: 'Test', type: '6', plates: [plate(H1)] }, owner);
