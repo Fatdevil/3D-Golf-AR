@@ -1138,9 +1138,54 @@ app.get('/api/collections/:id', requireDB, async (req, res) => {
     }
 });
 
+// Saving a collection reads its plates' holes (for the stroke index and ratings) and writes the result. A plate that is published again at the same
+// moment must not slip in between: the plates are read with a share lock inside the transaction, so a publish that is under way is waited for (and its
+// new holes are what get read), and a publish that comes after waits for this save, then finds the collection and brings it up to date.
+async function saveCollection(db, req, shape) {
+    const { id, name, author, type, cover_image } = req.body;
+    let cleanPlates = shape.plates, totalPar = null, ratings = { stroke_index: null, course_rating: null, slope_rating: null };
+    if (cleanPlates.length > 0) {
+        const found = await db.query(
+            `SELECT share_code, name, holes, total_par, hole_count, COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range
+             FROM courses WHERE share_code = ANY($1) FOR SHARE`, [cleanPlates.map(p => p.plate_code)]
+        );
+        const exist = collectionsCore.checkPlatesExist(cleanPlates, found.rows);
+        if (exist.error) return { status: 400, body: { error: exist.error } };
+        cleanPlates = exist.plates;
+        totalPar = exist.totalPar; // worked out from the plates themselves, not from what the page says
+        const byCode = {};
+        found.rows.forEach(r => { byCode[r.share_code.toUpperCase()] = r; });
+        ratings = collectionRatings(cleanPlates.map(p => byCode[p.plate_code]));   // the stroke index and ratings of all its holes together
+    }
+
+    if (id) {
+        // Update existing
+        const ownerCheck = await db.query('SELECT owner_id FROM course_collections WHERE id = $1', [id.toUpperCase()]);
+        if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id && req.userId && ownerCheck.rows[0].owner_id !== req.userId) {
+            return { status: 403, body: { error: 'Not the owner' } };
+        }
+        const result = await db.query(
+            `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6, stroke_index=$8, course_rating=$9, slope_rating=$10 WHERE id=$7 RETURNING id`,
+            [name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, id.toUpperCase(),
+             ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
+        );
+        if (result.rows.length > 0) return { status: 200, body: { success: true, id: result.rows[0].id } };
+    }
+
+    // Create new
+    const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    await db.query(
+        `INSERT INTO course_collections (id, name, author, type, plates, total_par, cover_image, owner_id, stroke_index, course_rating, slope_rating) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, req.userId || null,
+         ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
+    );
+    return { status: 200, body: { success: true, id: newId } };
+}
+
 app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
+    let db = null;
     try {
-        const { id, name, author, type, plates, cover_image } = req.body;
+        const { type, plates } = req.body;
         if (!type || !collectionsCore.TYPES.includes(type)) {
             return res.status(400).json({ error: 'type must be 3, 6, 9, or 18' });
         }
@@ -1148,46 +1193,18 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
         // the plates are checked here, not trusted from the page: how many fit, that none is used twice, that each is a published course
         const shape = collectionsCore.checkPlateList(type, plates);
         if (shape.error) return res.status(400).json({ error: shape.error });
-        let cleanPlates = shape.plates, totalPar = null, ratings = { stroke_index: null, course_rating: null, slope_rating: null };
-        if (cleanPlates.length > 0) {
-            const found = await pool.query(
-                `SELECT share_code, name, holes, total_par, hole_count, COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range
-                 FROM courses WHERE share_code = ANY($1)`, [cleanPlates.map(p => p.plate_code)]
-            );
-            const exist = collectionsCore.checkPlatesExist(cleanPlates, found.rows);
-            if (exist.error) return res.status(400).json({ error: exist.error });
-            cleanPlates = exist.plates;
-            totalPar = exist.totalPar; // worked out from the plates themselves, not from what the page says
-            const byCode = {};
-            found.rows.forEach(r => { byCode[r.share_code.toUpperCase()] = r; });
-            ratings = collectionRatings(cleanPlates.map(p => byCode[p.plate_code]));   // the stroke index and ratings of all its holes together
-        }
 
-        if (id) {
-            // Update existing
-            const ownerCheck = await pool.query('SELECT owner_id FROM course_collections WHERE id = $1', [id.toUpperCase()]);
-            if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id && req.userId && ownerCheck.rows[0].owner_id !== req.userId) {
-                return res.status(403).json({ error: 'Not the owner' });
-            }
-            const result = await pool.query(
-                `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6, stroke_index=$8, course_rating=$9, slope_rating=$10 WHERE id=$7 RETURNING id`,
-                [name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, id.toUpperCase(),
-                 ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
-            );
-            if (result.rows.length > 0) return res.json({ success: true, id: result.rows[0].id });
-        }
-
-        // Create new
-        const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        await pool.query(
-            `INSERT INTO course_collections (id, name, author, type, plates, total_par, cover_image, owner_id, stroke_index, course_rating, slope_rating) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-            [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, req.userId || null,
-             ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
-        );
-        res.json({ success: true, id: newId });
+        db = await pool.connect();
+        await db.query('BEGIN');
+        const out = await saveCollection(db, req, shape);
+        await db.query(out.status === 200 ? 'COMMIT' : 'ROLLBACK');
+        res.status(out.status).json(out.body);
     } catch(err) {
+        if (db) { try { await db.query('ROLLBACK'); } catch (e) { /* the connection is gone */ } }
         console.error('Collection save error:', err);
         res.status(500).json({ error: 'Server error' });
+    } finally {
+        if (db) db.release();
     }
 });
 

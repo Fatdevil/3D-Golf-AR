@@ -14,6 +14,7 @@ if (!/^postgres(ql)?:\/\/[^/]*@?(localhost|127\.0\.0\.1)(:\d+)?\//.test(URL_DB))
 let Pool;
 try { Pool = require(path.join(ROOT, 'node_modules', 'pg')).Pool; } catch (e) { console.error('Missing "pg". Run: npm install'); process.exit(2); }
 
+const wait = ms => new Promise(r => setTimeout(r, ms));
 let failed = 0;
 function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name + (detail ? '  ' + detail : '')); if (!ok) failed++; }
 
@@ -277,6 +278,21 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/courses', { edit_code: tag + '-F1', name: 'Ny F1', author: 't', holes: JSON.parse(holesOf([100, 300, 200])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
     const fRow = (await pool.query("SELECT stroke_index FROM course_collections WHERE plates @> $1::jsonb", [JSON.stringify([{ plate_code: tag + '-F1' }])])).rows[0];
     check('and the same publish goes through once it can: the plate and its collection are updated together (a malformed collection row is ignored)', r.status === 200 && fRow && JSON.stringify(fRow.stroke_index.slice(0, 3)) === JSON.stringify([3, 1, 2]), r.status + ' ' + JSON.stringify(fRow));
+
+    // a collection saved while one of its plates is being published again: the save waits for the publish and reads the plate's NEW holes
+    // (the publish is held open here by a lock on the plate's row, as a slow publish would hold it)
+    const lockPlate = tag + '-F1';
+    const holder = await pool.connect();
+    await holder.query('BEGIN');
+    await holder.query('SELECT 1 FROM courses WHERE share_code = $1 FOR UPDATE', [lockPlate]);
+    const racing = api('POST', '/api/collections', { name: 'Kapplopning', author: 'Test', type: '6', plates: [plate(lockPlate)] }, owner);
+    await wait(900);   // the save is now waiting for the lock: it has not read the old holes
+    await holder.query('UPDATE courses SET holes = $2::jsonb WHERE share_code = $1', [lockPlate, holesOf([500, 100, 300])]);
+    await holder.query('COMMIT'); holder.release();
+    const raced = await racing;
+    if (raced.json.id) madeCollections.push(raced.json.id);
+    const racedRow = (await pool.query('SELECT stroke_index FROM course_collections WHERE id = $1', [raced.json.id])).rows[0];
+    check('a collection saved while a plate is being published gets the new holes of the plate, not the old (500 100 300 => 1 3 2)', raced.status === 200 && racedRow && JSON.stringify(racedRow.stroke_index.slice(0, 3)) === JSON.stringify([1, 3, 2]), JSON.stringify(raced) + JSON.stringify(racedRow));
 
     // a plate saved again: the collections it is in get their stroke index and ratings from the plates as they are now (B: 600 100 100)
     r = await api('POST', '/api/courses', { edit_code: B, name: 'Platta B', author: 't', holes: JSON.parse(holesOf([600, 100, 100])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
