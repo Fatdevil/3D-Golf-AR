@@ -31,6 +31,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     return { status: res.status, json: json || {} };
   }
   async function cleanup() {
+    try { await pool.query('ALTER TABLE course_collections DROP CONSTRAINT IF EXISTS e2c_block'); } catch (e) { /* none */ }
     try { await pool.query("DELETE FROM course_records WHERE course_code LIKE $1", [tag + '-%']); } catch (e) { /* none */ }
     try { await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-%']); } catch (e) { /* none */ }
     try { if (madeCollections.length) await pool.query("DELETE FROM course_collections WHERE id = ANY($1)", [madeCollections]); } catch (e) { /* none */ }
@@ -46,7 +47,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const holesOf = lens => JSON.stringify(lens.map(len => ({ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -len } })));
     const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par, course_rating, slope_rating) VALUES ($1,$2,'t',$7::jsonb,$3,$4,$5,3,$6,$8,$9)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par, o.lens ? holesOf(o.lens) : '[]', o.cr || null, o.sr || null]); };
     await mk('A', { par: 11, lens: [150, 400, 250] }); await mk('B', { par: 12, lens: [300, 100, 500] }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
-    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('L1', { par: 12, lens: [200, 200, 200] }); await mk('X1', { par: 12, lens: [300, 300, 300], cr: 10, sr: 113 });
+    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('L1', { par: 12, lens: [200, 200, 200] }); await mk('X1', { par: 12, lens: [300, 300, 300], cr: 10, sr: 113 }); await mk('F1', { par: 12, lens: [200, 200, 200] });
     await pool.query('UPDATE courses SET hole_count = 2 WHERE share_code = $1', [tag + '-T']);
     const A = tag + '-A', B = tag + '-B', C = tag + '-C', D = tag + '-D', R = tag + '-R';
     const plate = function (c) { return { plate_code: c, plate_name: 'whatever the page says' }; };
@@ -200,6 +201,21 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/courses', { edit_code: tag + '-L1', name: 'Platta L1', author: 't', holes: JSON.parse(holesOf([100, 300, 200])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
     const legacyRow = (await pool.query('SELECT stroke_index, course_rating::float AS cr FROM course_collections WHERE id = $1', [legacyId])).rows[0];
     check('a collection that lists its plates as bare codes is refreshed when a plate is saved again (lengths 100 300 200 + padding)', r.status === 200 && JSON.stringify(legacyRow.stroke_index.slice(0, 3)) === JSON.stringify([3, 1, 2]) && legacyRow.cr !== null, JSON.stringify(legacyRow));
+
+    // a collection that cannot be brought up to date takes the publish back too (and a malformed collection row does not block publishing)
+    r = await api('POST', '/api/collections', { name: 'Fast', author: 'Test', type: '6', plates: [plate(tag + '-F1')] }, owner);
+    madeCollections.push(r.json.id);
+    await pool.query("INSERT INTO course_collections (id, name, author, type, plates, owner_id) VALUES ($1, 'Trasig', 'Test', '6', '{\"inte\": \"en lista\"}'::jsonb, $2)", ['B' + tag.slice(-5).replace('-', 'X'), owner]);
+    madeCollections.push('B' + tag.slice(-5).replace('-', 'X'));
+    await pool.query('ALTER TABLE course_collections ADD CONSTRAINT e2c_block CHECK (course_rating IS NULL OR course_rating < 0) NOT VALID');
+    const beforeF = (await pool.query('SELECT name, version FROM courses WHERE share_code = $1', [tag + '-F1'])).rows[0];
+    r = await api('POST', '/api/courses', { edit_code: tag + '-F1', name: 'Ny F1', author: 't', holes: JSON.parse(holesOf([100, 300, 200])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    const afterF = (await pool.query('SELECT name, version FROM courses WHERE share_code = $1', [tag + '-F1'])).rows[0];
+    check('when its collections cannot be brought up to date the publish fails and changes nothing (not a success with stale collections)', r.status === 500 && afterF.name === beforeF.name && afterF.version === beforeF.version, r.status + ' ' + JSON.stringify([beforeF, afterF]));
+    await pool.query('ALTER TABLE course_collections DROP CONSTRAINT e2c_block');
+    r = await api('POST', '/api/courses', { edit_code: tag + '-F1', name: 'Ny F1', author: 't', holes: JSON.parse(holesOf([100, 300, 200])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    const fRow = (await pool.query("SELECT stroke_index FROM course_collections WHERE plates @> $1::jsonb", [JSON.stringify([{ plate_code: tag + '-F1' }])])).rows[0];
+    check('and the same publish goes through once it can: the plate and its collection are updated together (a malformed collection row is ignored)', r.status === 200 && fRow && JSON.stringify(fRow.stroke_index.slice(0, 3)) === JSON.stringify([3, 1, 2]), r.status + ' ' + JSON.stringify(fRow));
 
     // a plate saved again: the collections it is in get their stroke index and ratings from the plates as they are now (B: 600 100 100)
     r = await api('POST', '/api/courses', { edit_code: B, name: 'Platta B', author: 't', holes: JSON.parse(holesOf([600, 100, 100])), is_draft: false, hole_count: 3, total_par: 12 }, owner);

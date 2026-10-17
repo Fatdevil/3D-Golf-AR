@@ -843,8 +843,10 @@ async function refreshCollectionsOf(db, plateCode) {
     // a plate is listed as { plate_code } (older rows: the bare code, in any case)
     const cols = await db.query(
         `SELECT id, plates FROM course_collections
-         WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(plates) e
-                       WHERE upper(CASE WHEN jsonb_typeof(e) = 'string' THEN e #>> '{}' ELSE e->>'plate_code' END) = $1)`, [plateCode.toUpperCase()]);
+         WHERE CASE WHEN jsonb_typeof(plates) = 'array'
+                    THEN EXISTS (SELECT 1 FROM jsonb_array_elements(plates) e
+                                 WHERE upper(CASE WHEN jsonb_typeof(e) = 'string' THEN e #>> '{}' ELSE e->>'plate_code' END) = $1)
+                    ELSE false END`, [plateCode.toUpperCase()]);
     for (const c of cols.rows) {
         const plates = (typeof c.plates === 'string' ? JSON.parse(c.plates) : c.plates) || [];
         const rows = await loadPlateRows(db, plates.map(collectionsCore.plateCode));
@@ -937,7 +939,13 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                      play_count = CASE WHEN is_draft IS DISTINCT FROM true THEN 0 ELSE play_count END`;
             }
 
-            const updateResult = await pool.query(
+            // The course and the collections it is in are saved as one: a failure while the collections are brought up to date takes the
+            // publish back too (the editor sees the error and publishes again), so no collection is left with the stroke index of the old holes.
+            const txdb = await pool.connect();
+            let updateResult;
+            try {
+                await txdb.query('BEGIN');
+                updateResult = await txdb.query(
                 `UPDATE courses 
                  SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, 
                      is_draft=$8, theme_data=$10, is_range=$11, hole_count=$12, total_par=$13, cover_image=$14,
@@ -957,14 +965,21 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                     // the ratings follow the holes as they are now (a draft saved early has none worth keeping once the holes are built)
                     calculateCourseRating(holes, c_total_par), calculateSlopeRating(holes), JSON.stringify(calculateStrokeIndex(holes))
                 ]
-            );
+                );
+                if (updateResult.rows.length > 0) await refreshCollectionsOf(txdb, updateResult.rows[0].share_code);
+                await txdb.query('COMMIT');
+            } catch (e) {
+                try { await txdb.query('ROLLBACK'); } catch (e2) { /* the connection is gone */ }
+                throw e;
+            } finally {
+                txdb.release();
+            }
             
             if (updateResult.rows.length === 0 && draftStatus && ownerCheck.rows.length > 0) {
                 // the course exists but was published between the check above and the update
                 return res.status(409).json({ error: 'This course is already published. Use Publish to update it.', code: 'already_published' });
             }
             if (updateResult.rows.length > 0) {
-                try { await refreshCollectionsOf(pool, updateResult.rows[0].share_code); } catch (e) { console.error('Collection refresh error:', e.message); }
                 return res.json({ success: true, share_code: updateResult.rows[0].share_code, version: updateResult.rows[0].version });
             }
         }
