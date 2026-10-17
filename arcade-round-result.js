@@ -55,7 +55,8 @@
                     hole_scores: holeScores,
                     input_mode: window.G?.inputMode || 'SWING_METER',
                     lm_device: window.lmDeviceName || null,
-                    stats: collStats ? Object.assign({ round_id: collStats.collection_round_id + '-p' + collStats.plate_index + '-' + seat, player_slot: seat }, collStats) : undefined,
+                    // the seat goes with every result: the account is the player in seat 0, a guest's round does not count for the handicap (server.js)
+                    stats: collStats ? Object.assign({ round_id: collStats.collection_round_id + '-p' + collStats.plate_index + '-' + seat, player_slot: seat }, collStats) : { player_slot: seat },
                     player_name: displayName
                 }, collStats ? { keepalive: true } : undefined);
                 

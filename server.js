@@ -602,12 +602,17 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         if (total_score < holeCount) flagged = true;          // Under 1 per hole = suspicious
         if (total_score > holeCount * 10) flagged = true;     // Over 10 per hole = suspicious
         
+        // The game submits every local player's round under the one signed-in account. The account is the player in seat 0; a round from another seat
+        // is a guest's: it is on the course's leaderboard under the guest's name, but it does not count for the account's handicap. A client that does not
+        // say which seat it is (an older page, another app) is the account holder, as before.
+        const guest = !!(stats && stats.player_slot !== undefined && stats.player_slot !== null && String(stats.player_slot) !== '0');
+
         // === HCP: Calculate differential ===
         let scoreDifferential = null, playerHcpAtPlay = null, netScore = null;
         if (req.userId && req.userId !== 'anonymous') {
             const hcpRes = await pool.query('SELECT handicap_index FROM users WHERE id = $1', [req.userId]);
             if (hcpRes.rows.length > 0) playerHcpAtPlay = hcpRes.rows[0].handicap_index;
-            const ratRes = coll ? { rows: [] } : await pool.query('SELECT course_rating, slope_rating FROM courses WHERE share_code = $1', [code]);
+            const ratRes = (coll || guest) ? { rows: [] } : await pool.query('SELECT course_rating, slope_rating FROM courses WHERE share_code = $1', [code]);
             if (ratRes.rows.length > 0 && ratRes.rows[0].course_rating) {
                 const cr = parseFloat(ratRes.rows[0].course_rating), sr = parseInt(ratRes.rows[0].slope_rating) || 113;
                 scoreDifferential = calculateScoreDifferential(total_score, cr, sr);
@@ -665,7 +670,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
 
         // Update HCP (derived from the records, recomputed on every round: it can be redone at any time)
         let newHcp = null;
-        if (req.userId && req.userId !== 'anonymous' && !flagged) {
+        if (req.userId && req.userId !== 'anonymous' && !flagged && !guest) {
             newHcp = await updateHandicapIndex(req.userId, pool);
         }
         
