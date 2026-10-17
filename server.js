@@ -636,7 +636,9 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         // The last plate of a collection round is in: the round's differential, on the collection's rating, goes on this record
         let collDifferential = null;
         if (coll && req.userId && req.userId !== 'anonymous' && !flagged && coll.course_rating) {
-            const need = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).length;
+            // the whole collection: as many plates as its type has room for (a partly built collection can be played, but its go is no round for the handicap)
+            const have = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).length;
+            const need = Math.floor(parseInt(coll.type, 10) / collectionsCore.HOLES_PER_PLATE);
             const seat = String(stats.player_slot !== undefined && stats.player_slot !== null ? stats.player_slot : (player_name || req.body.player_name || 'Anonymous'));
             const keys = [collId, collRoundId, req.userId, seat];
             // the latest record per plate of this player in this go, on the plates as they are now
@@ -647,7 +649,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                    AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.flagged = false
                  ORDER BY r.course_code, r.played_at DESC, r.id DESC`, keys
             );
-            if (done.rows.length === need) {
+            if (have === need && done.rows.length === need) {
                 const total = done.rows.reduce((sum, r) => sum + r.total_score, 0);
                 collDifferential = calculateScoreDifferential(total, parseFloat(coll.course_rating), parseInt(coll.slope_rating) || 113);
                 // one differential per go: it sits on the record that completed it, and on no other record of the go
@@ -829,7 +831,11 @@ async function loadPlateRows(db, plateCodes) {
 
 // A plate was saved again: the collections it is in get their stroke index and ratings from the plates as they are now
 async function refreshCollectionsOf(db, plateCode) {
-    const cols = await db.query('SELECT id, plates FROM course_collections WHERE plates @> $1::jsonb', [JSON.stringify([{ plate_code: plateCode.toUpperCase() }])]);
+    // a plate is listed as { plate_code } (older rows: the bare code, in any case)
+    const cols = await db.query(
+        `SELECT id, plates FROM course_collections
+         WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(plates) e
+                       WHERE upper(CASE WHEN jsonb_typeof(e) = 'string' THEN e #>> '{}' ELSE e->>'plate_code' END) = $1)`, [plateCode.toUpperCase()]);
     for (const c of cols.rows) {
         const plates = (typeof c.plates === 'string' ? JSON.parse(c.plates) : c.plates) || [];
         const rows = await loadPlateRows(db, plates.map(collectionsCore.plateCode));
