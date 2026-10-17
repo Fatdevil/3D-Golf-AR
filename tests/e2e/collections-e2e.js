@@ -31,6 +31,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     return { status: res.status, json: json || {} };
   }
   async function cleanup() {
+    try { await pool.query("DELETE FROM users WHERE id LIKE $1", ['e2c-%-' + tag]); } catch (e) { /* none */ }
     try { await pool.query('ALTER TABLE course_collections DROP CONSTRAINT IF EXISTS e2c_block'); } catch (e) { /* none */ }
     try { await pool.query("DELETE FROM course_records WHERE course_code LIKE $1", [tag + '-%']); } catch (e) { /* none */ }
     try { await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-%']); } catch (e) { /* none */ }
@@ -185,6 +186,14 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await hpost(H2, 15, 'repair01', 1);
     rows = await diffs('repair01');
     check('sending a plate again after its finishing step was lost repairs the go: answered as a duplicate, and the differential is back on the newest record', r.json.duplicate === true && rows.length === 2 && rows[0].d === null && rows[1].d === wantR, JSON.stringify(rows) + ' want ' + wantR + ' ' + JSON.stringify(r.json));
+
+    // the handicap history shows a go through a collection as one round: all its plates' strokes, the collection, and the differential for them
+    await pool.query("INSERT INTO users (id, display_name) VALUES ($1, 'E2C Hcp') ON CONFLICT (id) DO NOTHING", [hcpUser]);
+    let hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
+    const histRow = (hist.json.recent_rounds || []).find(x => x.collection_id === hid && parseFloat(x.score_differential) === wantR);
+    check('the handicap history shows a collection round as one round: 14 + 15 = 29 strokes, the collection\'s name and no single plate, next to the differential worked out from 29', !!histRow && histRow.total_score === 29 && histRow.score_vs_par === (14 - 12) + (15 - 12) && histRow.course_code === null && histRow.collection_name === 'Handicap', JSON.stringify(hist.json.recent_rounds));
+    const plainRow = (hist.json.recent_rounds || []).find(x => x.course_code === H1 && x.collection_id === undefined);
+    check('and a round on a plate played on its own is shown as it was (its own strokes and course)', !!plainRow && plainRow.total_score === 14 && parseFloat(plainRow.score_differential) === 2, JSON.stringify(plainRow));
 
     // a partly built collection (one plate of the two its type has room for) can be played, but its go is no round for the handicap
     r = await api('POST', '/api/collections', { name: 'Halv', author: 'Test', type: '6', plates: [plate(H1)] }, owner);

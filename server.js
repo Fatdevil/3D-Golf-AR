@@ -455,10 +455,38 @@ app.get('/api/users/:id/handicap', requireDB, async (req, res) => {
         const user = await pool.query('SELECT handicap_index, handicap_rounds, handicap_updated FROM users WHERE id = $1', [req.params.id]);
         if (user.rows.length === 0) return res.status(404).json({ error: 'User not found' });
         const rounds = await pool.query(
-            `SELECT score_differential, total_score, score_vs_par, course_code, played_at FROM course_records WHERE player_id = $1 AND flagged = false AND score_differential IS NOT NULL ORDER BY played_at DESC LIMIT 20`,
+            `SELECT score_differential, total_score, score_vs_par, course_code, played_at, player_name, stats FROM course_records WHERE player_id = $1 AND flagged = false AND score_differential IS NOT NULL ORDER BY played_at DESC LIMIT 20`,
             [req.params.id]
         );
-        res.json({ handicap_index: user.rows[0].handicap_index, rounds_counted: user.rows[0].handicap_rounds, last_updated: user.rows[0].handicap_updated, recent_rounds: rounds.rows });
+        // A round through a whole collection sits on one plate's record, but its differential is for all the plates: show the whole go (the totals of
+        // all its plates and the collection) so a row never pairs a 15-stroke plate with a differential worked out from 29.
+        const collCache = {};
+        const recent = [];
+        for (const r of rounds.rows) {
+            const st = r.stats || {};
+            const row = { score_differential: r.score_differential, total_score: r.total_score, score_vs_par: r.score_vs_par, course_code: r.course_code, played_at: r.played_at };
+            if (typeof st.collection_id === 'string' && typeof st.collection_round_id === 'string') {
+                const cid = st.collection_id.toUpperCase();
+                if (collCache[cid] === undefined) {
+                    const cr = await pool.query('SELECT id, name, type, plates FROM course_collections WHERE id = $1', [cid]);
+                    collCache[cid] = cr.rows[0] || null;
+                }
+                const coll = collCache[cid];
+                if (coll) {
+                    const seat = String(st.player_slot !== undefined && st.player_slot !== null ? st.player_slot : r.player_name);
+                    const go = await collectionGoRecords(pool, coll, cid, st.collection_round_id, req.params.id, seat, false);
+                    if (go.rows.length > 0) {
+                        row.total_score = go.rows.reduce((sum, g) => sum + g.total_score, 0);
+                        row.score_vs_par = go.rows.reduce((sum, g) => sum + (g.score_vs_par || 0), 0);
+                        row.course_code = null;
+                        row.collection_id = coll.id;
+                        row.collection_name = coll.name;
+                    }
+                }
+            }
+            recent.push(row);
+        }
+        res.json({ handicap_index: user.rows[0].handicap_index, rounds_counted: user.rows[0].handicap_rounds, last_updated: user.rows[0].handicap_updated, recent_rounds: recent });
     } catch(err) { console.error('HCP fetch error:', err); res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -805,18 +833,28 @@ function collectionRatings(plateRows) {
 // whose first request stopped half way finishes it): the player's latest record on each of the collection's plates, in this go and on the plates as they
 // are now, must be there for every plate the collection has room for. The differential then sits on the newest of those records and on no other
 // record of the go. Records on other courses are never part of it, whatever their stats say.
-async function finalizeCollectionRound(db, coll, collId, roundId, userId, seat) {
+// The player's latest record on each of the collection's plates in one go (only the collection's own plates, never other courses).
+// currentOnly: just the plates as they are now (the differential of a go); otherwise whatever version they were played on (the history).
+async function collectionGoRecords(db, coll, collId, roundId, userId, seat, currentOnly) {
     const codes = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).map(collectionsCore.plateCode);
-    const need = Math.floor(parseInt(coll.type, 10) / collectionsCore.HOLES_PER_PLATE);
-    if (!coll.course_rating || codes.length !== need) return null;
-    const keys = [collId, roundId, userId, seat, codes];
     const done = await db.query(
-        `SELECT DISTINCT ON (r.course_code) r.id, r.total_score
-         FROM course_records r JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
+        `SELECT DISTINCT ON (r.course_code) r.id, r.total_score, r.score_vs_par
+         FROM course_records r LEFT JOIN courses c ON c.share_code = r.course_code
          WHERE r.stats->>'collection_id' = $1 AND r.stats->>'collection_round_id' = $2 AND r.player_id = $3
            AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.course_code = ANY($5) AND r.flagged = false
-         ORDER BY r.course_code, r.played_at DESC, r.id DESC`, keys
+           AND ($6 = false OR r.course_version = COALESCE(c.version, 1))
+         ORDER BY r.course_code, r.played_at DESC, r.id DESC`, [collId, roundId, userId, seat, codes, !!currentOnly]
     );
+    return { codes: codes, rows: done.rows };
+}
+
+async function finalizeCollectionRound(db, coll, collId, roundId, userId, seat) {
+    const need = Math.floor(parseInt(coll.type, 10) / collectionsCore.HOLES_PER_PLATE);
+    const keys = [collId, roundId, userId, seat, null];
+    const go = await collectionGoRecords(db, coll, collId, roundId, userId, seat, true);
+    const codes = go.codes, done = { rows: go.rows };
+    keys[4] = codes;
+    if (!coll.course_rating || codes.length !== need) return null;
     if (done.rows.length !== need) return null;
     const total = done.rows.reduce((sum, r) => sum + r.total_score, 0);
     const carrier = done.rows.reduce((m, r) => Math.max(m, r.id), 0);

@@ -85,6 +85,7 @@ check('topplistan räknar bara rundor på plattornas nuvarande version', /JOIN c
 check('topplistan skiljer spelare på plats (player_slot), inte på namn', /COALESCE\(r\.stats->>'player_slot', r\.player_name\)/.test(server));
 check('servern kontrollerar plattorna vid sparande och räknar totalpar själv', /checkPlateList\(type, plates\)/.test(server) && /checkPlatesExist\(cleanPlates, found\.rows\)/.test(server) && !/total_par\s*\}\s*=\s*req\.body/.test(server.slice(server.indexOf("app.post('/api/collections'"), server.indexOf("app.get('/api/collections/:id/leaderboard'"))));
 check('servern lagrar samlingens slagindex och betyg, räknar om dem i samma transaktion som banan när en platta publiceras igen och låter en samlingsrunda ge en differential', /ADD COLUMN IF NOT EXISTS stroke_index JSONB/.test(server) && /await txdb\.query\('BEGIN'\);[\s\S]{0,2500}refreshCollectionsOf\(txdb, updateResult\.rows\[0\]\.share_code\);\s*await txdb\.query\('COMMIT'\)/.test(server) && /collDifferential/.test(server));
+check('handikapphistoriken visar en samlingsrunda som en runda (alla plattors slag och samlingens namn), inte en plattas slag bredvid hela rundans differential', /collectionGoRecords\(pool, coll, cid, st\.collection_round_id, req\.params\.id, seat, false\)/.test(server) && /row\.collection_name = coll\.name/.test(server));
 check('servern har en topplista för samlingen', /app\.get\('\/api\/collections\/:id\/leaderboard'/.test(server));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall passed');
