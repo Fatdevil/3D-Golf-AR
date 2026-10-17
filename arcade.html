@@ -15266,12 +15266,13 @@ window.triggerExplosion = function(x, y, z) {
                         document.getElementById('lie-icon').style.background = iconCol;
                     }
                     
+                    // what the lie takes from the shot comes from the physics itself (GolfPhysics.lieRange), so the text cannot drift from it;
+                    // a launch monitor measures a real ball: the physics applies no lie penalty to its shots, and neither does the text
                     let powStr = "100%"; let spinStr = "100%"; let powCol = "#4ade80";
-                    if (!isTee) {
-                        if (lType === 'ROUGH') { powStr = "85 - 95%"; spinStr = "60 - 70%"; powCol = "#fbbf24"; }
-                        else if (lType === 'DEEP ROUGH') { powStr = "75 - 90%"; spinStr = "40 - 60%"; powCol = "#f87171"; }
-                        else if (lType === 'SEMI-ROUGH') { powStr = "95 - 98%"; spinStr = "85 - 95%"; }
-                        else if (lType === 'SAND' || lType === 'WASTE') { powStr = "80 - 95%"; spinStr = "40 - 60%"; powCol = "#fbbf24"; }
+                    if (!isTee && !(window.G && window.G.inputMode === 'LAUNCH_MONITOR') && window.GolfPhysics && window.GolfPhysics.lieEffectText) {
+                        let eff = window.GolfPhysics.lieEffectText(lType);
+                        powStr = eff.power; spinStr = eff.spin;
+                        powCol = eff.level === 'bad' ? "#f87171" : (eff.level === 'warn' ? "#fbbf24" : "#4ade80");
                     }
                     
                     if (document.getElementById('lie-power')) document.getElementById('lie-power').innerText = powStr;
