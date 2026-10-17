@@ -831,7 +831,7 @@ function collectionRatings(plateRows) {
 async function collectionGoRecords(db, coll, collId, roundId, userId, seat) {
     const codes = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).map(collectionsCore.plateCode);
     const done = await db.query(
-        `SELECT DISTINCT ON (r.course_code) r.id, r.total_score, r.score_vs_par
+        `SELECT DISTINCT ON (r.course_code) r.id, r.total_score, r.score_vs_par, r.score_differential, r.stats->'collection_go' AS go
          FROM course_records r JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
          WHERE r.stats->>'collection_id' = $1 AND r.stats->>'collection_round_id' = $2 AND r.player_id = $3
            AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.course_code = ANY($5) AND r.flagged = false
@@ -850,6 +850,10 @@ async function finalizeCollectionRound(db, coll, collId, roundId, userId, seat) 
     if (done.rows.length !== need) return null;
     const total = done.rows.reduce((sum, r) => sum + r.total_score, 0);
     const carrier = done.rows.reduce((m, r) => Math.max(m, r.id), 0);
+    // A go that is already finished on this record is left as it is (a retry must not rewrite what was captured when the go was completed,
+    // such as the collection's name at that time); only a go that lacks its snapshot or its differential is finished here.
+    const carrierRow = done.rows.find(r => r.id === carrier);
+    if (carrierRow && carrierRow.go && carrierRow.score_differential !== null) return { differential: parseFloat(carrierRow.score_differential), recordId: carrier };
     const differential = calculateScoreDifferential(total, parseFloat(coll.course_rating), parseInt(coll.slope_rating) || 113);
     // The go is kept on the record that carries its differential, as it was when it was completed (the collection, its plates and the strokes):
     // the handicap history reads this and nothing else, so a later change of the collection, or a record that only claims to be part of a go, cannot

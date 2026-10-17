@@ -199,6 +199,16 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     rows = await diffs('repair01');
     check('sending a plate again after its finishing step was lost repairs the go: answered as a duplicate, and the differential is back on the newest record', r.json.duplicate === true && rows.length === 2 && rows[0].d === null && rows[1].d === wantR, JSON.stringify(rows) + ' want ' + wantR + ' ' + JSON.stringify(r.json));
 
+    // a retry of a finished go, after its collection was renamed, does not rewrite what was captured when the go was completed
+    await pool.query("INSERT INTO users (id, display_name) VALUES ($1, 'E2C Hcp') ON CONFLICT (id) DO NOTHING", [hcpUser]);
+    await pool.query("UPDATE course_collections SET name = 'Omdopt' WHERE id = $1", [hid]);
+    r = await hpost(H2, 15, 'repair01', 1);
+    const keptRows = await diffs('repair01');
+    const keptHist = (await api('GET', '/api/users/' + hcpUser + '/handicap')).json.recent_rounds || [];
+    const keptRow = keptHist.find(x => x.collection_id === hid && parseFloat(x.score_differential) === wantR);
+    await pool.query("UPDATE course_collections SET name = 'Handicap' WHERE id = $1", [hid]);
+    check('a retry of a finished go after the collection was renamed leaves the go as it was captured (the old name, the same differential)', r.json.duplicate === true && keptRows.filter(x => x.d !== null).length === 1 && !!keptRow && keptRow.collection_name === 'Handicap', JSON.stringify(keptRow));
+
     // the handicap history shows a go through a collection as one round: all its plates' strokes, the collection, and the differential for them
     await pool.query("INSERT INTO users (id, display_name) VALUES ($1, 'E2C Hcp') ON CONFLICT (id) DO NOTHING", [hcpUser]);
     let hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
