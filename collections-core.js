@@ -50,4 +50,18 @@ function checkPlatesExist(plates, found) {
   return { plates: out, totalPar: totalPar };
 }
 
-module.exports = { HOLES_PER_PLATE, TYPES, plateCode, checkPlateList, checkPlatesExist };
+// The holes of all plates of a collection as one list, in the order of the plates, three per plate (a plate with fewer entries is padded with empty
+// holes, one with more is cut): hole n of the collection is hole (n % 3) of plate (n / 3), the same numbering the game uses when it plays them.
+// `holesByPlate` is a list of hole lists (an array or the JSON text of one).
+function combineHoles(holesByPlate) {
+  const out = [];
+  (holesByPlate || []).forEach(function (h) {
+    let arr = h;
+    if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch (e) { arr = []; } }
+    if (!Array.isArray(arr)) arr = [];
+    for (let i = 0; i < HOLES_PER_PLATE; i++) out.push(arr[i] && typeof arr[i] === 'object' ? arr[i] : {});
+  });
+  return out;
+}
+
+module.exports = { HOLES_PER_PLATE, TYPES, plateCode, checkPlateList, checkPlatesExist, combineHoles };

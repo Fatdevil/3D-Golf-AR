@@ -185,6 +185,13 @@ async function initDB() {
             );
         `);
 
+        // A collection has the stroke index and rating of all its holes together (worked out from its plates, kept up to date when one is published again)
+        try {
+            await pool.query(`ALTER TABLE course_collections ADD COLUMN IF NOT EXISTS stroke_index JSONB;`);
+            await pool.query(`ALTER TABLE course_collections ADD COLUMN IF NOT EXISTS course_rating DECIMAL(4,1);`);
+            await pool.query(`ALTER TABLE course_collections ADD COLUMN IF NOT EXISTS slope_rating INT;`);
+        } catch(e) {}
+
         // Migration for existing course_records without tournament_id
         try {
             await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS tournament_id VARCHAR(20);`);
@@ -559,12 +566,25 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         if (total_score < holeCount) flagged = true;          // Under 1 per hole = suspicious
         if (total_score > holeCount * 10) flagged = true;     // Over 10 per hole = suspicious
         
+        // A plate of a collection is not a round of its own for the handicap: the whole go counts once, on the collection's rating
+        // (filed below, when the last plate has come in). The collection must exist and list this plate, or the record is an ordinary one.
+        let coll = null;
+        const collId = stats && typeof stats.collection_id === 'string' && /^[A-Za-z0-9]{1,20}$/.test(stats.collection_id) ? stats.collection_id.toUpperCase() : null;
+        const collRoundId = stats && typeof stats.collection_round_id === 'string' && stats.collection_round_id.length <= 64 ? stats.collection_round_id : null;
+        if (collId && collRoundId) {
+            const cr = await pool.query('SELECT id, type, plates, course_rating, slope_rating FROM course_collections WHERE id = $1', [collId]);
+            if (cr.rows.length > 0) {
+                const cp = (typeof cr.rows[0].plates === 'string' ? JSON.parse(cr.rows[0].plates) : cr.rows[0].plates) || [];
+                if (cp.map(collectionsCore.plateCode).indexOf(code) >= 0) coll = cr.rows[0];
+            }
+        }
+
         // === HCP: Calculate differential ===
         let scoreDifferential = null, playerHcpAtPlay = null, netScore = null;
         if (req.userId && req.userId !== 'anonymous') {
             const hcpRes = await pool.query('SELECT handicap_index FROM users WHERE id = $1', [req.userId]);
             if (hcpRes.rows.length > 0) playerHcpAtPlay = hcpRes.rows[0].handicap_index;
-            const ratRes = await pool.query('SELECT course_rating, slope_rating FROM courses WHERE share_code = $1', [code]);
+            const ratRes = coll ? { rows: [] } : await pool.query('SELECT course_rating, slope_rating FROM courses WHERE share_code = $1', [code]);
             if (ratRes.rows.length > 0 && ratRes.rows[0].course_rating) {
                 const cr = parseFloat(ratRes.rows[0].course_rating), sr = parseInt(ratRes.rows[0].slope_rating) || 113;
                 scoreDifferential = calculateScoreDifferential(total_score, cr, sr);
@@ -613,6 +633,32 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             db.release();
         }
         
+        // The last plate of a collection round is in: the round's differential, on the collection's rating, goes on this record
+        let collDifferential = null;
+        if (coll && req.userId && req.userId !== 'anonymous' && !flagged && coll.course_rating) {
+            const need = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).length;
+            const seat = String(stats.player_slot !== undefined && stats.player_slot !== null ? stats.player_slot : (player_name || req.body.player_name || 'Anonymous'));
+            const keys = [collId, collRoundId, req.userId, seat];
+            // the latest record per plate of this player in this go, on the plates as they are now
+            const done = await pool.query(
+                `SELECT DISTINCT ON (r.course_code) r.id, r.total_score
+                 FROM course_records r JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
+                 WHERE r.stats->>'collection_id' = $1 AND r.stats->>'collection_round_id' = $2 AND r.player_id = $3
+                   AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.flagged = false
+                 ORDER BY r.course_code, r.played_at DESC, r.id DESC`, keys
+            );
+            if (done.rows.length === need) {
+                const total = done.rows.reduce((sum, r) => sum + r.total_score, 0);
+                collDifferential = calculateScoreDifferential(total, parseFloat(coll.course_rating), parseInt(coll.slope_rating) || 113);
+                // one differential per go: it sits on the record that completed it, and on no other record of the go
+                await pool.query(
+                    `UPDATE course_records SET score_differential = CASE WHEN id = $5 THEN $6::numeric ELSE NULL END
+                     WHERE stats->>'collection_id' = $1 AND stats->>'collection_round_id' = $2 AND player_id = $3
+                       AND COALESCE(stats->>'player_slot', player_name) = $4`, keys.concat([result.rows[0].id, collDifferential])
+                );
+            }
+        }
+
         // Update HCP (derived from the records, recomputed on every round: it can be redone at any time)
         let newHcp = null;
         if (req.userId && req.userId !== 'anonymous' && !flagged) {
@@ -631,7 +677,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             record_id: result.rows[0].id,
             position: parseInt(posResult.rows[0].position),
             flagged: flagged,
-            handicap: { previous: playerHcpAtPlay, new: newHcp, differential: scoreDifferential }
+            handicap: { previous: playerHcpAtPlay, new: newHcp, differential: coll ? collDifferential : scoreDifferential }
         });
     } catch(err) {
         console.error('Error saving result:', err);
@@ -759,6 +805,40 @@ function calculateStrokeIndex(holes) {
     return si;
 }
 
+// Stroke index and ratings of a collection: its plates' holes as one course (three per plate, in the order of the plates).
+// `plateRows` are courses rows ({ holes, total_par, hole_count }) in plate order.
+function collectionRatings(plateRows) {
+    const holes = collectionsCore.combineHoles(plateRows.map(function (r) { return r.holes; }));
+    const totalPar = plateRows.reduce(function (sum, r) { return sum + (r.total_par || (r.hole_count || collectionsCore.HOLES_PER_PLATE) * 4); }, 0);
+    return {
+        stroke_index: calculateStrokeIndex(holes),
+        course_rating: calculateCourseRating(holes, totalPar),
+        slope_rating: calculateSlopeRating(holes),
+        total_par: totalPar
+    };
+}
+
+// The plates of a collection, from the database, in the order the collection lists them (a plate that is gone is left out)
+async function loadPlateRows(db, plateCodes) {
+    if (!plateCodes.length) return [];
+    const rows = await db.query('SELECT share_code, holes, total_par, hole_count FROM courses WHERE share_code = ANY($1)', [plateCodes]);
+    const byCode = {};
+    rows.rows.forEach(function (r) { byCode[r.share_code.toUpperCase()] = r; });
+    return plateCodes.map(function (c) { return byCode[c]; }).filter(Boolean);
+}
+
+// A plate was saved again: the collections it is in get their stroke index and ratings from the plates as they are now
+async function refreshCollectionsOf(db, plateCode) {
+    const cols = await db.query('SELECT id, plates FROM course_collections WHERE plates @> $1::jsonb', [JSON.stringify([{ plate_code: plateCode.toUpperCase() }])]);
+    for (const c of cols.rows) {
+        const plates = (typeof c.plates === 'string' ? JSON.parse(c.plates) : c.plates) || [];
+        const rows = await loadPlateRows(db, plates.map(collectionsCore.plateCode));
+        const r = collectionRatings(rows);
+        await db.query('UPDATE course_collections SET stroke_index=$1, course_rating=$2, slope_rating=$3, total_par=$4 WHERE id=$5',
+            [JSON.stringify(r.stroke_index), r.course_rating, r.slope_rating, r.total_par, c.id]);
+    }
+}
+
 function calculateScoreDifferential(adjustedScore, courseRating, slopeRating) {
     if (!courseRating || !slopeRating || slopeRating === 0) return null;
     return Math.round(((113 / slopeRating) * (adjustedScore - courseRating)) * 10) / 10;
@@ -869,6 +949,7 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                 return res.status(409).json({ error: 'This course is already published. Use Publish to update it.', code: 'already_published' });
             }
             if (updateResult.rows.length > 0) {
+                try { await refreshCollectionsOf(pool, updateResult.rows[0].share_code); } catch (e) { console.error('Collection refresh error:', e.message); }
                 return res.json({ success: true, share_code: updateResult.rows[0].share_code, version: updateResult.rows[0].version });
             }
         }
@@ -984,16 +1065,19 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
         // the plates are checked here, not trusted from the page: how many fit, that none is used twice, that each is a published course
         const shape = collectionsCore.checkPlateList(type, plates);
         if (shape.error) return res.status(400).json({ error: shape.error });
-        let cleanPlates = shape.plates, totalPar = null;
+        let cleanPlates = shape.plates, totalPar = null, ratings = { stroke_index: null, course_rating: null, slope_rating: null };
         if (cleanPlates.length > 0) {
             const found = await pool.query(
-                `SELECT share_code, name, total_par, hole_count, COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range
+                `SELECT share_code, name, holes, total_par, hole_count, COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range
                  FROM courses WHERE share_code = ANY($1)`, [cleanPlates.map(p => p.plate_code)]
             );
             const exist = collectionsCore.checkPlatesExist(cleanPlates, found.rows);
             if (exist.error) return res.status(400).json({ error: exist.error });
             cleanPlates = exist.plates;
             totalPar = exist.totalPar; // worked out from the plates themselves, not from what the page says
+            const byCode = {};
+            found.rows.forEach(r => { byCode[r.share_code.toUpperCase()] = r; });
+            ratings = collectionRatings(cleanPlates.map(p => byCode[p.plate_code]));   // the stroke index and ratings of all its holes together
         }
 
         if (id) {
@@ -1003,8 +1087,9 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
                 return res.status(403).json({ error: 'Not the owner' });
             }
             const result = await pool.query(
-                `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6 WHERE id=$7 RETURNING id`,
-                [name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, id.toUpperCase()]
+                `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6, stroke_index=$8, course_rating=$9, slope_rating=$10 WHERE id=$7 RETURNING id`,
+                [name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, id.toUpperCase(),
+                 ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
             );
             if (result.rows.length > 0) return res.json({ success: true, id: result.rows[0].id });
         }
@@ -1012,8 +1097,9 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
         // Create new
         const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
         await pool.query(
-            `INSERT INTO course_collections (id, name, author, type, plates, total_par, cover_image, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, req.userId || null]
+            `INSERT INTO course_collections (id, name, author, type, plates, total_par, cover_image, owner_id, stroke_index, course_rating, slope_rating) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+            [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, req.userId || null,
+             ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
         );
         res.json({ success: true, id: newId });
     } catch(err) {

@@ -42,8 +42,11 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     if (!up) { console.error('server did not come up with a database'); await cleanup(); process.exit(2); }
 
     // three published plates, one draft, one range
-    const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par) VALUES ($1,$2,'t','[]'::jsonb,$3,$4,$5,3,$6)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par]); };
-    await mk('A', { par: 11 }); await mk('B', { par: 12 }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
+    // a plate's holes: tee at the origin, the flag `len` metres away (par 4 each)
+    const holesOf = lens => JSON.stringify(lens.map(len => ({ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -len } })));
+    const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par, course_rating, slope_rating) VALUES ($1,$2,'t',$7::jsonb,$3,$4,$5,3,$6,$8,$9)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par, o.lens ? holesOf(o.lens) : '[]', o.cr || null, o.sr || null]); };
+    await mk('A', { par: 11, lens: [150, 400, 250] }); await mk('B', { par: 12, lens: [300, 100, 500] }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
+    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 });
     await pool.query('UPDATE courses SET hole_count = 2 WHERE share_code = $1', [tag + '-T']);
     const A = tag + '-A', B = tag + '-B', C = tag + '-C', D = tag + '-D', R = tag + '-R';
     const plate = function (c) { return { plate_code: c, plate_name: 'whatever the page says' }; };
@@ -79,6 +82,11 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(A), plate(B)] }, owner);
     const row2 = (await pool.query('SELECT plates, total_par FROM course_collections WHERE id = $1', [id])).rows[0];
     check('plate 2 is added: total par 11 + 12', r.status === 200 && row2.plates.length === 2 && row2.total_par === 23, JSON.stringify(row2));
+
+    // the collection's stroke index and ratings: its six holes as one course (lengths 150 400 250 | 300 100 500: longest = hardest = 1)
+    const colRow = (await api('GET', '/api/collections/' + id)).json;
+    check('the collection has the stroke index of all six holes together (not 1-3 twice)', JSON.stringify(colRow.stroke_index) === JSON.stringify([5, 2, 4, 3, 6, 1]), JSON.stringify(colRow.stroke_index));
+    check('and a course rating and slope for the whole (par 23, 100 m short of 1800: 22.8; slope 110)', parseFloat(colRow.course_rating) === 22.8 && colRow.slope_rating === 110, colRow.course_rating + ' / ' + colRow.slope_rating);
 
     // rounds: Kim plays both plates in one go (round K1), Lo only the first (L1), Kim a second time on plate A only (K2)
     const post = function (course, who, score, collRound, plateIndex, extra) {
@@ -130,6 +138,35 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
 
     r = await api('GET', '/api/collections/NOSUCH/leaderboard');
     check('an unknown collection is a 404', r.status === 404);
+
+    // the handicap: a go through the whole collection is ONE differential, on the collection's rating (not one per plate)
+    const hcpUser = 'e2c-Hcp-' + tag, H1 = tag + '-H1', H2 = tag + '-H2';
+    r = await api('POST', '/api/collections', { name: 'Handicap', author: 'Test', type: '6', plates: [plate(H1), plate(H2)] }, owner);
+    const hid = r.json.id; madeCollections.push(hid);
+    const hRow = (await pool.query('SELECT course_rating::float AS cr, slope_rating AS sr FROM course_collections WHERE id = $1', [hid])).rows[0];
+    const hpost = function (course, score, round, plateIndex, retryId) {
+      return api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
+        stats: { collection_id: hid, collection_round_id: round, plate_index: plateIndex, round_id: retryId || (round + '-p' + plateIndex + '-0'), player_slot: 0 } }, hcpUser);
+    };
+    const diffs = async round => (await pool.query("SELECT course_code, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = $2 ORDER BY id", [hcpUser, round])).rows;
+    r = await hpost(H1, 14, 'hcpround01', 0);
+    let rows = await diffs('hcpround01');
+    check('plate 1 of a go has no differential of its own (it is not a round for the handicap)', rows.length === 1 && rows[0].d === null && r.json.handicap && r.json.handicap.differential === null, JSON.stringify(rows) + JSON.stringify(r.json.handicap));
+    r = await hpost(H2, 15, 'hcpround01', 1);
+    rows = await diffs('hcpround01');
+    const wantD = Math.round((113 / hRow.sr) * (29 - hRow.cr) * 10) / 10;
+    check('the last plate carries the differential of the whole go: 14 + 15 = 29 on the collection\'s rating', rows.length === 2 && rows[0].d === null && rows[1].d === wantD && r.json.handicap.differential === wantD, JSON.stringify(rows) + ' want ' + wantD);
+    await hpost(H2, 13, 'hcpround01', 1, 'hcpround01-p1-retry');
+    rows = await diffs('hcpround01');
+    const wantD2 = Math.round((113 / hRow.sr) * (27 - hRow.cr) * 10) / 10;
+    check('a plate sent again moves the differential to the newest record: still exactly one for the go (14 + 13 = 27)', rows.filter(x => x.d !== null).length === 1 && rows[rows.length - 1].d === wantD2, JSON.stringify(rows) + ' want ' + wantD2);
+    r = await api('POST', '/api/courses/' + H1 + '/results', { total_score: 14, score_vs_par: 2, hole_scores: [5, 5, 4], input_mode: 'SWING_METER', player_name: 'Hcp' }, hcpUser);
+    check('a round on a plate played on its own still gets its own differential (113/113 x (14 - 12) = 2.0)', r.json.handicap && r.json.handicap.differential === 2, JSON.stringify(r.json.handicap));
+
+    // a plate saved again: the collections it is in get their stroke index and ratings from the plates as they are now (B: 600 100 100)
+    r = await api('POST', '/api/courses', { edit_code: B, name: 'Platta B', author: 't', holes: JSON.parse(holesOf([600, 100, 100])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    const colAfter = (await api('GET', '/api/collections/' + id)).json;
+    check('when plate B is published again the collection\'s stroke index follows (lengths 150 400 250 | 600 100 100)', r.status === 200 && JSON.stringify(colAfter.stroke_index) === JSON.stringify([4, 2, 3, 1, 5, 6]), r.status + ' ' + JSON.stringify(colAfter.stroke_index) + JSON.stringify(r.json));
 
     // a collection with another type: 9 holes, three plates
     r = await api('POST', '/api/collections', { name: 'Nian', author: 'Test', type: '9', plates: [plate(A), plate(B), plate(C)] }, owner);

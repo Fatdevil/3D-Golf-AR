@@ -41,6 +41,12 @@ check('ett utkast avvisas', /not published/.test(core.checkPlatesExist(plates, [
 check('en bana med 1 eller 2 hål är ingen platta (4 hål inte heller)', [1, 2, 4].every(n => /holes, a plate has 3/.test(core.checkPlatesExist(plates, [row('A1'), row('B2', { hole_count: n })]).error || '')));
 check('en bana utan hole_count (gammal rad) räknas som 3 hål', !core.checkPlatesExist(plates, [row('A1'), row('B2', { hole_count: null })]).error);
 
+// --- samlingens hål som en bana (slagindex och betyg) ---
+const six = core.combineHoles([[{ n: 1 }, { n: 2 }, { n: 3 }], JSON.stringify([{ n: 4 }, { n: 5 }, { n: 6 }])]);
+check('plattornas hål blir en lista, tre per platta i plattornas ordning (text eller lista)', six.length === 6 && six.map(h => h.n).join('') === '123456');
+const padded = core.combineHoles([[{ n: 1 }], [{ n: 2 }, { n: 3 }, { n: 4 }, { n: 5 }], 'trasig text', null]);
+check('en platta med färre hål fylls ut till tre, en med fler kapas, trasiga data blir tomma hål (hål n i samlingen är alltid hål n % 3 på platta n / 3)', padded.length === 12 && padded[0].n === 1 && padded[1].n === undefined && padded[3].n === 2 && padded[5].n === 4 && padded[6].n === undefined && padded[11].n === undefined);
+
 // --- hålnumren ---
 const arcade = read('arcade.html'), builder = read('smart-builder.js'), load = read('arcade-load.js');
 check('arcade.html har holeNumber() som lägger till plattans förskjutning', /window\.holeNumber\s*=\s*function\s*\(index\)\s*\{\s*return \(window\._holeNumberOffset \|\| 0\) \+ index \+ 1;/.test(arcade));
@@ -78,6 +84,7 @@ check('plattväljaren erbjuder bara banor med 3 hål', /!c\.hole_count \|\| c\.h
 check('topplistan räknar bara rundor på plattornas nuvarande version', /JOIN courses c ON c\.share_code = r\.course_code AND r\.course_version = COALESCE\(c\.version, 1\)/.test(server));
 check('topplistan skiljer spelare på plats (player_slot), inte på namn', /COALESCE\(r\.stats->>'player_slot', r\.player_name\)/.test(server));
 check('servern kontrollerar plattorna vid sparande och räknar totalpar själv', /checkPlateList\(type, plates\)/.test(server) && /checkPlatesExist\(cleanPlates, found\.rows\)/.test(server) && !/total_par\s*\}\s*=\s*req\.body/.test(server.slice(server.indexOf("app.post('/api/collections'"), server.indexOf("app.get('/api/collections/:id/leaderboard'"))));
+check('servern lagrar samlingens slagindex och betyg, räknar om dem när en platta publiceras igen och låter en samlingsrunda ge en differential', /ADD COLUMN IF NOT EXISTS stroke_index JSONB/.test(server) && /refreshCollectionsOf\(pool, updateResult\.rows\[0\]\.share_code\)/.test(server) && /collDifferential/.test(server));
 check('servern har en topplista för samlingen', /app\.get\('\/api\/collections\/:id\/leaderboard'/.test(server));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall passed');

@@ -8696,9 +8696,12 @@
         
         // Assemble global scores and pars
         let globalPars = new Array(totalHoles).fill('-');
+        // stroke index of all the collection's holes together (the server works it out from the plates); none on an old collection
+        let globalSI = Array.isArray(col.stroke_index) ? col.stroke_index : null;
         let globalScores = {};
         let players = window.players || [];
         const slotOf = (pl, pi) => (pl && pl.slot !== undefined) ? pl.slot : pi;
+        const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         for(let pi=0; pi<players.length; pi++) globalScores[slotOf(players[pi], pi)] = new Array(totalHoles).fill(null);
         
         accumulated.forEach(acc => {
@@ -8761,7 +8764,7 @@
                 let p = players[pi] || accumulated[0]?.plateScores[pi];
                 if(!p) continue;
                 let sTot = 0, hasOut = false;
-                out += `<tr style="color:#fff; border-bottom:1px solid #1e293b;"><td style="color:${p.color||'#fff'}">${p.name||'P'+(pi+1)}</td>`;
+                out += `<tr style="color:#fff; border-bottom:1px solid #1e293b;"><td style="color:${p.color||'#fff'}">${esc(p.name||'P'+(pi+1))}</td>`;
                 for(let i=startHole; i<endHole; i++) {
                     let s = (globalScores[slotOf(p, pi)] || [])[i];
                     let par = globalPars[i] !== '-' ? globalPars[i] : 4;
@@ -8775,6 +8778,33 @@
                     out += `<td style="color:${cellColor}">${s!==null?s:'-'}</td>`;
                 }
                 out += `<td style="color:#fbbf24; font-weight:900">${hasOut ? sTot : '-'}</td></tr>`;
+            }
+            // stroke index of these holes
+            if (globalSI) {
+                out += `<tr style="color:#64748b; font-size:10px; border-bottom:1px solid #1e293b;"><td>SI</td>`;
+                for(let i=startHole; i<endHole; i++) out += `<td>${globalSI[i] || '-'}</td>`;
+                out += `<td></td></tr>`;
+            }
+            // net scores for players with a handicap: strokes on the hardest holes of the whole collection, over the holes that have been played
+            let playedIdx = [];
+            for (let k = 0; k < totalHoles; k++) if (globalPars[k] !== '-') playedIdx.push(k);
+            for(let pi=0; pi<players.length; pi++) {
+                let p = players[pi];
+                if (!p || p.hcp === null || p.hcp === undefined) continue;
+                let seat = slotOf(p, pi);
+                let strokes = window.HandicapStrokes.strokesPerHole(p.hcp, globalSI, playedIdx);
+                let netTot = 0, hasNet = false;
+                out += `<tr style="color:#a78bfa; font-size:11px; border-bottom:1px solid #1e293b;"><td style="color:#a78bfa">${esc(p.name || 'P'+(pi+1))} NET</td>`;
+                for(let i=startHole; i<endHole; i++) {
+                    let gross = (globalScores[seat] || [])[i];
+                    if (gross !== null && gross !== undefined) {
+                        let net = gross - (strokes[i] || 0);
+                        let par = globalPars[i] !== '-' ? globalPars[i] : 4;
+                        out += `<td style="color:${net < par ? '#a78bfa' : (net > par ? '#f472b6' : '#e2e8f0')}">${net}</td>`;
+                        netTot += net; hasNet = true;
+                    } else out += `<td>-</td>`;
+                }
+                out += `<td style="color:#a78bfa; font-weight:900">${hasNet ? netTot : '-'}</td></tr>`;
             }
             return out;
         }
@@ -8874,25 +8904,15 @@
             let pl = players[pi];
             if (pl.hcp === null || pl.hcp === undefined) continue;
             
-            // Playing HCP scaled to the number of holes played (a 3-hole plate gets 3/18 of the strokes)
-            let playingHcp = Math.round(pl.hcp * Math.min(1, playableIdx.length / 18));
-            // Rank the holes by stroke index so the strokes land on the hardest holes of THIS course
-            let siRank = [];
-            {
-                let order = [];
-                for (const k of playableIdx) order.push({ k: k, si: courseStrokeIndex ? (courseStrokeIndex[k] || 99) : (k + 1) });
-                order.sort((a, b) => a.si - b.si || a.k - b.k);
-                order.forEach((o, r) => { siRank[o.k] = r + 1; });
-            }
+            // Strokes per hole: the playing handicap scaled to the holes played, the remainder on the hardest holes of THIS course (shared with collections)
+            let netStrokes = window.HandicapStrokes.strokesPerHole(pl.hcp, courseStrokeIndex, playableIdx);
             let trNet = '<tr style="color:#a78bfa; font-size:11px; border-bottom:1px solid #1e293b;"><td style="color:#a78bfa">' + (pl.name || 'P'+(pi+1)) + ' NET</td>';
             let netOut = 0, netIn = 0, hasNetOut = false, hasNetIn = false;
             
             for(let i=0; i<maxHoles; i++) {
                 let gross = (pl.scores && pl.scores[i] !== null && pl.scores[i] !== undefined) ? pl.scores[i] : null;
                 if (gross !== null) {
-                    // Whole laps of strokes, remainder on the lowest-ranked (hardest) holes
-                    let strokes = Math.floor(playingHcp / playableIdx.length) + (siRank[i] <= (playingHcp % playableIdx.length) ? 1 : 0);
-                    let net = gross - strokes;
+                    let net = gross - (netStrokes[i] || 0);
                     let par = courseHoles[i] ? (courseHoles[i].par || 4) : 4;
                     let netColor = net < par ? '#a78bfa' : (net > par ? '#f472b6' : '#e2e8f0');
                     trNet += '<td style="color:' + netColor + '">' + net + '</td>';
@@ -8914,6 +8934,7 @@
 <script>
 
 </script>
+<script src="arcade-handicap.js?v=1"></script>
 <script src="arcade-round-result.js?v=1"></script>
 <script>
     
