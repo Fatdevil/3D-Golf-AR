@@ -157,6 +157,12 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     // put it back as it was for the rest
     await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(A), plate(B)] }, owner);
 
+    const gone = await api('POST', '/api/collections', { name: 'Borta', author: 'Test', type: '6', plates: [] }, owner);
+    await api('DELETE', '/api/collections/' + gone.json.id, undefined, owner);
+    const before = (await pool.query('SELECT COUNT(*)::int AS n FROM course_collections')).rows[0].n;
+    r = await api('POST', '/api/collections', { id: gone.json.id, expect_existing: true, name: 'Borta', author: 'Test', type: '6', plates: [plate(A)] }, owner);
+    check('saving the edit of a collection that was deleted meanwhile is refused (404) and does not create it again', r.status === 404 && (await pool.query('SELECT COUNT(*)::int AS n FROM course_collections')).rows[0].n === before, JSON.stringify(r));
+
     r = await api('GET', '/api/collections/NOSUCH/leaderboard');
     check('an unknown collection is a 404', r.status === 404);
 

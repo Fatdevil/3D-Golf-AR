@@ -1183,6 +1183,7 @@ async function saveCollection(db, req, shape) {
              ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
         );
         if (result.rows.length > 0) return { status: 200, body: { success: true, id: result.rows[0].id } };
+        if (ownerCheck.rows.length === 0 && req.body.expect_existing === true) return { status: 404, body: { error: 'Collection not found' } };   // deleted meanwhile: do not bring it back as a new one
     }
 
     // Create new

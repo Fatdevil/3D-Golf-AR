@@ -1121,7 +1121,7 @@
     // the whole list goes to the server, which checks it again and works out the total par and the ratings
     async function savePlates(col, plates, failText) {
         _savingPlates = true;
-        document.querySelectorAll('.col-play-btn').forEach(function (b) { b.disabled = true; });   // Play would start from the old list
+        document.querySelectorAll('.col-play-btn, .col-del-btn').forEach(function (b) { b.disabled = true; });   // Play would start from the old list, a delete would meet the save half way
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');
             let saved = await fetch(API_BASE + '/api/collections', {
@@ -1132,6 +1132,7 @@
                     name: col.name,
                     author: col.author,
                     type: col.type,
+                    expect_existing: true,   // saving the edit of a collection that has been deleted meanwhile is refused, not created again
                     cover_image: col.cover_image,   // the save writes what it is sent: leave it out and the cover is cleared
                     plates: plates
                 })
@@ -1196,6 +1197,7 @@
     }
 
     async function deleteCollection(collectionId) {
+        if (_savingPlates) return;
         if (!confirm('Radera denna collection? Plattorna raderas INTE.')) return;
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');
