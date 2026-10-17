@@ -185,6 +185,13 @@ async function initDB() {
             );
         `);
 
+        // A collection has the stroke index and rating of all its holes together (worked out from its plates, kept up to date when one is published again)
+        try {
+            await pool.query(`ALTER TABLE course_collections ADD COLUMN IF NOT EXISTS stroke_index JSONB;`);
+            await pool.query(`ALTER TABLE course_collections ADD COLUMN IF NOT EXISTS course_rating DECIMAL(4,1);`);
+            await pool.query(`ALTER TABLE course_collections ADD COLUMN IF NOT EXISTS slope_rating INT;`);
+        } catch(e) {}
+
         // Migration for existing course_records without tournament_id
         try {
             await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS tournament_id VARCHAR(20);`);
@@ -448,10 +455,25 @@ app.get('/api/users/:id/handicap', requireDB, async (req, res) => {
         const user = await pool.query('SELECT handicap_index, handicap_rounds, handicap_updated FROM users WHERE id = $1', [req.params.id]);
         if (user.rows.length === 0) return res.status(404).json({ error: 'User not found' });
         const rounds = await pool.query(
-            `SELECT score_differential, total_score, score_vs_par, course_code, played_at FROM course_records WHERE player_id = $1 AND flagged = false AND score_differential IS NOT NULL ORDER BY played_at DESC LIMIT 20`,
+            `SELECT score_differential, total_score, score_vs_par, course_code, played_at, player_name, stats FROM course_records WHERE player_id = $1 AND flagged = false AND score_differential IS NOT NULL ORDER BY played_at DESC LIMIT 20`,
             [req.params.id]
         );
-        res.json({ handicap_index: user.rows[0].handicap_index, rounds_counted: user.rows[0].handicap_rounds, last_updated: user.rows[0].handicap_updated, recent_rounds: rounds.rows });
+        // A round through a whole collection sits on one plate's record, but its differential is for all the plates: it is shown as the whole go,
+        // from the snapshot the server wrote when the go was completed (all its plates' strokes, the collection), so a row never pairs one plate's
+        // strokes with the differential of the whole go, and a later change of the collection changes nothing here.
+        const recent = rounds.rows.map(r => {
+            const row = { score_differential: r.score_differential, total_score: r.total_score, score_vs_par: r.score_vs_par, course_code: r.course_code, played_at: r.played_at };
+            const go = r.stats && r.stats.collection_go;
+            if (go && typeof go === 'object') {
+                row.total_score = go.total_score;
+                row.score_vs_par = go.score_vs_par;
+                row.course_code = null;
+                row.collection_id = go.collection_id;
+                row.collection_name = go.collection_name || null;
+            }
+            return row;
+        });
+        res.json({ handicap_index: user.rows[0].handicap_index, rounds_counted: user.rows[0].handicap_rounds, last_updated: user.rows[0].handicap_updated, recent_rounds: recent });
     } catch(err) { console.error('HCP fetch error:', err); res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -547,13 +569,34 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                  WHERE course_code = $1 AND course_version = $2 AND total_score < $3 AND flagged = false`,
                 [code, courseVersion, d.total_score]
             );
+            // the go's differential is derived from the records too: redo it, in case the first request stopped before it
+            if (coll && d.flagged !== true && collSeat === '0') await finalizeCollectionRound(pool, coll, collId, collRoundId, req.userId, collSeat);
             // the handicap is derived from the records: redo it, in case the first request stopped before it
             const hcpDup = d.flagged === true ? null : await updateHandicapIndex(req.userId, pool);
             res.json({ success: true, duplicate: true, record_id: d.id, position: parseInt(posDup.rows[0].position), flagged: d.flagged === true, handicap: { new: hcpDup } });
             return true;
         };
+        // A plate of a collection is not a round of its own for the handicap: the whole go counts once, on the collection's rating
+        // (filed when the last plate has come in). The collection must exist and list this plate, or the record is an ordinary one.
+        let coll = null;
+        const collId = stats && typeof stats.collection_id === 'string' && /^[A-Za-z0-9]{1,20}$/.test(stats.collection_id) ? stats.collection_id.toUpperCase() : null;
+        const collRoundId = stats && typeof stats.collection_round_id === 'string' && stats.collection_round_id.length <= 64 ? stats.collection_round_id : null;
+        if (collId && collRoundId) {
+            const cr = await pool.query('SELECT id, name, type, plates, course_rating, slope_rating FROM course_collections WHERE id = $1', [collId]);
+            if (cr.rows.length > 0) {
+                const cp = (typeof cr.rows[0].plates === 'string' ? JSON.parse(cr.rows[0].plates) : cr.rows[0].plates) || [];
+                if (cp.map(collectionsCore.plateCode).indexOf(code) >= 0) coll = await ensureCollectionRatings(pool, cr.rows[0]);
+            }
+        }
+        // The signed-in account is the player in seat 0 (the game submits every local player under the same account: only the account holder's go counts
+        // for the handicap, a guest's does not)
+        const collSeat = String(stats && stats.player_slot !== undefined && stats.player_slot !== null ? stats.player_slot : (player_name || req.body.player_name || 'Anonymous'));
         if (keyed && await answerDuplicate()) return;
         
+        // the stats are the client's own; the snapshot of a whole collection round (collection_go) is written by the server only
+        const storedStats = (stats && typeof stats === 'object' && !Array.isArray(stats)) ? Object.assign({}, stats) : {};
+        delete storedStats.collection_go;
+
         // Sanity check: flag suspicious scores
         let flagged = false;
         if (total_score < holeCount) flagged = true;          // Under 1 per hole = suspicious
@@ -564,7 +607,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         if (req.userId && req.userId !== 'anonymous') {
             const hcpRes = await pool.query('SELECT handicap_index FROM users WHERE id = $1', [req.userId]);
             if (hcpRes.rows.length > 0) playerHcpAtPlay = hcpRes.rows[0].handicap_index;
-            const ratRes = await pool.query('SELECT course_rating, slope_rating FROM courses WHERE share_code = $1', [code]);
+            const ratRes = coll ? { rows: [] } : await pool.query('SELECT course_rating, slope_rating FROM courses WHERE share_code = $1', [code]);
             if (ratRes.rows.length > 0 && ratRes.rows[0].course_rating) {
                 const cr = parseFloat(ratRes.rows[0].course_rating), sr = parseInt(ratRes.rows[0].slope_rating) || 113;
                 scoreDifferential = calculateScoreDifferential(total_score, cr, sr);
@@ -592,7 +635,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
                     total_score,
                     score_vs_par || 0,
                     JSON.stringify(hole_scores || []),
-                    JSON.stringify(stats || {}),
+                    JSON.stringify(storedStats),
                     flagged,
                     playerHcpAtPlay, scoreDifferential, netScore
                 ]
@@ -613,6 +656,13 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             db.release();
         }
         
+        // The last plate of a collection round is in: the round's differential, on the collection's rating, goes on the record that completed it
+        let collDifferential = null;
+        if (coll && collSeat === '0' && req.userId && req.userId !== 'anonymous' && !flagged) {
+            const fin = await finalizeCollectionRound(pool, coll, collId, collRoundId, req.userId, collSeat);
+            if (fin && fin.recordId === result.rows[0].id) collDifferential = fin.differential;
+        }
+
         // Update HCP (derived from the records, recomputed on every round: it can be redone at any time)
         let newHcp = null;
         if (req.userId && req.userId !== 'anonymous' && !flagged) {
@@ -631,7 +681,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
             record_id: result.rows[0].id,
             position: parseInt(posResult.rows[0].position),
             flagged: flagged,
-            handicap: { previous: playerHcpAtPlay, new: newHcp, differential: scoreDifferential }
+            handicap: { previous: playerHcpAtPlay, new: newHcp, differential: coll ? collDifferential : scoreDifferential }
         });
     } catch(err) {
         console.error('Error saving result:', err);
@@ -759,6 +809,114 @@ function calculateStrokeIndex(holes) {
     return si;
 }
 
+// Stroke index and ratings of a collection: its plates' holes as one course (three per plate, in the order of the plates).
+// `plateRows` are courses rows ({ holes, total_par, hole_count }) in plate order.
+function collectionRatings(plateRows) {
+    const holes = collectionsCore.combineHoles(plateRows.map(function (r) { return r.holes; }));
+    const totalPar = plateRows.reduce(function (sum, r) { return sum + (r.total_par || (r.hole_count || collectionsCore.HOLES_PER_PLATE) * 4); }, 0);
+    return {
+        stroke_index: calculateStrokeIndex(holes),
+        course_rating: calculateCourseRating(holes, totalPar),
+        slope_rating: calculateSlopeRating(holes),
+        total_par: totalPar
+    };
+}
+
+// The differential of a go through a whole collection. It is worked out from the records alone and can be redone at any time (a retry of a plate
+// whose first request stopped half way finishes it): the player's latest record on each of the collection's plates, in this go and on the plates as they
+// are now, must be there for every plate the collection has room for. The differential then sits on the newest of those records and on no other
+// record of the go. Records on other courses are never part of it, whatever their stats say.
+// The player's latest record on each of the collection's plates in one go: only the collection's own plates (never other courses), on the plates as
+// they are now.
+async function collectionGoRecords(db, coll, collId, roundId, userId, seat) {
+    const codes = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates).map(collectionsCore.plateCode);
+    const done = await db.query(
+        `SELECT DISTINCT ON (r.course_code) r.id, r.total_score, r.score_vs_par, r.score_differential, r.stats->'collection_go' AS go
+         FROM course_records r JOIN courses c ON c.share_code = r.course_code AND r.course_version = COALESCE(c.version, 1)
+         WHERE r.stats->>'collection_id' = $1 AND r.stats->>'collection_round_id' = $2 AND r.player_id = $3
+           AND COALESCE(r.stats->>'player_slot', r.player_name) = $4 AND r.course_code = ANY($5) AND r.flagged = false
+         ORDER BY r.course_code, r.played_at DESC, r.id DESC`, [collId, roundId, userId, seat, codes]
+    );
+    return { codes: codes, rows: done.rows };
+}
+
+async function finalizeCollectionRound(db, coll, collId, roundId, userId, seat) {
+    const need = Math.floor(parseInt(coll.type, 10) / collectionsCore.HOLES_PER_PLATE);
+    const keys = [collId, roundId, userId, seat, null];
+    const go = await collectionGoRecords(db, coll, collId, roundId, userId, seat);
+    const codes = go.codes, done = { rows: go.rows };
+    keys[4] = codes;
+    if (!coll.course_rating || codes.length !== need) return null;
+    if (done.rows.length !== need) return null;
+    const total = done.rows.reduce((sum, r) => sum + r.total_score, 0);
+    const carrier = done.rows.reduce((m, r) => Math.max(m, r.id), 0);
+    // A go that is already finished on this record is left as it is (a retry must not rewrite what was captured when the go was completed,
+    // such as the collection's name at that time); only a go that lacks its snapshot or its differential is finished here.
+    const carrierRow = done.rows.find(r => r.id === carrier);
+    if (carrierRow && carrierRow.go && carrierRow.score_differential !== null) return { differential: parseFloat(carrierRow.score_differential), recordId: carrier };
+    const differential = calculateScoreDifferential(total, parseFloat(coll.course_rating), parseInt(coll.slope_rating) || 113);
+    // The go is kept on the record that carries its differential, as it was when it was completed (the collection, its plates and the strokes):
+    // the handicap history reads this and nothing else, so a later change of the collection, or a record that only claims to be part of a go, cannot
+    // change what a past round shows.
+    const snapshot = {
+        collection_id: collId, collection_name: coll.name || null, plates: codes,
+        total_score: total, score_vs_par: done.rows.reduce((sum, r) => sum + (r.score_vs_par || 0), 0)
+    };
+    await db.query(
+        `UPDATE course_records SET score_differential = CASE WHEN id = $6 THEN $7::numeric ELSE NULL END,
+                                   stats = CASE WHEN id = $6 THEN stats || jsonb_build_object('collection_go', $8::jsonb) ELSE stats - 'collection_go' END
+         WHERE stats->>'collection_id' = $1 AND stats->>'collection_round_id' = $2 AND player_id = $3
+           AND COALESCE(stats->>'player_slot', player_name) = $4 AND course_code = ANY($5)`, keys.concat([carrier, differential, JSON.stringify(snapshot)])
+    );
+    return { differential: differential, recordId: carrier };
+}
+
+// The plates of a collection, from the database, in the order the collection lists them (a plate that is gone is left out)
+async function loadPlateRows(db, plateCodes) {
+    if (!plateCodes.length) return [];
+    const rows = await db.query('SELECT share_code, holes, total_par, hole_count FROM courses WHERE share_code = ANY($1)', [plateCodes]);
+    const byCode = {};
+    rows.rows.forEach(function (r) { byCode[r.share_code.toUpperCase()] = r; });
+    return plateCodes.map(function (c) { return byCode[c]; }).filter(Boolean);
+}
+
+// A collection saved before stroke index and ratings existed has none: they are worked out from its plates the first time they are needed
+// (the row is updated, so it happens once). A collection without plates has nothing to work out.
+async function ensureCollectionRatings(db, coll) {
+    if (coll.course_rating !== null && coll.course_rating !== undefined) return coll;
+    const plates = (typeof coll.plates === 'string' ? JSON.parse(coll.plates) : coll.plates) || [];
+    if (!Array.isArray(plates) || plates.length === 0) return coll;
+    const rows = await loadPlateRows(db, plates.map(collectionsCore.plateCode));
+    if (rows.length === 0) return coll;
+    const r = collectionRatings(rows);
+    await db.query('UPDATE course_collections SET stroke_index=$1, course_rating=$2, slope_rating=$3 WHERE id=$4 AND course_rating IS NULL',
+        [JSON.stringify(r.stroke_index), r.course_rating, r.slope_rating, coll.id]);
+    coll.stroke_index = r.stroke_index; coll.course_rating = r.course_rating; coll.slope_rating = r.slope_rating;
+    return coll;
+}
+
+// A plate was saved again: the collections it is in get their stroke index and ratings from the plates as they are now
+async function refreshCollectionsOf(db, plateCode) {
+    // a plate is listed as { plate_code } (older rows: the bare code, in any case)
+    const cols = await db.query(
+        `SELECT id, plates FROM course_collections
+         WHERE CASE WHEN jsonb_typeof(plates) = 'array'
+                    THEN EXISTS (SELECT 1 FROM jsonb_array_elements(plates) e
+                                 WHERE upper(CASE WHEN jsonb_typeof(e) = 'string' THEN e #>> '{}' ELSE e->>'plate_code' END) = $1)
+                    ELSE false END`, [plateCode.toUpperCase()]);
+    for (const c of cols.rows) {
+        // The collection's row is locked before its plates are read: two plates of it that are published at the same moment take turns, and the second
+        // reads the first one's new holes (its transaction has committed by the time the lock is given), so the last write is never a mix of old and new.
+        const locked = await db.query('SELECT id, plates FROM course_collections WHERE id = $1 FOR UPDATE', [c.id]);
+        if (locked.rows.length === 0) continue;   // deleted while waiting
+        const plates = (typeof locked.rows[0].plates === 'string' ? JSON.parse(locked.rows[0].plates) : locked.rows[0].plates) || [];
+        const rows = await loadPlateRows(db, plates.map(collectionsCore.plateCode));
+        const r = collectionRatings(rows);
+        await db.query('UPDATE course_collections SET stroke_index=$1, course_rating=$2, slope_rating=$3, total_par=$4 WHERE id=$5',
+            [JSON.stringify(r.stroke_index), r.course_rating, r.slope_rating, r.total_par, c.id]);
+    }
+}
+
 function calculateScoreDifferential(adjustedScore, courseRating, slopeRating) {
     if (!courseRating || !slopeRating || slopeRating === 0) return null;
     return Math.round(((113 / slopeRating) * (adjustedScore - courseRating)) * 10) / 10;
@@ -842,7 +1000,13 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                      play_count = CASE WHEN is_draft IS DISTINCT FROM true THEN 0 ELSE play_count END`;
             }
 
-            const updateResult = await pool.query(
+            // The course and the collections it is in are saved as one: a failure while the collections are brought up to date takes the
+            // publish back too (the editor sees the error and publishes again), so no collection is left with the stroke index of the old holes.
+            const txdb = await pool.connect();
+            let updateResult;
+            try {
+                await txdb.query('BEGIN');
+                updateResult = await txdb.query(
                 `UPDATE courses 
                  SET name=$1, author=$2, holes=$3, targets=$4, trees=$5, terrain_heightmap=$6, terrain_biomemap=$7, 
                      is_draft=$8, theme_data=$10, is_range=$11, hole_count=$12, total_par=$13, cover_image=$14,
@@ -862,7 +1026,15 @@ app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
                     // the ratings follow the holes as they are now (a draft saved early has none worth keeping once the holes are built)
                     calculateCourseRating(holes, c_total_par), calculateSlopeRating(holes), JSON.stringify(calculateStrokeIndex(holes))
                 ]
-            );
+                );
+                if (updateResult.rows.length > 0) await refreshCollectionsOf(txdb, updateResult.rows[0].share_code);
+                await txdb.query('COMMIT');
+            } catch (e) {
+                try { await txdb.query('ROLLBACK'); } catch (e2) { /* the connection is gone */ }
+                throw e;
+            } finally {
+                txdb.release();
+            }
             
             if (updateResult.rows.length === 0 && draftStatus && ownerCheck.rows.length > 0) {
                 // the course exists but was published between the check above and the update
@@ -967,16 +1139,61 @@ app.get('/api/collections/:id', requireDB, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM course_collections WHERE id = $1', [req.params.id.toUpperCase()]);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Collection not found' });
-        res.json(result.rows[0]);
+        res.json(await ensureCollectionRatings(pool, result.rows[0]));
     } catch(err) {
         console.error('Collection fetch error:', err);
         res.status(500).json({ error: 'Database error' });
     }
 });
 
+// Saving a collection reads its plates' holes (for the stroke index and ratings) and writes the result. A plate that is published again at the same
+// moment must not slip in between: the plates are read with a share lock inside the transaction, so a publish that is under way is waited for (and its
+// new holes are what get read), and a publish that comes after waits for this save, then finds the collection and brings it up to date.
+async function saveCollection(db, req, shape) {
+    const { id, name, author, type, cover_image } = req.body;
+    let cleanPlates = shape.plates, totalPar = null, ratings = { stroke_index: null, course_rating: null, slope_rating: null };
+    if (cleanPlates.length > 0) {
+        const found = await db.query(
+            `SELECT share_code, name, holes, total_par, hole_count, COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range
+             FROM courses WHERE share_code = ANY($1) FOR SHARE`, [cleanPlates.map(p => p.plate_code)]
+        );
+        const exist = collectionsCore.checkPlatesExist(cleanPlates, found.rows);
+        if (exist.error) return { status: 400, body: { error: exist.error } };
+        cleanPlates = exist.plates;
+        totalPar = exist.totalPar; // worked out from the plates themselves, not from what the page says
+        const byCode = {};
+        found.rows.forEach(r => { byCode[r.share_code.toUpperCase()] = r; });
+        ratings = collectionRatings(cleanPlates.map(p => byCode[p.plate_code]));   // the stroke index and ratings of all its holes together
+    }
+
+    if (id) {
+        // Update existing
+        const ownerCheck = await db.query('SELECT owner_id FROM course_collections WHERE id = $1', [id.toUpperCase()]);
+        if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id && req.userId && ownerCheck.rows[0].owner_id !== req.userId) {
+            return { status: 403, body: { error: 'Not the owner' } };
+        }
+        const result = await db.query(
+            `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6, stroke_index=$8, course_rating=$9, slope_rating=$10 WHERE id=$7 RETURNING id`,
+            [name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, id.toUpperCase(),
+             ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
+        );
+        if (result.rows.length > 0) return { status: 200, body: { success: true, id: result.rows[0].id } };
+    }
+
+    // Create new
+    const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    await db.query(
+        `INSERT INTO course_collections (id, name, author, type, plates, total_par, cover_image, owner_id, stroke_index, course_rating, slope_rating) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, req.userId || null,
+         ratings.stroke_index ? JSON.stringify(ratings.stroke_index) : null, ratings.course_rating, ratings.slope_rating]
+    );
+    return { status: 200, body: { success: true, id: newId } };
+}
+
 app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
+    let db = null;
     try {
-        const { id, name, author, type, plates, cover_image } = req.body;
+        const { type, plates } = req.body;
         if (!type || !collectionsCore.TYPES.includes(type)) {
             return res.status(400).json({ error: 'type must be 3, 6, 9, or 18' });
         }
@@ -984,41 +1201,18 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
         // the plates are checked here, not trusted from the page: how many fit, that none is used twice, that each is a published course
         const shape = collectionsCore.checkPlateList(type, plates);
         if (shape.error) return res.status(400).json({ error: shape.error });
-        let cleanPlates = shape.plates, totalPar = null;
-        if (cleanPlates.length > 0) {
-            const found = await pool.query(
-                `SELECT share_code, name, total_par, hole_count, COALESCE(is_draft, false) AS is_draft, COALESCE(is_range, false) AS is_range
-                 FROM courses WHERE share_code = ANY($1)`, [cleanPlates.map(p => p.plate_code)]
-            );
-            const exist = collectionsCore.checkPlatesExist(cleanPlates, found.rows);
-            if (exist.error) return res.status(400).json({ error: exist.error });
-            cleanPlates = exist.plates;
-            totalPar = exist.totalPar; // worked out from the plates themselves, not from what the page says
-        }
 
-        if (id) {
-            // Update existing
-            const ownerCheck = await pool.query('SELECT owner_id FROM course_collections WHERE id = $1', [id.toUpperCase()]);
-            if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id && req.userId && ownerCheck.rows[0].owner_id !== req.userId) {
-                return res.status(403).json({ error: 'Not the owner' });
-            }
-            const result = await pool.query(
-                `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6 WHERE id=$7 RETURNING id`,
-                [name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, id.toUpperCase()]
-            );
-            if (result.rows.length > 0) return res.json({ success: true, id: result.rows[0].id });
-        }
-
-        // Create new
-        const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        await pool.query(
-            `INSERT INTO course_collections (id, name, author, type, plates, total_par, cover_image, owner_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [newId, name || 'My Course', author || 'Anonymous', type, JSON.stringify(cleanPlates), totalPar, cover_image || null, req.userId || null]
-        );
-        res.json({ success: true, id: newId });
+        db = await pool.connect();
+        await db.query('BEGIN');
+        const out = await saveCollection(db, req, shape);
+        await db.query(out.status === 200 ? 'COMMIT' : 'ROLLBACK');
+        res.status(out.status).json(out.body);
     } catch(err) {
+        if (db) { try { await db.query('ROLLBACK'); } catch (e) { /* the connection is gone */ } }
         console.error('Collection save error:', err);
         res.status(500).json({ error: 'Server error' });
+    } finally {
+        if (db) db.release();
     }
 });
 

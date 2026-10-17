@@ -14,6 +14,7 @@ if (!/^postgres(ql)?:\/\/[^/]*@?(localhost|127\.0\.0\.1)(:\d+)?\//.test(URL_DB))
 let Pool;
 try { Pool = require(path.join(ROOT, 'node_modules', 'pg')).Pool; } catch (e) { console.error('Missing "pg". Run: npm install'); process.exit(2); }
 
+const wait = ms => new Promise(r => setTimeout(r, ms));
 let failed = 0;
 function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name + (detail ? '  ' + detail : '')); if (!ok) failed++; }
 
@@ -31,6 +32,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     return { status: res.status, json: json || {} };
   }
   async function cleanup() {
+    try { await pool.query("DELETE FROM users WHERE id LIKE $1", ['e2c-%-' + tag]); } catch (e) { /* none */ }
+    try { await pool.query('ALTER TABLE course_collections DROP CONSTRAINT IF EXISTS e2c_block'); } catch (e) { /* none */ }
     try { await pool.query("DELETE FROM course_records WHERE course_code LIKE $1", [tag + '-%']); } catch (e) { /* none */ }
     try { await pool.query("DELETE FROM courses WHERE share_code LIKE $1", [tag + '-%']); } catch (e) { /* none */ }
     try { if (madeCollections.length) await pool.query("DELETE FROM course_collections WHERE id = ANY($1)", [madeCollections]); } catch (e) { /* none */ }
@@ -42,8 +45,11 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     if (!up) { console.error('server did not come up with a database'); await cleanup(); process.exit(2); }
 
     // three published plates, one draft, one range
-    const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par) VALUES ($1,$2,'t','[]'::jsonb,$3,$4,$5,3,$6)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par]); };
-    await mk('A', { par: 11 }); await mk('B', { par: 12 }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
+    // a plate's holes: tee at the origin, the flag `len` metres away (par 4 each)
+    const holesOf = lens => JSON.stringify(lens.map(len => ({ par: 4, tees: { yellow: { x: 0, y: 0, z: 0 } }, flag: { x: 0, y: 0, z: -len } })));
+    const mk = function (suffix, o) { return pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, is_range, owner_id, hole_count, total_par, course_rating, slope_rating) VALUES ($1,$2,'t',$7::jsonb,$3,$4,$5,3,$6,$8,$9)", [tag + '-' + suffix, 'Platta ' + suffix, !!o.draft, !!o.range, owner, o.par === undefined ? 12 : o.par, o.lens ? holesOf(o.lens) : '[]', o.cr || null, o.sr || null]); };
+    await mk('A', { par: 11, lens: [150, 400, 250] }); await mk('B', { par: 12, lens: [300, 100, 500] }); await mk('C', { par: 10 }); await mk('D', { draft: true }); await mk('R', { range: true }); await mk('T', { par: 8 });
+    await mk('H1', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('H2', { par: 12, lens: [300, 300, 300], cr: 12, sr: 113 }); await mk('L1', { par: 12, lens: [200, 200, 200] }); await mk('X1', { par: 12, lens: [300, 300, 300], cr: 10, sr: 113 }); await mk('F1', { par: 12, lens: [200, 200, 200] }); await mk('Z1', { par: 12, lens: [100, 100, 100] }); await mk('Z2', { par: 12, lens: [100, 100, 100] });
     await pool.query('UPDATE courses SET hole_count = 2 WHERE share_code = $1', [tag + '-T']);
     const A = tag + '-A', B = tag + '-B', C = tag + '-C', D = tag + '-D', R = tag + '-R';
     const plate = function (c) { return { plate_code: c, plate_name: 'whatever the page says' }; };
@@ -79,6 +85,11 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(A), plate(B)] }, owner);
     const row2 = (await pool.query('SELECT plates, total_par FROM course_collections WHERE id = $1', [id])).rows[0];
     check('plate 2 is added: total par 11 + 12', r.status === 200 && row2.plates.length === 2 && row2.total_par === 23, JSON.stringify(row2));
+
+    // the collection's stroke index and ratings: its six holes as one course (lengths 150 400 250 | 300 100 500: longest = hardest = 1)
+    const colRow = (await api('GET', '/api/collections/' + id)).json;
+    check('the collection has the stroke index of all six holes together (not 1-3 twice)', JSON.stringify(colRow.stroke_index) === JSON.stringify([5, 2, 4, 3, 6, 1]), JSON.stringify(colRow.stroke_index));
+    check('and a course rating and slope for the whole (par 23, 100 m short of 1800: 22.8; slope 110)', parseFloat(colRow.course_rating) === 22.8 && colRow.slope_rating === 110, colRow.course_rating + ' / ' + colRow.slope_rating);
 
     // rounds: Kim plays both plates in one go (round K1), Lo only the first (L1), Kim a second time on plate A only (K2)
     const post = function (course, who, score, collRound, plateIndex, extra) {
@@ -130,6 +141,188 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
 
     r = await api('GET', '/api/collections/NOSUCH/leaderboard');
     check('an unknown collection is a 404', r.status === 404);
+
+    // the handicap: a go through the whole collection is ONE differential, on the collection's rating (not one per plate)
+    const hcpUser = 'e2c-Hcp-' + tag, H1 = tag + '-H1', H2 = tag + '-H2';
+    r = await api('POST', '/api/collections', { name: 'Handicap', author: 'Test', type: '6', plates: [plate(H1), plate(H2)] }, owner);
+    const hid = r.json.id; madeCollections.push(hid);
+    const hRow = (await pool.query('SELECT course_rating::float AS cr, slope_rating AS sr FROM course_collections WHERE id = $1', [hid])).rows[0];
+    const hpost = function (course, score, round, plateIndex, retryId) {
+      return api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
+        stats: { collection_id: hid, collection_round_id: round, plate_index: plateIndex, round_id: retryId || (round + '-p' + plateIndex + '-0'), player_slot: 0 } }, hcpUser);
+    };
+    const diffs = async round => (await pool.query("SELECT course_code, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = $2 ORDER BY id", [hcpUser, round])).rows;
+    r = await hpost(H1, 14, 'hcpround01', 0);
+    let rows = await diffs('hcpround01');
+    check('plate 1 of a go has no differential of its own (it is not a round for the handicap)', rows.length === 1 && rows[0].d === null && r.json.handicap && r.json.handicap.differential === null, JSON.stringify(rows) + JSON.stringify(r.json.handicap));
+    r = await hpost(H2, 15, 'hcpround01', 1);
+    rows = await diffs('hcpround01');
+    const wantD = Math.round((113 / hRow.sr) * (29 - hRow.cr) * 10) / 10;
+    check('the last plate carries the differential of the whole go: 14 + 15 = 29 on the collection\'s rating', rows.length === 2 && rows[0].d === null && rows[1].d === wantD && r.json.handicap.differential === wantD, JSON.stringify(rows) + ' want ' + wantD);
+    await hpost(H2, 13, 'hcpround01', 1, 'hcpround01-p1-retry');
+    rows = await diffs('hcpround01');
+    const wantD2 = Math.round((113 / hRow.sr) * (27 - hRow.cr) * 10) / 10;
+    check('a plate sent again moves the differential to the newest record: still exactly one for the go (14 + 13 = 27)', rows.filter(x => x.d !== null).length === 1 && rows[rows.length - 1].d === wantD2, JSON.stringify(rows) + ' want ' + wantD2);
+    r = await api('POST', '/api/courses/' + H1 + '/results', { total_score: 14, score_vs_par: 2, hole_scores: [5, 5, 4], input_mode: 'SWING_METER', player_name: 'Hcp' }, hcpUser);
+    check('a round on a plate played on its own still gets its own differential (113/113 x (14 - 12) = 2.0)', r.json.handicap && r.json.handicap.differential === 2, JSON.stringify(r.json.handicap));
+
+    // several local players under one signed-in account: only the account holder (seat 0) gets a differential, a guest's go does not count for the handicap
+    const multiUser = 'e2c-Multi-' + tag;
+    for (const seat of [0, 1, 2]) {
+      for (const [course, score, pi] of [[H1, 14 + seat, 0], [H2, 15 + seat, 1]]) {
+        await api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Gast' + seat,
+          stats: { collection_id: hid, collection_round_id: 'multi01', plate_index: pi, round_id: 'multi01-p' + pi + '-' + seat, player_slot: seat } }, multiUser);
+      }
+    }
+    const multiRows = (await pool.query("SELECT stats->>'player_slot' AS seat, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'multi01' AND score_differential IS NOT NULL", [multiUser])).rows;
+    check('three local players on one account: only the account holder\'s go (seat 0) carries a differential, 14 + 15 = 29 on the collection\'s rating', multiRows.length === 1 && multiRows[0].seat === '0' && multiRows[0].d === Math.round((113 / hRow.sr) * (29 - hRow.cr) * 10) / 10, JSON.stringify(multiRows));
+
+    // a result on a course that is NOT in the collection, with the collection's stats on it, is no part of the go
+    const xpost = (course, score, retryId) => api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
+      stats: { collection_id: hid, collection_round_id: 'forge01', plate_index: 0, round_id: retryId, player_slot: 0 } }, hcpUser);
+    const X1 = tag + '-X1';
+    await xpost(X1, 13, 'forge01-px-0');
+    r = await xpost(H1, 14, 'forge01-p0-0');
+    let fr = (await pool.query("SELECT course_code, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'forge01' ORDER BY id", [hcpUser])).rows;
+    check('a result on another course with the collection\'s stats does not stand in for a plate: one real plate of two gives no differential, and the other course keeps its own (113/113 x (13 - 10) = 3)', r.json.handicap.differential === null && fr.length === 2 && fr[0].d === 3 && fr[1].d === null, JSON.stringify(fr));
+    r = await xpost(H2, 16, 'forge01-p1-0');
+    fr = (await pool.query("SELECT course_code, score_differential::float AS d FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'forge01' ORDER BY id", [hcpUser])).rows;
+    const wantF = Math.round((113 / hRow.sr) * (30 - hRow.cr) * 10) / 10;
+    check('with both real plates the go is 14 + 16 on the collection\'s rating, the other course is still left out and keeps its own differential', fr.length === 3 && fr[0].d === 3 && fr[1].d === null && fr[2].d === wantF && r.json.handicap.differential === wantF, JSON.stringify(fr) + ' want ' + wantF);
+
+    // a go whose finishing step did not happen (the request stopped after the record was stored): sending the plate again finishes it
+    await hpost(H1, 14, 'repair01', 0);
+    await hpost(H2, 15, 'repair01', 1);
+    const wantR = Math.round((113 / hRow.sr) * (29 - hRow.cr) * 10) / 10;
+    await pool.query("UPDATE course_records SET score_differential = NULL WHERE player_id = $1 AND stats->>'collection_round_id' = 'repair01'", [hcpUser]);
+    r = await hpost(H2, 15, 'repair01', 1);
+    rows = await diffs('repair01');
+    check('sending a plate again after its finishing step was lost repairs the go: answered as a duplicate, and the differential is back on the newest record', r.json.duplicate === true && rows.length === 2 && rows[0].d === null && rows[1].d === wantR, JSON.stringify(rows) + ' want ' + wantR + ' ' + JSON.stringify(r.json));
+
+    // a retry of a finished go, after its collection was renamed, does not rewrite what was captured when the go was completed
+    await pool.query("INSERT INTO users (id, display_name) VALUES ($1, 'E2C Hcp') ON CONFLICT (id) DO NOTHING", [hcpUser]);
+    await pool.query("UPDATE course_collections SET name = 'Omdopt' WHERE id = $1", [hid]);
+    r = await hpost(H2, 15, 'repair01', 1);
+    const keptRows = await diffs('repair01');
+    const keptHist = (await api('GET', '/api/users/' + hcpUser + '/handicap')).json.recent_rounds || [];
+    const keptRow = keptHist.find(x => x.collection_id === hid && parseFloat(x.score_differential) === wantR);
+    await pool.query("UPDATE course_collections SET name = 'Handicap' WHERE id = $1", [hid]);
+    check('a retry of a finished go after the collection was renamed leaves the go as it was captured (the old name, the same differential)', r.json.duplicate === true && keptRows.filter(x => x.d !== null).length === 1 && !!keptRow && keptRow.collection_name === 'Handicap', JSON.stringify(keptRow));
+
+    // the handicap history shows a go through a collection as one round: all its plates' strokes, the collection, and the differential for them
+    await pool.query("INSERT INTO users (id, display_name) VALUES ($1, 'E2C Hcp') ON CONFLICT (id) DO NOTHING", [hcpUser]);
+    let hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
+    const histRow = (hist.json.recent_rounds || []).find(x => x.collection_id === hid && parseFloat(x.score_differential) === wantR);
+    check('the handicap history shows a collection round as one round: 14 + 15 = 29 strokes, the collection\'s name and no single plate, next to the differential worked out from 29', !!histRow && histRow.total_score === 29 && histRow.score_vs_par === (14 - 12) + (15 - 12) && histRow.course_code === null && histRow.collection_name === 'Handicap', JSON.stringify(hist.json.recent_rounds));
+    const plainRow = (hist.json.recent_rounds || []).find(x => x.course_code === H1 && x.collection_id === undefined);
+    check('and a round on a plate played on its own is shown as it was (its own strokes and course)', !!plainRow && plainRow.total_score === 14 && parseFloat(plainRow.score_differential) === 2, JSON.stringify(plainRow));
+
+    // a result on another course that only CLAIMS to belong to a go is an ordinary row: it is not the record that carries the go
+    const forgedRow = (hist.json.recent_rounds || []).find(x => x.course_code === X1);
+    check('a result on another course with the collection\'s stats stays an ordinary row in the history (its own course and strokes and its own differential)', !!forgedRow && forgedRow.total_score === 13 && forgedRow.collection_id === undefined && parseFloat(forgedRow.score_differential) === 3, JSON.stringify(forgedRow));
+
+    // the plates of a collection are changed after a go: the go is shown as it was
+    r = await api('POST', '/api/collections', { name: 'Byte', author: 'Test', type: '6', plates: [plate(H1), plate(H2)] }, owner);
+    const swapId = r.json.id; madeCollections.push(swapId);
+    for (const [course, score, pi] of [[H1, 14, 0], [H2, 15, 1]]) {
+      await api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
+        stats: { collection_id: swapId, collection_round_id: 'swap01', plate_index: pi, round_id: 'swap01-p' + pi + '-0', player_slot: 0 } }, hcpUser);
+    }
+    await api('POST', '/api/collections', { id: swapId, name: 'Byte', author: 'Test', type: '6', plates: [plate(H1)] }, owner);
+    hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
+    const swapRow = (hist.json.recent_rounds || []).find(x => x.collection_id === swapId);
+    check('a go is still shown whole after its collection has had its plates changed (29 strokes, as played)', !!swapRow && swapRow.total_score === 29 && swapRow.score_vs_par === 5 && swapRow.course_code === null, JSON.stringify(swapRow));
+
+    // the snapshot is the server's: one sent in by a client is dropped
+    r = await api('POST', '/api/courses/' + H1 + '/results', { total_score: 15, score_vs_par: 3, hole_scores: [5, 5, 5], input_mode: 'SWING_METER', player_name: 'Hcp', stats: { collection_go: { total_score: 999, score_vs_par: 99, collection_id: 'FAKE', collection_name: 'Fake' } } }, hcpUser);
+    const sent = (await pool.query("SELECT stats FROM course_records WHERE id = $1", [r.json.record_id])).rows[0];
+    hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
+    check('a snapshot of a collection round sent in by a client is dropped: nothing stored, and the history shows the plain round', sent.stats.collection_go === undefined && !(hist.json.recent_rounds || []).some(x => x.total_score === 999 || x.collection_id === 'FAKE'), JSON.stringify(sent.stats));
+
+    // a collection from before ratings existed (none stored): they are worked out when needed, so its go still counts for the handicap
+    const oldId = 'O' + tag.slice(-5).replace('-', 'X');
+    await pool.query("INSERT INTO course_collections (id, name, author, type, plates, owner_id) VALUES ($1, 'Fore betyg', 'Test', '6', $2::jsonb, $3)", [oldId, JSON.stringify([plate(H1), plate(H2)]), owner]);
+    madeCollections.push(oldId);
+    const oldCol = (await api('GET', '/api/collections/' + oldId)).json;
+    check('a collection saved before ratings existed gets its stroke index and ratings when it is read', Array.isArray(oldCol.stroke_index) && oldCol.stroke_index.length === 6 && parseFloat(oldCol.course_rating) === 24, JSON.stringify([oldCol.stroke_index, oldCol.course_rating]));
+    await pool.query('UPDATE course_collections SET course_rating = NULL, slope_rating = NULL, stroke_index = NULL WHERE id = $1', [oldId]);
+    const opost = (course, score, plateIndex) => api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
+      stats: { collection_id: oldId, collection_round_id: 'oldround01', plate_index: plateIndex, round_id: 'oldround01-p' + plateIndex + '-0', player_slot: 0 } }, hcpUser);
+    await opost(H1, 14, 0); r = await opost(H2, 15, 1);
+    const wantO = Math.round((113 / 113) * (29 - 24) * 10) / 10;
+    check('and a go through it, played before the ratings were stored, still gets its differential (the ratings are worked out when the result comes in)', r.json.handicap.differential === wantO, JSON.stringify(r.json.handicap) + ' want ' + wantO);
+
+    // a deleted collection: its rounds are still whole in the handicap history
+    await pool.query('DELETE FROM course_collections WHERE id = $1', [oldId]);
+    hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
+    const goneRow = (hist.json.recent_rounds || []).find(x => x.collection_id === oldId);
+    check('a round through a collection that has since been deleted is still shown whole, as it was (29 strokes, no single plate, the collection\'s name)', !!goneRow && goneRow.total_score === 29 && goneRow.course_code === null && goneRow.collection_name === 'Fore betyg' && parseFloat(goneRow.score_differential) === wantO, JSON.stringify(goneRow));
+
+    // a partly built collection (one plate of the two its type has room for) can be played, but its go is no round for the handicap
+    r = await api('POST', '/api/collections', { name: 'Halv', author: 'Test', type: '6', plates: [plate(H1)] }, owner);
+    const incId = r.json.id; madeCollections.push(incId);
+    r = await api('POST', '/api/courses/' + H1 + '/results', { total_score: 14, score_vs_par: 2, hole_scores: [5, 5, 4], input_mode: 'SWING_METER', player_name: 'Hcp',
+      stats: { collection_id: incId, collection_round_id: 'incround01', plate_index: 0, round_id: 'incround01-p0-0', player_slot: 0 } }, hcpUser);
+    const incRows = (await pool.query("SELECT score_differential FROM course_records WHERE player_id = $1 AND stats->>'collection_round_id' = 'incround01'", [hcpUser])).rows;
+    check('the only plate of a collection with room for two gives no differential (a 3-hole result must not count as a collection round)', r.json.success && incRows.length === 1 && incRows[0].score_differential === null && r.json.handicap.differential === null, JSON.stringify(incRows) + JSON.stringify(r.json.handicap));
+
+    // an old collection row lists its plates as bare codes (any case): a plate saved again refreshes it too
+    const legacyId = 'L' + tag.slice(-5).replace('-', 'X');
+    await pool.query("INSERT INTO course_collections (id, name, author, type, plates, owner_id) VALUES ($1, 'Gammal', 'Test', '6', $2::jsonb, $3)", [legacyId, JSON.stringify([(tag + '-L1').toLowerCase()]), owner]);
+    madeCollections.push(legacyId);
+    r = await api('POST', '/api/courses', { edit_code: tag + '-L1', name: 'Platta L1', author: 't', holes: JSON.parse(holesOf([100, 300, 200])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    const legacyRow = (await pool.query('SELECT stroke_index, course_rating::float AS cr FROM course_collections WHERE id = $1', [legacyId])).rows[0];
+    check('a collection that lists its plates as bare codes is refreshed when a plate is saved again (lengths 100 300 200 + padding)', r.status === 200 && JSON.stringify(legacyRow.stroke_index.slice(0, 3)) === JSON.stringify([3, 1, 2]) && legacyRow.cr !== null, JSON.stringify(legacyRow));
+
+    // a collection that cannot be brought up to date takes the publish back too (and a malformed collection row does not block publishing)
+    r = await api('POST', '/api/collections', { name: 'Fast', author: 'Test', type: '6', plates: [plate(tag + '-F1')] }, owner);
+    madeCollections.push(r.json.id);
+    await pool.query("INSERT INTO course_collections (id, name, author, type, plates, owner_id) VALUES ($1, 'Trasig', 'Test', '6', '{\"inte\": \"en lista\"}'::jsonb, $2)", ['B' + tag.slice(-5).replace('-', 'X'), owner]);
+    madeCollections.push('B' + tag.slice(-5).replace('-', 'X'));
+    await pool.query('ALTER TABLE course_collections ADD CONSTRAINT e2c_block CHECK (course_rating IS NULL OR course_rating < 0) NOT VALID');
+    const beforeF = (await pool.query('SELECT name, version FROM courses WHERE share_code = $1', [tag + '-F1'])).rows[0];
+    r = await api('POST', '/api/courses', { edit_code: tag + '-F1', name: 'Ny F1', author: 't', holes: JSON.parse(holesOf([100, 300, 200])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    const afterF = (await pool.query('SELECT name, version FROM courses WHERE share_code = $1', [tag + '-F1'])).rows[0];
+    check('when its collections cannot be brought up to date the publish fails and changes nothing (not a success with stale collections)', r.status === 500 && afterF.name === beforeF.name && afterF.version === beforeF.version, r.status + ' ' + JSON.stringify([beforeF, afterF]));
+    await pool.query('ALTER TABLE course_collections DROP CONSTRAINT e2c_block');
+    r = await api('POST', '/api/courses', { edit_code: tag + '-F1', name: 'Ny F1', author: 't', holes: JSON.parse(holesOf([100, 300, 200])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    const fRow = (await pool.query("SELECT stroke_index FROM course_collections WHERE plates @> $1::jsonb", [JSON.stringify([{ plate_code: tag + '-F1' }])])).rows[0];
+    check('and the same publish goes through once it can: the plate and its collection are updated together (a malformed collection row is ignored)', r.status === 200 && fRow && JSON.stringify(fRow.stroke_index.slice(0, 3)) === JSON.stringify([3, 1, 2]), r.status + ' ' + JSON.stringify(fRow));
+
+    // a collection saved while one of its plates is being published again: the save waits for the publish and reads the plate's NEW holes
+    // (the publish is held open here by a lock on the plate's row, as a slow publish would hold it)
+    const lockPlate = tag + '-F1';
+    const holder = await pool.connect();
+    await holder.query('BEGIN');
+    await holder.query('SELECT 1 FROM courses WHERE share_code = $1 FOR UPDATE', [lockPlate]);
+    const racing = api('POST', '/api/collections', { name: 'Kapplopning', author: 'Test', type: '6', plates: [plate(lockPlate)] }, owner);
+    await wait(900);   // the save is now waiting for the lock: it has not read the old holes
+    await holder.query('UPDATE courses SET holes = $2::jsonb WHERE share_code = $1', [lockPlate, holesOf([500, 100, 300])]);
+    await holder.query('COMMIT'); holder.release();
+    const raced = await racing;
+    if (raced.json.id) madeCollections.push(raced.json.id);
+    const racedRow = (await pool.query('SELECT stroke_index FROM course_collections WHERE id = $1', [raced.json.id])).rows[0];
+    check('a collection saved while a plate is being published gets the new holes of the plate, not the old (500 100 300 => 1 3 2)', raced.status === 200 && racedRow && JSON.stringify(racedRow.stroke_index.slice(0, 3)) === JSON.stringify([1, 3, 2]), JSON.stringify(raced) + JSON.stringify(racedRow));
+
+    // two plates of one collection published at the same moment take turns: the second reads the first one's new holes (the collection's row is locked
+    // first; here another publish is held in its refresh by a lock on the collection's row, and commits its plate while ours waits)
+    r = await api('POST', '/api/collections', { name: 'Tva samtidigt', author: 'Test', type: '6', plates: [plate(tag + '-Z1'), plate(tag + '-Z2')] }, owner);
+    const zId = r.json.id; madeCollections.push(zId);
+    const zHolder = await pool.connect();
+    await zHolder.query('BEGIN');
+    await zHolder.query('SELECT 1 FROM course_collections WHERE id = $1 FOR UPDATE', [zId]);
+    const zPublish = api('POST', '/api/courses', { edit_code: tag + '-Z2', name: 'Platta Z2', author: 't', holes: JSON.parse(holesOf([200, 400, 600])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    await wait(900);   // Z2 is stored (not yet committed) and its refresh waits for the collection's lock
+    await zHolder.query('UPDATE courses SET holes = $2::jsonb WHERE share_code = $1', [tag + '-Z1', holesOf([500, 100, 300])]);
+    await zHolder.query('COMMIT'); zHolder.release();
+    r = await zPublish;
+    const zRow = (await pool.query('SELECT stroke_index FROM course_collections WHERE id = $1', [zId])).rows[0];
+    check('two plates of a collection published at the same moment: the collection ends with the new holes of both (500 100 300 | 200 400 600 => 2 6 4 5 3 1), not a mix', r.status === 200 && JSON.stringify(zRow.stroke_index) === JSON.stringify([2, 6, 4, 5, 3, 1]), r.status + ' ' + JSON.stringify(zRow));
+
+    // a plate saved again: the collections it is in get their stroke index and ratings from the plates as they are now (B: 600 100 100)
+    r = await api('POST', '/api/courses', { edit_code: B, name: 'Platta B', author: 't', holes: JSON.parse(holesOf([600, 100, 100])), is_draft: false, hole_count: 3, total_par: 12 }, owner);
+    const colAfter = (await api('GET', '/api/collections/' + id)).json;
+    check('when plate B is published again the collection\'s stroke index follows (lengths 150 400 250 | 600 100 100)', r.status === 200 && JSON.stringify(colAfter.stroke_index) === JSON.stringify([4, 2, 3, 1, 5, 6]), r.status + ' ' + JSON.stringify(colAfter.stroke_index) + JSON.stringify(r.json));
 
     // a collection with another type: 9 holes, three plates
     r = await api('POST', '/api/collections', { name: 'Nian', author: 'Test', type: '9', plates: [plate(A), plate(B), plate(C)] }, owner);
