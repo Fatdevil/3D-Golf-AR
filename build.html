@@ -1115,8 +1115,12 @@
         return plates.slice();
     }
 
+    // one edit at a time: a second click before the first is saved and reloaded would start from the old list
+    let _savingPlates = false;
+
     // the whole list goes to the server, which checks it again and works out the total par and the ratings
     async function savePlates(col, plates, failText) {
+        _savingPlates = true;
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');
             let saved = await fetch(API_BASE + '/api/collections', {
@@ -1127,6 +1131,7 @@
                     name: col.name,
                     author: col.author,
                     type: col.type,
+                    cover_image: col.cover_image,   // the save writes what it is sent: leave it out and the cover is cleared
                     plates: plates
                 })
             });
@@ -1138,13 +1143,13 @@
         } catch(e) {
             alert(failText + '.');
         }
-        loadCollections();
+        try { await loadCollections(); } finally { _savingPlates = false; }
     }
 
     async function assignPlate(plateCode, plateName) {
         closePlatePicker();
         let col = _myCollections.find(c => c.id === _pickerCollectionId);
-        if (!col) return;
+        if (!col || _savingPlates) return;
         let plates = platesOf(col);
         plates.push({ plate_code: plateCode, plate_name: plateName });
         await savePlates(col, plates, 'Kunde inte lägga till plattan');
@@ -1153,7 +1158,7 @@
     // plate n of the collection holds holes 3n+1..3n+3, so moving one renumbers the holes (rounds already played are kept, they count by plate)
     async function movePlate(collectionId, index, step) {
         let col = _myCollections.find(c => c.id === collectionId);
-        if (!col) return;
+        if (!col || _savingPlates) return;
         let plates = platesOf(col), to = index + step;
         if (to < 0 || to >= plates.length) return;
         let moved = plates.splice(index, 1)[0];
@@ -1163,7 +1168,7 @@
 
     async function removePlate(collectionId, index) {
         let col = _myCollections.find(c => c.id === collectionId);
-        if (!col) return;
+        if (!col || _savingPlates) return;
         let plates = platesOf(col);
         if (index < 0 || index >= plates.length) return;
         if (!confirm('Ta bort platta ' + (index + 1) + ' från samlingen? Själva banan raderas inte. Hålen efter den får nya nummer.')) return;
