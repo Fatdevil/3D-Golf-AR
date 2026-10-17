@@ -195,6 +195,28 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const plainRow = (hist.json.recent_rounds || []).find(x => x.course_code === H1 && x.collection_id === undefined);
     check('and a round on a plate played on its own is shown as it was (its own strokes and course)', !!plainRow && plainRow.total_score === 14 && parseFloat(plainRow.score_differential) === 2, JSON.stringify(plainRow));
 
+    // a result on another course that only CLAIMS to belong to a go is an ordinary row: it is not the record that carries the go
+    const forgedRow = (hist.json.recent_rounds || []).find(x => x.course_code === X1);
+    check('a result on another course with the collection\'s stats stays an ordinary row in the history (its own course and strokes and its own differential)', !!forgedRow && forgedRow.total_score === 13 && forgedRow.collection_id === undefined && parseFloat(forgedRow.score_differential) === 3, JSON.stringify(forgedRow));
+
+    // the plates of a collection are changed after a go: the go is shown as it was
+    r = await api('POST', '/api/collections', { name: 'Byte', author: 'Test', type: '6', plates: [plate(H1), plate(H2)] }, owner);
+    const swapId = r.json.id; madeCollections.push(swapId);
+    for (const [course, score, pi] of [[H1, 14, 0], [H2, 15, 1]]) {
+      await api('POST', '/api/courses/' + course + '/results', { total_score: score, score_vs_par: score - 12, hole_scores: [score / 3, score / 3, score / 3], input_mode: 'SWING_METER', player_name: 'Hcp',
+        stats: { collection_id: swapId, collection_round_id: 'swap01', plate_index: pi, round_id: 'swap01-p' + pi + '-0', player_slot: 0 } }, hcpUser);
+    }
+    await api('POST', '/api/collections', { id: swapId, name: 'Byte', author: 'Test', type: '6', plates: [plate(H1)] }, owner);
+    hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
+    const swapRow = (hist.json.recent_rounds || []).find(x => x.collection_id === swapId);
+    check('a go is still shown whole after its collection has had its plates changed (29 strokes, as played)', !!swapRow && swapRow.total_score === 29 && swapRow.score_vs_par === 5 && swapRow.course_code === null, JSON.stringify(swapRow));
+
+    // the snapshot is the server's: one sent in by a client is dropped
+    r = await api('POST', '/api/courses/' + H1 + '/results', { total_score: 15, score_vs_par: 3, hole_scores: [5, 5, 5], input_mode: 'SWING_METER', player_name: 'Hcp', stats: { collection_go: { total_score: 999, score_vs_par: 99, collection_id: 'FAKE', collection_name: 'Fake' } } }, hcpUser);
+    const sent = (await pool.query("SELECT stats FROM course_records WHERE id = $1", [r.json.record_id])).rows[0];
+    hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
+    check('a snapshot of a collection round sent in by a client is dropped: nothing stored, and the history shows the plain round', sent.stats.collection_go === undefined && !(hist.json.recent_rounds || []).some(x => x.total_score === 999 || x.collection_id === 'FAKE'), JSON.stringify(sent.stats));
+
     // a collection from before ratings existed (none stored): they are worked out when needed, so its go still counts for the handicap
     const oldId = 'O' + tag.slice(-5).replace('-', 'X');
     await pool.query("INSERT INTO course_collections (id, name, author, type, plates, owner_id) VALUES ($1, 'Fore betyg', 'Test', '6', $2::jsonb, $3)", [oldId, JSON.stringify([plate(H1), plate(H2)]), owner]);
@@ -212,7 +234,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await pool.query('DELETE FROM course_collections WHERE id = $1', [oldId]);
     hist = await api('GET', '/api/users/' + hcpUser + '/handicap');
     const goneRow = (hist.json.recent_rounds || []).find(x => x.collection_id === oldId);
-    check('a round through a collection that has since been deleted is still shown whole (29 strokes, no single plate), without a collection name', !!goneRow && goneRow.total_score === 29 && goneRow.course_code === null && goneRow.collection_name === null && parseFloat(goneRow.score_differential) === wantO, JSON.stringify(goneRow));
+    check('a round through a collection that has since been deleted is still shown whole, as it was (29 strokes, no single plate, the collection\'s name)', !!goneRow && goneRow.total_score === 29 && goneRow.course_code === null && goneRow.collection_name === 'Fore betyg' && parseFloat(goneRow.score_differential) === wantO, JSON.stringify(goneRow));
 
     // a partly built collection (one plate of the two its type has room for) can be played, but its go is no round for the handicap
     r = await api('POST', '/api/collections', { name: 'Halv', author: 'Test', type: '6', plates: [plate(H1)] }, owner);
