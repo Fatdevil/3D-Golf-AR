@@ -1190,6 +1190,7 @@
         sessionStorage.removeItem('collection_scores_' + collectionId);
         sessionStorage.removeItem('collection_round_' + collectionId);
         sessionStorage.removeItem('collection_roster_' + collectionId);
+        sessionStorage.removeItem('collection_plates_' + collectionId);
         
         let firstPlate = plates[0];
         let firstCode = typeof firstPlate === 'string' ? firstPlate : firstPlate.plate_code;

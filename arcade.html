@@ -7942,7 +7942,7 @@
 <script>
 
 </script>
-<script src="arcade-load.js?v=7"></script>
+<script src="arcade-load.js?v=9"></script>
 <script>
     
     let isFlying = false;
@@ -8680,7 +8680,7 @@
             submitRoundResult();
             
             // Clean up collection session
-            if (col) { sessionStorage.removeItem('collection_scores_' + col.id); sessionStorage.removeItem('collection_round_' + col.id); sessionStorage.removeItem('collection_roster_' + col.id); }
+            if (col) { sessionStorage.removeItem('collection_scores_' + col.id); sessionStorage.removeItem('collection_round_' + col.id); sessionStorage.removeItem('collection_roster_' + col.id); sessionStorage.removeItem('collection_plates_' + col.id); }
             return;
         }
         
