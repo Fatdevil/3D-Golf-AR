@@ -546,7 +546,7 @@
                 const chip = document.getElementById('lie-chip');
                 if (isFlying) { if (lieKey) { lieKey = ''; chip.classList.remove('active'); } return; }
                 const pl = window.GolfEngine.getActivePlayer();
-                const tee = !pl || pl.strokes + pl.penaltyStrokes === 0;
+                const tee = !pl || pl.strokes === 0;   // the shot below is a tee shot when this is the first stroke
                 const type = tee ? 'TEE' : window._terrainTypeAt(ball.position.x, -ball.position.z);
                 const key = type + '|' + ball.position.x.toFixed(1) + '|' + ball.position.z.toFixed(1);
                 if (key === lieKey) return;
@@ -917,6 +917,8 @@
                 shooter.strokes++;
                 shooter.prevLie = { x: ball.position.x, z: ball.position.z };
                 updateUI();
+                // the first stroke of a hole is off the tee: the physics takes the lie as fairway whatever is painted under it (the lie box says so)
+                physicsData.isTeeShot = shooter.strokes === 1;
                 document.getElementById('swing-overlay').classList.remove('active');
                 
                 // The shot goes along the camera's view direction. OrbitControls' azimuth is where the camera sits around the ball

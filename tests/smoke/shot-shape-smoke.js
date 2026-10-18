@@ -228,6 +228,14 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       return out;
     });
     check('mobile: after the first shot, in sand, the box shows SAND and the physics\' own figures (' + lieSand.want.power + ' power, ' + lieSand.want.spin + ' spin)', lieSand.name === 'SAND' && lieSand.fx === 'Kraft ' + lieSand.want.power + ' · Spinn ' + lieSand.want.spin, JSON.stringify(lieSand));
+    const teeFlag = await page.evaluate(function () {
+      const seen = []; const orig = window.GolfPhysics.simulateFlight;
+      window.GolfPhysics.simulateFlight = function (input, env) { seen.push(input.isTeeShot); return orig.call(this, input, env); };
+      const p = window.GolfEngine.getActivePlayer(); const was = p.strokes;
+      p.strokes = 0; window.triggerRealShot({ ballSpeedMph: 60, launchAngleDeg: 15, totalSpinRpm: 3000, spinAxisDeg: 0, azimDeg: 0, isLiveData: false });
+      return new Promise(function (r) { setTimeout(function () { window.GolfPhysics.simulateFlight = orig; r(seen); }, 300); });
+    });
+    check('mobile: the first stroke of the hole goes to the physics as a tee shot (so the box saying TEE / 100% is true even on painted rough)', teeFlag.length >= 1 && teeFlag[0] === true, JSON.stringify(teeFlag));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
