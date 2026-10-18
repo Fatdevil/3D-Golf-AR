@@ -252,6 +252,20 @@
             border: 1px solid rgba(16, 185, 129, 0.2);
             color: #6ee7b7;
         }
+        .col-plate-slot .slot-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .col-plate-slot .slot-btn {
+            flex: 0 0 auto;
+            width: 28px; height: 28px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(15, 23, 42, 0.6);
+            color: #cbd5e1;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+        }
+        .col-plate-slot .slot-btn:hover:not(:disabled) { border-color: rgba(56, 189, 248, 0.5); color: #fff; }
+        .col-plate-slot .slot-btn:disabled { opacity: 0.3; cursor: default; }
         .col-plate-slot.empty {
             background: rgba(255, 255, 255, 0.03);
             border: 1px dashed rgba(255, 255, 255, 0.1);
@@ -995,6 +1009,12 @@
         }
     }
 
+    function escHtml(v) {
+        return String(v === undefined || v === null ? '' : v).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
     function renderCollections() {
         let section = document.getElementById('collections-section');
         let carousel = document.getElementById('collections-carousel');
@@ -1018,7 +1038,10 @@
                 if (i < plates.length) {
                     let p = plates[i];
                     let pName = typeof p === 'string' ? p : (p.plate_name || p.plate_code);
-                    slotsHtml += `<div class="col-plate-slot filled">✅ Platta ${i + 1}: ${pName}</div>`;
+                    slotsHtml += `<div class="col-plate-slot filled"><span class="slot-name">✅ Platta ${i + 1}: ${escHtml(pName)}</span>
+                        <button class="slot-btn" title="Flytta upp" aria-label="Flytta platta ${i + 1} upp" ${i === 0 ? 'disabled' : ''} onclick="movePlate('${col.id}', ${i}, -1)">↑</button>
+                        <button class="slot-btn" title="Flytta ner" aria-label="Flytta platta ${i + 1} ner" ${i === plates.length - 1 ? 'disabled' : ''} onclick="movePlate('${col.id}', ${i}, 1)">↓</button>
+                        <button class="slot-btn" title="Ta bort plattan" aria-label="Ta bort platta ${i + 1}" onclick="removePlate('${col.id}', ${i})">✕</button></div>`;
                 } else {
                     slotsHtml += `<div class="col-plate-slot empty" onclick="openPlatePicker('${col.id}', ${i})">+ Lägg till platta ${i + 1}</div>`;
                 }
@@ -1027,7 +1050,7 @@
             html += `
             <div class="col-card">
                 <div class="col-header">
-                    <div class="col-name">${col.name}</div>
+                    <div class="col-name">${escHtml(col.name)}</div>
                     <div class="col-type-badge">${col.type}H</div>
                 </div>
                 <div class="col-plates">${slotsHtml}</div>
@@ -1086,18 +1109,21 @@
         document.getElementById('plate-picker-overlay').classList.remove('active');
     }
 
-    async function assignPlate(plateCode, plateName) {
-        closePlatePicker();
-        let col = _myCollections.find(c => c.id === _pickerCollectionId);
-        if (!col) return;
-        
+    function platesOf(col) {
         let plates = col.plates || [];
         if (typeof plates === 'string') plates = JSON.parse(plates);
-        plates.push({ plate_code: plateCode, plate_name: plateName });
+        return plates.slice();
+    }
 
+    // one edit at a time: a second click before the first is saved and reloaded would start from the old list
+    let _savingPlates = false;
+
+    // the whole list goes to the server, which checks it again and works out the total par and the ratings
+    async function savePlates(col, plates, failText) {
+        _savingPlates = true;
+        document.querySelectorAll('.col-play-btn, .col-del-btn').forEach(function (b) { b.disabled = true; });   // Play would start from the old list, a delete would meet the save half way
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');
-            // the server checks the plates and works out the total par itself
             let saved = await fetch(API_BASE + '/api/collections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-user-id': deviceId },
@@ -1106,25 +1132,58 @@
                     name: col.name,
                     author: col.author,
                     type: col.type,
+                    expect_existing: true,   // saving the edit of a collection that has been deleted meanwhile is refused, not created again
+                    cover_image: col.cover_image,   // the save writes what it is sent: leave it out and the cover is cleared
                     plates: plates
                 })
             });
-            if (!saved.ok) {
+            if (saved.ok) {
+                col.plates = plates;   // kept even if the reload below fails, so the next edit starts from what was saved
+            } else {
                 let why = '';
                 try { why = (await saved.json()).error || ''; } catch (e) {}
-                alert('Kunde inte lägga till plattan' + (why ? ': ' + why : '.'));
+                alert(failText + (why ? ': ' + why : '.'));
             }
-            loadCollections();
         } catch(e) {
-            alert('Kunde inte spara plattan.');
+            alert(failText + '.');
         }
+        try { await loadCollections(); } finally { _savingPlates = false; renderCollections(); }
+    }
+
+    async function assignPlate(plateCode, plateName) {
+        closePlatePicker();
+        let col = _myCollections.find(c => c.id === _pickerCollectionId);
+        if (!col || _savingPlates) return;
+        let plates = platesOf(col);
+        plates.push({ plate_code: plateCode, plate_name: plateName });
+        await savePlates(col, plates, 'Kunde inte lägga till plattan');
+    }
+
+    // plate n of the collection holds holes 3n+1..3n+3, so moving one renumbers the holes (rounds already played are kept, they count by plate)
+    async function movePlate(collectionId, index, step) {
+        let col = _myCollections.find(c => c.id === collectionId);
+        if (!col || _savingPlates) return;
+        let plates = platesOf(col), to = index + step;
+        if (to < 0 || to >= plates.length) return;
+        let moved = plates.splice(index, 1)[0];
+        plates.splice(to, 0, moved);
+        await savePlates(col, plates, 'Kunde inte flytta plattan');
+    }
+
+    async function removePlate(collectionId, index) {
+        let col = _myCollections.find(c => c.id === collectionId);
+        if (!col || _savingPlates) return;
+        let plates = platesOf(col);
+        if (index < 0 || index >= plates.length) return;
+        if (!confirm('Ta bort platta ' + (index + 1) + ' från samlingen? Själva banan raderas inte. Hålen efter den får nya nummer.')) return;
+        plates.splice(index, 1);
+        await savePlates(col, plates, 'Kunde inte ta bort plattan');
     }
 
     function playCollection(collectionId) {
         let col = _myCollections.find(c => c.id === collectionId);
-        if (!col) return;
-        let plates = col.plates || [];
-        if (typeof plates === 'string') plates = JSON.parse(plates);
+        if (!col || _savingPlates) return;
+        let plates = platesOf(col);
         if (plates.length === 0) return;
         
         // Clear any previous collection scores
@@ -1138,6 +1197,7 @@
     }
 
     async function deleteCollection(collectionId) {
+        if (_savingPlates) return;
         if (!confirm('Radera denna collection? Plattorna raderas INTE.')) return;
         try {
             let deviceId = localStorage.getItem('golf_os_device_id');

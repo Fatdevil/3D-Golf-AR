@@ -139,6 +139,30 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('GET', '/api/collections/' + id + '/leaderboard');
     check('a round on the current versions of both plates counts again (Lo 8 + 9 = 17), and only that', (r.json.leaderboard || []).length === 1 && r.json.leaderboard[0].player_name === 'Lo' && r.json.leaderboard[0].total_score === 17, JSON.stringify(r.json));
 
+    // editing the plates (the build page moves and removes them by saving the whole list): rounds count by plate, not by place
+    const siBefore = (await api('GET', '/api/collections/' + id)).json.stroke_index;
+    r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(B), plate(A)] }, owner);
+    const swapped = (await api('GET', '/api/collections/' + id)).json;
+    r = await api('GET', '/api/collections/' + id + '/leaderboard');
+    check('plates swapped: the order and the six-hole stroke index follow, the total par stays, and Lo\'s round (8 + 9 = 17) still counts',
+      swapped.plates[0].plate_code === B && swapped.plates[1].plate_code === A && JSON.stringify(swapped.stroke_index) !== JSON.stringify(siBefore) && swapped.total_par === 23 && (r.json.leaderboard || []).length === 1 && r.json.leaderboard[0].total_score === 17, JSON.stringify([swapped.plates, swapped.stroke_index, siBefore, r.json]));
+    r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(B)] }, owner);
+    const cut = (await api('GET', '/api/collections/' + id)).json;
+    r = await api('GET', '/api/collections/' + id + '/leaderboard');
+    check('a plate removed: the collection is short again (one plate, par of that plate) and has no results until it is filled',
+      cut.plates.length === 1 && cut.total_par === 12 && (r.json.leaderboard || []).length === 0 && r.json.needed === 2, JSON.stringify([cut.plates, cut.total_par, r.json]));
+    r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(B), plate(A)] }, owner);
+    r = await api('GET', '/api/collections/' + id + '/leaderboard');
+    check('and when the plate is back, the round on both plates counts again', (r.json.leaderboard || []).length === 1 && r.json.leaderboard[0].total_score === 17, JSON.stringify(r.json));
+    // put it back as it was for the rest
+    await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(A), plate(B)] }, owner);
+
+    const gone = await api('POST', '/api/collections', { name: 'Borta', author: 'Test', type: '6', plates: [] }, owner);
+    await api('DELETE', '/api/collections/' + gone.json.id, undefined, owner);
+    const before = (await pool.query('SELECT COUNT(*)::int AS n FROM course_collections')).rows[0].n;
+    r = await api('POST', '/api/collections', { id: gone.json.id, expect_existing: true, name: 'Borta', author: 'Test', type: '6', plates: [plate(A)] }, owner);
+    check('saving the edit of a collection that was deleted meanwhile is refused (404) and does not create it again', r.status === 404 && (await pool.query('SELECT COUNT(*)::int AS n FROM course_collections')).rows[0].n === before, JSON.stringify(r));
+
     r = await api('GET', '/api/collections/NOSUCH/leaderboard');
     check('an unknown collection is a 404', r.status === 404);
 
