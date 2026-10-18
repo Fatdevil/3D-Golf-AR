@@ -50,6 +50,11 @@
         #swing-ui-container { height: 60px; position: relative; background: rgba(0,0,0,0.5); border-radius: 30px; border: 2px solid rgba(255,255,255,0.2); overflow: hidden; display: flex; justify-content: center; align-items: center; }
         
         /* whose turn it is: a short banner at the top, above the popups */
+        /* the lie under the ball and what it takes from the shot (read from the physics, as on the big screen) */
+        #lie-chip { position: absolute; top: 80px; right: 15px; display: none; flex-direction: column; align-items: flex-end; gap: 2px; z-index: 50; padding: 6px 12px; border-radius: 10px; background: rgba(15,23,42,0.78); border: 1px solid rgba(255,255,255,0.15); text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: none; font-family: 'Outfit', sans-serif; }
+        #lie-chip.active { display: flex; }
+        #lie-chip .lie-name { color: #fff; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+        #lie-chip .lie-fx { font-size: 12px; font-weight: 700; }
         #turn-toast { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); z-index: 200; padding: 10px 22px; border-radius: 999px; background: rgba(15,23,42,0.92); border: 2px solid var(--primary); color: #fff; font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
         #turn-toast.show { opacity: 1; }
         .sc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
@@ -139,6 +144,7 @@
             </div>
         </div>
 
+        <div id="lie-chip" aria-live="polite"><span class="lie-name" id="lie-name">-</span><span class="lie-fx" id="lie-fx"></span></div>
         <div id="turn-toast" role="status" aria-live="polite"></div>
         <div class="top-bar">
             <div class="hole-info" onclick="window.showScorecard && showScorecard()">
@@ -533,9 +539,30 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
 
+            // What the ground under the ball does to the next shot. The texts come from the physics (GolfPhysics.lieEffectText), which applies the
+            // same factors to the shot; the first shot of a hole is off the tee (no penalty), as on the big screen.
+            let lieKey = '';
+            function updateLieChip() {
+                const chip = document.getElementById('lie-chip');
+                if (isFlying) { if (lieKey) { lieKey = ''; chip.classList.remove('active'); } return; }
+                const pl = window.GolfEngine.getActivePlayer();
+                const tee = !pl || pl.strokes + pl.penaltyStrokes === 0;
+                const type = tee ? 'TEE' : window._terrainTypeAt(ball.position.x, -ball.position.z);
+                const key = type + '|' + ball.position.x.toFixed(1) + '|' + ball.position.z.toFixed(1);
+                if (key === lieKey) return;
+                lieKey = key;
+                const eff = tee ? { power: '100%', spin: '100%', level: 'ok' } : window.GolfPhysics.lieEffectText(type);
+                document.getElementById('lie-name').textContent = type;
+                const fx = document.getElementById('lie-fx');
+                fx.textContent = 'Kraft ' + eff.power + ' · Spinn ' + eff.spin;
+                fx.style.color = eff.level === 'bad' ? '#f87171' : (eff.level === 'warn' ? '#fbbf24' : '#4ade80');
+                chip.classList.add('active');
+            }
+
             function animate() {
                 requestAnimationFrame(animate);
                 controls.update();
+                updateLieChip();
                 
                 if (isFlying && flightData && flightData.positions) {
                     if (flightIndex < flightData.positions.length) {

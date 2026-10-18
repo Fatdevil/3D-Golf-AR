@@ -215,6 +215,19 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       const cs = await page.evaluate(function () { return { club: SwingEngine.getClub(), sel: Array.from(document.querySelectorAll('#ui-clubs .club-btn.selected')).map(function (b) { return b.dataset.club; }) }; });
       check('mobile: the ' + club + ' button picks the club and is the only one highlighted', cs.club === club && cs.sel.length === 1 && cs.sel[0] === club, JSON.stringify(cs));
     }
+    // the lie under the ball and what it takes from the shot: TEE with nothing off on the first shot, and the physics' own figures after
+    await page.waitForTimeout(400);
+    const lieTee = await page.evaluate(function () { const c = document.getElementById('lie-chip'); return { shown: c.classList.contains('active'), name: document.getElementById('lie-name').textContent, fx: document.getElementById('lie-fx').textContent, vis: getComputedStyle(c).display !== 'none' }; });
+    check('mobile: the lie box shows TEE with nothing off on the first shot of the hole', lieTee.shown && lieTee.vis && lieTee.name === 'TEE' && /100%/.test(lieTee.fx), JSON.stringify(lieTee));
+    const lieSand = await page.evaluate(async function () {
+      const p = window.GolfEngine.getActivePlayer(); p.strokes = 1;
+      const was = window._terrainTypeAt; window._terrainTypeAt = function () { return 'SAND'; };
+      await new Promise(function (r) { setTimeout(r, 300); });
+      const out = { name: document.getElementById('lie-name').textContent, fx: document.getElementById('lie-fx').textContent, want: window.GolfPhysics.lieEffectText('SAND') };
+      window._terrainTypeAt = was; p.strokes = 0;
+      return out;
+    });
+    check('mobile: after the first shot, in sand, the box shows SAND and the physics\' own figures (' + lieSand.want.power + ' power, ' + lieSand.want.spin + ' spin)', lieSand.name === 'SAND' && lieSand.fx === 'Kraft ' + lieSand.want.power + ' · Spinn ' + lieSand.want.spin, JSON.stringify(lieSand));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
