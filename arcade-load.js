@@ -923,7 +923,15 @@
                                 // Plate 1 is where a collection round starts, whichever page it was started from (build.html, courses.html, a link): what an
                                 // earlier, abandoned go left behind (scores, round token, players) must not carry into this one
                                 if (plateIndex === 0) {
-                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_'].forEach(function (k) { sessionStorage.removeItem(k + collectionId); }); } catch (e) {}
+                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(function (k) { sessionStorage.removeItem(k + collectionId); }); } catch (e) {}
+                                    // the plates in the order they were when the round started: the collection can be edited meanwhile (another tab, another device)
+                                    try { sessionStorage.setItem('collection_plates_' + collectionId, JSON.stringify(colRes.plates.map(function (p) { return typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name }; }))); } catch (e) {}
+                                } else {
+                                    // Plate 2 and on follow the order the round started with, as long as this plate is in it (else the collection as it is now)
+                                    try {
+                                        let frozen = JSON.parse(sessionStorage.getItem('collection_plates_' + collectionId) || 'null');
+                                        if (Array.isArray(frozen) && frozen.length > plateIndex && frozen[plateIndex] && String(frozen[plateIndex].plate_code).toUpperCase() === String(courseCode).toUpperCase()) colRes.plates = frozen;
+                                    } catch (e) {}
                                 }
                                 window._collectionScores = JSON.parse(sessionStorage.getItem('collection_scores_' + collectionId) || '[]');
                                 // Override displayed hole numbers based on plate position
