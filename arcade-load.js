@@ -919,26 +919,28 @@
                             let colRes = await ArcadeAPI.getCollection(collectionId);
                             if (colRes && colRes.plates) {
                                 window._activeCollection = colRes;
+                                // the keys of the round's state in sessionStorage use the collection's own (upper case) id, as the next plate's page and the scorecard do, whatever case the link had
+                                const roundKey = String(colRes.id || collectionId).toUpperCase();
                                 window._activePlateIndex = plateIndex;
                                 // Plate 1 is where a collection round starts, whichever page it was started from (build.html, courses.html, a link): what an
                                 // earlier, abandoned go left behind (scores, round token, players) must not carry into this one
                                 if (plateIndex === 0) {
-                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(function (k) { sessionStorage.removeItem(k + collectionId); }); } catch (e) {}
+                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(function (k) { sessionStorage.removeItem(k + roundKey); }); } catch (e) {}
                                     // the plates in the order they were when the round started: the collection can be edited meanwhile (another tab, another device)
-                                    try { sessionStorage.setItem('collection_plates_' + collectionId, JSON.stringify(colRes.plates.map(function (p) { return typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name }; }))); } catch (e) {}
+                                    try { sessionStorage.setItem('collection_plates_' + roundKey, JSON.stringify(colRes.plates.map(function (p) { return typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name }; }))); } catch (e) {}
                                 } else {
                                     // Plate 2 and on follow the order the round started with, as long as this plate is in it (else the collection as it is now)
                                     try {
-                                        let frozen = JSON.parse(sessionStorage.getItem('collection_plates_' + collectionId) || 'null');
+                                        let frozen = JSON.parse(sessionStorage.getItem('collection_plates_' + roundKey) || 'null');
                                         if (Array.isArray(frozen) && frozen.length > plateIndex && frozen[plateIndex] && String(frozen[plateIndex].plate_code).toUpperCase() === String(courseCode).toUpperCase()) colRes.plates = frozen;
                                     } catch (e) {}
                                 }
-                                window._collectionScores = JSON.parse(sessionStorage.getItem('collection_scores_' + collectionId) || '[]');
+                                window._collectionScores = JSON.parse(sessionStorage.getItem('collection_scores_' + roundKey) || '[]');
                                 // Override displayed hole numbers based on plate position
                                 window._holeNumberOffset = plateIndex * MAX_HOLES;
                                 // Plate 2 and on: the players of the round come along (the page started over with one player)
                                 try {
-                                    let roster = JSON.parse(sessionStorage.getItem('collection_roster_' + collectionId) || 'null');
+                                    let roster = JSON.parse(sessionStorage.getItem('collection_roster_' + roundKey) || 'null');
                                     if (plateIndex > 0 && Array.isArray(roster) && roster.length > 0 && Array.isArray(window.setupPlayers)) {
                                         window.setupPlayers = roster.slice(0, 4).map(function (p) { return { name: p.name, tee: p.tee || 'yellow', hcp: p.hcp === undefined ? null : p.hcp, slot: p.slot }; });
                                     }

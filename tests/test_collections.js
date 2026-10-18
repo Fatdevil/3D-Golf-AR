@@ -66,7 +66,7 @@ check('en platta som inte är sista skickas innan sidan går vidare (och sidan v
 check('samlingens runda-id rensas när sista plattan är skickad och när en ny omgång startas', /removeItem\('collection_round_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_round_' \+ collectionId\)/.test(read('build.html')));
 
 // --- spelarna följer med mellan plattorna ---
-check('spelarna sparas när sidan går vidare och läggs tillbaka på nästa platta (namn, tee, hcp och plats)', /collection_roster_' \+ col\.id, JSON\.stringify\(players\.map/.test(arcade) && /getItem\('collection_roster_' \+ collectionId\)/.test(load) && /plateIndex > 0 && Array\.isArray\(roster\)/.test(load));
+check('spelarna sparas när sidan går vidare och läggs tillbaka på nästa platta (namn, tee, hcp och plats)', /collection_roster_' \+ col\.id, JSON\.stringify\(players\.map/.test(arcade) && /getItem\('collection_roster_' \+ roundKey\)/.test(load) && /plateIndex > 0 && Array\.isArray\(roster\)/.test(load));
 check('varje spelare har en plats (slot) som följer hela rundan, och resultatet använder den', /slot: sp\.slot/.test(arcade) && /let seat = pl\.slot !== undefined \? pl\.slot : pi/.test(result) && /player_slot: seat/.test(result));
 check('samlingens slaglista summerar per plats, inte per plats i den här sidans lista', /slotOf\(/.test(arcade) && (arcade.match(/slotOf\(/g) || []).length >= 4);
 check('spelarlistan rensas när sista plattan är klar och när en ny omgång startas', /removeItem\('collection_roster_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_roster_' \+ collectionId\)/.test(read('build.html')));
@@ -74,7 +74,8 @@ check('spelarlistan rensas när sista plattan är klar och när en ny omgång st
 check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken och spelare rensas, vilken sida man än startade från', /if \(plateIndex === 0\) \{\s*try \{ \['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'\]\.forEach/.test(load) && load.indexOf("if (plateIndex === 0) {") < load.indexOf("window._collectionScores = JSON.parse"));
 
 check('plattföljden fryses när en runda startar (platta 1) och plattorna 2 och framåt följer den, så en ändring av samlingen under rundan flyttar inte på vägen',
-  /setItem\('collection_plates_' \+ collectionId/.test(load) && /getItem\('collection_plates_' \+ collectionId\)/.test(load) && /colRes\.plates = frozen/.test(load));
+  /setItem\('collection_plates_' \+ roundKey/.test(load) && /getItem\('collection_plates_' \+ roundKey\)/.test(load) && /colRes\.plates = frozen/.test(load));
+check('rundans nycklar i sessionStorage bygger på samlingens eget id i versaler, så en länk med gemener hittar samma tillstånd som nästa platta och poängkortet', /const roundKey = String\(colRes\.id \|\| collectionId\)\.toUpperCase\(\)/.test(load) && !/sessionStorage\.\w+Item\('collection_\w+_' \+ collectionId/.test(load));
 check('och den fryser bara om sidan själv finns i den frusna följden, annars gäller samlingen som den är', /frozen\[plateIndex\]\.plate_code\)\.toUpperCase\(\) === String\(courseCode\)\.toUpperCase\(\)/.test(load));
 check('den frusna följden rensas när rundan är slut och när en ny startas från byggsidan', /removeItem\('collection_plates_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_plates_' \+ collectionId\)/.test(read('build.html')));
 
