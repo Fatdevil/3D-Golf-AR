@@ -215,6 +215,27 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       const cs = await page.evaluate(function () { return { club: SwingEngine.getClub(), sel: Array.from(document.querySelectorAll('#ui-clubs .club-btn.selected')).map(function (b) { return b.dataset.club; }) }; });
       check('mobile: the ' + club + ' button picks the club and is the only one highlighted', cs.club === club && cs.sel.length === 1 && cs.sel[0] === club, JSON.stringify(cs));
     }
+    // the lie under the ball and what it takes from the shot: TEE with nothing off on the first shot, and the physics' own figures after
+    await page.waitForTimeout(400);
+    const lieTee = await page.evaluate(function () { const c = document.getElementById('lie-chip'); return { shown: c.classList.contains('active'), name: document.getElementById('lie-name').textContent, fx: document.getElementById('lie-fx').textContent, vis: getComputedStyle(c).display !== 'none' }; });
+    check('mobile: the lie box shows TEE with nothing off on the first shot of the hole', lieTee.shown && lieTee.vis && lieTee.name === 'TEE' && /100%/.test(lieTee.fx), JSON.stringify(lieTee));
+    const lieSand = await page.evaluate(async function () {
+      const p = window.GolfEngine.getActivePlayer(); p.strokes = 1;
+      const was = window._terrainTypeAt; window._terrainTypeAt = function () { return 'SAND'; };
+      await new Promise(function (r) { setTimeout(r, 300); });
+      const out = { name: document.getElementById('lie-name').textContent, fx: document.getElementById('lie-fx').textContent, want: window.GolfPhysics.lieEffectText('SAND') };
+      window._terrainTypeAt = was; p.strokes = 0;
+      return out;
+    });
+    check('mobile: after the first shot, in sand, the box shows SAND and the physics\' own figures (' + lieSand.want.power + ' power, ' + lieSand.want.spin + ' spin)', lieSand.name === 'SAND' && lieSand.fx === 'Kraft ' + lieSand.want.power + ' · Spinn ' + lieSand.want.spin, JSON.stringify(lieSand));
+    const teeFlag = await page.evaluate(function () {
+      const seen = []; const orig = window.GolfPhysics.simulateFlight;
+      window.GolfPhysics.simulateFlight = function (input, env) { seen.push(input.isTeeShot); return orig.call(this, input, env); };
+      const p = window.GolfEngine.getActivePlayer(); const was = p.strokes;
+      p.strokes = 0; window.triggerRealShot({ ballSpeedMph: 60, launchAngleDeg: 15, totalSpinRpm: 3000, spinAxisDeg: 0, azimDeg: 0, isLiveData: false });
+      return new Promise(function (r) { setTimeout(function () { window.GolfPhysics.simulateFlight = orig; r(seen); }, 300); });
+    });
+    check('mobile: the first stroke of the hole goes to the physics as a tee shot (so the box saying TEE / 100% is true even on painted rough)', teeFlag.length >= 1 && teeFlag[0] === true, JSON.stringify(teeFlag));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
