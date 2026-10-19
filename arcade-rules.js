@@ -122,7 +122,8 @@
             let dropZ = controls.target.z;
             let dropSurf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(dropX, -dropZ) : null;
             let why = window.ReliefRules.checkDrop({ ref: ref, flag: flag, drop: { x: dropX, z: dropZ }, surface: dropSurf ? dropSurf.type : null,
-                                                     mode: opts.mode, mustBeIn: opts.mustBeIn, mustBeOutOf: opts.mustBeOutOf });
+                                                     mode: opts.mode, mustBeIn: opts.mustBeIn, mustBeOutOf: opts.mustBeOutOf,
+                                                     surfaceAt: function (x, z) { let s = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(x, -z) : null; return s ? s.type : null; } });
             if (why) {
                 popup('❌ ' + why, '#ef4444', 2500);
                 return;

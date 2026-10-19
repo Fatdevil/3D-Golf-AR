@@ -6,6 +6,7 @@
     const DROP_RADIUS = 2.5;      // two club lengths
     const LINE_TOLERANCE = 1.5;   // how far off the line a "back on the line" drop may be
     const LINE_MAX = 60;          // how far back on the line
+    const PATH_STEP = 0.25;       // how finely the ground between the ball and the drop is looked at
 
     // The direction away from the hole, from the ball (unit vector), or null when the ball lies on the hole.
     function backLine(ref, flag) {
@@ -18,6 +19,7 @@
     //   mode 'lateral' (default): inside two club lengths of ref, not nearer the hole
     //   mode 'line': behind the ball on the line from the hole through it, outside the bunker (the relief that costs two strokes from a bunker)
     //   mustBeIn / mustBeOutOf: a surface type the drop has to be on / may not be on (SAND: the bunker)
+//   surfaceAt(x, z): the surface type at a point; with mustBeIn the whole way from the ball to the drop has to be that surface (the same bunker)
     // Returns null when the drop is fine, else the reason.
     function checkDrop(o) {
         const ref = o.ref, flag = o.flag, drop = o.drop;
@@ -36,6 +38,13 @@
         const type = o.surface || null;
         if (type === 'WATER' || type === 'OB') return 'Cannot drop in ' + type + '!';
         if (o.mustBeIn && type !== o.mustBeIn) return 'Must stay in the bunker. (Or take two penalty strokes and drop outside it.)';
+        // the same bunker, not the one next to it: the ground between the ball and the drop is all the same surface (a painted map has no bunker names)
+        if (o.mustBeIn && o.surfaceAt) {
+            const dx = drop.x - ref.x, dz = drop.z - ref.z, steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / PATH_STEP));
+            for (let i = 1; i < steps; i++) {
+                if (o.surfaceAt(ref.x + dx * i / steps, ref.z + dz * i / steps) !== o.mustBeIn) return 'Must stay in the same bunker as the ball.';
+            }
+        }
         if (o.mustBeOutOf && type === o.mustBeOutOf) return 'Must be outside the bunker.';
         return null;
     }

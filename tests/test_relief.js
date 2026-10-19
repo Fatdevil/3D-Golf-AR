@@ -27,6 +27,11 @@ check('i vatten eller OB är inte godkänt', /WATER/.test(lat({ x: 1, z: 0 }, { 
 check('+1 i bunker: en droppning i bunkern är godkänd', lat({ x: 1, z: 1 }, { surface: 'SAND', mustBeIn: 'SAND' }) === null);
 check('+1 i bunker: en droppning utanför bunkern är inte godkänd (det kostar två slag)', /bunker/.test(lat({ x: 1, z: 1 }, { surface: 'FAIRWAY', mustBeIn: 'SAND' }) || ''));
 
+// två bunkrar bredvid varandra: bara den bollen ligger i räknas
+const twoBunkers = (x, z) => (x >= 1.2 && x <= 2.2 ? 'FAIRWAY' : 'SAND');   // en 1 m bred remsa gräs mellan bunkrarna
+check('+1 i bunker: en droppning i bunkern bredvid (med gräs emellan) är inte godkänd', /same bunker/.test(lat({ x: 2.4, z: 0 }, { surface: 'SAND', mustBeIn: 'SAND', surfaceAt: (x, z) => twoBunkers(x, z) }) || ''));
+check('och en droppning i samma bunker är godkänd', lat({ x: 1, z: 0.5 }, { surface: 'SAND', mustBeIn: 'SAND', surfaceAt: (x, z) => twoBunkers(x, z) }) === null);
+
 // --- ospelbar i bunker, +2: bakåt på linjen, utanför bunkern ---
 const line = (drop, surface) => R.checkDrop({ ref, flag, drop, surface: surface || 'FAIRWAY', mode: 'line', mustBeOutOf: 'SAND' });
 check('+2: bakåt på linjen, 10 m bakom bollen, utanför bunkern: godkänt', line({ x: 0, z: 10 }) === null, line({ x: 0, z: 10 }));
@@ -41,6 +46,7 @@ check('+2 utan hål (ingen linje) ger ett svar i stället för att krascha', /No
 const rules = read('arcade-rules.js'), html = read('arcade.html');
 check('arcade.html laddar arcade-relief.js före arcade-rules.js', html.indexOf('arcade-relief.js') > 0 && html.indexOf('arcade-relief.js') < html.indexOf('arcade-rules.js'));
 check('droppningens kontroller kommer från ReliefRules.checkDrop (inga egna kopior)', /ReliefRules\.checkDrop\(/.test(rules) && !/Too far away/.test(rules) && !/Cannot drop closer/.test(rules));
+check('droppen provas mot marken mellan bollen och droppen (samma bunker)', /surfaceAt: function \(x, z\)/.test(rules));
 check('ospelbar boll i sand frågar och tar +1 (kvar i bunkern) eller +2 (bakåt på linjen, utanför)', /here\.type === 'SAND'/.test(rules) && /mustBeIn: 'SAND'/.test(rules) && /mode: 'line', mustBeOutOf: 'SAND'/.test(rules) && /penalty = 2/.test(rules) && /penaltyStrokes \+= penalty/.test(rules));
 check('utanför bunker är det som förut: +1 och en vanlig droppning', /let opts = \{\}, penalty = 1;/.test(rules));
 
