@@ -49,8 +49,10 @@
     // Relief by dropping: the player places the ball inside a circle (two club lengths) around a reference point, not nearer the hole than
     // that point, and never in water or out of bounds. Used for the water hazard drop (reference = where the ball entered the water) and for an
     // unplayable ball (reference = where the ball lies). onDone runs once the drop is confirmed.
-    const DROP_RADIUS = 2.5;   // two club lengths, in metres
-    window.startLateralDrop = function(ref, label, doneText) {
+    // opts: { mode: 'lateral' (default) | 'line', mustBeIn, mustBeOutOf } as in arcade-relief.js (an unplayable ball in a bunker)
+    const DROP_RADIUS = window.ReliefRules.DROP_RADIUS;   // two club lengths, in metres
+    window.startLateralDrop = function(ref, label, doneText, opts) {
+        opts = opts || {};
         let p = window.players[window.activePlayerIndex];
         let hole = courseHoles[playingHoleIndex];
         let flag = hole ? hole.flag : null;
@@ -76,11 +78,22 @@
         controls.enabled = true;
         controls.update();
 
-        // the drop circle
+        // the drop circle (or, back on the line, the line behind the ball)
         if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); }
         let circGeo = new THREE.BufferGeometry();
         let pts = [];
-        for (let a = 0; a <= 64; a++) {
+        const lineDir = opts.mode === 'line' ? window.ReliefRules.backLine(ref, flag) : null;
+        if (lineDir) {
+            for (let d = 0; d <= window.ReliefRules.LINE_MAX; d += 2) {
+                let lx = ref.x + lineDir.x * d, lz = ref.z + lineDir.z * d, lh = 0.3;
+                if (typeof localGetTerrainAt === 'function') {
+                    let ls = localGetTerrainAt(lx, -lz);
+                    if (ls) lh = ls.z + 0.15;
+                }
+                pts.push(lx, lh, lz);
+            }
+        }
+        for (let a = 0; !lineDir && a <= 64; a++) {
             let angle = (a / 64) * Math.PI * 2;
             let cx = ref.x + Math.cos(angle) * DROP_RADIUS;
             let cz = ref.z + Math.sin(angle) * DROP_RADIUS;
@@ -107,17 +120,12 @@
         confirmBtn.onclick = function () {
             let dropX = controls.target.x;
             let dropZ = controls.target.z;
-            if (Math.hypot(dropX - ref.x, dropZ - ref.z) > DROP_RADIUS + 0.05) {
-                popup('❌ Too far away! Max 2 club lengths (inside the blue circle).', '#ef4444', 2000);
-                return;
-            }
-            if (flag && Math.hypot(dropX - flag.x, dropZ - flag.z) < Math.hypot(ref.x - flag.x, ref.z - flag.z) - 0.5) {
-                popup('❌ Cannot drop closer to the hole!', '#ef4444', 2000);
-                return;
-            }
             let dropSurf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(dropX, -dropZ) : null;
-            if (dropSurf && (dropSurf.type === 'WATER' || dropSurf.type === 'OB')) {
-                popup('❌ Cannot drop in ' + dropSurf.type + '!', '#ef4444', 2000);
+            let why = window.ReliefRules.checkDrop({ ref: ref, flag: flag, drop: { x: dropX, z: dropZ }, surface: dropSurf ? dropSurf.type : null,
+                                                     mode: opts.mode, mustBeIn: opts.mustBeIn, mustBeOutOf: opts.mustBeOutOf,
+                                                     surfaceAt: function (x, z) { let s = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(x, -z) : null; return s ? s.type : null; } });
+            if (why) {
+                popup('❌ ' + why, '#ef4444', 2500);
                 return;
             }
             let dh = dropSurf ? dropSurf.z + 0.1 : 0.3;
@@ -139,20 +147,33 @@
             setTimeout(() => { document.getElementById('score-popup').style.opacity = '0'; evaluateNextTurn(); }, 1500);
         };
         if (tools) tools.insertBefore(confirmBtn, tools.firstChild);
-        popup('📍 Place the drop inside the blue circle, not closer to the hole', '#3b82f6', 0);
+        popup(opts.mode === 'line' ? '📍 Place the drop on the blue line behind the ball, outside the bunker' : (opts.mustBeIn ? '📍 Place the drop inside the blue circle, in the bunker, not closer to the hole' : '📍 Place the drop inside the blue circle, not closer to the hole'), '#3b82f6', 0);
     };
 
-    // Unplayable ball: +1 penalty and a drop within two club lengths of where the ball lies, not nearer the hole
+    // Unplayable ball: +1 penalty and a drop within two club lengths of where the ball lies, not nearer the hole.
+    // In a bunker the +1 drop has to stay in the bunker; to get out of it the player takes two penalty strokes and drops back on the line
+    // from the hole through the ball, outside the bunker.
     window.takePenaltyDrop = function() {
         if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
         if (playState !== 'ROUND_IDLE') return;
         let p = window.players[window.activePlayerIndex];
         if (!p || !p.lie) return;
+        let here = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(p.lie.x, -p.lie.z) : null;
+        let inBunker = !!here && here.type === 'SAND';
+        let opts = {}, penalty = 1;
+        if (inBunker) {
+            if (window.confirm('The ball is in a bunker.\n\nOK: drop in the bunker (+1)\nCancel: drop outside, back on the line from the hole (+2)')) {
+                opts = { mustBeIn: 'SAND' };
+            } else {
+                opts = { mode: 'line', mustBeOutOf: 'SAND' };
+                penalty = 2;
+            }
+        }
         if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
-        p.penaltyStrokes++;
+        p.penaltyStrokes += penalty;
         document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
         if (typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
-        window.startLateralDrop({ x: p.lie.x, z: p.lie.z }, 'PENALTY DROP', '📍 Penalty drop (+1) — play on');
+        window.startLateralDrop({ x: p.lie.x, z: p.lie.z }, 'PENALTY DROP', '📍 Penalty drop (+' + penalty + ') — play on', opts);
     };
 
     // === RULES ENGINE ===
