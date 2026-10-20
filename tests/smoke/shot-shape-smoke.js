@@ -74,6 +74,7 @@ function serve() {
         { share_code: 'PUTTCOURSE', name: 'Putt Green', author: null, hole_count: 1, total_par: 3 }
       ])); }
       if (p === '/api/collections') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify([COLLECTION])); }
+      if (/^\/api\/collections\/colfail$/i.test(p)) { res.writeHead(500, { 'Content-Type': 'application/json' }); return res.end('{"error":"Server error"}'); }
       if (/^\/api\/collections\/col1$/i.test(p)) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COLLECTION)); }
       // the leaderboard: the test reads what was posted and picks the answer
       if (req.method === 'POST' && /^\/api\/courses\/[^/]+\/results$/.test(p)) {
@@ -709,6 +710,15 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.waitForURL(/plate=1/, { timeout: 20000 }).catch(function () {});
     check('a slow sign-in: the page waits for it (stays on plate 1 after 9 s), and moves on only once the result request has been sent',
       /plate=0/.test(early.url) && early.posted === 0 && /plate=1/.test(page.url()) && POSTED.length === 1, JSON.stringify({ early: early, after: page.url(), n: POSTED.length, ms: Date.now() - t0 }));
+    await o.ctx.close();
+  }
+
+  // a collection that cannot be loaded (between two plates, say): not played on as a single course, but a message with Try again
+  {
+    POSTED.length = 0;
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE&collection=colfail&plate=1', { width: 390, height: 844 });
+    const st = await o.page.evaluate(function () { const pop = document.getElementById('popup-result'); return { title: document.getElementById('popup-title').innerText, btn: document.getElementById('popup-btn').innerText, shown: getComputedStyle(pop).display === 'flex', started: typeof window.triggerRealShot === 'function' }; });
+    check('a collection that cannot be loaded stops the page with COULD NOT LOAD and Try again (the game does not start as an ordinary course)', st.title === 'COULD NOT LOAD' && st.btn === 'Try again' && st.shown && !st.started, JSON.stringify(st));
     await o.ctx.close();
   }
 

@@ -295,10 +295,25 @@
             const HOLES_PER_PLATE = 3;
             let collection = null, plateIndex = 0, roundKey = null, courseChangedNote = false;
             if (params.get('collection') && window.ArcadeAPI) {
-                try {
-                    const c = await window.ArcadeAPI.getCollection(params.get('collection'));
-                    if (c && Array.isArray(c.plates) && c.plates.length > 0) collection = c;
-                } catch (e) { console.warn('Collection load failed', e); }
+                // a collection that cannot be loaded is not played as a single course (the round would be left behind half way): a few tries,
+                // then a message with Try again
+                for (let attempt = 0; attempt < 3 && !collection; attempt++) {
+                    if (attempt > 0) await new Promise(r => setTimeout(r, 700));
+                    try {
+                        const c = await window.ArcadeAPI.getCollection(params.get('collection'));
+                        if (c && Array.isArray(c.plates) && c.plates.length > 0) collection = c;
+                    } catch (e) { console.warn('Collection load failed', e); }
+                }
+                if (!collection) {
+                    document.getElementById('popup-title').innerText = 'COULD NOT LOAD';
+                    document.getElementById('popup-title').style.color = '#f87171';
+                    document.getElementById('popup-desc').innerText = 'The course could not be loaded. Check your connection and try again.';
+                    document.getElementById('popup-btn').innerText = 'Try again';
+                    window.popupAction = () => window.location.reload();
+                    const pop = document.getElementById('popup-result');
+                    pop.style.display = 'flex'; pop.style.opacity = '1';
+                    return;
+                }
             }
             if (collection) {
                 plateIndex = Math.max(0, parseInt(params.get('plate') || '0', 10) || 0);
