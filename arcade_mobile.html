@@ -251,6 +251,7 @@
     <script src="physics.js"></script>
     <script src="arcade-auth.js"></script>
     <script src="arcade-api-service.js"></script>
+    <script src="collection-round.js?v=1"></script>
     <script src="arcade-game-core.js"></script>
     <script src="arcade-surface.js?v=1"></script>
     <script src="arcade-swing-engine.js"></script>
@@ -320,21 +321,27 @@
                 roundKey = String(collection.id || params.get('collection')).toUpperCase();
                 try {
                     if (plateIndex === 0) {
-                        ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(k => sessionStorage.removeItem(k + roundKey));
+                        ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_'].forEach(k => sessionStorage.removeItem(k + roundKey));
                         sessionStorage.setItem('collection_plates_' + roundKey, JSON.stringify(collection.plates.map(p => typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name })));
+                        sessionStorage.setItem('collection_versions_' + roundKey, JSON.stringify(collection.plate_versions || null));
                     } else {
-                        const frozen = JSON.parse(sessionStorage.getItem('collection_plates_' + roundKey) || 'null');
-                        if (Array.isArray(frozen) && frozen.length > plateIndex && frozen[plateIndex] && String(frozen[plateIndex].plate_code).toUpperCase() === String(courseCode).toUpperCase()) {
-                            // The order of the round is kept as long as the same plates are in the collection. If a plate was taken out or replaced
-                            // meanwhile, the course is no longer the one that was started: the rest is played as ordinary rounds (the server only
-                            // ties a result to a collection whose plates it still has), and the player is told.
-                            const code = p => String(typeof p === 'string' ? p : p.plate_code).toUpperCase();
-                            const now = collection.plates.map(code);
-                            if (frozen.length === now.length && frozen.every(p => now.indexOf(code(p)) >= 0)) collection.plates = frozen;
-                            else { courseChangedNote = true; collection = null; }
+                        // The order of the round is kept as long as the same plates are in the collection and the ones already played are the versions
+                        // that were played. If not, the course is no longer the one that was started: the rest is played as ordinary rounds (the server
+                        // only ties a result to a collection that still has those plates), and the player is told.
+                        const r = window.CollectionRound.continueRound({
+                            frozen: JSON.parse(sessionStorage.getItem('collection_plates_' + roundKey) || 'null'),
+                            versions: JSON.parse(sessionStorage.getItem('collection_versions_' + roundKey) || 'null'),
+                            collection: collection, plateIndex: plateIndex, courseCode: courseCode
+                        });
+                        if (r.changed) { courseChangedNote = true; collection = null; }
+                        else {
+                            collection.plates = r.plates;
+                            if (r.versions) sessionStorage.setItem('collection_versions_' + roundKey, JSON.stringify(r.versions));
                         }
-                        const roster = JSON.parse(sessionStorage.getItem('collection_roster_' + roundKey) || 'null');
-                        if (Array.isArray(roster) && roster.length > 0) matchData.players = roster;   // the players of the round come along
+                        if (collection) {
+                            const roster = JSON.parse(sessionStorage.getItem('collection_roster_' + roundKey) || 'null');
+                            if (Array.isArray(roster) && roster.length > 0) matchData.players = roster;   // the players of the round come along
+                        }
                     }
                 } catch (e) { /* no storage: the plates are played as the collection is now */ }
                 if (collection && plateIndex >= collection.plates.length) { collection = null; plateIndex = 0; }
@@ -931,7 +938,7 @@
                     if (!r || !r.success) throw new Error('not saved');
                     roundSubmitted = true;
                     // the last plate is filed: the next go starts clean
-                    if (collection && lastPlate) { try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(k => sessionStorage.removeItem(k + roundKey)); } catch (e) { /* none */ } }
+                    if (collection && lastPlate) { try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_'].forEach(k => sessionStorage.removeItem(k + roundKey)); } catch (e) { /* none */ } }
                     if (r.skipped) { say('Draft course: the result is not saved.'); return; }
                     let t = 'Saved. Course position #' + Number(r.position);
                     if (r.handicap && Number.isFinite(Number(r.handicap.new))) t += ' · Handicap ' + Number(r.handicap.new).toFixed(1);

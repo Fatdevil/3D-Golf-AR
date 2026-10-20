@@ -139,6 +139,10 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('GET', '/api/collections/' + id + '/leaderboard');
     check('a round on the current versions of both plates counts again (Lo 8 + 9 = 17), and only that', (r.json.leaderboard || []).length === 1 && r.json.leaderboard[0].player_name === 'Lo' && r.json.leaderboard[0].total_score === 17, JSON.stringify(r.json));
 
+    // the version each plate has now (a round over several pages checks that the plates it has played are still those versions)
+    const pv = (await api('GET', '/api/collections/' + id)).json.plate_versions || {};
+    check('a collection says the version of each of its plates (plate B was published again: a higher version than plate A)', typeof pv[A] === 'number' && typeof pv[B] === 'number' && pv[B] > pv[A], JSON.stringify(pv));
+
     // editing the plates (the build page moves and removes them by saving the whole list): rounds count by plate, not by place
     const siBefore = (await api('GET', '/api/collections/' + id)).json.stroke_index;
     r = await api('POST', '/api/collections', { id: id, name: 'Sexan', author: 'Test', type: '6', plates: [plate(B), plate(A)] }, owner);

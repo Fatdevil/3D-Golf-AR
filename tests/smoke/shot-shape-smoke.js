@@ -60,6 +60,7 @@ const COURSES = {
 
 // a collection of two plates (a 6 hole course): the mock holds them in the order they have now; a test can swap them
 const COLLECTION = { id: 'COL1', name: 'Mixed <i id="xss2">six</i>', author: 'Kim', type: '6', total_par: 7, stroke_index: null,
+  plate_versions: { PUTTCOURSE: 1, TESTCOURSE: 1 },
   plates: [{ plate_code: 'PUTTCOURSE', plate_name: 'Putt' }, { plate_code: 'TESTCOURSE', plate_name: 'Test' }] };
 const POSTED = [];
 let RESULT_MODE = 'ok';
@@ -711,6 +712,20 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     check('a slow sign-in: the page waits for it (stays on plate 1 after 9 s), and moves on only once the result request has been sent',
       /plate=0/.test(early.url) && early.posted === 0 && /plate=1/.test(page.url()) && POSTED.length === 1, JSON.stringify({ early: early, after: page.url(), n: POSTED.length, ms: Date.now() - t0 }));
     await o.ctx.close();
+  }
+
+  // a plate already played is published again during the round: its result no longer counts for the course, so the rest is played as ordinary rounds
+  {
+    POSTED.length = 0;
+    COLLECTION.plate_versions = { PUTTCOURSE: 2, TESTCOURSE: 1 };   // PUTTCOURSE (plate 1, played) was published again; the round started with version 1
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE&collection=col1&plate=1', { width: 390, height: 844 }, { init: function () {
+      sessionStorage.setItem('collection_plates_COL1', JSON.stringify([{ plate_code: 'PUTTCOURSE' }, { plate_code: 'TESTCOURSE' }]));
+      sessionStorage.setItem('collection_versions_COL1', JSON.stringify({ PUTTCOURSE: 1, TESTCOURSE: 1 }));
+    } });
+    const st = await o.page.evaluate(function () { return { title: document.getElementById('popup-title').innerText, hole: document.getElementById('ui-hole').innerText }; });
+    check('a plate already played was published again during the round: COURSE CHANGED and an ordinary course (Hole 1/2)', st.title === 'COURSE CHANGED' && st.hole === 'Hole 1/2', JSON.stringify(st));
+    await o.ctx.close();
+    COLLECTION.plate_versions = { PUTTCOURSE: 1, TESTCOURSE: 1 };
   }
 
   // a collection that cannot be loaded (between two plates, say): not played on as a single course, but a message with Try again
