@@ -290,6 +290,36 @@
             const params = new URLSearchParams(window.location.search);
             let courseCode = params.get('course') || matchData.courseCode || '2593d6e5-4a57-41e9-91ee-0a2db7f90117';
 
+            // A collection (a 6, 9 or 18 hole course of 3-hole plates) is played one plate per page, as on arcade.html: the plates come in the order
+            // they had when the round started, the players, scores and the round's token ride along in sessionStorage (under the collection's own id).
+            const HOLES_PER_PLATE = 3;
+            let collection = null, plateIndex = 0, roundKey = null;
+            if (params.get('collection') && window.ArcadeAPI) {
+                try {
+                    const c = await window.ArcadeAPI.getCollection(params.get('collection'));
+                    if (c && Array.isArray(c.plates) && c.plates.length > 0) collection = c;
+                } catch (e) { console.warn('Collection load failed', e); }
+            }
+            if (collection) {
+                plateIndex = Math.max(0, parseInt(params.get('plate') || '0', 10) || 0);
+                roundKey = String(collection.id || params.get('collection')).toUpperCase();
+                try {
+                    if (plateIndex === 0) {
+                        ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(k => sessionStorage.removeItem(k + roundKey));
+                        sessionStorage.setItem('collection_plates_' + roundKey, JSON.stringify(collection.plates.map(p => typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name })));
+                    } else {
+                        const frozen = JSON.parse(sessionStorage.getItem('collection_plates_' + roundKey) || 'null');
+                        if (Array.isArray(frozen) && frozen.length > plateIndex && frozen[plateIndex] && String(frozen[plateIndex].plate_code).toUpperCase() === String(courseCode).toUpperCase()) collection.plates = frozen;
+                        const roster = JSON.parse(sessionStorage.getItem('collection_roster_' + roundKey) || 'null');
+                        if (Array.isArray(roster) && roster.length > 0) matchData.players = roster;   // the players of the round come along
+                    }
+                } catch (e) { /* no storage: the plates are played as the collection is now */ }
+                if (plateIndex >= collection.plates.length) { collection = null; plateIndex = 0; }
+            }
+            const holeOffset = collection ? plateIndex * HOLES_PER_PLATE : 0;
+            const totalHoles = collection ? (parseInt(collection.type, 10) || collection.plates.length * HOLES_PER_PLATE) : 0;
+            const lastPlate = !collection || plateIndex + 1 >= collection.plates.length;
+
             let coursePayload = null;
             if (courseCode && window.ArcadeAPI) {
                 try {
@@ -769,16 +799,40 @@
                     line = winners.length === 1 ? esc(winners[0].player.name) + ' wins with ' + best + ' (' + vs(winners[0].vsPar) + ')' : 'Tie at ' + best;
                 } else line = `Total ${sc.score} (${vs(sc.vsPar)})`;
                 showPopup('ROUND COMPLETE', scorecardHtml() + `<div style="margin-top:12px">${line}</div><div id="sc-status" style="margin-top:8px;font-size:15px;color:#94a3b8"></div>`, '#10b981', 'Back to menu', () => { window.location.href = 'arcade_mobile_hub.html'; }, true);
+                if (collection && !lastPlate) { goToNextPlate(sc); return; }
                 submitRound(sc);
             });
+
+            // A plate that is not the last: its round is filed (as a round of that plate, tied to the collection by the round's token), the players
+            // and scores are kept for the next page, and the next plate opens. Not later than 3 seconds more for the answer.
+            function goToNextPlate(sc) {
+                const done = (holeOffset + holes.length);
+                try {
+                    const before = JSON.parse(sessionStorage.getItem('collection_scores_' + roundKey) || '[]');
+                    if (!before.find(b => b.plateIndex === plateIndex)) {
+                        before.push({ plateIndex: plateIndex, platePars: holes.map(h => h.par), plateScores: players.map(pl => ({ name: pl.name, color: pl.color, scores: window.GolfEngine.scorecard(pl).rows.map(r => r.score) })) });
+                        sessionStorage.setItem('collection_scores_' + roundKey, JSON.stringify(before));
+                    }
+                    sessionStorage.setItem('collection_roster_' + roundKey, JSON.stringify(players.map(pl => ({ name: pl.name, color: pl.color }))));
+                } catch (e) { /* no storage */ }
+                showPopup(done + ' HOLES PLAYED', 'On to the next plate…', '#10b981', 'Continue', null);
+                const sent = submitRound(sc, true);
+                const nextPlate = collection.plates[plateIndex + 1];
+                const nextCode = typeof nextPlate === 'string' ? nextPlate : nextPlate.plate_code;
+                setTimeout(() => {
+                    const url = 'arcade_mobile.html?v=' + Date.now() + '&course=' + encodeURIComponent(nextCode) + '&collection=' + encodeURIComponent(roundKey) + '&plate=' + (plateIndex + 1);
+                    Promise.race([sent, new Promise(r => setTimeout(r, 3000))]).then(() => { window.location.href = url; });
+                }, 2000);
+            }
 
             // A finished round goes to the course's leaderboard (and the handicap), like arcade.html does. Not for a practice hole, a draft
             // course or a round played with typed numbers (the lab: it has no board). The text is built with textContent, never HTML.
             let roundSubmitted = false;
             // the round's own key: a retry names the same round, so a record that was saved but whose answer got lost is not filed twice
             const roundId = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-            async function submitRound(sc) {
+            async function submitRound(sc, silent) {
                 const say = (t, retry) => {
+                    if (silent) return;
                     const el = document.getElementById('sc-status');
                     if (!el) return;
                     el.textContent = t;
@@ -799,16 +853,29 @@
                         if (window.GolfAuth && !GolfAuth.isReady) await GolfAuth.init();
                         const player = window.GolfEngine.getState().players[0];
                         const name = (window.GolfAuth && GolfAuth.user && GolfAuth.user.display_name) || player.name || 'Player 1';
+                        const stats = { round_id: roundId };
+                        if (collection) {
+                            // the plates of one go share the token: the collection adds them up (seat 0 is the owner of the phone)
+                            let token = null;
+                            try { token = sessionStorage.getItem('collection_round_' + roundKey); } catch (e) { /* none */ }
+                            if (!token) {
+                                token = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+                                try { sessionStorage.setItem('collection_round_' + roundKey, token); } catch (e) { /* none */ }
+                            }
+                            Object.assign(stats, { collection_id: roundKey, collection_round_id: token, plate_index: plateIndex, round_id: token + '-p' + plateIndex + '-0', player_slot: 0 });
+                        }
                         return window.ArcadeAPI.submitResult(coursePayload.share_code, {
                             total_score: sc.score, score_vs_par: sc.vsPar, hole_scores: scores,
-                            input_mode: mode === 'LM' ? 'LAUNCH_MONITOR' : 'SWING_METER', lm_device: null, player_name: name, stats: { round_id: roundId }
-                        });
+                            input_mode: mode === 'LM' ? 'LAUNCH_MONITOR' : 'SWING_METER', lm_device: null, player_name: name, stats: stats
+                        }, collection ? { keepalive: true } : undefined);
                     };
                     let timer;
                     const r = await Promise.race([send(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 20000); })]);
                     clearTimeout(timer);
                     if (!r || !r.success) throw new Error('not saved');
                     roundSubmitted = true;
+                    // the last plate is filed: the next go starts clean
+                    if (collection && lastPlate) { try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(k => sessionStorage.removeItem(k + roundKey)); } catch (e) { /* none */ } }
                     if (r.skipped) { say('Draft course: the result is not saved.'); return; }
                     let t = 'Saved. Course position #' + Number(r.position);
                     if (r.handicap && Number.isFinite(Number(r.handicap.new))) t += ' · Handicap ' + Number(r.handicap.new).toFixed(1);
@@ -825,9 +892,17 @@
                 const n = v => (Number.isFinite(Number(v)) ? String(Number(v)) : '-');
                 const cards = players.map(pl => window.GolfEngine.scorecard(pl));
                 const head = multi ? players.map(pl => `<th title="${esc(pl.name)}"><span class="sc-dot" style="background:${esc(pl.color)}"></span>${esc(pl.name)}</th>`).join('') : '<th>Score</th>';
-                const rows = cards[0].rows.map((r, i) => `<tr><td>${n(r.hole)}</td><td>${n(r.par)}</td>${cards.map(c => `<td>${c.rows[i].score === null ? '-' : n(c.rows[i].score)}</td>`).join('')}</tr>`).join('');
+                const rows = cards[0].rows.map((r, i) => `<tr><td>${n(Number(r.hole) + holeOffset)}</td><td>${n(r.par)}</td>${cards.map(c => `<td>${c.rows[i].score === null ? '-' : n(c.rows[i].score)}</td>`).join('')}</tr>`).join('');
                 const total = `<tr class="sc-total"><td>Total</td><td>${n(cards[0].par)}</td>${cards.map(c => `<td>${n(c.score)}</td>`).join('')}</tr>`;
-                return `<div class="sc-scroll"><table class="sc-table${multi ? ' sc-multi' : ''}"><tr><th>Hole</th><th>Par</th>${head}</tr>${rows}${total}</table></div>`;
+                // the whole round so far: the plates before this one (kept in sessionStorage) and this one
+                let all = '';
+                if (collection && plateIndex > 0) {
+                    let before = [];
+                    try { before = JSON.parse(sessionStorage.getItem('collection_scores_' + roundKey) || '[]'); } catch (e) { /* none */ }
+                    const prev = pl => before.reduce((sum, b) => sum + (((b.plateScores || []).find(x => x.name === pl.name) || { scores: [] }).scores.reduce((a, v) => a + (Number(v) || 0), 0)), 0);
+                    all = `<tr class="sc-total"><td>All ${holeOffset + cards[0].rows.length}</td><td></td>${cards.map((c, i) => `<td>${n(prev(players[i]) + c.score)}</td>`).join('')}</tr>`;
+                }
+                return `<div class="sc-scroll"><table class="sc-table${multi ? ' sc-multi' : ''}"><tr><th>Hole</th><th>Par</th>${head}</tr>${rows}${total}${all}</table></div>`;
             }
             window.showScorecard = function () {
                 showPopup('SCORECARD', scorecardHtml(), '#fff', 'Continue', null, true);
@@ -840,7 +915,7 @@
                 nameEl.style.color = multi ? p.color : '';
                 document.getElementById('ui-player-score').innerText = window.GolfEngine.holeScore(p);
                 const idx = window.GolfEngine.getState().holeIndex;
-                document.getElementById('ui-hole').innerText = holes.length > 1 ? `Hole ${idx + 1}/${holes.length}` : 'Hole 1';
+                document.getElementById('ui-hole').innerText = collection ? `Hole ${holeOffset + idx + 1}/${totalHoles}` : (holes.length > 1 ? `Hole ${idx + 1}/${holes.length}` : 'Hole 1');
                 document.getElementById('ui-par').innerText = `Par ${window.GolfEngine.holePar()} | ${Math.round(yardsToPin())}yd`;
             }
             

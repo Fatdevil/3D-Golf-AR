@@ -58,6 +58,9 @@ const COURSES = {
   PUTTCOURSE: { share_code: 'PUTTCOURSE', holes: [{ par: 3, tees: { yellow: { x: 0, y: 0, z: 3 } }, flag: { x: 0, y: 0, z: 0 } }] }
 };
 
+// a collection of two plates (a 6 hole course): the mock holds them in the order they have now; a test can swap them
+const COLLECTION = { id: 'COL1', name: 'Mixed <i id="xss2">six</i>', author: 'Kim', type: '6', total_par: 7, stroke_index: null,
+  plates: [{ plate_code: 'PUTTCOURSE', plate_name: 'Putt' }, { plate_code: 'TESTCOURSE', plate_name: 'Test' }] };
 const POSTED = [];
 let RESULT_MODE = 'ok';
 let RESULT_DELAY = 0;
@@ -70,6 +73,8 @@ function serve() {
         { share_code: 'TESTCOURSE', name: 'Test <b id="xss">Course</b>', author: 'Anna', hole_count: 2, total_par: 7 },
         { share_code: 'PUTTCOURSE', name: 'Putt Green', author: null, hole_count: 1, total_par: 3 }
       ])); }
+      if (p === '/api/collections') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify([COLLECTION])); }
+      if (/^\/api\/collections\/col1$/i.test(p)) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COLLECTION)); }
       // the leaderboard: the test reads what was posted and picks the answer
       if (req.method === 'POST' && /^\/api\/courses\/[^/]+\/results$/.test(p)) {
         let body = ''; req.on('data', function (c) { body += c; });
@@ -686,6 +691,45 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  // a collection on the phone: plate 1 is filed as a plate of the collection and the next plate opens; the last plate is filed with the same token
+  {
+    POSTED.length = 0;
+    const o = await open('/arcade_mobile.html?course=PUTTCOURSE&collection=col1&plate=0', { width: 390, height: 844 }, { init: function () {
+      if (!localStorage.getItem('golf_os_mobile_match')) localStorage.setItem('golf_os_mobile_match', JSON.stringify({ settings: { gimmeDist: 10, autoPutt: 'OFF', autoConcede: 99 }, players: [{ name: 'Anna', color: '#ef4444' }, { name: 'Bo', color: '#3b82f6' }] }));
+    } });
+    const page = o.page;
+    const head0 = await page.evaluate(function () { return { hole: document.getElementById('ui-hole').innerText, stored: sessionStorage.getItem('collection_plates_COL1') }; });
+    check('collection plate 1: the header counts the holes of the whole course (Hole 1/6) and the plate order is kept for the round (under the collection\'s own id)', head0.hole === 'Hole 1/6' && JSON.parse(head0.stored).map(function (x) { return x.plate_code; }).join() === 'PUTTCOURSE,TESTCOURSE', JSON.stringify(head0));
+    COLLECTION.plates = [COLLECTION.plates[1], COLLECTION.plates[0]];   // the collection is edited meanwhile: the round goes on in the order it started with
+    const finish = function (scores) {
+      return page.evaluate(function (sc) {
+        const pls = window.GolfEngine.getState().players;
+        pls.forEach(function (pl, i) { pl.strokes = 1; pl.scores = sc.map(function (v) { return v + i; }); pl.totalScore = sc.reduce(function (a, b) { return a + b; }, 0) + i * sc.length; });
+        window.dispatchEvent(new CustomEvent('GolfEvent_RoundCompleted', { detail: { scorecard: GolfEngine.scorecard(pls[0]), scorecards: pls.map(function (pl) { return Object.assign({ player: pl }, GolfEngine.scorecard(pl)); }) } }));
+      }, scores);
+    };
+    await finish([3]);
+    await page.waitForURL(/plate=1/, { timeout: 15000 }).catch(function () {});
+    const url1 = page.url();
+    const p0 = POSTED[0] || { body: { stats: {} } };
+    check('plate 1 is filed as a plate of the collection (collection id, plate 0, seat 0) and the next page is plate 2 of the order the round started with (TESTCOURSE, not the swapped order)',
+      POSTED.length === 1 && POSTED[0].code === 'PUTTCOURSE' && p0.body.stats.collection_id === 'COL1' && p0.body.stats.plate_index === 0 && p0.body.stats.player_slot === 0 && /-p0-0$/.test(p0.body.stats.round_id) && /course=TESTCOURSE&collection=COL1&plate=1/.test(url1),
+      JSON.stringify({ n: POSTED.length, stats: p0.body.stats, url: url1 }));
+    await page.waitForTimeout(6000);
+    const head1 = await page.evaluate(function () { return { hole: document.getElementById('ui-hole').innerText, names: window.GolfEngine.getState().players.map(function (x) { return x.name; }), scores: sessionStorage.getItem('collection_scores_COL1') }; });
+    check('plate 2: the header goes on from hole 4 (Hole 4/6) with the same players, and the first plate\'s scores were kept', head1.hole === 'Hole 4/6' && head1.names.join() === 'Anna,Bo' && JSON.parse(head1.scores)[0].plateScores.length === 2, JSON.stringify(head1));
+    await finish([2, 2]);
+    await page.waitForFunction(function () { return /Saved/.test((document.getElementById('sc-status') || {}).textContent || ''); }, null, { timeout: 15000 }).catch(function () {});
+    const card = await page.evaluate(function () { return { text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), holes: Array.from(document.querySelectorAll('#popup-desc .sc-table tr')).map(function (r) { return r.cells[0].innerText; }).join(), left: ['collection_scores_COL1', 'collection_round_COL1', 'collection_roster_COL1', 'collection_plates_COL1'].filter(function (k) { return sessionStorage.getItem(k) !== null; }) }; });
+    const p1 = POSTED[1] || { body: { stats: {} } };
+    check('the last plate is filed with the same round token as plate 1 (plate 1, seat 0), the card numbers the holes 4 and 5 and adds up the whole round, and the round\'s state is cleared',
+      POSTED.length === 2 && POSTED[1].code === 'TESTCOURSE' && p1.body.stats.plate_index === 1 && p1.body.stats.collection_round_id === p0.body.stats.collection_round_id && /-p1-0$/.test(p1.body.stats.round_id) && card.holes === 'Hole,4,5,Total,All 5' && card.left.length === 0,
+      JSON.stringify({ n: POSTED.length, stats: p1.body.stats, card: card }));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+    COLLECTION.plates = [COLLECTION.plates[1], COLLECTION.plates[0]];
+  }
+
   // two players on one phone: the farthest from the flag plays, the honour on the next tee, one scorecard for both, only player 1 on the board
   {
     const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 390, height: 844 }, { init: function () {
@@ -1010,13 +1054,22 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       return { names: Array.from(document.querySelectorAll('.course-name')).map(function (n) { return n.textContent; }), meta: document.querySelector('.course-card').innerText.replace(/\s+/g, ' '),
                injected: !!document.getElementById('xss'), mock: document.body.innerText.indexOf('Pine Valley') >= 0 };
     });
-    check('the course list comes from the server (GET /api/courses), not from a made-up list', list.names.length === 2 && list.names[1] === 'Putt Green' && !list.mock, JSON.stringify(list.names));
+    check('the course list comes from the server (GET /api/courses), not from a made-up list (and the collection after the courses)', list.names.length === 3 && list.names[1] === 'Putt Green' && !list.mock, JSON.stringify(list.names));
     check('a course name with HTML in it is shown as text, not run', list.names[0] === 'Test <b id="xss">Course</b>' && !list.injected, JSON.stringify(list.names[0]));
     check('a card shows holes, par and the author', /2 Holes/.test(list.meta) && /Par 7/.test(list.meta) && /Anna/.test(list.meta), list.meta);
     const nextDisabled = await page.evaluate(function () { return document.getElementById('main-action-btn').disabled; });
     await page.click('.course-card:nth-child(2)');
     const picked = await page.evaluate(function () { return { code: matchState.courseCode, selected: document.querySelectorAll('.course-card.selected').length, disabled: document.getElementById('main-action-btn').disabled }; });
     check('picking a course selects it by its share code and enables Continue', nextDisabled === true && picked.code === 'PUTTCOURSE' && picked.selected === 1 && picked.disabled === false, JSON.stringify(picked));
+    // the collection card: text, plates, and Continue opens the first plate with the collection in the link
+    const colCard = await page.evaluate(function () { const c = Array.from(document.querySelectorAll('.course-card'))[2]; return { text: c.innerText.replace(/\s+/g, ' '), injected: !!document.getElementById('xss2') }; });
+    check('a collection is listed after the courses: name as text, holes and plates', /Mixed <i id="xss2">six<\/i>/.test(colCard.text) && /6 Holes/.test(colCard.text) && /2 plates/.test(colCard.text) && !colCard.injected, JSON.stringify(colCard));
+    await page.click('.course-card:nth-child(3)');
+    const pickedCol = await page.evaluate(function () { return { code: matchState.courseCode, col: matchState.collectionId, selected: document.querySelectorAll('.course-card.selected').length }; });
+    check('picking a collection selects its first plate and the collection (only that card is highlighted)', pickedCol.code === 'PUTTCOURSE' && pickedCol.col === 'COL1' && pickedCol.selected === 1, JSON.stringify(pickedCol));
+    await page.click('.course-card:nth-child(1)');
+    const backToCourse = await page.evaluate(function () { return { code: matchState.courseCode, col: matchState.collectionId }; });
+    check('picking a course again drops the collection', backToCourse.code === 'TESTCOURSE' && backToCourse.col === null, JSON.stringify(backToCourse));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
