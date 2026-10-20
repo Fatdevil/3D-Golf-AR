@@ -792,19 +792,33 @@
 
             window.addEventListener('GolfEvent_RoundCompleted', e => {
                 const sc = e.detail.scorecard, all = e.detail.scorecards || [];
+                if (collection && !lastPlate) { goToNextPlate(sc); return; }
                 const vs = d => (d === 0 ? 'even' : (d > 0 ? '+' + d : d));
                 let line;
-                if (multi) {
+                if (collection) {
+                    // the whole course: the plates before this one (by seat, not by name: two players may share a name) and this one
+                    const tot = i => priorTotal(i) + (all[i] ? all[i].score : sc.score);
+                    if (multi) {
+                        const totals = players.map((pl, i) => tot(i)), best = Math.min(...totals), winners = players.filter((pl, i) => totals[i] === best);
+                        line = winners.length === 1 ? esc(winners[0].name) + ' wins with ' + best : 'Tie at ' + best;
+                    } else line = `Total ${tot(0)} over ${totalHoles} holes`;
+                } else if (multi) {
                     const best = Math.min(...all.map(x => x.score)), winners = all.filter(x => x.score === best);
                     line = winners.length === 1 ? esc(winners[0].player.name) + ' wins with ' + best + ' (' + vs(winners[0].vsPar) + ')' : 'Tie at ' + best;
                 } else line = `Total ${sc.score} (${vs(sc.vsPar)})`;
                 showPopup('ROUND COMPLETE', scorecardHtml() + `<div style="margin-top:12px">${line}</div><div id="sc-status" style="margin-top:8px;font-size:15px;color:#94a3b8"></div>`, '#10b981', 'Back to menu', () => { window.location.href = 'arcade_mobile_hub.html'; }, true);
-                if (collection && !lastPlate) { goToNextPlate(sc); return; }
                 submitRound(sc);
             });
 
             // A plate that is not the last: its round is filed (as a round of that plate, tied to the collection by the round's token), the players
             // and scores are kept for the next page, and the next plate opens. Not later than 3 seconds more for the answer.
+            // what player i (their seat on this phone) scored on the plates before this one
+            function priorTotal(i) {
+                let before = [];
+                try { before = JSON.parse(sessionStorage.getItem('collection_scores_' + roundKey) || '[]'); } catch (e) { /* none */ }
+                return before.reduce((sum, b) => sum + ((((b.plateScores || [])[i] || {}).scores || []).reduce((a, v) => a + (Number(v) || 0), 0)), 0);
+            }
+
             function goToNextPlate(sc) {
                 const done = (holeOffset + holes.length);
                 try {
@@ -897,10 +911,7 @@
                 // the whole round so far: the plates before this one (kept in sessionStorage) and this one
                 let all = '';
                 if (collection && plateIndex > 0) {
-                    let before = [];
-                    try { before = JSON.parse(sessionStorage.getItem('collection_scores_' + roundKey) || '[]'); } catch (e) { /* none */ }
-                    const prev = pl => before.reduce((sum, b) => sum + (((b.plateScores || []).find(x => x.name === pl.name) || { scores: [] }).scores.reduce((a, v) => a + (Number(v) || 0), 0)), 0);
-                    all = `<tr class="sc-total"><td>All ${holeOffset + cards[0].rows.length}</td><td></td>${cards.map((c, i) => `<td>${n(prev(players[i]) + c.score)}</td>`).join('')}</tr>`;
+                    all = `<tr class="sc-total"><td>All ${holeOffset + cards[0].rows.length}</td><td></td>${cards.map((c, i) => `<td>${n(priorTotal(i) + c.score)}</td>`).join('')}</tr>`;
                 }
                 return `<div class="sc-scroll"><table class="sc-table${multi ? ' sc-multi' : ''}"><tr><th>Hole</th><th>Par</th>${head}</tr>${rows}${total}${all}</table></div>`;
             }
