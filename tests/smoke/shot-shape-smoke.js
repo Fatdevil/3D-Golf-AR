@@ -712,6 +712,28 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  // a plate taken out of the collection during the round: the rest is played as ordinary rounds, and the player is told
+  {
+    POSTED.length = 0;
+    const saved = COLLECTION.plates;
+    COLLECTION.plates = [{ plate_code: 'TESTCOURSE', plate_name: 'Test' }, { plate_code: 'LONGCOURSE', plate_name: 'Long' }];   // PUTTCOURSE is gone
+    const o = await open('/arcade_mobile.html?course=TESTCOURSE&collection=col1&plate=1', { width: 390, height: 844 }, { init: function () {
+      sessionStorage.setItem('collection_plates_COL1', JSON.stringify([{ plate_code: 'PUTTCOURSE' }, { plate_code: 'TESTCOURSE' }]));
+    } });
+    const page = o.page;
+    const st = await page.evaluate(function () { return { title: document.getElementById('popup-title').innerText, hole: document.getElementById('ui-hole').innerText }; });
+    check('a plate was taken out of the collection during the round: the player is told (COURSE CHANGED) and the page is an ordinary course (Hole 1/2, no collection)', st.title === 'COURSE CHANGED' && st.hole === 'Hole 1/2', JSON.stringify(st));
+    await page.evaluate(function () {
+      const pl = window.GolfEngine.getState().players[0]; pl.strokes = 1; pl.scores = [3, 3]; pl.totalScore = 6;
+      window.dispatchEvent(new CustomEvent('GolfEvent_RoundCompleted', { detail: { scorecard: GolfEngine.scorecard(pl), scorecards: [Object.assign({ player: pl }, GolfEngine.scorecard(pl))] } }));
+    });
+    await page.waitForFunction(function () { return /Saved/.test((document.getElementById('sc-status') || {}).textContent || ''); }, null, { timeout: 15000 }).catch(function () {});
+    check('and its result is filed as an ordinary round (no collection in the stats)', POSTED.length === 1 && POSTED[0].code === 'TESTCOURSE' && POSTED[0].body.stats.collection_id === undefined && POSTED[0].body.stats.plate_index === undefined, JSON.stringify(POSTED.map(function (x) { return x.body.stats; })));
+    check('no page errors', o.errors.length === 0, o.errors.join(' | '));
+    await o.ctx.close();
+    COLLECTION.plates = saved;
+  }
+
   // a collection on the phone: plate 1 is filed as a plate of the collection and the next plate opens; the last plate is filed with the same token
   {
     POSTED.length = 0;

@@ -293,7 +293,7 @@
             // A collection (a 6, 9 or 18 hole course of 3-hole plates) is played one plate per page, as on arcade.html: the plates come in the order
             // they had when the round started, the players, scores and the round's token ride along in sessionStorage (under the collection's own id).
             const HOLES_PER_PLATE = 3;
-            let collection = null, plateIndex = 0, roundKey = null;
+            let collection = null, plateIndex = 0, roundKey = null, courseChangedNote = false;
             if (params.get('collection') && window.ArcadeAPI) {
                 try {
                     const c = await window.ArcadeAPI.getCollection(params.get('collection'));
@@ -309,12 +309,20 @@
                         sessionStorage.setItem('collection_plates_' + roundKey, JSON.stringify(collection.plates.map(p => typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name })));
                     } else {
                         const frozen = JSON.parse(sessionStorage.getItem('collection_plates_' + roundKey) || 'null');
-                        if (Array.isArray(frozen) && frozen.length > plateIndex && frozen[plateIndex] && String(frozen[plateIndex].plate_code).toUpperCase() === String(courseCode).toUpperCase()) collection.plates = frozen;
+                        if (Array.isArray(frozen) && frozen.length > plateIndex && frozen[plateIndex] && String(frozen[plateIndex].plate_code).toUpperCase() === String(courseCode).toUpperCase()) {
+                            // The order of the round is kept as long as the same plates are in the collection. If a plate was taken out or replaced
+                            // meanwhile, the course is no longer the one that was started: the rest is played as ordinary rounds (the server only
+                            // ties a result to a collection whose plates it still has), and the player is told.
+                            const code = p => String(typeof p === 'string' ? p : p.plate_code).toUpperCase();
+                            const now = collection.plates.map(code);
+                            if (frozen.length === now.length && frozen.every(p => now.indexOf(code(p)) >= 0)) collection.plates = frozen;
+                            else { courseChangedNote = true; collection = null; }
+                        }
                         const roster = JSON.parse(sessionStorage.getItem('collection_roster_' + roundKey) || 'null');
                         if (Array.isArray(roster) && roster.length > 0) matchData.players = roster;   // the players of the round come along
                     }
                 } catch (e) { /* no storage: the plates are played as the collection is now */ }
-                if (plateIndex >= collection.plates.length) { collection = null; plateIndex = 0; }
+                if (collection && plateIndex >= collection.plates.length) { collection = null; plateIndex = 0; }
             }
             const holeOffset = collection ? plateIndex * HOLES_PER_PLATE : 0;
             const totalHoles = collection ? (parseInt(collection.type, 10) || collection.plates.length * HOLES_PER_PLATE) : 0;
@@ -978,6 +986,7 @@
             
             // the round starts: hole 1 is up (the HOLE_STARTED listener loads it)
             window.GolfEngine.startRound(holes.map(h => ({ par: h.par })));
+            if (courseChangedNote) showPopup('COURSE CHANGED', 'The plates of this course were changed during your round. The rest is played as ordinary rounds, not as part of the course.', '#fbbf24', 'Continue');
 
             // 7. SWING ENGINE INTEGRATION
             window.playingHoleIndex = 0;
