@@ -71,13 +71,35 @@ check('varje spelare har en plats (slot) som följer hela rundan, och resultatet
 check('samlingens slaglista summerar per plats, inte per plats i den här sidans lista', /slotOf\(/.test(arcade) && (arcade.match(/slotOf\(/g) || []).length >= 4);
 check('spelarlistan rensas när sista plattan är klar och när en ny omgång startas', /removeItem\('collection_roster_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_roster_' \+ collectionId\)/.test(read('build.html')));
 
-check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken och spelare rensas, vilken sida man än startade från', /if \(plateIndex === 0\) \{\s*try \{ \['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'\]\.forEach/.test(load) && load.indexOf("if (plateIndex === 0) {") < load.indexOf("window._collectionScores = JSON.parse"));
+check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken och spelare rensas, vilken sida man än startade från', /if \(plateIndex === 0\) \{\s*try \{ \['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_'\]\.forEach/.test(load) && load.indexOf("if (plateIndex === 0) {") < load.indexOf("window._collectionScores = JSON.parse"));
 
 check('plattföljden fryses när en runda startar (platta 1) och plattorna 2 och framåt följer den, så en ändring av samlingen under rundan flyttar inte på vägen',
-  /setItem\('collection_plates_' \+ roundKey/.test(load) && /getItem\('collection_plates_' \+ roundKey\)/.test(load) && /colRes\.plates = frozen/.test(load));
+  /setItem\('collection_plates_' \+ roundKey/.test(load) && /getItem\('collection_plates_' \+ roundKey\)/.test(load) && /CollectionRound\.continueRound\(/.test(load) && /colRes\.plates = r\.plates/.test(load));
 check('rundans nycklar i sessionStorage bygger på samlingens eget id i versaler, så en länk med gemener hittar samma tillstånd som nästa platta och poängkortet', /const roundKey = String\(colRes\.id \|\| collectionId\)\.toUpperCase\(\)/.test(load) && !/sessionStorage\.\w+Item\('collection_\w+_' \+ collectionId/.test(load));
-check('och den fryser bara om sidan själv finns i den frusna följden, annars gäller samlingen som den är', /frozen\[plateIndex\]\.plate_code\)\.toUpperCase\(\) === String\(courseCode\)\.toUpperCase\(\)/.test(load));
+check('och den fryser bara om sidan själv finns i den frusna följden, annars gäller samlingen som den är (regeln finns på ett ställe, collection-round.js, som båda skärmarna använder)', /codeOf\(frozen\[o\.plateIndex\]\) !== String\(o\.courseCode\)\.toUpperCase\(\)/.test(read('collection-round.js')) && /collection-round\.js/.test(arcade) && /collection-round\.js/.test(read('arcade_mobile.html')));
 check('den frusna följden rensas när rundan är slut och när en ny startas från byggsidan', /removeItem\('collection_plates_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_plates_' \+ collectionId\)/.test(read('build.html')));
+
+// --- en runda över flera sidor: samma plattor och samma versioner ---
+const CR = require('../collection-round.js');
+const P = c => ({ plate_code: c });
+const colNow = (codes, versions) => ({ plates: codes.map(P), plate_versions: versions });
+const started = ['A', 'B', 'C'].map(P);
+let cr = CR.continueRound({ frozen: started, versions: { A: 1, B: 1, C: 1 }, collection: colNow(['A', 'C', 'B'], { A: 1, B: 1, C: 1 }), plateIndex: 1, courseCode: 'b' });
+check('samma plattor i annan ordning: rundan går vidare i den ordning den startade med', !cr.changed && cr.plates.map(CR.codeOf).join() === 'A,B,C', JSON.stringify(cr));
+cr = CR.continueRound({ frozen: started, versions: null, collection: colNow(['A', 'B', 'D'], {}), plateIndex: 1, courseCode: 'B' });
+check('en platta utbytt: banan är inte längre den som startades (changed)', cr.changed === true);
+cr = CR.continueRound({ frozen: started, versions: null, collection: colNow(['A', 'B'], {}), plateIndex: 1, courseCode: 'B' });
+check('en platta borttagen: changed', cr.changed === true);
+cr = CR.continueRound({ frozen: started, versions: { A: 1, B: 1, C: 1 }, collection: colNow(['A', 'B', 'C'], { A: 2, B: 1, C: 1 }), plateIndex: 1, courseCode: 'B' });
+check('en redan spelad platta (A) publicerad igen sedan start: changed (dess resultat räknas inte längre)', cr.changed === true);
+cr = CR.continueRound({ frozen: started, versions: { A: 1, B: 1, C: 1 }, collection: colNow(['A', 'B', 'C'], { A: 1, B: 1, C: 3 }), plateIndex: 1, courseCode: 'B' });
+check('en platta som inte spelats än (C) publicerad igen är inget problem: dess resultat får den nya versionen', !cr.changed);
+cr = CR.continueRound({ frozen: started, versions: { A: 1, B: 1, C: 1 }, collection: colNow(['A', 'B', 'C'], { A: 1, B: 2, C: 1 }), plateIndex: 1, courseCode: 'B' });
+check('och inte heller plattan som spelas nu (B): den spelas in på sin nya version', !cr.changed);
+cr = CR.continueRound({ frozen: started, versions: null, collection: colNow(['A', 'B', 'C'], { A: 9 }), plateIndex: 1, courseCode: 'B' });
+check('utan sparade versioner (äldre sida eller server) bedöms bara plattorna', !cr.changed);
+cr = CR.continueRound({ frozen: null, versions: null, collection: colNow(['B', 'A'], {}), plateIndex: 1, courseCode: 'A' });
+check('inget sparat från start: samlingen som den är', !cr.changed && cr.plates.map(CR.codeOf).join() === 'B,A');
 
 // --- katalogen ---
 const catalog = read('courses.html');
@@ -92,7 +114,7 @@ check('topplistan skiljer spelare på plats (player_slot), inte på namn', /COAL
 check('servern kontrollerar plattorna vid sparande och räknar totalpar själv', /checkPlateList\(type, plates\)/.test(server) && /checkPlatesExist\(cleanPlates, found\.rows\)/.test(server) && !/total_par\s*\}\s*=\s*req\.body/.test(server.slice(server.indexOf("app.post('/api/collections'"), server.indexOf("app.get('/api/collections/:id/leaderboard'"))));
 check('servern lagrar samlingens slagindex och betyg, räknar om dem i samma transaktion som banan när en platta publiceras igen och låter en samlingsrunda ge en differential', /ADD COLUMN IF NOT EXISTS stroke_index JSONB/.test(server) && /await txdb\.query\('BEGIN'\);[\s\S]{0,2500}refreshCollectionsOf\(txdb, updateResult\.rows\[0\]\.share_code\);\s*await txdb\.query\('COMMIT'\)/.test(server) && /collDifferential/.test(server));
 check('handikapphistoriken visar en samlingsrunda ur den ögonblicksbild servern skrev när rundan slutfördes (collection_go), inte ur föränderliga data, och en klient kan inte skicka in en egen', /stats \|\| jsonb_build_object\('collection_go'/.test(server) && /const go = r\.stats && r\.stats\.collection_go/.test(server) && /delete storedStats\.collection_go/.test(server));
-check('betyg som saknas på en äldre samling räknas fram när de behövs (när samlingen läses och när ett resultat kommer in)', /async function ensureCollectionRatings/.test(server) && /coll = await ensureCollectionRatings\(pool, cr\.rows\[0\]\)/.test(server) && /res\.json\(await ensureCollectionRatings\(pool, result\.rows\[0\]\)\)/.test(server));
+check('betyg som saknas på en äldre samling räknas fram när de behövs (när samlingen läses och när ett resultat kommer in)', /async function ensureCollectionRatings/.test(server) && /coll = await ensureCollectionRatings\(pool, cr\.rows\[0\]\)/.test(server) && /const row = await ensureCollectionRatings\(pool, result\.rows\[0\]\)/.test(server));
 check('en samling sparas i en transaktion som läser plattorna med delat lås, så en publicering som pågår inte kan smita förbi', /async function saveCollection\(db, req, shape\)/.test(server) && /FROM courses WHERE share_code = ANY\(\$1\) FOR SHARE/.test(server) && /await db\.query\('BEGIN'\);\s*const out = await saveCollection\(db, req, shape\)/.test(server));
 check('omräkningen när en platta publiceras låser samlingens rad innan plattorna läses', /SELECT id, plates FROM course_collections WHERE id = \$1 FOR UPDATE/.test(server));
 check('klienten skickar platsen (player_slot) med varje resultat, också på vanliga banor, och servern räknar bara plats 0 (eller ingen angiven plats) för handicapet', /: \{ player_slot: seat \},/.test(result) && /const guest = !!\(stats && stats\.player_slot !== undefined/.test(server) && /!flagged && !guest\) \{\s*newHcp = await updateHandicapIndex/.test(server));

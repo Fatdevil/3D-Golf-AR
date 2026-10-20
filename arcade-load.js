@@ -924,17 +924,37 @@
                                 window._activePlateIndex = plateIndex;
                                 // Plate 1 is where a collection round starts, whichever page it was started from (build.html, courses.html, a link): what an
                                 // earlier, abandoned go left behind (scores, round token, players) must not carry into this one
+                                let roundChanged = false;
                                 if (plateIndex === 0) {
-                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_'].forEach(function (k) { sessionStorage.removeItem(k + roundKey); }); } catch (e) {}
-                                    // the plates in the order they were when the round started: the collection can be edited meanwhile (another tab, another device)
+                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_'].forEach(function (k) { sessionStorage.removeItem(k + roundKey); }); } catch (e) {}
+                                    // the plates in the order they were when the round started (and the version each had): the collection can be edited meanwhile (another tab, another device)
                                     try { sessionStorage.setItem('collection_plates_' + roundKey, JSON.stringify(colRes.plates.map(function (p) { return typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name }; }))); } catch (e) {}
+                                    try { sessionStorage.setItem('collection_versions_' + roundKey, JSON.stringify(colRes.plate_versions || null)); } catch (e) {}
                                 } else {
-                                    // Plate 2 and on follow the order the round started with, as long as this plate is in it (else the collection as it is now)
+                                    // Plate 2 and on follow the order the round started with, as long as the same plates are in the collection and the ones
+                                    // already played are the versions that were played. If not, the course is no longer the one that was started: the rest
+                                    // is played as ordinary rounds (the server only ties a result to a collection that still has those plates), and the player is told.
                                     try {
-                                        let frozen = JSON.parse(sessionStorage.getItem('collection_plates_' + roundKey) || 'null');
-                                        if (Array.isArray(frozen) && frozen.length > plateIndex && frozen[plateIndex] && String(frozen[plateIndex].plate_code).toUpperCase() === String(courseCode).toUpperCase()) colRes.plates = frozen;
+                                        let r = window.CollectionRound.continueRound({
+                                            frozen: JSON.parse(sessionStorage.getItem('collection_plates_' + roundKey) || 'null'),
+                                            versions: JSON.parse(sessionStorage.getItem('collection_versions_' + roundKey) || 'null'),
+                                            collection: colRes, plateIndex: plateIndex, courseCode: courseCode
+                                        });
+                                        if (r.changed) roundChanged = true; else colRes.plates = r.plates;
                                     } catch (e) {}
                                 }
+                                if (roundChanged) {
+                                    window._activeCollection = null;
+                                    window._activePlateIndex = undefined;
+                                    window._holeNumberOffset = 0;
+                                    setTimeout(function () {
+                                        let pop = document.getElementById('score-popup');
+                                        if (!pop) return;
+                                        pop.innerText = 'The plates of this course were changed during your round: the rest is played as ordinary rounds.';
+                                        pop.style.opacity = '1';
+                                        setTimeout(function () { pop.style.opacity = '0'; }, 8000);
+                                    }, 3000);
+                                } else {
                                 window._collectionScores = JSON.parse(sessionStorage.getItem('collection_scores_' + roundKey) || '[]');
                                 // Override displayed hole numbers based on plate position
                                 window._holeNumberOffset = plateIndex * MAX_HOLES;
@@ -946,6 +966,7 @@
                                     }
                                 } catch (e) {}
                                 console.log('📦 Collection loaded:', colRes.name, '| Plate', plateIndex + 1, '/', colRes.plates.length);
+                                }
                             }
                         } catch(e) { console.warn('Collection load failed:', e); }
                     }

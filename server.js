@@ -1144,7 +1144,17 @@ app.get('/api/collections/:id', requireDB, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM course_collections WHERE id = $1', [req.params.id.toUpperCase()]);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Collection not found' });
-        res.json(await ensureCollectionRatings(pool, result.rows[0]));
+        const row = await ensureCollectionRatings(pool, result.rows[0]);
+        // the version each plate has now: a round that is played over several pages checks that the plates it has played are still those versions
+        let plates = row.plates;
+        if (typeof plates === 'string') { try { plates = JSON.parse(plates); } catch (e) { plates = []; } }
+        const codes = (Array.isArray(plates) ? plates : []).map(p => collectionsCore.plateCode(p)).filter(Boolean);
+        const versions = {};
+        if (codes.length > 0) {
+            const vr = await pool.query('SELECT share_code, COALESCE(version, 1) AS version FROM courses WHERE share_code = ANY($1)', [codes]);
+            vr.rows.forEach(r => { versions[String(r.share_code).toUpperCase()] = r.version; });
+        }
+        res.json(Object.assign({}, row, { plate_versions: versions }));
     } catch(err) {
         console.error('Collection fetch error:', err);
         res.status(500).json({ error: 'Database error' });
