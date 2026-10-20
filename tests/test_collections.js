@@ -79,6 +79,8 @@ check('rundans nycklar i sessionStorage bygger på samlingens eget id i versaler
 check('och den fryser bara om sidan själv finns i den frusna följden, annars gäller samlingen som den är (regeln finns på ett ställe, collection-round.js, som båda skärmarna använder)', /codeOf\(frozen\[o\.plateIndex\]\) !== String\(o\.courseCode\)\.toUpperCase\(\)/.test(read('collection-round.js')) && /collection-round\.js/.test(arcade) && /collection-round\.js/.test(read('arcade_mobile.html')));
 check('den frusna följden rensas när rundan är slut och när en ny startas från byggsidan', /removeItem\('collection_plates_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_plates_' \+ collectionId\)/.test(read('build.html')));
 
+check('en samling som inte går att läsa in stoppar stora skärmen med ett felmeddelande och Försök igen (tre försök), i stället för att spela plattan som vanlig bana', /attempt < 3/.test(load) && /collection-load-error/.test(load) && /COULD NOT LOAD/.test(load) && /window\.location\.reload\(\)/.test(load));
+
 // --- en runda över flera sidor: samma plattor och samma versioner ---
 const CR = require('../collection-round.js');
 const P = c => ({ plate_code: c });

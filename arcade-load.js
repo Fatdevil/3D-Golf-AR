@@ -916,7 +916,31 @@
                     // Collection support: load collection metadata
                     if (collectionId) {
                         try {
-                            let colRes = await ArcadeAPI.getCollection(collectionId);
+                            // a collection that cannot be loaded is not played on as a single course (the round would be left behind half way): a few
+                            // tries, then a message with Try again
+                            let colRes = null;
+                            for (let attempt = 0; attempt < 3 && !(colRes && Array.isArray(colRes.plates) && colRes.plates.length > 0); attempt++) {
+                                if (attempt > 0) await new Promise(function (r) { setTimeout(r, 700); });
+                                try { colRes = await ArcadeAPI.getCollection(collectionId); } catch (e) { colRes = null; }
+                            }
+                            if (!(colRes && Array.isArray(colRes.plates) && colRes.plates.length > 0)) {
+                                let box = document.createElement('div');
+                                box.id = 'collection-load-error';
+                                box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,23,42,0.96);color:#fff;font-family:Inter,sans-serif;text-align:center;padding:24px;';
+                                let title = document.createElement('div');
+                                title.style.cssText = 'font-size:28px;font-weight:800;color:#f87171;';
+                                title.textContent = 'COULD NOT LOAD';
+                                let msg = document.createElement('div');
+                                msg.style.cssText = 'font-size:16px;color:#94a3b8;max-width:420px;';
+                                msg.textContent = 'The course could not be loaded. Check your connection and try again.';
+                                let btn = document.createElement('button');
+                                btn.textContent = 'Try again';
+                                btn.style.cssText = 'padding:12px 28px;border:none;border-radius:10px;background:#38bdf8;color:#0f172a;font-weight:800;font-size:16px;cursor:pointer;';
+                                btn.onclick = function () { window.location.reload(); };
+                                box.appendChild(title); box.appendChild(msg); box.appendChild(btn);
+                                document.body.appendChild(box);
+                                return;
+                            }
                             if (colRes && colRes.plates) {
                                 window._activeCollection = colRes;
                                 // the keys of the round's state in sessionStorage use the collection's own (upper case) id, as the next plate's page and the scorecard do, whatever case the link had
