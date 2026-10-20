@@ -829,14 +829,24 @@
                     }
                     sessionStorage.setItem('collection_roster_' + roundKey, JSON.stringify(players.map(pl => ({ name: pl.name, color: pl.color }))));
                 } catch (e) { /* no storage */ }
-                showPopup(done + ' HOLES PLAYED', 'On to the next plate…', '#10b981', 'Continue', null);
-                const sent = submitRound(sc, true);
                 const nextPlate = collection.plates[plateIndex + 1];
                 const nextCode = typeof nextPlate === 'string' ? nextPlate : nextPlate.plate_code;
-                setTimeout(() => {
-                    const url = 'arcade_mobile.html?v=' + Date.now() + '&course=' + encodeURIComponent(nextCode) + '&collection=' + encodeURIComponent(roundKey) + '&plate=' + (plateIndex + 1);
-                    Promise.race([sent, new Promise(r => setTimeout(r, 3000))]).then(() => { window.location.href = url; });
-                }, 2000);
+                const url = 'arcade_mobile.html?v=' + Date.now() + '&course=' + encodeURIComponent(nextCode) + '&collection=' + encodeURIComponent(roundKey) + '&plate=' + (plateIndex + 1);
+                // A plate that was not filed leaves a hole in the course (the collection needs every plate): the answer is waited for, and a failure
+                // is shown with a way to try again (the same round id, so a record that did get saved is not filed twice) or to go on without it.
+                const attempt = async () => {
+                    showPopup(done + ' HOLES PLAYED', 'On to the next plate…', '#10b981', 'Continue', null);
+                    const started = Date.now();
+                    const sent = submitRound(sc, true);
+                    const answer = await Promise.race([sent, new Promise(r => setTimeout(() => r('slow'), 8000))]);   // slow: the request goes on after the page has moved on
+                    if (answer === false) {
+                        showPopup('COULD NOT SAVE', 'The result of this plate was not saved.<div style="margin-top:14px"><button id="plate-skip" style="padding:10px 18px;border:none;border-radius:10px;background:rgba(255,255,255,0.12);color:#fff;font-weight:700;font-size:15px">Continue without saving</button></div>', '#f87171', 'Try again', () => attempt(), true);
+                        document.getElementById('plate-skip').onclick = () => { window.location.href = url; };
+                        return;
+                    }
+                    setTimeout(() => { window.location.href = url; }, Math.max(0, 2000 - (Date.now() - started)));
+                };
+                attempt();
             }
 
             // A finished round goes to the course's leaderboard (and the handicap), like arcade.html does. Not for a practice hole, a draft
@@ -895,7 +905,7 @@
                     if (r.handicap && Number.isFinite(Number(r.handicap.new))) t += ' · Handicap ' + Number(r.handicap.new).toFixed(1);
                     if (r.flagged) t += ' (flagged as unusual)';
                     say(t);
-                } catch (e) { say('Could not save the result.', true); }
+                } catch (e) { say('Could not save the result.', true); return false; }
                 finally { if (back) back.disabled = false; }
             }
 

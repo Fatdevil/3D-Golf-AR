@@ -709,12 +709,19 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
         window.dispatchEvent(new CustomEvent('GolfEvent_RoundCompleted', { detail: { scorecard: GolfEngine.scorecard(pls[0]), scorecards: pls.map(function (pl) { return Object.assign({ player: pl }, GolfEngine.scorecard(pl)); }) } }));
       }, scores);
     };
+    RESULT_MODE = 'fail';   // the leaderboard cannot be reached: the plate is not left behind
     await finish([[5], [2]]);   // Sam (seat 1) 5, Sam (seat 2) 2
+    await page.waitForFunction(function () { return document.getElementById('popup-title').innerText === 'COULD NOT SAVE'; }, null, { timeout: 15000 }).catch(function () {});
+    const failed = await page.evaluate(function () { return { title: document.getElementById('popup-title').innerText, btn: document.getElementById('popup-btn').innerText, skip: !!document.getElementById('plate-skip'), url: location.search, disabled: document.getElementById('popup-btn').disabled }; });
+    await page.waitForTimeout(3000);
+    check('a plate that could not be filed is not left behind: the page stays, with Try again and Continue without saving', failed.title === 'COULD NOT SAVE' && failed.btn === 'Try again' && failed.skip && /plate=0/.test(failed.url) && failed.disabled === false && /plate=0/.test(page.url()) && POSTED.length === 1, JSON.stringify({ failed: failed, n: POSTED.length, url: page.url() }));
+    RESULT_MODE = 'ok';
+    await page.click('#popup-btn');
     await page.waitForURL(/plate=1/, { timeout: 15000 }).catch(function () {});
     const url1 = page.url();
-    const p0 = POSTED[0] || { body: { stats: {} } };
-    check('plate 1 is filed as a plate of the collection (collection id, plate 0, seat 0) and the next page is plate 2 of the order the round started with (TESTCOURSE, not the swapped order)',
-      POSTED.length === 1 && POSTED[0].code === 'PUTTCOURSE' && p0.body.stats.collection_id === 'COL1' && p0.body.stats.plate_index === 0 && p0.body.stats.player_slot === 0 && /-p0-0$/.test(p0.body.stats.round_id) && /course=TESTCOURSE&collection=COL1&plate=1/.test(url1),
+    const p0 = POSTED[1] || { body: { stats: {} } };
+    check('Try again files it (the same round id as the failed try) as a plate of the collection (collection id, plate 0, seat 0) and the next page is plate 2 of the order the round started with (TESTCOURSE, not the swapped order)',
+      POSTED.length === 2 && POSTED[1].code === 'PUTTCOURSE' && POSTED[0].body.stats.round_id === p0.body.stats.round_id && p0.body.stats.collection_id === 'COL1' && p0.body.stats.plate_index === 0 && p0.body.stats.player_slot === 0 && /-p0-0$/.test(p0.body.stats.round_id) && /course=TESTCOURSE&collection=COL1&plate=1/.test(url1),
       JSON.stringify({ n: POSTED.length, stats: p0.body.stats, url: url1 }));
     await page.waitForTimeout(6000);
     const head1 = await page.evaluate(function () { return { hole: document.getElementById('ui-hole').innerText, names: window.GolfEngine.getState().players.map(function (x) { return x.name; }), scores: sessionStorage.getItem('collection_scores_COL1') }; });
@@ -722,9 +729,9 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await finish([[2, 2], [3, 3]]);   // seat 1: 5 + 4 = 9, seat 2: 2 + 6 = 8: seat 2 wins the course although it lost the last plate
     await page.waitForFunction(function () { return /Saved/.test((document.getElementById('sc-status') || {}).textContent || ''); }, null, { timeout: 15000 }).catch(function () {});
     const card = await page.evaluate(function () { return { text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), holes: Array.from(document.querySelectorAll('#popup-desc .sc-table tr')).map(function (r) { return r.cells[0].innerText; }).join(), allRow: Array.from(document.querySelectorAll('#popup-desc .sc-table tr.sc-total:last-child td')).map(function (c) { return c.innerText; }).join(), left: ['collection_scores_COL1', 'collection_round_COL1', 'collection_roster_COL1', 'collection_plates_COL1'].filter(function (k) { return sessionStorage.getItem(k) !== null; }) }; });
-    const p1 = POSTED[1] || { body: { stats: {} } };
+    const p1 = POSTED[2] || { body: { stats: {} } };
     check('the last plate is filed with the same round token as plate 1 (plate 1, seat 0), the card numbers the holes 4 and 5 and adds up the whole round, and the round\'s state is cleared',
-      POSTED.length === 2 && POSTED[1].code === 'TESTCOURSE' && p1.body.stats.plate_index === 1 && p1.body.stats.collection_round_id === p0.body.stats.collection_round_id && /-p1-0$/.test(p1.body.stats.round_id) && card.holes === 'Hole,4,5,Total,All 5' && card.allRow === 'All 5,,9,8' && /Sam wins with 8/.test(card.text) && card.left.length === 0,
+      POSTED.length === 3 && POSTED[2].code === 'TESTCOURSE' && p1.body.stats.plate_index === 1 && p1.body.stats.collection_round_id === p0.body.stats.collection_round_id && /-p1-0$/.test(p1.body.stats.round_id) && card.holes === 'Hole,4,5,Total,All 5' && card.allRow === 'All 5,,9,8' && /Sam wins with 8/.test(card.text) && card.left.length === 0,
       JSON.stringify({ n: POSTED.length, stats: p1.body.stats, card: card }));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
