@@ -8,7 +8,8 @@
 
     // o: { frozen: the plates in the order of the start, versions: { CODE: version } at the start (or null), collection: the collection as it is now
     //      (with plate_versions { CODE: version } when the server tells), plateIndex, courseCode }
-    // Returns { plates, changed }: the plates to go on with, and whether the course is no longer the one that was started.
+    // Returns { plates, changed, versions }: the plates to go on with, whether the course is no longer the one that was started, and (when not) the versions to
+    // keep for the pages after this one.
     //   changed: a plate was taken out or replaced, or a plate already played has been published again since
     //   without a usable start (nothing kept, or this page is not in it) the collection is taken as it is now
     function continueRound(o) {
@@ -20,13 +21,17 @@
         const nowCodes = now.map(codeOf);
         if (frozen.length !== nowCodes.length || !frozen.every(p => nowCodes.indexOf(codeOf(p)) >= 0)) return { plates: now, changed: true };
         const then = o.versions, cur = col.plate_versions;
+        let versions = then || null;
         if (then && cur) {
             for (let i = 0; i < o.plateIndex; i++) {
                 const c = codeOf(frozen[i]);
                 if (then[c] !== undefined && cur[c] !== undefined && then[c] !== cur[c]) return { plates: now, changed: true };
             }
+            // the plate played now is played in the version it has now: that is the version later pages compare it with
+            const here = codeOf(frozen[o.plateIndex]);
+            if (cur[here] !== undefined) versions = Object.assign({}, then, { [here]: cur[here] });
         }
-        return { plates: frozen, changed: false };
+        return { plates: frozen, changed: false, versions: versions };
     }
 
     const api = { codeOf: codeOf, continueRound: continueRound };

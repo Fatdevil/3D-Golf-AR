@@ -940,7 +940,11 @@
                                             versions: JSON.parse(sessionStorage.getItem('collection_versions_' + roundKey) || 'null'),
                                             collection: colRes, plateIndex: plateIndex, courseCode: courseCode
                                         });
-                                        if (r.changed) roundChanged = true; else colRes.plates = r.plates;
+                                        if (r.changed) roundChanged = true;
+                                        else {
+                                            colRes.plates = r.plates;
+                                            if (r.versions) sessionStorage.setItem('collection_versions_' + roundKey, JSON.stringify(r.versions));
+                                        }
                                     } catch (e) {}
                                 }
                                 if (roundChanged) {

@@ -96,6 +96,14 @@ cr = CR.continueRound({ frozen: started, versions: { A: 1, B: 1, C: 1 }, collect
 check('en platta som inte spelats än (C) publicerad igen är inget problem: dess resultat får den nya versionen', !cr.changed);
 cr = CR.continueRound({ frozen: started, versions: { A: 1, B: 1, C: 1 }, collection: colNow(['A', 'B', 'C'], { A: 1, B: 2, C: 1 }), plateIndex: 1, courseCode: 'B' });
 check('och inte heller plattan som spelas nu (B): den spelas in på sin nya version', !cr.changed);
+// C was published again before it was reached; at plate 3 it is played in that version, and plate 3 must not count it as a change
+cr = CR.continueRound({ frozen: started, versions: { A: 1, B: 1, C: 1 }, collection: colNow(['A', 'B', 'C'], { A: 1, B: 1, C: 3 }), plateIndex: 2, courseCode: 'C' });
+const kept = cr.versions;
+check('plattan som spelas nu sparas i den version den har nu (så nästa sida inte räknar den som omgjord)', !cr.changed && kept.C === 3 && kept.A === 1, JSON.stringify(cr));
+cr = CR.continueRound({ frozen: started, versions: kept, collection: colNow(['A', 'B', 'C'], { A: 1, B: 1, C: 3 }), plateIndex: 2, courseCode: 'C' });
+check('och en sida efter den (här samma sida igen) godkänner den versionen', !cr.changed);
+cr = CR.continueRound({ frozen: ['A', 'B', 'C', 'D'].map(P), versions: { A: 1, B: 1, C: 1, D: 1 }, collection: colNow(['A', 'B', 'C', 'D'], { A: 1, B: 1, C: 3, D: 1 }), plateIndex: 3, courseCode: 'D' });
+check('utan att ha uppdaterat versionen på sidan för C (gammal sparad version 1) skulle C räknas som omgjord: det är det som förhindras', cr.changed === true);
 cr = CR.continueRound({ frozen: started, versions: null, collection: colNow(['A', 'B', 'C'], { A: 9 }), plateIndex: 1, courseCode: 'B' });
 check('utan sparade versioner (äldre sida eller server) bedöms bara plattorna', !cr.changed);
 cr = CR.continueRound({ frozen: null, versions: null, collection: colNow(['B', 'A'], {}), plateIndex: 1, courseCode: 'A' });
