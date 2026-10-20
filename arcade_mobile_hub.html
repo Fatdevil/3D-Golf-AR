@@ -386,6 +386,7 @@
         let matchState = {
             mode: null,
             courseCode: null,
+            collectionId: null,
             settings: { gimmeDist: 10, autoPutt: 'TOUR_PRO', autoConcede: 99 },
             players: [{ name: 'Player 1', color: '#ef4444' }]
         };
@@ -447,6 +448,7 @@
         // Course Selection: the published courses from the server (GET /api/courses)
         let courseList = null;   // null = not loaded, [] = none, or the rows
         let courseListError = false;
+        let collectionList = [];   // the complete multi-plate collections (a 6, 9 or 18 hole course of 3-hole plates)
 
         function esc(t) {
             return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -463,6 +465,15 @@
                 courseList = [];
                 courseListError = true;
             }
+            // the collections are a bonus: without them the courses are listed all the same
+            try {
+                const cr = await fetch('/api/collections');
+                const cols = cr.ok ? await cr.json() : [];
+                collectionList = (Array.isArray(cols) ? cols : []).filter(c => {
+                    const plates = Array.isArray(c.plates) ? c.plates : [];
+                    return ['6', '9', '18'].indexOf(String(c.type)) >= 0 && plates.length === Number(c.type) / 3 && plates.every(p => p && (typeof p === 'string' || p.plate_code));
+                });
+            } catch (e) { collectionList = []; }
             loadCourses();
         }
 
@@ -485,7 +496,7 @@
             }
 
             courseList.forEach(c => {
-                const isSelected = matchState.courseCode === c.share_code;
+                const isSelected = matchState.courseCode === c.share_code && !matchState.collectionId;
                 const card = document.createElement('div');
                 card.className = `course-card ${isSelected ? 'selected' : ''}`;
                 card.onclick = () => selectCourse(c.share_code);
@@ -503,12 +514,42 @@
                 `;
                 container.appendChild(card);
             });
+            collectionList.forEach(c => {
+                const isSelected = matchState.collectionId === c.id;
+                const card = document.createElement('div');
+                card.className = `course-card ${isSelected ? 'selected' : ''}`;
+                card.onclick = () => selectCollection(c.id);
+                card.innerHTML = `
+                    <div class="course-img"></div>
+                    <div class="course-info">
+                        <div class="course-name">${esc(c.name)}</div>
+                        <div class="course-meta">
+                            <span><i data-lucide="layers" size="14"></i> ${esc(c.type)} Holes · ${esc(Number(c.type) / 3)} plates</span>
+                            <span><i data-lucide="target" size="14"></i> Par ${esc(c.total_par || '?')}</span>
+                        </div>
+                        ${c.author ? `<div class="course-meta"><span>by ${esc(c.author)}</span></div>` : ''}
+                    </div>
+                    ${isSelected ? '<i data-lucide="check-circle-2" style="color:var(--primary)"></i>' : ''}
+                `;
+                container.appendChild(card);
+            });
             lucide.createIcons();
             updateBottomBar();
         }
 
         function selectCourse(id) {
             matchState.courseCode = id;
+            matchState.collectionId = null;
+            loadCourses(); // re-render
+        }
+
+        // a collection starts on its first plate; the game page takes the rest from the collection
+        function selectCollection(id) {
+            const c = collectionList.find(x => x.id === id);
+            if (!c) return;
+            const first = c.plates[0];
+            matchState.courseCode = typeof first === 'string' ? first : first.plate_code;
+            matchState.collectionId = id;
             loadCourses(); // re-render
         }
 
@@ -572,7 +613,7 @@
             lucide.createIcons();
             
             setTimeout(() => {
-                window.location.href = `arcade_mobile.html?course=${matchState.courseCode}`;
+                window.location.href = `arcade_mobile.html?course=${encodeURIComponent(matchState.courseCode)}` + (matchState.collectionId ? `&collection=${encodeURIComponent(matchState.collectionId)}&plate=0` : '');
             }, 800);
         }
     </script>
