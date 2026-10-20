@@ -837,8 +837,17 @@
                 const attempt = async () => {
                     showPopup(done + ' HOLES PLAYED', 'On to the next plate…', '#10b981', 'Continue', null);
                     const started = Date.now();
-                    const sent = submitRound(sc, true);
-                    const answer = await Promise.race([sent, new Promise(r => setTimeout(() => r('slow'), 8000))]);   // slow: the request goes on after the page has moved on
+                    // the sign-in comes first and is waited for as long as it takes (up to 20 s): the 8 s below start when the result request does, so
+                    // a page that moves on always leaves a request that is on its way (keepalive), never one that has not begun
+                    let signedIn = true;
+                    try {
+                        if (window.GolfAuth && !GolfAuth.isReady) {
+                            let t;
+                            await Promise.race([GolfAuth.init(), new Promise((_, rej) => { t = setTimeout(() => rej(new Error('timeout')), 20000); })]);
+                            clearTimeout(t);
+                        }
+                    } catch (e) { signedIn = false; }
+                    const answer = signedIn ? await Promise.race([submitRound(sc, true), new Promise(r => setTimeout(() => r('slow'), 8000))]) : false;   // slow: the request goes on after the page has moved on
                     if (answer === false) {
                         showPopup('COULD NOT SAVE', 'The result of this plate was not saved.<div style="margin-top:14px"><button id="plate-skip" style="padding:10px 18px;border:none;border-radius:10px;background:rgba(255,255,255,0.12);color:#fff;font-weight:700;font-size:15px">Continue without saving</button></div>', '#f87171', 'Try again', () => attempt(), true);
                         document.getElementById('plate-skip').onclick = () => { window.location.href = url; };

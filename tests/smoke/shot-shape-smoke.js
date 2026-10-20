@@ -691,6 +691,27 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
   }
 
+  // a slow sign-in must not make the page move on before the result request has begun (a request that has not started cannot outlive the page)
+  {
+    POSTED.length = 0;
+    const o = await open('/arcade_mobile.html?course=PUTTCOURSE&collection=col1&plate=0', { width: 390, height: 844 });
+    const page = o.page;
+    const t0 = Date.now();
+    await page.evaluate(function () {
+      window.GolfAuth.isReady = false;
+      window.GolfAuth.init = function () { return new Promise(function (r) { setTimeout(function () { window.GolfAuth.isReady = true; r(); }, 10000); }); };
+      const pl = window.GolfEngine.getState().players[0];
+      pl.strokes = 1; pl.scores = [3]; pl.totalScore = 3;
+      window.dispatchEvent(new CustomEvent('GolfEvent_RoundCompleted', { detail: { scorecard: GolfEngine.scorecard(pl), scorecards: [Object.assign({ player: pl }, GolfEngine.scorecard(pl))] } }));
+    });
+    await page.waitForTimeout(9000);   // longer than the 8 s wait for an answer: the sign-in is still going
+    const early = { url: page.url(), posted: POSTED.length };
+    await page.waitForURL(/plate=1/, { timeout: 20000 }).catch(function () {});
+    check('a slow sign-in: the page waits for it (stays on plate 1 after 9 s), and moves on only once the result request has been sent',
+      /plate=0/.test(early.url) && early.posted === 0 && /plate=1/.test(page.url()) && POSTED.length === 1, JSON.stringify({ early: early, after: page.url(), n: POSTED.length, ms: Date.now() - t0 }));
+    await o.ctx.close();
+  }
+
   // a collection on the phone: plate 1 is filed as a plate of the collection and the next plate opens; the last plate is filed with the same token
   {
     POSTED.length = 0;
