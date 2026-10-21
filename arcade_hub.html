@@ -412,7 +412,7 @@ let _allCourses = [];
 
 async function loadUGC() {
     try {
-        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses');
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/courses', { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
         _allCourses = await res.json();
         renderCourseCards(_allCourses);
         renderMyPublishedCourses();
@@ -517,7 +517,7 @@ function renderMyPublishedCourses() {
         return;
     }
     
-    let myCourses = _allCourses.filter(c => c.owner_id === myDeviceId);
+    let myCourses = _allCourses.filter(c => c.is_mine === true);
     let html = '';
     
     let bgImg = c.cover_image || 'https://images.unsplash.com/photo-1593118247619-e2d6f056869e?w=800&q=80'; 
@@ -718,7 +718,7 @@ function renderCombineUI() {
     document.getElementById('combine-slots').innerHTML = html;
     
     let availHtml = '';
-    let my3Hole = _allCourses.filter(c => c.owner_id === myDeviceId && (!c.type || c.type == '3'));
+    let my3Hole = _allCourses.filter(c => c.is_mine === true && (!c.type || c.type == '3'));
     my3Hole.forEach(c => {
         availHtml += `<div style="background:#1e293b; padding:10px; border-radius:8px; cursor:pointer; border:1px solid #475569;" onclick="assignCombineSlot('${c.share_code}')">
                         <div style="font-size:12px; font-weight:bold; color:#fff; margin-bottom:4px;">${c.name}</div>

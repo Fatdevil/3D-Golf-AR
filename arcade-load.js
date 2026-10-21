@@ -897,11 +897,11 @@
                     isCloud = true;
                     // Store course metadata for Round Setup header
                     window._loadedUpdatedAt = String(data.updated_at || data.created_at || 'none'); // which saved revision this page shows
-                    window._loadedOwnerId = data.owner_id || null;
+                    window._loadedOwnerId = data.owner_ref || null;   // only 'has an owner': the id of the owner is never sent, can_edit says whether it is you
                     window._loadedCanEdit = data.can_edit === true;
                     window._loadedShareCode = data.share_code;
                     // a course somebody else built is played, not edited: the builder link sends everyone but the owner to the round
-                    if (editCode && (autoRun === 'edit_build' || autoRun === 'build') && data.owner_id && !window.canEditLoadedCourse()) {
+                    if (editCode && (autoRun === 'edit_build' || autoRun === 'build') && data.owner_ref && !window.canEditLoadedCourse()) {
                         window.location.replace('arcade.html?v=' + Date.now() + '&autorun=setup&course=' + data.share_code);
                         return;
                     }

@@ -394,6 +394,30 @@ function optionalAuth(req, res, next) {
     next();
 }
 
+// A user's id is the key to their account (it is what x-user-id carries), so it never goes out in a public answer. What goes out instead is a
+// reference made from it that cannot be turned back into the id and cannot be used as one, and a flag for "this is you" (the caller's own id is
+// compared on the server).
+const PUBLIC_REF_KEY = process.env.PUBLIC_REF_KEY || 'golf-os-public-ref-v1';
+function publicRef(id) {
+    return id ? crypto.createHmac('sha256', PUBLIC_REF_KEY).update(String(id)).digest('hex').slice(0, 20) : null;
+}
+function hideOwner(row, callerId) {
+    if (!row) return row;
+    const out = Object.assign({}, row), owner = out.owner_id;
+    delete out.owner_id;
+    out.owner_ref = publicRef(owner);
+    out.is_mine = !!owner && !!callerId && owner === callerId;
+    return out;
+}
+function hidePlayer(row, callerId) {
+    if (!row) return row;
+    const out = Object.assign({}, row), player = out.player_id;
+    delete out.player_id;
+    out.player_ref = publicRef(player);
+    out.is_me = !!player && !!callerId && player === callerId;
+    return out;
+}
+
 // --- AUTH ENDPOINTS ---
 
 // Register or fetch user by device ID
@@ -488,14 +512,14 @@ app.get('/api/my/courses', requireDB, authMiddleware, async (req, res) => {
               AND COALESCE(theme_data->>'_playCopy', '') <> 'true'
             ORDER BY COALESCE(updated_at, created_at) DESC
         `, [req.userId]); // no cap: the rows are small (no holes, no images) and the client treats this as the whole list
-        res.json(result.rows);
+        res.json(result.rows.map(r => hideOwner(r, req.userId)));
     } catch(err) {
         console.error('GET /api/my/courses error:', err);
         res.status(500).json({ error: 'Database error' });
     }
 });
 
-app.get('/api/courses', requireDB, async (req, res) => {
+app.get('/api/courses', requireDB, optionalAuth, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT share_code, name, author, likes, hole_count, total_par, play_count, owner_id, version, created_at 
@@ -506,7 +530,7 @@ app.get('/api/courses', requireDB, async (req, res) => {
             ORDER BY COALESCE(updated_at, created_at) DESC 
             LIMIT 50
         `);
-        res.json(result.rows);
+        res.json(result.rows.map(r => hideOwner(r, req.userId)));
     } catch(err) {
         console.error(err);
         res.status(500).json({ error: 'Database error' });
@@ -695,7 +719,7 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
 });
 
 // Get leaderboard for a course
-app.get('/api/courses/:code/leaderboard', requireDB, async (req, res) => {
+app.get('/api/courses/:code/leaderboard', requireDB, optionalAuth, async (req, res) => {
     try {
         const code = req.params.code.toUpperCase();
         const mode = req.query.mode;      // 'LAUNCH_MONITOR' | 'SWING_METER' | undefined (all)
@@ -740,7 +764,7 @@ app.get('/api/courses/:code/leaderboard', requireDB, async (req, res) => {
         );
         
         res.json({
-            leaderboard: result.rows,
+            leaderboard: result.rows.map(r => hidePlayer(r, req.userId)),
             total_rounds: parseInt(countResult.rows[0].total)
         });
     } catch(err) {
@@ -1082,7 +1106,7 @@ app.get('/api/courses/:share_code', requireDB, optionalAuth, async (req, res) =>
         // only the builder may open the course in the builder (saving is checked against the owner again by POST /api/courses)
         row.can_edit = !!row.owner_id && !!req.userId && req.userId === row.owner_id;
         if (!row.can_edit) delete row.builder_holes; // the builder's own definitions are for the builder only, players never download them
-        res.json(row);
+        res.json(hideOwner(row, req.userId));
     } catch(err) {
         console.error("Error fetching course:", err);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -1122,7 +1146,7 @@ app.delete('/api/courses/:code', requireDB, authMiddleware, async (req, res) => 
 });
 
 // --- COLLECTIONS API ---
-app.get('/api/collections', requireDB, async (req, res) => {
+app.get('/api/collections', requireDB, optionalAuth, async (req, res) => {
     try {
         const typeFilter = req.query.type; // '3','6','9','18' or undefined
         let query = `SELECT id, name, author, type, plates, total_par, cover_image, owner_id, created_at FROM course_collections`;
@@ -1133,14 +1157,14 @@ app.get('/api/collections', requireDB, async (req, res) => {
         }
         query += ' ORDER BY created_at DESC LIMIT 50';
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        res.json(result.rows.map(r => hideOwner(r, req.userId)));
     } catch(err) {
         console.error('Collections list error:', err);
         res.status(500).json({ error: 'Database error' });
     }
 });
 
-app.get('/api/collections/:id', requireDB, async (req, res) => {
+app.get('/api/collections/:id', requireDB, optionalAuth, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM course_collections WHERE id = $1', [req.params.id.toUpperCase()]);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Collection not found' });
@@ -1154,7 +1178,7 @@ app.get('/api/collections/:id', requireDB, async (req, res) => {
             const vr = await pool.query('SELECT share_code, COALESCE(version, 1) AS version FROM courses WHERE share_code = ANY($1)', [codes]);
             vr.rows.forEach(r => { versions[String(r.share_code).toUpperCase()] = r.version; });
         }
-        res.json(Object.assign({}, row, { plate_versions: versions }));
+        res.json(hideOwner(Object.assign({}, row, { plate_versions: versions }), req.userId));
     } catch(err) {
         console.error('Collection fetch error:', err);
         res.status(500).json({ error: 'Database error' });
@@ -1234,7 +1258,7 @@ app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
 
 // The leaderboard of a collection: a player's rounds on every plate of it, played in one go (stats.collection_round_id), added together.
 // A round that stopped after two of three plates is not a result of the collection.
-app.get('/api/collections/:id/leaderboard', requireDB, async (req, res) => {
+app.get('/api/collections/:id/leaderboard', requireDB, optionalAuth, async (req, res) => {
     try {
         const col = await pool.query('SELECT id, type, plates FROM course_collections WHERE id = $1', [req.params.id.toUpperCase()]);
         if (col.rows.length === 0) return res.status(404).json({ error: 'Collection not found' });
@@ -1264,7 +1288,7 @@ app.get('/api/collections/:id/leaderboard', requireDB, async (req, res) => {
              LIMIT 50`,
             [col.rows[0].id, codes, codes.length]
         );
-        res.json({ leaderboard: rows.rows, plates: codes.length, needed: need });
+        res.json({ leaderboard: rows.rows.map(r => hidePlayer(r, req.userId)), plates: codes.length, needed: need });
     } catch(err) {
         console.error('Collection leaderboard error:', err);
         res.status(500).json({ error: 'Server error' });
