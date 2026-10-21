@@ -926,7 +926,7 @@
                             if (!(colRes && Array.isArray(colRes.plates) && colRes.plates.length > 0)) {
                                 let box = document.createElement('div');
                                 box.id = 'collection-load-error';
-                                box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,23,42,0.96);color:#fff;font-family:Inter,sans-serif;text-align:center;padding:24px;';
+                                box.style.cssText = 'position:fixed;inset:0;z-index:1000000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,23,42,0.96);color:#fff;font-family:Inter,sans-serif;text-align:center;padding:24px;';
                                 let title = document.createElement('div');
                                 title.style.cssText = 'font-size:28px;font-weight:800;color:#f87171;';
                                 title.textContent = 'COULD NOT LOAD';
@@ -939,6 +939,9 @@
                                 btn.onclick = function () { window.location.reload(); };
                                 box.appendChild(title); box.appendChild(msg); box.appendChild(btn);
                                 document.body.appendChild(box);
+                                // the loading screen sits on top of everything and is only taken away at the end of a load: this load ends here
+                                let loadingScreen = document.getElementById('global-loader');
+                                if (loadingScreen) loadingScreen.classList.add('hidden');
                                 return;
                             }
                             if (colRes && colRes.plates) {
