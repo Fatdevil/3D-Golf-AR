@@ -40,7 +40,7 @@ window.GolfAuth = {
         try {
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'x-user-id': deviceId },
                 body: JSON.stringify({ 
                     device_id: deviceId,
                     display_name: displayName

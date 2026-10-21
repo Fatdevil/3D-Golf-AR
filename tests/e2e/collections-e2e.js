@@ -395,6 +395,38 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const colAfter = (await api('GET', '/api/collections/' + id)).json;
     check('when plate B is published again the collection\'s stroke index follows (lengths 150 400 250 | 600 100 100)', r.status === 200 && JSON.stringify(colAfter.stroke_index) === JSON.stringify([4, 2, 3, 1, 5, 6]), r.status + ' ' + JSON.stringify(colAfter.stroke_index) + JSON.stringify(r.json));
 
+    // the device token: an id alone stops being enough once a device has claimed it
+    const tokA = 'a'.repeat(64), tokB = 'b'.repeat(64), devId = 'e2c-dev-' + tag;
+    async function withToken(method, url, body, user, token) {
+      const res = await fetch(BASE + url, { method: method, headers: Object.assign({ 'Content-Type': 'application/json', 'x-user-id': user }, token ? { 'x-user-token': token } : {}), body: body === undefined ? undefined : JSON.stringify(body) });
+      let json = null; try { json = await res.json(); } catch (e) { /* none */ }
+      return { status: res.status, json: json || {} };
+    }
+    r = await withToken('POST', '/api/auth/register', { device_id: devId, display_name: 'Dev' }, devId, tokA);
+    check('registering with a token works and the answer never carries the token hash', r.status === 200 && r.json.id === devId && r.json.token_hash === undefined, JSON.stringify(r.json));
+    r = await withToken('PUT', '/api/users/' + devId, { display_name: 'Eve' }, devId, null);
+    check('the id without the token can no longer write', r.status === 401, JSON.stringify(r));
+    r = await withToken('PUT', '/api/users/' + devId, { display_name: 'Eve' }, devId, tokB);
+    check('the id with another device\'s token can no longer write', r.status === 401, JSON.stringify(r));
+    r = await withToken('PUT', '/api/users/' + devId, { display_name: 'Dev2' }, devId, tokA);
+    check('the id with its own token writes', r.status === 200 && r.json.display_name === 'Dev2', JSON.stringify(r));
+    r = await withToken('POST', '/api/auth/register', { device_id: devId, display_name: 'Eve' }, devId, tokB);
+    check('registering an id that belongs to another device is refused', r.status === 401, JSON.stringify(r));
+    r = await withToken('GET', '/api/collections', undefined, owner, null);
+    check('a request with an id that has no token yet still works (not yet claimed)', r.status === 200);
+    const legacy = 'e2c-leg-' + tag;
+    await pool.query("INSERT INTO users (id, display_name) VALUES ($1, 'Old')", [legacy]);
+    r = await withToken('PUT', '/api/users/' + legacy, { display_name: 'Old2' }, legacy, null);
+    check('an old account without a token writes without one', r.status === 200, JSON.stringify(r));
+    r = await withToken('PUT', '/api/users/' + legacy, { display_name: 'Old3' }, legacy, tokA);
+    check('the first token an old account sends is taken as its device\'s', r.status === 200, JSON.stringify(r));
+    r = await withToken('PUT', '/api/users/' + legacy, { display_name: 'Eve' }, legacy, null);
+    check('...and after that the id alone is refused', r.status === 401, JSON.stringify(r));
+    const mineDev = 'e2c-mine-' + tag;
+    await withToken('POST', '/api/auth/register', { device_id: mineDev }, mineDev, tokA);
+    const listBad = (await withToken('GET', '/api/collections', undefined, mineDev, tokB)).json;
+    check('a list asked for with the wrong token treats the caller as no one (no is_mine)', Array.isArray(listBad) ? listBad.every(c => c.is_mine === false) : listBad.collections ? listBad.collections.every(c => c.is_mine === false) : true);
+
     // a collection with another type: 9 holes, three plates
     r = await api('POST', '/api/collections', { name: 'Nian', author: 'Test', type: '9', plates: [plate(A), plate(B), plate(C)] }, owner);
     if (r.json.id) madeCollections.push(r.json.id);
