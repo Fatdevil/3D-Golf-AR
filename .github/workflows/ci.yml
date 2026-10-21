@@ -1,0 +1,94 @@
+# The tests of tests/README.md, run on every pull request and every push to main.
+#   unit     every tests/test_*.js (npm test): physics, rules, handicap, collections, the static checks
+#   api      collections-e2e: the real server.js against a real Postgres, over HTTP, no browser
+#   browser  the three browser tests in headless Chromium: the smoke test, the shape smoke test (phone and desktop) and the courses e2e (also Postgres)
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: golf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/golf_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: node tests/e2e/collections-e2e.js
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: smoke
+            command: node tests/smoke/arcade-smoke.js
+          - name: shape
+            command: node tests/smoke/shot-shape-smoke.js
+          - name: courses-e2e
+            command: node tests/e2e/courses-e2e.js
+    name: browser (${{ matrix.name }})
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: golf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/golf_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm --prefix tests install --no-audit --no-fund
+      - run: npx --prefix tests playwright-core install --with-deps chromium
+      - run: ${{ matrix.command }}
