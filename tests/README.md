@@ -16,3 +16,7 @@
 `tests/manual/` holds exploratory scripts that print numbers and do not check anything. They are not run by `npm test`.
 
 The smoke test needs a Chromium. It uses `CHROMIUM_PATH`, else `/opt/pw-browsers/chromium-*`, else the one installed by `npm --prefix tests run setup`.
+
+## CI
+
+`.github/workflows/ci.yml` runs the tests on every pull request and every push to `main`: `unit` (`npm test`), `api` (`collections-e2e.js` against a Postgres service) and `browser` (the smoke test, the shape smoke test and the courses e2e in headless Chromium, each as its own job). A job that fails shows which test it was in its log.
