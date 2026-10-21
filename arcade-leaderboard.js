@@ -109,7 +109,7 @@
             
             lb.forEach((r, i) => {
                 let pos = i + 1;
-                let isMe = r.player_id === myId;
+                let isMe = r.is_me === true;   // the server compares the ids: a player's id is never sent
                 
                 // Medals Logic
                 let medalIcon = pos;

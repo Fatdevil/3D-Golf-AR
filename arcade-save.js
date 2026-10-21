@@ -640,8 +640,7 @@
 
     // Only the person who built the course gets to its builder: a course someone else owns is played, never edited
     window.canEditLoadedCourse = function () {
-        if (window._loadedCanEdit) return true;
-        return !!window._loadedOwnerId && !!window.GolfAuth && window.GolfAuth.userId === window._loadedOwnerId;
+        return window._loadedCanEdit === true;   // the server says whether the course is yours (its owner's id is not sent)
     };
     window.openBuilderForLoadedCourse = function (ask) {
         if (!window.canEditLoadedCourse() || !window._loadedShareCode) return;

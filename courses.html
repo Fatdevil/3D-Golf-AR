@@ -890,7 +890,7 @@
     async function loadCommunityCourses() {
         let carousel = document.getElementById('community-carousel');
         try {
-            let res = await fetch(API_BASE + '/api/courses');
+            let res = await fetch(API_BASE + '/api/courses', { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
             let courses = await res.json();
 
             if (courses && courses.length > 0) {
@@ -904,7 +904,7 @@
                         play_count: c.play_count || 0,
                         hole_count: c.hole_count || 3,
                         total_par: c.total_par || 12,
-                        owner_id: c.owner_id || null,
+                        is_mine: c.is_mine === true,
                         biome: 'Community'
                     };
                     return createCardHtml(course, false);
@@ -977,8 +977,7 @@
             editBtn.style.display = 'flex';
         } else {
             playBtn.href = `arcade.html?v=${Date.now()}&course=${course.share_code}&autorun=setup`;
-            let currentUserId = localStorage.getItem('golf_os_device_id');
-            if (course.owner_id && course.owner_id === currentUserId) {
+            if (course.is_mine === true) {
                 editBtn.href = `arcade.html?v=${Date.now()}&autorun=edit_build&edit=${course.share_code}`;
                 editBtn.style.display = 'flex';
             } else {

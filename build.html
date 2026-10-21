@@ -869,7 +869,7 @@
     function myPublishedCourses() {
         if (_myCourses) return _myCourses.filter(c => !c.is_draft);
         let myDeviceId = localStorage.getItem('golf_os_device_id');
-        return _allCourses.filter(c => c.owner_id === myDeviceId);
+        return _allCourses.filter(c => c.is_mine === true);
     }
     function findCourseByCode(code) {
         return (_myCourses || []).find(x => x.share_code === code) || _allCourses.find(x => x.share_code === code);
@@ -878,7 +878,7 @@
     async function loadPublished() {
         try {
             if (_myCourses) { renderMyPublished(); return; }
-            let res = await fetch(API_BASE + '/api/courses');
+            let res = await fetch(API_BASE + '/api/courses', { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
             _allCourses = await res.json();
             renderMyPublished();
         } catch(e) {
@@ -999,10 +999,10 @@
 
     async function loadCollections() {
         try {
-            let res = await fetch(API_BASE + '/api/collections');
+            let res = await fetch(API_BASE + '/api/collections', { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
             let allCols = await res.json();
             let myDeviceId = localStorage.getItem('golf_os_device_id');
-            _myCollections = allCols.filter(c => c.owner_id === myDeviceId);
+            _myCollections = allCols.filter(c => c.is_mine === true);
             renderCollections();
         } catch(e) {
             console.warn('Collections load failed:', e);

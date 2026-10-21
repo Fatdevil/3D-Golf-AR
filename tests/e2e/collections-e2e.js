@@ -104,6 +104,35 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('GET', '/api/collections/' + id + '/leaderboard');
     const lb = r.json.leaderboard || [];
     check('the collection\'s leaderboard has the one whole round only: Kim, 12 + 15 = 27 (Lo stopped after plate 1, Kim\'s second go too)', r.status === 200 && lb.length === 1 && lb[0].player_name === 'Kim' && lb[0].total_score === 27 && lb[0].score_vs_par === (12 - 12) + (15 - 12), JSON.stringify(r.json));
+    // a user's id is the key to their account: no public answer carries one (only a reference that cannot be used as one, and "this is you" for the caller)
+    {
+      const kimId = 'e2c-Kim-' + tag, loId = 'e2c-Lo-' + tag;
+      const hasId = (obj, ids) => ids.some(function (x) { return JSON.stringify(obj).indexOf(x) >= 0; });
+      const ids = [kimId, loId, owner];
+      const asKim = await api('GET', '/api/collections/' + id + '/leaderboard', undefined, kimId);
+      const asLo = await api('GET', '/api/collections/' + id + '/leaderboard', undefined, loId);
+      const anon = await api('GET', '/api/collections/' + id + '/leaderboard');
+      check('the collection\'s leaderboard sends no user id, only a reference (and is_me for the caller: Kim sees her own row, Lo and a stranger do not)',
+        !hasId([asKim.json, asLo.json, anon.json], ids) && asKim.json.leaderboard.length === 1 && /^[0-9a-f]{20}$/.test(asKim.json.leaderboard[0].player_ref) && asKim.json.leaderboard[0].player_ref !== kimId && asKim.json.leaderboard[0].is_me === true && asLo.json.leaderboard[0].is_me === false && anon.json.leaderboard[0].is_me === false && asKim.json.leaderboard[0].player_ref === anon.json.leaderboard[0].player_ref,
+        JSON.stringify(asKim.json.leaderboard));
+      const cl = await api('GET', '/api/courses/' + A + '/leaderboard', undefined, loId);
+      check('a course\'s leaderboard does the same: no ids, a reference, and is_me only on Lo\'s own row',
+        cl.status === 200 && !hasId(cl.json, ids) && cl.json.leaderboard.length > 0 && cl.json.leaderboard.every(function (x) { return x.player_id === undefined && /^[0-9a-f]{20}$/.test(x.player_ref) && x.is_me === (x.player_name === 'Lo'); }), JSON.stringify(cl.json.leaderboard));
+      const cg = await api('GET', '/api/collections/' + id, undefined, owner);
+      const cgOther = await api('GET', '/api/collections/' + id, undefined, kimId);
+      const cgList = await api('GET', '/api/collections', undefined, owner);
+      const mine = (cgList.json || []).find(function (x) { return x.id === id; });
+      check('a collection (one and in the list) sends no owner id, but an owner reference, and is_mine only for its owner',
+        cg.status === 200 && cg.json.owner_id === undefined && /^[0-9a-f]{20}$/.test(cg.json.owner_ref) && cg.json.is_mine === true && cgOther.json.is_mine === false && !!mine && mine.owner_id === undefined && mine.is_mine === true && !hasId([cg.json, cgOther.json, cgList.json], ids), JSON.stringify([cg.json.owner_ref, cg.json.is_mine, cgOther.json.is_mine]));
+      const crs = await api('GET', '/api/courses/' + A, undefined, owner);
+      const crsOther = await api('GET', '/api/courses/' + A, undefined, kimId);
+      const crsList = await api('GET', '/api/courses', undefined, owner);
+      check('a course sends no owner id either: an owner reference, is_mine (and can_edit) only for its owner; the lists likewise',
+        crs.status === 200 && crs.json.owner_id === undefined && crs.json.is_mine === crs.json.can_edit && crsOther.json.is_mine === false && crsOther.json.can_edit === false && (crsList.json || []).every(function (x) { return x.owner_id === undefined && typeof x.is_mine === 'boolean'; }) && !hasId([crs.json, crsOther.json, crsList.json], ids),
+        JSON.stringify([crs.json.owner_ref, crs.json.is_mine, crs.json.can_edit, crsOther.json.is_mine]));
+      const myc = await api('GET', '/api/my/courses', undefined, owner);
+      check('the builder\'s own list has no owner id and says is_mine', myc.status === 200 && myc.json.every(function (x) { return x.owner_id === undefined && x.is_mine === true; }) && !hasId(myc.json, ids), JSON.stringify(myc.json).slice(0, 200));
+    }
 
     // a plate sent twice in one round counts once (the latest)
     await post(B, 'Kim', 14, 'kimround1', 1, { round_id: 'kimround1-p1-retry' });
