@@ -214,6 +214,7 @@ async function initDB() {
 
         // --- HCP System migrations ---
         try {
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_hash VARCHAR(64);`);
             await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS handicap_index DECIMAL(4,1);`);
             await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS handicap_rounds INT DEFAULT 0;`);
             await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS handicap_history JSONB DEFAULT '[]';`);
@@ -378,19 +379,58 @@ app.get('/api/admin/courses', requireAdmin, async (req, res) => {
     }
 });
 
+// The id in x-user-id is not a secret (it is the key to the account), so it is backed by a token the device keeps (x-user-token, see device-token.js).
+// The server keeps only a hash of it. The first token it sees for an id is taken as that device's; from then on the id counts only with the same
+// token. An id that has no token yet (an account whose device has not been online since this was added) still works without one, until it claims.
+function withoutSecret(row) { const out = Object.assign({}, row); delete out.token_hash; return out; }
+function tokenHash(t) { return crypto.createHash('sha256').update(String(t)).digest('hex'); }
+function validToken(t) { return typeof t === 'string' && /^[0-9a-f]{64}$/.test(t); }
+async function checkDevice(req, createRow) {
+    const id = req.headers['x-user-id'];
+    if (!id) return 'none';
+    const token = req.headers['x-user-token'];
+    if (!pool) return 'ok';
+    try {
+        const r = await pool.query('SELECT token_hash FROM users WHERE id = $1', [id]);
+        if (r.rows.length === 0) {
+            // an id with no account yet (courses and collections can be saved under one): the first token seen for it creates the account and binds it
+            if (createRow === false || !validToken(token)) return 'ok';
+            await pool.query(`INSERT INTO users (id, display_name, auth_provider, token_hash) VALUES ($1, 'Golfer', 'device', $2) ON CONFLICT (id) DO NOTHING`, [id, tokenHash(token)]);
+            const made = await pool.query('SELECT token_hash FROM users WHERE id = $1', [id]);
+            return made.rows.length && made.rows[0].token_hash === tokenHash(token) ? 'ok' : 'bad';
+        }
+        const stored = r.rows[0].token_hash;
+        if (!stored) {
+            if (!validToken(token)) return 'ok';
+            const u = await pool.query('UPDATE users SET token_hash = $2 WHERE id = $1 AND token_hash IS NULL RETURNING id', [id, tokenHash(token)]);
+            if (u.rows.length) return 'ok';
+            const again = await pool.query('SELECT token_hash FROM users WHERE id = $1', [id]);
+            return again.rows.length && again.rows[0].token_hash === tokenHash(token) ? 'ok' : 'bad';
+        }
+        if (!validToken(token)) return 'bad';
+        const a = Buffer.from(stored), b = Buffer.from(tokenHash(token));
+        return a.length === b.length && crypto.timingSafeEqual(a, b) ? 'ok' : 'bad';
+    } catch (err) {
+        console.error('checkDevice error:', err);
+        return 'bad';
+    }
+}
+
 // Auth middleware: extract user ID from header
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
     const userId = req.headers['x-user-id'];
     if (!userId) {
         return res.status(401).json({ error: 'Missing x-user-id header' });
     }
+    if (await checkDevice(req) === 'bad') return res.status(401).json({ error: 'This device is not the one this account belongs to' });
     req.userId = userId;
     next();
 }
 
-// Optional auth: sets req.userId if present but doesn't block
-function optionalAuth(req, res, next) {
+// Optional auth: sets req.userId if present but doesn't block (an id that comes without its device's token is treated as no one)
+async function optionalAuth(req, res, next) {
     req.userId = req.headers['x-user-id'] || null;
+    if (req.userId && await checkDevice(req) === 'bad') req.userId = null;
     next();
 }
 
@@ -426,21 +466,26 @@ app.post('/api/auth/register', requireDB, async (req, res) => {
         const { device_id, display_name } = req.body;
         if (!device_id) return res.status(400).json({ error: 'Missing device_id' });
 
+        if (req.headers['x-user-id'] && req.headers['x-user-id'] !== device_id) return res.status(400).json({ error: 'device_id does not match x-user-id' });
+        const asked = await checkDevice({ headers: { 'x-user-id': device_id, 'x-user-token': req.headers['x-user-token'] } }, false);
+        if (asked === 'bad') return res.status(401).json({ error: 'This device is not the one this account belongs to' });
+
         // Try to find existing user
         let result = await pool.query('SELECT * FROM users WHERE id = $1', [device_id]);
         
         if (result.rows.length > 0) {
-            // Existing user — return profile
-            return res.json(result.rows[0]);
+            // Existing user — return profile (never the token hash)
+            return res.json(withoutSecret(result.rows[0]));
         }
 
-        // New user — create
+        // New user — create, with the device's token if it sent one
+        const token = req.headers['x-user-token'];
         result = await pool.query(
-            `INSERT INTO users (id, display_name, auth_provider) VALUES ($1, $2, 'device') RETURNING *`,
-            [device_id, display_name || 'Golfer']
+            `INSERT INTO users (id, display_name, auth_provider, token_hash) VALUES ($1, $2, 'device', $3) ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id RETURNING *`,
+            [device_id, display_name || 'Golfer', validToken(token) ? tokenHash(token) : null]
         );
         console.log('👤 New user registered:', device_id.substring(0, 8) + '...');
-        res.json(result.rows[0]);
+        res.json(withoutSecret(result.rows[0]));
     } catch (err) {
         console.error('Auth register error:', err);
         res.status(500).json({ error: 'Server error' });
