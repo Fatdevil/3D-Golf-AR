@@ -1,7 +1,7 @@
 /**
  * Sand: det som underlaget tar av slaget, texten i lie-rutan och puttar från sand (physics.js only, ingen webbläsare).
  *   - lie-rutans text kommer från fysiken (GolfPhysics.lieEffectText), och fysiken använder samma faktorer (lieMultipliers) som texten visar
- *   - waste har inget straff; en launch monitor-boll får inget straff (texten säger 100 % då)
+ *   - waste har inget straff; en launch monitor-boll räknas om efter underlaget som alla andra slag (den mäter en riktig boll på en matta)
  *   - en putt som startar i sand rullar som i rough (8,5 m vid full puttfart, förut 5 m); en boll som landar i sand gräver ner sig och stannar
  *   - en boll som rullar från fairway in i sand bromsas av sanden
  * Run: node tests/test_sand.js
@@ -61,9 +61,16 @@ try {
     check('slag från ' + lie + ' = samma slag från fairway med faktorerna ur lieMultipliers (som texten visar)', same, detail);
   });
 } finally { Math.random = realRandom; }
-const live = shot({ launchAngleDeg: 22, ballSpeedMph: 100, totalSpinRpm: 4000, isLiveData: true }, world('SAND', 'FAIRWAY'));
-const liveFair = shot({ launchAngleDeg: 22, ballSpeedMph: 100, totalSpinRpm: 4000, isLiveData: true }, world('FAIRWAY', 'FAIRWAY'));
-check('en launch monitor-boll får inget straff från sand (lie-rutan visar 100 % då)', Math.abs(live.total - liveFair.total) < 1e-6, live.total.toFixed(2) + ' mot ' + liveFair.total.toFixed(2));
+Math.random = function () { return 0.99; };   // ingen flyer
+try {
+  const lmFac = G.lieMultipliers('SAND', 22, null);
+  const live = shot({ launchAngleDeg: 22, ballSpeedMph: 100, totalSpinRpm: 4000, isLiveData: true }, world('SAND', 'FAIRWAY'));
+  const liveFair = shot({ launchAngleDeg: 22, ballSpeedMph: 100, totalSpinRpm: 4000, isLiveData: true }, world('FAIRWAY', 'FAIRWAY'));
+  const liveWant = shot({ launchAngleDeg: 22, ballSpeedMph: 100 * lmFac.speed, totalSpinRpm: 4000 * lmFac.spin, isLiveData: true }, world('FAIRWAY', 'FAIRWAY'));
+  check('en launch monitor-boll i sand räknas om efter underlaget: kortare än från fairway, och exakt som siffrorna gånger sandens faktorer', live.total < liveFair.total - 5 && Math.abs(live.total - liveWant.total) < 1e-6 && Math.abs(live.carry - liveWant.carry) < 1e-6, live.total.toFixed(2) + ' mot fairway ' + liveFair.total.toFixed(2) + ', väntat ' + liveWant.total.toFixed(2));
+  const liveTee = shot({ launchAngleDeg: 22, ballSpeedMph: 100, totalSpinRpm: 4000, isLiveData: true, isTeeShot: true }, world('SAND', 'FAIRWAY'));
+  check('och ett utslag med launch monitor är fortfarande uppteat (inget straff även om det ligger sand under)', Math.abs(liveTee.total - liveFair.total) < 1e-6, liveTee.total.toFixed(2) + ' mot ' + liveFair.total.toFixed(2));
+} finally { Math.random = realRandom; }
 
 // --- puttar från sand ---
 const putt = (mph, lie) => shot({ launchAngleDeg: 1.5, ballSpeedMph: mph, totalSpinRpm: 300 }, world(lie, lie)).total;
@@ -87,7 +94,7 @@ check('en putt som rullar från fairway in i sand stannar efter några meter (sa
 // --- lie-rutan i spelet läser fysiken ---
 const arcade = fs.readFileSync(path.join(__dirname, '..', 'arcade.html'), 'utf8');
 check('lie-rutan i arcade.html läser GolfPhysics.lieEffectText och har inga egna procenttal för sand', /GolfPhysics\.lieEffectText\(lType\)/.test(arcade) && !/lType === 'SAND' \|\| lType === 'WASTE'\) \{ powStr/.test(arcade) && !/"40 - 60%"/.test(arcade));
-check('lie-rutan visar 100 % för en launch monitor', /window\.G\.inputMode === 'LAUNCH_MONITOR'/.test(arcade));
+check('lie-rutan har ingen särbehandling av launch monitor (den räknas om efter underlaget som alla andra slag)', /if \(!isTee && window\.GolfPhysics && window\.GolfPhysics\.lieEffectText\)/.test(arcade) && !/lieEffectText[\s\S]{0,40}LAUNCH_MONITOR/.test(arcade));
 
 console.log(failed ? '\n' + failed + ' failed' : '\nall passed');
 process.exit(failed ? 1 : 0);

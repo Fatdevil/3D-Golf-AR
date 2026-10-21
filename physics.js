@@ -411,14 +411,14 @@ window.GolfPhysics = (function() {
         let speedMult = 1.0;
         let spinMult = 1.0;
         
-        if (!input.isLiveData) {
-            // TEE SHOT OVERRIDE: First shot is always perfectly teed up, regardless of terrain color under it.
-            if (input.isTeeShot) lieType = 'FAIRWAY';
-            
-            const lm = lieMultipliers(lieType, vla, Math.random);
-            speedMult = lm.speed; spinMult = lm.spin;
-            if (lm.flyer) console.log("💥 FLYER-LIE (" + lieType + "): less spin, ball flies long.");
-        }
+        // The lie takes something off every shot, a launch monitor's too: the monitor measures a real ball on a flat mat and knows nothing of the
+        // virtual lie, so its numbers (ball speed, spin) are converted for the ground the ball lies on, like the slope correction below.
+        // TEE SHOT OVERRIDE: First shot is always perfectly teed up, regardless of terrain color under it.
+        if (input.isTeeShot) lieType = 'FAIRWAY';
+
+        const lm = lieMultipliers(lieType, vla, Math.random);
+        speedMult = lm.speed; spinMult = lm.spin;
+        if (lm.flyer) console.log("💥 FLYER-LIE (" + lieType + "): less spin, ball flies long.");
         
         // Är detta ett putt-slag? (avgörs av hur bollen lämnar klubban, inte av hur den landar)
         const isPuttLaunch = vla <= PUTT_MAX_LAUNCH_DEG && baseSpinRpm <= PUTT_MAX_SPIN_RPM && (baseSpeedMph * 0.44704) < ROLL_START_MAX_SPEED;

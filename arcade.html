@@ -15290,9 +15290,9 @@ window.triggerExplosion = function(x, y, z) {
                     }
                     
                     // what the lie takes from the shot comes from the physics itself (GolfPhysics.lieRange), so the text cannot drift from it;
-                    // a launch monitor measures a real ball: the physics applies no lie penalty to its shots, and neither does the text
+                    // a launch monitor's numbers are converted for the lie as well (it measures a real ball on a mat), so the text is the same for it
                     let powStr = "100%"; let spinStr = "100%"; let powCol = "#4ade80";
-                    if (!isTee && !(window.G && window.G.inputMode === 'LAUNCH_MONITOR') && window.GolfPhysics && window.GolfPhysics.lieEffectText) {
+                    if (!isTee && window.GolfPhysics && window.GolfPhysics.lieEffectText) {
                         let eff = window.GolfPhysics.lieEffectText(lType);
                         powStr = eff.power; spinStr = eff.spin;
                         powCol = eff.level === 'bad' ? "#f87171" : (eff.level === 'warn' ? "#fbbf24" : "#4ade80");

@@ -112,7 +112,7 @@ console.log('\nAndra lägen påverkas inte av slumptalet');
 {
   check('fairway: samma slag oavsett slumptal', Math.abs(carry('PW', 1, 'FAIRWAY', 0.0) - carry('PW', 1, 'FAIRWAY', 0.5)) < 0.01);
   check('utslag (isTeeShot) från rough räknas som fairway', Math.abs(carry('PW', 1, 'ROUGH', 0.0, { isTeeShot: true }) - carry('PW', 1, 'FAIRWAY', 0.5)) < 0.01);
-  check('live-data (launch monitor) får ingen lie-effekt', Math.abs(carry('PW', 1, 'ROUGH', 0.0, { isLiveData: true }) - carry('PW', 1, 'FAIRWAY', 0.5)) < 0.01);
+  check('live-data (launch monitor) räknas om efter underlaget som andra slag: samma carry från rough som ett vanligt slag', Math.abs(carry('PW', 1, 'ROUGH', 0.0, { isLiveData: true }) - carry('PW', 1, 'ROUGH', 0.0)) < 0.01 && carry('PW', 1, 'ROUGH', 0.5, { isLiveData: true }) < carry('PW', 1, 'FAIRWAY', 0.5) - 1);
 }
 
 console.log(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
