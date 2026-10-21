@@ -40,7 +40,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
   const pool = new Pool({ connectionString: URL_DB });
   const port = 20000 + Math.floor(Math.random() * 20000);
   const BASE = 'http://127.0.0.1:' + port;
-  const server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), DATABASE_URL: URL_DB }), stdio: 'ignore' });
+  const server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), DATABASE_URL: URL_DB, RATE_LIMIT_WRITES: '100000', RATE_LIMIT_REGISTER: '100000' }), stdio: 'ignore' });
   let deviceId = null, browser = null;
   const tag = 'E2E-' + require('crypto').randomBytes(3).toString('hex').toUpperCase(); // the application's own share codes never contain a hyphen
   async function cleanup() {
