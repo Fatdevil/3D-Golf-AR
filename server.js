@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const RateLimit = require('./rate-limit');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -11,7 +12,28 @@ const app = express();
 const port = process.env.PORT || 8080;
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // För att tillåta stora base64-höjdkartor/bilder
+// Behind Railway's proxy: the caller's address is the one the proxy forwards
+app.set('trust proxy', 1);
+// Request limits: how often one address may change things (rate-limit.js; RATE_LIMIT_WRITES / RATE_LIMIT_REGISTER / RATE_LIMIT_LOGIN per minute override the defaults)
+const limits = {
+    write: RateLimit.limiter({ windowMs: 60000, max: parseInt(process.env.RATE_LIMIT_WRITES, 10) || 120 }),
+    register: RateLimit.limiter({ windowMs: 60000, max: parseInt(process.env.RATE_LIMIT_REGISTER, 10) || 30 }),
+    login: RateLimit.limiter({ windowMs: 60000, max: parseInt(process.env.RATE_LIMIT_LOGIN, 10) || 10 })
+};
+app.use((req, res, next) => {
+    const kind = RateLimit.classify(req.method, req.path);
+    if (!kind) return next();
+    const r = limits[kind].hit(req.ip || 'unknown');
+    if (r.ok) return next();
+    res.set('Retry-After', String(r.retryAfter));
+    res.status(429).json({ error: 'Too many requests, try again in ' + r.retryAfter + ' s' });
+});
+// A body is read only up to what its route needs (the maps, images and models of courses and assets are the large ones)
+const jsonLimited = {};
+app.use((req, res, next) => {
+    const lim = RateLimit.bodyLimit(req.path);
+    (jsonLimited[lim] || (jsonLimited[lim] = express.json({ limit: lim })))(req, res, next);
+});
 
 // --- DATABAS ANSLUTNING ---
 const pool = new Pool({
@@ -1941,6 +1963,13 @@ app.use(express.static(__dirname));
 // Fallback för allt annat (Catch-all)
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'hub.html'));
+});
+
+// A body that is too large, or not JSON, is answered as JSON like everything else under /api
+app.use((err, req, res, next) => {
+    if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'The request body is too large' });
+    if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'The request body is not valid JSON' });
+    next(err);
 });
 
 // --- START SERVER ---

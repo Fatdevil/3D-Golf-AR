@@ -22,7 +22,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
   const pool = new Pool({ connectionString: URL_DB });
   const port = 20000 + Math.floor(Math.random() * 20000);
   const BASE = 'http://127.0.0.1:' + port;
-  const server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), DATABASE_URL: URL_DB }), stdio: 'ignore' });
+  const server = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), DATABASE_URL: URL_DB, RATE_LIMIT_WRITES: '100000', RATE_LIMIT_REGISTER: '100000' }), stdio: 'ignore' });
   const tag = 'E2C-' + require('crypto').randomBytes(3).toString('hex').toUpperCase();
   const owner = 'e2c-owner-' + tag;
   const madeCollections = [];
@@ -433,6 +433,14 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await withToken('POST', '/api/auth/register', { device_id: mineDev }, mineDev, tokA);
     const listBad = (await withToken('GET', '/api/collections', undefined, mineDev, tokB)).json;
     check('a list asked for with the wrong token treats the caller as no one (no is_mine)', Array.isArray(listBad) ? listBad.every(c => c.is_mine === false) : listBad.collections ? listBad.collections.every(c => c.is_mine === false) : true);
+
+    // request limits: a body larger than its route takes is refused, and guessing the admin password is slowed down
+    const bigBody = await fetch(BASE + '/api/collections', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': owner }, body: JSON.stringify({ name: 'x', plates: [], pad: 'x'.repeat(2 * 1024 * 1024) }) });
+    let bigJson = null; try { bigJson = await bigBody.json(); } catch (e) { /* none */ }
+    check('a 2 MB body to /api/collections is refused as JSON with 413', bigBody.status === 413 && !!(bigJson && bigJson.error), bigBody.status + ' ' + JSON.stringify(bigJson));
+    let tries = [];
+    for (let i = 0; i < 12; i++) { const lr = await fetch(BASE + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'wrong-' + i }) }); tries.push(lr.status); if (lr.status === 429) check('...and the 429 says when to try again', Number(lr.headers.get('retry-after')) >= 1); }
+    check('the 11th wrong admin password within a minute gets 429, the ten before it 401', tries.slice(0, 10).every(s => s === 401) && tries[10] === 429 && tries[11] === 429, JSON.stringify(tries));
 
     // a collection with another type: 9 holes, three plates
     r = await api('POST', '/api/collections', { name: 'Nian', author: 'Test', type: '9', plates: [plate(A), plate(B), plate(C)] }, owner);
