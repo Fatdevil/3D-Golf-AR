@@ -78,7 +78,7 @@ function serve() {
 
   // keys the browser itself puts on window: taken from a blank page so the baseline holds only what arcade.html adds
   const blank = await ctx.newPage();
-  await blank.goto('about:blank');
+  await blank.goto(base + '/robots.txt'); // same origin so secure-context-only browser APIs (sharedStorage, showOpenFilePicker...) are counted as built in
   const builtin = await blank.evaluate(function () { return Object.keys(window); });
   await blank.close();
 
