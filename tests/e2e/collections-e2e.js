@@ -422,6 +422,13 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('the first token an old account sends is taken as its device\'s', r.status === 200, JSON.stringify(r));
     r = await withToken('PUT', '/api/users/' + legacy, { display_name: 'Eve' }, legacy, null);
     check('...and after that the id alone is refused', r.status === 401, JSON.stringify(r));
+    const ghost = 'e2c-ghost-' + tag;
+    r = await withToken('PUT', '/api/users/' + ghost, { display_name: 'Ghost' }, ghost, tokA);
+    check('an id with no account yet is given one by the first token seen for it', r.status === 200, JSON.stringify(r));
+    r = await withToken('PUT', '/api/users/' + ghost, { display_name: 'Ghost' }, ghost, tokB);
+    check('an id with no account is bound to that token, and another token is then refused', r.status === 401, JSON.stringify(r));
+    r = await withToken('PUT', '/api/users/' + ghost, { display_name: 'Ghost' }, ghost, tokA);
+    check('...and the first token still writes', r.status === 200, JSON.stringify(r));
     const mineDev = 'e2c-mine-' + tag;
     await withToken('POST', '/api/auth/register', { device_id: mineDev }, mineDev, tokA);
     const listBad = (await withToken('GET', '/api/collections', undefined, mineDev, tokB)).json;
