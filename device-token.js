@@ -14,8 +14,14 @@
         if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
         else for (var i = 0; i < 32; i++) bytes[i] = Math.floor(Math.random() * 256);
         t = Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
-        try { localStorage.setItem(KEY, t); } catch (e) { return null; }
-        return t;
+        // a token another tab stored first is the one that counts: read it back so that every tab sends the same one
+        try {
+            var other = localStorage.getItem(KEY);
+            if (other && /^[0-9a-f]{64}$/.test(other)) return other;
+            localStorage.setItem(KEY, t);
+            var stored = localStorage.getItem(KEY);
+            return stored && /^[0-9a-f]{64}$/.test(stored) ? stored : null;
+        } catch (e) { return null; }
     }
     window.GolfDeviceToken = { get: token };
     if (typeof window.fetch !== 'function') return;
