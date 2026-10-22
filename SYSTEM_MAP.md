@@ -152,9 +152,10 @@ biomes (id, name, config)
 ### Auth
 | Endpoint | Metod | Syfte |
 |----------|-------|-------|
-| `POST /api/auth/register` | POST | Skapa/hämta user via device_id |
+| `POST /api/auth/register` | POST | Skapa/hämta user via device_id (kräver enhetens token om kontot har en; svaret har aldrig `token_hash`) |
 | `GET /api/users/:id` | GET | Hämta profil |
 | `PUT /api/users/:id` | PUT | Uppdatera display_name (kräver auth) |
+| `GET /api/users/:id/handicap` | GET | Handicapindex och senaste rundor |
 
 ### Courses
 | Endpoint | Metod | Syfte |
@@ -163,6 +164,15 @@ biomes (id, name, config)
 | `POST /api/courses` | POST | Spara/uppdatera bana (med ownership-check) |
 | `GET /api/courses/:code` | GET | Ladda en bana |
 | `POST /api/courses/:code/like` | POST | Gilla en bana |
+
+### Collections (banor av flera 3-hålsplattor)
+| Endpoint | Metod | Syfte |
+|----------|-------|-------|
+| `GET /api/collections` | GET | Lista samlingar (`is_mine`, aldrig `owner_id`) |
+| `GET /api/collections/:id` | GET | En samling; `plate_versions` ger varje plattas nuvarande `version` |
+| `POST /api/collections` | POST | Spara/uppdatera (plattlistan kontrolleras; `expect_existing: true` ger 404 om samlingen raderats) |
+| `GET /api/collections/:id/leaderboard` | GET | Ett varv över alla plattor räknas ihop |
+| `DELETE /api/collections/:id` | DELETE | Radera (ägaren) |
 
 ### Leaderboard
 | Endpoint | Metod | Syfte |
@@ -175,7 +185,7 @@ biomes (id, name, config)
 |----------|-------|-------|
 | `GET /api/ranges` | GET | Lista publicerade ranges |
 
-### Assets & Biomes (admin, lösenord: golfadmin123)
+### Assets & Biomes (admin, lösenord från ADMIN_PASSWORD)
 | Endpoint | Metod |
 |----------|-------|
 | `GET /api/assets` | Lista assets (utan file_data) |
@@ -391,3 +401,22 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - Efter flygningen: en resultatpaus (600 ms), siktblicken glider till siktpunkten (förut hopp) och linsen går tillbaka till 60°. Gäller bara AUTO-kameran; FREE-kameran är orörd.
 - `tests/test_flight_cam.js` mäter bl.a. att bollen är i bild ≥ 98 % av bildrutorna, vinkelhastighet ≤ 3 rad/s, samma resultat vid 30/60/144 fps, kamerahöjd över marken.
 - **Etapp 2:** fyra slagtyper (`profile`): ground (putt/rollare, gamla kameran), short (chip/pitch, närmare vy, lätt zoom, ingen slow motion), approach (35–140 m, slow motion 0,35×) och long (drivar, 0,45×, bredare båge, zoom ner mot 17°). Kameran håller sig över träd längs flygningen (`buildCameraObstacles` ger upprätta cylindrar `{x, z, r, top}`; bågen får en mjuk lyftning och kameran ligger minst 1,8 m över toppen). Vid approach hålls pinnen i bild efter landning (blicken delvis mot pinnen, något vidare lins). **Hoppa över:** tryck på bilden eller Space/Enter/Esc (`skipFlight`, inte de första 500 ms) lägger bollen i slutet av banan; en liten "TAP TO SKIP"-text visas under flygningen.
+
+## Banor av flera plattor (collections) (2026-10)
+- En samling är en 3-, 6-, 9- eller 18-hålsbana som består av publicerade 3-hålsplattor (en platta per sida i spelet). Reglerna för plattlistan (antal som ryms, ingen platta två gånger, varje platta finns och är publicerad) ligger i `collections-core.js` och kontrolleras av servern; serverns egen totalpar och slagindex räknas om när en platta publiceras igen.
+- Spelet sparar per samling i `sessionStorage` (`collection_*_<NYCKEL>`, nyckeln är samlingens id i versaler): poäng, rundtoken, deltagare, plattor och plattversioner. `collection-round.js` (`CollectionRound.continueRound`) fryser plattornas ordning vid start och avgör om en platta bytts eller publicerats på nytt under rundan; då spelas det som återstår som vanliga rundor ("COURSE CHANGED"). Servern (`finalizeCollectionRound`) kräver att varje plattas `course_version` är aktuell och skriver ögonblicksbilden `collection_go` på resultatet.
+- Laddningen försöker 3 gånger; misslyckas den visas "COULD NOT LOAD" med Try again (`#collection-load-error` på desktop, motsvarande på mobil). Mobil (`arcade_mobile.html`, `arcade_mobile_hub.html`) spelar samlingar med nytt försök vid misslyckad sparning och ett lie-chip (`#lie-chip`).
+- Handikapp: bara plats 0 (kontoinnehavaren) får differential; gäster (`stats.player_slot` ≠ 0) räknas inte. Test: `tests/test_collections.js`, `tests/e2e/collections-e2e.js`.
+
+## Underlag, avdrag och lägen (2026-10)
+- Underlagets multiplikatorer (`lieMultipliers`, `lieRange`, `lieEffectText` i `physics.js`) gäller också riktiga tal från en launch monitor: LM ger boll- och klubbdata, systemet omvandlar utfallet efter underlaget. Utslag (`isTeeShot`) tvingas till FAIRWAY.
+- `arcade-relief.js` (`ReliefRules.checkDrop`): avdrag i sidled inom 2,5 m, i "line"-läge högst 60 m bakåt längs linjen, tolerans 1,5 m, och i samma bunker kontrolleras vägen var 0,25 m. `takePenaltyDrop` i `arcade-rules.js` frågar i bunker: +1 slag och droppa kvar i bunkern, eller +2 slag och droppa utanför. Putt i bunker följer sandreglerna. Test: `tests/test_relief.js`, `tests/test_sand.js`.
+
+## Identitet och skydd (2026-10)
+- **Id är inte hemligt.** `x-user-id` är enhetens UUID (`golf_os_device_id`). Ingen publik lista får därför innehålla ett användar-id: `publicRef()` (HMAC-SHA256 av id:t, nyckel `PUBLIC_REF_KEY`) ger `owner_ref`/`player_ref`, och `hideOwner`/`hidePlayer` byter ut `owner_id`/`player_id` mot dem plus `is_mine`/`is_me`. Klienterna använder bara `is_mine`, `is_me` och `can_edit`.
+- **Enhetens token.** `device-token.js` skapar en slumpad token (`golf_os_device_token`, 64 hex) och en `fetch`-omslag lägger den som `x-user-token` på varje anrop med `x-user-id`. Servern sparar bara SHA-256-hashen (`users.token_hash`). Första token ett id visar upp blir enhetens (`checkDevice`); därefter ger saknad eller fel token 401 i `authMiddleware`, och i `optionalAuth` behandlas anroparen som ingen. Ett id utan konto får ett konto bundet till första token. **Övergång:** ett id utan token som ingen enhet gjort anspråk på släpps fortfarande igenom, så att gamla klienter inte låses ute; den regeln kan skärpas när aktiva enheter hunnit göra anspråk.
+- **Gränser** (`rate-limit.js`): skrivande anrop under `/api` 120/min och adress (`RATE_LIMIT_WRITES`), skapa konto 30/min (`RATE_LIMIT_REGISTER`), admininloggning 10/min (`RATE_LIMIT_LOGIN`); över gränsen 429 med `Retry-After`. JSON-kroppar: 100 kB för konto och admin, 1 MB för resultat, gilla och samlingar, 50 MB för banor, modeller och bilder; för stor kropp ger 413. `trust proxy` är 1 (Railway). Test: `tests/test_rate_limit.js` och `collections-e2e.js`.
+- **Adminlösenordet** kommer från `ADMIN_PASSWORD`; saknas den används ett standardvärde i koden. Sätt alltid variabeln i produktion.
+
+## Tester och CI (2026-10)
+`.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.
