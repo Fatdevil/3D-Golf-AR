@@ -172,7 +172,7 @@ biomes (id, name, config)
 | `GET /api/collections/:id` | GET | En samling; `plate_versions` ger varje plattas nuvarande `version` |
 | `POST /api/collections` | POST | Spara/uppdatera (plattlistan kontrolleras; `expect_existing: true` ger 404 om samlingen raderats) |
 | `GET /api/collections/:id/leaderboard` | GET | Ett varv över alla plattor räknas ihop |
-| `DELETE /api/collections/:id` | DELETE | Radera (ägaren) |
+| `DELETE /api/collections/:id` | DELETE | Radera (ägaren; en samling utan ägare, sparad utan `x-user-id`, kan raderas och ändras av vem som helst som skickar ett id) |
 
 ### Leaderboard
 | Endpoint | Metod | Syfte |
