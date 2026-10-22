@@ -1275,8 +1275,10 @@ async function saveCollection(db, req, shape) {
     if (id) {
         // Update existing
         const ownerCheck = await db.query('SELECT owner_id FROM course_collections WHERE id = $1', [id.toUpperCase()]);
-        if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id && req.userId && ownerCheck.rows[0].owner_id !== req.userId) {
-            return { status: 403, body: { error: 'Not the owner' } };
+        if (ownerCheck.rows.length > 0 && ownerCheck.rows[0].owner_id) {
+            // a collection with an owner is changed only by that owner (as for courses): no id, or an id whose token was refused, is no one
+            if (!req.userId) return { status: 401, body: { error: 'Authentication required to edit this collection' } };
+            if (ownerCheck.rows[0].owner_id !== req.userId) return { status: 403, body: { error: 'Not the owner' } };
         }
         const result = await db.query(
             `UPDATE course_collections SET name=$1, author=$2, type=$3, plates=$4, total_par=$5, cover_image=$6, stroke_index=$8, course_rating=$9, slope_rating=$10 WHERE id=$7 RETURNING id`,

@@ -395,6 +395,14 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const colAfter = (await api('GET', '/api/collections/' + id)).json;
     check('when plate B is published again the collection\'s stroke index follows (lengths 150 400 250 | 600 100 100)', r.status === 200 && JSON.stringify(colAfter.stroke_index) === JSON.stringify([4, 2, 3, 1, 5, 6]), r.status + ' ' + JSON.stringify(colAfter.stroke_index) + JSON.stringify(r.json));
 
+    // a collection with an owner is changed only by that owner: no id and another id are both refused, and the collection is left as it was
+    const nameBefore = (await pool.query('SELECT name FROM course_collections WHERE id = $1', [id])).rows[0].name;
+    r = await api('POST', '/api/collections', { id: id, name: 'Overwritten', author: 'x', type: '6', plates: [plate(A)] }, undefined);
+    check('saving over an owned collection without an id is refused (401)', r.status === 401, JSON.stringify(r));
+    r = await api('POST', '/api/collections', { id: id, name: 'Overwritten', author: 'x', type: '6', plates: [plate(A)] }, 'e2c-other-' + tag);
+    check('saving over an owned collection as someone else is refused (403)', r.status === 403, JSON.stringify(r));
+    check('...and the collection is unchanged', (await pool.query('SELECT name FROM course_collections WHERE id = $1', [id])).rows[0].name === nameBefore);
+
     // the device token: an id alone stops being enough once a device has claimed it
     const tokA = 'a'.repeat(64), tokB = 'b'.repeat(64), devId = 'e2c-dev-' + tag;
     async function withToken(method, url, body, user, token) {
