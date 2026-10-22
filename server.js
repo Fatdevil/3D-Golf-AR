@@ -1057,6 +1057,8 @@ async function updateHandicapIndex(playerId, dbPool) {
 
 app.post('/api/courses', requireDB, optionalAuth, async (req, res) => {
     try {
+        // a course is saved by someone: without an id (or with an id whose token was refused) it would have no owner and anyone could change it
+        if (!req.userId) return res.status(401).json({ error: 'Authentication required to save a course' });
         const { name, author, holes, builder_holes, targets, trees, terrain_heightmap, terrain_biomemap, terrain_watermask, is_draft, is_range, edit_code, theme_data, hole_count, total_par, new_version, cover_image } = req.body;
         
         // Validering
@@ -1302,6 +1304,8 @@ async function saveCollection(db, req, shape) {
 app.post('/api/collections', requireDB, optionalAuth, async (req, res) => {
     let db = null;
     try {
+        // as for courses: a collection is saved by someone, so it always has an owner
+        if (!req.userId) return res.status(401).json({ error: 'Authentication required to save a collection' });
         const { type, plates } = req.body;
         if (!type || !collectionsCore.TYPES.includes(type)) {
             return res.status(400).json({ error: 'type must be 3, 6, 9, or 18' });
