@@ -410,6 +410,19 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('a course without an id is refused (401)', r.status === 401, JSON.stringify(r));
     check('...and none of them was made', (await pool.query("SELECT 1 FROM course_collections WHERE name = 'Ownerless' UNION ALL SELECT 1 FROM courses WHERE name = 'Ownerless'")).rows.length === 0);
 
+    // a deployed server without ADMIN_PASSWORD has no admin login (the built-in password is for local development only)
+    const port2 = port + 1, BASE2 = 'http://127.0.0.1:' + port2;
+    const env2 = Object.assign({}, process.env, { PORT: String(port2), DATABASE_URL: URL_DB, RAILWAY_ENVIRONMENT: 'production' }); delete env2.ADMIN_PASSWORD;
+    const server2 = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: env2, stdio: 'ignore' });
+    try {
+      let up2 = false;
+      for (let i = 0; i < 60 && !up2; i++) { try { const hr = await fetch(BASE2 + '/api/health'); up2 = hr.ok; } catch (e) { /* not yet */ } if (!up2) await wait(500); }
+      const lr = await fetch(BASE2 + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'golfadmin123' }) });
+      check('a deployed server without ADMIN_PASSWORD refuses the built-in admin password (503, not a login)', up2 && lr.status === 503, up2 + ' ' + lr.status);
+    } finally { server2.kill(); }
+    const ok1 = await fetch(BASE + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'golfadmin123' }) });
+    check('a local server (not deployed) still takes the development password', ok1.status === 200, String(ok1.status));
+
     // the device token: an id alone stops being enough once a device has claimed it
     const tokA = 'a'.repeat(64), tokB = 'b'.repeat(64), devId = 'e2c-dev-' + tag;
     async function withToken(method, url, body, user, token) {
@@ -455,7 +468,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('a 2 MB body to /api/collections is refused as JSON with 413', bigBody.status === 413 && !!(bigJson && bigJson.error), bigBody.status + ' ' + JSON.stringify(bigJson));
     let tries = [];
     for (let i = 0; i < 12; i++) { const lr = await fetch(BASE + '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'wrong-' + i }) }); tries.push(lr.status); if (lr.status === 429) check('...and the 429 says when to try again', Number(lr.headers.get('retry-after')) >= 1); }
-    check('the 11th wrong admin password within a minute gets 429, the ten before it 401', tries.slice(0, 10).every(s => s === 401) && tries[10] === 429 && tries[11] === 429, JSON.stringify(tries));
+    check('admin logins are limited to 10 a minute: with the one made earlier, 9 wrong passwords get 401 and the rest 429', tries.slice(0, 9).every(s => s === 401) && tries.slice(9).every(s => s === 429), JSON.stringify(tries));
 
     // a collection with another type: 9 holes, three plates
     r = await api('POST', '/api/collections', { name: 'Nian', author: 'Test', type: '9', plates: [plate(A), plate(B), plate(C)] }, owner);

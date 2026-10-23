@@ -292,7 +292,16 @@ function requireDB(req, res, next) {
 }
 
 // --- ADMIN AUTH & TOKENS ---
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'golfadmin123';
+// The admin password comes from ADMIN_PASSWORD. The built-in one is for local development only: on a deployed server (NODE_ENV=production, or Railway)
+// without the variable the admin login is off (503) rather than open to a password anyone can read in the code.
+const IS_DEPLOYED = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT || !!process.env.RAILWAY_PROJECT_ID;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_DEPLOYED ? null : 'golfadmin123');
+if (!ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not set: the admin login is off until it is');
+function adminPasswordOk(pw) {
+    if (!ADMIN_PASSWORD || typeof pw !== 'string' || !pw) return false;
+    const a = crypto.createHash('sha256').update(pw).digest(), b = crypto.createHash('sha256').update(ADMIN_PASSWORD).digest();
+    return crypto.timingSafeEqual(a, b);
+}
 const activeAdminTokens = new Map(); // token -> { expiresAt: number }
 
 function generateAdminToken() {
@@ -320,7 +329,7 @@ function requireAdmin(req, res, next) {
     }
     // Backwards compatibility for direct password verification
     const pw = (req.body && (req.body.password || req.body.adminPassword)) || req.headers['x-admin-password'];
-    if (pw && pw === ADMIN_PASSWORD) {
+    if (adminPasswordOk(pw)) {
         return next();
     }
     return res.status(401).json({ error: 'Unauthorized: Admin authentication required' });
@@ -360,7 +369,8 @@ function saveLocalStarterPlates(plates) {
 // --- ADMIN AUTH ENDPOINTS ---
 app.post('/api/admin/login', (req, res) => {
     const { password } = req.body || {};
-    if (!password || password !== ADMIN_PASSWORD) {
+    if (!ADMIN_PASSWORD) return res.status(503).json({ error: 'Admin login is not configured on this server' });
+    if (!adminPasswordOk(password)) {
         return res.status(401).json({ error: 'Incorrect admin password' });
     }
     const token = generateAdminToken();
