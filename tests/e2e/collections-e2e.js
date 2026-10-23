@@ -403,6 +403,13 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('saving over an owned collection as someone else is refused (403)', r.status === 403, JSON.stringify(r));
     check('...and the collection is unchanged', (await pool.query('SELECT name FROM course_collections WHERE id = $1', [id])).rows[0].name === nameBefore);
 
+    // nothing is saved without an id, so nothing is saved without an owner
+    r = await api('POST', '/api/collections', { name: 'Ownerless', author: 'x', type: '6', plates: [] }, undefined);
+    check('a new collection without an id is refused (401)', r.status === 401, JSON.stringify(r));
+    r = await api('POST', '/api/courses', { name: 'Ownerless', holes: [], is_draft: true }, undefined);
+    check('a course without an id is refused (401)', r.status === 401, JSON.stringify(r));
+    check('...and none of them was made', (await pool.query("SELECT 1 FROM course_collections WHERE name = 'Ownerless' UNION ALL SELECT 1 FROM courses WHERE name = 'Ownerless'")).rows.length === 0);
+
     // the device token: an id alone stops being enough once a device has claimed it
     const tokA = 'a'.repeat(64), tokB = 'b'.repeat(64), devId = 'e2c-dev-' + tag;
     async function withToken(method, url, body, user, token) {
