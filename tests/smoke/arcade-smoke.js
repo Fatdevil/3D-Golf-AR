@@ -1237,6 +1237,53 @@ function serve() {
       return { hadStrip: true, attrsAtDispose: attrsAtDispose, replaced: sh._stripGeo !== old, newStripOk: !!sh._stripGeo && sh._stripGeo.attributes.position === sh.customGeo.attributes.position };
     });
     checks.push({ name: 'edge strip: rebuilding it does not dispose the vertex buffers shared with the full-grid shells', ok: sd.hadStrip && sd.attrsAtDispose === 0 && sd.replaced && sd.newStripOk, detail: JSON.stringify(sd) });
+    // 2D grass cards: off by default; on, chunks of tufts stand on the grass (the right half, the left is fairway) around the camera,
+    // the shader compiles, dropping a chunk keeps the shared template buffers, and the menu buttons switch and remember them
+    const cards = await pp.evaluate(async function () {
+      const sh = window._terrainShells, errs = [], oe = console.error;
+      console.error = function () { errs.push(String(arguments[0]).slice(0, 160)); oe.apply(console, arguments); };
+      const out = { defaultOff: sh.cardsOn === false && sh.cards.size === 0 };
+      if (sh.quality === 'OFF') window.setGrassQuality('MED');
+      const px = function (x) { return Math.round((x / 600 + 0.5) * 4096); };
+      window.pCtx.fillStyle = '#4a782b'; window.pCtx.fillRect(0, 0, 4096, 4096);
+      window.pCtx.fillStyle = '#7db952'; window.pCtx.fillRect(px(-300), 0, px(0) - px(-300), 4096); // fairway on the left half
+      window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+      window._roughMaskDirty = false; window.rebuildRoughMask();
+      const cam = new THREE.PerspectiveCamera(55, 1.5, 0.05, 2000); cam.position.set(6, 2, 0); cam.lookAt(12, 0, -6); cam.updateMatrixWorld(true);
+      window.setGrassExtra('cards', '1');
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      let n = 0, onFairway = 0, far = 0, badClass = 0;
+      const reach = sh._cardPreset().radius + 16 * 1.42;
+      for (const c of sh.cards.values()) {
+        if (!c.mesh) continue;
+        const g = c.mesh.geometry, b = g.attributes.iBase.array, k = g.attributes.iClass.array;
+        for (let i = 0; i < c.count; i++) {
+          n++;
+          if (b[i * 3] < -0.6) onFairway++;
+          if (Math.hypot(b[i * 3] - 6, b[i * 3 + 2]) > reach) far++;
+          if (!(k[i] === 0 || k[i] === 1 || k[i] === 2)) badClass++;
+        }
+      }
+      Object.assign(out, { n: n, chunks: sh.cards.size, onFairway: onFairway, far: far, badClass: badClass });
+      renderer.render(scene, cam);
+      // dropping a chunk frees only its own data: the shared template attributes are taken off before dispose
+      const first = Array.from(sh.cards.values()).find(function (c) { return c.mesh; });
+      let attrsAtDispose = -1;
+      if (first) { const g = first.mesh.geometry, d = g.dispose.bind(g); g.dispose = function () { attrsAtDispose = ('position' in g.attributes) || ('uv' in g.attributes) ? 1 : 0; d(); }; }
+      sh._clearCards();
+      out.attrsAtDispose = attrsAtDispose; out.tplKept = !!sh._cardTpl && sh._cardTpl.pos.array.length === 24;
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      out.rebuilt = sh.cards.size === out.chunks;
+      const btn = document.getElementById('grass-x-cards-1');
+      out.shown = !!btn && btn.style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
+      out.stored = localStorage.getItem('golf_grass_cards') === '1';
+      window.setGrassExtra('cards', '0');
+      out.off = sh.cardsOn === false && sh.cards.size === 0 && localStorage.getItem('golf_grass_cards') === '0';
+      console.error = oe;
+      out.errs = errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); });
+      return out;
+    });
+    checks.push({ name: '2D grass cards: off by default; on, tufts stand on the grass around the camera (not on the fairway), compile, keep the shared template on a drop, and the buttons switch and remember them', ok: cards.defaultOff && cards.n > 500 && cards.onFairway === 0 && cards.far === 0 && cards.badClass === 0 && cards.attrsAtDispose === 0 && cards.tplKept && cards.rebuilt && cards.shown && cards.stored && cards.off && cards.errs.length === 0, detail: JSON.stringify(cards) });
     // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };
