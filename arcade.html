@@ -34,7 +34,7 @@
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
-<script src="terrain-shells.js?v=47"></script>
+<script src="terrain-shells.js?v=48"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
 <script src="arcade-scene-engine.js?v=11"></script>
 <script src="arcade-tracer-engine.js"></script>
@@ -3987,14 +3987,19 @@
     if (window.ParticleEngine) window.ParticleEngine.init(scene, camera);
     if (window.AutumnLeaves) window.AutumnLeaves.init(scene, camera);
 
+    // iPadOS 13+ reports itself as a Mac ("Macintosh"): only the touch screen gives it away (a Mac has no touch points)
+    window.isTouchDevice = function() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    };
+
     window.getCapPixelRatio = function() {
-        let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+        let isMobileDevice = window.isTouchDevice() || window.innerWidth <= 768;
         let maxRatio = isMobileDevice ? 1.5 : 2.0;
         return Math.min(window.devicePixelRatio || 1, maxRatio);
     };
 
     window.initAutoPerformanceLOD = function() {
-        let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+        let isMobileDevice = window.isTouchDevice() || window.innerWidth <= 768;
         // Always lock Green Physics to 600x600 minimum so ball breaks are 100% accurate
         window.TERRAIN_SEGS = 600;
         
@@ -5333,7 +5338,7 @@
     window.waterTex = waterTex;
     
     const TERRAIN_SIZE = 600; 
-    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPadOS reports a Mac
     window.TERRAIN_SEGS = window.TERRAIN_SEGS || (_isMobile ? 400 : 600); 
     let planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, window.TERRAIN_SEGS, window.TERRAIN_SEGS);
     planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);

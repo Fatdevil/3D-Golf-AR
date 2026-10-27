@@ -12,7 +12,47 @@
 (function() {
     'use strict';
 
-    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+    // iPadOS 13+ reports itself as a Mac ("Macintosh"): only the touch screen gives it away
+    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+    // The turf pattern's value noise, baked once into a small tiling texture (period NOISE_PERIOD noise units): one texture
+    // read instead of four sin() hashes per call, and the shader calls it five times per pixel and shell.
+    const NOISE_PERIOD = 32, NOISE_RES = 256;
+    function makeNoiseTex() {
+        let seed = 1337;
+        const rand = function () { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+        const lat = new Float32Array(NOISE_PERIOD * NOISE_PERIOD);
+        for (let i = 0; i < lat.length; i++) lat[i] = rand();
+        const at = function (x, y) { return lat[(y % NOISE_PERIOD) * NOISE_PERIOD + (x % NOISE_PERIOD)]; };
+        const data = new Uint8Array(NOISE_RES * NOISE_RES);
+        for (let y = 0; y < NOISE_RES; y++) {
+            const v = (y + 0.5) / NOISE_RES * NOISE_PERIOD, iy = Math.floor(v); let fy = v - iy; fy = fy * fy * (3 - 2 * fy);
+            for (let x = 0; x < NOISE_RES; x++) {
+                const u = (x + 0.5) / NOISE_RES * NOISE_PERIOD, ix = Math.floor(u); let fx = u - ix; fx = fx * fx * (3 - 2 * fx);
+                const a = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * fx, b = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * fx;
+                data[y * NOISE_RES + x] = Math.round(255 * (a + (b - a) * fy));
+            }
+        }
+        const tex = new THREE.DataTexture(data, NOISE_RES, NOISE_RES, THREE.LuminanceFormat, THREE.UnsignedByteType);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        // no mipmaps: averaged noise is a flat 0.5, which would turn the far shells into solid sheets
+        tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    // Wind on the grass: gusts roll across it along the wind (waves of 35 and 90 m, well over the 3 m shell vertex spacing).
+    // Returns how far a full-height tip leans downwind, in its own heights (a base lean plus the gust).
+    const WIND_GLSL = `
+        uniform float uTime;
+        uniform vec2  uWindDir;   // world xz, downwind
+        uniform float uWindStr;
+        float windLean(vec2 xz) {
+            float along = dot(xz, uWindDir), across = dot(xz, vec2(-uWindDir.y, uWindDir.x));
+            float g = sin(along * 0.18 - uTime * 2.2) * 0.6 + sin(along * 0.07 + across * 0.05 - uTime * 1.3) * 0.4;
+            return uWindStr * (0.55 + 0.45 * g);
+        }
+    `;
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
@@ -24,13 +64,10 @@
 
     // ─── GLSL: 3D Shell Shader ──────────────────────────────────
 
-    const VERT = `
+    const VERT = WIND_GLSL + `
         uniform float uLayer;
         uniform float uLayers;
         uniform float uMaxHeight;
-        uniform vec2  uWindDir;
-        uniform float uWindStr;
-        uniform float uTime;
 
         varying vec2 vUv;
         varying float vL;
@@ -38,6 +75,7 @@
         varying vec3 vWorldNormal;
         varying float vSlope;
         varying float vCamDist;
+        varying vec2  vSway;
 
         void main() {
             vUv = uv;
@@ -58,16 +96,9 @@
             float layerDisp = max(vL * uMaxHeight * slopeHeightScale, slopeBias);
             vec3 p = position + dir * layerDisp;
 
-            // Wind sway (disabled for visual stability and performance)
-            /*
-            float sway = vL * vL * uWindStr * 0.6;
-            float w1 = sin(uTime * 1.4 + p.x * 0.06 + p.y * 0.04);
-            float w2 = sin(uTime * 2.1 + p.y * 0.09 + p.x * 0.03);
-            p.x += uWindDir.x * sway * (w1 * 0.6 + w2 * 0.4);
-            p.y -= uWindDir.y * sway * (w1 * 0.6 + w2 * 0.4);
-            */
-
             vWorldPos = (modelMatrix * vec4(p, 1.0)).xyz;
+            // the shells stay in place; the fragment shader shifts the turf pattern of each shell downwind by this, so the strands lean
+            vSway = uWindDir * windLean(vWorldPos.xz);
             vCamDist = distance(vWorldPos, cameraPosition);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
@@ -96,7 +127,7 @@
         uniform float uEdgeOn;
         uniform float uMaxHeight;
         uniform float uMaxDist;
-        uniform vec2  uWindDir;
+        uniform sampler2D uNoiseTex;
 
         // Dynamic light uniforms synced with scene
         uniform vec3  uLightDir;
@@ -121,19 +152,14 @@
         varying vec3  vWorldNormal;
         varying float vSlope;
         varying float vCamDist;
+        varying vec2  vSway;
 
         float hash(vec2 p) {
             return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
+        // smoothed value noise, baked (see makeNoiseTex)
         float vnoise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            f = f * f * (3.0 - 2.0 * f);
-            return mix(
-                mix(hash(i), hash(i + vec2(1,0)), f.x),
-                mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x),
-                f.y
-            );
+            return texture2D(uNoiseTex, p * (1.0 / ${NOISE_PERIOD}.0)).r;
         }
         float fbm(vec2 p) {
             return 0.45 * vnoise(p) +
@@ -208,10 +234,12 @@
             }
 
             vec2 wXZ = vWorldPos.xz;
+            // wind: a shell at this height samples the pattern from upwind, more so higher up (a strand bends, its root stays)
+            vec2 nXZ = wXZ - vSway * targetH * eL * eL;
 
             // Dense, fine-grained turf structure (uniform coverage without coarse blotchy clumps)
-            float tuft = fbm(wXZ * 5.0 + 50.0);
-            float blade = vnoise(wXZ * 20.0 + 100.0);
+            float tuft = fbm(nXZ * 5.0 + 50.0);
+            float blade = vnoise(nXZ * 20.0 + 100.0);
             float grass = tuft * 0.5 + blade * 0.5;
 
             // Gentle threshold: bottom layers keep ~90% pixels, top ~60%
@@ -236,8 +264,8 @@
             // still reads as grass. The texture is mean 0.5, so x2 keeps the average brightness; mipmaps fade it out with distance.
             if (uTexOn > 0.5 && isDeep > 0.5) {
                 // two scales (the second one rotated) so the repeat of the tile does not show
-                vec2 rXZ = vec2(wXZ.x * 0.8 - wXZ.y * 0.6, wXZ.x * 0.6 + wXZ.y * 0.8);
-                float texd = texture2D(uGrassTex, wXZ / uTexTile).r + texture2D(uGrassTex, rXZ / (uTexTile * 2.7)).r;
+                vec2 rXZ = vec2(nXZ.x * 0.8 - nXZ.y * 0.6, nXZ.x * 0.6 + nXZ.y * 0.8);
+                float texd = texture2D(uGrassTex, nXZ / uTexTile).r + texture2D(uGrassTex, rXZ / (uTexTile * 2.7)).r;
                 // lighter and flatter than a photo: the shadows between the blades stay soft, so it reads as a cartoon lawn
                 float tex = clamp(1.0 + (texd - 1.0) * 1.0, 0.85, 1.5);
                 col *= tex * uTexLift;
@@ -289,7 +317,7 @@
     // ─── Edge blades: real tapered blades along the borders of the grass ─────────────
     // Where the grass meets fairway, green or sand the height shows in the silhouette. A thin strip of blades there
     // (a few thousand, only near the camera) gives what the shells cannot: separate, pointed blades.
-    const BLADE_VERT = `
+    const BLADE_VERT = WIND_GLSL + `
         attribute vec3 iBase;     // blade root (world)
         attribute vec4 iParam;    // height, yaw, lean, shade
         attribute float iClass;   // 0 rough, 1 deep rough, 2 semi-rough
@@ -308,6 +336,10 @@
             vec3 l = vec3(w, t * iParam.x, iParam.z * t * t * iParam.x);   // bends over towards its lean
             float c = cos(iParam.y), s = sin(iParam.y);
             vec3 wp = iBase + vec3(l.x * c + l.z * s, l.y, -l.x * s + l.z * c);
+            // wind: the tip bends downwind (quadratic from the root) and dips a little, so the blade keeps about its length
+            float bend = windLean(iBase.xz) * t * t * iParam.x;
+            wp.xz += uWindDir * bend;
+            wp.y -= 0.5 * bend * bend / max(iParam.x, 0.01);
             vec3 base = iClass < 0.5 ? uRoughCol : (iClass < 1.5 ? uDeepCol : uSemiCol);
             vCol = base * mix(0.55, 1.12, t) * iParam.w;            // darker at the root, lighter at the tip
             vDist = distance(wp, cameraPosition);
@@ -354,15 +386,16 @@
             this.waterTex = waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || null;
             this.quality = 'OFF';
             this.shells = [];   // { layer, mesh, mat }
-            // Draw all shells only near borders (see the fragment shader). Off by default until it has been tried on a phone:
-            // ?grassedge=1 in the address turns it on (and remembers it), ?grassedge=0 turns it off again.
+            // Draw all shells only near borders (see the fragment shader). On by default on phones and tablets (it cuts most of the
+            // shell triangles and pixels there), off on a computer; ?grassedge=1 in the address turns it on (and remembers it),
+            // ?grassedge=0 turns it off again.
             let edgeFlag = null;
             try {
                 const q = new URLSearchParams(window.location.search).get('grassedge');
                 if (q !== null) localStorage.setItem('golf_grass_edge', q === '1' ? '1' : '0');
                 edgeFlag = localStorage.getItem('golf_grass_edge');
             } catch (e) { /* storage blocked: stays off */ }
-            this.edgeWeighted = edgeFlag === '1';
+            this.edgeWeighted = edgeFlag === null ? _isMobile : edgeFlag === '1';
             // Blade texture on the deep rough: off by default; ?grasstex=1 (or =2 for the other tile) turns it on (and remembers it), ?grasstex=0 turns it off.
             let texFlag = null;
             try {
@@ -392,6 +425,9 @@
             this._edgeTex = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.LuminanceFormat, THREE.UnsignedByteType);
             this._edgeTex.needsUpdate = true;   // 1x1 'everything is an edge' until the mask has been built
             this._frame = 0;
+            this._noiseTex = makeNoiseTex();
+            this._windDir = new THREE.Vector2(0, -1);
+            this._windStr = 0;
 
             // 1x1 black dummy texture fallback so shader never fails if waterTex is null
             let blackPixel = new Uint8Array([0, 0, 0, 255]);
@@ -476,12 +512,15 @@
             let len = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1.0;
             lx /= len; ly /= len; lz /= len;
 
-            this._updateBlades(camera, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB);
+            this.updateWind();
+            this._updateBlades(camera, time, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB);
 
             let curWaterTex = this.waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || this._dummyWaterTex;
 
             for (let s of this.shells) {
                 s.mat.uniforms.uTime.value = time;
+                s.mat.uniforms.uWindStr.value = this._windStr;
+                s.mat.uniforms.uWindDir.value.copy(this._windDir);
                 s.mat.uniforms.uLightDir.value.set(lx, ly, lz);
                 s.mat.uniforms.uDirColor.value.set(dirR, dirG, dirB);
                 s.mat.uniforms.uAmbColor.value.set(ambR, ambG, ambB);
@@ -522,13 +561,15 @@
             }
         }
 
+        // The same wind as the ball, the trees and the leaves (window.currentWindMph / currentWindDir, downwind = (sin, -cos)).
+        // A light breeze even when calm, so the grass is never frozen; the Wind Sway switch and reduced motion stop it.
         updateWind() {
-            let ws = (window.windSpeed || 0) / 30;
-            let wa = (window.windAngle || 0) * Math.PI / 180;
-            for (let s of this.shells) {
-                s.mat.uniforms.uWindStr.value = ws;
-                s.mat.uniforms.uWindDir.value.set(Math.cos(wa), Math.sin(wa));
-            }
+            const mph = window.currentWindMph || 0, dir = (window.currentWindDir || 0) * Math.PI / 180;
+            let still = window.WindSway && typeof window.WindSway.isEnabled === 'function' && !window.WindSway.isEnabled();
+            if (this._reducedMotion === undefined) { try { this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)'); } catch (e) { this._reducedMotion = null; } }
+            still = still || !!(this._reducedMotion && this._reducedMotion.matches);
+            this._windDir.set(Math.sin(dir), -Math.cos(dir));
+            this._windStr = still ? 0 : 0.12 + 0.68 * Math.min(1, mph / 35);
         }
 
         /** Call after updateTerrainResolution to swap in new geometry */
@@ -881,7 +922,8 @@
                     uniforms: {
                         uWidth: { value: BLADE_WIDTH }, uWorld: { value: window.TERRAIN_SIZE || 600 }, uWaterMap: { value: this.waterTex || window.waterTex || this._dummyWaterTex }, uMaxDist: { value: preset.maxDist },
                         uRoughCol: { value: this._roughCol.clone() }, uDeepCol: { value: this._deepCol.clone() }, uSemiCol: { value: this._semiCol.clone() },
-                        uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) }
+                        uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+                        uTime: { value: 0 }, uWindDir: { value: this._windDir.clone() }, uWindStr: { value: this._windStr }
                     },
                     vertexShader: BLADE_VERT, fragmentShader: BLADE_FRAG, side: THREE.DoubleSide
                 });
@@ -953,9 +995,10 @@
             }, 300);
         }
 
-        _updateBlades(camera, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB) {
+        _updateBlades(camera, time, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB) {
             if (!this.blades.length || !this._bladeMat) return;
             const u = this._bladeMat.uniforms, maxD = u.uMaxDist.value;
+            u.uTime.value = time; u.uWindStr.value = this._windStr; u.uWindDir.value.copy(this._windDir);
             u.uWaterMap.value = this.waterTex || window.waterTex || this._dummyWaterTex;
             u.uWorld.value = window.TERRAIN_SIZE || 600;
             u.uLightDir.value.set(lx, ly, lz); u.uDirColor.value.set(dirR, dirG, dirB); u.uAmbColor.value.set(ambR, ambG, ambB);
@@ -1106,9 +1149,10 @@
                     uNextInterior: { value: this._nextInteriorLayer(layer, total) },
                     uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this.grassTexOn && this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 }, uTexLift: { value: this.grassTexLift },
                     uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
-                    uWindDir:  { value: new THREE.Vector2(1, 0) },
-                    uWindStr:  { value: 0.3 },
+                    uWindDir:  { value: this._windDir.clone() },
+                    uWindStr:  { value: this._windStr },
                     uTime:     { value: 0 },
+                    uNoiseTex: { value: this._noiseTex },
                     uRoughMask:{ value: this.roughMaskTex },
                     uWaterMap: { value: this.waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || this._dummyWaterTex },
                     uRoughCol: { value: this._roughCol.clone() },

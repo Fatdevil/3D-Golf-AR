@@ -1080,7 +1080,17 @@ function serve() {
       await new Promise(function (r) { setTimeout(r, 1500); });
       console.error = oe;
       const sh = window._terrainShells;
-      return { errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }), shells: sh.shells.length, semi: sh.semiHeight, rough: sh.roughHeight, deep: sh.deepHeight, u: sh.shells[0] && sh.shells[0].mat.uniforms.uSemiH.value };
+      // wind: the shells follow the game's wind (downwind = sin/-cos of the direction), a breeze when calm, none with Wind Sway off
+      const m0 = window.currentWindMph, d0 = window.currentWindDir, u0 = sh.shells[0].mat.uniforms;
+      window.currentWindMph = 0; sh.update(1, camera); const calm = u0.uWindStr.value;
+      window.currentWindMph = 35; window.currentWindDir = 90; sh.update(2, camera);
+      const wind = { calm: calm, storm: u0.uWindStr.value, dir: [u0.uWindDir.value.x, u0.uWindDir.value.y], time: u0.uTime.value };
+      if (window.WindSway) { window.WindSway.setEnabled(false); sh.update(3, camera); wind.swayOff = u0.uWindStr.value; window.WindSway.setEnabled(true); }
+      window.currentWindMph = m0; window.currentWindDir = d0;
+      const nt = u0.uNoiseTex.value, nd = nt && nt.image.data;
+      let nMin = 255, nMax = 0; if (nd) for (let i = 0; i < nd.length; i++) { nMin = Math.min(nMin, nd[i]); nMax = Math.max(nMax, nd[i]); }
+      const noise = { w: nt && nt.image.width, min: nMin, max: nMax, shared: sh.shells.every(function (q) { return q.mat.uniforms.uNoiseTex.value === nt; }), touch: typeof window.isTouchDevice === 'function' && window.isTouchDevice() === false };
+      return { errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }), shells: sh.shells.length, semi: sh.semiHeight, rough: sh.roughHeight, deep: sh.deepHeight, u: sh.shells[0] && sh.shells[0].mat.uniforms.uSemiH.value, wind: wind, noise: noise };
     });
     // the closeness-to-border map the edge-weighted shells use: 1 at a fairway edge, 0 well inside the grass, and the switch reaches the shaders
     const edge = await pp.evaluate(async function () {
@@ -1291,6 +1301,7 @@ function serve() {
       return { autumn: autumn, back: back, builtin: [window.BUILTIN_BIOMES.GLOBAL.horizonColor, window.BUILTIN_BIOMES.GLOBAL.oceanColor], hasCopy: !!window.BUILTIN_BIOMES };
     });
     checks.push({ name: 'biome rows: a database row without ocean and horizon colours gets the built-in ones (summer after autumn is summer again)', ok: rowFill.hasCopy && rowFill.autumn[0] !== rowFill.back[0] && rowFill.back.join() === rowFill.builtin.join(), detail: JSON.stringify(rowFill) });
+    checks.push({ name: '3D grass: the turf noise is a baked texture shared by all shells; the wind (and a calm breeze) reaches them, Wind Sway off stills them; a desktop is not a touch device', ok: grass.noise.w === 256 && grass.noise.min < 40 && grass.noise.max > 215 && grass.noise.shared && grass.noise.touch && Math.abs(grass.wind.calm - 0.12) < 1e-6 && Math.abs(grass.wind.storm - 0.8) < 1e-6 && Math.abs(grass.wind.dir[0] - 1) < 1e-6 && Math.abs(grass.wind.dir[1]) < 1e-6 && grass.wind.time === 2 && grass.wind.swayOff === 0, detail: JSON.stringify({ wind: grass.wind, noise: grass.noise }) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
