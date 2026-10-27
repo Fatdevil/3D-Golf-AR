@@ -12,7 +12,47 @@
 (function() {
     'use strict';
 
-    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+    // iPadOS 13+ reports itself as a Mac ("Macintosh"): only the touch screen gives it away
+    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+    // The turf pattern's value noise, baked once into a small tiling texture (period NOISE_PERIOD noise units): one texture
+    // read instead of four sin() hashes per call, and the shader calls it five times per pixel and shell.
+    const NOISE_PERIOD = 32, NOISE_RES = 256;
+    function makeNoiseTex() {
+        let seed = 1337;
+        const rand = function () { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+        const lat = new Float32Array(NOISE_PERIOD * NOISE_PERIOD);
+        for (let i = 0; i < lat.length; i++) lat[i] = rand();
+        const at = function (x, y) { return lat[(y % NOISE_PERIOD) * NOISE_PERIOD + (x % NOISE_PERIOD)]; };
+        const data = new Uint8Array(NOISE_RES * NOISE_RES);
+        for (let y = 0; y < NOISE_RES; y++) {
+            const v = (y + 0.5) / NOISE_RES * NOISE_PERIOD, iy = Math.floor(v); let fy = v - iy; fy = fy * fy * (3 - 2 * fy);
+            for (let x = 0; x < NOISE_RES; x++) {
+                const u = (x + 0.5) / NOISE_RES * NOISE_PERIOD, ix = Math.floor(u); let fx = u - ix; fx = fx * fx * (3 - 2 * fx);
+                const a = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * fx, b = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * fx;
+                data[y * NOISE_RES + x] = Math.round(255 * (a + (b - a) * fy));
+            }
+        }
+        const tex = new THREE.DataTexture(data, NOISE_RES, NOISE_RES, THREE.LuminanceFormat, THREE.UnsignedByteType);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        // no mipmaps: averaged noise is a flat 0.5, which would turn the far shells into solid sheets
+        tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    // Wind on the grass: gusts roll across it along the wind (waves of 35 and 90 m, well over the 3 m shell vertex spacing).
+    // Returns how far a full-height tip leans downwind, in its own heights (a base lean plus the gust).
+    const WIND_GLSL = `
+        uniform float uTime;
+        uniform vec2  uWindDir;   // world xz, downwind
+        uniform float uWindStr;
+        float windLean(vec2 xz) {
+            float along = dot(xz, uWindDir), across = dot(xz, vec2(-uWindDir.y, uWindDir.x));
+            float g = sin(along * 0.18 - uTime * 2.2) * 0.6 + sin(along * 0.07 + across * 0.05 - uTime * 1.3) * 0.4;
+            return uWindStr * (0.55 + 0.45 * g);
+        }
+    `;
 
     const QUALITY = {
         OFF:  { layers: 0, maxDist: 0 },
@@ -24,13 +64,10 @@
 
     // ─── GLSL: 3D Shell Shader ──────────────────────────────────
 
-    const VERT = `
+    const VERT = WIND_GLSL + `
         uniform float uLayer;
         uniform float uLayers;
         uniform float uMaxHeight;
-        uniform vec2  uWindDir;
-        uniform float uWindStr;
-        uniform float uTime;
 
         varying vec2 vUv;
         varying float vL;
@@ -38,6 +75,7 @@
         varying vec3 vWorldNormal;
         varying float vSlope;
         varying float vCamDist;
+        varying vec2  vSway;
 
         void main() {
             vUv = uv;
@@ -58,16 +96,9 @@
             float layerDisp = max(vL * uMaxHeight * slopeHeightScale, slopeBias);
             vec3 p = position + dir * layerDisp;
 
-            // Wind sway (disabled for visual stability and performance)
-            /*
-            float sway = vL * vL * uWindStr * 0.6;
-            float w1 = sin(uTime * 1.4 + p.x * 0.06 + p.y * 0.04);
-            float w2 = sin(uTime * 2.1 + p.y * 0.09 + p.x * 0.03);
-            p.x += uWindDir.x * sway * (w1 * 0.6 + w2 * 0.4);
-            p.y -= uWindDir.y * sway * (w1 * 0.6 + w2 * 0.4);
-            */
-
             vWorldPos = (modelMatrix * vec4(p, 1.0)).xyz;
+            // the shells stay in place; the fragment shader shifts the turf pattern of each shell downwind by this, so the strands lean
+            vSway = uWindDir * windLean(vWorldPos.xz);
             vCamDist = distance(vWorldPos, cameraPosition);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
@@ -96,7 +127,7 @@
         uniform float uEdgeOn;
         uniform float uMaxHeight;
         uniform float uMaxDist;
-        uniform vec2  uWindDir;
+        uniform sampler2D uNoiseTex;
 
         // Dynamic light uniforms synced with scene
         uniform vec3  uLightDir;
@@ -121,19 +152,14 @@
         varying vec3  vWorldNormal;
         varying float vSlope;
         varying float vCamDist;
+        varying vec2  vSway;
 
         float hash(vec2 p) {
             return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
+        // smoothed value noise, baked (see makeNoiseTex)
         float vnoise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            f = f * f * (3.0 - 2.0 * f);
-            return mix(
-                mix(hash(i), hash(i + vec2(1,0)), f.x),
-                mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x),
-                f.y
-            );
+            return texture2D(uNoiseTex, p * (1.0 / ${NOISE_PERIOD}.0)).r;
         }
         float fbm(vec2 p) {
             return 0.45 * vnoise(p) +
@@ -208,10 +234,12 @@
             }
 
             vec2 wXZ = vWorldPos.xz;
+            // wind: a shell at this height samples the pattern from upwind, more so higher up (a strand bends, its root stays)
+            vec2 nXZ = wXZ - vSway * targetH * eL * eL;
 
             // Dense, fine-grained turf structure (uniform coverage without coarse blotchy clumps)
-            float tuft = fbm(wXZ * 5.0 + 50.0);
-            float blade = vnoise(wXZ * 20.0 + 100.0);
+            float tuft = fbm(nXZ * 5.0 + 50.0);
+            float blade = vnoise(nXZ * 20.0 + 100.0);
             float grass = tuft * 0.5 + blade * 0.5;
 
             // Gentle threshold: bottom layers keep ~90% pixels, top ~60%
@@ -236,8 +264,8 @@
             // still reads as grass. The texture is mean 0.5, so x2 keeps the average brightness; mipmaps fade it out with distance.
             if (uTexOn > 0.5 && isDeep > 0.5) {
                 // two scales (the second one rotated) so the repeat of the tile does not show
-                vec2 rXZ = vec2(wXZ.x * 0.8 - wXZ.y * 0.6, wXZ.x * 0.6 + wXZ.y * 0.8);
-                float texd = texture2D(uGrassTex, wXZ / uTexTile).r + texture2D(uGrassTex, rXZ / (uTexTile * 2.7)).r;
+                vec2 rXZ = vec2(nXZ.x * 0.8 - nXZ.y * 0.6, nXZ.x * 0.6 + nXZ.y * 0.8);
+                float texd = texture2D(uGrassTex, nXZ / uTexTile).r + texture2D(uGrassTex, rXZ / (uTexTile * 2.7)).r;
                 // lighter and flatter than a photo: the shadows between the blades stay soft, so it reads as a cartoon lawn
                 float tex = clamp(1.0 + (texd - 1.0) * 1.0, 0.85, 1.5);
                 col *= tex * uTexLift;
@@ -289,7 +317,7 @@
     // ─── Edge blades: real tapered blades along the borders of the grass ─────────────
     // Where the grass meets fairway, green or sand the height shows in the silhouette. A thin strip of blades there
     // (a few thousand, only near the camera) gives what the shells cannot: separate, pointed blades.
-    const BLADE_VERT = `
+    const BLADE_VERT = WIND_GLSL + `
         attribute vec3 iBase;     // blade root (world)
         attribute vec4 iParam;    // height, yaw, lean, shade
         attribute float iClass;   // 0 rough, 1 deep rough, 2 semi-rough
@@ -308,6 +336,10 @@
             vec3 l = vec3(w, t * iParam.x, iParam.z * t * t * iParam.x);   // bends over towards its lean
             float c = cos(iParam.y), s = sin(iParam.y);
             vec3 wp = iBase + vec3(l.x * c + l.z * s, l.y, -l.x * s + l.z * c);
+            // wind: the tip bends downwind (quadratic from the root) and dips a little, so the blade keeps about its length
+            float bend = windLean(iBase.xz) * t * t * iParam.x;
+            wp.xz += uWindDir * bend;
+            wp.y -= 0.5 * bend * bend / max(iParam.x, 0.01);
             vec3 base = iClass < 0.5 ? uRoughCol : (iClass < 1.5 ? uDeepCol : uSemiCol);
             vCol = base * mix(0.55, 1.12, t) * iParam.w;            // darker at the root, lighter at the tip
             vDist = distance(wp, cameraPosition);
@@ -342,6 +374,128 @@
     const BLADE_CHUNK = 48;      // metres: blades are grouped in chunks that are culled and hidden by distance
     const BLADE_WIDTH = 0.025;   // metres at the root (stylised: a real blade is a few millimetres)
 
+    // ─── Grass cards: 2D tufts on crossed quads in a ring around the camera ─────────────
+    // Each card is two crossed quads showing a tuft of 5-9 blades from a small atlas the code paints at start-up
+    // (makeCardAtlas: greyscale shape and shading only). The colour comes from the biome in the shader, so the cards
+    // always match the ground (autumn, winter, desert). Placed from the grass class map, only near the camera, in chunks
+    // that are built as the camera moves and dropped behind it. They bend with the same wind as the shells and blades.
+    const CARD_VERT = WIND_GLSL + `
+        attribute vec3 iBase;     // card root (world)
+        attribute vec4 iParam;    // height, yaw, atlas cell, shade
+        attribute float iClass;   // 0 rough, 1 deep rough, 2 semi-rough
+        uniform vec3 uRoughCol;
+        uniform vec3 uDeepCol;
+        uniform vec3 uSemiCol;
+        uniform float uWorld;
+        uniform float uCells;
+        varying vec3 vCol;
+        varying vec2 vUv;
+        varying float vDist;
+        varying float vT;
+        varying vec2 vWaterUv;
+        void main() {
+            vWaterUv = vec2(iBase.x / uWorld + 0.5, 0.5 - iBase.z / uWorld);
+            float h = iParam.x, t = position.y;                     // t: 0 at the root, 1 at the top of the card
+            vec3 l = vec3(position.x, t, position.z) * vec3(h * 1.2, h, h * 1.2);   // a tuft is a little wider than tall
+            float c = cos(iParam.y), s = sin(iParam.y);
+            vec3 wp = iBase + vec3(l.x * c + l.z * s, l.y, -l.x * s + l.z * c);
+            float bend = windLean(iBase.xz) * t * t * h;
+            wp.xz += uWindDir * bend;
+            wp.y -= 0.5 * bend * bend / max(h, 0.01);
+            vUv = vec2((iParam.z + uv.x) / uCells, uv.y);
+            vT = t;
+            vec3 base = iClass < 0.5 ? uRoughCol : (iClass < 1.5 ? uDeepCol : uSemiCol);
+            vCol = base * iParam.w;
+            vDist = distance(wp, cameraPosition);
+            gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+        }
+    `;
+    const CARD_FRAG = `
+        uniform sampler2D uAtlas;
+        uniform sampler2D uWaterMap;
+        uniform float uMaxDist;
+        uniform vec3 uLightDir;
+        uniform vec3 uDirColor;
+        uniform vec3 uAmbColor;
+        varying vec3 vCol;
+        varying vec2 vUv;
+        varying float vDist;
+        varying float vT;
+        varying vec2 vWaterUv;
+        float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        void main() {
+            if (vDist > uMaxDist) discard;
+            vec4 a = texture2D(uAtlas, vUv);                        // r: shade (dark root, light tip), a: coverage
+            if (a.a < 0.5) discard;
+            if (texture2D(uWaterMap, vWaterUv).r > 0.05) discard;
+            float fade = 1.0 - smoothstep(uMaxDist * 0.6, uMaxDist, vDist);
+            if (hash2(gl_FragCoord.xy) > fade) discard;
+            float shade = a.r;
+            // the tips end at the shells' canopy colour (the biome colour), the roots are as dark as the turf between them
+            vec3 col = vCol * mix(0.5, 1.12, shade);
+            col += vec3(0.04, 0.05, 0.0) * smoothstep(0.6, 1.0, vT) * shade;   // the lit tips lean a little yellow-green
+            col = mix(col, vCol * 0.9, smoothstep(uMaxDist * 0.5, uMaxDist, vDist));   // far out they melt into the turf colour
+            vec3 light = uAmbColor + uDirColor * max(0.0, uLightDir.y * 0.8 + 0.2);
+            // alpha 1: the page canvas is transparent (alpha: true), a softer alpha would let the page show through the blade edges
+            gl_FragColor = vec4(col * light, 1.0);
+        }
+    `;
+    // per quality: how far out the cards reach (m) and how many per square metre of grass; a phone gets 70 % of the reach
+    const CARDS = {
+        LOW:  { radius: 20, density: 1.2 },
+        MED:  { radius: 32, density: 2.0 },
+        HIGH: { radius: 50, density: 3.5 }
+    };
+    const CARD_CHUNK = 16;       // metres
+    const CARD_CELLS = 4;        // tuft variants in the atlas
+
+    // The tuft atlas, painted by code: CARD_CELLS cells side by side, each a tuft of tapered, curved blades, dark at the
+    // root and light at the tip. The shade (red) and the coverage (alpha) are painted on two canvases and packed into a
+    // DataTexture: a canvas stores premultiplied colour, and the shade at the soft blade edges would come out wrong.
+    function makeCardAtlas() {
+        const cell = 256, W = cell * CARD_CELLS;
+        const mk = function () { const c = document.createElement('canvas'); c.width = W; c.height = cell; return c.getContext('2d'); };
+        const g = mk(), ga = mk();
+        g.fillStyle = 'rgb(110,110,110)'; g.fillRect(0, 0, W, cell);   // around the blades: a mid shade, so filtering at the edges stays plausible
+        let seed = 4242;
+        const rand = function () { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+        for (let v = 0; v < CARD_CELLS; v++) {
+            const ox = v * cell, n = 8 + Math.floor(rand() * 6);
+            const blades = [];
+            for (let k = 0; k < n; k++) blades.push({ x: 0.15 + rand() * 0.7, h: 0.45 + rand() * 0.52, lean: (rand() - 0.5) * 0.55, w: 0.05 + rand() * 0.04, lum: 0.85 + rand() * 0.15 });
+            blades.sort(function (a, b) { return b.h - a.h; });   // the tall ones behind
+            for (const b of blades) {
+                const rx = ox + b.x * cell, ry = cell, tx = rx + b.lean * cell, ty = cell * (1 - b.h), hw = b.w * cell / 2;
+                const mx = rx + b.lean * cell * 0.25, my = cell * (1 - b.h * 0.55);   // the bend: most of the lean is near the tip
+                const grad = g.createLinearGradient(0, ry, 0, ty);
+                const lo = Math.round(255 * 0.35 * b.lum), hi = Math.round(255 * b.lum);
+                grad.addColorStop(0, 'rgb(' + lo + ',' + lo + ',' + lo + ')');
+                grad.addColorStop(1, 'rgb(' + hi + ',' + hi + ',' + hi + ')');
+                g.fillStyle = grad; ga.fillStyle = '#fff';
+                for (const ctx of [g, ga]) {
+                    ctx.beginPath();
+                    ctx.moveTo(rx - hw, ry);
+                    ctx.quadraticCurveTo(mx - hw * 0.7, my, tx, ty);
+                    ctx.quadraticCurveTo(mx + hw * 0.7, my, rx + hw, ry);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+        }
+        const sh = g.getImageData(0, 0, W, cell).data, al = ga.getImageData(0, 0, W, cell).data;
+        const data = new Uint8Array(W * cell * 4);
+        for (let y = 0; y < cell; y++) {
+            const src = (cell - 1 - y) * W * 4, dst = y * W * 4;   // a DataTexture has row 0 at v = 0 (the root end)
+            for (let x = 0; x < W * 4; x += 4) { data[dst + x] = sh[src + x]; data[dst + x + 3] = al[src + x + 3]; }
+        }
+        const tex = new THREE.DataTexture(data, W, cell, THREE.RGBAFormat, THREE.UnsignedByteType);
+        tex.needsUpdate = true;
+        tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        return tex;
+    }
+
     // ─── Manager ─────────────────────────────────────────────────
 
     class TerrainShellManager {
@@ -354,15 +508,16 @@
             this.waterTex = waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || null;
             this.quality = 'OFF';
             this.shells = [];   // { layer, mesh, mat }
-            // Draw all shells only near borders (see the fragment shader). Off by default until it has been tried on a phone:
-            // ?grassedge=1 in the address turns it on (and remembers it), ?grassedge=0 turns it off again.
+            // Draw all shells only near borders (see the fragment shader). On by default on phones and tablets (it cuts most of the
+            // shell triangles and pixels there), off on a computer; ?grassedge=1 in the address turns it on (and remembers it),
+            // ?grassedge=0 turns it off again.
             let edgeFlag = null;
             try {
                 const q = new URLSearchParams(window.location.search).get('grassedge');
                 if (q !== null) localStorage.setItem('golf_grass_edge', q === '1' ? '1' : '0');
                 edgeFlag = localStorage.getItem('golf_grass_edge');
             } catch (e) { /* storage blocked: stays off */ }
-            this.edgeWeighted = edgeFlag === '1';
+            this.edgeWeighted = edgeFlag === null ? _isMobile : edgeFlag === '1';
             // Blade texture on the deep rough: off by default; ?grasstex=1 (or =2 for the other tile) turns it on (and remembers it), ?grasstex=0 turns it off.
             let texFlag = null;
             try {
@@ -386,12 +541,26 @@
                 bladeFlag = localStorage.getItem('golf_grass_blades');
             } catch (e) { /* storage blocked: stays off */ }
             this.bladesOn = bladeFlag === '1';
+            // Grass cards: off by default; ?grasscards=1 turns them on (and remembers it), ?grasscards=0 turns them off.
+            let cardFlag = null;
+            try {
+                const cq = new URLSearchParams(window.location.search).get('grasscards');
+                if (cq !== null) localStorage.setItem('golf_grass_cards', cq === '1' ? '1' : '0');
+                cardFlag = localStorage.getItem('golf_grass_cards');
+            } catch (e) { /* storage blocked: stays off */ }
+            this.cardsOn = cardFlag === '1';
+            this.cards = new Map();  // chunk key -> { mesh, count }
+            this._cardMat = null;
+            this._cardAtlas = null;
             this.blades = [];        // { mesh, count, cx, cz, r }
             this._bladeMat = null;
             this._cls = null;        // 1024x1024 grass class per cell: 0 none, 1 rough, 2 deep, 3 semi
             this._edgeTex = new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.LuminanceFormat, THREE.UnsignedByteType);
             this._edgeTex.needsUpdate = true;   // 1x1 'everything is an edge' until the mask has been built
             this._frame = 0;
+            this._noiseTex = makeNoiseTex();
+            this._windDir = new THREE.Vector2(0, -1);
+            this._windStr = 0;
 
             // 1x1 black dummy texture fallback so shader never fails if waterTex is null
             let blackPixel = new Uint8Array([0, 0, 0, 255]);
@@ -476,12 +645,16 @@
             let len = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1.0;
             lx /= len; ly /= len; lz /= len;
 
-            this._updateBlades(camera, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB);
+            this.updateWind();
+            this._updateBlades(camera, time, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB);
+            this._updateCards(camera, time, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB);
 
             let curWaterTex = this.waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || this._dummyWaterTex;
 
             for (let s of this.shells) {
                 s.mat.uniforms.uTime.value = time;
+                s.mat.uniforms.uWindStr.value = this._windStr;
+                s.mat.uniforms.uWindDir.value.copy(this._windDir);
                 s.mat.uniforms.uLightDir.value.set(lx, ly, lz);
                 s.mat.uniforms.uDirColor.value.set(dirR, dirG, dirB);
                 s.mat.uniforms.uAmbColor.value.set(ambR, ambG, ambB);
@@ -522,13 +695,15 @@
             }
         }
 
+        // The same wind as the ball, the trees and the leaves (window.currentWindMph / currentWindDir, downwind = (sin, -cos)).
+        // A light breeze even when calm, so the grass is never frozen; the Wind Sway switch and reduced motion stop it.
         updateWind() {
-            let ws = (window.windSpeed || 0) / 30;
-            let wa = (window.windAngle || 0) * Math.PI / 180;
-            for (let s of this.shells) {
-                s.mat.uniforms.uWindStr.value = ws;
-                s.mat.uniforms.uWindDir.value.set(Math.cos(wa), Math.sin(wa));
-            }
+            const mph = window.currentWindMph || 0, dir = (window.currentWindDir || 0) * Math.PI / 180;
+            let still = window.WindSway && typeof window.WindSway.isEnabled === 'function' && !window.WindSway.isEnabled();
+            if (this._reducedMotion === undefined) { try { this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)'); } catch (e) { this._reducedMotion = null; } }
+            still = still || !!(this._reducedMotion && this._reducedMotion.matches);
+            this._windDir.set(Math.sin(dir), -Math.cos(dir));
+            this._windStr = still ? 0 : 0.12 + 0.68 * Math.min(1, mph / 35);
         }
 
         /** Call after updateTerrainResolution to swap in new geometry */
@@ -668,6 +843,7 @@
             this.deepHeight = deepH;
             this.semiHeight = Math.max(0.03, roughH * 0.4); // semi-rough follows the rough slider at 40 % of its height
             this._scaleBlades(oldH, [this.roughHeight, this.deepHeight, this.semiHeight]);
+            this._clearCards();   // rebuilt around the camera over the next frames, at the new heights
             this._refreshInterior();
             let maxH = Math.max(roughH, deepH, this.semiHeight);
             for (let s of this.shells) {
@@ -881,7 +1057,8 @@
                     uniforms: {
                         uWidth: { value: BLADE_WIDTH }, uWorld: { value: window.TERRAIN_SIZE || 600 }, uWaterMap: { value: this.waterTex || window.waterTex || this._dummyWaterTex }, uMaxDist: { value: preset.maxDist },
                         uRoughCol: { value: this._roughCol.clone() }, uDeepCol: { value: this._deepCol.clone() }, uSemiCol: { value: this._semiCol.clone() },
-                        uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) }
+                        uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+                        uTime: { value: 0 }, uWindDir: { value: this._windDir.clone() }, uWindStr: { value: this._windStr }
                     },
                     vertexShader: BLADE_VERT, fragmentShader: BLADE_FRAG, side: THREE.DoubleSide
                 });
@@ -934,6 +1111,10 @@
 
         // the terrain was reshaped: the blade roots follow it (a moment after the last change)
         _scheduleBladeHeights() {
+            if (this.cards.size) {   // the cards are rebuilt (from the new ground) a moment after the last change
+                clearTimeout(this._cardTimer);
+                this._cardTimer = setTimeout(() => this._clearCards(), 300);
+            }
             if (!this.blades.length || typeof window.getTerrainHeight !== 'function') return;
             clearTimeout(this._bladeTimer);
             this._bladeTimer = setTimeout(() => {
@@ -953,9 +1134,10 @@
             }, 300);
         }
 
-        _updateBlades(camera, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB) {
+        _updateBlades(camera, time, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB) {
             if (!this.blades.length || !this._bladeMat) return;
             const u = this._bladeMat.uniforms, maxD = u.uMaxDist.value;
+            u.uTime.value = time; u.uWindStr.value = this._windStr; u.uWindDir.value.copy(this._windDir);
             u.uWaterMap.value = this.waterTex || window.waterTex || this._dummyWaterTex;
             u.uWorld.value = window.TERRAIN_SIZE || 600;
             u.uLightDir.value.set(lx, ly, lz); u.uDirColor.value.set(dirR, dirG, dirB); u.uAmbColor.value.set(ambR, ambG, ambB);
@@ -965,11 +1147,128 @@
             for (let b of this.blades) b.mesh.visible = Math.hypot(cp.x - b.cx, cp.z - b.cz) - b.r < maxD;
         }
 
+        setCards(on) {
+            this.cardsOn = !!on;
+            if (this.cardsOn) this._ensureEdgeMap();   // the cards are placed from the class map built with the edge map
+            else this._clearCards();
+        }
+
+        _clearCards() {
+            for (const c of this.cards.values()) this._dropCardChunk(c);
+            this.cards.clear();
+        }
+
+        // The chunks share the template's position and uv attributes: disposing a chunk as it is would delete those GPU
+        // buffers under every other chunk (as with the edge strip). Only the chunk's own instance data and index are freed.
+        _dropCardChunk(c) {
+            if (!c.mesh) return;
+            if (c.mesh.parent) this.scene.remove(c.mesh);
+            const g = c.mesh.geometry;
+            g.deleteAttribute('position'); g.deleteAttribute('uv');
+            g.dispose();
+        }
+
+        _cardPreset() {
+            const p = CARDS[this.quality];
+            if (!p) return null;
+            return { radius: p.radius * (_isMobile ? 0.7 : 1), density: p.density };
+        }
+
+        // One chunk of cards: deterministic per chunk, so a chunk that is dropped and built again looks the same.
+        _buildCardChunk(ix, iz, preset) {
+            const n = 1024, cls = this._cls, world = window.TERRAIN_SIZE || 600, half = world / 2, cell = world / n;
+            const gh = typeof window.getTerrainHeight === 'function' ? window.getTerrainHeight : null;
+            const heights = [0, this.roughHeight, this.deepHeight, this.semiHeight];
+            const tries = Math.round(preset.density * CARD_CHUNK * CARD_CHUNK);
+            const x0 = ix * CARD_CHUNK - half, z0 = iz * CARD_CHUNK - half;
+            const ck = ix * 4099 + iz;
+            const rnd = function (k) { let h = Math.imul(ck + 7, 374761393) ^ Math.imul(k + 1, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+            const base = [], param = [], klass = [];
+            let minY = 1e9, maxY = -1e9, maxH = 0;
+            for (let k = 0; k < tries; k++) {
+                const wx = x0 + rnd(k * 6) * CARD_CHUNK, wz = z0 + rnd(k * 6 + 1) * CARD_CHUNK;
+                const cx = Math.floor((wx + half) / cell), cz = Math.floor((wz + half) / cell);
+                if (cx < 0 || cz < 0 || cx >= n || cz >= n) continue;
+                const c = cls[cz * n + cx];
+                if (!c) continue;
+                const y = gh ? gh(wx, wz) : 0, h = heights[c] * (0.8 + rnd(k * 6 + 2) * 0.45);
+                base.push(wx, y, wz);
+                param.push(h, rnd(k * 6 + 3) * Math.PI, Math.floor(rnd(k * 6 + 4) * CARD_CELLS), 0.85 + rnd(k * 6 + 5) * 0.25);
+                klass.push(c - 1);
+                if (y < minY) minY = y; if (y > maxY) maxY = y; if (h > maxH) maxH = h;
+            }
+            const count = klass.length;
+            if (!count) return { mesh: null, count: 0 };
+            if (!this._cardTpl) {
+                // two crossed quads (x = across -0.5..0.5, y = 0 root .. 1 top), uv over one atlas cell
+                const pos = new Float32Array([-0.5,0,0, 0.5,0,0, -0.5,1,0, 0.5,1,0,  0,0,-0.5, 0,0,0.5, 0,1,-0.5, 0,1,0.5]);
+                const uv = new Float32Array([0,0, 1,0, 0,1, 1,1,  0,0, 1,0, 0,1, 1,1]);
+                this._cardTpl = { pos: new THREE.BufferAttribute(pos, 3), uv: new THREE.BufferAttribute(uv, 2), idx: [0,1,2, 1,3,2, 4,5,6, 5,7,6] };
+            }
+            const geo = new THREE.InstancedBufferGeometry();
+            geo.setAttribute('position', this._cardTpl.pos);
+            geo.setAttribute('uv', this._cardTpl.uv);
+            geo.setIndex(this._cardTpl.idx);
+            geo.setAttribute('iBase', new THREE.InstancedBufferAttribute(new Float32Array(base), 3));
+            geo.setAttribute('iParam', new THREE.InstancedBufferAttribute(new Float32Array(param), 4));
+            geo.setAttribute('iClass', new THREE.InstancedBufferAttribute(new Float32Array(klass), 1));
+            geo.instanceCount = count;
+            geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(x0 + CARD_CHUNK / 2, (minY + maxY) / 2, z0 + CARD_CHUNK / 2), CARD_CHUNK * 0.71 + (maxY - minY) + maxH * 1.5 + 1);
+            const mesh = new THREE.Mesh(geo, this._cardMat);
+            mesh.frustumCulled = true;
+            mesh.renderOrder = 121;
+            this.scene.add(mesh);
+            return { mesh: mesh, count: count };
+        }
+
+        // the chunks within reach of the camera exist (at most two new ones per frame, so moving never stalls a frame); the rest are dropped
+        _updateCards(camera, time, lx, ly, lz, dirR, dirG, dirB, ambR, ambG, ambB) {
+            const preset = this._cardPreset();
+            if (!this.cardsOn || !preset || !this._cls || !camera) { if (this.cards.size) this._clearCards(); return; }
+            if (!this._cardMat) {
+                this._cardAtlas = makeCardAtlas();
+                this._cardMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uAtlas: { value: this._cardAtlas }, uCells: { value: CARD_CELLS }, uWorld: { value: window.TERRAIN_SIZE || 600 },
+                        uWaterMap: { value: this._dummyWaterTex }, uMaxDist: { value: preset.radius },
+                        uRoughCol: { value: this._roughCol.clone() }, uDeepCol: { value: this._deepCol.clone() }, uSemiCol: { value: this._semiCol.clone() },
+                        uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+                        uTime: { value: 0 }, uWindDir: { value: this._windDir.clone() }, uWindStr: { value: this._windStr }
+                    },
+                    vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, side: THREE.DoubleSide
+                });
+            }
+            const u = this._cardMat.uniforms;
+            u.uTime.value = time; u.uWindStr.value = this._windStr; u.uWindDir.value.copy(this._windDir);
+            u.uWaterMap.value = this.waterTex || window.waterTex || this._dummyWaterTex;
+            u.uWorld.value = window.TERRAIN_SIZE || 600;
+            u.uMaxDist.value = preset.radius;
+            u.uLightDir.value.set(lx, ly, lz); u.uDirColor.value.set(dirR, dirG, dirB); u.uAmbColor.value.set(ambR, ambG, ambB);
+            u.uRoughCol.value.copy(this._roughCol); u.uDeepCol.value.copy(this._deepCol); u.uSemiCol.value.copy(this._semiCol);
+
+            const world = window.TERRAIN_SIZE || 600, half = world / 2, perAxis = Math.ceil(world / CARD_CHUNK);
+            const cp = camera.position, reach = preset.radius + CARD_CHUNK * 0.71;
+            const want = [];
+            const i0 = Math.max(0, Math.floor((cp.x - reach + half) / CARD_CHUNK)), i1 = Math.min(perAxis - 1, Math.floor((cp.x + reach + half) / CARD_CHUNK));
+            const j0 = Math.max(0, Math.floor((cp.z - reach + half) / CARD_CHUNK)), j1 = Math.min(perAxis - 1, Math.floor((cp.z + reach + half) / CARD_CHUNK));
+            const keep = new Set();
+            for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+                const d = Math.hypot((i + 0.5) * CARD_CHUNK - half - cp.x, (j + 0.5) * CARD_CHUNK - half - cp.z);
+                if (d > reach) continue;
+                const key = i * perAxis + j;
+                keep.add(key);
+                if (!this.cards.has(key)) want.push({ i: i, j: j, key: key, d: d });
+            }
+            for (const [key, c] of this.cards) if (!keep.has(key)) { this._dropCardChunk(c); this.cards.delete(key); }
+            want.sort(function (a, b) { return a.d - b.d; });   // nearest first
+            for (let k = 0; k < want.length && k < 2; k++) this.cards.set(want[k].key, this._buildCardChunk(want[k].i, want[k].j, preset));
+        }
+
         // maskRGBA: the rough mask (srcSize x srcSize, R=rough G=deep B=semi). Builds a coarse "closeness to a border" map:
         // 1 on and next to a border with anything that is not shell grass (fairway, green, sand), fading to 0 over edgeWidth.
         setEdgeMapFromMask(maskRGBA, srcSize) {
             // the map costs several 1024x1024 passes: only built while a feature that uses it is on (else on demand, see _ensureEdgeMap)
-            if (!this.edgeWeighted && !this.bladesOn) { this._edgeStale = true; return; }
+            if (!this.edgeWeighted && !this.bladesOn && !this.cardsOn) { this._edgeStale = true; return; }
             this._edgeStale = false;
             const n = 1024, step = Math.max(1, Math.floor(srcSize / n)), half = step >> 1;
             const worldSize = window.TERRAIN_SIZE || 600;
@@ -1024,6 +1323,7 @@
             if (old && old.dispose) old.dispose();
             this._buildStrip();
             this._scheduleBladeBuild();
+            this._clearCards();   // the class map changed
         }
 
         getStats() {
@@ -1051,6 +1351,7 @@
             this._disposeStrip();
 
             this._scheduleBladeBuild();   // the number of blades follows the quality
+            this._clearCards();           // and so do the reach and density of the cards
             let preset = QUALITY[this.quality];
             // CODEX L2 FIX: Free customGeo vertex buffer from memory when quality is OFF
             if (!preset || preset.layers === 0) {
@@ -1106,9 +1407,10 @@
                     uNextInterior: { value: this._nextInteriorLayer(layer, total) },
                     uGrassTex: { value: this._grassTex || this._edgeTex }, uTexOn: { value: this.grassTexOn && this._grassTexReady ? 1 : 0 }, uTexTile: { value: 4.0 }, uTexLift: { value: this.grassTexLift },
                     uEdgeOn:   { value: this.edgeWeighted ? 1 : 0 },
-                    uWindDir:  { value: new THREE.Vector2(1, 0) },
-                    uWindStr:  { value: 0.3 },
+                    uWindDir:  { value: this._windDir.clone() },
+                    uWindStr:  { value: this._windStr },
                     uTime:     { value: 0 },
+                    uNoiseTex: { value: this._noiseTex },
                     uRoughMask:{ value: this.roughMaskTex },
                     uWaterMap: { value: this.waterTex || (typeof window !== 'undefined' ? window.waterTex : null) || this._dummyWaterTex },
                     uRoughCol: { value: this._roughCol.clone() },

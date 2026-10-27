@@ -1080,7 +1080,17 @@ function serve() {
       await new Promise(function (r) { setTimeout(r, 1500); });
       console.error = oe;
       const sh = window._terrainShells;
-      return { errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }), shells: sh.shells.length, semi: sh.semiHeight, rough: sh.roughHeight, deep: sh.deepHeight, u: sh.shells[0] && sh.shells[0].mat.uniforms.uSemiH.value };
+      // wind: the shells follow the game's wind (downwind = sin/-cos of the direction), a breeze when calm, none with Wind Sway off
+      const m0 = window.currentWindMph, d0 = window.currentWindDir, u0 = sh.shells[0].mat.uniforms;
+      window.currentWindMph = 0; sh.update(1, camera); const calm = u0.uWindStr.value;
+      window.currentWindMph = 35; window.currentWindDir = 90; sh.update(2, camera);
+      const wind = { calm: calm, storm: u0.uWindStr.value, dir: [u0.uWindDir.value.x, u0.uWindDir.value.y], time: u0.uTime.value };
+      if (window.WindSway) { window.WindSway.setEnabled(false); sh.update(3, camera); wind.swayOff = u0.uWindStr.value; window.WindSway.setEnabled(true); }
+      window.currentWindMph = m0; window.currentWindDir = d0;
+      const nt = u0.uNoiseTex.value, nd = nt && nt.image.data;
+      let nMin = 255, nMax = 0; if (nd) for (let i = 0; i < nd.length; i++) { nMin = Math.min(nMin, nd[i]); nMax = Math.max(nMax, nd[i]); }
+      const noise = { w: nt && nt.image.width, min: nMin, max: nMax, shared: sh.shells.every(function (q) { return q.mat.uniforms.uNoiseTex.value === nt; }), touch: typeof window.isTouchDevice === 'function' && window.isTouchDevice() === false };
+      return { errs: errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); }), shells: sh.shells.length, semi: sh.semiHeight, rough: sh.roughHeight, deep: sh.deepHeight, u: sh.shells[0] && sh.shells[0].mat.uniforms.uSemiH.value, wind: wind, noise: noise };
     });
     // the closeness-to-border map the edge-weighted shells use: 1 at a fairway edge, 0 well inside the grass, and the switch reaches the shaders
     const edge = await pp.evaluate(async function () {
@@ -1227,6 +1237,53 @@ function serve() {
       return { hadStrip: true, attrsAtDispose: attrsAtDispose, replaced: sh._stripGeo !== old, newStripOk: !!sh._stripGeo && sh._stripGeo.attributes.position === sh.customGeo.attributes.position };
     });
     checks.push({ name: 'edge strip: rebuilding it does not dispose the vertex buffers shared with the full-grid shells', ok: sd.hadStrip && sd.attrsAtDispose === 0 && sd.replaced && sd.newStripOk, detail: JSON.stringify(sd) });
+    // 2D grass cards: off by default; on, chunks of tufts stand on the grass (the right half, the left is fairway) around the camera,
+    // the shader compiles, dropping a chunk keeps the shared template buffers, and the menu buttons switch and remember them
+    const cards = await pp.evaluate(async function () {
+      const sh = window._terrainShells, errs = [], oe = console.error;
+      console.error = function () { errs.push(String(arguments[0]).slice(0, 160)); oe.apply(console, arguments); };
+      const out = { defaultOff: sh.cardsOn === false && sh.cards.size === 0 };
+      if (sh.quality === 'OFF') window.setGrassQuality('MED');
+      const px = function (x) { return Math.round((x / 600 + 0.5) * 4096); };
+      window.pCtx.fillStyle = '#4a782b'; window.pCtx.fillRect(0, 0, 4096, 4096);
+      window.pCtx.fillStyle = '#7db952'; window.pCtx.fillRect(px(-300), 0, px(0) - px(-300), 4096); // fairway on the left half
+      window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data;
+      window._roughMaskDirty = false; window.rebuildRoughMask();
+      const cam = new THREE.PerspectiveCamera(55, 1.5, 0.05, 2000); cam.position.set(6, 2, 0); cam.lookAt(12, 0, -6); cam.updateMatrixWorld(true);
+      window.setGrassExtra('cards', '1');
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      let n = 0, onFairway = 0, far = 0, badClass = 0;
+      const reach = sh._cardPreset().radius + 16 * 1.42;
+      for (const c of sh.cards.values()) {
+        if (!c.mesh) continue;
+        const g = c.mesh.geometry, b = g.attributes.iBase.array, k = g.attributes.iClass.array;
+        for (let i = 0; i < c.count; i++) {
+          n++;
+          if (b[i * 3] < -0.6) onFairway++;
+          if (Math.hypot(b[i * 3] - 6, b[i * 3 + 2]) > reach) far++;
+          if (!(k[i] === 0 || k[i] === 1 || k[i] === 2)) badClass++;
+        }
+      }
+      Object.assign(out, { n: n, chunks: sh.cards.size, onFairway: onFairway, far: far, badClass: badClass });
+      renderer.render(scene, cam);
+      // dropping a chunk frees only its own data: the shared template attributes are taken off before dispose
+      const first = Array.from(sh.cards.values()).find(function (c) { return c.mesh; });
+      let attrsAtDispose = -1;
+      if (first) { const g = first.mesh.geometry, d = g.dispose.bind(g); g.dispose = function () { attrsAtDispose = ('position' in g.attributes) || ('uv' in g.attributes) ? 1 : 0; d(); }; }
+      sh._clearCards();
+      out.attrsAtDispose = attrsAtDispose; out.tplKept = !!sh._cardTpl && sh._cardTpl.pos.array.length === 24;
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      out.rebuilt = sh.cards.size === out.chunks;
+      const btn = document.getElementById('grass-x-cards-1');
+      out.shown = !!btn && btn.style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
+      out.stored = localStorage.getItem('golf_grass_cards') === '1';
+      window.setGrassExtra('cards', '0');
+      out.off = sh.cardsOn === false && sh.cards.size === 0 && localStorage.getItem('golf_grass_cards') === '0';
+      console.error = oe;
+      out.errs = errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); });
+      return out;
+    });
+    checks.push({ name: '2D grass cards: off by default; on, tufts stand on the grass around the camera (not on the fairway), compile, keep the shared template on a drop, and the buttons switch and remember them', ok: cards.defaultOff && cards.n > 500 && cards.onFairway === 0 && cards.far === 0 && cards.badClass === 0 && cards.attrsAtDispose === 0 && cards.tplKept && cards.rebuilt && cards.shown && cards.stored && cards.off && cards.errs.length === 0, detail: JSON.stringify(cards) });
     // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };
@@ -1291,6 +1348,7 @@ function serve() {
       return { autumn: autumn, back: back, builtin: [window.BUILTIN_BIOMES.GLOBAL.horizonColor, window.BUILTIN_BIOMES.GLOBAL.oceanColor], hasCopy: !!window.BUILTIN_BIOMES };
     });
     checks.push({ name: 'biome rows: a database row without ocean and horizon colours gets the built-in ones (summer after autumn is summer again)', ok: rowFill.hasCopy && rowFill.autumn[0] !== rowFill.back[0] && rowFill.back.join() === rowFill.builtin.join(), detail: JSON.stringify(rowFill) });
+    checks.push({ name: '3D grass: the turf noise is a baked texture shared by all shells; the wind (and a calm breeze) reaches them, Wind Sway off stills them; a desktop is not a touch device', ok: grass.noise.w === 256 && grass.noise.min < 40 && grass.noise.max > 215 && grass.noise.shared && grass.noise.touch && Math.abs(grass.wind.calm - 0.12) < 1e-6 && Math.abs(grass.wind.storm - 0.8) < 1e-6 && Math.abs(grass.wind.dir[0] - 1) < 1e-6 && Math.abs(grass.wind.dir[1]) < 1e-6 && grass.wind.time === 2 && grass.wind.swayOff === 0, detail: JSON.stringify({ wind: grass.wind, noise: grass.noise }) });
     checks.push({ name: '3D grass shells compile, and semi-rough is lower than rough and deep rough', ok: grass.errs.length === 0 && grass.shells === 5 && grass.semi > 0 && grass.semi < grass.rough && grass.rough < grass.deep && grass.u === grass.semi, detail: JSON.stringify(grass) });
     await pp.close();
 
