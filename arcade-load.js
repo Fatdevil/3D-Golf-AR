@@ -1198,7 +1198,7 @@
                         if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
                         if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
                         if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
-                        if(h.tees.range) { h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z); if(h.tees.range.rot) h.teeMeshes.range.rotation.y = h.tees.range.rot; }
+                        if(h.tees.range) { h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z, h.tees.range.rot || 0); }
                         
                         if(hSync.flag) {
                             h.flag = hSync.flag;
@@ -1402,15 +1402,26 @@
             }
         }
         
-        if (autoRun === 'setup') {
+        // A driving range stays a range whichever link opened it (the builder's card, a draft, a reload, the quick draft):
+        // the saved course says so, the address may not
+        if (params.get('mode') === 'range' || (savedStr && savedStr.is_range === true)) {
+            window._isRangeMode = true;
+            if (params.get('mode') !== 'range') {
+                try {
+                    let u = new URL(window.location.href);
+                    u.searchParams.set('mode', 'range');
+                    window.history.replaceState({}, '', u.toString());
+                } catch (e) {}
+            }
+        }
+
+        if (autoRun === 'setup' && !window._isRangeMode) {
             setMode('PLAY');
             if (typeof startRound === 'function') setTimeout(startRound, 500);
         } else if (autoRun === 'edit_build' || autoRun === 'build') {
             setMode('BUILD');
-        } else if (courseCode || editCode) {
-            let isRange = params.get('mode') === 'range';
-            if (isRange) {
-                window._isRangeMode = true;
+        } else if (courseCode || editCode || autoRun === 'setup') {
+            if (window._isRangeMode) {
                 setMode('TEST');
             } else {
                 setMode('PLAY');

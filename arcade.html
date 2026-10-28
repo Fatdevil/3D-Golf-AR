@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=13">
+<link rel="stylesheet" href="arcade.css?v=15">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -132,6 +132,13 @@
                 <button class="input-btn" data-input="NUMBERS" onclick="SwingEngine.setInputMode('NUMBERS')" title="Skriv in siffror: exakta slag för att testa fysiken">Siffror</button>
             </div>
         </div>
+        <div id="hb-units">
+            <div class="hb-section-title" style="cursor:default;">Avstånd</div>
+            <div class="hb-input-row" role="group" aria-label="Avståndsenhet">
+                <button class="unit-btn" data-unit="yd" onclick="window.setDistanceUnit(false)">Yards</button>
+                <button class="unit-btn" data-unit="m" onclick="window.setDistanceUnit(true)">Meter</button>
+            </div>
+        </div>
         <button class="hb-btn" id="hb-scorecard-btn" style="display:none;" onclick="toggleHamburgerMenu(); renderScorecard(); let eB=document.getElementById('scorecard-endround-btns'); if(eB) eB.style.display='none'; let cB=document.getElementById('scorecard-footer'); if(cB) cB.style.display='flex'; document.getElementById('scorecard-modal').style.display='flex';">📋 Scorecard</button>
         
         <div class="hb-section-title" onclick="toggleHbSection(this)">Data Tiles (HUD) <span style="transition: transform 0.2s; display: inline-block; transform: rotate(-90deg);">?</span></div>
@@ -147,7 +154,8 @@
         <label class="hb-toggle"><span>Launch Angle</span><input type="checkbox" data-tile="LAUNCH_ANGLE"></label>
         <label class="hb-toggle"><span>Club Path</span><input type="checkbox" data-tile="CLUB_PATH"></label>
         <label class="hb-toggle"><span>Face To Path</span><input type="checkbox" data-tile="FACE_TO_PATH"></label>
-        <label class="hb-toggle"><span>Offline (HLA)</span><input type="checkbox" data-tile="HLA"></label>
+        <label class="hb-toggle"><span>Offline</span><input type="checkbox" data-tile="OFFLINE"></label>
+        <label class="hb-toggle"><span>Start Line (HLA)</span><input type="checkbox" data-tile="HLA"></label>
         
         </div><div class="hb-section-title" onclick="toggleHbSection(this)">Green Visualization <span style="transition: transform 0.2s; display: inline-block; transform: rotate(-90deg);">?</span></div>
 <div class="hb-section-content">
@@ -429,7 +437,7 @@
     
     <div id="dropdown-menu">
         <button onclick="window.location.href='arcade_hub.html'" style="color:#e2e8f0;">← <span data-i18n="nav_hub">Tillbaka till Hub</span></button>
-        <button id="btn-toggle-unit" onclick="window.useMeters = !window.useMeters; this.innerText = window.useMeters ? '📏 Meter' : '📏 Yards'; toggleMenu();">📏 Yards</button>
+        <button id="btn-unit-toggle" onclick="window.setDistanceUnit(!window.useMeters); toggleMenu();">📏 Yards</button>
         <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ <span data-i18n="ed_clear">Rensa bana</span></button>
         <div style="display:flex; justify-content:center; padding:8px 0; border-top:1px solid #334155; margin-top:4px;">
             <div id="menu-lang-slot"></div>
@@ -650,7 +658,23 @@
                 m.style.display = 'none';
             }
         });
-        window.useMeters = false;
+        // The player's distance unit, used everywhere (HUD, minimap, range marks, session panel) and kept on this device
+        try { window.useMeters = localStorage.getItem('golfos_units') === 'm'; } catch (e) { window.useMeters = false; }
+        window.syncUnitButtons = function() {
+            let label = window.useMeters ? 'Meter' : 'Yards';
+            let dd = document.getElementById('btn-unit-toggle'); if (dd) dd.innerText = '📏 ' + label;
+            let rb = document.getElementById('btn-range-unit'); if (rb) rb.textContent = '📐 ' + label;
+            document.querySelectorAll('.unit-btn').forEach(function (b) { b.classList.toggle('selected', (b.dataset.unit === 'm') === !!window.useMeters); });
+        };
+        window.setDistanceUnit = function(meters) {
+            window.useMeters = !!meters;
+            try { localStorage.setItem('golfos_units', window.useMeters ? 'm' : 'yd'); } catch (e) { /* private mode: for this page only */ }
+            window.syncUnitButtons();
+            if (typeof window.rebuildRangeMarkers === 'function') window.rebuildRangeMarkers();
+            if (window.RangeSession && window.RangeSession.render) window.RangeSession.render();
+            if (typeof window.updateTopbarHoleDistance === 'function') window.updateTopbarHoleDistance();
+        };
+        document.addEventListener('DOMContentLoaded', function () { window.syncUnitButtons(); });
         window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
         window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
 
@@ -1640,7 +1664,7 @@
                 <button id="btn-set-tee-black" onclick="setHoleItem('TEE_BLACK')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:none; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer;">⚫ Black Tee</button>
                 <button id="btn-set-flag" onclick="setHoleItem('FLAG')" class="hole-item-btn" style="background:#1e293b; color:#94a3b8; border:1px solid #475569; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer; grid-column:1 / 2;">⛳ Flag</button>
                 <button id="btn-set-range-tee" onclick="setHoleItem('TEE_RANGE')" class="hole-item-btn" style="background:#1e293b; color:#eab308; border:1px solid #eab308; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer; grid-column:2 / 3;">🎯 Range Tee</button>
-                <button id="btn-toggle-unit" onclick="toggleRangeUnit()" style="background:#1e293b; color:#eab308; border:1px solid #475569; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer; grid-column:1 / -1; margin-top:5px;">📐 Enhet: Meter</button>
+                <button id="btn-range-unit" onclick="toggleRangeUnit()" title="Avståndsenhet för hela spelet (skyltar, HUD, karta)" style="background:#1e293b; color:#eab308; border:1px solid #475569; padding:8px 4px; border-radius:6px; font-weight:bold; font-size:10px; cursor:pointer; grid-column:1 / -1; margin-top:5px;">📐 Yards</button>
             </div>
         </div>
         <!-- === ENVIRONMENT PANELS (Nivå 3) === -->
@@ -3831,7 +3855,8 @@
             'LAUNCH_ANGLE': 'Launch (VLA)',
             'CLUB_PATH': 'Club Path',
             'FACE_TO_PATH': 'Face to Path',
-            'HLA': 'Offline (HLA)'
+            'OFFLINE': 'Offline',
+            'HLA': 'Start Line (HLA)'
         };
         
         let idMap = {
@@ -3844,6 +3869,7 @@
             'LAUNCH_ANGLE': 'hud-vla',
             'CLUB_PATH': 'hud-cp',
             'FACE_TO_PATH': 'hud-ftp',
+            'OFFLINE': 'hud-offline',
             'HLA': 'hud-hla'
         };
         
@@ -3958,6 +3984,8 @@
 </script>
 <script src="arcade-aim.js?v=1"></script>
 <script src="arcade-shot-plan.js?v=1"></script>
+<script src="arcade-range-markers.js?v=1"></script>
+<script src="arcade-range-session.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -7687,139 +7715,30 @@
     };
 
     // === RANGE TEE SYSTEM ===
-    window.rangeUseMeters = true;
-    
-    window.toggleRangeUnit = function() {
-        window.rangeUseMeters = !window.rangeUseMeters;
-        let btn = document.getElementById('btn-toggle-unit');
-        if(btn) btn.textContent = '📐 Enhet: ' + (window.rangeUseMeters ? 'Meter' : 'Yards');
-        // Rebuild all range tees with new unit
-        for(let i=0; i<MAX_HOLES; i++) {
-            let h = courseHoles[i];
-            if(h.tees.range && h.teeMeshes.range) {
-                let oldRot = h.teeMeshes.range.rotation.y;
-                scene.remove(h.teeMeshes.range);
-                h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z);
-                h.teeMeshes.range.rotation.y = oldRot;
-            }
-        }
-    };
-    
-    function createDistLabel(text) {
-        let c = document.createElement('canvas');
-        c.width = 512; c.height = 256;
-        let ctx = c.getContext('2d');
-        
-        // Rounded rect background with gradient
-        let r = 24;
-        let w = 500, h = 244;
-        ctx.beginPath();
-        ctx.moveTo(r + 6, 6);
-        ctx.lineTo(w + 6 - r, 6);
-        ctx.quadraticCurveTo(w + 6, 6, w + 6, r + 6);
-        ctx.lineTo(w + 6, h + 6 - r);
-        ctx.quadraticCurveTo(w + 6, h + 6, w + 6 - r, h + 6);
-        ctx.lineTo(r + 6, h + 6);
-        ctx.quadraticCurveTo(6, h + 6, 6, h + 6 - r);
-        ctx.lineTo(6, r + 6);
-        ctx.quadraticCurveTo(6, 6, r + 6, 6);
-        ctx.closePath();
-        
-        let grad = ctx.createLinearGradient(0, 0, 0, 256);
-        grad.addColorStop(0, 'rgba(15, 23, 42, 0.95)');
-        grad.addColorStop(1, 'rgba(30, 41, 59, 0.95)');
-        ctx.fillStyle = grad;
-        ctx.fill();
-        
-        // Glowing border
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 5;
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 15;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        
-        // Inner highlight line
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(30, 6);
-        ctx.lineTo(w - 18, 6);
-        ctx.stroke();
-        
-        // Distance number — large
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 110px Arial, Helvetica, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(56, 189, 248, 0.6)';
-        ctx.shadowBlur = 12;
-        ctx.fillText(text, 256, 128);
-        ctx.shadowBlur = 0;
-        
-        let tex = new THREE.CanvasTexture(c);
-        tex.minFilter = THREE.LinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        let mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
-        let sprite = new THREE.Sprite(mat);
-        sprite.scale.set(8, 4, 1);
-        return sprite;
+    // The marks down the range (arcade-range-markers.js: arcs, targets, signs) are drawn in the player's unit and lie on the ground,
+    // turned to the tee's heading
+    function rangeGroundAt(x, z) {
+        let s = (typeof window.localGetTerrainAt === 'function') ? window.localGetTerrainAt(x, -z) : null;
+        return (s && typeof s.z === 'number') ? s.z : null;
     }
-
-    function createRangeTeeObject(x, y, z) {
-        let group = new THREE.Group();
-        
-        // Tee marker spheres (same as regular tee)
-        let tMat = new THREE.MeshLambertMaterial({ color: 0xeab308 });
-        let meshLeft = new THREE.Mesh(teeGeo, tMat);
-        meshLeft.position.set(-2.5, 0.35, 0);
-        meshLeft.castShadow = true;
-        let meshRight = new THREE.Mesh(teeGeo, tMat);
-        meshRight.position.set(2.5, 0.35, 0);
-        meshRight.castShadow = true;
-        group.add(meshLeft);
-        group.add(meshRight);
-        
-        // Center line — thin stripe 300m forward along local +Z
-        let centerLineGeo = new THREE.PlaneGeometry(0.3, 300);
-        let centerLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.35 });
-        let centerLine = new THREE.Mesh(centerLineGeo, centerLineMat);
-        centerLine.rotation.x = -Math.PI / 2;
-        centerLine.position.set(0, 0.06, 150); // center of 300m line
-        group.add(centerLine);
-        
-        // Distance markers at 50, 100, 150, 200, 250, 300
-        let distances = [50, 100, 150, 200, 250, 300];
-        let unit = window.rangeUseMeters ? 'm' : 'yd';
-        
-        for(let i = 0; i < distances.length; i++) {
-            let d = distances[i];
-            // Convert to scene units (1 unit = 1 meter)
-            let sceneD = window.rangeUseMeters ? d : d * 0.9144; // yards to meters
-            
-            // Cross line — 100 meters wide
-            let crossGeo = new THREE.PlaneGeometry(100, 0.5);
-            let crossMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
-            let crossMesh = new THREE.Mesh(crossGeo, crossMat);
-            crossMesh.rotation.x = -Math.PI / 2;
-            crossMesh.position.set(0, 0.07, sceneD);
-            group.add(crossMesh);
-            
-            // Distance label — RIGHT side
-            let labelR = createDistLabel(d + unit);
-            labelR.position.set(54, 3.5, sceneD);
-            group.add(labelR);
-            
-            // Distance label — LEFT side
-            let labelL = createDistLabel(d + unit);
-            labelL.position.set(-54, 3.5, sceneD);
-            group.add(labelL);
-        }
-        
-        group.position.set(x, y, z);
+    function createRangeTeeObject(x, y, z, rot) {
+        let group = window.RangeMarkers.build({ THREE: THREE, x: x, y: y, z: z, rot: rot || 0, useMeters: !!window.useMeters, groundAt: rangeGroundAt, teeGeo: teeGeo });
         scene.add(group);
         return group;
     }
+    // Draws the range marks again: the unit changed, the ground under them changed, or the tee was turned
+    window.rebuildRangeMarkers = function() {
+        for (let i = 0; i < MAX_HOLES; i++) {
+            let h = courseHoles[i];
+            if (!h || !h.tees || !h.tees.range || !h.teeMeshes || !h.teeMeshes.range) continue;
+            scene.remove(h.teeMeshes.range);
+            window.RangeMarkers.dispose(h.teeMeshes.range);
+            let t = h.tees.range;
+            h.teeMeshes.range = createRangeTeeObject(t.x, t.y, t.z, t.rot || 0);
+        }
+    };
+    // the range panel's unit button switches the player's unit (one unit everywhere)
+    window.toggleRangeUnit = function() { window.setDistanceUnit(!window.useMeters); };
 
     window.changeHoleTo = function(targetIdx) {
         if(targetIdx < 0) targetIdx = 0;
@@ -9248,7 +9167,20 @@
     }
     
     function triggerRealShot(data) {
-        if(isFlying) return;
+        if(isFlying) {
+            // A launch monitor does not wait for the ball on screen. On the range the new shot cuts the flight short and goes next
+            // (the animate loop fires it once the ball is back on the tee); on a course it cannot be played from a ball still in the air
+            if (data && data.isLiveData) {
+                if (window._isRangeMode) {
+                    window._pendingLMShot = data;
+                    if (typeof window.skipFlight === 'function') window.skipFlight();
+                } else if (typeof window.showBuildToast === 'function') {
+                    let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                    window.showBuildToast(sv ? '⏳ Slaget kom medan bollen var i luften och räknades inte' : '⏳ Shot arrived while the ball was still moving and was not counted', '#f59e0b');
+                }
+            }
+            return;
+        }
         if (window.clearBreakLine) window.clearBreakLine();
         
         // RISK-02 FIX: Normalize BackSpin/SideSpin → TotalSpin/SpinAxis if bridge sends
@@ -9476,11 +9408,21 @@
         // which may not reflect the player's chosen value.
         window.GREEN_STIMP = (window.matchSettings && window.matchSettings.greenStimp) ? window.matchSettings.greenStimp : 10.0;
         
+        // what the range session books for this shot (launch data and where it came from); the result is added when the ball stops
+        window._rangeShotInput = window._isRangeMode ? {
+            source: data.isLiveData ? 'LM' : 'SIM', swingClub: (window.SwingEngine && window.SwingEngine.getClub) ? window.SwingEngine.getClub() : null,
+            ballSpeed: data.ballSpeedMph, clubSpeed: data.clubSpeedMph, launch: data.launchAngleDeg, hla: data.azimDeg || 0,
+            spin: data.totalSpinRpm, spinAxis: data.spinAxisDeg || 0
+        } : null;
+
         let aimOffsetDeg = 0;
+        window.shotAimDir = null;   // the aim line of this shot (ground plane): how far offline the ball ends is measured across it
         if ((appMode === 'PLAY' || appMode === 'TEST') && window.aimTarget) {
             let dX = window.aimTarget.x - window.ballMesh.position.x;
             let dZ = window.aimTarget.z - window.ballMesh.position.z;
             aimOffsetDeg = Math.atan2(dX, -dZ) * 180 / Math.PI;
+            let aimLen = Math.hypot(dX, dZ);
+            if (aimLen > 0.01) window.shotAimDir = { x: dX / aimLen, z: dZ / aimLen };
         }
 
         var launchConfig = {
@@ -10095,7 +10037,7 @@
                 for(let key in h.tees) {
                     if(!h.tees[key]) continue;
                     if(key === 'range') {
-                        h.teeMeshes[key] = createRangeTeeObject(h.tees[key].x, h.tees[key].y, h.tees[key].z);
+                        h.teeMeshes[key] = createRangeTeeObject(h.tees[key].x, h.tees[key].y, h.tees[key].z, h.tees[key].rot || 0);
                     } else {
                         let col = 0xffffff;
                         if(key === 'red') col = 0xef4444;
@@ -11067,6 +11009,7 @@
             controls.enabled = false;
         }
         if (typeof activeRotatingTee !== 'undefined' && activeRotatingTee) {
+            if (activeRotatingTee === 'range' && typeof window.rebuildRangeMarkers === 'function') window.rebuildRangeMarkers();   // the marks lie on the ground under the new heading
             activeRotatingTee = null;
             controls.enabled = true;
             saveLevel();
@@ -11237,6 +11180,7 @@
         
         if (mode === 'BUILD' || mode === 'TEST') window.restoreTargets();
         if (mode === 'BUILD') {
+            if (window.RangeSession && window.RangeSession.stop) window.RangeSession.stop();   // the session panel and its landing dots belong to play
             playState = 'BUILDING'; // Nollställ playState från tidigare test-rundor
             window.aimTarget = null; // Rensa eventuella gamla sikten
             
@@ -11343,6 +11287,14 @@
                         tee.y,
                         tee.z + Math.cos(dir) * 200
                     );
+
+                    // the marks on the ground as it is now (the range may have been shaped since the tee was placed)
+                    if (typeof window.rebuildRangeMarkers === 'function') window.rebuildRangeMarkers();
+
+                    // the session panel: this range's shots so far (kept per range on this device), landing dots and spread
+                    if (window.RangeSession && window.RangeSession.start) {
+                        window.RangeSession.start({ key: window._loadedShareCode || (typeof currentEditCode !== 'undefined' && currentEditCode) || 'draft', scene: scene, tee: tee });
+                    }
                 } else {
                     // COURSE MODE: Default camera behind ball
                     camera.position.set(window.ballPos.x, window.ballPos.y + 2, window.ballPos.z + 10);
@@ -12102,8 +12054,9 @@
                     let dist = Math.hypot(p.x - teeData.x, p.z - teeData.z);
                     if(dist > 0.1) {
                         lastHitPoint = p;
-                        teeGroup.lookAt(p.x, teeGroup.position.y, p.z);
-                        teeData.rot = teeGroup.rotation.y;
+                        // the heading straight from the drag (lookAt + rotation.y loses it past 90°: three.js then reports x = z = 180° and a mirrored y)
+                        teeData.rot = Math.atan2(p.x - teeData.x, p.z - teeData.z);
+                        teeGroup.rotation.set(0, teeData.rot, 0);
                     }
                 }
             }
@@ -12429,8 +12382,7 @@
                 if(teeType === 'range') {
                     // Start range tee facing AWAY from camera (Math.PI = 180°)
                     hole.tees[teeType].rot = Math.PI;
-                    hole.teeMeshes[teeType] = createRangeTeeObject(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z);
-                    hole.teeMeshes[teeType].rotation.y = Math.PI;
+                    hole.teeMeshes[teeType] = createRangeTeeObject(lastHitPoint.x, lastHitPoint.y, lastHitPoint.z, Math.PI);
                 } else {
                     let col = 0xffffff;
                     if(teeType === 'red') col = 0xef4444;
@@ -14664,14 +14616,24 @@ window.triggerExplosion = function(x, y, z) {
                     // Sanity: total should never be less than carry
                     if (totalM < carryM) totalM = carryM;
                     
-                    if (document.getElementById('hud-carry')) {
-                        document.getElementById('hud-carry').innerText = window.formatDistStr(carryM);
-                        if (document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
-                        if (document.getElementById('hud-total')) document.getElementById('hud-total').innerText = window.formatDistStr(totalM); 
-                        
-                        let offPath = Math.abs(finalPhys.x - window.shotStartPos.x);
-                        if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = window.formatDistStr(offPath);
+                    // each tile on its own (the player picks which are shown)
+                    if (document.getElementById('hud-carry')) document.getElementById('hud-carry').innerText = window.formatDistStr(carryM);
+                    if (document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
+                    if (document.getElementById('hud-total')) document.getElementById('hud-total').innerText = window.formatDistStr(totalM);
+
+                    // offline = across the aim line (right of it is R), whichever way the hole or the range points; dZ (scene) = -dY
+                    let offText, side = null;
+                    if (window.shotAimDir) {
+                        side = dX * -window.shotAimDir.z + (-dY) * window.shotAimDir.x;
+                        offText = window.formatDistStr(Math.abs(side)) + (Math.abs(side) < 0.05 ? '' : (side > 0 ? ' R' : ' L'));
+                    } else {
+                        offText = window.formatDistStr(Math.abs(dX));
                     }
+                    if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = offText;
+                    // where the ball first came down (carry): the first point of the path that is no longer in flight
+                    let landP = finalPhys;
+                    for (let li = 1; li < flightData.path.length; li++) { if (flightData.path[li].phase && flightData.path[li].phase !== 'flight') { landP = flightData.path[li]; break; } }
+                    window._lastShotResult = { carry: carryM, total: totalM, offline: side, apex: flightData.metrics.apexMeters, landX: landP.x, landZ: -landP.y };
                 }
                 
                 if (playState === 'ROUND_FLYING') {
@@ -14681,6 +14643,14 @@ window.triggerExplosion = function(x, y, z) {
                     const rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
                     if (rangeHole) {
                         let rangeTee = rangeHole.tees.range;
+                        // book the shot in the session (before the ball goes back to the tee)
+                        let rIn = window._rangeShotInput, rOut = window._lastShotResult;
+                        if (window.RangeSession && window.RangeSession.active && window.RangeSession.active() && rIn && rOut) {
+                            window.RangeSession.record({ club: window.RangeSession.clubFor(rIn.source, rIn.swingClub), source: rIn.source,
+                                carry: rOut.carry, total: rOut.total, offline: rOut.offline, apex: rOut.apex, landX: rOut.landX, landZ: rOut.landZ,
+                                ballSpeed: rIn.ballSpeed, clubSpeed: rIn.clubSpeed, launch: rIn.launch, hla: rIn.hla, spin: rIn.spin, spinAxis: rIn.spinAxis });
+                        }
+                        window._rangeShotInput = null; window._lastShotResult = null;
                         window.ballPos.x = rangeTee.x;
                         window.ballPos.y = rangeTee.y + 0.2;
                         window.ballPos.z = rangeTee.z;
@@ -14702,8 +14672,8 @@ window.triggerExplosion = function(x, y, z) {
                         );
                         controls.update();
                         
-                        // Reset aim target along range direction
-                        if (window.aimTarget) {
+                        // Aim back down the range, unless the player picked a target of their own: the ball comes back to the same tee, so that target still holds
+                        if (window.aimTarget && !window.aimManual) {
                             window.aimManual = false;
                             window.aimTarget.set(
                                 rangeTee.x + Math.sin(dir) * 200,
@@ -14850,10 +14820,12 @@ window.triggerExplosion = function(x, y, z) {
                         }
                     }
                     
-                    setTimeout(() => {
+                    // gimme, auto-putt and whose turn: a course's business. On the range the ball is back on the tee already (above) and there is
+                    // no flag (the turn change read hole.flag and threw after every range shot, and reset a hand-set aim)
+                    if (!rangeHole) setTimeout(() => {
                         let pop = document.getElementById('score-popup');
                         pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
-                        
+
                         let lieSurface = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
                         let isGreen = lieSurface && lieSurface.type === 'GREEN';
                         let distFt = distToPin * 3.28084;
@@ -14935,6 +14907,13 @@ window.triggerExplosion = function(x, y, z) {
                     }, 500);
                 }
             }
+        }
+
+        // a launch-monitor shot that came in during the last flight on the range (see triggerRealShot): the ball is back on the tee now
+        if (window._pendingLMShot && !isFlying && playState === 'ROUND_IDLE') {
+            let pending = window._pendingLMShot;
+            window._pendingLMShot = null;
+            if (window._isRangeMode && (appMode === 'PLAY' || appMode === 'TEST')) window.triggerRealShot(pending);
         }
 
         // === UNIFIED AIM CAMERA (runs when NOT flying) ===
@@ -15228,8 +15207,8 @@ window.triggerExplosion = function(x, y, z) {
                 let hole = courseHoles[playingHoleIndex];
                 let dist = window.ballMesh.position.distanceTo(window.aimTarget);
                 let elevDiff = window.aimTarget.y - window.ballMesh.position.y;
-                document.getElementById('aim-bb-dist').innerText = (dist * 1.09361).toFixed(0); 
-                document.getElementById('aim-bb-elev').innerText = Math.abs(elevDiff * 1.09361).toFixed(1) + 'y';
+                document.getElementById('aim-bb-dist').innerText = window.formatDistRaw(dist, 0);   // in the player's unit
+                document.getElementById('aim-bb-elev').innerText = window.formatDistRaw(Math.abs(elevDiff), 1) + (window.useMeters ? 'm' : 'y');
                 document.getElementById('aim-bb-arrow').innerText = elevDiff > 0 ? '▲' : '▼';
                 document.getElementById('aim-bb-arrow').style.color = elevDiff > 0 ? '#4ade80' : '#f87171'; // Grön upp, Röd ner
 
@@ -15317,8 +15296,7 @@ window.triggerExplosion = function(x, y, z) {
                 if (window.aimTarget && document.getElementById('lie-distance')) {
                     let dX = window.aimTarget.x - window.ballMesh.position.x;
                     let dZ = window.aimTarget.z - window.ballMesh.position.z;
-                    let distYds = Math.sqrt(dX*dX + dZ*dZ) * 1.09361;
-                    document.getElementById('lie-distance').innerText = distYds.toFixed(1) + " yds";
+                    document.getElementById('lie-distance').innerText = window.formatDistStr(Math.sqrt(dX*dX + dZ*dZ), 1);
                     
                     let elevDistM = window.aimTarget.y - window.ballMesh.position.y;
                     let sign = elevDistM > 0 ? "+" : (elevDistM < 0 ? "-" : "");

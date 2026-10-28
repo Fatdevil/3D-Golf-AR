@@ -719,6 +719,11 @@
 <script>
     const API_BASE = 'https://3d-golf-ar-production.up.railway.app';
 
+    // names are typed by whoever saved the course: shown as text, never as markup
+    function escHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  Navigation
     // ═══════════════════════════════════════════════════════════
@@ -814,7 +819,7 @@
                         <div class="card-badges"><span class="badge badge-draft">DRAFT</span></div>
                     </div>
                     <div class="card-info">
-                        <div class="card-title">${d.name || 'Unnamed Draft'}</div>
+                        <div class="card-title">${escHtml(d.name || 'Unnamed Draft')}</div>
                         <div class="card-subtitle">Saved ${formatDate(d.date)}</div>
                         <div class="card-stats">
                             <span class="stat-item">☁️ Cloud Draft</span>
@@ -910,10 +915,10 @@
             let imageHtml = '';
             if (bgImg) {
                 let src = bgImg.startsWith('data:') ? bgImg : bgImg;
-                imageHtml = `<img class="card-img" src="${src}" alt="${c.name}">`;
+                imageHtml = `<img class="card-img" src="${src}" alt="${escHtml(c.name)}">`;
             } else {
                 let gradient = getFallbackGradient(c.share_code);
-                imageHtml = `<div class="card-fallback" style="background: ${gradient};"><div class="card-letters">${(c.name || '').substring(0, 3).toUpperCase()}</div></div>`;
+                imageHtml = `<div class="card-fallback" style="background: ${gradient};"><div class="card-letters">${escHtml((c.name || '').substring(0, 3).toUpperCase())}</div></div>`;
             }
 
             html += `
@@ -923,7 +928,7 @@
                     <span class="badge-holes ${badgeClass}">${isRange ? 'RANGE' : holeCount + ' HOLES'}</span>
                 </div>
                 <div class="card-info">
-                    <div class="card-title">${c.name}</div>
+                    <div class="card-title">${escHtml(c.name)}</div>
                     <div class="card-subtitle">${isRange ? 'Driving Range' : 'Par ' + totalPar}</div>
                     <div class="card-stats">
                         <span class="stat-item">🏌️ ${c.play_count || 0} play${(c.play_count || 0) !== 1 ? 's' : ''}</span>
@@ -1093,9 +1098,9 @@
                 let hc = c.hole_count || 3;
                 let par = c.total_par || (hc * 4);
                 html += `
-                <div class="plate-pick-item" onclick="assignPlate('${c.share_code}', '${(c.name || '').replace(/'/g, '')}')">
+                <div class="plate-pick-item" onclick="assignPlate('${c.share_code}', '${escHtml((c.name || '').replace(/['\\]/g, ''))}')">
                     <div>
-                        <div class="plate-pick-name">${c.name}</div>
+                        <div class="plate-pick-name">${escHtml(c.name)}</div>
                         <div class="plate-pick-meta">${hc} hål • Par ${par}</div>
                     </div>
                     <div style="font-size:18px;">→</div>

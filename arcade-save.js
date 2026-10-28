@@ -381,6 +381,7 @@
             _fullSave: true,
             edit_code: (typeof currentEditCode !== 'undefined' && currentEditCode) ? currentEditCode : null,
             edit_is_published: !!window._editIsPublished,
+            is_range: !!window._isRangeMode,   // the working copy reopens as a range (see loadLevelBody)
             name: (document.getElementById('course-name-input') && document.getElementById('course-name-input').value) || 'Quick Draft',
             author: (document.getElementById('author-name-input') && document.getElementById('author-name-input').value) || '',
             targets: dumpTargets,

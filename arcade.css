@@ -520,8 +520,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 
   /* input mode picker in the menu (swing / launch monitor / numbers) */
   #hb-input-mode { display: none; padding: 4px 0 8px; }
-  #hb-input-mode .hb-input-row { display: flex; }
-  .input-btn {
+  #hb-input-mode .hb-input-row, #hb-units .hb-input-row { display: flex; }
+  #hb-units { padding: 4px 0 8px; }
+  .input-btn, .unit-btn {
       flex: 1; min-height: 36px; padding: 6px 8px;
       background: rgba(15,23,42,0.85);
       border: 1px solid rgba(255,255,255,0.12);
@@ -531,9 +532,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       font-size: 11px; font-weight: 700;
       cursor: pointer;
   }
-  .input-btn:first-child { border-radius: 8px 0 0 8px; }
-  .input-btn:last-child  { border-radius: 0 8px 8px 0; border-right: 1px solid rgba(255,255,255,0.12); }
-  .input-btn.selected    { background: rgba(56,189,248,0.25); border-color: #38bdf8; color: #fff; }
+  .input-btn:first-child, .unit-btn:first-child { border-radius: 8px 0 0 8px; }
+  .input-btn:last-child, .unit-btn:last-child   { border-radius: 0 8px 8px 0; border-right: 1px solid rgba(255,255,255,0.12); }
+  .input-btn.selected, .unit-btn.selected       { background: rgba(56,189,248,0.25); border-color: #38bdf8; color: #fff; }
 
   /* --- Swing Overlay --- */
   #swing-overlay {
@@ -740,4 +741,45 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       .sys-btn { padding: 6px 10px; font-size: 12px; }
       #topbar-hole-nav { padding: 3px 8px !important; }
       #biome-selector-container { padding: 4px 8px !important; }
+  }
+  /* RANGE SESSION PANEL (arcade-range-session.js): right side, under the menu button, above the minimap */
+  #range-session {
+      position: absolute; top: 76px; right: 20px; width: 300px; max-width: calc(100vw - 32px); max-height: calc(100vh - 76px - 380px);
+      min-height: 0; display: flex; flex-direction: column; z-index: 95; pointer-events: auto;
+      background: rgba(15,23,42,0.88); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45); color: #e2e8f0; font-family: 'Inter', sans-serif; font-size: 12px; overflow: hidden;
+  }
+  #range-session.collapsed { max-height: none; }
+  #range-session button { font-family: inherit; cursor: pointer; }
+  #range-session button:focus-visible, #range-session select:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
+  #range-session .rs-head { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  #range-session.collapsed .rs-head { border-bottom: none; }
+  #range-session .rs-toggle { background: none; border: none; color: #fff; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 0; width: 100%; text-align: left; }
+  #range-session .rs-count { color: #94a3b8; font-weight: 700; text-transform: none; letter-spacing: 0; margin-left: 4px; }
+  #range-session .rs-clubs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px 4px; }
+  #range-session .rs-club { min-width: 34px; height: 28px; padding: 0 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #cbd5e1; font-size: 11px; font-weight: 800; }
+  #range-session .rs-club.selected { background: var(--c); border-color: var(--c); color: #0f172a; }
+  #range-session .rs-hint { margin: 2px 12px 4px; color: #fbbf24; font-size: 11px; font-weight: 600; }
+  #range-session .rs-tabs { display: flex; gap: 4px; padding: 6px 12px; }
+  #range-session .rs-tabs button { flex: 1; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #94a3b8; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+  #range-session .rs-tabs button.selected { background: #334155; color: #fff; }
+  #range-session .rs-body { overflow-y: auto; min-height: 0; flex: 1 1 auto; padding: 0 8px; }
+  #range-session table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  #range-session th { position: sticky; top: 0; background: rgba(15,23,42,0.98); color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; text-align: right; padding: 4px; }
+  #range-session td { text-align: right; padding: 3px 4px; border-top: 1px solid rgba(255,255,255,0.05); font-weight: 600; }
+  #range-session th:first-child, #range-session td:first-child, #range-session th:nth-child(2), #range-session td:nth-child(2) { text-align: left; }
+  #range-session tr.rs-last td { color: #38bdf8; font-weight: 800; }
+  #range-session select { background: #1e293b; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; font-size: 11px; font-weight: 700; padding: 1px 2px; }
+  #range-session .rs-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  #range-session .rs-empty { color: #94a3b8; padding: 12px 4px; }
+  #range-session .rs-unit { color: #64748b; font-size: 10px; text-align: right; padding: 2px 4px; }
+  #range-session .rs-note { color: #94a3b8; font-size: 10px; padding: 4px 12px 0; }
+  #range-session .rs-actions { display: flex; gap: 6px; padding: 8px 12px 10px; }
+  #range-session .rs-actions button { flex: 1; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 11px; font-weight: 700; }
+  #range-session .rs-actions button:disabled { opacity: 0.4; cursor: default; }
+  @media (max-width: 768px) {
+      #range-session { top: auto; bottom: 380px; right: 16px; max-height: 40vh; }
+  }
+  @media (max-height: 640px) {
+      #range-session { max-height: calc(100vh - 96px); right: 260px; }
   }
