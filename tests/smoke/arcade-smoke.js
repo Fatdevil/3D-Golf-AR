@@ -622,6 +622,9 @@ function serve() {
       const S = BP.state();
       // open() starts an asynchronous search for a good spot (status "searching", detail row cleared): wait until it is done
       for (let w = 0; w < 80 && S.busy; w++) await new Promise(function (r) { setTimeout(r, 100); });
+      // on a slow runner that search can run out of time and leave "no free spot" up; that note stays until the player touches the map
+      // (as here, where the test moves the hole itself), so clear it as a touch does: the checks below are about the status of each spot
+      S.note = null; S.noteBad = false;
       const sk = S.sketches[0], seen = {}, tops = [];
       sk.seed = 4242; sk.plan = window.HoleGenerator.planFor(sk.par, sk.seed); // the planner starts from a random seed: pin it so the test sees the same hole every run
       for (let hd = 0; hd < 6.3; hd += Math.PI / 4) for (let ox = -240; ox <= 240; ox += 40) for (let oz = -240; oz <= 240; oz += 40) {
