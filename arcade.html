@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=13">
+<link rel="stylesheet" href="arcade.css?v=14">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -3961,6 +3961,7 @@
 </script>
 <script src="arcade-aim.js?v=1"></script>
 <script src="arcade-shot-plan.js?v=1"></script>
+<script src="arcade-range-session.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -9491,6 +9492,13 @@
         // which may not reflect the player's chosen value.
         window.GREEN_STIMP = (window.matchSettings && window.matchSettings.greenStimp) ? window.matchSettings.greenStimp : 10.0;
         
+        // what the range session books for this shot (launch data and where it came from); the result is added when the ball stops
+        window._rangeShotInput = window._isRangeMode ? {
+            source: data.isLiveData ? 'LM' : 'SIM', swingClub: (window.SwingEngine && window.SwingEngine.getClub) ? window.SwingEngine.getClub() : null,
+            ballSpeed: data.ballSpeedMph, clubSpeed: data.clubSpeedMph, launch: data.launchAngleDeg, hla: data.azimDeg || 0,
+            spin: data.totalSpinRpm, spinAxis: data.spinAxisDeg || 0
+        } : null;
+
         let aimOffsetDeg = 0;
         window.shotAimDir = null;   // the aim line of this shot (ground plane): how far offline the ball ends is measured across it
         if ((appMode === 'PLAY' || appMode === 'TEST') && window.aimTarget) {
@@ -11255,6 +11263,7 @@
         
         if (mode === 'BUILD' || mode === 'TEST') window.restoreTargets();
         if (mode === 'BUILD') {
+            if (window.RangeSession && window.RangeSession.stop) window.RangeSession.stop();   // the session panel and its landing dots belong to play
             playState = 'BUILDING'; // Nollställ playState från tidigare test-rundor
             window.aimTarget = null; // Rensa eventuella gamla sikten
             
@@ -11361,6 +11370,11 @@
                         tee.y,
                         tee.z + Math.cos(dir) * 200
                     );
+
+                    // the session panel: this range's shots so far (kept per range on this device), landing dots and spread
+                    if (window.RangeSession && window.RangeSession.start) {
+                        window.RangeSession.start({ key: window._loadedShareCode || (typeof currentEditCode !== 'undefined' && currentEditCode) || 'draft', scene: scene, tee: tee });
+                    }
                 } else {
                     // COURSE MODE: Default camera behind ball
                     camera.position.set(window.ballPos.x, window.ballPos.y + 2, window.ballPos.z + 10);
@@ -14683,21 +14697,24 @@ window.triggerExplosion = function(x, y, z) {
                     // Sanity: total should never be less than carry
                     if (totalM < carryM) totalM = carryM;
                     
-                    if (document.getElementById('hud-carry')) {
-                        document.getElementById('hud-carry').innerText = window.formatDistStr(carryM);
-                        if (document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
-                        if (document.getElementById('hud-total')) document.getElementById('hud-total').innerText = window.formatDistStr(totalM); 
-                        
-                        // offline = across the aim line (right of it is R), whichever way the hole or the range points; dZ (scene) = -dY
-                        let offText;
-                        if (window.shotAimDir) {
-                            let side = dX * -window.shotAimDir.z + (-dY) * window.shotAimDir.x;
-                            offText = window.formatDistStr(Math.abs(side)) + (Math.abs(side) < 0.05 ? '' : (side > 0 ? ' R' : ' L'));
-                        } else {
-                            offText = window.formatDistStr(Math.abs(dX));
-                        }
-                        if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = offText;
+                    // each tile on its own (the player picks which are shown)
+                    if (document.getElementById('hud-carry')) document.getElementById('hud-carry').innerText = window.formatDistStr(carryM);
+                    if (document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
+                    if (document.getElementById('hud-total')) document.getElementById('hud-total').innerText = window.formatDistStr(totalM);
+
+                    // offline = across the aim line (right of it is R), whichever way the hole or the range points; dZ (scene) = -dY
+                    let offText, side = null;
+                    if (window.shotAimDir) {
+                        side = dX * -window.shotAimDir.z + (-dY) * window.shotAimDir.x;
+                        offText = window.formatDistStr(Math.abs(side)) + (Math.abs(side) < 0.05 ? '' : (side > 0 ? ' R' : ' L'));
+                    } else {
+                        offText = window.formatDistStr(Math.abs(dX));
                     }
+                    if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = offText;
+                    // where the ball first came down (carry): the first point of the path that is no longer in flight
+                    let landP = finalPhys;
+                    for (let li = 1; li < flightData.path.length; li++) { if (flightData.path[li].phase && flightData.path[li].phase !== 'flight') { landP = flightData.path[li]; break; } }
+                    window._lastShotResult = { carry: carryM, total: totalM, offline: side, apex: flightData.metrics.apexMeters, landX: landP.x, landZ: -landP.y };
                 }
                 
                 if (playState === 'ROUND_FLYING') {
@@ -14707,6 +14724,14 @@ window.triggerExplosion = function(x, y, z) {
                     const rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
                     if (rangeHole) {
                         let rangeTee = rangeHole.tees.range;
+                        // book the shot in the session (before the ball goes back to the tee)
+                        let rIn = window._rangeShotInput, rOut = window._lastShotResult;
+                        if (window.RangeSession && window.RangeSession.active && window.RangeSession.active() && rIn && rOut) {
+                            window.RangeSession.record({ club: window.RangeSession.clubFor(rIn.source, rIn.swingClub), source: rIn.source,
+                                carry: rOut.carry, total: rOut.total, offline: rOut.offline, apex: rOut.apex, landX: rOut.landX, landZ: rOut.landZ,
+                                ballSpeed: rIn.ballSpeed, clubSpeed: rIn.clubSpeed, launch: rIn.launch, hla: rIn.hla, spin: rIn.spin, spinAxis: rIn.spinAxis });
+                        }
+                        window._rangeShotInput = null; window._lastShotResult = null;
                         window.ballPos.x = rangeTee.x;
                         window.ballPos.y = rangeTee.y + 0.2;
                         window.ballPos.z = rangeTee.z;

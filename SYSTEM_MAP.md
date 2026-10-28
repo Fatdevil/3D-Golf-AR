@@ -40,6 +40,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `arcade-tracer-engine.js` | Bollspår-rendering (Classic, Phantom, Pro Dot + premium) |
 | `arcade-terrain-overlays.js` | Contour maps, heatmaps, pro grid |
 | `arcade-perlin.js` | Perlin noise för terränggeneration |
+| `arcade-range-session.js` | Range-session: slaglista, klubbsnitt (gapping), landningsprickar och spridningsellips, CSV (`window.RangeSession`) |
 | `arcade-lm-bridge.js` | WebSocket till Launch Monitor (SkyTrak/GSPro) på ws://localhost:8081 |
 | `physics.js` | Ballistisk fysikmotor (drag, spin, bounce, roll) |
 | `arcade.css` | Extraherad CSS |
@@ -418,6 +419,7 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - Range Tee vrids genom att dra; riktningen räknas direkt ur draget (`atan2`). Läs aldrig tillbaka `rotation.y` efter `lookAt`: förbi 90° ger three.js x = z = 180° och ett speglat y.
 - Efter varje slag läggs bollen tillbaka på teet. Banans eftersteg (gimme, auto-putt, vems tur) körs inte på rangen. Ett handsatt sikte ligger kvar mellan slagen; ⚑/F sätter siktet rakt fram igen.
 - Launch monitor: ett LM-slag som kommer medan bollen flyger hoppar över flygningen på rangen och spelas sedan (`window._pendingLMShot`). På en bana räknas det inte, och spelaren får ett meddelande. Ett LM-slag när inmatningen inte är LM ger också ett meddelande.
+- **Sessionspanelen** (`arcade-range-session.js`, uppe till höger ovanför minimapen) visar varje slag (klubba, carry, total, offline) och per klubba snitt, ± på carry och spridning i sidled. Klubban för ett LM-slag väljs i panelen eftersom LM inte skickar den. Ett sving- eller sifferslag får swingmotorns klubba om ingen är vald, och klubban kan ändras på varje rad. En prick ritas där bollen landade (carry), och en ellips (1,5 standardavvikelser, ungefär 2 av 3 slag) visas för vald klubba från tre slag. Sessionen sparas per range på enheten (`localStorage` `golf_range_session_<kod>`, högst 500 slag). "Ny session" tömmer den, och Exportera CSV ger slagen i spelarens enhet. `arcade.html` sparar slagets indata i `executeArcadeShot` (`_rangeShotInput`) och utfallet när bollen stannar (`_lastShotResult`), och bokför slaget innan bollen läggs tillbaka på teet. Matten testas i `tests/test_range_session.js`.
 - HUD-rutan **Offline** mäter avvikelsen vinkelrätt mot slagets siktlinje (`window.shotAimDir`) med R/L. Rutan **Start Line (HLA)** är startriktningen från LM.
 
 ## Banor av flera plattor (collections) (2026-10)
