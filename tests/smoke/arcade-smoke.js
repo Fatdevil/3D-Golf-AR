@@ -1354,6 +1354,88 @@ function serve() {
 
   } catch (e) { checks.push({ name: 'quick draft reopen check ran', ok: false, detail: 'step ' + reopenStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
 
+  // The driving range: the range tee keeps the heading it was turned to, launch-monitor shots during a flight are played next,
+  // offline is measured across the aim line, a hand-set aim stays, and a range reopened without "mode=range" in the address is still a range
+  let rangeStep = 'start';
+  try {
+    const ctx3 = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
+    await ctx3.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
+      const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
+      if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
+    });
+    await ctx3.route(/^https:\/\/(?!cdn)/, function (r) { r.abort(); });
+    rangeStep = 'range builder'; const rp = await ctx3.newPage();
+    const rangeErrors = []; rp.on('pageerror', function (e) { rangeErrors.push(e.message.slice(0, 120)); });
+    await rp.goto(base + '/arcade.html?autorun=new_build&mode=range', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await rp.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await rp.waitForTimeout(4000);
+    rangeStep = 'turn the tee';
+    const turned = await rp.evaluate(function () {
+      setMode('BUILD');
+      const pos = planeGeo.attributes.position.array; for (let i = 0; i < planeGeo.attributes.position.count; i++) pos[i * 3 + 2] = 0;
+      planeGeo.attributes.position.needsUpdate = true; planeGeo.computeBoundingSphere(); planeGeo.computeBoundingBox();
+      const h = courseHoles[currentHoleIndex];
+      h.tees.range = { x: 0, y: 0, z: 0, rot: Math.PI };
+      if (h.teeMeshes.range) scene.remove(h.teeMeshes.range);
+      h.teeMeshes.range = new THREE.Group(); scene.add(h.teeMeshes.range);
+      camera.position.set(0, 160, 80); camera.lookAt(0, 0, -20); camera.updateMatrixWorld(); camera.updateProjectionMatrix();
+      const cv = renderer.domElement, rect = cv.getBoundingClientRect(), out = {};
+      [170, -150, 60].forEach(function (deg) {
+        const th = deg * Math.PI / 180, wp = new THREE.Vector3(Math.sin(th) * 50, 0, Math.cos(th) * 50).project(camera);
+        (0, eval)('activeRotatingTee = "range"; lastHitPoint = new THREE.Vector3(0, 0, 0);');
+        window.dispatchEvent(new PointerEvent('pointermove', { clientX: rect.left + (wp.x + 1) / 2 * rect.width, clientY: rect.top + (1 - wp.y) / 2 * rect.height, pointerType: 'mouse' }));
+        const r = h.tees.range.rot;
+        out[deg] = Math.round(Math.atan2(Math.sin(r - th), Math.cos(r - th)) * 180 / Math.PI);   // heading error, degrees
+      });
+      (0, eval)('activeRotatingTee = null;');
+      return out;
+    });
+    checks.push({ name: 'range tee: the heading it is turned to is the heading it keeps, also past 90° (it used to point the other way)', ok: Object.keys(turned).every(function (k) { return Math.abs(turned[k]) <= 3; }), detail: JSON.stringify(turned) });
+    rangeStep = 'launch monitor shots';
+    await rp.evaluate(function () {
+      const h = courseHoles[currentHoleIndex];
+      h.tees.range.rot = Math.PI / 2;   // the range points along +X: offline is then across X, not along it
+      setMode('TEST');
+      ArcadeStorage.setHudPrefs(['TOTAL_LENGTH', 'CARRY', 'OFFLINE']); window.renderDynamicHUD();
+      window.setAimPoint(150, 0, 0);   // a target of the player's own, straight down the range
+      window.triggerRealShot({ ballSpeedMph: 90, launchAngleDeg: 18, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 0, isLiveData: true });
+    });
+    await rp.waitForTimeout(800);   // the next ball is hit while the first is still in the air
+    await rp.evaluate(function () {
+      window.triggerRealShot({ ballSpeedMph: 90, launchAngleDeg: 18, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 6, isLiveData: true });
+      window.__queued = !!window._pendingLMShot;
+    });
+    await rp.waitForFunction(function () { return window.players[0].strokes >= 2; }, null, { timeout: 60000 });
+    await rp.waitForTimeout(800);
+    await rp.evaluate(function () { window.skipFlight(); });   // a headless browser flies slowly: the second flight is skipped as a player would tap
+    await rp.waitForFunction(function () { return !window.isBallFlying() && playState === 'ROUND_IDLE'; }, null, { timeout: 60000 });
+    await rp.waitForTimeout(300);
+    const lm = await rp.evaluate(function () {
+      const el = document.getElementById('hud-offline'), t = el ? el.innerText : '';
+      return { queued: window.__queued, strokes: window.players[0].strokes, offline: t, offM: parseFloat(t), total: parseFloat(document.getElementById('hud-total').innerText),
+               aim: [Math.round(window.aimTarget.x), Math.round(window.aimTarget.z)], manual: window.aimManual };
+    });
+    checks.push({ name: 'range: a launch-monitor shot that comes in during a flight is played next, not dropped', ok: lm.queued && lm.strokes === 2, detail: JSON.stringify(lm) });
+    checks.push({ name: 'range: offline is measured across the aim line (a range along +X, started 6° right, ends a few metres R)', ok: / R$/.test(lm.offline) && lm.offM > 0.5 && lm.offM < lm.total * 0.3, detail: JSON.stringify(lm) });
+    checks.push({ name: 'range: a hand-set aim stays between shots', ok: lm.manual && lm.aim[0] === 150 && lm.aim[1] === 0, detail: JSON.stringify(lm) });
+    checks.push({ name: 'range: shots raise no page errors (the course turn logic used to run and read the missing flag)', ok: rangeErrors.length === 0, detail: JSON.stringify(rangeErrors) });
+    rangeStep = 'save the range';
+    await rp.evaluate(async function () { setMode('BUILD'); await window.saveLevel(true, true); });
+    await rp.close();
+    rangeStep = 'reopen without mode=range';
+    const rp2 = await ctx3.newPage();
+    await rp2.goto(base + '/arcade.html?autorun=edit_build', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await rp2.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await rp2.waitForTimeout(2000);
+    const reopenedRange = await rp2.evaluate(function () {
+      const b = document.getElementById('btn-set-range-tee');
+      return { range: window._isRangeMode === true, url: new URLSearchParams(location.search).get('mode'), teeBtn: b ? getComputedStyle(b).display : 'missing', hasTee: !!courseHoles.find(function (h) { return h && h.tees && h.tees.range; }) };
+    });
+    await rp2.close();
+    checks.push({ name: 'range: the quick draft of a range reopens as a range even without mode=range in the address', ok: reopenedRange.range && reopenedRange.url === 'range' && reopenedRange.teeBtn !== 'none' && reopenedRange.hasTee, detail: JSON.stringify(reopenedRange) });
+    await ctx3.close();
+  } catch (e) { checks.push({ name: 'range checks ran', ok: false, detail: 'step ' + rangeStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
+
   await browser.close();
   srv.close();
 

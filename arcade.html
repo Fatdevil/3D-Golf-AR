@@ -147,7 +147,8 @@
         <label class="hb-toggle"><span>Launch Angle</span><input type="checkbox" data-tile="LAUNCH_ANGLE"></label>
         <label class="hb-toggle"><span>Club Path</span><input type="checkbox" data-tile="CLUB_PATH"></label>
         <label class="hb-toggle"><span>Face To Path</span><input type="checkbox" data-tile="FACE_TO_PATH"></label>
-        <label class="hb-toggle"><span>Offline (HLA)</span><input type="checkbox" data-tile="HLA"></label>
+        <label class="hb-toggle"><span>Offline</span><input type="checkbox" data-tile="OFFLINE"></label>
+        <label class="hb-toggle"><span>Start Line (HLA)</span><input type="checkbox" data-tile="HLA"></label>
         
         </div><div class="hb-section-title" onclick="toggleHbSection(this)">Green Visualization <span style="transition: transform 0.2s; display: inline-block; transform: rotate(-90deg);">?</span></div>
 <div class="hb-section-content">
@@ -3831,7 +3832,8 @@
             'LAUNCH_ANGLE': 'Launch (VLA)',
             'CLUB_PATH': 'Club Path',
             'FACE_TO_PATH': 'Face to Path',
-            'HLA': 'Offline (HLA)'
+            'OFFLINE': 'Offline',
+            'HLA': 'Start Line (HLA)'
         };
         
         let idMap = {
@@ -3844,6 +3846,7 @@
             'LAUNCH_ANGLE': 'hud-vla',
             'CLUB_PATH': 'hud-cp',
             'FACE_TO_PATH': 'hud-ftp',
+            'OFFLINE': 'hud-offline',
             'HLA': 'hud-hla'
         };
         
@@ -7697,10 +7700,9 @@
         for(let i=0; i<MAX_HOLES; i++) {
             let h = courseHoles[i];
             if(h.tees.range && h.teeMeshes.range) {
-                let oldRot = h.teeMeshes.range.rotation.y;
                 scene.remove(h.teeMeshes.range);
                 h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z);
-                h.teeMeshes.range.rotation.y = oldRot;
+                h.teeMeshes.range.rotation.y = h.tees.range.rot || 0;
             }
         }
     };
@@ -9248,7 +9250,20 @@
     }
     
     function triggerRealShot(data) {
-        if(isFlying) return;
+        if(isFlying) {
+            // A launch monitor does not wait for the ball on screen. On the range the new shot cuts the flight short and goes next
+            // (the animate loop fires it once the ball is back on the tee); on a course it cannot be played from a ball still in the air
+            if (data && data.isLiveData) {
+                if (window._isRangeMode) {
+                    window._pendingLMShot = data;
+                    if (typeof window.skipFlight === 'function') window.skipFlight();
+                } else if (typeof window.showBuildToast === 'function') {
+                    let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                    window.showBuildToast(sv ? '⏳ Slaget kom medan bollen var i luften och räknades inte' : '⏳ Shot arrived while the ball was still moving and was not counted', '#f59e0b');
+                }
+            }
+            return;
+        }
         if (window.clearBreakLine) window.clearBreakLine();
         
         // RISK-02 FIX: Normalize BackSpin/SideSpin → TotalSpin/SpinAxis if bridge sends
@@ -9477,10 +9492,13 @@
         window.GREEN_STIMP = (window.matchSettings && window.matchSettings.greenStimp) ? window.matchSettings.greenStimp : 10.0;
         
         let aimOffsetDeg = 0;
+        window.shotAimDir = null;   // the aim line of this shot (ground plane): how far offline the ball ends is measured across it
         if ((appMode === 'PLAY' || appMode === 'TEST') && window.aimTarget) {
             let dX = window.aimTarget.x - window.ballMesh.position.x;
             let dZ = window.aimTarget.z - window.ballMesh.position.z;
             aimOffsetDeg = Math.atan2(dX, -dZ) * 180 / Math.PI;
+            let aimLen = Math.hypot(dX, dZ);
+            if (aimLen > 0.01) window.shotAimDir = { x: dX / aimLen, z: dZ / aimLen };
         }
 
         var launchConfig = {
@@ -12102,8 +12120,9 @@
                     let dist = Math.hypot(p.x - teeData.x, p.z - teeData.z);
                     if(dist > 0.1) {
                         lastHitPoint = p;
-                        teeGroup.lookAt(p.x, teeGroup.position.y, p.z);
-                        teeData.rot = teeGroup.rotation.y;
+                        // the heading straight from the drag (lookAt + rotation.y loses it past 90°: three.js then reports x = z = 180° and a mirrored y)
+                        teeData.rot = Math.atan2(p.x - teeData.x, p.z - teeData.z);
+                        teeGroup.rotation.set(0, teeData.rot, 0);
                     }
                 }
             }
@@ -14669,8 +14688,15 @@ window.triggerExplosion = function(x, y, z) {
                         if (document.getElementById('hud-carryraw')) document.getElementById('hud-carryraw').innerText = window.formatDistStr(carryM);
                         if (document.getElementById('hud-total')) document.getElementById('hud-total').innerText = window.formatDistStr(totalM); 
                         
-                        let offPath = Math.abs(finalPhys.x - window.shotStartPos.x);
-                        if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = window.formatDistStr(offPath);
+                        // offline = across the aim line (right of it is R), whichever way the hole or the range points; dZ (scene) = -dY
+                        let offText;
+                        if (window.shotAimDir) {
+                            let side = dX * -window.shotAimDir.z + (-dY) * window.shotAimDir.x;
+                            offText = window.formatDistStr(Math.abs(side)) + (Math.abs(side) < 0.05 ? '' : (side > 0 ? ' R' : ' L'));
+                        } else {
+                            offText = window.formatDistStr(Math.abs(dX));
+                        }
+                        if (document.getElementById('hud-offline')) document.getElementById('hud-offline').innerText = offText;
                     }
                 }
                 
@@ -14702,8 +14728,8 @@ window.triggerExplosion = function(x, y, z) {
                         );
                         controls.update();
                         
-                        // Reset aim target along range direction
-                        if (window.aimTarget) {
+                        // Aim back down the range, unless the player picked a target of their own: the ball comes back to the same tee, so that target still holds
+                        if (window.aimTarget && !window.aimManual) {
                             window.aimManual = false;
                             window.aimTarget.set(
                                 rangeTee.x + Math.sin(dir) * 200,
@@ -14850,10 +14876,12 @@ window.triggerExplosion = function(x, y, z) {
                         }
                     }
                     
-                    setTimeout(() => {
+                    // gimme, auto-putt and whose turn: a course's business. On the range the ball is back on the tee already (above) and there is
+                    // no flag (the turn change read hole.flag and threw after every range shot, and reset a hand-set aim)
+                    if (!rangeHole) setTimeout(() => {
                         let pop = document.getElementById('score-popup');
                         pop.style.transform = 'translate(-50%, -60%) scale(1.0)';
-                        
+
                         let lieSurface = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
                         let isGreen = lieSurface && lieSurface.type === 'GREEN';
                         let distFt = distToPin * 3.28084;
@@ -14935,6 +14963,13 @@ window.triggerExplosion = function(x, y, z) {
                     }, 500);
                 }
             }
+        }
+
+        // a launch-monitor shot that came in during the last flight on the range (see triggerRealShot): the ball is back on the tee now
+        if (window._pendingLMShot && !isFlying && playState === 'ROUND_IDLE') {
+            let pending = window._pendingLMShot;
+            window._pendingLMShot = null;
+            if (window._isRangeMode && (appMode === 'PLAY' || appMode === 'TEST')) window.triggerRealShot(pending);
         }
 
         // === UNIFIED AIM CAMERA (runs when NOT flying) ===

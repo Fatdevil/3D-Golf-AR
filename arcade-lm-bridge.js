@@ -46,7 +46,14 @@
                     }
                     msg.data.isLiveData = true;
                     // only while the launch monitor is the chosen input (see SwingEngine.acceptsBridgeShots)
-                    if (window.SwingEngine && window.SwingEngine.acceptsBridgeShots && !window.SwingEngine.acceptsBridgeShots()) return;
+                    if (window.SwingEngine && window.SwingEngine.acceptsBridgeShots && !window.SwingEngine.acceptsBridgeShots()) {
+                        // say so, or the player thinks the shot got lost
+                        if (typeof window.showBuildToast === 'function') {
+                            var sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                            window.showBuildToast(sv ? '📡 Slag från launch monitorn ignorerat: välj LM som inmatning för att spela det' : '📡 Launch monitor shot ignored: pick LM as the input to play it', '#f59e0b');
+                        }
+                        return;
+                    }
                     if (typeof window.triggerRealShot === 'function') {
                         window.triggerRealShot(msg.data);
                     }

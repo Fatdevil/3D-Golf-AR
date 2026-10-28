@@ -362,6 +362,11 @@ function playCourse(courseCode) {
     window.location.href = url;
 }
 
+// names and authors are typed by whoever saved the course: shown as text, never as markup
+function escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+}
+
 function playRange(rangeCode) {
     let url = "arcade.html?v=" + Date.now() + "&course=" + rangeCode + "&mode=range";
     window.location.href = url;
@@ -391,7 +396,7 @@ function loadDrafts() {
              html += `
              <div class="course-item">
                 <div class="course-info">
-                  <h4>${d.name}</h4>
+                  <h4>${escHtml(d.name)}</h4>
                   <p>Saved: ${dDate}</p>
                 </div>
                 <div style="display:flex; gap:10px;">
@@ -476,8 +481,8 @@ function renderCourseCards(courses) {
            <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
            <div class="course-card-overlay">
               <div class="course-card-badge" style="background:${holeBadgeColor};">${holeLabel}</div>
-              <h4 class="course-card-title">${c.name}</h4>
-              <div class="course-card-meta">${c.author}</div>
+              <h4 class="course-card-title">${escHtml(c.name)}</h4>
+              <div class="course-card-meta">${escHtml(c.author)}</div>
               <div class="course-card-meta">PAR ${totalPar}</div>
               <div class="course-card-diff">Difficulty: ${diffDots}</div>
               <div style="position:absolute; bottom:15px; right:15px; text-align:center; cursor:pointer; z-index:10;" onclick="${isLiked ? 'event.stopPropagation()' : `likeCourse(event, '${c.share_code}')`}">
@@ -532,7 +537,7 @@ function renderMyPublishedCourses() {
            <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
            <div class="course-card-overlay" style="padding-bottom: 20px;">
               <div class="course-card-badge" style="background:rgba(56,189,248,0.8);">${holeCount} HOLES</div>
-              <h4 class="course-card-title">${c.name}</h4>
+              <h4 class="course-card-title">${escHtml(c.name)}</h4>
               <div class="course-card-meta">PAR ${totalPar} • Spelad ${c.play_count || 0} ggr</div>
               <div style="display:flex; gap:10px; margin-top: 15px; position:relative; z-index:20;">
                   <button class="btn-play" style="flex:1; font-size:12px; padding:10px; background:rgba(56,189,248,0.9); color:#0f172a;" onclick="event.stopPropagation(); window.location.href='arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=${c.share_code}'">✏️ EDIT</button>
@@ -655,8 +660,8 @@ async function loadRanges() {
                <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
                <div class="course-card-overlay">
                   <div class="course-card-badge" style="background:rgba(234,179,8,0.8);">DRIVING RANGE</div>
-                  <h4 class="course-card-title">${r.name}</h4>
-                  <div class="course-card-meta">${r.author}</div>
+                  <h4 class="course-card-title">${escHtml(r.name)}</h4>
+                  <div class="course-card-meta">${escHtml(r.author)}</div>
                   <div class="course-card-meta">PRACTICE MODE</div>
                </div>
             </div>`;
@@ -722,7 +727,7 @@ function renderCombineUI() {
     let my3Hole = _allCourses.filter(c => c.is_mine === true && (!c.type || c.type == '3'));
     my3Hole.forEach(c => {
         availHtml += `<div style="background:#1e293b; padding:10px; border-radius:8px; cursor:pointer; border:1px solid #475569;" onclick="assignCombineSlot('${c.share_code}')">
-                        <div style="font-size:12px; font-weight:bold; color:#fff; margin-bottom:4px;">${c.name}</div>
+                        <div style="font-size:12px; font-weight:bold; color:#fff; margin-bottom:4px;">${escHtml(c.name)}</div>
                         <div style="font-size:10px; color:#94a3b8;">${c.share_code}</div>
                       </div>`;
     });

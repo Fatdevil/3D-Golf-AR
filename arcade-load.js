@@ -1402,15 +1402,26 @@
             }
         }
         
-        if (autoRun === 'setup') {
+        // A driving range stays a range whichever link opened it (the builder's card, a draft, a reload, the quick draft):
+        // the saved course says so, the address may not
+        if (params.get('mode') === 'range' || (savedStr && savedStr.is_range === true)) {
+            window._isRangeMode = true;
+            if (params.get('mode') !== 'range') {
+                try {
+                    let u = new URL(window.location.href);
+                    u.searchParams.set('mode', 'range');
+                    window.history.replaceState({}, '', u.toString());
+                } catch (e) {}
+            }
+        }
+
+        if (autoRun === 'setup' && !window._isRangeMode) {
             setMode('PLAY');
             if (typeof startRound === 'function') setTimeout(startRound, 500);
         } else if (autoRun === 'edit_build' || autoRun === 'build') {
             setMode('BUILD');
-        } else if (courseCode || editCode) {
-            let isRange = params.get('mode') === 'range';
-            if (isRange) {
-                window._isRangeMode = true;
+        } else if (courseCode || editCode || autoRun === 'setup') {
+            if (window._isRangeMode) {
                 setMode('TEST');
             } else {
                 setMode('PLAY');
