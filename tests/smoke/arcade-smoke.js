@@ -1454,10 +1454,32 @@ function serve() {
       g.children.filter(function (c) { return c.userData && c.userData.rangeSign; }).forEach(function (c) { const k = c.userData.rangeSign.side; (bySide[k] = bySide[k] || []).push(c.visible ? 1 : 0); });
       return { club: document.getElementById('aim-bb-club').innerText, reach: document.getElementById('aim-bb-reach').innerText, fx: document.getElementById('aim-bb-fx').innerText, sides: bySide };
     });
-    const runOn = function (a) { return a && a.join('').indexOf('01') < 0; };   // shown signs run on from the near end, no gap
+    // shown signs run on without a gap; the nearest may be hidden because the edge of the view cuts it off
+    const runOn = function (a) { return a && a.join('').replace(/^0+/, '').indexOf('01') < 0; };
     checks.push({ name: 'range: the aim billboard shows the club picked in the panel and the player\'s own average with it, not a suggestion', ok: /^7i · /.test(aimSigns.club) && /^Carry /.test(aimSigns.reach) && aimSigns.fx.length > 0, detail: JSON.stringify(aimSigns) });
     checks.push({ name: 'range signs: from the tee the crowded far signs hide, the ones shown run on without a gap, and some are shown', ok: runOn(aimSigns.sides['-1']) && runOn(aimSigns.sides['1']) &&
       aimSigns.sides['-1'].concat(aimSigns.sides['1']).some(Boolean) && !aimSigns.sides['-1'].concat(aimSigns.sides['1']).every(Boolean), detail: JSON.stringify(aimSigns.sides) });
+    rangeStep = 'signs at the edge of the view';
+    const cutOff = function () {   // visible signs that the edge of the view cuts off (same size maths as declutter)
+      return rp.evaluate(function () {
+        const g = courseHoles.find(function (x) { return x && x.tees && x.tees.range; }).teeMeshes.range;
+        const W = renderer.domElement.clientWidth, H = renderer.domElement.clientHeight, tanHalf = Math.tan(camera.fov * Math.PI / 360), out = [];
+        g.children.filter(function (c) { return c.userData && c.userData.rangeSign && c.visible && c.material.opacity > 0.5; }).forEach(function (c) {
+          const wp = c.getWorldPosition(new THREE.Vector3()), d = camera.position.distanceTo(wp), p = wp.clone().project(camera);
+          const h = c.scale.y / (2 * d * tanHalf) * H, w = h * c.scale.x / c.scale.y, x = (p.x + 1) / 2 * W, y = (1 - p.y) / 2 * H;
+          if (x - w / 2 < -1 || x + w / 2 > W + 1 || y - h / 2 < -1 || y + h / 2 > H + 1) out.push(Math.round(x) + ',' + Math.round(y));
+        });
+        return out;
+      });
+    };
+    const cutAtTee = await cutOff();
+    await rp.evaluate(function () {   // turn the view so that signs on one side straddle the edge
+      const t = courseHoles.find(function (x) { return x && x.tees && x.tees.range; }).tees.range, dir = t.rot || 0;
+      controls.target.set(t.x + Math.sin(dir) * 30 + Math.cos(dir) * 14, t.y, t.z + Math.cos(dir) * 30 - Math.sin(dir) * 14); controls.update();
+    });
+    await rp.waitForTimeout(1500);
+    const cutTurned = await cutOff();
+    checks.push({ name: 'range signs: no sign is left showing cut off by the edge of the view', ok: cutAtTee.length === 0 && cutTurned.length === 0, detail: JSON.stringify({ tee: cutAtTee, turned: cutTurned }) });
     rangeStep = 'save the range';
     const built = await rp.evaluate(async function () {
       setMode('BUILD'); await window.saveLevel(true, true);

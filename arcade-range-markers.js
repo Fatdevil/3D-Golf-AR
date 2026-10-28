@@ -230,7 +230,7 @@
             }).sort(function (a, b) { return a.d - b.d; });
             const vis = pickVisible(items.map(function (it) { return it.rect; }));
             items.forEach(function (it, i) {
-                const target = (vis[i] || !it.rect) ? 1 : 0, m = it.sp.material;
+                const target = vis[i] ? 1 : 0, m = it.sp.material;   // a sign without a rect (cut off by the edge, or behind the camera) fades out too
                 m.opacity += (target - m.opacity) * step;
                 if (Math.abs(target - m.opacity) < 0.02) m.opacity = target;
                 it.sp.visible = m.opacity > 0.01;
