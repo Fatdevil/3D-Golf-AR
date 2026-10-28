@@ -1439,6 +1439,25 @@ function serve() {
     });
     checks.push({ name: 'range: the distance marks follow the player\'s unit (one setting, remembered, shown in the menu), a sign at each end of every 50', ok: units.m && units.yd &&
       units.mStored === 'm' && units.ydStored === 'yd' && units.mBtn === 'm' && units.ydBtn === 'yd' && units.signs === 12, detail: JSON.stringify(units) });
+    rangeStep = 'aim billboard and signs';
+    await rp.evaluate(function () {   // the player's view from behind the tee, down the range
+      const t = courseHoles.find(function (x) { return x && x.tees && x.tees.range; }).tees.range, dir = t.rot || 0;
+      window.camFollowMode = 'FREE'; controls.enabled = true;
+      camera.position.set(t.x - Math.sin(dir) * 12, t.y + 3, t.z - Math.cos(dir) * 12);
+      controls.target.set(t.x + Math.sin(dir) * 30, t.y, t.z + Math.cos(dir) * 30); controls.update();
+      window.setAimPoint(t.x + Math.sin(dir) * 120, t.y, t.z + Math.cos(dir) * 120);
+    });
+    await rp.waitForTimeout(1500);
+    const aimSigns = await rp.evaluate(function () {
+      const g = courseHoles.find(function (x) { return x && x.tees && x.tees.range; }).teeMeshes.range;
+      const bySide = {};
+      g.children.filter(function (c) { return c.userData && c.userData.rangeSign; }).forEach(function (c) { const k = c.userData.rangeSign.side; (bySide[k] = bySide[k] || []).push(c.visible ? 1 : 0); });
+      return { club: document.getElementById('aim-bb-club').innerText, reach: document.getElementById('aim-bb-reach').innerText, fx: document.getElementById('aim-bb-fx').innerText, sides: bySide };
+    });
+    const runOn = function (a) { return a && a.join('').indexOf('01') < 0; };   // shown signs run on from the near end, no gap
+    checks.push({ name: 'range: the aim billboard shows the club picked in the panel and the player\'s own average with it, not a suggestion', ok: /^7i · /.test(aimSigns.club) && /^Carry /.test(aimSigns.reach) && aimSigns.fx.length > 0, detail: JSON.stringify(aimSigns) });
+    checks.push({ name: 'range signs: from the tee the crowded far signs hide, the ones shown run on without a gap, and some are shown', ok: runOn(aimSigns.sides['-1']) && runOn(aimSigns.sides['1']) &&
+      aimSigns.sides['-1'].concat(aimSigns.sides['1']).some(Boolean) && !aimSigns.sides['-1'].concat(aimSigns.sides['1']).every(Boolean), detail: JSON.stringify(aimSigns.sides) });
     rangeStep = 'save the range';
     const built = await rp.evaluate(async function () {
       setMode('BUILD'); await window.saveLevel(true, true);

@@ -15167,6 +15167,14 @@ window.triggerExplosion = function(x, y, z) {
             }
         }
 
+        // range signs that would overlap a nearer one on the screen fade out (the far ones crowd together at the horizon)
+        if (window.RangeMarkers && window.RangeMarkers.declutter) {
+            for (let i = 0; i < MAX_HOLES; i++) {
+                let rg = courseHoles[i] && courseHoles[i].teeMeshes && courseHoles[i].teeMeshes.range;
+                if (rg) window.RangeMarkers.declutter(rg, camera, renderer.domElement.clientWidth || window.innerWidth, renderer.domElement.clientHeight || window.innerHeight);
+            }
+        }
+
         renderer.render(scene, camera);
         
         // --- GSPRO AIM BILLBOARD PROJECTION ---
@@ -15214,7 +15222,32 @@ window.triggerExplosion = function(x, y, z) {
 
                 // --- SHOT PLAN: club, power, carry/total, what wind and terrain do (worked out above, every frame) ---
                 let planEl = document.getElementById('aim-bb-plan'), pl = window.shotPlan;
-                if (planEl) {
+                // on the range the club picked in the session panel and the player's own average with it (a launch monitor does not say
+                // which club is in the hand, so a suggestion would be a guess)
+                let rangeAim = (window._isRangeMode && window.RangeSession && window.RangeSession.aimPlan) ? window.RangeSession.aimPlan() : null;
+                if (planEl && rangeAim) {
+                    let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                    let u = window.useMeters ? ' m' : ' yd', d0 = (m) => window.formatDistRaw(m, 0);
+                    let clubEl = document.getElementById('aim-bb-club'), reachEl = document.getElementById('aim-bb-reach'), fxEl = document.getElementById('aim-bb-fx');
+                    planEl.style.display = 'block';
+                    planEl.style.opacity = '1';
+                    if (rangeAim.needClub) {
+                        clubEl.innerText = sv ? 'Välj klubba i panelen' : 'Pick your club in the panel';
+                        reachEl.innerText = sv ? 'Launch monitorn skickar inte klubban' : 'The launch monitor does not send it';
+                        fxEl.innerText = '';
+                    } else if (!rangeAim.n) {
+                        clubEl.innerText = rangeAim.club + (sv ? ' · inga slag än' : ' · no shots yet');
+                        reachEl.innerText = sv ? 'Slå några så visas ditt snitt' : 'Hit a few and your average shows here';
+                        fxEl.innerText = '';
+                    } else {
+                        let flat = Math.hypot(window.aimTarget.x - window.ballMesh.position.x, window.aimTarget.z - window.ballMesh.position.z);
+                        let diff = rangeAim.carry - flat, near = Math.abs(diff) <= Math.max(3, rangeAim.carrySd || 0);
+                        clubEl.innerText = rangeAim.club + (sv ? ' · ditt snitt (' + rangeAim.n + ' slag)' : ' · your average (' + rangeAim.n + (rangeAim.n === 1 ? ' shot)' : ' shots)'));
+                        reachEl.innerText = 'Carry ' + d0(rangeAim.carry) + (rangeAim.n > 1 ? ' ±' + d0(rangeAim.carrySd) : '') + ' · Total ' + d0(rangeAim.total) + u;
+                        fxEl.innerHTML = near ? '<span style="color:#4ade80">' + (sv ? 'Rätt längd till siktet' : 'Right length for the aim') + '</span>'
+                            : '<span style="color:' + (diff < 0 ? '#f87171' : '#fbbf24') + '">' + d0(Math.abs(diff)) + u + (diff < 0 ? (sv ? ' kort om siktet' : ' short of the aim') : (sv ? ' förbi siktet' : ' past the aim')) + '</span>';
+                    }
+                } else if (planEl) {
                     if (!pl) planEl.style.display = 'none';
                     else {
                         let u = window.useMeters ? ' m' : ' yd', d0 = (m) => window.formatDistRaw(m, 0);
@@ -15452,7 +15485,12 @@ window.triggerExplosion = function(x, y, z) {
             }
             
             // depth är redan rensat via clear() ovan
-            renderer.render(scene, minimapCamera);
+            // the minimap looks straight down: every range sign is shown there (the main view hides the crowded ones)
+            if (window.RangeMarkers && window.RangeMarkers.withAllSigns) {
+                window.RangeMarkers.withAllSigns(courseHoles.map(function (h) { return h && h.teeMeshes && h.teeMeshes.range; }), function () { renderer.render(scene, minimapCamera); });
+            } else {
+                renderer.render(scene, minimapCamera);
+            }
             
             plane.material = oldMat; // Återställ markens material
             renderer.setClearColor(oldClearColor, 1.0); // Återställ clear color ifall den används på andra ställen

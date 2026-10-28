@@ -266,6 +266,16 @@
             save();
             redraw();
         };
+        // What the aim billboard shows on the range instead of the club suggestion: the club picked in the panel and the player's own
+        // average with it. null when the panel is not up, or no club is picked and the shots are not from a launch monitor (then the
+        // suggestion stays); { needClub } when a launch monitor is the input and no club is picked.
+        api.aimPlan = function () {
+            if (!ctx) return null;
+            const lm = !!(root.SwingEngine && root.SwingEngine.getInputMode && root.SwingEngine.getInputMode() === 'LM');
+            if (!state.club) return lm ? { needClub: true } : null;
+            const st = clubStats(state.shots.filter(function (s) { return s.club === state.club; }))[0];
+            return st ? { club: state.club, n: st.n, carry: st.carry, carrySd: st.carrySd, total: st.total } : { club: state.club, n: 0 };
+        };
         api.shots = function () { return state.shots.slice(); };
         api.getClub = function () { return state.club; };
         api.setClub = function (c) { state.club = (c && CLUBS.indexOf(c) >= 0) ? c : null; save(); if (ctx) redraw(); };
