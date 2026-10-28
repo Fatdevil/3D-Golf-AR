@@ -76,11 +76,13 @@
             sv: { title: 'Session', shots: 'slag', pick: 'Vilken klubba slår du?', tabShots: 'Slag', tabClubs: 'Klubbor', club: 'Klubba', carry: 'Carry', total: 'Total',
                   offline: 'Offline', n: 'Antal', spread: 'Spridning', empty: 'Slå ett slag så hamnar det här.', csv: 'Exportera CSV', clear: 'Ny session',
                   confirmClear: 'Börja en ny session? Slagen i den här sessionen tas bort.', ellipse: 'Ellipsen visar var ungefär 2 av 3 slag med {c} landar.',
-                  lmHint: 'Launch monitorn skickar inte klubban: välj den här.' },
+                  lmHint: 'Launch monitorn skickar inte klubban: välj den här.',
+                  bagNote: 'Dina launch monitor-slag sparas i din bag (senaste 40 per klubba) och styr klubbförslaget på banan från 3 slag.' },
             en: { title: 'Session', shots: 'shots', pick: 'Which club are you hitting?', tabShots: 'Shots', tabClubs: 'Clubs', club: 'Club', carry: 'Carry', total: 'Total',
                   offline: 'Offline', n: 'Shots', spread: 'Spread', empty: 'Hit a shot and it shows up here.', csv: 'Export CSV', clear: 'New session',
                   confirmClear: 'Start a new session? The shots of this session are removed.', ellipse: 'The ellipse shows where about 2 in 3 shots with {c} land.',
-                  lmHint: 'The launch monitor does not send the club: pick it here.' }
+                  lmHint: 'The launch monitor does not send the club: pick it here.',
+                  bagNote: 'Your launch monitor shots go to your bag (the last 40 per club) and set the club suggestion on a course from 3 shots.' }
         };
         const COLORS = { Dr: 0xef4444, '3W': 0xf97316, '5W': 0xf59e0b, Hy: 0xeab308, '4i': 0x84cc16, '5i': 0x22c55e, '6i': 0x10b981, '7i': 0x14b8a6,
                          '8i': 0x06b6d4, '9i': 0x0ea5e9, PW: 0x3b82f6, GW: 0x6366f1, SW: 0x8b5cf6, LW: 0xd946ef };
@@ -151,6 +153,7 @@
                              (r.n > 1 ? dist(r.carrySd) : '–') + '</td><td>' + dist(r.total) + '</td><td>' + (r.n > 1 ? '±' + dist(r.offlineSd) : '–') + '</td></tr>';
                     });
                     h += '</tbody></table><div class="rs-unit">' + unit() + '</div>';
+                    h += '<div class="rs-note">' + esc(t('bagNote')) + '</div>';
                 }
                 h += '</div>';
                 const ell = ellipseClub();
@@ -177,6 +180,7 @@
             const s = state.shots[+sel.dataset.shot];
             if (!s) return;
             s.club = sel.value || null;
+            if (root.PlayerBag && root.PlayerBag.book) root.PlayerBag.book(s);   // the bag follows the corrected club
             save(); redraw();
         }
 
@@ -261,7 +265,9 @@
         };
         api.record = function (shot) {
             if (!ctx || !shot) return;
-            state.shots.push(Object.assign({ t: Date.now() }, shot));
+            const rec = Object.assign({ t: Date.now() }, shot);
+            state.shots.push(rec);
+            if (root.PlayerBag && root.PlayerBag.book) root.PlayerBag.book(rec);   // launch-monitor shots also go to the player's bag (club suggestions on a course)
             if (state.shots.length > MAX_SHOTS) state.shots.splice(0, state.shots.length - MAX_SHOTS);
             save();
             redraw();
