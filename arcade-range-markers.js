@@ -21,8 +21,25 @@
         }
         return out;
     }
-    // How much bigger a sign is than the nearest: grows with the distance (1.33 at 50 m, 3 at 300 m)
-    function signScale(metres) { return 1 + metres / 150; }
+    // How big a sign is: grows with the distance so that the far ones still read from the tee (1.17 at 50 m, 3.25 at 300 m)
+    function signScale(metres) { return 0.75 + metres / 120; }
+    // Which signs to show: rects {x, y, w, h, side} in screen pixels (centre and size), nearest first; null for a sign that is not
+    // wholly in view. A sign that would overlap one already shown (with a few pixels to spare) is hidden, and so is every further sign
+    // on the same side of the range after it, so the far signs that crowd together at the horizon do not pile up and the ones shown
+    // run on without a gap (50, 100, 150, not 50, 100, 250).
+    function pickVisible(rects, pad) {
+        pad = pad === undefined ? 4 : pad;
+        const shown = [], closed = {};
+        return rects.map(function (r) {
+            if (!r) return false;
+            const key = r.side === undefined ? null : String(r.side);
+            if (key !== null && closed[key]) return false;
+            const hit = shown.some(function (o) { return Math.abs(r.x - o.x) * 2 < r.w + o.w + pad * 2 && Math.abs(r.y - o.y) * 2 < r.h + o.h + pad * 2; });
+            if (hit) { if (key !== null) closed[key] = true; return false; }
+            shown.push(r);
+            return true;
+        });
+    }
     // Half the angle an arc spans: about 45 m of arc each side of the centre line, never more than ±40°
     function arcHalfAngle(r) { return Math.min(0.7, 45 / Math.max(r, 1)); }
     // A point given in the range's own frame (across to the right, along down the range) in scene x/z. Same turn as THREE's rotation.y:
@@ -32,7 +49,7 @@
         return { x: tee.x + lx * c + lz * s, z: tee.z - lx * s + lz * c };
     }
 
-    const api = { YD: YD, MAJOR_COLORS: MAJOR_COLORS, marks: marks, arcHalfAngle: arcHalfAngle, signScale: signScale, toWorld: toWorld };
+    const api = { YD: YD, MAJOR_COLORS: MAJOR_COLORS, marks: marks, arcHalfAngle: arcHalfAngle, signScale: signScale, pickVisible: pickVisible, toWorld: toWorld };
 
     if (typeof document !== 'undefined') {
         const FONT = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
@@ -178,12 +195,64 @@
                     sprite.renderOrder = 4;
                     group.add(sprite);
                     const post = new THREE.Mesh(postGeo, postMat); post.scale.set(k, postH, k); post.position.set(lx, sy + postH / 2, lz); group.add(post);
+                    sprite.userData.rangeSign = { post: post, side: side };
                 });
             });
 
             group.position.set(tee.x, tee.y, tee.z);
             group.rotation.y = tee.rot;
             return group;
+        };
+
+        // Called before each frame is drawn: signs that would overlap a nearer one on the screen fade out (about 0.2 s), and come back when
+        // the view opens up again. viewW / viewH are the size of the view in pixels.
+        const _wp = { v: null };
+        api.declutter = function (group, camera, viewW, viewH) {
+            if (!group || !camera || !root.THREE) return;
+            const signs = [];
+            group.children.forEach(function (c) { if (c.userData && c.userData.rangeSign) signs.push(c); });
+            if (!signs.length) return;
+            if (!_wp.v) _wp.v = new root.THREE.Vector3();
+            const now = performance.now(), last = group.userData.declutterAt || now;
+            group.userData.declutterAt = now;
+            const step = Math.min(1, (now - last) / 200);
+            const tanHalf = Math.tan((camera.fov || 60) * Math.PI / 360);
+            const items = signs.map(function (sp) {
+                sp.getWorldPosition(_wp.v);
+                const d = camera.position.distanceTo(_wp.v);
+                const p = _wp.v.clone().project(camera);
+                if (p.z > 1 || p.z < -1 || d < 0.01) return { sp: sp, d: d, rect: null };
+                const h = sp.scale.y / (2 * d * tanHalf) * viewH, w = h * sp.scale.x / sp.scale.y;
+                const x = (p.x + 1) / 2 * viewW, y = (1 - p.y) / 2 * viewH;
+                // a sign cut off by the edge of the view reads as broken: hidden (it does not hide the ones behind it)
+                if (x - w / 2 < 0 || x + w / 2 > viewW || y - h / 2 < 0 || y + h / 2 > viewH) return { sp: sp, d: d, rect: null };
+                return { sp: sp, d: d, rect: { x: x, y: y, w: w, h: h, side: sp.userData.rangeSign.side } };
+            }).sort(function (a, b) { return a.d - b.d; });
+            const vis = pickVisible(items.map(function (it) { return it.rect; }));
+            items.forEach(function (it, i) {
+                const target = vis[i] ? 1 : 0, m = it.sp.material;   // a sign without a rect (cut off by the edge, or behind the camera) fades out too
+                m.opacity += (target - m.opacity) * step;
+                if (Math.abs(target - m.opacity) < 0.02) m.opacity = target;
+                it.sp.visible = m.opacity > 0.01;
+                it.sp.userData.rangeSign.post.visible = m.opacity > 0.3;
+            });
+        };
+
+        // Draws with every sign shown (the minimap looks straight down, where nothing crowds), then puts back what declutter chose
+        api.withAllSigns = function (groups, draw) {
+            const saved = [];
+            groups.forEach(function (g) {
+                if (!g) return;
+                g.children.forEach(function (c) {
+                    if (!c.userData || !c.userData.rangeSign) return;
+                    const post = c.userData.rangeSign.post;
+                    saved.push([c, c.visible, c.material.opacity, post.visible]);
+                    c.visible = true; c.material.opacity = 1; post.visible = true;
+                });
+            });
+            try { draw(); } finally {
+                saved.forEach(function (x) { x[0].visible = x[1]; x[0].material.opacity = x[2]; x[0].userData.rangeSign.post.visible = x[3]; });
+            }
         };
 
         // Frees what build() made (the tee ball geometry is shared with the other tees and stays)
