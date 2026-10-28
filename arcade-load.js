@@ -1198,7 +1198,7 @@
                         if(h.tees.yellow) { h.teeMeshes.yellow = createTeeObject(h.tees.yellow.x, h.tees.yellow.y, h.tees.yellow.z, 0xfacc15); if(h.tees.yellow.rot) h.teeMeshes.yellow.rotation.y = h.tees.yellow.rot; }
                         if(h.tees.white) { h.teeMeshes.white = createTeeObject(h.tees.white.x, h.tees.white.y, h.tees.white.z, 0xffffff); if(h.tees.white.rot) h.teeMeshes.white.rotation.y = h.tees.white.rot; }
                         if(h.tees.black) { h.teeMeshes.black = createTeeObject(h.tees.black.x, h.tees.black.y, h.tees.black.z, 0x111111); if(h.tees.black.rot) h.teeMeshes.black.rotation.y = h.tees.black.rot; }
-                        if(h.tees.range) { h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z); if(h.tees.range.rot) h.teeMeshes.range.rotation.y = h.tees.range.rot; }
+                        if(h.tees.range) { h.teeMeshes.range = createRangeTeeObject(h.tees.range.x, h.tees.range.y, h.tees.range.z, h.tees.range.rot || 0); }
                         
                         if(hSync.flag) {
                             h.flag = hSync.flag;

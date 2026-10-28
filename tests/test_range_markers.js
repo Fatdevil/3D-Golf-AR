@@ -1,0 +1,29 @@
+/**
+ * The range marks (arcade-range-markers.js): every 25 out to 300 in the player's unit, majors every 50 with a colour each,
+ * arcs that stay about 45 m wide each side, and the tee frame matching THREE's rotation.y. Run: node tests/test_range_markers.js
+ */
+const M = require('../arcade-range-markers.js');
+let failed = 0;
+function check(name, ok, detail) { console.log((ok ? 'PASS  ' : '❌ FAIL  ') + name + (ok ? '' : '  ' + detail)); if (!ok) failed++; }
+const near = (a, b, e) => Math.abs(a - b) <= (e || 1e-9);
+
+const yd = M.marks(false), m = M.marks(true);
+check('12 marks, every 25 out to 300', yd.length === 12 && yd[0].value === 25 && yd[11].value === 300, yd.map(x => x.value).join());
+check('majors every 50, each with its own colour', yd.filter(x => x.major).map(x => x.value).join() === '50,100,150,200,250,300' &&
+      new Set(yd.filter(x => x.major).map(x => x.color)).size === 6 && yd.filter(x => !x.major).every(x => x.color === null));
+check('yards: 150 yd stands at 137.16 m', near(yd.find(x => x.value === 150).metres, 137.16, 1e-9), yd.find(x => x.value === 150).metres);
+check('metres: 150 m stands at 150 m', m.find(x => x.value === 150).metres === 150);
+check('the arc reaches about 45 m each side', near(150 * M.arcHalfAngle(150), 45, 1e-9) && near(300 * M.arcHalfAngle(300), 45, 1e-9));
+check('close arcs never open wider than 0.7 rad', M.arcHalfAngle(22.86) === 0.7);
+
+check('far signs are bigger: 3x the base at 300 m', M.signScale(300) === 3 && M.signScale(50) < M.signScale(150));
+
+// THREE's rotation.y turns local +Z to (sin r, cos r) and local +X to (cos r, -sin r)
+const tee = { x: 10, z: -5, rot: Math.PI };
+let w = M.toWorld(tee, 0, 100);
+check('down the range from a tee facing -Z', near(w.x, 10, 1e-9) && near(w.z, -105, 1e-9), JSON.stringify(w));
+w = M.toWorld({ x: 0, z: 0, rot: Math.PI / 2 }, 2, 50);
+check('a range along +X: local +X turns with the group (to -Z)', near(w.x, 50, 1e-9) && near(w.z, -2, 1e-9), JSON.stringify(w));
+
+if (failed) { console.log('\n' + failed + ' failed'); process.exit(1); }
+console.log('\nAll range marker checks passed');

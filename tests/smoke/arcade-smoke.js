@@ -1426,6 +1426,19 @@ function serve() {
     checks.push({ name: 'range session: both shots are listed, booked to the club picked in the panel, with a landing dot each', ok: lm.panel !== 'none' && lm.rows === 2 && lm.dots === 2 &&
       lm.session.length === 2 && lm.session.every(function (x) { return x.club === '7i' && x.src === 'LM' && x.carry > 30; }) && lm.session[1].off > 0.5, detail: JSON.stringify(lm) });
     checks.push({ name: 'range: shots raise no page errors (the course turn logic used to run and read the missing flag)', ok: rangeErrors.length === 0, detail: JSON.stringify(rangeErrors) });
+    rangeStep = 'distance unit';
+    const units = await rp.evaluate(function () {
+      const h = courseHoles.find(function (x) { return x && x.tees && x.tees.range; });
+      const signs = function () { return h.teeMeshes.range.children.filter(function (c) { return c.isSprite; }).length; };
+      window.setDistanceUnit(true);
+      const m = { marks: h.teeMeshes.range.userData.rangeMarkers, signs: signs(), stored: localStorage.getItem('golfos_units'), btn: (document.querySelector('.unit-btn.selected') || {}).dataset };
+      window.setDistanceUnit(false);
+      const yd = { marks: h.teeMeshes.range.userData.rangeMarkers, stored: localStorage.getItem('golfos_units'), btn: (document.querySelector('.unit-btn.selected') || {}).dataset };
+      return { m: m.marks && m.marks.useMeters === true, mStored: m.stored, mBtn: m.btn && m.btn.unit, signs: m.signs,
+               yd: yd.marks && yd.marks.useMeters === false, ydStored: yd.stored, ydBtn: yd.btn && yd.btn.unit };
+    });
+    checks.push({ name: 'range: the distance marks follow the player\'s unit (one setting, remembered, shown in the menu), a sign at each end of every 50', ok: units.m && units.yd &&
+      units.mStored === 'm' && units.ydStored === 'yd' && units.mBtn === 'm' && units.ydBtn === 'yd' && units.signs === 12, detail: JSON.stringify(units) });
     rangeStep = 'save the range';
     const built = await rp.evaluate(async function () {
       setMode('BUILD'); await window.saveLevel(true, true);

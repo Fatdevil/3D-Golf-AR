@@ -520,8 +520,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 
   /* input mode picker in the menu (swing / launch monitor / numbers) */
   #hb-input-mode { display: none; padding: 4px 0 8px; }
-  #hb-input-mode .hb-input-row { display: flex; }
-  .input-btn {
+  #hb-input-mode .hb-input-row, #hb-units .hb-input-row { display: flex; }
+  #hb-units { padding: 4px 0 8px; }
+  .input-btn, .unit-btn {
       flex: 1; min-height: 36px; padding: 6px 8px;
       background: rgba(15,23,42,0.85);
       border: 1px solid rgba(255,255,255,0.12);
@@ -531,9 +532,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       font-size: 11px; font-weight: 700;
       cursor: pointer;
   }
-  .input-btn:first-child { border-radius: 8px 0 0 8px; }
-  .input-btn:last-child  { border-radius: 0 8px 8px 0; border-right: 1px solid rgba(255,255,255,0.12); }
-  .input-btn.selected    { background: rgba(56,189,248,0.25); border-color: #38bdf8; color: #fff; }
+  .input-btn:first-child, .unit-btn:first-child { border-radius: 8px 0 0 8px; }
+  .input-btn:last-child, .unit-btn:last-child   { border-radius: 0 8px 8px 0; border-right: 1px solid rgba(255,255,255,0.12); }
+  .input-btn.selected, .unit-btn.selected       { background: rgba(56,189,248,0.25); border-color: #38bdf8; color: #fff; }
 
   /* --- Swing Overlay --- */
   #swing-overlay {
