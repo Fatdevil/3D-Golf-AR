@@ -1407,10 +1407,10 @@ function serve() {
       window.triggerRealShot({ ballSpeedMph: 90, launchAngleDeg: 18, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 6, isLiveData: true });
       window.__queued = !!window._pendingLMShot;
     });
-    await rp.waitForFunction(function () { return window.players[0].strokes >= 2; }, null, { timeout: 60000 });
-    await rp.waitForTimeout(800);
-    await rp.evaluate(function () { window.skipFlight(); });   // a headless browser flies slowly: the second flight is skipped as a player would tap
-    await rp.waitForFunction(function () { return !window.isBallFlying() && playState === 'ROUND_IDLE'; }, null, { timeout: 60000 });
+    // a headless browser on a CI runner draws a frame or two a second: the flights are skipped as a player would tap, again until each
+    // is done (skipFlight ignores the first half second of a flight, which can be a single slow frame there)
+    await rp.waitForFunction(function () { window.skipFlight(); return window.players[0].strokes >= 2; }, null, { timeout: 120000, polling: 500 });
+    await rp.waitForFunction(function () { window.skipFlight(); return !window.isBallFlying() && playState === 'ROUND_IDLE'; }, null, { timeout: 120000, polling: 500 });
     await rp.waitForTimeout(300);
     const lm = await rp.evaluate(function () {
       const el = document.getElementById('hud-offline'), t = el ? el.innerText : '';
