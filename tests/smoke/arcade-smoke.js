@@ -1428,6 +1428,11 @@ function serve() {
     checks.push({ name: 'range: a hand-set aim stays between shots', ok: lm.manual && lm.aim[0] === 150 && lm.aim[1] === 0, detail: JSON.stringify(lm) });
     checks.push({ name: 'range session: both shots are listed, booked to the club picked in the panel, with a landing dot each', ok: lm.panel !== 'none' && lm.rows === 2 && lm.dots === 2 &&
       lm.session.length === 2 && lm.session.every(function (x) { return x.club === '7i' && x.src === 'LM' && x.carry > 30; }) && lm.session[1].off > 0.5, detail: JSON.stringify(lm) });
+    const bagNow = await rp.evaluate(function () {
+      const st = JSON.parse(localStorage.getItem('golf_bag_v1') || '{"shots":[]}').shots, sess = window.RangeSession.shots().map(function (x) { return x.t; });
+      return { n: st.length, clubs: st.map(function (e) { return e.club; }), same: st.every(function (e) { return sess.indexOf(e.t) >= 0; }) };
+    });
+    checks.push({ name: 'range: the launch-monitor shots go to the player\'s bag with their club', ok: bagNow.n === 2 && bagNow.clubs.every(function (c) { return c === '7i'; }) && bagNow.same, detail: JSON.stringify(bagNow) });
     checks.push({ name: 'range: shots raise no page errors (the course turn logic used to run and read the missing flag)', ok: rangeErrors.length === 0, detail: JSON.stringify(rangeErrors) });
     rangeStep = 'distance unit';
     const units = await rp.evaluate(function () {
@@ -1500,6 +1505,31 @@ function serve() {
       return { range: window._isRangeMode === true, url: new URLSearchParams(location.search).get('mode'), teeBtn: b ? getComputedStyle(b).display : 'missing', hasTee: !!courseHoles.find(function (h) { return h && h.tees && h.tees.range; }) };
     });
     await rp2.close();
+    rangeStep = 'bag on a course';
+    const cp = await ctx3.newPage();
+    await cp.goto(base + '/arcade.html?autorun=new_build&template=blank&biome=GLOBAL', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await cp.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await cp.waitForTimeout(3000);
+    await cp.evaluate(function () {
+      // the bag already has the two 7i shots from the range above; a few more so that two clubs are known
+      [[143, 150], [146, 153], [140, 147]].forEach(function (x, i) { window.PlayerBag.book({ t: 900 + i, source: 'LM', club: '7i', carry: x[0], total: x[1] }); });
+      [[112, 118], [115, 121], [109, 116]].forEach(function (x, i) { window.PlayerBag.book({ t: 910 + i, source: 'LM', club: 'PW', carry: x[0], total: x[1] }); });
+      const pos = planeGeo.attributes.position.array; for (let i = 0; i < planeGeo.attributes.position.count; i++) pos[i * 3 + 2] = 0;
+      planeGeo.attributes.position.needsUpdate = true;
+      setMode('BUILD');
+      courseHoles[0].tees.yellow = { x: 0, y: 0, z: 0, rot: 0 }; courseHoles[0].flag = { x: 0, y: 0, z: -110 };
+      setMode('TEST');
+      window.SwingEngine.setInputMode('LM');
+      window.setAimPoint(0, 0, -110);
+    });
+    await cp.waitForFunction(function () { return /^🎒 /.test(document.getElementById('aim-bb-club').innerText); }, null, { timeout: 60000, polling: 500 });
+    const bagCourse = await cp.evaluate(function () { return { club: document.getElementById('aim-bb-club').innerText, reach: document.getElementById('aim-bb-reach').innerText, fx: document.getElementById('aim-bb-fx').innerText }; });
+    await cp.evaluate(function () { window.SwingEngine.setInputMode('SWING'); });
+    // with the swing the game's own suggestion comes back once the shot plan is worked out again (the plan row is hidden meanwhile)
+    await cp.waitForFunction(function () { return getComputedStyle(document.getElementById('aim-bb-plan')).display === 'block' && !/^🎒/.test(document.getElementById('aim-bb-club').innerText); }, null, { timeout: 60000, polling: 500 }).catch(function () {});
+    const swingClub = await cp.evaluate(function () { return document.getElementById('aim-bb-club').innerText; });
+    await cp.close();
+    checks.push({ name: 'course: with a launch monitor the aim billboard suggests the club from the player\'s bag (PW for 110), not with the swing', ok: /PW/.test(bagCourse.club) && /^Carry /.test(bagCourse.reach) && /plays/.test(bagCourse.fx) && !/^🎒/.test(swingClub), detail: JSON.stringify([bagCourse, swingClub]) });
     checks.push({ name: 'range: the quick draft of a range reopens as a range even without mode=range in the address', ok: reopenedRange.range && reopenedRange.url === 'range' && reopenedRange.teeBtn !== 'none' && reopenedRange.hasTee, detail: JSON.stringify(reopenedRange) });
     await ctx3.close();
   } catch (e) { checks.push({ name: 'range checks ran', ok: false, detail: 'step ' + rangeStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }

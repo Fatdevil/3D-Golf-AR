@@ -3984,8 +3984,9 @@
 </script>
 <script src="arcade-aim.js?v=1"></script>
 <script src="arcade-shot-plan.js?v=1"></script>
-<script src="arcade-range-markers.js?v=1"></script>
-<script src="arcade-range-session.js?v=1"></script>
+<script src="arcade-range-markers.js?v=2"></script>
+<script src="arcade-bag.js?v=1"></script>
+<script src="arcade-range-session.js?v=2"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -15247,7 +15248,31 @@ window.triggerExplosion = function(x, y, z) {
                         fxEl.innerHTML = near ? '<span style="color:#4ade80">' + (sv ? 'Rätt längd till siktet' : 'Right length for the aim') + '</span>'
                             : '<span style="color:' + (diff < 0 ? '#f87171' : '#fbbf24') + '">' + d0(Math.abs(diff)) + u + (diff < 0 ? (sv ? ' kort om siktet' : ' short of the aim') : (sv ? ' förbi siktet' : ' past the aim')) + '</span>';
                     }
-                } else if (planEl) {
+                }
+                // on a course with a launch monitor: the club from the player's own bag (the range's launch-monitor shots) whose average total is
+                // nearest to what the shot plays like (the distance to the aim minus what wind and slope add, from the shot plan once it is worked out)
+                let bagAim = null;
+                if (planEl && !rangeAim && !window._isRangeMode && window.PlayerBag && window.PlayerBag.suggestFor &&
+                    window.SwingEngine && window.SwingEngine.getInputMode && window.SwingEngine.getInputMode() === 'LM') {
+                    let flatD = Math.hypot(window.aimTarget.x - window.ballMesh.position.x, window.aimTarget.z - window.ballMesh.position.z);
+                    let playsLike = pl ? pl.target - pl.wind - pl.terrain : flatD;
+                    let sug = window.PlayerBag.suggestFor(playsLike);
+                    if (sug) bagAim = { sug: sug, playsLike: playsLike };
+                }
+                if (planEl && bagAim) {
+                    let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                    let u = window.useMeters ? ' m' : ' yd', d0 = (m) => window.formatDistRaw(m, 0), g = bagAim.sug;
+                    let sgn = (m) => (m >= 0 ? '+' : '−') + d0(Math.abs(m));
+                    let col = (m) => Math.abs(m) < 0.5 ? '#94a3b8' : (m > 0 ? '#4ade80' : '#f87171');
+                    planEl.style.display = 'block';
+                    planEl.style.opacity = (pl && pl.stale) ? '0.5' : '1';
+                    document.getElementById('aim-bb-club').innerText = '🎒 ' + g.club + (sv ? ' · din bag' : ' · your bag');
+                    document.getElementById('aim-bb-reach').innerText = 'Carry ' + d0(g.carry) + (g.n > 1 ? ' ±' + d0(g.carrySd) : '') + ' · Total ' + d0(g.total) + u + ' · ' + g.n + (sv ? ' slag' : (g.n === 1 ? ' shot' : ' shots'));
+                    let fit = Math.abs(g.diff) <= 3 ? '<span style="color:#4ade80">' + (sv ? 'rätt längd' : 'right length') + '</span>'
+                        : '<span style="color:' + (g.diff < 0 ? '#f87171' : '#fbbf24') + '">≈' + d0(Math.abs(g.diff)) + u + (g.diff < 0 ? (sv ? ' kort' : ' short') : (sv ? ' långt' : ' long')) + '</span>';
+                    document.getElementById('aim-bb-fx').innerHTML = (pl ? '<span style="color:' + col(pl.wind) + '">💨 ' + sgn(pl.wind) + '</span> · <span style="color:' + col(pl.terrain) + '">⛰ ' + sgn(pl.terrain) + '</span> · ' : '') +
+                        'plays ' + d0(bagAim.playsLike) + u + ' · ' + fit;
+                } else if (planEl && !rangeAim) {
                     if (!pl) planEl.style.display = 'none';
                     else {
                         let u = window.useMeters ? ' m' : ' yd', d0 = (m) => window.formatDistRaw(m, 0);
