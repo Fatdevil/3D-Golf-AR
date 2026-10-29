@@ -45,5 +45,25 @@ check('per distance: shots, greens hit, average and best to the pin', st.length 
 check('distance in yards: 100 yd is 91.44 m, back to 100', near(P.toMetres(100, false), 91.44, 1e-9) && P.inUnit(91.44, false) === 100);
 check('distance is held between 10 and 300 in the player\'s unit', P.toMetres(5, true) === 10 && P.toMetres(999, true) === 300);
 
+// the test
+let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+const plan = P.testPlan(9, 50, 150, rnd);
+const sorted = plan.slice().sort((a, b) => a - b);
+check('a test plan: n whole distances inside the band, one from each ninth of it', plan.length === 9 && plan.every(d => Number.isInteger(d) && d >= 50 && d <= 150) &&
+  sorted.every((d, i) => d >= Math.floor(50 + 100 * i / 9) && d <= Math.ceil(50 + 100 * (i + 1) / 9)), JSON.stringify(plan));
+check('a test plan is shuffled (not in order)', plan.some((d, i) => i > 0 && d < plan[i - 1]), JSON.stringify(plan));
+check('points: in the hole 100, from 100 m 5 m away 75, 10 m 50, 20 m or more 0',
+  P.points(3, 100, true) === 100 && P.points(5, 100) === 75 && P.points(10, 100) === 50 && P.points(20, 100) === 0 && P.points(35, 100) === 0 && P.points(0, 100) === 100);
+check('points scale with the distance: 3 m from 30 m is 50', P.points(3, 30) === 50);
+
+// the spread around the pin
+check('spread needs three shots', P.spread([{ along: 1, across: 0 }, { along: 2, across: 1 }]) === null);
+const sp = P.spread([{ along: 2, across: -1 }, { along: 4, across: 1 }, { along: 6, across: 0 }]);
+check('spread: the middle (long 4, across 0) and the standard deviation each way', near(sp.along, 4) && near(sp.across, 0) && near(sp.sdAlong, 2) && near(sp.sdAcross, 1), JSON.stringify(sp));
+const svg = P.plotSVG([{ along: 2, across: -1, onGreen: true }, { along: -8, across: 3 }, { along: 0, across: 0, holed: true }], { label: 'x' });
+check('the plot: one dot per shot (gold in the hole, green on it, red off it) and the ellipse with three shots',
+  (svg.match(/class="rp-shot"/g) || []).length === 3 && svg.includes('#fbbf24') && svg.includes('#4ade80') && svg.includes('#f87171') && svg.includes('<ellipse'), svg);
+check('the plot: past the pin is up, right is right', /cx="(7[1-9]|[89]\d)[^"]*" cy="(7[1-9]|[89]\d|1\d\d)/.test(svg.split('rp-shot')[2]), svg);
+
 if (failed) { console.log('\n' + failed + ' failed'); process.exit(1); }
 console.log('\nAll range practice checks passed');

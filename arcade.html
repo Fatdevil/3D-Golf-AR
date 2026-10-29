@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=16">
+<link rel="stylesheet" href="arcade.css?v=17">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -3991,8 +3991,8 @@
 <script src="arcade-shot-plan.js?v=1"></script>
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="arcade-bag.js?v=1"></script>
-<script src="arcade-range-session.js?v=3"></script>
-<script src="arcade-range-practice.js?v=2"></script>
+<script src="arcade-range-session.js?v=4"></script>
+<script src="arcade-range-practice.js?v=3"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -6183,7 +6183,7 @@
         }
     };
     // RangePractice tells where the ball is hit from now (null: the Range Tee again): which hole's cup counts, the distance marks (they
-    // measure from the tee: hidden while practising), and the ball moves there at once when the player is between shots
+    // measure from the tee: hidden while practising, as are the session's landing dots), and the ball moves there at once when the player is between shots
     window.rangeShotBusy = function() { return playState === 'ROUND_FLYING'; };   // a shot in the air: approach changes wait for it
     window.onRangePracticeChange = function(sp) {
         let rangeHole = courseHoles.find(h => h && h.tees && h.tees.range);
@@ -6194,6 +6194,7 @@
         let target = sp ? courseHoles[sp.hole] : null;
         if (target && target.flagMesh) window.pinMesh = target.flagMesh;
         if (window.RangeMarkers && window.RangeMarkers.setDistanceMarks) window.RangeMarkers.setDistanceMarks(rangeHole.teeMeshes && rangeHole.teeMeshes.range, !sp);
+        if (window.RangeSession && window.RangeSession.setMarksVisible) window.RangeSession.setMarksVisible(!sp);   // the green shows the approach spread instead of the landing dots
         if ((appMode === 'TEST' || appMode === 'PLAY') && playState === 'ROUND_IDLE' && !isFlying) window.placeRangeBall(true);
     };
     // What the aim is measured against: the flag, or straight down the range (a range has no flag), or the pin when practising approaches
@@ -11344,7 +11345,7 @@
                     }
                     // approach practice against the range's greens (puts the ball on its spot when the player had it on)
                     if (window.RangePractice && window.RangePractice.start) {
-                        window.RangePractice.start({ key: rangeKey, tee: tee, holes: function () { return courseHoles; } });
+                        window.RangePractice.start({ key: rangeKey, tee: tee, scene: scene, holes: function () { return courseHoles; } });
                     }
                 } else {
                     // COURSE MODE: Default camera behind ball
@@ -14721,7 +14722,8 @@ window.triggerExplosion = function(x, y, z) {
                             window.RangeSession.record({ club: window.RangeSession.clubFor(rIn.source, rIn.swingClub), source: rIn.source,
                                 carry: rOut.carry, total: rOut.total, offline: rOut.offline, apex: rOut.apex, landX: rOut.landX, landZ: rOut.landZ,
                                 ballSpeed: rIn.ballSpeed, clubSpeed: rIn.clubSpeed, launch: rIn.launch, hla: rIn.hla, spin: rIn.spin, spinAxis: rIn.spinAxis,
-                                practice: practice ? { dist: practice.dist, prox: practice.prox, onGreen: practice.onGreen, holed: practice.holed, along: practice.along, across: practice.across } : undefined });
+                                practice: practice ? { dist: practice.dist, prox: practice.prox, onGreen: practice.onGreen, holed: practice.holed, along: practice.along, across: practice.across, hole: practice.hole,
+                                           points: practice.points, test: practice.test ? true : undefined } : undefined });
                         }
                         window._rangeShotInput = null; window._lastShotResult = null;
                         // a green, distance or lie picked during the flight takes effect now (it moves the ball itself)

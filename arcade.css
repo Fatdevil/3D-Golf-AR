@@ -814,4 +814,29 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-practice .rp-close { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #94a3b8; font-size: 14px; cursor: pointer; }
   #range-practice .rp-close:hover { color: #fff; background: rgba(239,68,68,0.25); }
   #range-practice .rp-note { flex-basis: 100%; text-align: center; color: #fbbf24; font-size: 11px; font-weight: 600; }
+  #range-practice button:disabled { opacity: 0.45; cursor: default; }
+  #range-practice select:disabled { opacity: 0.7; }
+  /* the approach test: its button, the setup (shots, band), the shot being played, and the result with the spread around the pin */
+  #range-practice .rp-test { height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid rgba(250,204,21,0.5); background: transparent; color: #fde68a; font-weight: 800; cursor: pointer; }
+  #range-practice .rp-test:hover { background: rgba(250,204,21,0.15); }
+  #range-practice .rp-label { color: #fde68a; font-weight: 800; font-size: 13px; }
+  #range-practice .rp-big { font-size: 22px; font-weight: 900; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
+  #range-practice .rp-big .rp-unit { font-size: 13px; margin-left: 3px; }
+  #range-practice .rp-sub-inline { color: #94a3b8; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #range-practice .rp-start { height: 30px; padding: 0 14px; border-radius: 8px; border: none; background: #facc15; color: #0f172a; font-weight: 900; cursor: pointer; }
+  #range-practice .rp-start:hover { background: #fde047; }
+  #range-practice .rp-text { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #cbd5e1; font-weight: 700; cursor: pointer; }
+  #range-practice .rp-text:hover { background: rgba(255,255,255,0.08); }
+  #range-practice .rp-presets button[data-tn].selected, #range-practice .rp-presets button[data-tb].selected { background: #facc15; border-color: #facc15; color: #0f172a; }
+  #range-practice .rp-sub { flex-basis: 100%; text-align: center; color: #94a3b8; font-size: 11px; font-weight: 600; }
+  #range-practice .rp-summary { flex-basis: 100%; display: flex; align-items: center; gap: 14px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08); }
+  #range-practice .rp-plot { flex: none; border-radius: 10px; }
+  #range-practice .rp-sum-text { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+  #range-practice .rp-sum-text .rp-sub { text-align: left; }
+  #range-practice .rp-sum-title { color: #94a3b8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+  #range-practice .rp-score { font-size: 34px; font-weight: 900; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
+  #range-practice .rp-score span { font-size: 15px; color: #94a3b8; margin-left: 4px; }
+  #range-practice .rp-sum-best { color: #cbd5e1; font-weight: 700; }
+  #range-practice .rp-sum-best.rp-new { color: #facc15; font-weight: 900; }
+  #range-practice .rp-sum-actions { display: flex; gap: 6px; margin-top: 4px; }
   @media (max-width: 1100px) { #range-practice { max-width: calc(100vw - 32px); top: 76px; } }
