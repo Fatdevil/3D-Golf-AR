@@ -77,12 +77,14 @@
                   offline: 'Offline', n: 'Antal', spread: 'Spridning', empty: 'Slå ett slag så hamnar det här.', csv: 'Exportera CSV', clear: 'Ny session',
                   confirmClear: 'Börja en ny session? Slagen i den här sessionen tas bort.', ellipse: 'Ellipsen visar var ungefär 2 av 3 slag med {c} landar.',
                   lmHint: 'Launch monitorn skickar inte klubban: välj den här.',
-                  bagNote: 'Dina launch monitor-slag sparas i din bag (senaste 40 per klubba) och styr klubbförslaget på banan från 3 slag.' },
+                  bagNote: 'Dina launch monitor-slag sparas i din bag (senaste 40 per klubba) och styr klubbförslaget på banan från 3 slag.',
+                  tabApproach: 'Inspel', distance: 'Avstånd', greens: 'Green', toPin: 'Till pinne', best: 'Bäst', toPinNote: 'Snitt och bästa avstånd till pinnen per övat avstånd' },
             en: { title: 'Session', shots: 'shots', pick: 'Which club are you hitting?', tabShots: 'Shots', tabClubs: 'Clubs', club: 'Club', carry: 'Carry', total: 'Total',
                   offline: 'Offline', n: 'Shots', spread: 'Spread', empty: 'Hit a shot and it shows up here.', csv: 'Export CSV', clear: 'New session',
                   confirmClear: 'Start a new session? The shots of this session are removed.', ellipse: 'The ellipse shows where about 2 in 3 shots with {c} land.',
                   lmHint: 'The launch monitor does not send the club: pick it here.',
-                  bagNote: 'Your launch monitor shots go to your bag (the last 40 per club) and set the club suggestion on a course from 3 shots.' }
+                  bagNote: 'Your launch monitor shots go to your bag (the last 40 per club) and set the club suggestion on a course from 3 shots.',
+                  tabApproach: 'Approach', distance: 'Distance', greens: 'Greens', toPin: 'To pin', best: 'Best', toPinNote: 'Average and best distance to the pin per practised distance' }
         };
         const COLORS = { Dr: 0xef4444, '3W': 0xf97316, '5W': 0xf59e0b, Hy: 0xeab308, '4i': 0x84cc16, '5i': 0x22c55e, '6i': 0x10b981, '7i': 0x14b8a6,
                          '8i': 0x06b6d4, '9i': 0x0ea5e9, PW: 0x3b82f6, GW: 0x6366f1, SW: 0x8b5cf6, LW: 0xd946ef };
@@ -96,6 +98,7 @@
         const t = function (k) { const L = (root.getGolfLanguage && root.getGolfLanguage() === 'sv') ? TXT.sv : TXT.en; return L[k]; };
         const dist = function (m) { return num(m) === null ? '–' : (root.useMeters ? m : m * 1.09361).toFixed(0); };
         const unit = function () { return root.useMeters ? 'm' : 'yd'; };
+        const side0 = function (m) { return num(m) === null ? '–' : (root.useMeters ? m : m * 1.09361).toFixed(1); };
         const side = function (m) { if (num(m) === null) return '–'; const a = Math.abs(root.useMeters ? m : m * 1.09361); return a.toFixed(1) + (a < 0.05 ? '' : (m > 0 ? ' R' : ' L')); };
 
         function storageKey() { return 'golf_range_session_' + state.key; }
@@ -133,11 +136,21 @@
                     return '<button class="rs-club' + (state.club === c ? ' selected' : '') + '" data-club="' + c + '" style="--c:' + hex(c) + '">' + c + '</button>';
                 }).join('') + '</div>';
                 if (!state.club && root.SwingEngine && root.SwingEngine.getInputMode && root.SwingEngine.getInputMode() === 'LM') h += '<div class="rs-hint">' + esc(t('lmHint')) + '</div>';
+                const practised = root.RangePractice && root.RangePractice.byDistance ? root.RangePractice.byDistance(shots) : [];
+                if (state.tab === 'approach' && !practised.length) state.tab = 'shots';
                 h += '<div class="rs-tabs"><button data-tab="shots" class="' + (state.tab === 'shots' ? 'selected' : '') + '">' + esc(t('tabShots')) + '</button>' +
-                     '<button data-tab="clubs" class="' + (state.tab === 'clubs' ? 'selected' : '') + '">' + esc(t('tabClubs')) + '</button></div>';
+                     '<button data-tab="clubs" class="' + (state.tab === 'clubs' ? 'selected' : '') + '">' + esc(t('tabClubs')) + '</button>' +
+                     (practised.length ? '<button data-tab="approach" class="' + (state.tab === 'approach' ? 'selected' : '') + '">' + esc(t('tabApproach')) + '</button>' : '') + '</div>';
                 h += '<div class="rs-body">';
                 if (!shots.length) h += '<div class="rs-empty">' + esc(t('empty')) + '</div>';
-                else if (state.tab === 'shots') {
+                else if (state.tab === 'approach') {
+                    // per practised distance: greens hit and how close to the pin
+                    h += '<table><thead><tr><th>' + esc(t('distance')) + '</th><th>' + esc(t('n')) + '</th><th>' + esc(t('greens')) + '</th><th>' + esc(t('toPin')) + '</th><th>' + esc(t('best')) + '</th></tr></thead><tbody>';
+                    practised.forEach(function (r) {
+                        h += '<tr><td>' + dist(r.dist) + ' ' + unit() + '</td><td>' + r.n + '</td><td>' + Math.round(100 * r.greens / r.n) + ' %</td><td>' + side0(r.prox) + '</td><td>' + side0(r.best) + '</td></tr>';
+                    });
+                    h += '</tbody></table><div class="rs-unit">' + esc(t('toPinNote')) + '</div>';
+                } else if (state.tab === 'shots') {
                     h += '<table><thead><tr><th>#</th><th>' + esc(t('club')) + '</th><th>' + esc(t('carry')) + '</th><th>' + esc(t('total')) + '</th><th>' + esc(t('offline')) + '</th></tr></thead><tbody>';
                     for (let i = shots.length - 1; i >= 0; i--) {
                         const s = shots[i];

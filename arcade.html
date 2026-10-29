@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=15">
+<link rel="stylesheet" href="arcade.css?v=16">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -672,6 +672,7 @@
             window.syncUnitButtons();
             if (typeof window.rebuildRangeMarkers === 'function') window.rebuildRangeMarkers();
             if (window.RangeSession && window.RangeSession.render) window.RangeSession.render();
+            if (window.RangePractice && window.RangePractice.render) window.RangePractice.render();
             if (typeof window.updateTopbarHoleDistance === 'function') window.updateTopbarHoleDistance();
         };
         document.addEventListener('DOMContentLoaded', function () { window.syncUnitButtons(); });
@@ -3988,9 +3989,10 @@
 </script>
 <script src="arcade-aim.js?v=1"></script>
 <script src="arcade-shot-plan.js?v=1"></script>
-<script src="arcade-range-markers.js?v=3"></script>
+<script src="arcade-range-markers.js?v=4"></script>
 <script src="arcade-bag.js?v=1"></script>
-<script src="arcade-range-session.js?v=2"></script>
+<script src="arcade-range-session.js?v=3"></script>
+<script src="arcade-range-practice.js?v=2"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -6149,8 +6151,54 @@
         window.aimManual = true;
         window.aimManualOwner = { player: window.activePlayerIndex, hole: playingHoleIndex };
     };
-    // What the aim is measured against: the flag, or straight down the range (a range has no flag)
+    // Where the ball is hit from on the range: the Range Tee, or the approach spot (RangePractice) with the pin to aim at.
+    // dir is the heading the camera looks along, (sin dir, cos dir) in scene x/z
+    window.rangeHome = function() {
+        let rangeHole = courseHoles.find(h => h && h.tees && h.tees.range);
+        if (!rangeHole) return null;
+        let sp = window._rangePracticeSpot, t = rangeHole.tees.range;
+        if (sp) return { x: sp.x, y: sp.y + 0.05, z: sp.z, dir: Math.atan2(sp.pin.x - sp.x, sp.pin.z - sp.z), aim: sp.pin };
+        return { x: t.x, y: t.y + 0.2, z: t.z, dir: t.rot || 0, aim: null };
+    };
+    // Puts the ball where it is hit from, the camera behind it looking along the shot, in its aim phase (a course does that when it hands
+    // the shot on: without it the swing keys stay locked as in a flight and the aim camera stops following the aim). The aim goes to the
+    // pin, or straight down the range, unless the player picked a target of their own (resetAim: that one too)
+    window.placeRangeBall = function(resetAim) {
+        let home = window.rangeHome();
+        if (!home || !window.ballMesh) return;
+        window.ballPos.x = home.x; window.ballPos.y = home.y; window.ballPos.z = home.z;
+        window.ballMesh.position.set(home.x, home.y, home.z);
+        window.ballMesh.visible = true;
+        gameCamPhase = 'IDLE_AIM';
+        window.isPuttingMode = false;
+        let dir = home.dir, behindDist = 12, lookAheadDist = 30;
+        camera.position.set(home.x - Math.sin(dir) * behindDist, home.y + 3, home.z - Math.cos(dir) * behindDist);
+        controls.target.set(home.x + Math.sin(dir) * lookAheadDist, home.y, home.z + Math.cos(dir) * lookAheadDist);
+        controls.update();
+        if (!window.aimTarget) window.aimTarget = new THREE.Vector3();
+        if (resetAim || !window.aimManual) {
+            window.aimManual = false;
+            if (home.aim) window.aimTarget.set(home.aim.x, home.aim.y, home.aim.z);
+            else window.aimTarget.set(home.x + Math.sin(dir) * 200, home.y, home.z + Math.cos(dir) * 200);
+        }
+    };
+    // RangePractice tells where the ball is hit from now (null: the Range Tee again): which hole's cup counts, the distance marks (they
+    // measure from the tee: hidden while practising), and the ball moves there at once when the player is between shots
+    window.rangeShotBusy = function() { return playState === 'ROUND_FLYING'; };   // a shot in the air: approach changes wait for it
+    window.onRangePracticeChange = function(sp) {
+        let rangeHole = courseHoles.find(h => h && h.tees && h.tees.range);
+        if (!rangeHole) return;
+        window._rangePracticeSpot = sp;
+        playingHoleIndex = sp ? sp.hole : courseHoles.indexOf(rangeHole);
+        window.playingHoleIndex = playingHoleIndex;
+        let target = sp ? courseHoles[sp.hole] : null;
+        if (target && target.flagMesh) window.pinMesh = target.flagMesh;
+        if (window.RangeMarkers && window.RangeMarkers.setDistanceMarks) window.RangeMarkers.setDistanceMarks(rangeHole.teeMeshes && rangeHole.teeMeshes.range, !sp);
+        if ((appMode === 'TEST' || appMode === 'PLAY') && playState === 'ROUND_IDLE' && !isFlying) window.placeRangeBall(true);
+    };
+    // What the aim is measured against: the flag, or straight down the range (a range has no flag), or the pin when practising approaches
     window.aimReference = function() {
+        if (window._isRangeMode && window._rangePracticeSpot) return window._rangePracticeSpot.pin;
         let rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
         if (rangeHole) {
             let rt = rangeHole.tees.range, dir = rt.rot || 0;
@@ -6188,7 +6236,7 @@
 
         function previewTee() {
             let surf = window.localGetTerrainAt ? window.localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z) : null;
-            if (window._isRangeMode) return true;   // the Range Tee's hitting mat, as in executeArcadeShot
+            if (window._isRangeMode) return !(window._rangePracticeSpot && window._rangePracticeSpot.lie === 'ground');   // the mat, as in executeArcadeShot
             let p = window.players && window.players[window.activePlayerIndex];
             return !!p && (p.strokes || 0) === 0;   // the first stroke of the hole is played from a tee
         }
@@ -7737,6 +7785,7 @@
             window.RangeMarkers.dispose(h.teeMeshes.range);
             let t = h.tees.range;
             h.teeMeshes.range = createRangeTeeObject(t.x, t.y, t.z, t.rot || 0);
+            if (window._rangePracticeSpot) window.RangeMarkers.setDistanceMarks(h.teeMeshes.range, false);   // still practising approaches
         }
     };
     // the range panel's unit button switches the player's unit (one unit everywhere)
@@ -9435,8 +9484,9 @@
             spinAxisDeg: data.spinAxisDeg || 0,
             azimDeg: (data.azimDeg || 0) + aimOffsetDeg, 
             isLiveData: data.isLiveData || false,
-            // on the range every ball is hit from the Range Tee's hitting mat, whatever the ground under it
-            isTeeShot: window._isRangeMode ? true : (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1)
+            // on the range every ball is hit from the Range Tee's hitting mat, whatever the ground under it (approach practice: the mat,
+            // or the ground where the ball lies when the player chose that)
+            isTeeShot: window._isRangeMode ? !(window._rangePracticeSpot && window._rangePracticeSpot.lie === 'ground') : (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1)
         };
 
         // a putt from the swing meter carries the distance it should roll: turn it into the speed that does it under this ball
@@ -11176,6 +11226,7 @@
         if (mode === 'BUILD' || mode === 'TEST') window.restoreTargets();
         if (mode === 'BUILD') {
             if (window.RangeSession && window.RangeSession.stop) window.RangeSession.stop();   // the session panel and its landing dots belong to play
+            if (window.RangePractice && window.RangePractice.stop) window.RangePractice.stop();   // and so does approach practice (the Range Tee is home again)
             playState = 'BUILDING'; // Nollställ playState från tidigare test-rundor
             window.aimTarget = null; // Rensa eventuella gamla sikten
             
@@ -11287,8 +11338,13 @@
                     if (typeof window.rebuildRangeMarkers === 'function') window.rebuildRangeMarkers();
 
                     // the session panel: this range's shots so far (kept per range on this device), landing dots and spread
+                    let rangeKey = window._loadedShareCode || (typeof currentEditCode !== 'undefined' && currentEditCode) || 'draft';
                     if (window.RangeSession && window.RangeSession.start) {
-                        window.RangeSession.start({ key: window._loadedShareCode || (typeof currentEditCode !== 'undefined' && currentEditCode) || 'draft', scene: scene, tee: tee });
+                        window.RangeSession.start({ key: rangeKey, scene: scene, tee: tee });
+                    }
+                    // approach practice against the range's greens (puts the ball on its spot when the player had it on)
+                    if (window.RangePractice && window.RangePractice.start) {
+                        window.RangePractice.start({ key: rangeKey, tee: tee, holes: function () { return courseHoles; } });
                     }
                 } else {
                     // COURSE MODE: Default camera behind ball
@@ -14645,48 +14701,33 @@ window.triggerExplosion = function(x, y, z) {
                     // RANGE MODE: Reset ball to tee after each shot
                     const rangeHole = window._isRangeMode ? courseHoles.find(h => h && h.tees && h.tees.range) : null;
                     if (rangeHole) {
-                        let rangeTee = rangeHole.tees.range;
+                        // approach practice: the shot against the pin (where the ball stopped, on the green or not), shown and booked
+                        let practice = null;
+                        if (window.RangePractice && window.RangePractice.active && window.RangePractice.active()) {
+                            let rest = window.ballMesh.position, restSurf = localGetTerrainAt(rest.x, -rest.z);
+                            practice = window.RangePractice.score({ x: rest.x, z: rest.z }, !!(restSurf && restSurf.type === 'GREEN'), !!(flightData.metrics && flightData.metrics.holed));
+                            if (practice) {
+                                let pPop = document.getElementById('score-popup');
+                                pPop.innerText = practice.text;
+                                pPop.style.color = practice.holed ? '#fbbf24' : (practice.onGreen ? '#4ade80' : '#f87171');
+                                pPop.style.opacity = '1'; pPop.style.transform = 'translate(-50%, -60%) scale(1.1)';
+                                clearTimeout(window._practicePopTimer);
+                                window._practicePopTimer = setTimeout(() => { pPop.style.opacity = '0'; pPop.style.transform = 'translate(-50%, -60%) scale(1.0)'; }, 2600);
+                            }
+                        }
                         // book the shot in the session (before the ball goes back to the tee)
                         let rIn = window._rangeShotInput, rOut = window._lastShotResult;
                         if (window.RangeSession && window.RangeSession.active && window.RangeSession.active() && rIn && rOut) {
                             window.RangeSession.record({ club: window.RangeSession.clubFor(rIn.source, rIn.swingClub), source: rIn.source,
                                 carry: rOut.carry, total: rOut.total, offline: rOut.offline, apex: rOut.apex, landX: rOut.landX, landZ: rOut.landZ,
-                                ballSpeed: rIn.ballSpeed, clubSpeed: rIn.clubSpeed, launch: rIn.launch, hla: rIn.hla, spin: rIn.spin, spinAxis: rIn.spinAxis });
+                                ballSpeed: rIn.ballSpeed, clubSpeed: rIn.clubSpeed, launch: rIn.launch, hla: rIn.hla, spin: rIn.spin, spinAxis: rIn.spinAxis,
+                                practice: practice ? { dist: practice.dist, prox: practice.prox, onGreen: practice.onGreen, holed: practice.holed, along: practice.along, across: practice.across } : undefined });
                         }
                         window._rangeShotInput = null; window._lastShotResult = null;
-                        window.ballPos.x = rangeTee.x;
-                        window.ballPos.y = rangeTee.y + 0.2;
-                        window.ballPos.z = rangeTee.z;
-                        window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
-                        window.ballMesh.visible = true;
-                        
-                        // Reset camera behind tee, looking along range direction; the camera is back in its aim phase (a course does that when
-                        // it hands the shot on: without it the swing keys stay locked as in a flight and the aim camera stops following the aim)
-                        gameCamPhase = 'IDLE_AIM';
-                        window.isPuttingMode = false;
-                        let dir = rangeTee.rot || 0;
-                        let behindDist = 12, lookAheadDist = 30;
-                        camera.position.set(
-                            window.ballPos.x - Math.sin(dir) * behindDist,
-                            window.ballPos.y + 3,
-                            window.ballPos.z - Math.cos(dir) * behindDist
-                        );
-                        controls.target.set(
-                            window.ballPos.x + Math.sin(dir) * lookAheadDist,
-                            window.ballPos.y,
-                            window.ballPos.z + Math.cos(dir) * lookAheadDist
-                        );
-                        controls.update();
-                        
-                        // Aim back down the range, unless the player picked a target of their own: the ball comes back to the same tee, so that target still holds
-                        if (window.aimTarget && !window.aimManual) {
-                            window.aimManual = false;
-                            window.aimTarget.set(
-                                rangeTee.x + Math.sin(dir) * 200,
-                                rangeTee.y,
-                                rangeTee.z + Math.cos(dir) * 200
-                            );
-                        }
+                        // a green, distance or lie picked during the flight takes effect now (it moves the ball itself)
+                        if (window.RangePractice && window.RangePractice.settle) window.RangePractice.settle();
+                        // the ball back where it is hit from (the Range Tee, or the approach spot), the camera behind it in its aim phase
+                        window.placeRangeBall(false);
                     } else {
                         // COURSE MODE: Ball stays where it landed
                         window.ballPos.x = window.ballMesh.position.x;
@@ -14793,7 +14834,7 @@ window.triggerExplosion = function(x, y, z) {
                     }
                     
                     // a ball holed on the range: a cheer, and the next ball (no score, no next hole)
-                    if (rangeHole && flightData.metrics && flightData.metrics.holed) {
+                    if (rangeHole && flightData.metrics && flightData.metrics.holed && !window._rangePracticeSpot) {
                         if (window.AudioEngine && window.AudioEngine.playApplause) window.AudioEngine.playApplause();
                         let rPop = document.getElementById('score-popup');
                         rPop.innerText = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? '🎯 I hål!' : '🎯 In the hole!';
@@ -15318,7 +15359,7 @@ window.triggerExplosion = function(x, y, z) {
                 if (typeof localGetTerrainAt === 'function') {
                     let surf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
                     // on the range the ball is always on the Range Tee's mat
-                    let isTee = !!window._isRangeMode || (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 0);
+                    let isTee = (!!window._isRangeMode && !(window._rangePracticeSpot && window._rangePracticeSpot.lie === 'ground')) || (!window._isRangeMode && window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 0);
                     
                     let lType = isTee ? 'FAIRWAY' : (surf ? (surf.type || 'FAIRWAY') : 'FAIRWAY');
                     
