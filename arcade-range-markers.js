@@ -99,6 +99,25 @@
             return tex;
         }
 
+        // The hitting mat under the Range Tee: artificial turf with mown stripes and a light edge
+        function matTexture(THREE) {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 160;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#23592f';
+            ctx.fillRect(0, 0, 256, 160);
+            ctx.fillStyle = '#2b6838';
+            for (let x = 0; x < 256; x += 32) ctx.fillRect(x, 0, 16, 160);
+            roundRect(ctx, 5, 5, 246, 150, 14);
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = 'rgba(241, 245, 249, 0.7)';
+            ctx.stroke();
+            const tex = new THREE.CanvasTexture(c);
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            tex.anisotropy = 4;
+            return tex;
+        }
+
         // A strip lying on the ground: pts are [lx, lz] pairs along its middle; width in metres. Heights follow the terrain.
         function groundStrip(THREE, tee, pts, width, groundAt, lift) {
             const pos = [], idx = [];
@@ -145,6 +164,17 @@
             const list = marks(!!opts.useMeters), far = list[list.length - 1].metres;
             const group = new THREE.Group();
             group.userData.rangeMarkers = { useMeters: !!opts.useMeters };
+
+            // the hitting mat: every ball on the range is hit from here (a tee lie, whatever the ground under it), lying on the ground
+            const matGeo = new THREE.PlaneGeometry(5.6, 3.6, 8, 6);
+            matGeo.rotateX(-Math.PI / 2);
+            const mp = matGeo.attributes.position;
+            for (let i = 0; i < mp.count; i++) { const lz = mp.getZ(i) - 0.6; mp.setZ(i, lz); mp.setY(i, localY(mp.getX(i), lz, 0.05)); }
+            matGeo.computeVertexNormals();
+            const mat = new THREE.Mesh(matGeo, new THREE.MeshLambertMaterial({ map: matTexture(THREE), polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+            mat.receiveShadow = true;
+            mat.userData.rangeMat = true;
+            group.add(mat);
 
             // the tee markers (as on every tee, in range yellow)
             if (opts.teeGeo) {

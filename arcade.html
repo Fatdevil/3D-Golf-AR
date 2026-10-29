@@ -746,6 +746,10 @@
         
         <div class="toolbar-divider"></div>
         
+        <button id="tool-hole" onclick="setTool('HOLE'); setHoleItem('TEE_RANGE');" title="Place and turn the Range Tee (where the balls are hit from)" style="display:none;">
+            <span style="font-size:16px;">🎯</span>
+            <span>Range Tee</span>
+        </button>
         <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')" title="Draw Fairways, Greens, Bunkers & Tees">
             <img src="icons/hole_3d.png" style="width:24px; height:24px; object-fit:contain; display:block; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));" alt="Hål">
             <span data-i18n="tool_course">Hål</span>
@@ -3984,7 +3988,7 @@
 </script>
 <script src="arcade-aim.js?v=1"></script>
 <script src="arcade-shot-plan.js?v=1"></script>
-<script src="arcade-range-markers.js?v=2"></script>
+<script src="arcade-range-markers.js?v=3"></script>
 <script src="arcade-bag.js?v=1"></script>
 <script src="arcade-range-session.js?v=2"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
@@ -6184,10 +6188,7 @@
 
         function previewTee() {
             let surf = window.localGetTerrainAt ? window.localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z) : null;
-            if (window._isRangeMode) {
-                let type = surf ? surf.type : 'FAIRWAY';
-                return !(type === 'ROUGH' || type === 'DEEP ROUGH' || type === 'SAND' || type === 'FESCUE');   // same rule as executeArcadeShot
-            }
+            if (window._isRangeMode) return true;   // the Range Tee's hitting mat, as in executeArcadeShot
             let p = window.players && window.players[window.activePlayerIndex];
             return !!p && (p.strokes || 0) === 0;   // the first stroke of the hole is played from a tee
         }
@@ -7776,8 +7777,8 @@
     };
 
     window.changeHole = function(dir) {
-        // GATE: Block forward navigation until current hole is complete
-        if(dir > 0) {
+        // GATE: Block forward navigation until current hole is complete (not on a range: its holes only hold greens to aim at, it has no tees or aim points)
+        if(dir > 0 && !window._isRangeMode) {
             let h = courseHoles[currentHoleIndex];
             let hasTee = h.tees.red || h.tees.yellow || h.tees.white || h.tees.black;
             let hasFlag = h.flag;
@@ -9434,19 +9435,8 @@
             spinAxisDeg: data.spinAxisDeg || 0,
             azimDeg: (data.azimDeg || 0) + aimOffsetDeg, 
             isLiveData: data.isLiveData || false,
-            isTeeShot: (window._isRangeMode) ? (function() {
-                // In range mode, check the surface under the Range Tee.
-                // If it is on rough, deep rough, or sand, treat it as turf lie (no tee-shot)
-                // so the physics engine applies the lie penalty!
-                if (typeof window.localGetTerrainAt === 'function') {
-                    let surf = window.localGetTerrainAt(startPos[0], startPos[1]);
-                    let type = surf ? surf.type : 'FAIRWAY';
-                    if (type === 'ROUGH' || type === 'DEEP ROUGH' || type === 'SAND' || type === 'FESCUE') {
-                        return false; // Not a tee shot (forces lie penalty!)
-                    }
-                }
-                return true; // Default to tee shot (fairway mat) for other surfaces
-            })() : (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1)
+            // on the range every ball is hit from the Range Tee's hitting mat, whatever the ground under it
+            isTeeShot: window._isRangeMode ? true : (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1)
         };
 
         // a putt from the swing meter carries the distance it should roll: turn it into the speed that does it under this ball
@@ -11161,6 +11151,10 @@
         if (btnRangeTeeEl) {
             btnRangeTeeEl.style.display = isRangeModeActive ? '' : 'none';
         }
+        // a range has no par and no coloured tees: its hole panel keeps the Range Tee, the flags of its greens and the hole switch
+        ['btn-set-tee-red', 'btn-set-tee-yellow', 'btn-set-tee-white', 'btn-set-tee-black'].forEach(function (id) { safeSetDisplay(id, isRangeModeActive ? 'none' : ''); });
+        let parUi = document.getElementById('hole-ui-par');
+        if (parUi && parUi.parentElement) parUi.parentElement.style.display = isRangeModeActive ? 'none' : 'flex';
 
         // Toggle Top Bar Hole Navigator in Build Course Mode
         let topbarHoleNav = document.getElementById('topbar-hole-nav');
@@ -11536,6 +11530,10 @@
 
             let cat = window._activeEnvCategory || 'SUN';
             if (window.selectEnvCategory) window.selectEnvCategory(cat);
+        } else if (toolName === 'HOLE') {
+            // the Range Tee (range builder): its own button (lit above) and the hole panel, not the hole builder and its flyout
+            [smartBuilderBtn, sculptGroupBtn, objectsGroupBtn, envGroupBtn].forEach(function (g) { if (g) g.className = ''; });
+            if (leftFlyout) leftFlyout.style.display = 'none';
         } else if (HOLES_FAMILY.includes(toolName)) {
             if (smartBuilderBtn) smartBuilderBtn.className = 'active-green';
             if (sculptGroupBtn) sculptGroupBtn.className = '';
@@ -11678,7 +11676,7 @@
         else if (toolName === 'MEASURE') hintHtml = "Click: <b>Place Line</b> (1st = start, 2nd = end) max 20<br>Right Click: <b>Cancel / Remove Nearest</b>";
         else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
         else if (toolName === 'COLORIZE') hintHtml = "Left Click/Drag: <b>Paint object with selected color</b>";
-        else if (toolName === 'HOLE') hintHtml = "Left Click: <b>Place Selected Marker</b>";
+        else if (toolName === 'HOLE') hintHtml = window._isRangeMode ? "Left Click: <b>Place the Range Tee</b> (any dry ground, it brings its own mat) · Hold and drag: <b>turn it</b>" : "Left Click: <b>Place Selected Marker</b>";
         else if (toolName === 'RAMP') hintHtml = "Left Drag: <b>Draw ramp</b> from start to cursor — creates linear slope";
         else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Draw spline line & select fence/wall type in panel";
         else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter trees</b> (respects biome toggle)";
@@ -12369,9 +12367,13 @@
             let surf = localGetTerrainAt(lastHitPoint.x, -lastHitPoint.z);
             let surfType = surf ? surf.type : 'UNKNOWN';
             
+            if (currentHoleAction === 'TEE_RANGE' && (surfType === 'WATER' || surfType === 'OB')) {
+                showBuildToast('🎯 The Range Tee cannot stand in water or out of bounds', '#ef4444');
+                return;
+            }
             if (currentHoleAction.startsWith('TEE_')) {
-                // Tees can only be placed on TEE surface
-                if (surfType !== 'TEE') {
+                // Tees can only be placed on TEE surface (the Range Tee brings its own hitting mat: any dry ground)
+                if (surfType !== 'TEE' && currentHoleAction !== 'TEE_RANGE') {
                     showBuildToast('⛳ Tee markers can only be placed on TEE BOX surface!', '#ef4444');
                     return;
                 }
@@ -14692,7 +14694,8 @@ window.triggerExplosion = function(x, y, z) {
                     if (document.getElementById('play-tools')) document.getElementById('play-tools').style.display = 'flex';
                     let hole = courseHoles[playingHoleIndex];
                     let distToPin = 999;
-                    if(hole && hole.flag) {
+                    // on a range the ball is already back on the tee (above): no water or out-of-bounds penalty, no gimme, no next hole
+                    if(hole && hole.flag && !rangeHole) {
                         distToPin = window.ballMesh.position.distanceTo(new THREE.Vector3(hole.flag.x, hole.flag.y, hole.flag.z));
                         
                         // --- BUG-04 FIX: Build green grid ONCE on landing, not in animate loop ---
@@ -14786,8 +14789,16 @@ window.triggerExplosion = function(x, y, z) {
                         }
                     }
                     
+                    // a ball holed on the range: a cheer, and the next ball (no score, no next hole)
+                    if (rangeHole && flightData.metrics && flightData.metrics.holed) {
+                        if (window.AudioEngine && window.AudioEngine.playApplause) window.AudioEngine.playApplause();
+                        let rPop = document.getElementById('score-popup');
+                        rPop.innerText = (window.getGolfLanguage && window.getGolfLanguage() === 'sv') ? '🎯 I hål!' : '🎯 In the hole!';
+                        rPop.style.color = '#fbbf24'; rPop.style.opacity = '1'; rPop.style.transform = 'translate(-50%, -60%) scale(1.2)';
+                        setTimeout(() => { rPop.style.opacity = '0'; rPop.style.transform = 'translate(-50%, -60%) scale(1.0)'; }, 1800);
+                    }
                     // BUG-P01 FIX: Check physics holed result FIRST (hole-in-one, chip-in, sunk putt)
-                    if (flightData.metrics && flightData.metrics.holed && playState === 'ROUND_IDLE') {
+                    if (!rangeHole && flightData.metrics && flightData.metrics.holed && playState === 'ROUND_IDLE') {
                         let p = window.players[window.activePlayerIndex];
                         if (p && !p.holedOut) {
                             p.holedOut = true;
@@ -15303,13 +15314,8 @@ window.triggerExplosion = function(x, y, z) {
                 if(lieHud) lieHud.style.display = 'block';
                 if (typeof localGetTerrainAt === 'function') {
                     let surf = localGetTerrainAt(window.ballMesh.position.x, -window.ballMesh.position.z);
-                    let isTee = (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 0);
-                    if (window._isRangeMode && isTee && surf) {
-                        let type = surf.type || 'FAIRWAY';
-                        if (type === 'ROUGH' || type === 'DEEP ROUGH' || type === 'SAND' || type === 'FESCUE') {
-                            isTee = false;
-                        }
-                    }
+                    // on the range the ball is always on the Range Tee's mat
+                    let isTee = !!window._isRangeMode || (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 0);
                     
                     let lType = isTee ? 'FAIRWAY' : (surf ? (surf.type || 'FAIRWAY') : 'FAIRWAY');
                     

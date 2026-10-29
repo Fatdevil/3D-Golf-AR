@@ -917,7 +917,9 @@ function serve() {
       document.getElementById('voice-btn').click();
       const rp = window.__sr[window.__sr.length - 1]; rp.onerror({ error: 'no-speech' });
       check('voice: a pause without speech keeps listening', document.getElementById('voice-btn').getAttribute('aria-pressed') === 'true');
-      // hole navigation: an unfinished hole keeps its own "Finish hole" message, a finished one moves on
+      // hole navigation: an unfinished hole keeps its own "Finish hole" message, a finished one moves on (a course's rule: this page is a
+      // range, where the holes only hold greens and the next one always opens, so the check runs as on a course)
+      const wasRange = window._isRangeMode; window._isRangeMode = false;
       const h0 = courseHoles[0], keep = { tees: h0.tees, flag: h0.flag, aim: h0.aimPoint }, idx0 = window.currentHoleIndex;
       window.changeHoleTo(0); h0.tees = {}; h0.flag = null; h0.aimPoint = null;
       say('next hole'); await new Promise(function (r) { setTimeout(r, 100); });
@@ -927,6 +929,7 @@ function serve() {
       say('next hole'); await new Promise(function (r) { setTimeout(r, 100); });
       const moved = window.currentHoleIndex === 1, tMoved = (document.getElementById('build-toast') || {}).textContent || '';
       window.changeHoleTo(0); h0.tees = keep.tees; h0.flag = keep.flag; h0.aimPoint = keep.aim;
+      window._isRangeMode = wasRange;
       check('voice: "next hole" keeps the Finish-hole message when the hole is unfinished and announces only a real move', stayed && /Finish Hole/.test(tBlocked) && moved && /Next hole|Nästa hål/.test(tMoved), JSON.stringify([stayed, tBlocked, moved, tMoved]));
       // "spara" says saved only when the write happened
       const sq = window.saveQuickDraft; const toastText = function () { const t = document.getElementById('build-toast'); return t ? t.textContent : ''; };
@@ -1372,6 +1375,27 @@ function serve() {
     await rp.goto(base + '/arcade.html?autorun=new_build&mode=range', { waitUntil: 'domcontentloaded', timeout: 120000 });
     await rp.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
     await rp.waitForTimeout(4000);
+    rangeStep = 'range builder tools';
+    const rb = await rp.evaluate(async function () {
+      setMode('BUILD');
+      const vis = function (id) { const e = document.getElementById(id); return e ? getComputedStyle(e).display : 'missing'; };
+      document.getElementById('tool-hole').click();   // the Range Tee has its own button again
+      camera.position.set(0, 60, 40); controls.target.set(0, 0, 0); controls.update(); camera.updateMatrixWorld(true);
+      const under = localGetTerrainAt(0, 0);
+      const v = new THREE.Vector3(0, 0, 0).project(camera), rect = renderer.domElement.getBoundingClientRect();
+      const o = { bubbles: true, button: 0, buttons: 1, clientX: rect.left + (v.x * 0.5 + 0.5) * rect.width, clientY: rect.top + (-v.y * 0.5 + 0.5) * rect.height, pointerId: 1, pointerType: 'mouse' };
+      renderer.domElement.dispatchEvent(new PointerEvent('pointermove', o));
+      renderer.domElement.dispatchEvent(new PointerEvent('pointerdown', o));
+      window.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, o, { buttons: 0 })));
+      await new Promise(function (r) { setTimeout(r, 300); });
+      const h = courseHoles[currentHoleIndex], placed = !!h.tees.range;
+      const from = currentHoleIndex; window.changeHole(1); const to = currentHoleIndex; window.changeHoleTo(from);
+      return { tool: currentTool, btn: vis('tool-hole'), flyout: vis('left-flyout-toolbar'), under: under && under.type, placed: placed,
+               mat: placed && h.teeMeshes.range.children.some(function (c) { return c.userData && c.userData.rangeMat; }),
+               coloured: vis('btn-set-tee-yellow'), par: getComputedStyle(document.getElementById('hole-ui-par').parentElement).display, nextHole: from + '->' + to };
+    });
+    checks.push({ name: 'range builder: the Range Tee has its own button, goes on any dry ground with its own hitting mat, no par or coloured tees, and the next hole opens (for more greens)',
+      ok: rb.tool === 'HOLE' && rb.btn !== 'none' && rb.flyout === 'none' && rb.under !== 'TEE' && rb.placed && rb.mat && rb.coloured === 'none' && rb.par === 'none' && rb.nextHole === '0->1', detail: JSON.stringify(rb) });
     rangeStep = 'turn the tee';
     const turned = await rp.evaluate(function () {
       setMode('BUILD');
@@ -1524,6 +1548,16 @@ function serve() {
     });
     await cp.waitForFunction(function () { return /^🎒 /.test(document.getElementById('aim-bb-club').innerText); }, null, { timeout: 60000, polling: 500 });
     const bagCourse = await cp.evaluate(function () { return { club: document.getElementById('aim-bb-club').innerText, reach: document.getElementById('aim-bb-reach').innerText, fx: document.getElementById('aim-bb-fx').innerText }; });
+    const courseBuild = await cp.evaluate(function () {
+      setMode('BUILD');
+      const vis = function (id) { const e = document.getElementById(id); return e ? getComputedStyle(e).display : 'missing'; };
+      courseHoles[1].flag = null;
+      window.changeHoleTo(1); window.changeHole(1);   // hole 2 has no tee, flag or aim point: a course still waits for it
+      const r = { btn: vis('tool-hole'), yellow: vis('btn-set-tee-yellow'), hole: currentHoleIndex };
+      window.changeHoleTo(0); setMode('TEST'); window.setAimPoint(0, 0, -110);
+      return r;
+    });
+    checks.push({ name: 'course builder: no Range Tee button, coloured tees shown, and the next hole still waits for the hole to be finished', ok: courseBuild.btn === 'none' && courseBuild.yellow !== 'none' && courseBuild.hole === 1, detail: JSON.stringify(courseBuild) });
     await cp.evaluate(function () { window.SwingEngine.setInputMode('SWING'); });
     // with the swing the game's own suggestion comes back once the shot plan is worked out again (the plan row is hidden meanwhile)
     await cp.waitForFunction(function () { return getComputedStyle(document.getElementById('aim-bb-plan')).display === 'block' && !/^🎒/.test(document.getElementById('aim-bb-club').innerText); }, null, { timeout: 60000, polling: 500 }).catch(function () {});
