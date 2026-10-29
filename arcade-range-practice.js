@@ -37,10 +37,11 @@
         return { x: pin.x + rx * dist, z: pin.z + rz * dist };
     }
 
-    // The spot, or the nearest one around the pin at the same distance that is not blocked (water, out of bounds): a few degrees either way
+    // The spot, or the nearest one around the pin at the same distance that is not blocked (water, out of bounds): a few degrees either way,
+    // all the way round the pin if need be (blocked: nowhere at this distance)
     function playableSpot(pin, tee, dist, blocked) {
-        for (let k = 0; k <= 15; k++) {
-            const tries = k === 0 ? [0] : [3 * k, -3 * k];
+        for (let k = 0; k <= 60; k++) {
+            const tries = k === 0 ? [0] : (k === 60 ? [180] : [3 * k, -3 * k]);
             for (let j = 0; j < tries.length; j++) {
                 const p = spotFor(pin, tee, dist, tries[j]);
                 if (!blocked || !blocked(p.x, p.z)) return { x: p.x, z: p.z, angle: tries[j], moved: tries[j] !== 0 };
@@ -85,10 +86,12 @@
         const TXT = {
             sv: { open: '🎯 Inspel mot green', green: 'Green', mat: 'Matta', ground: 'Som marken', lie: 'Läge', close: 'Tillbaka till rangen',
                   none: 'Bygg en green med flagga för att öva inspel', onGreen: 'På green', miss: 'Miss', fromPin: 'från pinnen', short: 'kort', long: 'långt',
-                  left: 'vänster', right: 'höger', holed: 'I hål!', moved: 'Flyttad åt sidan (vatten eller utanför banan)' },
+                  left: 'vänster', right: 'höger', holed: 'I hål!', moved: 'Flyttad åt sidan (vatten eller utanför banan)',
+                  blocked: 'Inget spelbart läge på det avståndet (vatten eller utanför banan) – välj ett annat', later: 'Gäller från nästa slag' },
             en: { open: '🎯 Approach to a green', green: 'Green', mat: 'Mat', ground: 'As it lies', lie: 'Lie', close: 'Back to the range',
                   none: 'Build a green with a flag to practise approaches', onGreen: 'On the green', miss: 'Missed', fromPin: 'from the pin', short: 'short', long: 'long',
-                  left: 'left', right: 'right', holed: 'In the hole!', moved: 'Moved aside (water or out of bounds)' }
+                  left: 'left', right: 'right', holed: 'In the hole!', moved: 'Moved aside (water or out of bounds)',
+                  blocked: 'Nowhere playable at that distance (water or out of bounds) – pick another', later: 'From the next shot' }
         };
         const t = function (k) { return ((root.getGolfLanguage && root.getGolfLanguage() === 'sv') ? TXT.sv : TXT.en)[k]; };
         const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
@@ -98,6 +101,7 @@
         let ctx = null;   // { key, tee, holes() }
         let state = { on: false, hole: null, dist: 100, lie: 'mat' };   // dist in metres
         let bar = null, spot = null;
+        let pending = false, noSpot = false;   // a change made while the ball flies (it waits for the shot to be scored); no playable spot
 
         function storageKey() { return 'golf_range_practice_' + ctx.key; }
         function load() {
@@ -112,12 +116,16 @@
         }
 
         // Works out the spot for the chosen green and distance and tells the game (arcade.html) where the ball goes now
+        // (while the ball flies the shot keeps the spot it was hit from: the change waits, settle() makes it once the shot is scored)
         function apply() {
+            if (root.rangeShotBusy && root.rangeShotBusy()) { pending = true; render(); return; }
+            pending = false; noSpot = false;
             const g = state.on ? current() : null;
             if (!g) { spot = null; if (root.onRangePracticeChange) root.onRangePracticeChange(null); render(); return; }
             state.hole = g.hole;
             const blocked = function (x, z) { const s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!(s && (s.type === 'WATER' || s.type === 'OB')); };
             const p = playableSpot(g, ctx.tee, state.dist, blocked);
+            if (p.blocked) { noSpot = true; spot = null; if (root.onRangePracticeChange) root.onRangePracticeChange(null); render(); return; }   // back to the tee
             const s = root.localGetTerrainAt ? root.localGetTerrainAt(p.x, -p.z) : null;
             spot = { x: p.x, z: p.z, y: (s && num(s.z) !== null) ? s.z : g.y, moved: p.moved, pin: { x: g.x, y: g.y, z: g.z }, hole: g.hole, dist: state.dist, lie: state.lie };
             if (root.onRangePracticeChange) root.onRangePracticeChange(spot);
@@ -152,7 +160,9 @@
                 h += '<div class="rp-lie" role="group" aria-label="' + esc(t('lie')) + '"><button data-lie="mat" class="' + (state.lie === 'mat' ? 'selected' : '') + '">' + esc(t('mat')) + '</button>' +
                      '<button data-lie="ground" class="' + (state.lie === 'ground' ? 'selected' : '') + '">' + esc(t('ground')) + '</button></div>';
                 h += '<button class="rp-close" data-act="close" title="' + esc(t('close')) + '" aria-label="' + esc(t('close')) + '">✕</button>';
-                if (spot && spot.moved) h += '<div class="rp-note">' + esc(t('moved')) + '</div>';
+                if (noSpot) h += '<div class="rp-note">' + esc(t('blocked')) + '</div>';
+                else if (pending) h += '<div class="rp-note">' + esc(t('later')) + '</div>';
+                else if (spot && spot.moved) h += '<div class="rp-note">' + esc(t('moved')) + '</div>';
             }
             bar.innerHTML = h;
             bar.classList.toggle('on', !!state.on && list.length > 0);
@@ -188,7 +198,7 @@
         api.stop = function () {
             if (bar) bar.style.display = 'none';
             if (spot && root.onRangePracticeChange) root.onRangePracticeChange(null);
-            spot = null; ctx = null;
+            spot = null; ctx = null; pending = false; noSpot = false;
         };
         api.active = function () { return !!spot; };
         api.spot = function () { return spot; };
@@ -207,6 +217,7 @@
             }
             return r;
         };
+        api.settle = function () { if (pending && ctx) apply(); };   // the shot is scored: a change made during it now
         api.render = render;   // after a language or unit change
         api.refresh = function () { if (ctx) apply(); };   // the greens may have changed
         api.getState = function () { return Object.assign({}, state); };

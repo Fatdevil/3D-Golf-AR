@@ -3992,7 +3992,7 @@
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="arcade-bag.js?v=1"></script>
 <script src="arcade-range-session.js?v=3"></script>
-<script src="arcade-range-practice.js?v=1"></script>
+<script src="arcade-range-practice.js?v=2"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -6184,6 +6184,7 @@
     };
     // RangePractice tells where the ball is hit from now (null: the Range Tee again): which hole's cup counts, the distance marks (they
     // measure from the tee: hidden while practising), and the ball moves there at once when the player is between shots
+    window.rangeShotBusy = function() { return playState === 'ROUND_FLYING'; };   // a shot in the air: approach changes wait for it
     window.onRangePracticeChange = function(sp) {
         let rangeHole = courseHoles.find(h => h && h.tees && h.tees.range);
         if (!rangeHole) return;
@@ -14723,6 +14724,8 @@ window.triggerExplosion = function(x, y, z) {
                                 practice: practice ? { dist: practice.dist, prox: practice.prox, onGreen: practice.onGreen, holed: practice.holed, along: practice.along, across: practice.across } : undefined });
                         }
                         window._rangeShotInput = null; window._lastShotResult = null;
+                        // a green, distance or lie picked during the flight takes effect now (it moves the ball itself)
+                        if (window.RangePractice && window.RangePractice.settle) window.RangePractice.settle();
                         // the ball back where it is hit from (the Range Tee, or the approach spot), the camera behind it in its aim phase
                         window.placeRangeBall(false);
                     } else {

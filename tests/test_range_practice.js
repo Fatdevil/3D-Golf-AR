@@ -26,6 +26,9 @@ const ps = P.playableSpot(pin, tee, 100, water);
 check('a spot in water moves around the pin, same distance', ps.moved && !water(ps.x, ps.z) && near(Math.hypot(ps.x - pin.x, ps.z - pin.z), 100, 1e-9), JSON.stringify(ps));
 check('a free spot is not moved', P.playableSpot(pin, tee, 100, () => false).moved === false);
 check('everything blocked: the straight spot, marked as blocked', P.playableSpot(pin, tee, 100, () => true).blocked === true);
+// the pin near the end of the terrain, the tee just past it: every spot within ±45° is off the terrain, the far side of the pin is not
+const nearEnd = P.playableSpot({ x: 0, z: 250 }, { x: 0, z: 270 }, 100, (x, z) => z > 300);
+check('blocked on the tee side: found the other side of the pin', !nearEnd.blocked && nearEnd.z <= 300 && Math.abs(Math.hypot(nearEnd.x, nearEnd.z - 250) - 100) < 1e-6);
 
 const spot = { x: 0, z: -50 };   // hitting along -Z towards the pin at z = -150
 let r = P.result({ x: 3, z: -146 }, pin, spot, true);

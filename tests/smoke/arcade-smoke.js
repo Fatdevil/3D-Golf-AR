@@ -1496,13 +1496,19 @@ function serve() {
       document.querySelector('#range-practice [data-lie="mat"]').click();
       await wait(200);
       window.triggerRealShot({ ballSpeedMph: 80, launchAngleDeg: 24, totalSpinRpm: 8000, spinAxisDeg: 0, azimDeg: 0, isLiveData: true });
+      await wait(100);
+      on.flying = playState === 'ROUND_FLYING';
+      document.querySelector('#range-practice [data-preset="100"]').click();   // picked while the ball flies: from the next shot
+      on.spotKept = Math.abs(window.RangePractice.spot().dist - on.want) < 0.01;
+      on.note = (document.querySelector('#range-practice .rp-note') || {}).innerText || '';
       return { on: on, gi: gi, ri: ri, pin: pin };
     });
     await rp.waitForFunction(function () { window.skipFlight(); return !window.isBallFlying() && playState === 'ROUND_IDLE'; }, null, { timeout: 120000, polling: 500 });
     await rp.waitForTimeout(400);
     const prShot = await rp.evaluate(function (ctx) {
       const s = window.RangeSession.shots().slice(-1)[0], b = window.ballMesh.position;
-      const r = { popup: document.getElementById('score-popup').innerText, practice: s.practice, back: Math.hypot(b.x - ctx.pin.x, b.z - ctx.pin.z), tab: !!document.querySelector('#range-session [data-tab="approach"]') };
+      const r = { popup: document.getElementById('score-popup').innerText, practice: s.practice, back: Math.hypot(b.x - ctx.pin.x, b.z - ctx.pin.z), tab: !!document.querySelector('#range-session [data-tab="approach"]'),
+                  next: window.RangePractice.spot() && window.RangePractice.spot().dist };
       document.querySelector('#range-practice .rp-close').click();
       const t = courseHoles[ctx.ri].tees.range;
       r.off = { atTee: Math.hypot(b.x - t.x, b.z - t.z) < 0.5, hole: playingHoleIndex === ctx.ri, arcs: courseHoles[ctx.ri].teeMeshes.range.children.filter(function (c) { return c.userData.rangeDistance && !c.isSprite && c.geometry && c.geometry.type === 'BufferGeometry'; }).every(function (c) { return c.visible; }) };
@@ -1512,8 +1518,9 @@ function serve() {
     }, pr);
     checks.push({ name: 'range approach: the ball is put at the chosen distance from the pin, aimed at it, its hole\'s cup counts, the distance marks hide (the mat stays), the lie is the mat or the ground', ok:
       Math.abs(pr.on.toPin - pr.on.want) < 0.6 && pr.on.hole && pr.on.aimAtPin && pr.on.marksHidden && pr.on.mat && pr.on.lie === 'TEE' && pr.on.groundLie !== 'TEE', detail: JSON.stringify(pr.on) });
-    checks.push({ name: 'range approach: each shot is scored against the pin, booked with the practised distance, the ball goes back to the spot; closing puts it back on the tee', ok:
-      prShot.practice && Math.abs(prShot.practice.dist - pr.on.want) < 0.01 && prShot.practice.prox > 0 && /pinnen|the pin|I hål|In the hole/.test(prShot.popup) && Math.abs(prShot.back - pr.on.want) < 0.6 && prShot.tab &&
+    checks.push({ name: 'range approach: each shot is scored against the pin it was hit at, with the distance it was hit from (a change during the flight waits for the next shot, the ball then goes there); closing puts it back on the tee', ok:
+      prShot.practice && Math.abs(prShot.practice.dist - pr.on.want) < 0.01 && prShot.practice.prox > 0 && /pinnen|the pin|I hål|In the hole/.test(prShot.popup) && prShot.tab &&
+      pr.on.flying && pr.on.spotKept && pr.on.note.length > 0 && Math.abs(prShot.next - pr.on.want / 75 * 100) < 0.01 && Math.abs(prShot.back - pr.on.want / 75 * 100) < 0.6 &&
       prShot.off.atTee && prShot.off.hole && prShot.off.arcs, detail: JSON.stringify(prShot) });
     rangeStep = 'aim billboard and signs';
     await rp.evaluate(function () {   // the player's view from behind the tee, down the range
