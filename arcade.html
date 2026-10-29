@@ -14660,7 +14660,10 @@ window.triggerExplosion = function(x, y, z) {
                         window.ballMesh.position.set(window.ballPos.x, window.ballPos.y, window.ballPos.z);
                         window.ballMesh.visible = true;
                         
-                        // Reset camera behind tee, looking along range direction
+                        // Reset camera behind tee, looking along range direction; the camera is back in its aim phase (a course does that when
+                        // it hands the shot on: without it the swing keys stay locked as in a flight and the aim camera stops following the aim)
+                        gameCamPhase = 'IDLE_AIM';
+                        window.isPuttingMode = false;
                         let dir = rangeTee.rot || 0;
                         let behindDist = 12, lookAheadDist = 30;
                         camera.position.set(

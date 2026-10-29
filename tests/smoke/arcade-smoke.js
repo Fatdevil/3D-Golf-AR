@@ -1425,6 +1425,7 @@ function serve() {
       setMode('TEST');
       ArcadeStorage.setHudPrefs(['TOTAL_LENGTH', 'CARRY', 'OFFLINE']); window.renderDynamicHUD();
       window.setAimPoint(150, 0, 0);   // a target of the player's own, straight down the range
+      window.camFollowMode = 'AUTO';   // the directed camera, as players have it
       window.RangeSession.setClub(null);
       const chip = document.querySelector('#range-session .rs-club[data-club="7i"]'); if (chip) chip.click();   // the club the launch monitor shots are booked to
       window.triggerRealShot({ ballSpeedMph: 90, launchAngleDeg: 18, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 0, isLiveData: true });
@@ -1442,13 +1443,14 @@ function serve() {
     const lm = await rp.evaluate(function () {
       const el = document.getElementById('hud-offline'), t = el ? el.innerText : '';
       return { queued: window.__queued, strokes: window.players[0].strokes, offline: t, offM: parseFloat(t), total: parseFloat(document.getElementById('hud-total').innerText),
-               aim: [Math.round(window.aimTarget.x), Math.round(window.aimTarget.z)], manual: window.aimManual,
+               aim: [Math.round(window.aimTarget.x), Math.round(window.aimTarget.z)], manual: window.aimManual, keys: window.swingKeysAllowed(),
                session: window.RangeSession.shots().map(function (x) { return { club: x.club, src: x.source, off: Math.round(x.offline * 10) / 10, carry: Math.round(x.carry) }; }),
                panel: getComputedStyle(document.getElementById('range-session')).display, rows: document.querySelectorAll('#range-session tbody tr').length,
                dots: scene.children.filter(function (c) { return c.userData && c.userData.rangeSessionDot; }).length };
     });
     checks.push({ name: 'range: a launch-monitor shot that comes in during a flight is played next, not dropped', ok: lm.queued && lm.strokes === 2, detail: JSON.stringify(lm) });
     checks.push({ name: 'range: offline is measured across the aim line (a range along +X, started 6° right, ends a few metres R)', ok: / R$/.test(lm.offline) && lm.offM > 0.5 && lm.offM < lm.total * 0.3, detail: JSON.stringify(lm) });
+    checks.push({ name: 'range: after the shots the camera is back in its aim phase, so the swing keys work again (AUTO camera)', ok: lm.keys === true, detail: JSON.stringify(lm) });
     checks.push({ name: 'range: a hand-set aim stays between shots', ok: lm.manual && lm.aim[0] === 150 && lm.aim[1] === 0, detail: JSON.stringify(lm) });
     checks.push({ name: 'range session: both shots are listed, booked to the club picked in the panel, with a landing dot each', ok: lm.panel !== 'none' && lm.rows === 2 && lm.dots === 2 &&
       lm.session.length === 2 && lm.session.every(function (x) { return x.club === '7i' && x.src === 'LM' && x.carry > 30; }) && lm.session[1].off > 0.5, detail: JSON.stringify(lm) });
