@@ -1563,6 +1563,11 @@ function serve() {
                   dots: scene.children.filter(function (c) { return c.userData && c.userData.rangePracticeDot; }).length,
                   ellipse: scene.children.some(function (c) { return c.userData && c.userData.rangePracticeSpread; }),
                   sessionDotsHidden: scene.children.filter(function (c) { return c.userData && c.userData.rangeSessionDot; }).every(function (c) { return !c.visible; }) };
+      // each dot where its ball stopped (booked with the shot)
+      const rests = window.RangeSession.shots().slice(-3).map(function (s) { return s.practice; });
+      r.dotsAtRest = scene.children.filter(function (c) { return c.userData && c.userData.rangePracticeDot; }).every(function (c, i) {
+        return rests[i] && Math.hypot(c.position.x - rests[i].x, c.position.z - rests[i].z) < 0.01;
+      });
       document.querySelector('#range-practice [data-act="again"]').click();   // same test again: a new plan, shot 1
       r.again = window.RangePractice.test().phase === 'run' && window.RangePractice.test().i === 0;
       document.querySelector('#range-practice .rp-close').click();
@@ -1577,8 +1582,8 @@ function serve() {
       tsetup.setup.shots === 2 && tsetup.setup.bands === 3 && tsetup.setup.start && tsetup.setup.first && tsetup.setup.locked && /1\/3/.test(tsetup.setup.label) &&
       tshots.every(function (s) { return typeof s.points === 'number' && s.points >= 0 && s.points <= 100 && s.test === true && /\+\d+ (p|pts)/.test(s.popup); }) &&
       Math.abs(tshots[0].dist - 60 * tsetup.unitM) < 0.01 && tshots[0].at === 90 && tshots[1].at === 120, detail: JSON.stringify({ setup: tsetup.setup, shots: tshots }) });
-    checks.push({ name: 'range approach test: the result is the average of the points, the first is a best, with the spread drawn small and on the green (the landing dots hidden); closing clears it', ok:
-      tdone.phase === 'done' && tdone.score === tdone.avg && tdone.record === true && tdone.summary && tdone.plotDots === 3 && tdone.dots === 3 && tdone.ellipse && tdone.sessionDotsHidden &&
+    checks.push({ name: 'range approach test: the result is the average of the points, the first is a best, with the spread drawn small and on the green where the balls stopped (the landing dots hidden); closing clears it', ok:
+      tdone.phase === 'done' && tdone.score === tdone.avg && tdone.record === true && tdone.summary && tdone.plotDots === 3 && tdone.dots === 3 && tdone.dotsAtRest && tdone.ellipse && tdone.sessionDotsHidden &&
       tdone.again && tdone.after.dots === 0 && tdone.after.sessionDots, detail: JSON.stringify(tdone) });
     rangeStep = 'aim billboard and signs';
     await rp.evaluate(function () {   // the player's view from behind the tee, down the range

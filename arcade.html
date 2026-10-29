@@ -14722,7 +14722,7 @@ window.triggerExplosion = function(x, y, z) {
                             window.RangeSession.record({ club: window.RangeSession.clubFor(rIn.source, rIn.swingClub), source: rIn.source,
                                 carry: rOut.carry, total: rOut.total, offline: rOut.offline, apex: rOut.apex, landX: rOut.landX, landZ: rOut.landZ,
                                 ballSpeed: rIn.ballSpeed, clubSpeed: rIn.clubSpeed, launch: rIn.launch, hla: rIn.hla, spin: rIn.spin, spinAxis: rIn.spinAxis,
-                                practice: practice ? { dist: practice.dist, prox: practice.prox, onGreen: practice.onGreen, holed: practice.holed, along: practice.along, across: practice.across, hole: practice.hole,
+                                practice: practice ? { dist: practice.dist, prox: practice.prox, onGreen: practice.onGreen, holed: practice.holed, along: practice.along, across: practice.across, hole: practice.hole, x: practice.x, z: practice.z,
                                            points: practice.points, test: practice.test ? true : undefined } : undefined });
                         }
                         window._rangeShotInput = null; window._lastShotResult = null;

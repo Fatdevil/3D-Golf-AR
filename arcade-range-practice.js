@@ -262,7 +262,15 @@
             const at = function (along, across) { return { x: pin.x + ux * along - uz * across, z: pin.z + uz * along + ux * across }; };
             const ground = function (x, z) { const s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return (s && num(s.z) !== null) ? s.z : pin.y; };
             if (!dotGeo) dotGeo = new THREE.CircleGeometry(0.5, 18);
-            const shots = spreadShots();
+            // each shot where it stopped (its along/across are against the spot it was hit from, which a test may have turned since),
+            // seen from the spot now: the ellipse is then in the same frame as the dots
+            const shots = spreadShots().map(function (p) {
+                if (num(p.x) !== null && num(p.z) !== null) {
+                    const dx = p.x - pin.x, dz = p.z - pin.z;
+                    return { along: dx * ux + dz * uz, across: -dx * uz + dz * ux, onGreen: p.onGreen, holed: p.holed };
+                }
+                return p;
+            });
             shots.forEach(function (p, i) {
                 if (num(p.along) === null || num(p.across) === null) return;
                 const q = at(p.along, p.across), last = i === shots.length - 1;
@@ -410,7 +418,7 @@
         api.score = function (rest, onGreen, holed) {
             if (!spot) return null;
             const r = result(rest, spot.pin, spot, onGreen || holed);
-            r.dist = spot.dist; r.holed = !!holed; r.hole = spot.hole;
+            r.dist = spot.dist; r.holed = !!holed; r.hole = spot.hole; r.x = rest.x; r.z = rest.z;   // where it stopped (the spread on the green)
             const u = ' ' + unit();
             if (holed) r.text = '🎯 ' + t('holed');
             else {
@@ -424,7 +432,7 @@
                 r.points = points(r.prox, r.dist, r.holed);
                 r.test = { shot: test.i + 1, of: test.n };
                 r.text += ' · +' + r.points + ' ' + t('p');
-                test.shots.push({ dist: r.dist, along: r.along, across: r.across, prox: r.prox, onGreen: r.onGreen, holed: r.holed, points: r.points });
+                test.shots.push({ dist: r.dist, along: r.along, across: r.across, x: r.x, z: r.z, prox: r.prox, onGreen: r.onGreen, holed: r.holed, points: r.points });
                 test.i++;
                 if (test.i >= test.n) finishTest();
                 else { state.dist = toMetres(test.plan[test.i], test.meters); save(); }
