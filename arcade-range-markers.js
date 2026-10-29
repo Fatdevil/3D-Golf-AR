@@ -185,7 +185,9 @@
             // dashed centre line: 3 m dashes, 3 m apart, from just in front of the tee to the last arc
             const dashes = [];
             for (let z0 = 6; z0 + 3 <= far; z0 += 6) dashes.push(groundStrip(THREE, tee, [[0, z0], [0, z0 + 1.5], [0, z0 + 3]], 0.22, groundAt, 0.06));
-            group.add(new THREE.Mesh(mergeStrips(THREE, dashes), lineMat(THREE, 0xffffff, 0.38)));
+            const dashMesh = new THREE.Mesh(mergeStrips(THREE, dashes), lineMat(THREE, 0xffffff, 0.38));
+            dashMesh.userData.rangeDistance = true;
+            group.add(dashMesh);
 
             // the arcs: majors white and clear, the 25s faint
             const minor = [], major = [];
@@ -194,8 +196,9 @@
                 for (let i = 0; i <= n; i++) { const a = -half + 2 * half * i / n; pts.push([m.metres * Math.sin(a), m.metres * Math.cos(a)]); }
                 (m.major ? major : minor).push(groundStrip(THREE, tee, pts, m.major ? 0.45 : 0.2, groundAt, 0.07));
             });
-            group.add(new THREE.Mesh(mergeStrips(THREE, major), lineMat(THREE, 0xffffff, 0.55)));
-            group.add(new THREE.Mesh(mergeStrips(THREE, minor), lineMat(THREE, 0xffffff, 0.18)));
+            [new THREE.Mesh(mergeStrips(THREE, major), lineMat(THREE, 0xffffff, 0.55)), new THREE.Mesh(mergeStrips(THREE, minor), lineMat(THREE, 0xffffff, 0.18))].forEach(function (m) {
+                m.userData.rangeDistance = true; group.add(m);
+            });
 
             // per 50: a target (ring + flag) on the centre line and a sign on a post at each end of the arc
             const poleGeo = new THREE.CylinderGeometry(0.045, 0.045, 2.6, 8);
@@ -207,11 +210,12 @@
             const postMat = new THREE.MeshLambertMaterial({ color: 0xcbd5e1 });
             list.filter(function (m) { return m.major; }).forEach(function (m) {
                 const color = new THREE.Color(m.color), gy = localY(0, m.metres, 0);
-                const ring = new THREE.Mesh(ringGeo, lineMat(THREE, color, 0.85)); ring.rotation.x = -Math.PI / 2; ring.position.set(0, gy + 0.09, m.metres); group.add(ring);
-                const disc = new THREE.Mesh(discGeo, lineMat(THREE, color, 0.14)); disc.rotation.x = -Math.PI / 2; disc.position.set(0, gy + 0.08, m.metres); group.add(disc);
-                const pole = new THREE.Mesh(poleGeo, poleMat); pole.position.set(0, gy + 1.3, m.metres); pole.castShadow = true; group.add(pole);
+                const ring = new THREE.Mesh(ringGeo, lineMat(THREE, color, 0.85)); ring.rotation.x = -Math.PI / 2; ring.position.set(0, gy + 0.09, m.metres);
+                const disc = new THREE.Mesh(discGeo, lineMat(THREE, color, 0.14)); disc.rotation.x = -Math.PI / 2; disc.position.set(0, gy + 0.08, m.metres);
+                const pole = new THREE.Mesh(poleGeo, poleMat); pole.position.set(0, gy + 1.3, m.metres); pole.castShadow = true;
                 const flag = new THREE.Mesh(pennantGeo, new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide }));
-                flag.position.set(0, gy + 2.55, m.metres); group.add(flag);   // flies across the range, its face to the tee
+                flag.position.set(0, gy + 2.55, m.metres);   // flies across the range, its face to the tee
+                [ring, disc, pole, flag].forEach(function (o) { o.userData.rangeDistance = true; group.add(o); });
 
                 const tex = signTexture(THREE, m.label, unit, m.color), half = arcHalfAngle(m.metres);
                 [-1, 1].forEach(function (side) {
@@ -225,6 +229,7 @@
                     sprite.renderOrder = 4;
                     group.add(sprite);
                     const post = new THREE.Mesh(postGeo, postMat); post.scale.set(k, postH, k); post.position.set(lx, sy + postH / 2, lz); group.add(post);
+                    sprite.userData.rangeDistance = true; post.userData.rangeDistance = true;
                     sprite.userData.rangeSign = { post: post, side: side };
                 });
             });
@@ -237,8 +242,16 @@
         // Called before each frame is drawn: signs that would overlap a nearer one on the screen fade out (about 0.2 s), and come back when
         // the view opens up again. viewW / viewH are the size of the view in pixels.
         const _wp = { v: null };
+        // The distance marks (arcs, centre line, targets, signs) measure from the Range Tee: hidden while the ball is hit from somewhere
+        // else (approach practice); the tee and its mat stay
+        api.setDistanceMarks = function (group, visible) {
+            if (!group) return;
+            group.userData.hideDistance = !visible;
+            group.children.forEach(function (c) { if (c.userData && c.userData.rangeDistance) c.visible = !!visible; });
+        };
         api.declutter = function (group, camera, viewW, viewH) {
             if (!group || !camera || !root.THREE) return;
+            if (group.userData.hideDistance) return;   // the signs are hidden (see setDistanceMarks)
             const signs = [];
             group.children.forEach(function (c) { if (c.userData && c.userData.rangeSign) signs.push(c); });
             if (!signs.length) return;
@@ -272,7 +285,7 @@
         api.withAllSigns = function (groups, draw) {
             const saved = [];
             groups.forEach(function (g) {
-                if (!g) return;
+                if (!g || g.userData.hideDistance) return;
                 g.children.forEach(function (c) {
                     if (!c.userData || !c.userData.rangeSign) return;
                     const post = c.userData.rangeSign.post;
