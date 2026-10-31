@@ -94,6 +94,7 @@
         let state = { key: null, shots: [], club: null, tab: 'shots', open: true };
         let ctx = null;              // { scene, tee }
         let panel = null, dots = [], ellipse = null, dotGeo = null;
+        let marksShown = true;   // off while practising approaches (the green has its own spread then)
 
         const t = function (k) { const L = (root.getGolfLanguage && root.getGolfLanguage() === 'sv') ? TXT.sv : TXT.en; return L[k]; };
         const dist = function (m) { return num(m) === null ? '–' : (root.useMeters ? m : m * 1.09361).toFixed(0); };
@@ -170,7 +171,7 @@
                 }
                 h += '</div>';
                 const ell = ellipseClub();
-                if (ell && ellipse) h += '<div class="rs-note">' + esc(t('ellipse').replace('{c}', ell)) + '</div>';
+                if (ell && ellipse && marksShown) h += '<div class="rs-note">' + esc(t('ellipse').replace('{c}', ell)) + '</div>';
                 h += '<div class="rs-actions"><button data-act="csv"' + (shots.length ? '' : ' disabled') + '>⬇ ' + esc(t('csv')) + '</button><button data-act="clear"' + (shots.length ? '' : ' disabled') + '>' + esc(t('clear')) + '</button></div>';
             }
             panel.innerHTML = h;
@@ -236,6 +237,7 @@
                 m.position.set(s.landX, groundY(s.landX, s.landZ, ctx.tee.y) + 0.08, s.landZ);
                 if (last) m.scale.setScalar(1.7);
                 m.renderOrder = 2;
+                m.visible = marksShown;
                 m.userData.rangeSessionDot = true;
                 ctx.scene.add(m);
                 dots.push(m);
@@ -251,6 +253,7 @@
                 }
                 ellipse = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: COLORS[club] === undefined ? 0xffffff : COLORS[club], transparent: true, opacity: 0.95 }));
                 ellipse.renderOrder = 3;
+                ellipse.visible = marksShown;
                 ctx.scene.add(ellipse);
             }
         }
@@ -298,6 +301,7 @@
         api.shots = function () { return state.shots.slice(); };
         api.getClub = function () { return state.club; };
         api.setClub = function (c) { state.club = (c && CLUBS.indexOf(c) >= 0) ? c : null; save(); if (ctx) redraw(); };
+        api.setMarksVisible = function (v) { if (marksShown === !!v) return; marksShown = !!v; dots.forEach(function (d) { d.visible = marksShown; }); if (ellipse) ellipse.visible = marksShown; render(); };
         api.render = render;   // after a language or unit change
     }
 

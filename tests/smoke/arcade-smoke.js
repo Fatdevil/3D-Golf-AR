@@ -1522,6 +1522,69 @@ function serve() {
       prShot.practice && Math.abs(prShot.practice.dist - pr.on.want) < 0.01 && prShot.practice.prox > 0 && /pinnen|the pin|I hål|In the hole/.test(prShot.popup) && prShot.tab &&
       pr.on.flying && pr.on.spotKept && pr.on.note.length > 0 && Math.abs(prShot.next - pr.on.want / 75 * 100) < 0.01 && Math.abs(prShot.back - pr.on.want / 75 * 100) < 0.6 &&
       prShot.off.atTee && prShot.off.hole && prShot.off.arcs, detail: JSON.stringify(prShot) });
+    rangeStep = 'approach test';
+    const tsetup = await rp.evaluate(async function () {
+      const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+      const rh = courseHoles.find(function (x) { return x && x.tees && x.tees.range; }), ri = courseHoles.indexOf(rh), t = rh.tees.range;
+      const gi = ri === 1 ? 2 : 1, dir = t.rot || 0;
+      const pin = { x: t.x + Math.sin(dir) * 120, y: t.y, z: t.z + Math.cos(dir) * 120 };
+      courseHoles[gi].flag = pin; courseHoles[gi].flagMesh = createFlagObject(pin.x, pin.y, pin.z);
+      window.RangeSession.setClub(null);   // test shots of all lengths: not booked to the 7i in the player's bag
+      window.RangePractice.refresh();
+      await wait(200);
+      document.querySelector('#range-practice .rp-open').click();
+      await wait(200);
+      document.querySelector('#range-practice [data-act="test"]').click();
+      const setup = { shots: document.querySelectorAll('#range-practice [data-tn]').length, bands: document.querySelectorAll('#range-practice [data-tb]').length,
+                      start: !!document.querySelector('#range-practice [data-act="start"]') };
+      window.RangePractice.startTest(3, [50, 150], [60, 90, 120]);   // three shots at known distances (the player's unit)
+      await wait(300);
+      const unitM = window.useMeters ? 1 : 0.9144, b = window.ballMesh.position;
+      setup.first = Math.abs(Math.hypot(b.x - pin.x, b.z - pin.z) - 60 * unitM) < 0.6;
+      setup.locked = !document.querySelector('#range-practice .rp-value') && document.querySelector('#range-practice .rp-green').disabled;
+      setup.label = (document.querySelector('#range-practice .rp-label') || {}).innerText || '';
+      return { setup: setup, gi: gi, pin: pin, unitM: unitM };
+    });
+    const tshots = [];
+    for (let i = 0; i < 3; i++) {
+      await rp.evaluate(function (i) { window.triggerRealShot({ ballSpeedMph: 60 + i * 12, launchAngleDeg: 26, totalSpinRpm: 8000, spinAxisDeg: 0, azimDeg: i - 1, isLiveData: true }); }, i);
+      await rp.waitForFunction(function () { window.skipFlight(); return !window.isBallFlying() && playState === 'ROUND_IDLE'; }, null, { timeout: 120000, polling: 500 });
+      await rp.waitForTimeout(300);
+      tshots.push(await rp.evaluate(function (ctx) {
+        const s = window.RangeSession.shots().slice(-1)[0], b = window.ballMesh.position;
+        return { popup: document.getElementById('score-popup').innerText, points: s.practice && s.practice.points, test: s.practice && s.practice.test, dist: s.practice && s.practice.dist,
+                 at: Math.round(Math.hypot(b.x - ctx.pin.x, b.z - ctx.pin.z) / ctx.unitM) };
+      }, tsetup));
+    }
+    const tdone = await rp.evaluate(function (ctx) {
+      const tt = window.RangePractice.test();
+      const r = { phase: tt.phase, score: tt.score, record: tt.record, avg: Math.round(tt.shots.reduce(function (a, s) { return a + s.points; }, 0) / tt.shots.length),
+                  summary: !!document.querySelector('#range-practice .rp-summary svg'), plotDots: document.querySelectorAll('#range-practice .rp-summary .rp-shot').length,
+                  dots: scene.children.filter(function (c) { return c.userData && c.userData.rangePracticeDot; }).length,
+                  ellipse: scene.children.some(function (c) { return c.userData && c.userData.rangePracticeSpread; }),
+                  sessionDotsHidden: scene.children.filter(function (c) { return c.userData && c.userData.rangeSessionDot; }).every(function (c) { return !c.visible; }) };
+      // each dot where its ball stopped (booked with the shot)
+      const rests = window.RangeSession.shots().slice(-3).map(function (s) { return s.practice; });
+      r.dotsAtRest = scene.children.filter(function (c) { return c.userData && c.userData.rangePracticeDot; }).every(function (c, i) {
+        return rests[i] && Math.hypot(c.position.x - rests[i].x, c.position.z - rests[i].z) < 0.01;
+      });
+      document.querySelector('#range-practice [data-act="again"]').click();   // same test again: a new plan, shot 1
+      r.again = window.RangePractice.test().phase === 'run' && window.RangePractice.test().i === 0;
+      document.querySelector('#range-practice .rp-close').click();
+      r.after = { dots: scene.children.filter(function (c) { return c.userData && c.userData.rangePracticeDot; }).length,
+                  sessionDots: scene.children.filter(function (c) { return c.userData && c.userData.rangeSessionDot; }).some(function (c) { return c.visible; }) };
+      scene.remove(courseHoles[ctx.gi].flagMesh); courseHoles[ctx.gi].flag = null; courseHoles[ctx.gi].flagMesh = null;
+      window.RangePractice.refresh();
+      window.RangeSession.setClub('7i');   // as the steps after expect
+      return r;
+    }, tsetup);
+    checks.push({ name: 'range approach test: picks shots and band, then plays its distances in turn (the controls locked), each shot worth up to 100 points, booked as a test shot', ok:
+      tsetup.setup.shots === 2 && tsetup.setup.bands === 3 && tsetup.setup.start && tsetup.setup.first && tsetup.setup.locked && /1\/3/.test(tsetup.setup.label) &&
+      tshots.every(function (s) { return typeof s.points === 'number' && s.points >= 0 && s.points <= 100 && s.test === true && /\+\d+ (p|pts)/.test(s.popup); }) &&
+      Math.abs(tshots[0].dist - 60 * tsetup.unitM) < 0.01 && tshots[0].at === 90 && tshots[1].at === 120, detail: JSON.stringify({ setup: tsetup.setup, shots: tshots }) });
+    checks.push({ name: 'range approach test: the result is the average of the points, the first is a best, with the spread drawn small and on the green where the balls stopped (the landing dots hidden); closing clears it', ok:
+      tdone.phase === 'done' && tdone.score === tdone.avg && tdone.record === true && tdone.summary && tdone.plotDots === 3 && tdone.dots === 3 && tdone.dotsAtRest && tdone.ellipse && tdone.sessionDotsHidden &&
+      tdone.again && tdone.after.dots === 0 && tdone.after.sessionDots, detail: JSON.stringify(tdone) });
     rangeStep = 'aim billboard and signs';
     await rp.evaluate(function () {   // the player's view from behind the tee, down the range
       const t = courseHoles.find(function (x) { return x && x.tees && x.tees.range; }).tees.range, dir = t.rot || 0;
