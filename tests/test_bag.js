@@ -13,7 +13,8 @@ bag = B.upsert(bag, { t: 1, source: 'LM', club: '7i', carry: 140, total: 148 });
 bag = B.upsert(bag, { t: 2, source: 'SIM', club: '7i', carry: 160, total: 170 });   // the swing meter measures the game's clubs
 bag = B.upsert(bag, { t: 3, source: 'LM', club: null, carry: 150, total: 158 });    // no club picked yet
 bag = B.upsert(bag, { t: 4, source: 'LM', club: '7i', carry: 0, total: 0 });        // a mis-read
-check('only launch-monitor shots with a club and a carry count', bag.length === 1 && bag[0].t === 1, JSON.stringify(bag));
+bag = B.upsert(bag, { t: 5, source: 'LM', club: 'PW', carry: 58, total: 62, practice: { dist: 60 } });   // an approach to a pin (a part swing)
+check('only launch-monitor shots with a club and a carry count, not approach practice shots', bag.length === 1 && bag[0].t === 1, JSON.stringify(bag));
 bag = B.upsert(bag, { t: 3, source: 'LM', club: '7i', carry: 150, total: 158 });    // the club is picked afterwards in the panel
 check('a club picked afterwards books the shot', bag.length === 2, JSON.stringify(bag));
 bag = B.upsert(bag, { t: 3, source: 'LM', club: '8i', carry: 150, total: 158 });    // and corrected again
