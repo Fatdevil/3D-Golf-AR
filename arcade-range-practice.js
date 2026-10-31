@@ -147,7 +147,8 @@
                   test: '🏆 Test', testTitle: 'Inspeltest', shots: 'slag', start: 'Starta test', cancel: 'Avbryt', record: 'Rekord', noRecord: 'Inget rekord än',
                   shot: 'Slag', avg: 'snitt', p: 'p', result: 'Resultat', newRecord: '🏆 Nytt rekord!', again: 'Kör igen', done: 'Klar', greens: 'Green',
                   toPin: 'till pinnen', testBlocked: 'Testet avbröts: inget spelbart läge på avstånden', plot: 'Var slagen hamnade runt pinnen',
-                  testHint: 'Slumpade avstånd · upp till 100 p per slag efter hur nära pinnen' },
+                  testHint: 'Slumpade avstånd · upp till 100 p per slag efter hur nära pinnen', bagAvg: 'snitt', plays: 'spelar',
+                  bagTip: 'Klubban i din bag vars snittlängd ligger närmast (launch monitor-slag från rangen)' },
             en: { open: '🎯 Approach to a green', green: 'Green', mat: 'Mat', ground: 'As it lies', lie: 'Lie', close: 'Back to the range',
                   none: 'Build a green with a flag to practise approaches', onGreen: 'On the green', miss: 'Missed', fromPin: 'from the pin', short: 'short', long: 'long',
                   left: 'left', right: 'right', holed: 'In the hole!', moved: 'Moved aside (water or out of bounds)',
@@ -155,7 +156,8 @@
                   test: '🏆 Test', testTitle: 'Approach test', shots: 'shots', start: 'Start test', cancel: 'Cancel', record: 'Best', noRecord: 'No best yet',
                   shot: 'Shot', avg: 'avg', p: 'pts', result: 'Score', newRecord: '🏆 New best!', again: 'Go again', done: 'Done', greens: 'Greens',
                   toPin: 'to the pin', testBlocked: 'Test stopped: nowhere playable at its distances', plot: 'Where the shots finished around the pin',
-                  testHint: 'Random distances · up to 100 pts a shot by how close to the pin' }
+                  testHint: 'Random distances · up to 100 pts a shot by how close to the pin', bagAvg: 'avg', plays: 'plays',
+                  bagTip: 'The club in your bag whose average length is nearest (launch monitor shots from the range)' }
         };
         const t = function (k) { return ((root.getGolfLanguage && root.getGolfLanguage() === 'sv') ? TXT.sv : TXT.en)[k]; };
         const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
@@ -298,6 +300,19 @@
             }
         }
 
+        // The club from the player's bag for this shot: the one whose average total is nearest to what it plays like (the distance to the
+        // pin, less what wind and slope add once the shot plan for this spot is worked out). Empty without a known club in the bag
+        function bagHtml() {
+            if (!spot || !root.PlayerBag || !root.PlayerBag.suggestFor) return '';
+            const d = Math.hypot(spot.pin.x - spot.x, spot.pin.z - spot.z), pl = root.shotPlan;
+            let plays = d;
+            if (pl && !pl.stale && num(pl.target) !== null && Math.abs(pl.target - d) < 1 && num(pl.wind) !== null && num(pl.terrain) !== null) plays = pl.target - pl.wind - pl.terrain;
+            const sug = root.PlayerBag.suggestFor(plays);
+            if (!sug) return '';
+            return '<span class="rp-bag" title="' + esc(t('bagTip')) + '">🎒 <b>' + esc(sug.club) + '</b> · ' + esc(t('bagAvg')) + ' ' + fmt(sug.total) + ' ' + unit() +
+                   (Math.abs(plays - d) >= 1 ? ' · ' + esc(t('plays')) + ' ' + fmt(plays) + ' ' + unit() : '') + '</span>';
+        }
+
         function ensureBar() {
             if (bar) return bar;
             bar = document.createElement('div');
@@ -337,12 +352,14 @@
                     h += '<span class="rp-label">🏆 ' + esc(t('shot')) + ' ' + (test.i + 1) + '/' + test.n + '</span>';
                     h += '<span class="rp-big">' + d + '<span class="rp-unit">' + unit() + '</span></span>';
                     if (test.shots.length) h += '<span class="rp-sub-inline">' + esc(t('avg')) + ' ' + Math.round(sum / test.shots.length) + ' ' + esc(t('p')) + '</span>';
+                    h += '<span class="rp-bag-slot">' + bagHtml() + '</span>';
                     h += '<button class="rp-text" data-act="cancel">' + esc(t('cancel')) + '</button>';
                 } else {
                     h += '<div class="rp-dist"><button data-step="-5" aria-label="−5">−5</button><button data-step="-1" aria-label="−1">−1</button>' +
                          '<input type="number" class="rp-value" min="' + MIN + '" max="' + MAX + '" value="' + d + '" aria-label="' + esc(unit()) + '"><span class="rp-unit">' + unit() + '</span>' +
                          '<button data-step="1" aria-label="+1">+1</button><button data-step="5" aria-label="+5">+5</button></div>';
                     h += '<div class="rp-presets">' + PRESETS.map(function (p) { return '<button data-preset="' + p + '" class="' + (p === d ? 'selected' : '') + '">' + p + '</button>'; }).join('') + '</div>';
+                    h += '<span class="rp-bag-slot">' + bagHtml() + '</span>';
                     h += '<button class="rp-test" data-act="test">' + esc(t('test')) + '</button>';
                 }
                 if (!test || test.phase === 'run') {
@@ -443,6 +460,8 @@
         // The shot is scored and booked: a change made during it (or the test's next distance) now, and the spread with the new shot
         api.settle = function () { if (!ctx) return; if (pending) apply(); else { drawSpread(); render(); } };
         api.render = render;   // after a language or unit change
+        // the shot plan for the spot is worked out: the bag's club with what wind and slope do (only that bit, so typing is not disturbed)
+        api.planReady = function () { const el = bar && bar.querySelector('.rp-bag-slot'); if (el) el.innerHTML = bagHtml(); };
         api.refresh = function () { if (ctx) apply(); };   // the greens may have changed
         api.getState = function () { return Object.assign({}, state); };
         api.set = function (s) { if (!ctx) return; Object.assign(state, s || {}); save(); apply(); };   // for tests and voice commands
