@@ -2,7 +2,8 @@
 //  PLAYER BAG — how far the player really hits each club, from the launch-monitor shots on the range (window.PlayerBag).
 //  The range session books every shot here (arcade-range-session.js); on a course the aim billboard picks the club whose average total is
 //  nearest to what the shot plays like (the distance to the aim, with what wind and slope add or take, from the shot plan).
-//  Only launch-monitor shots count: a swing-meter or typed shot measures the game's clubs, not the player's. The last 40 shots per club
+//  Only launch-monitor shots count: a swing-meter or typed shot measures the game's clubs, not the player's. Approach practice shots
+//  (to a pin, often a part swing) do not count either: a 60 m wedge would pull the club's average down. The last 40 shots per club
 //  are kept, so the bag follows the player's game as it changes; a club needs 3 shots before it is suggested.
 //  Kept on this device (localStorage 'golf_bag_v1'). The maths has no DOM and is tested in tests/test_bag.js.
 // ================================================================
@@ -15,11 +16,12 @@
     function sd(a) { if (a.length < 2) return 0; const m = mean(a); return Math.sqrt(a.reduce(function (s, v) { return s + (v - m) * (v - m); }, 0) / (a.length - 1)); }
 
     // The bag after a shot is booked, or its club changed: the entry with the same time is replaced (or dropped when the shot no longer
-    // counts), and each club keeps its newest PER_CLUB shots. A shot counts when it came from a launch monitor, has a club and a carry.
+    // counts), and each club keeps its newest PER_CLUB shots. A shot counts when it came from a launch monitor, has a club and a carry,
+    // and is not an approach practice shot.
     function upsert(list, shot, perClub) {
         perClub = perClub || PER_CLUB;
         const out = list.filter(function (e) { return e.t !== shot.t; });
-        if (shot.source === 'LM' && shot.club && num(shot.carry) !== null && shot.carry > 0) {
+        if (shot.source === 'LM' && shot.club && num(shot.carry) !== null && shot.carry > 0 && !shot.practice) {
             out.push({ t: shot.t, club: shot.club, carry: shot.carry, total: num(shot.total) !== null ? shot.total : shot.carry });
         }
         out.sort(function (a, b) { return a.t - b.t; });
