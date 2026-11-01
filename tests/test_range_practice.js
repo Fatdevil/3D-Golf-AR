@@ -65,5 +65,29 @@ check('the plot: one dot per shot (gold in the hole, green on it, red off it) an
   (svg.match(/class="rp-shot"/g) || []).length === 3 && svg.includes('#fbbf24') && svg.includes('#4ade80') && svg.includes('#f87171') && svg.includes('<ellipse'), svg);
 check('the plot: past the pin is up, right is right', /cx="(7[1-9]|[89]\d)[^"]*" cy="(7[1-9]|[89]\d|1\d\d)/.test(svg.split('rp-shot')[2]), svg);
 
+// the test history
+const k9 = P.testKey(9, [50, 150], true), k18 = P.testKey(18, [30, 80], false);
+check('a test is its shots, band and unit', k9 === '9|50-150|m' && k18 === '18|30-80|yd' && P.testKey(9, [50, 150], false) !== k9);
+let hist = [];
+[40, 55, 48, 62, 58, 70].forEach((v, i) => { hist = P.addResult(hist, { t: i + 1, k: k9, score: v }); });
+hist = P.addResult(hist, { t: 10, k: k18, score: 33 });
+const tr = P.trend(hist, k9);
+check('trend: how many, the latest, the one before, the best, the average of the latest five, oldest first',
+  tr.n === 6 && tr.last === 70 && tr.prev === 58 && tr.best === 70 && tr.avg5 === Math.round((55 + 48 + 62 + 58 + 70) / 5) && tr.series.join() === '40,55,48,62,58,70', JSON.stringify(tr));
+check('trend: a test never played is null; one played once has no previous', P.trend(hist, '9|30-80|m') === null && P.trend(hist, k18).prev === null);
+check('the tests played, the latest played first', P.testsPlayed(hist).join() === [k18, k9].join());
+let many = [];
+for (let i = 0; i < P.HISTORY_MAX + 5; i++) many = P.addResult(many, { t: i, k: k9, score: 50 });
+check('the history keeps the newest ' + P.HISTORY_MAX, many.length === P.HISTORY_MAX && many[0].t === 5);
+const spark = P.sparkSVG([40, 70, 55], { tip: (i, v) => 'Test ' + (i + 1) + ': ' + v });
+check('the spark line: a dot per test with its score as a tooltip, the line, and the best dashed',
+  (spark.match(/class="rp-spark-dot"/g) || []).length === 3 && spark.includes('<polyline') && spark.includes('rp-spark-best') && spark.includes('<title>Test 2: 70</title>'), spark);
+const sr = P.sparkRange([55, 58, 61]), sr2 = P.sparkRange([5, 95]);
+check('the spark line shows the scores with room, at least 30 points tall, inside 0 to 100', sr[1] - sr[0] === 30 && sr[0] <= 55 && sr[1] >= 61 && sr2[0] === 0 && sr2[1] === 100, JSON.stringify([sr, sr2]));
+const old = P.sparkSVG([50, 50, 50], { best: 95 }), yOf = (svg, cls) => +new RegExp('class="' + cls + '"[^>]*y1="([\\d.]+)"').exec(svg)[1];
+check('the record line is at the test\'s record even when it is older than the scores drawn (and inside the chart)',
+  yOf(old, 'rp-spark-best') < +/class="rp-spark-dot" cx="[\d.]+" cy="([\d.]+)"/.exec(old)[1] && yOf(old, 'rp-spark-best') >= 0, old);
+check('a higher score is drawn higher', (() => { const ys = [...spark.matchAll(/class="rp-spark-dot" cx="[\d.]+" cy="([\d.]+)"/g)].map(m => +m[1]); return ys[1] < ys[2] && ys[2] < ys[0]; })(), spark);
+
 if (failed) { console.log('\n' + failed + ' failed'); process.exit(1); }
 console.log('\nAll range practice checks passed');
