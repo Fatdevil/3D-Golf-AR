@@ -39,5 +39,51 @@ expectNone('spela'); expectNone('play'); expectNone('let us play golf tomorrow')
 // ordinary talk holds no command
 expectNone(''); expectNone('hello there'); expectNone('jag tror att det blir regn'); expectNone(null);
 
+// the range: approach practice (parseRange), what a launch monitor player says at the mat
+const { parseRange } = require('../voice-commands.js');
+function expectRange(text, want) {
+  const c = parseRange(text), ok = JSON.stringify(c) === JSON.stringify(want);
+  console.log((ok ? '✅ ' : '❌ ') + 'range ' + JSON.stringify(text) + ' -> ' + JSON.stringify(c) + (ok ? '' : '   expected ' + JSON.stringify(want)));
+  if (!ok) failed++;
+}
+expectRange('75 meter', { action: 'dist', value: 75, unit: 'm' });
+expectRange('75 m', { action: 'dist', value: 75, unit: 'm' });
+expectRange('120 yards', { action: 'dist', value: 120, unit: 'yd' });
+expectRange('avstånd 90', { action: 'dist', value: 90, unit: null });
+expectRange('150', { action: 'dist', value: 150, unit: null });
+expectRange('sjuttiofem meter', { action: 'dist', value: 75, unit: 'm' });
+expectRange('sjuttiofem', { action: 'dist', value: 75, unit: null });   // ends in m, but no metre
+expectRange('75m', { action: 'dist', value: 75, unit: 'm' });
+expectRange('130yd', { action: 'dist', value: 130, unit: 'yd' });
+expectRange('etthundrafemtio', { action: 'dist', value: 150, unit: null });
+expectRange('hundratjugofem meter', { action: 'dist', value: 125, unit: 'm' });
+expectRange('a hundred and fifty yards', { action: 'dist', value: 150, unit: 'yd' });
+expectRange('sixty five', { action: 'dist', value: 65, unit: null });
+expectRange('green två', { action: 'green', value: 2 });
+expectRange('Green 3', { action: 'green', value: 3 });
+expectRange('green two', { action: 'green', value: 2 });
+expectRange('green to', { action: 'green', value: 2 });
+expectRange('matta', { action: 'lie', value: 'mat' });
+expectRange('the mat', { action: 'lie', value: 'mat' });
+expectRange('som marken', { action: 'lie', value: 'ground' });
+expectRange('as it lies', { action: 'lie', value: 'ground' });
+expectRange('starta test', { action: 'test' });
+expectRange('start the test', { action: 'test' });
+expectRange('kör igen', { action: 'again' });
+expectRange('go again', { action: 'again' });
+expectRange('avbryt', { action: 'cancel' });
+expectRange('stäng', { action: 'close' });
+expectRange('back to the range', { action: 'close' });
+expectRange('inspel', { action: 'open' });
+expectRange('hjälp', { action: 'help' });
+// talk at the mat: a number inside a sentence, a club number, a distance too short or too long is no command
+expectRange('jag slog 150 i går', null);
+expectRange('sju', null);
+expectRange('7', null);
+expectRange('900 meter', null);
+expectRange('vilket bra slag', null);
+// the builder's words are not range commands
+expectRange('ändra fairway', null);
+
 console.log(failed ? '\n' + failed + ' voice command check(s) failed' : '\nVoice commands: all checks passed');
 process.exit(failed ? 1 : 0);

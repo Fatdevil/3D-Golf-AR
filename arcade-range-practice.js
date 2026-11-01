@@ -201,7 +201,9 @@
                   shot: 'Slag', avg: 'snitt', p: 'p', result: 'Resultat', newRecord: '🏆 Nytt rekord!', again: 'Kör igen', done: 'Klar', greens: 'Green',
                   toPin: 'till pinnen', testBlocked: 'Testet avbröts: inget spelbart läge på avstånden', plot: 'Var slagen hamnade runt pinnen',
                   testHint: 'Slumpade avstånd · upp till 100 p per slag efter hur nära pinnen', bagAvg: 'snitt', plays: 'spelar', prev: 'Förra gången',
-                  bagTip: 'Klubban i din bag vars snittlängd ligger närmast (launch monitor-slag från rangen)' },
+                  bagTip: 'Klubban i din bag vars snittlängd ligger närmast (launch monitor-slag från rangen)',
+                  mic: 'Röststyrning: säg till exempel 75 meter, green två, matta eller starta test', locked: 'Låst under testet', noGreen: 'Ingen green',
+                  opened: 'Inspel', closed: 'Tillbaka till rangen', cancelled: 'Testet avbrutet', noTest: 'Inget test pågår' },
             en: { open: '🎯 Approach to a green', green: 'Green', mat: 'Mat', ground: 'As it lies', lie: 'Lie', close: 'Back to the range',
                   none: 'Build a green with a flag to practise approaches', onGreen: 'On the green', miss: 'Missed', fromPin: 'from the pin', short: 'short', long: 'long',
                   left: 'left', right: 'right', holed: 'In the hole!', moved: 'Moved aside (water or out of bounds)',
@@ -210,7 +212,9 @@
                   shot: 'Shot', avg: 'avg', p: 'pts', result: 'Score', newRecord: '🏆 New best!', again: 'Go again', done: 'Done', greens: 'Greens',
                   toPin: 'to the pin', testBlocked: 'Test stopped: nowhere playable at its distances', plot: 'Where the shots finished around the pin',
                   testHint: 'Random distances · up to 100 pts a shot by how close to the pin', bagAvg: 'avg', plays: 'plays', prev: 'Last time',
-                  bagTip: 'The club in your bag whose average length is nearest (launch monitor shots from the range)' }
+                  bagTip: 'The club in your bag whose average length is nearest (launch monitor shots from the range)',
+                  mic: 'Voice control: say for example 75 metres, green two, mat or start test', locked: 'Locked during the test', noGreen: 'No green',
+                  opened: 'Approach', closed: 'Back to the range', cancelled: 'Test cancelled', noTest: 'No test running' }
         };
         const t = function (k) { return ((root.getGolfLanguage && root.getGolfLanguage() === 'sv') ? TXT.sv : TXT.en)[k]; };
         const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
@@ -386,6 +390,13 @@
             document.body.appendChild(bar);
             return bar;
         }
+        // the microphone (voice-commands.js): the same switch as the builder's, here so a player at the mat sees and reaches it
+        function micHtml() {
+            const V = root.VoiceCommands;
+            if (!V || !V.supported) return '';
+            const on = !!(V.listening && V.listening());
+            return '<button class="rp-mic' + (on ? ' on' : '') + '" data-act="mic" aria-pressed="' + on + '" title="' + esc(t('mic')) + '" aria-label="' + esc(t('mic')) + '">🎙️</button>';
+        }
         function chips(attr, values, selected, label) {
             return values.map(function (v, i) { return '<button ' + attr + '="' + i + '" class="' + (i === selected ? 'selected' : '') + '">' + esc(label(v)) + '</button>'; }).join('');
         }
@@ -394,7 +405,7 @@
             const list = targets();
             let h = '';
             if (!list.length) h = '<div class="rp-hint">' + esc(t('none')) + '</div>';
-            else if (!state.on) h = '<button class="rp-open" data-act="open">' + esc(t('open')) + '</button>';
+            else if (!state.on) h = '<button class="rp-open" data-act="open">' + esc(t('open')) + '</button>' + micHtml();
             else {
                 const g = current(), d = inUnit(state.dist, !!root.useMeters), locked = running();
                 h += '<select class="rp-green" aria-label="' + esc(t('green')) + '"' + (test && test.phase !== 'done' ? ' disabled' : '') + '>' + list.map(function (x) {
@@ -429,6 +440,7 @@
                     h += '<div class="rp-lie" role="group" aria-label="' + esc(t('lie')) + '"><button data-lie="mat" class="' + (state.lie === 'mat' ? 'selected' : '') + '"' + (locked ? ' disabled' : '') + '>' + esc(t('mat')) + '</button>' +
                          '<button data-lie="ground" class="' + (state.lie === 'ground' ? 'selected' : '') + '"' + (locked ? ' disabled' : '') + '>' + esc(t('ground')) + '</button></div>';
                 }
+                h += micHtml();
                 if (!test || test.phase !== 'setup') h += '<button class="rp-close" data-act="close" title="' + esc(t('close')) + '" aria-label="' + esc(t('close')) + '">✕</button>';
                 if (test && test.phase === 'done') {
                     const n = test.shots.length, greens = test.shots.filter(function (s) { return s.onGreen || s.holed; }).length;
@@ -464,6 +476,7 @@
                 if (g && (state.hole === null || state.hole === undefined)) state.hole = g.hole;
                 save(); apply();
             } else if (act === 'close') { state.on = false; test = null; save(); apply(); }
+            else if (act === 'mic') { if (root.VoiceCommands && root.VoiceCommands.toggle) root.VoiceCommands.toggle(); }
             else if (act === 'test') { test = { phase: 'setup' }; render(); }
             else if (act === 'start') startTest(state.testN, BANDS[state.testBand]);
             else if (act === 'again') startTest(test.n, test.band);
@@ -536,6 +549,46 @@
         // A test from code (tests, voice): n shots in a band of the player's unit, or the given distances
         api.startTest = function (n, band, plan) { if (ctx && state.on) startTest(n, band || BANDS[1], plan); };
         api.test = function () { return test ? JSON.parse(JSON.stringify(test)) : null; };
+        // Voice (voice-commands.js parseRange): runs a command and says what it did, { ok, text }. During a test the distance, the green and
+        // the lie stay as the test has them
+        api.voiceReady = function () { return !!ctx && !!bar && bar.style.display !== 'none'; };
+        api.voice = function (cmd) {
+            if (!ctx || !cmd) return null;
+            const list = targets(), u = root.useMeters ? 'm' : 'yd';
+            if (!list.length) return { ok: false, text: t('none') };
+            const openIt = function () { if (!state.on) { state.on = true; if (state.hole === null || state.hole === undefined) state.hole = list[0].hole; } };
+            const locked = running() && (cmd.action === 'dist' || cmd.action === 'green' || cmd.action === 'lie');
+            if (locked) return { ok: false, text: t('locked') };
+            switch (cmd.action) {
+                case 'open': openIt(); save(); apply(); return { ok: true, text: t('opened') };
+                case 'close': state.on = false; test = null; save(); apply(); return { ok: true, text: t('closed') };
+                case 'dist': {
+                    // in the unit said, else the player's
+                    const unitSaid = cmd.unit || u, metres = unitSaid === 'm' ? cmd.value : cmd.value * 0.9144;
+                    openIt(); if (test && test.phase !== 'run') test = null;
+                    setDist(metres);
+                    return { ok: true, text: '🎯 ' + inUnit(state.dist, !!root.useMeters) + ' ' + u };
+                }
+                case 'green': {
+                    const g = list[cmd.value - 1];
+                    if (!g) return { ok: false, text: t('noGreen') + ' ' + cmd.value };
+                    openIt(); if (test && test.phase !== 'run') test = null;
+                    state.hole = g.hole; save(); apply();
+                    return { ok: true, text: t('green') + ' ' + g.n };
+                }
+                case 'lie': openIt(); state.lie = cmd.value === 'ground' ? 'ground' : 'mat'; save(); apply(); return { ok: true, text: t(state.lie === 'ground' ? 'ground' : 'mat') };
+                case 'test': case 'again': {
+                    if (running()) return { ok: false, text: t('locked') };
+                    openIt();
+                    const again = cmd.action === 'again' && test && test.phase === 'done';
+                    const n = again ? test.n : state.testN, band = again ? test.band : BANDS[state.testBand];
+                    startTest(n, band);
+                    return { ok: true, text: '🏆 ' + n + ' ' + t('shots') + ' · ' + band[0] + '–' + band[1] + ' ' + u };
+                }
+                case 'cancel': if (!test) return { ok: false, text: t('noTest') }; test = null; apply(); return { ok: true, text: t('cancelled') };
+            }
+            return null;
+        };
         // The tests played on this range, the latest played first (at most `max`): what each is, and how its scores go
         api.trends = function (max) {
             if (!ctx) return [];

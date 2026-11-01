@@ -55,6 +55,10 @@
         return { n: pts.length, along: mean(al), across: mean(ac), sdAlong: sd(al), sdAcross: sd(ac) };
     }
 
+    // The shots that tell how far a club goes: approach practice shots (to a pin, often a part swing, from a spot other than the tee) are
+    // listed with the others but left out of the club averages, the aim billboard's average and the ellipse, as they are out of the bag
+    function fullSwings(shots) { return shots.filter(function (s) { return !s.practice; }); }
+
     function toCSV(shots, useMeters) {
         const k = useMeters ? 1 : 1.09361, u = useMeters ? 'm' : 'yd';
         const f = function (v, d) { return num(v) === null ? '' : v.toFixed(d); };
@@ -68,7 +72,7 @@
     }
 
     const api = { CLUBS: CLUBS, FROM_SWING: FROM_SWING, MAX_SHOTS: MAX_SHOTS, mean: mean, sd: sd, rangeFrame: rangeFrame, fromRangeFrame: fromRangeFrame,
-                  clubStats: clubStats, dispersion: dispersion, toCSV: toCSV };
+                  clubStats: clubStats, dispersion: dispersion, fullSwings: fullSwings, toCSV: toCSV };
 
     // ── In the page: the panel, the dots and the ellipse ──
     if (typeof document !== 'undefined') {
@@ -178,7 +182,7 @@
                     h += '</tbody></table>';
                 } else {
                     h += '<table><thead><tr><th>' + esc(t('club')) + '</th><th>' + esc(t('n')) + '</th><th>' + esc(t('carry')) + '</th><th>±</th><th>' + esc(t('total')) + '</th><th>' + esc(t('spread')) + '</th></tr></thead><tbody>';
-                    clubStats(shots).forEach(function (r) {
+                    clubStats(fullSwings(shots)).forEach(function (r) {
                         h += '<tr><td><span class="rs-dot" style="background:' + hex(r.club) + '"></span>' + esc(r.club) + '</td><td>' + r.n + '</td><td>' + dist(r.carry) + '</td><td>' +
                              (r.n > 1 ? dist(r.carrySd) : '–') + '</td><td>' + dist(r.total) + '</td><td>' + (r.n > 1 ? '±' + dist(r.offlineSd) : '–') + '</td></tr>';
                     });
@@ -259,7 +263,7 @@
                 dots.push(m);
             });
             const club = ellipseClub();
-            const d = club ? dispersion(state.shots.filter(function (s) { return s.club === club; }), ctx.tee) : null;
+            const d = club ? dispersion(fullSwings(state.shots).filter(function (s) { return s.club === club; }), ctx.tee) : null;
             if (d) {
                 // 1.5 standard deviations each way: about 2 in 3 shots of a round spread land inside
                 const ra = Math.max(1.5, 1.5 * d.sdAlong), rc = Math.max(1.5, 1.5 * d.sdAcross), pts = [];
@@ -311,7 +315,7 @@
             if (!ctx) return null;
             const lm = !!(root.SwingEngine && root.SwingEngine.getInputMode && root.SwingEngine.getInputMode() === 'LM');
             if (!state.club) return lm ? { needClub: true } : null;
-            const st = clubStats(state.shots.filter(function (s) { return s.club === state.club; }))[0];
+            const st = clubStats(fullSwings(state.shots).filter(function (s) { return s.club === state.club; }))[0];
             return st ? { club: state.club, n: st.n, carry: st.carry, carrySd: st.carrySd, total: st.total } : { club: state.club, n: 0 };
         };
         api.shots = function () { return state.shots.slice(); };

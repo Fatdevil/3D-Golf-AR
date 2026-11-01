@@ -849,6 +849,10 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-practice .rp-sum-best { color: #cbd5e1; font-weight: 700; }
   #range-practice .rp-sum-best.rp-new { color: #facc15; font-weight: 900; }
   #range-practice .rp-sum-actions { display: flex; gap: 6px; margin-top: 4px; }
+  #range-practice .rp-mic { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: #cbd5e1; font-size: 14px; cursor: pointer; }
+  #range-practice .rp-mic:hover { background: rgba(255,255,255,0.08); }
+  #range-practice .rp-mic.on { background: #dc2626; border-color: #fecaca; color: #fff; animation: voicePulse 1.4s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { #range-practice .rp-mic.on { animation: none; } }
   #range-practice .rp-up { color: #4ade80; font-weight: 800; }
   #range-practice .rp-down { color: #f87171; font-weight: 800; }
   /* the club from the player's bag for this distance */

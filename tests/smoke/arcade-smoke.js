@@ -1541,18 +1541,28 @@ function serve() {
       window.RangeSession.setClub(null);   // test shots of all lengths: not booked to the 7i in the player's bag
       window.RangePractice.refresh();
       await wait(200);
-      document.querySelector('#range-practice .rp-open').click();
-      await wait(200);
+      // voice at the mat (what the recogniser writes is handed in as it would be): a distance opens practice there, the lie, a test locks
+      // the distance until it is cancelled
+      const V = window.VoiceCommands, unitM = window.useMeters ? 1 : 0.9144, voice = {};
+      voice.dist = V.handle(['90 meter']) && Math.abs(window.RangePractice.spot().dist - 90) < 0.01 && window.RangePractice.getState().on;
+      voice.words = V.handle(['sjuttiofem']) && Math.abs(window.RangePractice.spot().dist - 75 * unitM) < 0.01;   // in the player's unit
+      voice.lie = V.handle(['som marken']) && window.RangePractice.getState().lie === 'ground' && V.handle(['matta']) && window.RangePractice.getState().lie === 'mat';
+      voice.test = V.handle(['starta test']) && window.RangePractice.test().phase === 'run';
+      const locked = window.RangePractice.spot().dist;
+      voice.locked = V.handle(['120 meter']) === false && window.RangePractice.spot().dist === locked;
+      voice.cancel = V.handle(['avbryt']) && window.RangePractice.test() === null;
+      voice.talk = V.handle(['jag slog 150 i går']) === false;
+      voice.rangeClass = document.body.classList.contains('voice-range') || !V.supported;   // set by the voice module's check (every 0.7 s)
       document.querySelector('#range-practice [data-act="test"]').click();
       const setup = { shots: document.querySelectorAll('#range-practice [data-tn]').length, bands: document.querySelectorAll('#range-practice [data-tb]').length,
                       start: !!document.querySelector('#range-practice [data-act="start"]') };
       window.RangePractice.startTest(3, [50, 150], [60, 90, 120]);   // three shots at known distances (the player's unit)
       await wait(300);
-      const unitM = window.useMeters ? 1 : 0.9144, b = window.ballMesh.position;
+      const b = window.ballMesh.position;
       setup.first = Math.abs(Math.hypot(b.x - pin.x, b.z - pin.z) - 60 * unitM) < 0.6;
       setup.locked = !document.querySelector('#range-practice .rp-value') && document.querySelector('#range-practice .rp-green').disabled;
       setup.label = (document.querySelector('#range-practice .rp-label') || {}).innerText || '';
-      return { setup: setup, gi: gi, pin: pin, unitM: unitM };
+      return { setup: setup, gi: gi, pin: pin, unitM: unitM, voice: voice };
     });
     const tshots = [];
     for (let i = 0; i < 3; i++) {
@@ -1592,6 +1602,8 @@ function serve() {
       window.RangeSession.setClub('7i');   // as the steps after expect
       return r;
     }, tsetup);
+    checks.push({ name: 'range voice: at the mat a spoken distance (digits or words, in the player\'s unit unless said), the lie and the test work; the distance is locked during a test; talk is no command', ok:
+      Object.keys(tsetup.voice).every(function (k) { return tsetup.voice[k] === true; }), detail: JSON.stringify(tsetup.voice) });
     checks.push({ name: 'range approach test: picks shots and band, then plays its distances in turn (the controls locked), each shot worth up to 100 points, booked as a test shot', ok:
       tsetup.setup.shots === 2 && tsetup.setup.bands === 3 && tsetup.setup.start && tsetup.setup.first && tsetup.setup.locked && /1\/3/.test(tsetup.setup.label) &&
       tshots.every(function (s) { return typeof s.points === 'number' && s.points >= 0 && s.points <= 100 && s.test === true && /\+\d+ (p|pts)/.test(s.popup); }) &&
