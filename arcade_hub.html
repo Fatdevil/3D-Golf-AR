@@ -172,6 +172,15 @@ body {
 
 /* COURSE GRID (Trackman Style) */
 .tm-modal-content.wide { max-width: 1200px; }
+.list-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.list-tools input, .list-tools select { height: 38px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #0f172a; color: #e2e8f0; font: inherit; font-size: 14px; padding: 0 12px; }
+.list-tools input { flex: 1 1 220px; min-width: 0; }
+.list-tools input:focus-visible, .list-tools select:focus-visible, .more-btn:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
+.list-tools label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.more-btn { grid-column: 1 / -1; justify-self: center; height: 44px; padding: 0 22px; border-radius: 12px; border: 1px solid rgba(234,179,8,0.5); background: rgba(234,179,8,0.12); color: #fde68a; font-weight: 800; cursor: pointer; }
+.more-btn:hover { background: rgba(234,179,8,0.22); }
+.course-card-rating { margin-top: 8px; font-size: 12px; color: #e2e8f0; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+.course-card-rating .gr-pick button { font-size: 20px; }
 .course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
 .course-card { position: relative; background: #1e293b; border-radius: 16px; overflow: hidden; height: 220px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.2s, box-shadow 0.2s; }
 .course-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.3); }
@@ -185,6 +194,8 @@ body {
 </style>
 <script src="device-token.js"></script>
 <script src="arcade-auth.js"></script>
+<script src="ratings.js"></script>
+<script>window.GolfRatings.base = 'https://3d-golf-ar-production.up.railway.app';</script>
 <script src="arcade-feature-flags.js"></script>
 </head>
 <body>
@@ -340,6 +351,16 @@ body {
       <button class="tm-close" onclick="closeModal('modal-ranges')">&times;</button>
       <h2 style="font-size:32px; font-weight:900; margin-top:0;">DRIVING RANGES</h2>
       <p style="color:#94a3b8; margin-bottom:20px;">Choose a saved driving range and start hitting balls.</p>
+      <div class="list-tools">
+         <label for="range-search">Search ranges</label>
+         <input type="search" id="range-search" placeholder="Search by name, creator or code" autocomplete="off">
+         <label for="range-sort">Order</label>
+         <select id="range-sort">
+            <option value="new">Newest</option>
+            <option value="top">Best rated</option>
+            <option value="popular">Most played</option>
+         </select>
+      </div>
       <div id="range-container" class="course-grid">
          <div style="color:#94a3b8; text-align:center; padding:20px; grid-column: 1 / -1;">Loading ranges...</div>
       </div>
@@ -643,38 +664,58 @@ function promptDisplayName() {
 
 initHub();
 
-async function loadRanges() {
+// Every published range can be picked: searched by name or creator, ordered (newest, best rated, most played), 50 at a time.
+// Each card has its stars: tap one to rate the range (a star never starts the range; one's own shows its stars without rating them)
+const RANGE_PAGE = 50;
+let rangesShown = 0, rangesToken = 0;
+function rangeCard(r, i) {
+    const placeholders = [
+        'https://images.unsplash.com/photo-1535132011086-b8818f016104?w=800&q=80',
+        'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80'
+    ];
+    window.GolfRatings.seed(r);
+    return `
+    <div class="course-card" onclick="playRange('${escHtml(r.share_code)}')">
+       <div class="course-card-bg" style="background-image: url('${placeholders[i % placeholders.length]}');"></div>
+       <div class="course-card-overlay">
+          <div class="course-card-badge" style="background:rgba(234,179,8,0.8);">DRIVING RANGE</div>
+          <h4 class="course-card-title">${escHtml(r.name)}</h4>
+          <div class="course-card-meta">${escHtml(r.author)}</div>
+          <div class="course-card-rating">${window.GolfRatings.widget(r.share_code)}</div>
+       </div>
+    </div>`;
+}
+async function loadRanges(more) {
+    const box = document.getElementById('range-container');
+    const q = document.getElementById('range-search').value.trim(), sort = document.getElementById('range-sort').value;
+    const token = ++rangesToken, offset = more ? rangesShown : 0;
+    if (!more) rangesShown = 0;
     try {
-        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/ranges');
+        let res = await fetch('https://3d-golf-ar-production.up.railway.app/api/ranges?sort=' + encodeURIComponent(sort) + '&offset=' + offset + (q ? '&q=' + encodeURIComponent(q) : ''),
+                              { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
         let ranges = await res.json();
-        let html = '';
-        let placeholders = [
-            'https://images.unsplash.com/photo-1535132011086-b8818f016104?w=800&q=80',
-            'https://images.unsplash.com/photo-1587174486073-ae5e1c402111?w=800&q=80'
-        ];
-        
-        ranges.forEach((r, i) => {
-            let bgImg = placeholders[i % placeholders.length];
-            html += `
-            <div class="course-card" onclick="playRange('${r.share_code}')">
-               <div class="course-card-bg" style="background-image: url('${bgImg}');"></div>
-               <div class="course-card-overlay">
-                  <div class="course-card-badge" style="background:rgba(234,179,8,0.8);">DRIVING RANGE</div>
-                  <h4 class="course-card-title">${escHtml(r.name)}</h4>
-                  <div class="course-card-meta">${escHtml(r.author)}</div>
-                  <div class="course-card-meta">PRACTICE MODE</div>
-               </div>
-            </div>`;
-        });
-        
-        if (ranges.length === 0) {
-           html = "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Inga publicerade ranges hittades. Bygg en via Build → BYGG RANGE!</div>";
+        if (token !== rangesToken) return;   // a newer search is on its way
+        if (!Array.isArray(ranges)) throw new Error('not a list');
+        const old = box.querySelector('.more-btn');
+        if (old) old.remove();
+        if (!more) box.innerHTML = '';
+        if (!more && ranges.length === 0) {
+           box.innerHTML = q ? "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Ingen range matchar sökningen.</div>"
+                             : "<div style='color:#94a3b8; padding:20px; text-align:center; grid-column: 1 / -1;'>Inga publicerade ranges hittades. Bygg en via Build → BYGG RANGE!</div>";
+           return;
         }
-        document.getElementById('range-container').innerHTML = html;
+        box.insertAdjacentHTML('beforeend', ranges.map((r, i) => rangeCard(r, rangesShown + i)).join(''));
+        rangesShown += ranges.length;
+        if (ranges.length === RANGE_PAGE) box.insertAdjacentHTML('beforeend', '<button type="button" class="more-btn" onclick="loadRanges(true)">Visa fler</button>');
     } catch(e) {
-        document.getElementById('range-container').innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center; grid-column: 1 / -1;">Kunde inte ladda ranges.</div>`;
+        if (!more) box.innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center; grid-column: 1 / -1;">Kunde inte ladda ranges.</div>`;
     }
 }
+(function () {
+    let timer = null;
+    document.getElementById('range-search').addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { loadRanges(false); }, 300); });
+    document.getElementById('range-sort').addEventListener('change', function () { loadRanges(false); });
+})();
 
 // --- COMBINE COURSES (TOUR) LOGIC ---
 let combineLength = 0;

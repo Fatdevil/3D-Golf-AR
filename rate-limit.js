@@ -35,7 +35,7 @@ function classify(method, path) {
 // the largest JSON body a route takes: only the routes that carry maps, images and models need the large one
 function bodyLimit(path) {
   if (/^\/api\/(auth|users|admin)\b/.test(path)) return '100kb';
-  if (/^\/api\/courses\/[^/]+\/(like|results)$/.test(path)) return '1mb';
+  if (/^\/api\/courses\/[^/]+\/(like|results|rating)$/.test(path)) return '1mb';
   if (/^\/api\/collections\b/.test(path)) return '1mb';
   return '50mb';
 }
