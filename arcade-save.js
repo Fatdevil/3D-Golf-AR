@@ -323,6 +323,7 @@
 
     async function saveLevel(isAuto = false, noEdit = false) {
         if (window._courseLoading) return null; // not now: see above
+        if (window._practiceOnly) return null;  // the ready practice range played from the hub: the player's own draft stays as it was
         if (!isAuto && !noEdit) window._editRev = (window._editRev || 0) + 1; // the next-step guide: a direct save (panorama, quick save) means the course changed
         let sText = document.getElementById('save-status-text');
         let sIcon = document.getElementById('save-status-icon');

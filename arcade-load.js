@@ -816,6 +816,9 @@
         let isCloud = false;
         
         if (autoRun === 'new_build') {
+            // the ready practice range, played straight from the hub: built here and played, nothing saved on this device
+            const practice = params.get('practice') === '1', playNow = practice && params.get('play') === '1';
+            if (playNow) window._practiceOnly = true;
             if (typeof executeClear === 'function') executeClear();
             else ArcadeStorage.removeCustomLevel();
             
@@ -830,7 +833,7 @@
             if (params.get('mode') === 'range') {
                 window._isRangeMode = true;
                 // Auto-select Range Tee as default tool
-                setTimeout(() => {
+                if (!playNow) setTimeout(() => {
                     if (typeof setTool === 'function') setTool('HOLE');
                     if (typeof setHoleItem === 'function') setHoleItem('TEE_RANGE');
                 }, 500);
@@ -861,7 +864,18 @@
                 window._surroundTouched = true;   // the next-step guide counts the surroundings as started
                 window.updateSurroundColors();
             }
-            
+
+            // the practice range: its tee and greens, then straight to the range (play) or on in the builder as one's own new range
+            if (practice && window.RangeTemplate && window._isRangeMode) window.RangeTemplate.build();
+            if (playNow) {
+                setMode('TEST');
+                setTimeout(() => {
+                    let loader = document.getElementById('global-loader');
+                    if (loader) loader.classList.add('hidden');
+                }, 800);
+                return;
+            }
+
             setMode('BUILD');
             try {
                 let u = new URL(window.location.href);

@@ -42,6 +42,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `arcade-perlin.js` | Perlin noise för terränggeneration |
 | `arcade-bag.js` | Spelarens bag: snitt per klubba från rangens launch monitor-slag, klubbförslag på banan (`window.PlayerBag`) |
 | `arcade-range-markers.js` | Rangens markeringar: avståndsbågar, mål med flagga per 50, streckad mittlinje och skyltar, i spelarens enhet (`window.RangeMarkers`) |
+| `arcade-range-template.js` | Den färdiga övningsrangen: Range Tee och tre riktiga greener med flagga (60, 100, 140 m) (`window.RangeTemplate`) |
 | `ratings.js` | Stjärnor för publicerade banor och ranger: på kort och för att betygsätta (`window.GolfRatings`) |
 | `arcade-range-practice.js` | Inspel på rangen: utslagsplats på valt avstånd från en greens pinne, resultat mot pinnen, statistik per avstånd, inspeltest med poäng och rekord, spridning runt pinnen (`window.RangePractice`) |
 | `arcade-range-session.js` | Range-session: slaglista, klubbsnitt (gapping), landningsprickar och spridningsellips, CSV (`window.RangeSession`) |
@@ -463,6 +464,12 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - **Enhetens token.** `device-token.js` skapar en slumpad token (`golf_os_device_token`, 64 hex) och en `fetch`-omslag lägger den som `x-user-token` på varje anrop med `x-user-id`. Servern sparar bara SHA-256-hashen (`users.token_hash`). Första token ett id visar upp blir enhetens (`checkDevice`); därefter ger saknad eller fel token 401 i `authMiddleware`, och i `optionalAuth` behandlas anroparen som ingen. Ett id utan konto får ett konto bundet till första token. **Övergång:** ett id utan token som ingen enhet gjort anspråk på släpps fortfarande igenom, så att gamla klienter inte låses ute; den regeln kan skärpas när aktiva enheter hunnit göra anspråk.
 - **Gränser** (`rate-limit.js`): skrivande anrop under `/api` 120/min och adress (`RATE_LIMIT_WRITES`), skapa konto 30/min (`RATE_LIMIT_REGISTER`), admininloggning 10/min (`RATE_LIMIT_LOGIN`); över gränsen 429 med `Retry-After`. JSON-kroppar: 100 kB för konto och admin, 1 MB för resultat, gilla och samlingar, 50 MB för banor, modeller och bilder; för stor kropp ger 413. `trust proxy` är 1 (Railway). Test: `tests/test_rate_limit.js` och `collections-e2e.js`.
 - **Adminlösenordet** kommer från `ADMIN_PASSWORD`; saknas den används ett standardvärde i koden. Sätt alltid variabeln i produktion.
+
+## Övningsrangen (2026-11)
+`arcade-range-template.js` bygger en färdig range med byggarens egna delar: Range Tee med matta och tre greener (`applyGreenPipeline`, med klippmönster och flagga) 60, 100 och 140 m ner, lite åt sidorna. En bana har högst tre hål, så det blir tre greener; inspelet flyttar bollen till valfritt avstånd ändå. Två ingångar:
+- **Spela direkt** (hubbens range-dialog, kortet överst): `?autorun=new_build&mode=range&template=flat&practice=1&play=1`. Rangen byggs och spelas i testläge. `window._practiceOnly` gör att inget sparas på enheten (`saveLevel` gör ingenting), så spelarens eget utkast lämnas orört. Byggläget spärras med ett meddelande, och sessionen och inspelets inställningar sparas under nyckeln `golfos-practice`.
+- **Bygg från övningsrangen** (hubbens byggdialog, byggsidan): samma adress utan `play=1` ger en vanlig ny range som börjar som övningsrangen, att ändra och publicera.
+Test: `tests/test_range_template.js` och smoke (steget *practice range*).
 
 ## Publicerade banor och ranger: listor och betyg (2026-11)
 - **Alla kan välja alla publicerade:** `GET /api/courses` och `GET /api/ranges` delar samma fråga (`listQuery` i `server.js`): publicerade, inte dolda (`is_hidden`, även för ranger nu), sökning i namn, skapare och kod, ordning nyast / bäst betyg / mest spelade, 50 per sida med `offset`. Galleriet (`courses.html`, Community-banor) och hubbens range-dialog (`arcade_hub.html`) har sökfält, ordning och "Visa fler". Mobilhubben visar banornas betyg (den har inget range-läge).

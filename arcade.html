@@ -3996,6 +3996,7 @@
 <script src="arcade-bag.js?v=2"></script>
 <script src="arcade-range-session.js?v=7"></script>
 <script src="arcade-range-practice.js?v=6"></script>
+<script src="arcade-range-template.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -7781,6 +7782,7 @@
         scene.add(group);
         return group;
     }
+    window.createRangeTeeObject = createRangeTeeObject;   // the practice range template places its tee with it
     // Draws the range marks again: the unit changed, the ground under them changed, or the tee was turned
     window.rebuildRangeMarkers = function() {
         for (let i = 0; i < MAX_HOLES; i++) {
@@ -11107,6 +11109,13 @@
     window.getEditCode = function () { return currentEditCode; };
     window.getAppMode = function () { return appMode; };
     function setMode(mode) {
+        // the ready practice range played from the hub is not saved on this device: it is not built on here (a range of one's own starts
+        // from it in the builder instead)
+        if (window._practiceOnly && (mode === 'BUILD' || mode === 'ARCHITECT')) {
+            let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+            if (typeof showBuildToast === 'function') showBuildToast(sv ? 'Övningsrangen byggs inte om här. Välj "Bygg från övningsrangen" i hubben för en egen.' : 'The practice range is not edited here. Pick "Build from the practice range" in the hub for one of your own.', '#475569');
+            return;
+        }
         finalizeSculptStroke({ save: true });
         if ((appMode === 'BUILD' || appMode === 'ARCHITECT') && (mode === 'PLAY' || mode === 'TEST')) {
             if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
@@ -11354,7 +11363,7 @@
                     if (typeof window.rebuildRangeMarkers === 'function') window.rebuildRangeMarkers();
 
                     // the session panel: this range's shots so far (kept per range on this device), landing dots and spread
-                    let rangeKey = window._loadedShareCode || (typeof currentEditCode !== 'undefined' && currentEditCode) || 'draft';
+                    let rangeKey = window._practiceOnly ? 'golfos-practice' : (window._loadedShareCode || (typeof currentEditCode !== 'undefined' && currentEditCode) || 'draft');
                     if (window.RangeSession && window.RangeSession.start) {
                         // a published range can be rated from the panel (not a draft: it is only the builder's)
                         let rateCode = window._loadedShareCode && !window._loadedIsDraft ? window._loadedShareCode : null;

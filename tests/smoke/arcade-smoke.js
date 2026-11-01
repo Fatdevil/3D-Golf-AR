@@ -1670,6 +1670,24 @@ function serve() {
       return { range: window._isRangeMode === true, url: new URLSearchParams(location.search).get('mode'), teeBtn: b ? getComputedStyle(b).display : 'missing', hasTee: !!courseHoles.find(function (h) { return h && h.tees && h.tees.range; }) };
     });
     await rp2.close();
+    rangeStep = 'practice range';
+    // the ready practice range from the hub: three real greens with their flags, played at once, and the player's own draft (the range
+    // saved above) is left as it was, also when the builder is asked for
+    const draftBefore = await ctx3.newPage().then(async function (pg) { await pg.goto(base + '/robots.txt'); const d = await pg.evaluate(function () { return localStorage.getItem('arcade_custom_level'); }); await pg.close(); return d; });
+    const pr2 = await ctx3.newPage();
+    await pr2.goto(base + '/arcade.html?autorun=new_build&mode=range&template=flat&practice=1&play=1', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await pr2.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await pr2.waitForTimeout(3000);
+    const practiceRange = await pr2.evaluate(function (before) {
+      const t = courseHoles[0].tees.range, flags = courseHoles.filter(function (h) { return h && h.flag; }).map(function (h) { return h.flag; });
+      setMode('BUILD');
+      return { mode: appMode, tee: !!t, flags: flags.map(function (f) { return { d: Math.round(Math.hypot(f.x - t.x, f.z - t.z)), surf: (localGetTerrainAt(f.x, -f.z) || {}).type }; }),
+               draftKept: localStorage.getItem('arcade_custom_level') === before, bar: !!document.querySelector('#range-practice .rp-open, #range-practice .rp-green') };
+    }, draftBefore);
+    await pr2.close();
+    checks.push({ name: 'practice range: played straight from the hub with a Range Tee and three real greens (60, 100, 140 m, flags on the green), the player\'s own draft untouched, no builder', ok:
+      practiceRange.mode === 'TEST' && practiceRange.tee && practiceRange.flags.length === 3 && practiceRange.flags.every(function (f) { return f.surf === 'GREEN'; }) &&
+      practiceRange.flags.map(function (f) { return Math.round(f.d / 20); }).join() === '3,5,7' && practiceRange.draftKept && practiceRange.bar, detail: JSON.stringify(practiceRange) });
     rangeStep = 'bag on a course';
     const cp = await ctx3.newPage();
     await cp.goto(base + '/arcade.html?autorun=new_build&template=blank&biome=GLOBAL', { waitUntil: 'domcontentloaded', timeout: 120000 });
