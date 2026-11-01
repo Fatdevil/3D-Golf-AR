@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=20">
+<link rel="stylesheet" href="arcade.css?v=21">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -28,6 +28,7 @@
 <script src="arcade-auth.js"></script>
 <script src="arcade-feature-flags.js"></script>
 <script src="arcade-api-service.js"></script>
+<script src="ratings.js?v=1"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
 <script src="arcade-swing-engine.js?v=10"></script>
@@ -3792,6 +3793,8 @@
             <div id="scorecard-footer" style="margin-top:20px; text-align:center; display:flex; gap:15px; justify-content:center;">
                 <button onclick="document.getElementById('scorecard-modal').style.display='none'" style="background:#38bdf8; color:#0f172a; border:none; padding:12px 30px; border-radius:10px; font-weight:bold; font-size:16px; cursor:pointer;">Close Scorecard</button>
             </div>
+            <!-- after a round on a published course: the player's stars for it (ratings.js) -->
+            <div id="scorecard-rate" style="display:none; margin-top:18px; flex-direction:column; align-items:center; gap:6px; color:#e2e8f0;"></div>
             <div id="scorecard-endround-btns" style="display:none; margin-top:15px; text-align:center; display:flex; gap:15px; justify-content:center;">
                 <button onclick="document.getElementById('scorecard-modal').style.display='none'; commitSettingsAndStart();" style="background:#10b981; color:#fff; border:none; padding:14px 30px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🔄 Play Again</button>
                 <button onclick="window.location.href='arcade_hub.html'" style="background:#6366f1; color:#fff; border:none; padding:14px 30px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(99,102,241,0.4);">🏠 Return to Hub</button>
@@ -3991,7 +3994,7 @@
 <script src="arcade-shot-plan.js?v=1"></script>
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="arcade-bag.js?v=2"></script>
-<script src="arcade-range-session.js?v=6"></script>
+<script src="arcade-range-session.js?v=7"></script>
 <script src="arcade-range-practice.js?v=6"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
@@ -8657,6 +8660,17 @@
             if (endBtns) endBtns.style.display = 'flex';
             let closeBtn = document.getElementById('scorecard-footer');
             if (closeBtn) closeBtn.style.display = 'none';
+            // what did the player think of it: a published course (not a builder's preview, not a plate of a collection) can be rated here
+            let rateBox = document.getElementById('scorecard-rate');
+            if (rateBox && window.GolfRatings) {
+                let rateCode = window._loadedShareCode;
+                if (rateCode && !window._loadedIsDraft && !col) {
+                    let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                    rateBox.innerHTML = '<div style="font-weight:800; font-size:14px;">' + (sv ? 'Vad tyckte du om banan?' : 'What did you think of the course?') + '</div>' + window.GolfRatings.widget(rateCode);
+                    rateBox.style.display = 'flex';
+                    window.GolfRatings.load(rateCode);
+                } else rateBox.style.display = 'none';
+            }
             document.getElementById('scorecard-modal').style.display = 'flex';
             
             // === SUBMIT ROUND RESULT TO LEADERBOARD ===
@@ -11342,7 +11356,10 @@
                     // the session panel: this range's shots so far (kept per range on this device), landing dots and spread
                     let rangeKey = window._loadedShareCode || (typeof currentEditCode !== 'undefined' && currentEditCode) || 'draft';
                     if (window.RangeSession && window.RangeSession.start) {
-                        window.RangeSession.start({ key: rangeKey, scene: scene, tee: tee });
+                        // a published range can be rated from the panel (not a draft: it is only the builder's)
+                        let rateCode = window._loadedShareCode && !window._loadedIsDraft ? window._loadedShareCode : null;
+                        window.RangeSession.start({ key: rangeKey, scene: scene, tee: tee, rateCode: rateCode });
+                        if (rateCode && window.GolfRatings) window.GolfRatings.load(rateCode);
                     }
                     // approach practice against the range's greens (puts the ball on its spot when the player had it on)
                     if (window.RangePractice && window.RangePractice.start) {

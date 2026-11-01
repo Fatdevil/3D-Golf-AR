@@ -776,6 +776,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session .rs-note { color: #94a3b8; font-size: 10px; padding: 4px 12px 0; }
   /* the approach tests in the Approach tab: per test, its scores over time */
   #range-session .rs-tests { padding: 2px 0 6px; }
+  #range-session .rs-rate { padding: 6px 12px 0; }
+  #range-session .rs-rate .gr-pick button { font-size: 18px; }
   #range-session .rs-sub { color: #94a3b8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 4px 2px; }
   #range-session .rs-test { padding: 6px 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
   #range-session .rs-test-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }

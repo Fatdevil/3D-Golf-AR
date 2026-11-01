@@ -507,6 +507,7 @@
                         <div class="course-meta">
                             <span><i data-lucide="map" size="14"></i> ${esc(c.hole_count || '?')} Holes</span>
                             <span><i data-lucide="target" size="14"></i> Par ${esc(c.total_par || '?')}</span>
+                            ${c.rating_count ? `<span style="color:#facc15">★ ${esc((Math.round(c.rating_avg * 10) / 10).toFixed(1))} <span style="color:inherit; opacity:.7">(${esc(c.rating_count)})</span></span>` : ''}
                         </div>
                         ${c.author ? `<div class="course-meta"><span>by ${esc(c.author)}</span></div>` : ''}
                     </div>

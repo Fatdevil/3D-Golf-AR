@@ -252,6 +252,20 @@ async function initDB() {
             await pool.query(`ALTER TABLE course_records ADD COLUMN IF NOT EXISTS stableford_points INT;`);
         } catch(e) { console.log('HCP migration note:', e.message); }
 
+        // Ratings: one per player and course (or range), 1 to 5 stars, changeable
+        try {
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS course_ratings (
+                    share_code VARCHAR(20) NOT NULL,
+                    user_id VARCHAR(80) NOT NULL,
+                    stars SMALLINT NOT NULL CHECK (stars BETWEEN 1 AND 5),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (share_code, user_id)
+                );
+            `);
+        } catch(e) { console.log('Ratings migration note:', e.message); }
+
         console.log("✅ Database schema ready (v3 — HCP system)");
     } catch(err) {
         console.error("❌ Database schema error:", err);
@@ -586,18 +600,83 @@ app.get('/api/my/courses', requireDB, authMiddleware, async (req, res) => {
     }
 });
 
-app.get('/api/courses', requireDB, optionalAuth, async (req, res) => {
+// --- PUBLISHED COURSES AND RANGES: the lists everyone picks from ---
+// ?q= a word in the name or author, or the share code, ?sort= new (default) | top (best rated) | popular (most played), ?offset= for the next page (50 a page).
+// Each row carries its rating: the average stars, how many rated it, and the caller's own stars (my_rating) when they rated it.
+// 'top' ranks by the average pulled towards 3 stars by 3 imagined votes, so a single 5 does not beat a 4.8 from a hundred players.
+const LIST_PAGE = 50;
+function listQuery(isRange, q, sort, offset, userId) {
+    const params = [isRange, userId || ''];
+    let where = `(c.is_draft = false OR c.is_draft IS NULL) AND (c.is_hidden = false OR c.is_hidden IS NULL)
+                 AND COALESCE(c.is_range, false) = $1`;
+    if (q) {
+        params.push('%' + String(q).slice(0, 60).replace(/[\\%_]/g, ch => '\\' + ch) + '%');
+        where += ` AND (c.name ILIKE $${params.length} OR c.author ILIKE $${params.length} OR c.share_code ILIKE $${params.length})`;
+    }
+    const order = sort === 'top' ? `((COALESCE(rt.star_sum, 0) + 9) / (COALESCE(rt.rating_count, 0) + 3)) DESC, rt.rating_count DESC NULLS LAST, COALESCE(c.updated_at, c.created_at) DESC`
+        : sort === 'popular' ? `COALESCE(c.play_count, 0) DESC, COALESCE(c.updated_at, c.created_at) DESC`
+        : `COALESCE(c.updated_at, c.created_at) DESC`;
+    params.push(LIST_PAGE, Math.max(0, Math.min(100000, parseInt(offset, 10) || 0)));
+    const sql = `
+        SELECT c.share_code, c.name, c.author, c.likes, c.hole_count, c.total_par, c.play_count, c.owner_id, c.version, c.created_at,
+               rt.rating_avg, COALESCE(rt.rating_count, 0) AS rating_count, mr.stars AS my_rating
+        FROM courses c
+        LEFT JOIN (SELECT share_code, AVG(stars)::float AS rating_avg, SUM(stars)::float AS star_sum, COUNT(*)::int AS rating_count
+                   FROM course_ratings GROUP BY share_code) rt ON rt.share_code = c.share_code
+        LEFT JOIN course_ratings mr ON mr.share_code = c.share_code AND mr.user_id = $2
+        WHERE ${where}
+        ORDER BY ${order}
+        LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    return { sql: sql, params: params };
+}
+function listRow(r, userId) {
+    const out = hideOwner(r, userId);
+    out.rating_avg = r.rating_avg === null || r.rating_avg === undefined ? null : Math.round(r.rating_avg * 10) / 10;
+    out.rating_count = r.rating_count || 0;
+    out.my_rating = r.my_rating || null;
+    return out;
+}
+async function listPublished(req, res, isRange) {
     try {
-        const result = await pool.query(`
-            SELECT share_code, name, author, likes, hole_count, total_par, play_count, owner_id, version, created_at 
-            FROM courses 
-            WHERE (is_draft = false OR is_draft IS NULL) 
-              AND (is_range = false OR is_range IS NULL)
-              AND (is_hidden = false OR is_hidden IS NULL)
-            ORDER BY COALESCE(updated_at, created_at) DESC 
-            LIMIT 50
-        `);
-        res.json(result.rows.map(r => hideOwner(r, req.userId)));
+        const lq = listQuery(isRange, req.query.q, req.query.sort, req.query.offset, req.userId);
+        const result = await pool.query(lq.sql, lq.params);
+        res.json(result.rows.map(r => listRow(r, req.userId)));
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+}
+app.get('/api/courses', requireDB, optionalAuth, (req, res) => listPublished(req, res, false));
+
+// A course's (or range's) rating: the average, how many, the caller's own stars, and whether it is the caller's own (which they cannot rate)
+async function ratingOf(code, userId) {
+    const agg = (await pool.query('SELECT AVG(stars)::float AS avg, COUNT(*)::int AS n FROM course_ratings WHERE share_code = $1', [code])).rows[0];
+    const mine = userId ? (await pool.query('SELECT stars FROM course_ratings WHERE share_code = $1 AND user_id = $2', [code, userId])).rows[0] : null;
+    return { rating_avg: agg.avg === null ? null : Math.round(agg.avg * 10) / 10, rating_count: agg.n || 0, my_rating: mine ? mine.stars : null };
+}
+app.get('/api/courses/:code/rating', requireDB, optionalAuth, async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase();
+        const c = (await pool.query('SELECT owner_id FROM courses WHERE share_code = $1', [code])).rows[0];
+        if (!c) return res.status(404).json({ error: 'Course not found' });
+        res.json(Object.assign(await ratingOf(code, req.userId), { is_mine: !!c.owner_id && c.owner_id === req.userId }));
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// Rate a published course or range, 1 to 5 stars: one rating per player, a new one replaces theirs. Not one's own, not a draft or a hidden one
+app.post('/api/courses/:code/rating', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase();
+        const stars = Number(req.body && req.body.stars);
+        if (!Number.isInteger(stars) || stars < 1 || stars > 5) return res.status(400).json({ error: 'stars must be a whole number from 1 to 5' });
+        const c = (await pool.query('SELECT owner_id, is_draft, is_hidden FROM courses WHERE share_code = $1', [code])).rows[0];
+        if (!c || c.is_draft || c.is_hidden) return res.status(404).json({ error: 'Course not found' });
+        if (c.owner_id && c.owner_id === req.userId) return res.status(403).json({ error: 'You cannot rate your own course' });
+        await pool.query(`INSERT INTO course_ratings (share_code, user_id, stars) VALUES ($1, $2, $3)
+                          ON CONFLICT (share_code, user_id) DO UPDATE SET stars = EXCLUDED.stars, updated_at = CURRENT_TIMESTAMP`, [code, req.userId, stars]);
+        res.json(Object.assign({ success: true }, await ratingOf(code, req.userId)));
     } catch(err) {
         console.error(err);
         res.status(500).json({ error: 'Database error' });
@@ -1200,8 +1279,9 @@ app.delete('/api/courses/:code', requireDB, authMiddleware, async (req, res) => 
         const copies = (await pool.query("SELECT share_code FROM courses WHERE theme_data->>'_playCopyOf' = $1 AND owner_id IS NOT DISTINCT FROM $2", [code, course.rows[0].owner_id])).rows.map(r => r.share_code);
         const doomed = [code].concat(copies);
 
-        // Delete leaderboard records first (foreign key integrity)
+        // Delete leaderboard records first (foreign key integrity), and the course's ratings
         await pool.query('DELETE FROM course_records WHERE course_code = ANY($1)', [doomed]);
+        await pool.query('DELETE FROM course_ratings WHERE share_code = ANY($1)', [doomed]);
         
         // Delete the course
         await pool.query('DELETE FROM courses WHERE share_code = ANY($1)', [doomed]);
@@ -1382,22 +1462,8 @@ app.delete('/api/collections/:id', requireDB, authMiddleware, async (req, res) =
     }
 });
 
-// --- RANGES API ---
-app.get('/api/ranges', requireDB, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT share_code, name, author, likes, created_at 
-            FROM courses 
-            WHERE is_range = true AND (is_draft = false OR is_draft IS NULL)
-            ORDER BY created_at DESC 
-            LIMIT 50
-        `);
-        res.json(result.rows);
-    } catch(err) {
-        console.error(err);
-        res.status(500).json({ error: 'Database error' });
-    }
-});
+// --- RANGES API --- (the same list as the courses', of the published ranges: a hidden one is left out here too)
+app.get('/api/ranges', requireDB, optionalAuth, (req, res) => listPublished(req, res, true));
 
 // --- ASSET MANAGER API ---
 

@@ -134,6 +134,18 @@
         .cat-badge-community { color: #10b981; background: rgba(16, 185, 129, 0.1); }
         .cat-badge-draft { color: #94a3b8; background: rgba(148, 163, 184, 0.1); }
 
+        /* the community list: search, order, and more of it */
+        .list-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: -4px 0 6px; }
+        .list-tools input, .list-tools select { height: 38px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(15,23,42,0.7); color: #e2e8f0; font: inherit; font-size: 14px; padding: 0 12px; }
+        .list-tools input { flex: 1 1 220px; min-width: 0; }
+        .list-tools input:focus-visible, .list-tools select:focus-visible, .more-btn:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
+        .list-tools label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+        .more-btn { flex: 0 0 auto; align-self: center; height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid rgba(16,185,129,0.4); background: rgba(16,185,129,0.12); color: #6ee7b7; font-weight: 800; cursor: pointer; white-space: nowrap; }
+        .more-btn:hover { background: rgba(16,185,129,0.22); }
+        .card-rating { font-size: 12px; color: #cbd5e1; margin-top: 6px; }
+        .modal-rating { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .modal-rating-title { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+
         /* Scroll container with snap */
         .course-carousel {
             display: flex;
@@ -635,6 +647,16 @@
     <!-- Category 2: Community -->
     <section class="category-row">
         <h2 class="category-title">Community-banor <span class="cat-badge-community">COMMUNITY</span></h2>
+        <div class="list-tools">
+            <label for="community-search">Sök bana</label>
+            <input type="search" id="community-search" placeholder="Sök på namn, skapare eller kod" autocomplete="off">
+            <label for="community-sort">Ordning</label>
+            <select id="community-sort">
+                <option value="new">Nyast</option>
+                <option value="top">Bäst betyg</option>
+                <option value="popular">Mest spelade</option>
+            </select>
+        </div>
         <div class="course-carousel" id="community-carousel">
             <div class="empty-state">Laddar banor från servern...</div>
         </div>
@@ -673,6 +695,10 @@
                         <a href="#" class="btn-primary" id="modal-play-btn">🏌️ Spela banan</a>
                         <a href="#" class="btn-secondary" id="modal-edit-btn" style="display: none;">✏️ Redigera bana</a>
                     </div>
+                    <div class="modal-rating" id="modal-rating" style="display: none;">
+                        <div class="modal-rating-title">Betyg</div>
+                        <div id="modal-rating-widget"></div>
+                    </div>
                 </div>
 
                 <!-- Right: Leaderboard -->
@@ -693,9 +719,19 @@
 <!-- Auth Service -->
 <script src="device-token.js"></script>
 <script src="arcade-auth.js"></script>
+<script src="ratings.js"></script>
 
 <script>
     const API_BASE = 'https://3d-golf-ar-production.up.railway.app';
+    window.GolfRatings.base = API_BASE;
+    // a rating given in the details shows on its card too
+    window.GolfRatings.onChange = function (code, r) {
+        document.querySelectorAll('.card-rating').forEach(function (el) { if (el.getAttribute('data-rating-code') === code) el.innerHTML = window.GolfRatings.summary(r); });
+    };
+    // names and authors are typed by whoever saved the course: shown as text, never as markup
+    function escHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    }
 
     // ═══════════════════════════════════════════════════════════
     //  Featured / Official Presets (handcrafted with simulated leaderboard)
@@ -814,7 +850,7 @@
         let imageHtml = '';
         if (course.cover_image) {
             let src = course.cover_image.startsWith('data:') ? course.cover_image : course.cover_image;
-            imageHtml = `<img class="card-img" src="${src}" alt="${course.name}">`;
+            imageHtml = `<img class="card-img" src="${escHtml(src)}" alt="${escHtml(course.name)}">`;
         } else {
             let grad = getFallbackGradient(course.share_code);
             imageHtml = `<div class="card-fallback" style="background: ${grad}">
@@ -824,7 +860,7 @@
                     <path d="M70,33 L78,37 L70,41" fill="rgba(239,68,68,0.4)"/>
                     <ellipse cx="50" cy="75" rx="35" ry="8" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
                 </svg>
-                <span class="course-letters">${course.name.substring(0, 2).toUpperCase()}</span>
+                <span class="course-letters">${escHtml(String(course.name || '').substring(0, 2).toUpperCase())}</span>
             </div>`;
         }
 
@@ -841,13 +877,14 @@
                     <span class="badge-holes">⛳ ${holeCount}</span>
                 </div>
                 <div class="card-info">
-                    <div class="card-title">${course.name}</div>
-                    <div class="card-author">av ${course.author}</div>
+                    <div class="card-title">${escHtml(course.name)}</div>
+                    <div class="card-author">av ${escHtml(course.author)}</div>
                     <div class="card-stats">
                         <span class="stat-item">⛳ ${holeCount} hål</span>
                         <span class="stat-item">📏 P${totalPar}</span>
-                        <span class="stat-item">👍 ${course.likes || 0}</span>
+                        ${course.rating_count === undefined ? `<span class="stat-item">👍 ${course.likes || 0}</span>` : ''}
                     </div>
+                    ${course.rating_count === undefined ? '' : `<div class="card-rating" data-rating-code="${escHtml(course.share_code)}">${window.GolfRatings.summary(course)}</div>`}
                 </div>
             </div>
         `;
@@ -888,36 +925,48 @@
         }
     }
 
-    async function loadCommunityCourses() {
+    // Every published course can be picked: searched by name or creator, ordered (newest, best rated, most played), 50 at a time ("Visa fler")
+    const PAGE = 50;
+    let communityShown = 0, communityToken = 0;
+    function communityCard(c) {
+        window.GolfRatings.seed(c);
+        return createCardHtml({
+            share_code: c.share_code, name: c.name, author: c.author, cover_image: c.cover_image || null, likes: c.likes || 0,
+            play_count: c.play_count || 0, hole_count: c.hole_count || 3, total_par: c.total_par || 12, is_mine: c.is_mine === true, biome: 'Community',
+            rating_avg: c.rating_avg, rating_count: c.rating_count || 0, my_rating: c.my_rating || null
+        }, false);
+    }
+    async function loadCommunityCourses(more) {
         let carousel = document.getElementById('community-carousel');
+        const q = document.getElementById('community-search').value.trim(), sort = document.getElementById('community-sort').value;
+        const token = ++communityToken, offset = more ? communityShown : 0;
+        if (!more) communityShown = 0;
         try {
-            let res = await fetch(API_BASE + '/api/courses', { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
+            let url = API_BASE + '/api/courses?sort=' + encodeURIComponent(sort) + '&offset=' + offset + (q ? '&q=' + encodeURIComponent(q) : '');
+            let res = await fetch(url, { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
             let courses = await res.json();
-
-            if (courses && courses.length > 0) {
-                carousel.innerHTML = courses.map(c => {
-                    let course = {
-                        share_code: c.share_code,
-                        name: c.name,
-                        author: c.author,
-                        cover_image: c.cover_image || null,
-                        likes: c.likes || 0,
-                        play_count: c.play_count || 0,
-                        hole_count: c.hole_count || 3,
-                        total_par: c.total_par || 12,
-                        is_mine: c.is_mine === true,
-                        biome: 'Community'
-                    };
-                    return createCardHtml(course, false);
-                }).join('');
-            } else {
-                carousel.innerHTML = '<div class="empty-state">Inga publicerade banor hittades. Bli först med att bygga en!</div>';
+            if (token !== communityToken) return;   // a newer search is on its way
+            if (!Array.isArray(courses)) throw new Error('not a list');
+            const old = carousel.querySelector('.more-btn');
+            if (old) old.remove();
+            if (!more) carousel.innerHTML = '';
+            if (!more && courses.length === 0) {
+                carousel.innerHTML = q ? '<div class="empty-state">Ingen bana matchar sökningen.</div>' : '<div class="empty-state">Inga publicerade banor hittades. Bli först med att bygga en!</div>';
+                return;
             }
+            carousel.insertAdjacentHTML('beforeend', courses.map(communityCard).join(''));
+            communityShown += courses.length;
+            if (courses.length === PAGE) carousel.insertAdjacentHTML('beforeend', '<button type="button" class="more-btn" onclick="loadCommunityCourses(true)">Visa fler →</button>');
         } catch (e) {
             console.error('Failed to load courses:', e);
-            carousel.innerHTML = '<div class="empty-state" style="color: #ef4444">Kunde inte ansluta till databasen.</div>';
+            if (!more) carousel.innerHTML = '<div class="empty-state" style="color: #ef4444">Kunde inte ansluta till databasen.</div>';
         }
     }
+    (function () {
+        let timer = null;
+        document.getElementById('community-search').addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(function () { loadCommunityCourses(false); }, 300); });
+        document.getElementById('community-sort').addEventListener('change', function () { loadCommunityCourses(false); });
+    })();
 
     // ═══════════════════════════════════════════════════════════
     //  Modal Control
@@ -985,6 +1034,15 @@
                 editBtn.style.display = 'none';
             }
         }
+
+        // Rating: a published course from the community (one's own shows its stars, without rating them)
+        let ratingBox = document.getElementById('modal-rating');
+        if (!isFeatured && !course._isCollection && !course.is_draft && course.share_code) {
+            ratingBox.style.display = 'block';
+            if (course.rating_count !== undefined && !window.GolfRatings.cache[course.share_code]) window.GolfRatings.seed(course);   // a card may be older than a rating just given
+            document.getElementById('modal-rating-widget').innerHTML = window.GolfRatings.widget(course.share_code);
+            window.GolfRatings.load(course.share_code);
+        } else ratingBox.style.display = 'none';
 
         // Leaderboard
         let lbContent = document.getElementById('modal-leaderboard-content');

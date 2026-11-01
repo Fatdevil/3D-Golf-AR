@@ -53,6 +53,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: node tests/e2e/collections-e2e.js
+      - run: node tests/e2e/ratings-e2e.js
 
   browser:
     runs-on: ubuntu-latest

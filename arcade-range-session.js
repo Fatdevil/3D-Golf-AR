@@ -83,14 +83,14 @@
                   lmHint: 'Launch monitorn skickar inte klubban: välj den här.',
                   bagNote: 'Dina launch monitor-slag sparas i din bag (senaste 40 per klubba) och styr klubbförslaget på banan från 3 slag.',
                   tabApproach: 'Inspel', distance: 'Avstånd', greens: 'Green', toPin: 'Till pinne', best: 'Bäst', toPinNote: 'Snitt och bästa avstånd till pinnen per övat avstånd',
-                  tests: 'Inspeltest', last: 'Senast', avg5: 'Snitt 5 senaste', played: 'test', testTip: 'Test {i}: {v} p' },
+                  tests: 'Inspeltest', last: 'Senast', avg5: 'Snitt 5 senaste', played: 'test', testTip: 'Test {i}: {v} p', rateRange: 'Rangen' },
             en: { title: 'Session', shots: 'shots', pick: 'Which club are you hitting?', tabShots: 'Shots', tabClubs: 'Clubs', club: 'Club', carry: 'Carry', total: 'Total',
                   offline: 'Offline', n: 'Shots', spread: 'Spread', empty: 'Hit a shot and it shows up here.', csv: 'Export CSV', clear: 'New session',
                   confirmClear: 'Start a new session? The shots of this session are removed.', ellipse: 'The ellipse shows where about 2 in 3 shots with {c} land.',
                   lmHint: 'The launch monitor does not send the club: pick it here.',
                   bagNote: 'Your launch monitor shots go to your bag (the last 40 per club) and set the club suggestion on a course from 3 shots.',
                   tabApproach: 'Approach', distance: 'Distance', greens: 'Greens', toPin: 'To pin', best: 'Best', toPinNote: 'Average and best distance to the pin per practised distance',
-                  tests: 'Approach tests', last: 'Latest', avg5: 'Avg of last 5', played: 'tests', testTip: 'Test {i}: {v} pts' }
+                  tests: 'Approach tests', last: 'Latest', avg5: 'Avg of last 5', played: 'tests', testTip: 'Test {i}: {v} pts', rateRange: 'The range' }
         };
         const COLORS = { Dr: 0xef4444, '3W': 0xf97316, '5W': 0xf59e0b, Hy: 0xeab308, '4i': 0x84cc16, '5i': 0x22c55e, '6i': 0x10b981, '7i': 0x14b8a6,
                          '8i': 0x06b6d4, '9i': 0x0ea5e9, PW: 0x3b82f6, GW: 0x6366f1, SW: 0x8b5cf6, LW: 0xd946ef };
@@ -192,6 +192,8 @@
                 h += '</div>';
                 const ell = ellipseClub();
                 if (ell && ellipse && marksShown) h += '<div class="rs-note">' + esc(t('ellipse').replace('{c}', ell)) + '</div>';
+                // a published range: the player's stars for it (ratings.js keeps them, so a redraw shows the same)
+                if (ctx && ctx.rateCode && root.GolfRatings) h += '<div class="rs-rate"><span class="rs-sub">' + esc(t('rateRange')) + '</span>' + root.GolfRatings.widget(ctx.rateCode) + '</div>';
                 h += '<div class="rs-actions"><button data-act="csv"' + (shots.length ? '' : ' disabled') + '>⬇ ' + esc(t('csv')) + '</button><button data-act="clear"' + (shots.length ? '' : ' disabled') + '>' + esc(t('clear')) + '</button></div>';
             }
             panel.innerHTML = h;
@@ -283,7 +285,7 @@
             if (!opts || !opts.tee) return;
             const key = String(opts.key || 'draft');
             if (key !== state.key) { state.key = key; load(); }
-            ctx = { scene: opts.scene || null, tee: { x: opts.tee.x, y: opts.tee.y, z: opts.tee.z, rot: opts.tee.rot || 0 } };
+            ctx = { scene: opts.scene || null, tee: { x: opts.tee.x, y: opts.tee.y, z: opts.tee.z, rot: opts.tee.rot || 0 }, rateCode: opts.rateCode || null };
             ensurePanel().style.display = '';
             redraw();
         };

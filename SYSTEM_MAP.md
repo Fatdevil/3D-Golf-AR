@@ -42,6 +42,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `arcade-perlin.js` | Perlin noise för terränggeneration |
 | `arcade-bag.js` | Spelarens bag: snitt per klubba från rangens launch monitor-slag, klubbförslag på banan (`window.PlayerBag`) |
 | `arcade-range-markers.js` | Rangens markeringar: avståndsbågar, mål med flagga per 50, streckad mittlinje och skyltar, i spelarens enhet (`window.RangeMarkers`) |
+| `ratings.js` | Stjärnor för publicerade banor och ranger: på kort och för att betygsätta (`window.GolfRatings`) |
 | `arcade-range-practice.js` | Inspel på rangen: utslagsplats på valt avstånd från en greens pinne, resultat mot pinnen, statistik per avstånd, inspeltest med poäng och rekord, spridning runt pinnen (`window.RangePractice`) |
 | `arcade-range-session.js` | Range-session: slaglista, klubbsnitt (gapping), landningsprickar och spridningsellips, CSV (`window.RangeSession`) |
 | `arcade-lm-bridge.js` | WebSocket till Launch Monitor (SkyTrak/GSPro) på ws://localhost:8081 |
@@ -164,10 +165,13 @@ biomes (id, name, config)
 ### Courses
 | Endpoint | Metod | Syfte |
 |----------|-------|-------|
-| `GET /api/courses` | GET | Lista publicerade banor (exkl. draft, range, hidden) |
+| `GET /api/courses` | GET | Lista publicerade banor (exkl. draft, range, hidden). `?q=` söker i namn, skapare och kod, `?sort=new\|top\|popular`, `?offset=` nästa sida (50 per sida). Varje rad har `rating_avg`, `rating_count` och spelarens `my_rating` |
+| `GET /api/ranges` | GET | Samma lista för publicerade ranger (exkl. draft och hidden) |
+| `GET /api/courses/:code/rating` | GET | Banans eller rangens betyg: snitt, antal, spelarens egna och `is_mine` |
+| `POST /api/courses/:code/rating` | POST | Betygsätt 1–5 stjärnor (kräver id; ett betyg per spelare som ersätts; inte egen bana, utkast eller dold: 403/404; fel antal: 400) |
 | `POST /api/courses` | POST | Spara/uppdatera bana (kräver id, 401 annars; med ownership-check) |
 | `GET /api/courses/:code` | GET | Ladda en bana |
-| `POST /api/courses/:code/like` | POST | Gilla en bana |
+| `POST /api/courses/:code/like` | POST | Gilla en bana (äldre; listorna visar nu betyg) |
 
 ### Collections (banor av flera 3-hålsplattor)
 | Endpoint | Metod | Syfte |
@@ -460,5 +464,10 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - **Gränser** (`rate-limit.js`): skrivande anrop under `/api` 120/min och adress (`RATE_LIMIT_WRITES`), skapa konto 30/min (`RATE_LIMIT_REGISTER`), admininloggning 10/min (`RATE_LIMIT_LOGIN`); över gränsen 429 med `Retry-After`. JSON-kroppar: 100 kB för konto och admin, 1 MB för resultat, gilla och samlingar, 50 MB för banor, modeller och bilder; för stor kropp ger 413. `trust proxy` är 1 (Railway). Test: `tests/test_rate_limit.js` och `collections-e2e.js`.
 - **Adminlösenordet** kommer från `ADMIN_PASSWORD`; saknas den används ett standardvärde i koden. Sätt alltid variabeln i produktion.
 
+## Publicerade banor och ranger: listor och betyg (2026-11)
+- **Alla kan välja alla publicerade:** `GET /api/courses` och `GET /api/ranges` delar samma fråga (`listQuery` i `server.js`): publicerade, inte dolda (`is_hidden`, även för ranger nu), sökning i namn, skapare och kod, ordning nyast / bäst betyg / mest spelade, 50 per sida med `offset`. Galleriet (`courses.html`, Community-banor) och hubbens range-dialog (`arcade_hub.html`) har sökfält, ordning och "Visa fler". Mobilhubben visar banornas betyg (den har inget range-läge).
+- **Betyg** (`course_ratings`: `share_code`, `user_id`, `stars` 1–5, en rad per spelare): samma för banor och ranger. Egen bana, utkast och dolda kan inte betygsättas. "Bäst betyg" sorterar på snittet draget mot 3 med tre tänkta röster, så att en ensam femma inte slår 4,8 från hundra spelare. En raderad bana tar sina betyg med sig.
+- **`ratings.js`** (`window.GolfRatings`): `summary(rad)` ritar stjärnorna på kort, `widget(kod)` ritar stjärnor att betygsätta med. Cachen gör att en panel som ritar om sig visar samma sak. Ett klick på en stjärna når aldrig kortet under (fångas på vägen ner). Betyg sätts i galleriets detaljruta, på range-korten i hubben, på scorekortet efter en runda på en publicerad bana (inte en platta i en samling) och i rangens sessionspanel. Test: `tests/test_ratings.js`, `tests/e2e/ratings-e2e.js` (mot Postgres).
+
 ## Tester och CI (2026-10)
-`.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.
+`.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js` och `tests/e2e/ratings-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.
