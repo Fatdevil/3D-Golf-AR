@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=17">
+<link rel="stylesheet" href="arcade.css?v=18">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -3992,7 +3992,7 @@
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="arcade-bag.js?v=2"></script>
 <script src="arcade-range-session.js?v=4"></script>
-<script src="arcade-range-practice.js?v=3"></script>
+<script src="arcade-range-practice.js?v=4"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
 <script src="arcade-rules.js?v=3"></script>
@@ -6306,6 +6306,7 @@
             plan.target = job.dist; plan.manual = job.manual; plan.ctxKey = job.ctxKey; plan.stale = false;
             window.shotPlan = plan;
             if (!job.manual) window.SwingEngine.suggestClub(plan.club);
+            if (window._isRangeMode && window.RangePractice && window.RangePractice.planReady) window.RangePractice.planReady();   // the bag's club in the approach bar
         }
 
         // Runs a job in short timer slices (a flight or so each), independent of the render loop, so a heavy frame does not slow it down and it
@@ -12924,7 +12925,7 @@
             try {
                 const m = buildHillMesh(strideFor(30000, 8.0e6), 4.0e6);
                 if (splineHillMesh) { freePreview(splineHillMesh); splineHillMesh = null; }
-                if (m) { splineHillMesh = m; scene.add(m); }
+                if (m) { m.userData.hillFinal = true; splineHillMesh = m; scene.add(m); }   // the fine one (tests wait for it)
                 renderer.render(scene, camera);
             } catch (err) { console.warn('Hill mesh failed', err); }
         }, 180);

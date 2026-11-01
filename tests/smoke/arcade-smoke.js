@@ -734,17 +734,17 @@ function serve() {
         const prevMesh = function () { return scene.children.find(function (o) { return o.isMesh && o.renderOrder === 996; }); };
         const topY = function (m) { const a = m.geometry.attributes.position.array; let t = -1e9; for (let i = 1; i < a.length; i += 3) t = Math.max(t, a[i]); return t; };
         const sig = function (m) { const a = m.geometry.attributes.position.array; let t = 0; for (let i = 1; i < a.length; i += 3) t += a[i]; return t; };
+        // the coarse preview comes at once and the fine one a moment later: wait for the fine one (a slow runner can take well over the 180 ms)
+        const fine = async function () { for (let k = 0; k < 100; k++) { const m = prevMesh(); if (m && m.userData.hillFinal) return m; await wait(50); } return prevMesh(); };
         const hs = document.getElementById('mtn-spline-height'), js = document.getElementById('mtn-spline-jagged');
         hs.value = 25; js.value = 0; js.dispatchEvent(new Event('input', { bubbles: true }));
-        await wait(350);
-        const m0 = prevMesh();
+        const m0 = await fine();
         const fld = window.mtnHillField(window.splinePoints, 25, 0);
         let fmax = -1e9; fld.inside.forEach(function (v) { fmax = Math.max(fmax, v.newH); });
         const ok0 = !!m0 && Math.abs(topY(m0) - (fmax + 0.15)) < 0.05;
         const sig0 = m0 ? sig(m0) : 0;
         js.value = 100; js.dispatchEvent(new Event('input', { bubbles: true }));
-        await wait(350);
-        const m1 = prevMesh();
+        const m1 = await fine();
         const ok1 = !!m1 && Math.abs(sig(m1) - sig0) > 1;
         // the preview replaces itself: exactly one mesh, none after the outline is cleared
         const count1 = scene.children.filter(function (o) { return o.isMesh && o.renderOrder === 996; }).length;
@@ -1490,6 +1490,14 @@ function serve() {
       const on = { toPin: Math.hypot(b.x - pin.x, b.z - pin.z), want: 75 * unitM, hole: playingHoleIndex === gi, aimAtPin: Math.hypot(window.aimTarget.x - pin.x, window.aimTarget.z - pin.z) < 0.5,
                    marksHidden: rh.teeMeshes.range.children.filter(function (c) { return c.userData.rangeDistance; }).every(function (c) { return !c.visible; }),
                    mat: rh.teeMeshes.range.children.some(function (c) { return c.userData.rangeMat && c.visible; }), lie: document.getElementById('lie-text').innerText };
+      // the club from the player's bag for this distance: three SW shots about as long, then taken out again (the course step has its own bag)
+      const bagT = [9e12 + 1, 9e12 + 2, 9e12 + 3];
+      bagT.forEach(function (t, i) { window.PlayerBag.book({ t: t, source: 'LM', club: 'SW', carry: on.want - 3 + i, total: on.want + i }); });
+      window.RangePractice.render();
+      on.bag = (document.querySelector('#range-practice .rp-bag') || {}).textContent || '';
+      bagT.forEach(function (t) { window.PlayerBag.book({ t: t, source: 'SIM' }); });   // a shot that no longer counts leaves the bag
+      window.RangePractice.render();
+      on.bagGone = !/SW/.test((document.querySelector('#range-practice .rp-bag') || {}).textContent || '');
       document.querySelector('#range-practice [data-lie="ground"]').click();
       await wait(400);
       on.groundLie = document.getElementById('lie-text').innerText;
@@ -1517,8 +1525,8 @@ function serve() {
       window.RangePractice.refresh();
       return r;
     }, pr);
-    checks.push({ name: 'range approach: the ball is put at the chosen distance from the pin, aimed at it, its hole\'s cup counts, the distance marks hide (the mat stays), the lie is the mat or the ground', ok:
-      Math.abs(pr.on.toPin - pr.on.want) < 0.6 && pr.on.hole && pr.on.aimAtPin && pr.on.marksHidden && pr.on.mat && pr.on.lie === 'TEE' && pr.on.groundLie !== 'TEE', detail: JSON.stringify(pr.on) });
+    checks.push({ name: 'range approach: the ball is put at the chosen distance from the pin, aimed at it, its hole\'s cup counts, the distance marks hide (the mat stays), the lie is the mat or the ground, and the club from the player\'s bag for the distance shows', ok:
+      Math.abs(pr.on.toPin - pr.on.want) < 0.6 && /^🎒 SW · /.test(pr.on.bag) && pr.on.bagGone && pr.on.hole && pr.on.aimAtPin && pr.on.marksHidden && pr.on.mat && pr.on.lie === 'TEE' && pr.on.groundLie !== 'TEE', detail: JSON.stringify(pr.on) });
     checks.push({ name: 'range approach: each shot is scored against the pin it was hit at, with the distance it was hit from (a change during the flight waits for the next shot, the ball then goes there); an approach is not booked to the player\'s bag (a part swing); closing puts it back on the tee', ok:
       prShot.practice && Math.abs(prShot.practice.dist - pr.on.want) < 0.01 && prShot.practice.prox > 0 && /pinnen|the pin|I hål|In the hole/.test(prShot.popup) && prShot.tab &&
       prShot.inBag === false && pr.on.flying && pr.on.spotKept && pr.on.note.length > 0 && Math.abs(prShot.next - pr.on.want / 75 * 100) < 0.01 && Math.abs(prShot.back - pr.on.want / 75 * 100) < 0.6 &&
