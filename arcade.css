@@ -774,6 +774,16 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session .rs-empty { color: #94a3b8; padding: 12px 4px; }
   #range-session .rs-unit { color: #64748b; font-size: 10px; text-align: right; padding: 2px 4px; }
   #range-session .rs-note { color: #94a3b8; font-size: 10px; padding: 4px 12px 0; }
+  /* the approach tests in the Approach tab: per test, its scores over time */
+  #range-session .rs-tests { padding: 2px 0 6px; }
+  #range-session .rs-sub { color: #94a3b8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 4px 2px; }
+  #range-session .rs-test { padding: 6px 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  #range-session .rs-test-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+  #range-session .rs-test-name { color: #e2e8f0; font-weight: 800; font-size: 12px; }
+  #range-session .rs-test-n { color: #64748b; font-size: 10px; font-weight: 700; }
+  #range-session .rp-spark { display: block; max-width: 100%; height: auto; }
+  #range-session .rs-test-stats { display: flex; gap: 10px; color: #94a3b8; font-size: 11px; font-variant-numeric: tabular-nums; }
+  #range-session .rs-test-stats b { color: #fff; font-weight: 900; }
   #range-session .rs-actions { display: flex; gap: 6px; padding: 8px 12px 10px; }
   #range-session .rs-actions button { flex: 1; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 11px; font-weight: 700; }
   #range-session .rs-actions button:disabled { opacity: 0.4; cursor: default; }
@@ -839,6 +849,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-practice .rp-sum-best { color: #cbd5e1; font-weight: 700; }
   #range-practice .rp-sum-best.rp-new { color: #facc15; font-weight: 900; }
   #range-practice .rp-sum-actions { display: flex; gap: 6px; margin-top: 4px; }
+  #range-practice .rp-up { color: #4ade80; font-weight: 800; }
+  #range-practice .rp-down { color: #f87171; font-weight: 800; }
   /* the club from the player's bag for this distance */
   #range-practice .rp-bag-slot:empty { display: none; }
   #range-practice .rp-bag { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 7px; background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.35); color: #bbf7d0; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }

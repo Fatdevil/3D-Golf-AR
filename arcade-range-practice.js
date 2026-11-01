@@ -6,6 +6,7 @@
 //
 //  The test: a number of shots, each from a distance drawn from a band (spread over the band, in a shuffled order), each worth up to
 //  100 points by how close to the pin it finishes; the score is their average, and the best one per range, test and unit is kept.
+//  Every finished test is kept (per range, the newest HISTORY_MAX), so the panel can show how the scores of each test go over time.
 //  The spread: where the shots at this green finished around the pin (dots, and the ellipse where about 2 in 3 of them finish) on the
 //  green itself, and drawn small in the test's result.
 //
@@ -19,7 +20,8 @@
     const MIN = 10, MAX = 300;
     const TEST_SHOTS = [9, 18];
     const BANDS = [[30, 80], [50, 150], [100, 180]];   // the test's distances, in the player's unit
-    const SPREAD_SD = 1.5;   // the ellipse: 1.5 standard deviations each way, about 2 in 3 shots of a round spread finish inside
+    const SPREAD_SD = 1.5;
+    const HISTORY_MAX = 200;   // the ellipse: 1.5 standard deviations each way, about 2 in 3 shots of a round spread finish inside
 
     function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
 
@@ -130,13 +132,63 @@
         return h + '</svg>';
     }
 
+    // Which test a result belongs to: number of shots, band and unit (a band in yards is another test than the same numbers in metres)
+    function testKey(n, band, meters) { return n + '|' + band[0] + '-' + band[1] + '|' + (meters ? 'm' : 'yd'); }
+    // The history after a finished test: the newest HISTORY_MAX kept
+    function addResult(list, r) { return (list || []).concat([r]).slice(-HISTORY_MAX); }
+    // How one test goes over time (results of that key, oldest first): how many, the latest and the one before, the best, the average
+    // of the latest five, and the latest `keep` scores to draw. null when it was never played
+    function trend(list, key, keep) {
+        const rs = (list || []).filter(function (r) { return r && r.k === key && num(r.score) !== null; });
+        if (!rs.length) return null;
+        const sc = rs.map(function (r) { return r.score; }), last5 = sc.slice(-5);
+        return { n: sc.length, last: sc[sc.length - 1], prev: sc.length > 1 ? sc[sc.length - 2] : null, best: Math.max.apply(null, sc),
+                 avg5: Math.round(last5.reduce(function (a, v) { return a + v; }, 0) / last5.length), at: rs[rs.length - 1].t || 0, series: sc.slice(-(keep || 20)) };
+    }
+    // The tests played on a range, the latest played first
+    function testsPlayed(list) {
+        const seen = {}, out = [];
+        for (let i = (list || []).length - 1; i >= 0; i--) { const k = list[i] && list[i].k; if (k && !seen[k]) { seen[k] = true; out.push(k); } }
+        return out;
+    }
+    // The span of points a spark line shows: the scores with some room, at least 30 points tall, inside 0 to 100 (a fixed 0 to 100 would
+    // draw a player's few points of progress as a flat line)
+    function sparkRange(scores) {
+        if (!scores || !scores.length) return [0, 100];
+        let lo = Math.max(0, Math.min.apply(null, scores) - 8), hi = Math.min(100, Math.max.apply(null, scores) + 8);
+        if (hi - lo < 30) { const mid = (lo + hi) / 2; lo = Math.max(0, mid - 15); hi = Math.min(100, lo + 30); lo = Math.max(0, hi - 30); }
+        return [lo, hi];
+    }
+    // The scores of one test as a small line (SVG): one dot per test (the latest larger, each with its score as a tooltip), a dashed line at
+    // the best, a faint line at each ten points. One series, so no legend: the label beside it names the test
+    function sparkSVG(scores, opts) {
+        opts = opts || {};
+        const W = opts.width || 240, H = opts.height || 56, pad = 6, n = (scores || []).length, r = sparkRange(scores);
+        const x = function (i) { return n < 2 ? W / 2 : pad + (W - 2 * pad) * i / (n - 1); }, y = function (v) { return pad + (H - 2 * pad) * (1 - (v - r[0]) / (r[1] - r[0])); };
+        let h = '<svg xmlns="http://www.w3.org/2000/svg" class="rp-spark" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img"' +
+                (opts.label ? ' aria-label="' + String(opts.label).replace(/"/g, '&quot;') + '"' : '') + '>';
+        for (let g = Math.ceil(r[0] / 10) * 10; g <= r[1]; g += 10) h += '<line x1="0" x2="' + W + '" y1="' + y(g).toFixed(1) + '" y2="' + y(g).toFixed(1) + '" stroke="#ffffff" stroke-opacity="0.06"/>';
+        if (!n) return h + '</svg>';
+        const best = Math.max.apply(null, scores);
+        h += '<line class="rp-spark-best" x1="0" x2="' + W + '" y1="' + y(best).toFixed(1) + '" y2="' + y(best).toFixed(1) + '" stroke="#facc15" stroke-opacity="0.7" stroke-dasharray="3 3"/>';
+        if (n > 1) h += '<polyline points="' + scores.map(function (v, i) { return x(i).toFixed(1) + ',' + y(v).toFixed(1); }).join(' ') + '" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+        const unitP = opts.unit || 'p';
+        scores.forEach(function (v, i) {
+            const last = i === n - 1;
+            h += '<circle class="rp-spark-dot" cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="' + (last ? 5 : 4) + '" fill="' + (last ? '#ffffff' : '#38bdf8') +
+                 '" stroke="#0f172a" stroke-width="2"><title>' + (opts.tip ? opts.tip(i, v) : v + ' ' + unitP) + '</title></circle>';
+        });
+        return h + '</svg>';
+    }
+
     // The distance the player picks, in metres, from a value in their unit; held between MIN and MAX (in their unit)
     function toMetres(value, useMeters) { const v = Math.max(MIN, Math.min(MAX, Math.round(value))); return useMeters ? v : v * 0.9144; }
     function inUnit(metres, useMeters) { return Math.round(useMeters ? metres : metres / 0.9144); }
 
     const api = { PRESETS: PRESETS, MIN: MIN, MAX: MAX, targetsFrom: targetsFrom, spotFor: spotFor, playableSpot: playableSpot, result: result,
                   byDistance: byDistance, toMetres: toMetres, inUnit: inUnit, TEST_SHOTS: TEST_SHOTS, BANDS: BANDS, SPREAD_SD: SPREAD_SD,
-                  testPlan: testPlan, points: points, spread: spread, plotSVG: plotSVG };
+                  testPlan: testPlan, points: points, spread: spread, plotSVG: plotSVG, HISTORY_MAX: HISTORY_MAX, testKey: testKey, addResult: addResult,
+                  trend: trend, testsPlayed: testsPlayed, sparkRange: sparkRange, sparkSVG: sparkSVG };
 
     if (typeof document !== 'undefined') {
         const TXT = {
@@ -147,7 +199,7 @@
                   test: '🏆 Test', testTitle: 'Inspeltest', shots: 'slag', start: 'Starta test', cancel: 'Avbryt', record: 'Rekord', noRecord: 'Inget rekord än',
                   shot: 'Slag', avg: 'snitt', p: 'p', result: 'Resultat', newRecord: '🏆 Nytt rekord!', again: 'Kör igen', done: 'Klar', greens: 'Green',
                   toPin: 'till pinnen', testBlocked: 'Testet avbröts: inget spelbart läge på avstånden', plot: 'Var slagen hamnade runt pinnen',
-                  testHint: 'Slumpade avstånd · upp till 100 p per slag efter hur nära pinnen', bagAvg: 'snitt', plays: 'spelar',
+                  testHint: 'Slumpade avstånd · upp till 100 p per slag efter hur nära pinnen', bagAvg: 'snitt', plays: 'spelar', prev: 'Förra gången',
                   bagTip: 'Klubban i din bag vars snittlängd ligger närmast (launch monitor-slag från rangen)' },
             en: { open: '🎯 Approach to a green', green: 'Green', mat: 'Mat', ground: 'As it lies', lie: 'Lie', close: 'Back to the range',
                   none: 'Build a green with a flag to practise approaches', onGreen: 'On the green', miss: 'Missed', fromPin: 'from the pin', short: 'short', long: 'long',
@@ -156,7 +208,7 @@
                   test: '🏆 Test', testTitle: 'Approach test', shots: 'shots', start: 'Start test', cancel: 'Cancel', record: 'Best', noRecord: 'No best yet',
                   shot: 'Shot', avg: 'avg', p: 'pts', result: 'Score', newRecord: '🏆 New best!', again: 'Go again', done: 'Done', greens: 'Greens',
                   toPin: 'to the pin', testBlocked: 'Test stopped: nowhere playable at its distances', plot: 'Where the shots finished around the pin',
-                  testHint: 'Random distances · up to 100 pts a shot by how close to the pin', bagAvg: 'avg', plays: 'plays',
+                  testHint: 'Random distances · up to 100 pts a shot by how close to the pin', bagAvg: 'avg', plays: 'plays', prev: 'Last time',
                   bagTip: 'The club in your bag whose average length is nearest (launch monitor shots from the range)' }
         };
         const t = function (k) { return ((root.getGolfLanguage && root.getGolfLanguage() === 'sv') ? TXT.sv : TXT.en)[k]; };
@@ -183,7 +235,9 @@
         }
         function save() { try { localStorage.setItem(storageKey(), JSON.stringify(state)); } catch (e) { /* this page only */ } }
         // The best test scores on this range: per number of shots, band and unit
-        function bestKey(n, band, meters) { return n + '|' + band[0] + '-' + band[1] + '|' + (meters ? 'm' : 'yd'); }
+        const bestKey = testKey;
+        function history() { try { const h = JSON.parse(localStorage.getItem('golf_range_practice_tests_' + ctx.key) || '[]'); return Array.isArray(h) ? h : []; } catch (e) { return []; } }
+        function saveHistory(h) { try { localStorage.setItem('golf_range_practice_tests_' + ctx.key, JSON.stringify(h)); } catch (e) { /* this page only */ } }
         function bests() { try { return JSON.parse(localStorage.getItem('golf_range_practice_best_' + ctx.key) || '{}') || {}; } catch (e) { return {}; } }
         function saveBest(k, v) { const b = bests(); b[k] = v; try { localStorage.setItem('golf_range_practice_best_' + ctx.key, JSON.stringify(b)); } catch (e) { /* this page only */ } }
         function targets() { return ctx ? targetsFrom(ctx.holes(), ctx.tee) : []; }
@@ -241,6 +295,14 @@
             test.best = num(b);
             test.record = !test.stopped && (test.best === null || test.score > test.best);   // a stopped test is no record
             if (test.record) saveBest(k, test.score);
+            if (!test.stopped && test.shots.length) {
+                // kept for the history in the session panel (a stopped test is not a result); prev: the same test the time before
+                const h = history(), tr = trend(h, k);
+                test.prev = tr ? tr.last : null;
+                const greens = test.shots.filter(function (s) { return s.onGreen || s.holed; }).length;
+                const prox = test.shots.reduce(function (a, s) { return a + s.prox; }, 0) / test.shots.length;
+                saveHistory(addResult(h, { t: Date.now(), k: k, score: test.score, greens: greens, shots: test.shots.length, prox: Math.round(prox * 10) / 10 }));
+            }
         }
 
         // ── 3D: where the shots at this green finished around the pin (the test's, else those from this distance), and their ellipse ──
@@ -375,6 +437,10 @@
                     h += '<div class="rp-sum-title">' + esc(t('result')) + '</div><div class="rp-score">' + test.score + '<span>' + esc(t('p')) + '</span></div>';
                     if (test.record) h += '<div class="rp-sum-best rp-new">' + esc(t('newRecord')) + '</div>';
                     else if (test.best !== null) h += '<div class="rp-sum-best">' + esc(t('record') + ' ' + test.best + ' ' + t('p')) + '</div>';
+                    if (num(test.prev) !== null) {
+                        const dd = test.score - test.prev;
+                        h += '<div class="rp-sub">' + esc(t('prev')) + ' ' + test.prev + ' ' + esc(t('p')) + ' <span class="' + (dd > 0 ? 'rp-up' : (dd < 0 ? 'rp-down' : '')) + '">(' + (dd > 0 ? '+' : (dd < 0 ? '−' : '±')) + Math.abs(dd) + ')</span></div>';
+                    }
                     h += '<div class="rp-sub">' + esc(t('greens')) + ' ' + greens + '/' + n + ' · ' + esc(t('avg')) + ' ' + fmt(prox, 1) + ' ' + unit() + ' ' + esc(t('toPin')) + ' · ' +
                          test.band[0] + '–' + test.band[1] + ' ' + (test.meters ? 'm' : 'yd') + '</div>';
                     h += '<div class="rp-sum-actions"><button class="rp-start" data-act="again">' + esc(t('again')) + '</button><button class="rp-text" data-act="cancel">' + esc(t('done')) + '</button></div>';
@@ -421,6 +487,7 @@
             load();
             ensureBar().style.display = '';
             apply();
+            if (root.RangeSession && root.RangeSession.render) root.RangeSession.render();   // its Approach tab shows this range's tests
         };
         api.stop = function () {
             if (bar) bar.style.display = 'none';
@@ -468,6 +535,15 @@
         // A test from code (tests, voice): n shots in a band of the player's unit, or the given distances
         api.startTest = function (n, band, plan) { if (ctx && state.on) startTest(n, band || BANDS[1], plan); };
         api.test = function () { return test ? JSON.parse(JSON.stringify(test)) : null; };
+        // The tests played on this range, the latest played first (at most `max`): what each is, and how its scores go
+        api.trends = function (max) {
+            if (!ctx) return [];
+            const h = history();
+            return testsPlayed(h).slice(0, max || 3).map(function (k) {
+                const m = /^(\d+)\|(\d+)-(\d+)\|(m|yd)$/.exec(k);
+                return { key: k, label: m ? m[1] + ' ' + t('shots') + ' · ' + m[2] + '–' + m[3] + ' ' + m[4] : k, trend: trend(h, k) };
+            });
+        };
     }
 
     root.RangePractice = api;
