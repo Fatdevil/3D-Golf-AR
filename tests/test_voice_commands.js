@@ -59,6 +59,14 @@ expectRange('etthundrafemtio', { action: 'dist', value: 150, unit: null });
 expectRange('hundratjugofem meter', { action: 'dist', value: 125, unit: 'm' });
 expectRange('a hundred and fifty yards', { action: 'dist', value: 150, unit: 'yd' });
 expectRange('sixty five', { action: 'dist', value: 65, unit: null });
+// the teens, alone and after a hundred
+expectRange('one hundred and thirteen metres', { action: 'dist', value: 113, unit: 'm' });
+expectRange('hundratretton meter', { action: 'dist', value: 113, unit: 'm' });
+expectRange('etthundranitton', { action: 'dist', value: 119, unit: null });
+expectRange('a hundred and seventeen yards', { action: 'dist', value: 117, unit: 'yd' });
+expectRange('fourteen', { action: 'dist', value: 14, unit: null });
+expectRange('arton meter', { action: 'dist', value: 18, unit: 'm' });
+expectRange('sexton', { action: 'dist', value: 16, unit: null });
 expectRange('green två', { action: 'green', value: 2 });
 expectRange('Green 3', { action: 'green', value: 3 });
 expectRange('green two', { action: 'green', value: 2 });

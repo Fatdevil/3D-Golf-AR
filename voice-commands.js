@@ -51,7 +51,8 @@
     // ── the range: approach practice ──
     // Numbers as the recogniser may write them: digits, or words in either language ("sjuttiofem", "etthundrafemtio", "a hundred and fifty")
     const UNITS = { noll: 0, zero: 0, ett: 1, en: 1, one: 1, a: 1, tva: 2, two: 2, tre: 3, three: 3, fyra: 4, four: 4, fem: 5, five: 5, sex: 6, six: 6, sju: 7, seven: 7,
-                    atta: 8, eight: 8, nio: 9, nine: 9, tio: 10, ten: 10, elva: 11, eleven: 11, tolv: 12, twelve: 12, femton: 15, fifteen: 15, twenty: 20, tjugo: 20,
+                    atta: 8, eight: 8, nio: 9, nine: 9, tio: 10, ten: 10, elva: 11, eleven: 11, tolv: 12, twelve: 12, tretton: 13, thirteen: 13, fjorton: 14, fourteen: 14,
+                    femton: 15, fifteen: 15, sexton: 16, sixteen: 16, sjutton: 17, seventeen: 17, arton: 18, eighteen: 18, nitton: 19, nineteen: 19, twenty: 20, tjugo: 20,
                     thirty: 30, trettio: 30, forty: 40, fyrtio: 40, fifty: 50, femtio: 50, sixty: 60, sextio: 60, seventy: 70, sjuttio: 70, eighty: 80, attio: 80,
                     ninety: 90, nittio: 90 };
     function numberFrom(words) {
