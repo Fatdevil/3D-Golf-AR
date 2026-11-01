@@ -130,7 +130,6 @@
             font-weight: 900;
         }
 
-        .cat-badge-featured { color: #eab308; background: rgba(234, 179, 8, 0.1); }
         .cat-badge-community { color: #10b981; background: rgba(16, 185, 129, 0.1); }
         .cat-badge-draft { color: #94a3b8; background: rgba(148, 163, 184, 0.1); }
 
@@ -625,16 +624,8 @@
     <!-- Main Title -->
     <div class="main-title-block">
         <h1>Välj bana</h1>
-        <p>Bläddra bland utvalda mästerskapsbanor, kreationer från communityn och dina egna sparade utkast.</p>
+        <p>Bläddra bland communityns banor och dina egna sparade utkast.</p>
     </div>
-
-    <!-- Category 1: Featured / Official -->
-    <section class="category-row">
-        <h2 class="category-title">Utvalda banor <span class="cat-badge-featured">FEATURED</span></h2>
-        <div class="course-carousel" id="featured-carousel">
-            <!-- Rendered via JS -->
-        </div>
-    </section>
 
     <!-- Category 1.5: Collections (Multi-plate courses) -->
     <section class="category-row" id="collections-section" style="display: none;">
@@ -734,72 +725,6 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  Featured / Official Presets (handcrafted with simulated leaderboard)
-    // ═══════════════════════════════════════════════════════════
-    const FEATURED_COURSES = [
-        {
-            share_code: 'featured_links',
-            name: 'Coastal Links Classic',
-            author: 'Golf OS Team',
-            cover_image: 'golf_courses.png',
-            likes: 64,
-            play_count: 890,
-            hole_count: 18,
-            total_par: 72,
-            difficulty: 'Championship',
-            biome: 'Global',
-            desc: 'En klassisk linksbana med havsvind, djupa bunkrar och ondulerade greener. Par 72 som testar hela ditt spel.',
-            leaderboard: [
-                { name: 'T. Woods', detail: '18 hål', score: '-8 (64)' },
-                { name: 'R. McIlroy', detail: '18 hål', score: '-5 (67)' },
-                { name: 'J. Nicklaus', detail: '18 hål', score: '-3 (69)' },
-                { name: 'S. Ballesteros', detail: '18 hål', score: '-1 (71)' },
-                { name: 'A. Palmer', detail: '18 hål', score: 'E (72)' }
-            ]
-        },
-        {
-            share_code: 'featured_mountain',
-            name: 'Alpine Summit 9',
-            author: 'Golf OS Team',
-            cover_image: 'golf_practice.png',
-            likes: 45,
-            play_count: 620,
-            hole_count: 9,
-            total_par: 36,
-            difficulty: 'Pro',
-            biome: 'Winter',
-            desc: 'En utmanande bergsbana bland snöklädda toppar. 9 hål med dramatiska höjdskillnader och isiga greener.',
-            leaderboard: [
-                { name: 'P. Mickelson', detail: '9 hål', score: '-4 (32)' },
-                { name: 'B. Hogan', detail: '9 hål', score: '-3 (33)' },
-                { name: 'G. Player', detail: '9 hål', score: '-2 (34)' },
-                { name: 'L. Trevino', detail: '9 hål', score: '-1 (35)' },
-                { name: 'F. Couples', detail: '9 hål', score: 'E (36)' }
-            ]
-        },
-        {
-            share_code: 'featured_tropical',
-            name: 'Sunset Island Resort',
-            author: 'Golf OS Team',
-            cover_image: 'golf_build.png',
-            likes: 78,
-            play_count: 1200,
-            hole_count: 18,
-            total_par: 72,
-            difficulty: 'Casual',
-            biome: 'Autumn',
-            desc: 'En avslappnad resort-bana med breda fairways och milda doglegs. Perfekt för att njuta av spelet.',
-            leaderboard: [
-                { name: 'E. Els', detail: '18 hål', score: '-10 (62)' },
-                { name: 'V. Singh', detail: '18 hål', score: '-7 (65)' },
-                { name: 'D. Love III', detail: '18 hål', score: '-5 (67)' },
-                { name: 'F. Molinari', detail: '18 hål', score: '-3 (69)' },
-                { name: 'A. Scott', detail: '18 hål', score: '-1 (71)' }
-            ]
-        }
-    ];
-
-    // ═══════════════════════════════════════════════════════════
     //  Helpers
     // ═══════════════════════════════════════════════════════════
     function getFallbackGradient(code) {
@@ -839,7 +764,7 @@
     // ═══════════════════════════════════════════════════════════
     //  Card Rendering
     // ═══════════════════════════════════════════════════════════
-    function createCardHtml(course, isFeatured) {
+    function createCardHtml(course) {
         let diff = getDifficultyLabel(course);
         let diffClass = getDifficultyClass(diff);
         let biome = getBiomeLabel(course);
@@ -867,7 +792,7 @@
         let dataPayload = encodeURIComponent(JSON.stringify(course));
 
         return `
-            <div class="course-card" onclick="openCourseDetails('${dataPayload}', ${isFeatured})">
+            <div class="course-card" onclick="openCourseDetails('${dataPayload}')">
                 <div class="card-image-wrapper">
                     ${imageHtml}
                     <div class="card-badges">
@@ -893,10 +818,6 @@
     // ═══════════════════════════════════════════════════════════
     //  Render Carousels
     // ═══════════════════════════════════════════════════════════
-    function renderFeatured() {
-        let carousel = document.getElementById('featured-carousel');
-        carousel.innerHTML = FEATURED_COURSES.map(c => createCardHtml(c, true)).join('');
-    }
 
     function renderDrafts() {
         let drafts = JSON.parse(localStorage.getItem('golf_os_my_drafts') || '[]');
@@ -918,7 +839,7 @@
                     biome: 'Draft',
                     is_draft: true
                 };
-                return createCardHtml(course, false);
+                return createCardHtml(course);
             }).join('');
         } else {
             section.style.display = 'none';
@@ -934,7 +855,7 @@
             share_code: c.share_code, name: c.name, author: c.author, cover_image: c.cover_image || null, likes: c.likes || 0,
             play_count: c.play_count || 0, hole_count: c.hole_count || 3, total_par: c.total_par || 12, is_mine: c.is_mine === true, biome: 'Community',
             rating_avg: c.rating_avg, rating_count: c.rating_count || 0, my_rating: c.my_rating || null
-        }, false);
+        });
     }
     async function loadCommunityCourses(more) {
         let carousel = document.getElementById('community-carousel');
@@ -971,7 +892,7 @@
     // ═══════════════════════════════════════════════════════════
     //  Modal Control
     // ═══════════════════════════════════════════════════════════
-    function openCourseDetails(encodedCourse, isFeatured) {
+    function openCourseDetails(encodedCourse) {
         let course = JSON.parse(decodeURIComponent(encodedCourse));
         let modal = document.getElementById('course-modal');
 
@@ -1037,7 +958,7 @@
 
         // Rating: a published course from the community (one's own shows its stars, without rating them)
         let ratingBox = document.getElementById('modal-rating');
-        if (!isFeatured && !course._isCollection && !course.is_draft && course.share_code) {
+        if (!course._isCollection && !course.is_draft && course.share_code) {
             ratingBox.style.display = 'block';
             if (course.rating_count !== undefined && !window.GolfRatings.cache[course.share_code]) window.GolfRatings.seed(course);   // a card may be older than a rating just given
             document.getElementById('modal-rating-widget').innerHTML = window.GolfRatings.widget(course.share_code);
@@ -1048,35 +969,31 @@
         let lbContent = document.getElementById('modal-leaderboard-content');
         lbContent.innerHTML = '<div style="color: #64748b; font-size:12px; text-align:center; padding: 20px;">Hämtar resultat...</div>';
 
-        if (isFeatured && course.leaderboard) {
-            renderLeaderboardTable(course.leaderboard);
-        } else {
-            // Try API: a collection has its own leaderboard (a player's rounds on all its plates added together)
-            let lbUrl = course._isCollection
-                ? `${API_BASE}/api/collections/${encodeURIComponent(course._collectionId)}/leaderboard`
-                : `${API_BASE}/api/courses/${encodeURIComponent(course.share_code)}/leaderboard`;
-            fetch(lbUrl)
-                .then(res => res.json())
-                .then(data => {
-                    // the server answers { leaderboard: [...] }
-                    let records = Array.isArray(data) ? data : ((data && data.leaderboard) || []);
-                    if (records.length > 0) {
-                        let esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-                        let formatted = records.slice(0, 5).map(r => ({
-                            name: esc(r.player_name || 'Okänd spelare'),
-                            detail: (course.hole_count || r.hole_count || 18) + ' hål',
-                            score: r.total_score ? formatScore(r.total_score, r.score_vs_par !== undefined && r.score_vs_par !== null ? r.total_score - r.score_vs_par : r.total_par) : '—'
-                        }));
-                        renderLeaderboardTable(formatted);
-                    } else {
-                        lbContent.innerHTML = '<div class="no-records">Inga resultat registrerade ännu.<br>Bli först med att spela!</div>';
-                    }
-                })
-                .catch(err => {
-                    console.error('Failed to fetch leaderboard:', err);
-                    lbContent.innerHTML = '<div class="no-records">Kunde inte hämta resultat från servern.</div>';
-                });
-        }
+        // a collection has its own leaderboard (a player's rounds on all its plates added together)
+        let lbUrl = course._isCollection
+            ? `${API_BASE}/api/collections/${encodeURIComponent(course._collectionId)}/leaderboard`
+            : `${API_BASE}/api/courses/${encodeURIComponent(course.share_code)}/leaderboard`;
+        fetch(lbUrl)
+            .then(res => res.json())
+            .then(data => {
+                // the server answers { leaderboard: [...] }
+                let records = Array.isArray(data) ? data : ((data && data.leaderboard) || []);
+                if (records.length > 0) {
+                    let esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                    let formatted = records.slice(0, 5).map(r => ({
+                        name: esc(r.player_name || 'Okänd spelare'),
+                        detail: (course.hole_count || r.hole_count || 18) + ' hål',
+                        score: r.total_score ? formatScore(r.total_score, r.score_vs_par !== undefined && r.score_vs_par !== null ? r.total_score - r.score_vs_par : r.total_par) : '—'
+                    }));
+                    renderLeaderboardTable(formatted);
+                } else {
+                    lbContent.innerHTML = '<div class="no-records">Inga resultat registrerade ännu.<br>Bli först med att spela!</div>';
+                }
+            })
+            .catch(err => {
+                console.error('Failed to fetch leaderboard:', err);
+                lbContent.innerHTML = '<div class="no-records">Kunde inte hämta resultat från servern.</div>';
+            });
 
         modal.classList.add('active');
     }
@@ -1132,7 +1049,6 @@
     //  Startup
     // ═══════════════════════════════════════════════════════════
     window.addEventListener('DOMContentLoaded', () => {
-        renderFeatured();
         renderDrafts();
         loadCommunityCourses();
         loadCollections();
@@ -1172,7 +1088,7 @@
                         _plates: plates,
                         _isComplete: isComplete
                     };
-                    return createCardHtml(course, false);
+                    return createCardHtml(course);
                 }).join('');
             } else {
                 section.style.display = 'none';
