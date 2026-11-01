@@ -84,6 +84,9 @@ check('the spark line: a dot per test with its score as a tooltip, the line, and
   (spark.match(/class="rp-spark-dot"/g) || []).length === 3 && spark.includes('<polyline') && spark.includes('rp-spark-best') && spark.includes('<title>Test 2: 70</title>'), spark);
 const sr = P.sparkRange([55, 58, 61]), sr2 = P.sparkRange([5, 95]);
 check('the spark line shows the scores with room, at least 30 points tall, inside 0 to 100', sr[1] - sr[0] === 30 && sr[0] <= 55 && sr[1] >= 61 && sr2[0] === 0 && sr2[1] === 100, JSON.stringify([sr, sr2]));
+const old = P.sparkSVG([50, 50, 50], { best: 95 }), yOf = (svg, cls) => +new RegExp('class="' + cls + '"[^>]*y1="([\\d.]+)"').exec(svg)[1];
+check('the record line is at the test\'s record even when it is older than the scores drawn (and inside the chart)',
+  yOf(old, 'rp-spark-best') < +/class="rp-spark-dot" cx="[\d.]+" cy="([\d.]+)"/.exec(old)[1] && yOf(old, 'rp-spark-best') >= 0, old);
 check('a higher score is drawn higher', (() => { const ys = [...spark.matchAll(/class="rp-spark-dot" cx="[\d.]+" cy="([\d.]+)"/g)].map(m => +m[1]); return ys[1] < ys[2] && ys[2] < ys[0]; })(), spark);
 
 if (failed) { console.log('\n' + failed + ' failed'); process.exit(1); }

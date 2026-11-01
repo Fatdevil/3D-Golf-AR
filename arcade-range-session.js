@@ -153,7 +153,7 @@
                         tests.forEach(function (x) {
                             const tr = x.trend;
                             h += '<div class="rs-test"><div class="rs-test-head"><span class="rs-test-name">' + esc(x.label) + '</span><span class="rs-test-n">' + tr.n + ' ' + esc(t('played')) + '</span></div>' +
-                                 root.RangePractice.sparkSVG(tr.series, { width: 256, height: 44, label: x.label, tip: function (i, v) { return t('testTip').replace('{i}', tr.n - tr.series.length + i + 1).replace('{v}', v); } }) +
+                                 root.RangePractice.sparkSVG(tr.series, { width: 256, height: 44, best: tr.best, label: x.label, tip: function (i, v) { return t('testTip').replace('{i}', tr.n - tr.series.length + i + 1).replace('{v}', v); } }) +
                                  '<div class="rs-test-stats"><span>' + esc(t('last')) + ' <b>' + tr.last + '</b></span><span>' + esc(t('best')) + ' <b>' + tr.best + '</b></span><span>' + esc(t('avg5')) + ' <b>' + tr.avg5 + '</b></span></div></div>';
                         });
                         h += '</div>';

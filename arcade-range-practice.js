@@ -160,16 +160,17 @@
         return [lo, hi];
     }
     // The scores of one test as a small line (SVG): one dot per test (the latest larger, each with its score as a tooltip), a dashed line at
-    // the best, a faint line at each ten points. One series, so no legend: the label beside it names the test
+    // the best (opts.best: the test's record, which may be older than the scores drawn), a faint line at each ten points. One series, so
+    // no legend: the label beside it names the test
     function sparkSVG(scores, opts) {
         opts = opts || {};
-        const W = opts.width || 240, H = opts.height || 56, pad = 6, n = (scores || []).length, r = sparkRange(scores);
+        const n = (scores || []).length, best = num(opts.best) !== null ? opts.best : (n ? Math.max.apply(null, scores) : null);
+        const W = opts.width || 240, H = opts.height || 56, pad = 6, r = sparkRange(best !== null ? (scores || []).concat([best]) : scores);
         const x = function (i) { return n < 2 ? W / 2 : pad + (W - 2 * pad) * i / (n - 1); }, y = function (v) { return pad + (H - 2 * pad) * (1 - (v - r[0]) / (r[1] - r[0])); };
         let h = '<svg xmlns="http://www.w3.org/2000/svg" class="rp-spark" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img"' +
                 (opts.label ? ' aria-label="' + String(opts.label).replace(/"/g, '&quot;') + '"' : '') + '>';
         for (let g = Math.ceil(r[0] / 10) * 10; g <= r[1]; g += 10) h += '<line x1="0" x2="' + W + '" y1="' + y(g).toFixed(1) + '" y2="' + y(g).toFixed(1) + '" stroke="#ffffff" stroke-opacity="0.06"/>';
         if (!n) return h + '</svg>';
-        const best = Math.max.apply(null, scores);
         h += '<line class="rp-spark-best" x1="0" x2="' + W + '" y1="' + y(best).toFixed(1) + '" y2="' + y(best).toFixed(1) + '" stroke="#facc15" stroke-opacity="0.7" stroke-dasharray="3 3"/>';
         if (n > 1) h += '<polyline points="' + scores.map(function (v, i) { return x(i).toFixed(1) + ',' + y(v).toFixed(1); }).join(' ') + '" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
         const unitP = opts.unit || 'p';
