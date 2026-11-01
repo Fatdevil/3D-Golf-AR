@@ -43,6 +43,19 @@
         try { return localStorage.getItem('golf_os_device_id'); } catch (e) { return null; }
     }
     function headers() { const h = { 'Content-Type': 'application/json' }, id = userId(); if (id) h['x-user-id'] = id; return h; }
+    // A first visit straight to a page that does not start the player's identity (the gallery) has no id yet: start it before rating
+    // (GolfAuth makes the device id and registers it; without it an id is made here, and the server makes its account on the first write)
+    function ensureId() {
+        if (userId()) return Promise.resolve();
+        if (root.GolfAuth && typeof root.GolfAuth.init === 'function') return Promise.resolve(root.GolfAuth.init()).catch(function () {}).then(function () { if (!userId()) makeId(); });
+        makeId(); return Promise.resolve();
+    }
+    function makeId() {
+        try {
+            const id = root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+            localStorage.setItem('golf_os_device_id', id);
+        } catch (e) { /* no storage: the rating cannot be kept */ }
+    }
 
     let styled = false;
     function style() {
@@ -102,19 +115,34 @@
             .then(function (j) { if (j) { cache[code] = Object.assign(cache[code] || {}, j); refresh(code); } return j; })
             .catch(function () { return null; });
     }
+    // Rating a course: shown at once, saved one after the other per course (a quick second choice is saved after the first, so the
+    // server ends on the last one), and only the answer to the latest choice is shown
+    const queue = {}, latest = {}, saved = {};   // per code: the saves in turn, the number of the latest choice, the last rating the server took
     function rate(code, stars) {
-        const before = Object.assign({}, cache[code] || {});
+        const n = (latest[code] || 0) + 1;
+        latest[code] = n;
+        if (!saved[code]) saved[code] = Object.assign({}, cache[code] || {});
         cache[code] = Object.assign(cache[code] || {}, { my_rating: stars, note: '', noteErr: false });
         refresh(code);
-        return fetch((api.base || '') + '/api/courses/' + encodeURIComponent(code) + '/rating', { method: 'POST', headers: headers(), body: JSON.stringify({ stars: stars }) })
-            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, json: j }; }); })
-            .then(function (res) {
-                if (res.status === 200) cache[code] = Object.assign(cache[code], res.json, { note: t('thanks'), noteErr: false });
-                else cache[code] = Object.assign(before, { note: res.status === 403 ? t('ownErr') : (res.status === 404 ? t('gone') : t('failed')), noteErr: true, is_mine: res.status === 403 ? true : before.is_mine });
-                refresh(code);
-                return res;
+        const run = function () {
+            return ensureId().then(function () {
+                return fetch((api.base || '') + '/api/courses/' + encodeURIComponent(code) + '/rating', { method: 'POST', headers: headers(), body: JSON.stringify({ stars: stars }) });
             })
-            .catch(function () { cache[code] = Object.assign(before, { note: t('failed'), noteErr: true }); refresh(code); return null; });
+                .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, json: j }; }); })
+                .catch(function () { return { status: 0, json: {} }; })
+                .then(function (res) {
+                    if (res.status === 200) saved[code] = Object.assign({}, saved[code], res.json);
+                    if (n !== latest[code]) return res;   // a newer choice is on its way: its answer is the one to show
+                    if (res.status === 200) cache[code] = Object.assign(cache[code], res.json, { note: t('thanks'), noteErr: false });
+                    else cache[code] = Object.assign({}, saved[code], { note: res.status === 403 ? t('ownErr') : (res.status === 404 ? t('gone') : t('failed')), noteErr: true,
+                                                                          is_mine: res.status === 403 ? true : saved[code].is_mine });
+                    delete saved[code];
+                    refresh(code);
+                    return res;
+                });
+        };
+        queue[code] = (queue[code] || Promise.resolve()).then(run, run);
+        return queue[code];
     }
 
     // a star's click is the rating only: it never opens or plays the card it sits on (caught on the way down)
