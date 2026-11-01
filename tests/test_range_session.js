@@ -49,5 +49,8 @@ const csvY = R.toCSV(shots.slice(0, 1), false).trim().split('\n');
 check('CSV: yards when the player uses yards', /carry_yd/.test(csvY[0]) && csvY[1].split(',')[4] === (140 * 1.09361).toFixed(1), csvY[1]);
 check('CSV: an empty session is just the header', R.toCSV([], true).split('\n').filter(Boolean).length === 1);
 
+const mixed = [{ club: 'PW', carry: 110 }, { club: 'PW', carry: 55, practice: { dist: 60 } }, { club: 'PW', carry: 112 }];
+check('approach practice shots are left out of the club averages (part swings)', R.fullSwings(mixed).length === 2 && Math.round(R.clubStats(R.fullSwings(mixed))[0].carry) === 111);
+
 if (failed) { console.log('\n' + failed + ' failed'); process.exit(1); }
 console.log('\nAll range session checks passed');
