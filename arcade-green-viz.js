@@ -446,7 +446,10 @@
         // corners across a band edge (cyan next to gold) gave in-between shades that are not in the legend.
         let positions = [];
         let slopes = [];
-        let fgFlags = [];
+        // The foregreen goes on each corner as its signed distance (m) to the edge of the putting surface: negative inside it, positive
+        // on the foregreen. A distance blends linearly between corners, so where it crosses 0 follows the real outline; a 0/1 flag cut at
+        // 0.5 gave a boundary in 50 cm steps.
+        let fgDist = [];
         let indices = [];
         let vertCount = 0;
         
@@ -464,12 +467,16 @@
             let curH = surfaceHeight(wx, wz);
             let y = curH + 0.005; // 5 mm elevation above grass to eliminate z-fighting
             
-            let isFg = (innerPoly && fgWidth > 0.05) ? !window.pointInPolygon(wx, wz, innerPoly) : false;
+            let fgD = -1;   // no foregreen ring: all putting surface
+            if (innerPoly && fgWidth > 0.05) {
+                let q = nearestOnPolygon(wx, wz, innerPoly), d = Math.hypot(wx - q.x, wz - q.z);
+                fgD = window.pointInPolygon(wx, wz, innerPoly) ? -d : d;
+            }
             let grad = (typeof window.sampleGreenGradient === 'function') ? window.sampleGreenGradient(wx, wz, 0.25) : { slopePercent: 0 };
 
             positions.push(wx, y, wz);
             slopes.push(grad.slopePercent);
-            fgFlags.push(isFg ? 1 : 0);
+            fgDist.push(fgD);
             
             let newIdx = vertCount++;
             vertMap[mapIdx] = newIdx;
@@ -513,7 +520,7 @@
         let geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slopes, 1));
-        geo.setAttribute('aFg', new THREE.Float32BufferAttribute(fgFlags, 1));
+        geo.setAttribute('aFg', new THREE.Float32BufferAttribute(fgDist, 1));
         geo.setIndex(indices);
         
         const limits = window.restSlopeLimits();
@@ -525,7 +532,7 @@
                 '    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);', '}'
             ].join('\n'),
             fragmentShader: 'uniform float uOpacity;\nuniform float uNoRest;\nuniform float uNoRestFg;\nvarying float vSlope;\nvarying float vFg;\n' + SLOPE_COLOR_GLSL +
-                'void main() {\n    bool fg = vFg > 0.5;\n' +
+                'void main() {\n    bool fg = vFg > 0.0;\n' +
                 '    vec3 c = vSlope >= (fg ? uNoRestFg : uNoRest) ? ' + glslVec(NO_REST_COLOR) + ' : slopeColor(vSlope);\n' +
                 '    gl_FragColor = vec4(c * (fg ? ' + glslNum(FOREGREEN_DIM) + ' : 1.0), uOpacity);\n}\n',
             transparent: true,

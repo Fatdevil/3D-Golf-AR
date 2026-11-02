@@ -6769,15 +6769,28 @@
         let isSlopeActive = slopeLegend && slopeLegend.style.display !== 'none';
         let isGridActive = gridLegend && gridLegend.style.display !== 'none';
 
-        // 1. Position slope legend (push up if terrain grid scale guide is open)
+        // 1. Position slope legend (push up if terrain grid scale guide is open, and above the play controls at the bottom centre:
+        // the shot inputs and SHOOT on a computer, the club row, shot shape and SWING on a phone; it used to be drawn on top of them)
+        let slopeBottom = isGridActive ? 88 : 20;
+        if (slopeLegend && isSlopeActive) {
+            ['play-controls', 'club-selector', 'shape-selector', 'swing-launch-btn'].forEach(function (id) {
+                let el = document.getElementById(id);
+                if (!el || el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return;
+                let cs = getComputedStyle(el);
+                if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return;
+                let r = el.getBoundingClientRect();
+                if (r.width === 0 || r.height === 0 || r.top < window.innerHeight * 0.5) return;
+                slopeBottom = Math.max(slopeBottom, Math.round(window.innerHeight - r.top + 8));
+            });
+        }
         if (slopeLegend) {
-            slopeLegend.style.bottom = isGridActive ? '88px' : '20px';
+            slopeLegend.style.bottom = slopeBottom + 'px';
         }
 
         // 2. Position tool hints (always float cleanly above visible legends). The slope legend wraps to two rows on a phone, so its
         // real height is used (one row is 29 px: 64 px alone, 132 px above the terrain grid legend, as before).
         if (toolHints) {
-            let slopeTop = isSlopeActive ? (isGridActive ? 88 : 20) + (slopeLegend.offsetHeight || 29) + 15 : 0;
+            let slopeTop = isSlopeActive ? slopeBottom + (slopeLegend.offsetHeight || 29) + 15 : 0;
             if (isSlopeActive) {
                 toolHints.style.bottom = slopeTop + 'px';
             } else if (isGridActive) {
@@ -14273,6 +14286,10 @@ window.triggerExplosion = function(x, y, z) {
                     if (typeof window.updateBottomHUDLayout === 'function') {
                         window.updateBottomHUDLayout();
                     }
+                } else if (isLegendVisible && performance.now() - (window._slopeLegendLayoutAt || 0) > 500 && typeof window.updateBottomHUDLayout === 'function') {
+                    // the play controls under it come and go (putting mode, a shot in the air): place it again twice a second
+                    window._slopeLegendLayoutAt = performance.now();
+                    window.updateBottomHUDLayout();
                 }
                 if (isLegendVisible) {
                     let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');

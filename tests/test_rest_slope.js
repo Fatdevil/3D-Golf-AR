@@ -87,5 +87,12 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'arcade.html'), 'utf8');
 check('förklaringen har magenta-raden och uppdateras från slopeLegendTexts', /id="slope-legend-norest"/.test(html) && /id="slope-legend-severe"/.test(html) && /window\.slopeLegendTexts\(isSv\)/.test(html));
 check('förklaringen radbryts på smal skärm och får hela bredden (inte bara halva)', /id="green-slope-hud-legend"[^>]*left:12px; right:12px; margin:0 auto; width:fit-content[^>]*flex-wrap:wrap/.test(html));
 
+{
+  const lay = html.slice(html.indexOf('window.updateBottomHUDLayout = function'), html.indexOf('window._greenSlopeMode = '));
+  check('förklaringen läggs ovanför spelets kontroller längst ner (dator och telefon)',
+    ["'play-controls'", "'club-selector'", "'shape-selector'", "'swing-launch-btn'"].every(function (id) { return lay.indexOf(id) >= 0; }) && /slopeLegend\.style\.bottom = slopeBottom \+ 'px';/.test(lay));
+  check('och placeras om medan den syns (kontrollerna kommer och går)', /window\._slopeLegendLayoutAt = performance\.now\(\);\s*window\.updateBottomHUDLayout\(\);/.test(html));
+}
+
 console.log(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
 process.exit(failed ? 1 : 0);
