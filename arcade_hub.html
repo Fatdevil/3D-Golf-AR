@@ -172,6 +172,16 @@ body {
 
 /* COURSE GRID (Trackman Style) */
 .tm-modal-content.wide { max-width: 1200px; }
+.practice-card { display: flex; align-items: center; gap: 16px; margin: 0 0 18px; padding: 16px 18px; border-radius: 16px; cursor: pointer;
+  background: linear-gradient(135deg, rgba(234,179,8,0.18), rgba(16,185,129,0.12)); border: 1px solid rgba(234,179,8,0.45); transition: transform 0.15s, background 0.15s; }
+.practice-card:hover { transform: translateY(-2px); background: linear-gradient(135deg, rgba(234,179,8,0.26), rgba(16,185,129,0.18)); }
+.practice-card:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+.practice-card-icon { font-size: 34px; flex: none; }
+.practice-card-text { flex: 1; min-width: 0; }
+.practice-card-title { font-size: 18px; font-weight: 900; color: #fde68a; }
+.practice-card-sub { font-size: 13px; color: #cbd5e1; margin-top: 2px; }
+.practice-card-go { flex: none; height: 40px; padding: 0 18px; border-radius: 10px; background: #facc15; color: #0f172a; font-weight: 900; display: flex; align-items: center; }
+@media (prefers-reduced-motion: reduce) { .practice-card { transition: none; } .practice-card:hover { transform: none; } }
 .list-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .list-tools input, .list-tools select { height: 38px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #0f172a; color: #e2e8f0; font: inherit; font-size: 14px; padding: 0 12px; }
 .list-tools input { flex: 1 1 220px; min-width: 0; }
@@ -282,6 +292,9 @@ body {
           <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#eab308; color:#0f172a;" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build&mode=range'">
             + BUILD RANGE
           </button>
+          <button class="btn-play" style="flex:1; font-size:16px; padding:20px; background:#fde68a; color:#0f172a;" title="Range Tee and three greens with flags (60, 100, 140 m), ready to change and publish" onclick="window.location.href='arcade.html?v=' + Date.now() + '&autorun=new_build&mode=range&practice=1'">
+            + RANGE FROM PRACTICE RANGE
+          </button>
       </div>
       
       <h3 style="color:#94a3b8; font-size:14px; text-transform:uppercase; margin-bottom:15px;">Your Drafts</h3>
@@ -351,6 +364,15 @@ body {
       <button class="tm-close" onclick="closeModal('modal-ranges')">&times;</button>
       <h2 style="font-size:32px; font-weight:900; margin-top:0;">DRIVING RANGES</h2>
       <p style="color:#94a3b8; margin-bottom:20px;">Choose a saved driving range and start hitting balls.</p>
+      <!-- the ready practice range: always there, played at once (nothing is saved on this device, a draft of one's own stays as it is) -->
+      <div class="practice-card" role="button" tabindex="0" onclick="playPracticeRange()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playPracticeRange();}">
+         <div class="practice-card-icon" aria-hidden="true">🎯</div>
+         <div class="practice-card-text">
+            <div class="practice-card-title">Golf OS Practice Range</div>
+            <div class="practice-card-sub">Range Tee and three greens with flags at 60, 100 and 140 m. Approach practice, tests and voice: ready at once.</div>
+         </div>
+         <div class="practice-card-go">Play ▶</div>
+      </div>
       <div class="list-tools">
          <label for="range-search">Search ranges</label>
          <input type="search" id="range-search" placeholder="Search by name, creator or code" autocomplete="off">
@@ -386,6 +408,11 @@ function playCourse(courseCode) {
 // names and authors are typed by whoever saved the course: shown as text, never as markup
 function escHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+}
+
+// the ready practice range: built in the game and played at once, nothing saved on this device
+function playPracticeRange() {
+    window.location.href = "arcade.html?v=" + Date.now() + "&autorun=new_build&mode=range&template=flat&practice=1&play=1";
 }
 
 function playRange(rangeCode) {

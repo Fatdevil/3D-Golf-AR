@@ -676,6 +676,9 @@
         <a href="#" class="create-btn create-btn-range" id="btn-new-range" onclick="newBuild('range')">
             <span data-i18n="btn_new_range">🏌️ New Range</span>
         </a>
+        <a href="#" class="create-btn create-btn-range" id="btn-new-practice-range" onclick="newBuild('practice')" title="Range Tee and three greens with flags (60, 100, 140 m), ready to change and publish">
+            <span data-i18n="btn_new_practice_range">🎯 Range from the practice range</span>
+        </a>
     </div>
 
     <!-- Collection Create Row -->
@@ -730,6 +733,7 @@
     function newBuild(type) {
         let url = 'arcade.html?v=' + Date.now() + '&autorun=new_build';
         if (type === 'range') url += '&mode=range';
+        if (type === 'practice') url += '&mode=range&practice=1';   // a new range that starts as the ready practice range (tee and three greens)
         window.location.href = url;
     }
 
