@@ -5557,17 +5557,43 @@
         return h;
     };
 
+    // THE slope of the ground, shared by the ball (physicsTerrainAt), the lie (localGetTerrainAt) and the green slope view
+    // (sampleGreenGradient: grid, heatmap, beads), so the colours show the slope the ball rolls on.
+    // At every terrain vertex the gradient is the central difference to its neighbours (one cell each way, one-sided at the edge of
+    // the terrain): what the ball used to feel at its nearest vertex. Between vertices the four around the point are blended
+    // bilinearly, so the slope changes smoothly instead of in steps at each cell, and does not depend on a sampling radius.
+    // Three.js world coordinates in, { dhdx, dhdz } out (height change per metre along +x and +z).
+    window.terrainSlopeAt = function(worldX, worldZ) {
+        const geo = window._arcadePlaneGeo;
+        if (!geo) return { dhdx: 0, dhdz: 0 };
+        const pos = geo.attributes.position.array;
+        const segs = window.TERRAIN_SEGS, stride = segs + 1;
+        const step = TERRAIN_SIZE / segs, half = TERRAIN_SIZE / 2;
+        let gx = (worldX + half) / step, gz = (worldZ + half) / step;
+        gx = gx < 0 ? 0 : (gx > segs ? segs : gx);
+        gz = gz < 0 ? 0 : (gz > segs ? segs : gz);
+        const ix = Math.min(segs - 1, Math.floor(gx)), iz = Math.min(segs - 1, Math.floor(gz));
+        const fx = gx - ix, fz = gz - iz;
+        let sx = 0, sz = 0;
+        for (let c = 0; c < 4; c++) {
+            const vx = ix + (c & 1), vz = iz + (c >> 1);
+            const w = ((c & 1) ? fx : 1 - fx) * ((c >> 1) ? fz : 1 - fz);
+            if (w === 0) continue;
+            const xL = vx > 0 ? vx - 1 : 0, xR = vx < segs ? vx + 1 : segs;
+            const zD = vz > 0 ? vz - 1 : 0, zU = vz < segs ? vz + 1 : segs;
+            sx += w * (pos[(vz * stride + xR) * 3 + 2] - pos[(vz * stride + xL) * 3 + 2]) / ((xR - xL) * step);
+            sz += w * (pos[(zU * stride + vx) * 3 + 2] - pos[(zD * stride + vx) * 3 + 2]) / ((zU - zD) * step);
+        }
+        return { dhdx: sx, dhdz: sz };
+    };
+
     // Centralized green gradient & slope engine (TrackMan/GSPro unified standard)
+    // The slope comes from terrainSlopeAt, the same as the ball's; sampleRadius is kept for the callers but no longer used.
     window.sampleGreenGradient = function(wx, wz, sampleRadius = 0.20) {
-        let d = sampleRadius;
         let hCenter = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz) : 0;
-        let hR = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx + d, wz) : hCenter;
-        let hL = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx - d, wz) : hCenter;
-        let hU = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz + d) : hCenter;
-        let hD = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz - d) : hCenter;
-        
-        let dhdx = (hR - hL) / (2 * d);
-        let dhdz = (hU - hD) / (2 * d);
+        let sl = window.terrainSlopeAt(wx, wz);
+        let dhdx = sl.dhdx;
+        let dhdz = sl.dhdz;
         
         let slopeMagnitude = Math.hypot(dhdx, dhdz);
         let slopePercent = slopeMagnitude * 100.0;
@@ -6420,19 +6446,10 @@
         let positions = planeGeo.attributes.position.array;
         let height = positions[idx * 3 + 2]; 
         
-        let gxL = Math.max(0, gx - 1);
-        let gxR = Math.min(TERRAIN_SEGS, gx + 1);
-        let gzD = Math.max(0, gz - 1);
-        let gzU = Math.min(TERRAIN_SEGS, gz + 1);
-
-        let hR = positions[(gz * (TERRAIN_SEGS+1) + gxR) * 3 + 2];
-        let hL = positions[(gz * (TERRAIN_SEGS+1) + gxL) * 3 + 2];
-        let hU = positions[(gzU * (TERRAIN_SEGS+1) + gx) * 3 + 2];
-        let hD = positions[(gzD * (TERRAIN_SEGS+1) + gx) * 3 + 2];
-        
-        let step = TERRAIN_SIZE/TERRAIN_SEGS;
-        let dh_dx = (hR - hL) / ((gxR - gxL || 1) * step);
-        let dh_dz = (hU - hD) / ((gzU - gzD || 1) * step); 
+        // same slope as the ball (physicsTerrainAt) and the slope view
+        let slope = window.terrainSlopeAt(threeX, threeZ);
+        let dh_dx = slope.dhdx;
+        let dh_dz = slope.dhdz;
         
         let len = Math.sqrt(dh_dx*dh_dx + dh_dz*dh_dz + 1.0);
         let normX = -dh_dx / len;
@@ -6842,7 +6859,8 @@
         window._globalGreenGridEnabled = (window._greenSlopeMode !== 'OFF');
         let mode = window._greenSlopeMode;
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-        let hole = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null);
+        let vizIdx = window.slopeVizHoleIndex();   // the hole being played in a round, the builder's hole otherwise
+        let hole = (window.courseHoles && window.courseHoles[vizIdx]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[vizIdx] : null);
         let hasGreen = hole && hole.greenData && hole.greenData.points && hole.greenData.points.length >= 3;
         let leg = document.getElementById('green-slope-hud-legend');
 
@@ -6856,7 +6874,7 @@
             if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = false;
             if (hasGreen) {
                 if (typeof window.buildGreenGrid === 'function') {
-                    window.buildGreenGrid(hole, window.currentHoleIndex, true);
+                    window.buildGreenGrid(hole, vizIdx, true);
                 }
                 if (window.greenGridMesh) window.greenGridMesh.visible = true;
                 if (leg) leg.style.display = 'flex';
@@ -6869,7 +6887,7 @@
             if (typeof window.clearGreenBeads === 'function') window.clearGreenBeads();
             if (hasGreen) {
                 if (typeof window.buildGreenHeatmapMesh === 'function') {
-                    window.buildGreenHeatmapMesh(hole, window.currentHoleIndex, true);
+                    window.buildGreenHeatmapMesh(hole, vizIdx, true);
                 }
                 if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = true;
                 if (leg) leg.style.display = 'flex';
@@ -9338,19 +9356,10 @@
         let positions = planeGeo.attributes.position.array;
         let height = positions[idx * 3 + 2]; 
         
-        let gxL = Math.max(0, gx - 1);
-        let gxR = Math.min(TERRAIN_SEGS, gx + 1);
-        let gzD = Math.max(0, gz - 1);
-        let gzU = Math.min(TERRAIN_SEGS, gz + 1);
-
-        let hR = positions[(gz * (TERRAIN_SEGS+1) + gxR) * 3 + 2];
-        let hL = positions[(gz * (TERRAIN_SEGS+1) + gxL) * 3 + 2];
-        let hU = positions[(gzU * (TERRAIN_SEGS+1) + gx) * 3 + 2];
-        let hD = positions[(gzD * (TERRAIN_SEGS+1) + gx) * 3 + 2];
-        
-        let step = TERRAIN_SIZE/TERRAIN_SEGS;
-        let dh_dx = (hR - hL) / ((gxR - gxL || 1) * step);
-        let dh_dz = (hU - hD) / ((gzU - gzD || 1) * step); 
+        // the slope the slope view shows too (terrainSlopeAt)
+        let slope = window.terrainSlopeAt(threeX, threeZ);
+        let dh_dx = slope.dhdx;
+        let dh_dz = slope.dhdz;
         
         let len = Math.sqrt(dh_dx*dh_dx + dh_dz*dh_dz + 1.0);
         // Physics space: px = threeX, py = -threeZ (so dh/dpy = -dh/dz)
@@ -10002,6 +10011,7 @@
 
     function applyEditorState(state) {
         if (!state) return;
+        window._terrainRevision = (window._terrainRevision || 0) + 1;   // undo/redo can bring back other ground: the slope view rebuilds
         // Cancel any pending hole auto-advance timer immediately
         if (window._autoAdvanceTimer) {
             clearTimeout(window._autoAdvanceTimer);
@@ -11042,6 +11052,7 @@
             if (window.slopeOverlayActive) window.updateSlopeOverlay();
             if (window.contourLinesActive) window.updateContourLines();
             if (window.elevationHeatmapActive) window.updateElevationHeatmap();
+            window._terrainRevision = (window._terrainRevision || 0) + 1;   // the green slope grid, heatmap and beads are cached per revision
             if (options.save) debounceSaveCourse(1500);
         }
         
@@ -14002,14 +14013,18 @@ window.triggerExplosion = function(x, y, z) {
         let showGreenViz = false;
         let vizHole = null;
         let isStudioMode = false;
+        let vizHoleIdx = -1;
 
         if (isStudioLutning || isGlobalSlopeActive) {
-            vizHole = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null);
+            // Green Studio works on the builder's hole; the slope button in a round shows the hole being played
+            vizHoleIdx = isStudioLutning ? window.currentHoleIndex : window.slopeVizHoleIndex();
+            vizHole = (window.courseHoles && window.courseHoles[vizHoleIdx]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[vizHoleIdx] : null);
             if (vizHole && vizHole.greenData && vizHole.greenData.points && vizHole.greenData.points.length >= 3) {
                 showGreenViz = true;
                 isStudioMode = true;
             }
         } else if (typeof courseHoles !== 'undefined' && courseHoles && typeof playingHoleIndex !== 'undefined') {
+            vizHoleIdx = playingHoleIndex;
             vizHole = courseHoles[playingHoleIndex];
             if (vizHole && vizHole.flag && playState === 'ROUND_IDLE' && window.ballPos) {
                 let dx = window.ballPos.x - vizHole.flag.x;
@@ -14069,7 +14084,7 @@ window.triggerExplosion = function(x, y, z) {
                 let covKey = window._greenGridCoverage || 'ALL';
                 let revKey = window._terrainRevision || 0;
                 let stepKey = window._greenGridSpacing || 2.0;
-                let currentHoleKey = (isStudioMode ? ('studio_' + window.currentHoleIndex) : ('play_' + (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0))) + '_' + covKey + '_' + revKey + '_' + stepKey;
+                let currentHoleKey = (isStudioMode ? 'studio_' : 'play_') + vizHoleIdx + '_' + covKey + '_' + revKey + '_' + stepKey;
                 
                 // TrackMan / GSPro 2.0m Grid Alignment Bounding Box
                 let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -14205,24 +14220,14 @@ window.triggerExplosion = function(x, y, z) {
             }
             
             // --- GREEN GRID ---
-            if (window.greenGridMesh) {
-                window.greenGridMesh.visible = showGrid;
-            } else if (showGrid) {
-                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
-                window.buildGreenGrid(hole, holeIdx);
-                if (window.greenGridMesh) window.greenGridMesh.visible = true;
-            }
+            // Called every frame while shown: the builder returns at once when its cache key (hole, terrain revision, coverage, ...)
+            // still matches, and rebuilds when the mesh belongs to another hole or older ground (hole change, tilt, sculpt, undo).
+            if (showGrid) window.buildGreenGrid(hole, vizHoleIdx);
+            if (window.greenGridMesh) window.greenGridMesh.visible = showGrid;
 
             // --- GREEN HEATMAP ---
-            if (window.greenHeatmapMesh) {
-                window.greenHeatmapMesh.visible = showHeatmap;
-            } else if (showHeatmap) {
-                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
-                if (typeof window.buildGreenHeatmapMesh === 'function') {
-                    window.buildGreenHeatmapMesh(hole, holeIdx);
-                }
-                if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = true;
-            }
+            if (showHeatmap && typeof window.buildGreenHeatmapMesh === 'function') window.buildGreenHeatmapMesh(hole, vizHoleIdx);
+            if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = showHeatmap;
 
             // --- TRACKMAN SLOPE HUD LEGEND ---
             let slopeLegend = document.getElementById('green-slope-hud-legend');
