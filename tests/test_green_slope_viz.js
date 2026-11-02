@@ -213,6 +213,22 @@ if (REAL_THREE) {
   }
   const circleArea = Math.PI * R * R;
   check('heatmapen täcker hela greenen (yta inom 2 %)', Math.abs(area - circleArea) / circleArea < 0.02, 'yta ' + area.toFixed(1) + ' mot ' + circleArea.toFixed(1) + ' m²');
+  // the foregreen boundary: each corner carries its signed distance to the putting surface's edge, so the boundary (where it crosses
+  // 0) follows the outline instead of 50 cm steps
+  {
+    const Rin = R - 1.5, inner = []; for (let i = 0; i < 240; i++) inner.push({ x: 1.1 + Rin * Math.cos(i / 240 * 2 * Math.PI), z: -0.7 + Rin * Math.sin(i / 240 * 2 * Math.PI) });
+    hw.getActiveGreenPolygon = function (h, cov) { return cov === 'GREEN_ONLY' ? inner : circle; };
+    hw.buildGreenHeatmapMesh({ greenData: { points: [1, 2, 3, 4], foregreenWidth: 1.5 } }, 0, true);
+    const g2 = hw.greenHeatmapMesh.geometry, p2 = g2.attributes.position.array, fd = g2.attributes.aFg.array;
+    let worstD = 0, signs = { in: 0, out: 0 };
+    for (let i = 0; i < fd.length; i++) {
+      const r = Math.hypot(p2[i * 3] - 1.1, p2[i * 3 + 2] + 0.7);
+      worstD = Math.max(worstD, Math.abs(fd[i] - (r - Rin)));
+      if (fd[i] < 0) signs.in++; else signs.out++;
+    }
+    check('foregreen: varje hörn bär sitt avstånd till puttytans kant (negativt innanför)', worstD < 0.01 && signs.in > 0 && signs.out > 0, 'största fel ' + (worstD * 100).toFixed(2) + ' cm');
+    check('shadern dämpar där avståndet är över 0, inte vid en 0/1-flagga', /bool fg = vFg > 0\.0;/.test(hw.greenHeatmapMesh.material.fragmentShader));
+  }
 } else {
   console.log('  (heatmapens kant provas bara med three.js installerat: npm --prefix tests install)');
 }
