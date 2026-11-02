@@ -6470,8 +6470,7 @@
         if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
         
         let idx = gz * (TERRAIN_SEGS+1) + gx;
-        let positions = planeGeo.attributes.position.array;
-        let height = positions[idx * 3 + 2]; 
+        let height = window.getTerrainSurfaceHeight(threeX, threeZ);   // the drawn ground, like physicsTerrainAt
         
         // same slope as the ball (physicsTerrainAt) and the slope view
         let slope = window.terrainSlopeAt(threeX, threeZ);
@@ -9393,8 +9392,11 @@
         if(gz < 0) gz = 0; if(gz > TERRAIN_SEGS) gz = TERRAIN_SEGS;
         
         let idx = gz * (TERRAIN_SEGS+1) + gx;
-        let positions = planeGeo.attributes.position.array;
-        let height = positions[idx * 3 + 2]; 
+        // the height of the ground as it is drawn (the two triangles of the cell), so the ball lies on the ground the player sees.
+        // It used to be the nearest vertex: steps of slope x half a cell (1.5 cm on a 3 % green, 10 cm on a 20 % bank) that the
+        // ball jumped up and down as it rolled, floating above or sinking into the drawn ground in between. Water stays per vertex
+        // (idx), as the water data is stored.
+        let height = window.getTerrainSurfaceHeight(threeX, threeZ);
         
         // the slope the slope view shows too (terrainSlopeAt)
         let slope = window.terrainSlopeAt(threeX, threeZ);

@@ -115,6 +115,9 @@ check('sculpt och ångra/gör om räknar upp terrängversionen',
   const grad = html.slice(html.indexOf('window.sampleGreenGradient = function'), html.indexOf('plane.raycast = function'));
   check('bollen (physicsTerrainAt) använder terrainSlopeAt', /window\.terrainSlopeAt\(threeX, threeZ\)/.test(phys));
   check('läget (localGetTerrainAt) använder terrainSlopeAt', /window\.terrainSlopeAt\(threeX, threeZ\)/.test(lie));
+  check('bollens höjd (physicsTerrainAt) är den ritade marken, inte närmaste hörn', /let height = window\.getTerrainSurfaceHeight\(threeX, threeZ\);/.test(phys) && !/let height = positions\[idx \* 3 \+ 2\]/.test(phys));
+  check('lägets höjd (localGetTerrainAt) likaså', /let height = window\.getTerrainSurfaceHeight\(threeX, threeZ\);/.test(lie) && !/let height = positions\[idx \* 3 \+ 2\]/.test(lie));
+  check('vattnet läses fortfarande per hörn (så lagras det)', /window\.waterData\[idx\]/.test(phys) && /window\.waterData\[idx\]/.test(lie));
   check('lutningsvyn (sampleGreenGradient) använder terrainSlopeAt', /window\.terrainSlopeAt\(wx, wz\)/.test(grad) && !/getTerrainHeight\(wx \+ d/.test(grad));
 }
 
