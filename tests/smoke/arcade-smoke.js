@@ -1592,8 +1592,12 @@ function serve() {
       document.querySelector('#range-session [data-tab="approach"]').click();
       r.history = { tests: trs.length, n: trs[0] && trs[0].trend.n, last: trs[0] && trs[0].trend.last, rows: document.querySelectorAll('#range-session .rs-test').length,
                     dots: document.querySelectorAll('#range-session .rs-test .rp-spark-dot').length };
-      document.querySelector('#range-practice [data-act="again"]').click();   // same test again: a new plan, shot 1
-      r.again = window.RangePractice.test().phase === 'run' && window.RangePractice.test().i === 0;
+      // same test again, also after the unit was switched (the band stays in the unit the test was played in: the same test, the same board)
+      const metersBefore = window.RangePractice.test().meters;
+      window.setDistanceUnit(!window.useMeters);
+      document.querySelector('#range-practice [data-act="again"]').click();
+      r.again = window.RangePractice.test().phase === 'run' && window.RangePractice.test().i === 0 && window.RangePractice.test().meters === metersBefore;
+      window.setDistanceUnit(metersBefore);
       document.querySelector('#range-practice .rp-close').click();
       r.after = { dots: scene.children.filter(function (c) { return c.userData && c.userData.rangePracticeDot; }).length,
                   sessionDots: scene.children.filter(function (c) { return c.userData && c.userData.rangeSessionDot; }).some(function (c) { return c.visible; }) };
@@ -1608,7 +1612,7 @@ function serve() {
       tsetup.setup.shots === 2 && tsetup.setup.bands === 3 && tsetup.setup.start && tsetup.setup.first && tsetup.setup.locked && /1\/3/.test(tsetup.setup.label) &&
       tshots.every(function (s) { return typeof s.points === 'number' && s.points >= 0 && s.points <= 100 && s.test === true && /\+\d+ (p|pts)/.test(s.popup); }) &&
       Math.abs(tshots[0].dist - 60 * tsetup.unitM) < 0.01 && tshots[0].at === 90 && tshots[1].at === 120, detail: JSON.stringify({ setup: tsetup.setup, shots: tshots }) });
-    checks.push({ name: 'range approach test: the result is the average of the points, the first is a best, with the spread drawn small and on the green where the balls stopped (the landing dots hidden); kept in the test history in the panel; closing clears it', ok:
+    checks.push({ name: 'range approach test: the result is the average of the points, the first is a best, with the spread drawn small and on the green where the balls stopped (the landing dots hidden); kept in the test history in the panel; again is the same test even after a unit switch; closing clears it', ok:
       tdone.phase === 'done' && tdone.score === tdone.avg && tdone.record === true && tdone.summary && tdone.plotDots === 3 && tdone.dots === 3 && tdone.dotsAtRest && tdone.ellipse && tdone.sessionDotsHidden &&
       tdone.again && tdone.after.dots === 0 && tdone.after.sessionDots &&
       tdone.history.tests === 1 && tdone.history.n === 1 && tdone.history.last === tdone.score && tdone.history.rows === 1 && tdone.history.dots === 1, detail: JSON.stringify(tdone) });

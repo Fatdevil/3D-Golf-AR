@@ -286,8 +286,10 @@
         }
 
         // ── The test ──
-        function startTest(n, band, plan) {
-            const meters = !!root.useMeters, g = current();
+        // meters: the unit the band is in (the player's now, or for "again" the one the test was played in: the same test, the same board)
+        function startTest(n, band, plan, meters) {
+            if (meters === undefined) meters = !!root.useMeters;
+            const g = current();
             if (!g) return;
             test = { phase: 'run', n: n, band: band.slice(), meters: meters, plan: plan ? plan.slice(0, n) : testPlan(n, band[0], band[1]), i: 0, hole: g.hole, shots: [] };
             test.n = test.plan.length;
@@ -529,7 +531,7 @@
             else if (act === 'mic') { if (root.VoiceCommands && root.VoiceCommands.toggle) root.VoiceCommands.toggle(); }
             else if (act === 'test') { test = { phase: 'setup' }; render(); }
             else if (act === 'start') startTest(state.testN, BANDS[state.testBand]);
-            else if (act === 'again') startTest(test.n, test.band);
+            else if (act === 'again') startTest(test.n, test.band, null, test.meters);
             else if (act === 'cancel') { test = null; apply(); }
             else if (b.dataset.tn !== undefined) { state.testN = TEST_SHOTS[+b.dataset.tn]; save(); render(); }
             else if (b.dataset.tb !== undefined) { state.testBand = +b.dataset.tb; save(); render(); }
@@ -545,6 +547,7 @@
 
         api.start = function (opts) {
             if (!opts || !opts.tee) return;
+            Object.keys(boards).forEach(function (k) { delete boards[k]; });   // another range (or the same one published since) has boards of its own
             ctx = { key: String(opts.key || 'draft'), tee: { x: opts.tee.x, y: opts.tee.y, z: opts.tee.z, rot: opts.tee.rot || 0 }, holes: opts.holes || function () { return []; },
                     scene: opts.scene || null, board: opts.board || null };   // board: the code of the range's leaderboard (a published range, or the practice range)
             test = null;
@@ -597,7 +600,7 @@
         api.getState = function () { return Object.assign({}, state); };
         api.set = function (s) { if (!ctx) return; Object.assign(state, s || {}); save(); apply(); };   // for tests and voice commands
         // A test from code (tests, voice): n shots in a band of the player's unit, or the given distances
-        api.startTest = function (n, band, plan) { if (ctx && state.on) startTest(n, band || BANDS[1], plan); };
+        api.startTest = function (n, band, plan, meters) { if (ctx && state.on) startTest(n, band || BANDS[1], plan, meters); };
         api.test = function () { return test ? JSON.parse(JSON.stringify(test)) : null; };
         // Voice (voice-commands.js parseRange): runs a command and says what it did, { ok, text }. During a test the distance, the green and
         // the lie stay as the test has them
@@ -631,9 +634,9 @@
                     if (running()) return { ok: false, text: t('locked') };
                     openIt();
                     const again = cmd.action === 'again' && test && test.phase === 'done';
-                    const n = again ? test.n : state.testN, band = again ? test.band : BANDS[state.testBand];
-                    startTest(n, band);
-                    return { ok: true, text: '🏆 ' + n + ' ' + t('shots') + ' · ' + band[0] + '–' + band[1] + ' ' + u };
+                    const n = again ? test.n : state.testN, band = again ? test.band : BANDS[state.testBand], meters = again ? test.meters : !!root.useMeters;
+                    startTest(n, band, null, meters);
+                    return { ok: true, text: '🏆 ' + n + ' ' + t('shots') + ' · ' + band[0] + '–' + band[1] + ' ' + (meters ? 'm' : 'yd') };
                 }
                 case 'cancel': if (!test) return { ok: false, text: t('noTest') }; test = null; apply(); return { ok: true, text: t('cancelled') };
             }
