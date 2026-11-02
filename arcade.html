@@ -14107,7 +14107,7 @@ window.triggerExplosion = function(x, y, z) {
                 let covKey = window._greenGridCoverage || 'ALL';
                 let revKey = window._terrainRevision || 0;
                 let stepKey = window._greenGridSpacing || 2.0;
-                let currentHoleKey = (isStudioMode ? 'studio_' : 'play_') + vizHoleIdx + '_' + covKey + '_' + revKey + '_' + stepKey;
+                let currentHoleKey = (isStudioMode ? 'studio_' : 'play_') + vizHoleIdx + '_' + covKey + '_' + revKey + '_' + stepKey + '_' + window.greenShapeKey(hole.greenData);
                 
                 // TrackMan / GSPro 2.0m Grid Alignment Bounding Box
                 let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -14151,11 +14151,14 @@ window.triggerExplosion = function(x, y, z) {
                             if (inside) {
                                 let distOffset = (Math.sin(wx * 12.9898 + wz * 78.233) * 43758.5453) % 1;
                                 if (distOffset < 0) distOffset += 1.0;
+                                let g = window.sampleGreenGradient(wx, wz, 0.20);
                                 window._greenBeadData.push({
                                     axis: 'X',
                                     startX: wx,
                                     startZ: wz,
-                                    distOffset: distOffset
+                                    distOffset: distOffset,
+                                    dhdx: g.dhdx,
+                                    dhdz: g.dhdz
                                 });
                             }
                         }
@@ -14172,11 +14175,14 @@ window.triggerExplosion = function(x, y, z) {
                             if (inside) {
                                 let distOffset = (Math.sin(wx * 26.431 + wz * 53.177) * 43758.5453) % 1;
                                 if (distOffset < 0) distOffset += 1.0;
+                                let g = window.sampleGreenGradient(wx, wz, 0.20);
                                 window._greenBeadData.push({
                                     axis: 'Z',
                                     startX: wx,
                                     startZ: wz,
-                                    distOffset: distOffset
+                                    distOffset: distOffset,
+                                    dhdx: g.dhdx,
+                                    dhdz: g.dhdz
                                 });
                             }
                         }
@@ -14197,9 +14203,9 @@ window.triggerExplosion = function(x, y, z) {
                         let sx = bead.startX;
                         let sz = bead.startZ;
                         
-                        let grad = (typeof window.sampleGreenGradient === 'function')
-                            ? window.sampleGreenGradient(sx, sz, 0.20)
-                            : { downhillX: 0, downhillZ: 0, dhdx: 0, dhdz: 0, slopePercent: 0, height: 0 };
+                        // the slope where the bead starts, taken once when the beads were laid out (they are laid out again when the
+                        // ground changes: the key has the terrain revision)
+                        let grad = bead;
                         
                         let curX = sx;
                         let curZ = sz;
@@ -14225,7 +14231,7 @@ window.triggerExplosion = function(x, y, z) {
                         }
                         
                         // Height positioned so 4.0cm radius bead sits directly on 8mm line (0.048 - 0.040 = 0.008m)
-                        let curH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(curX, curZ) : grad.height;
+                        let curH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(curX, curZ) : 0;
                         _beadDummy.position.set(curX, curH + 0.048, curZ);
                         _beadDummy.scale.set(1, 1, 1);
                         _beadDummy.updateMatrix();
