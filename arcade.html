@@ -1996,6 +1996,8 @@
                 <!-- MODE 2: REDIGERA GREEN (When green is built) -->
                 <!-- ========================================== -->
                 <div id="gs-panel-built" style="display:none;">
+                    <!-- Flag placement check: the slope within 1 m of the cup (filled by GreenStudio.syncUIValues, pinSlopeCheck) -->
+                    <div id="gs-pin-check" style="display:none; background:#0b1120; border:1px solid #1e293b; border-radius:8px; padding:5px 8px; margin-bottom:8px; font-size:10px; font-weight:700; line-height:1.35;"></div>
                     <!-- 3-Tab Workflow Bar (1. Form, 2. Lutning, 3. Klippning) -->
                     <div style="display:flex; background:#0b1120; border:1px solid #1e293b; border-radius:10px; padding:3px; margin-bottom:10px; gap:4px;">
                         <button type="button" id="gs-tab-form" onclick="window.GreenStudio.setTab('form')" style="flex:1; background:#4ade80; color:#0f172a; border:none; border-radius:8px; padding:7px 2px; font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(74,222,128,0.3);">
@@ -6705,7 +6707,7 @@
     };
 
 </script>
-<script src="arcade-green-viz.js?v=3"></script>
+<script src="arcade-green-viz.js?v=4"></script>
 <script>
     
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
@@ -10741,6 +10743,9 @@
                         saveLevel();
                         let curLang = (typeof getLang === 'function') ? getLang() : (window.currentLang || 'sv');
                         showBuildToast(curLang === 'en' ? '⛳ Flag repositioned!' : '⛳ Flagga flyttad!', '#4ade80');
+                        // a steep pin replaces the message with a warning; the Green Studio row shows it too
+                        if (typeof window.warnPinSlope === 'function') window.warnPinSlope(hole);
+                        if (window.GreenStudio && window.GreenStudio.isOpen) window.GreenStudio.sync();
                     }
                     controls.enabled = false;
                     return;
@@ -12561,6 +12566,7 @@
                 }
                 hole.flag = { x: lastHitPoint.x, y: lastHitPoint.y, z: lastHitPoint.z };
                 hole.flagMesh = createFlagObject(hole.flag.x, hole.flag.y, hole.flag.z);
+                if (typeof window.warnPinSlope === 'function') window.warnPinSlope(hole);   // a steep pin gets a warning
                 
                 // Auto-sort tees by distance to the new flag position
                 autoSortTees(hole);
@@ -16489,7 +16495,7 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=31"></script>
+<script src="green-studio.js?v=32"></script>
 <script src="fairway-studio.js?v=7"></script>
 <script src="bunker-studio.js?v=2"></script>
 <script src="tee-studio.js?v=4"></script>
