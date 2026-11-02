@@ -217,5 +217,62 @@ if (REAL_THREE) {
   console.log('  (heatmapens kant provas bara med three.js installerat: npm --prefix tests install)');
 }
 
+// ---- 7. de mindre felen ----
+{
+  // the colour table gives the same colours as the old hand-written mapping
+  function oldColor(p, fg) {
+    let r, g, b;
+    if (p < 1.0) { const t = Math.max(0, Math.min(1, p)); r = 0.05 + t * 0.10; g = 0.88 + t * 0.07; b = 1.0; }
+    else if (p < 2.2) { const t = (p - 1.0) / 1.2; r = 1.0; g = 0.90 + t * 0.05; b = 0.10 + (1.0 - t) * 0.20; }
+    else if (p < 3.8) { const t = (p - 2.2) / 1.6; r = 1.0; g = 0.90 - t * 0.35; b = 0.05; }
+    else { const t = Math.min(1, (p - 3.8) / 2.5); r = 1.0; g = 0.55 - t * 0.35; b = 0.15; }
+    return fg ? [r * 0.65, g * 0.65, b * 0.65] : [r, g, b];
+  }
+  let worst = 0;
+  for (let p = 0; p <= 9; p += 0.05) for (const fg of [false, true]) {
+    const a = win.slopePercentToColor(p, fg), o = oldColor(p, fg);
+    for (let i = 0; i < 3; i++) worst = Math.max(worst, Math.abs(a[i] - o[i]));
+  }
+  check('färgtabellen ger samma färger som förut (0-9 %, green och foregreen)', worst < 1e-9, 'största skillnad ' + worst.toExponential(1));
+  // the shader's colours are written out from the same table: evaluate the GLSL as JS and compare
+  const glsl = win._slopeColorGLSL;
+  const js = glsl.replace('vec3 slopeColor(float s)', 'function slopeColor(s)');
+  const vec3 = function () { return Array.from(arguments); };
+  const mix = function (a, b, t) { return a.map(function (v, i) { return v + (b[i] - v) * t; }); };
+  const clamp = function (v, lo, hi) { return Math.min(hi, Math.max(lo, v)); };
+  const slopeColor = new Function('vec3', 'mix', 'clamp', js + '\nreturn slopeColor;')(vec3, mix, clamp);
+  let worstG = 0;
+  for (let p = 0; p <= 9; p += 0.05) { const a = slopeColor(p), b = win.slopePercentToColor(p); for (let i = 0; i < 3; i++) worstG = Math.max(worstG, Math.abs(a[i] - b[i])); }
+  check('heatmapens shader har samma färger som rutnätet och förklaringen', worstG < 1e-9, 'största skillnad ' + worstG.toExponential(1));
+  // cache key: the outline's shape and the foregreen width count, not only the number of points
+  const gd = { points: [{ x: 0, z: 0 }, { x: 5, z: 0 }, { x: 5, z: 5 }], foregreenWidth: 1 };
+  const k0 = win.greenShapeKey(gd);
+  const moved = JSON.parse(JSON.stringify(gd)); moved.points[1].x = 5.3;
+  const wider = JSON.parse(JSON.stringify(gd)); wider.foregreenWidth = 1.5;
+  check('cache-nyckeln ändras när en punkt flyttas eller foregreenen ändras, inte annars',
+    win.greenShapeKey(moved) !== k0 && win.greenShapeKey(wider) !== k0 && win.greenShapeKey(JSON.parse(JSON.stringify(gd))) === k0);
+  const viz = fs.readFileSync(path.join(__dirname, '..', 'arcade-green-viz.js'), 'utf8');
+  check('rutnät och heatmap har formens nyckel i sin cache-nyckel', (viz.match(/let shapeKey = window\.greenShapeKey\(hole\.greenData\);/g) || []).length === 2 && !/ptsCount/.test(viz));
+  check('lutningsbollarna har formens nyckel i sin nyckel', /currentHoleKey = [^\n]*window\.greenShapeKey\(hole\.greenData\)/.test(html));
+  // the break line's speed is the speed of the line it shows
+  check('brytlinjens tempo är den valda linjens', /speedMph: best\.v/.test(viz) && /return \{ az: azOff, v: v,/.test(viz));
+  // beads: the slope is taken once per bead, not every frame
+  const beadLoop = html.slice(html.indexOf('let beadCount = '), html.indexOf('window.greenBeadsMesh.instanceMatrix.needsUpdate = true;'));
+  check('lutningsbollarna räknar inte om lutningen varje bildruta', beadLoop.length > 0 && !/sampleGreenGradient/.test(beadLoop) && /let grad = bead;/.test(beadLoop));
+  check('heatmapen räknar inte normaler den inte använder', !/computeVertexNormals/.test(viz.slice(viz.indexOf('window.buildGreenHeatmapMesh'), viz.indexOf('window.resetGreenGrid'))));
+}
+if (REAL_THREE) {
+  // the heatmap carries the slope per corner, not a colour
+  const hw = { pointInPolygon: function () { return true; }, getActiveGreenPolygon: function () { return [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 3 }, { x: 0, z: 3 }]; },
+               getTerrainSurfaceHeight: function () { return 0; }, sampleGreenGradient: function (x) { return { slopePercent: x }; } };
+  const hctx = vm.createContext({ window: hw, THREE: REAL_THREE, console: { log() {}, warn() {}, error() {} },
+    document: { getElementById() { return null; } }, scene: { add() {}, remove() {} } });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'arcade-green-viz.js'), 'utf8'), hctx);
+  hw.buildGreenHeatmapMesh({ greenData: { points: [1, 2, 3], foregreenWidth: 0 } }, 0, true);
+  const g = hw.greenHeatmapMesh && hw.greenHeatmapMesh.geometry;
+  check('heatmapen bär lutningen per hörn, färgen räknas i shadern', !!g && !!g.attributes.aSlope && !!g.attributes.aFg && !g.attributes.color &&
+    /slopeColor\(vSlope\)/.test(hw.greenHeatmapMesh.material.fragmentShader));
+}
+
 console.log(failed ? '\n' + failed + ' failed' : '\nAll green slope view checks passed');
 process.exit(failed ? 1 : 0);

@@ -51,47 +51,40 @@
         }
     };
 
-    // Global TrackMan Slope Color Mapping (Used by both 3D Grid and Surface Heatmap)
+    // Slope colours (TrackMan style), the one table for the grid, the heatmap and the legend's bands: [from %, to %, colour at
+    // "from", colour at "to"], linear in between, the last band held above its end. 1 % / 2,2 % / 3,8 % are the legend's limits.
+    const SLOPE_BANDS = [
+        [0.0, 1.0, [0.05, 0.88, 1.00], [0.15, 0.95, 1.00]],   // flat: electric cyan
+        [1.0, 2.2, [1.00, 0.90, 0.30], [1.00, 0.95, 0.10]],   // gentle break (a typical green 1-2 %): neon gold
+        [2.2, 3.8, [1.00, 0.90, 0.05], [1.00, 0.55, 0.05]],   // moderate break: amber
+        [3.8, 6.3, [1.00, 0.55, 0.15], [1.00, 0.20, 0.15]]    // severe: coral red
+    ];
+    const FOREGREEN_DIM = 0.65;   // softer on the foregreen so the putting surface stands out
+
+    window.slopePercentToColor = function(slopePct, isForegreen = false) {
+        let band = SLOPE_BANDS[SLOPE_BANDS.length - 1];
+        for (const bd of SLOPE_BANDS) { if (slopePct < bd[1]) { band = bd; break; } }
+        let t = (slopePct - band[0]) / (band[1] - band[0]);
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        const k = isForegreen ? FOREGREEN_DIM : 1;
+        return [0, 1, 2].map(function (i) { return (band[2][i] + t * (band[3][i] - band[2][i])) * k; });
+    };
+
+    // The same mapping in GLSL, written out from SLOPE_BANDS (so the heatmap shader cannot drift from the grid and the legend)
+    function glslNum(v) { const s = String(v); return s.indexOf('.') >= 0 || s.indexOf('e') >= 0 ? s : s + '.0'; }
+    function glslVec(c) { return 'vec3(' + c.map(glslNum).join(', ') + ')'; }
+    const SLOPE_COLOR_GLSL = 'vec3 slopeColor(float s) {\n' + SLOPE_BANDS.map(function (bd, i) {
+        const body = 'return mix(' + glslVec(bd[2]) + ', ' + glslVec(bd[3]) + ', clamp((s - ' + glslNum(bd[0]) + ') / ' + glslNum(bd[1] - bd[0]) + ', 0.0, 1.0));';
+        return i < SLOPE_BANDS.length - 1 ? '    if (s < ' + glslNum(bd[1]) + ') ' + body : '    ' + body;
+    }).join('\n') + '\n}\n';
+    window._slopeColorGLSL = SLOPE_COLOR_GLSL;   // for the tests
+
+    // Global TrackMan Slope Color Mapping (Used by the 3D Grid and the legend's bands)
     window.getGreenSlopeColor = function(wx, wz, isForegreen = false) {
-        let grad = (typeof window.sampleGreenGradient === 'function') 
+        let grad = (typeof window.sampleGreenGradient === 'function')
             ? window.sampleGreenGradient(wx, wz, 0.25)
             : { slopePercent: 0 };
-        let slopePct = grad.slopePercent;
-        
-        let r, g, b;
-        if (slopePct < 1.0) {
-            // Flat / Level: Vivid Electric Cyan / Ice Blue (Maximum contrast on grass)
-            let t = Math.max(0, Math.min(1, slopePct / 1.0));
-            r = 0.05 + t * 0.10;
-            g = 0.88 + t * 0.07;
-            b = 1.0;
-        } else if (slopePct < 2.2) {
-            // Gentle break (typical putting green 1-2%): High-Contrast Neon Gold / Yellow
-            let t = (slopePct - 1.0) / (2.2 - 1.0);
-            r = 1.0;
-            g = 0.90 + t * 0.05;
-            b = 0.10 + (1.0 - t) * 0.20;
-        } else if (slopePct < 3.8) {
-            // Moderate break: Vivid Amber / Tangerine
-            let t = (slopePct - 2.2) / (3.8 - 2.2);
-            r = 1.0;
-            g = 0.90 - t * 0.35;
-            b = 0.05;
-        } else {
-            // Severe break / Slant: Fiery Coral Red
-            let t = Math.min(1, (slopePct - 3.8) / 2.5);
-            r = 1.0;
-            g = 0.55 - t * 0.35;
-            b = 0.15;
-        }
-        
-        if (isForegreen) {
-            // Mjukare kontrast på foregreen så puttytan syns distinkt
-            r *= 0.65;
-            g *= 0.65;
-            b *= 0.65;
-        }
-        return [r, g, b];
+        return window.slopePercentToColor(grad.slopePercent, isForegreen);
     };
 
     // Height of the drawn ground (the terrain triangles); the bilinear height where that is not available
@@ -130,15 +123,27 @@
     }
     window._addLineDepthBias = addLineDepthBias;   // for the tests
 
+    // A short fingerprint of what a green's slope view is built from: the outline points (where they are, not only how many), its
+    // tension and the foregreen width. Moving a point or changing the foregreen then gives a new cache key even without a terrain change.
+    window.greenShapeKey = function(gd) {
+        if (!gd) return 'none';
+        let h = 0;
+        const add = function (v) { h = (Math.imul(h, 31) + Math.round(v * 1000)) | 0; };
+        for (const p of (gd.points || [])) { add(p.x); add(p.z); }
+        add(gd.tension !== undefined ? gd.tension : 0.5);
+        add(gd.foregreenWidth !== undefined ? gd.foregreenWidth : 1.0);
+        return (gd.points ? gd.points.length : 0) + ':' + (h >>> 0).toString(36);
+    };
+
     window.buildGreenGrid = function(hole, holeIndex, forceRebuild = false) {
         if (!hole) return;
         
         let coverage = window._greenGridCoverage || 'ALL';
         let colorMode = window._greenGridColorMode || 'HEATMAP';
-        let ptsCount = (hole.greenData && hole.greenData.points) ? hole.greenData.points.length : 0;
+        let shapeKey = window.greenShapeKey(hole.greenData);
         let terrainRev = window._terrainRevision || 0;
         let gridStep = window._greenGridSpacing || 2.0;  // 2.0 meter TrackMan/GSPro standard spacing
-        let cacheKey = `${holeIndex}_${terrainRev}_${coverage}_${colorMode}_${ptsCount}_${gridStep}`;
+        let cacheKey = `${holeIndex}_${terrainRev}_${coverage}_${colorMode}_${shapeKey}_${gridStep}`;
         
         if (!forceRebuild && window._greenGridCacheKey === cacheKey && window.greenGridMesh) {
             return;
@@ -360,10 +365,10 @@
         if (!hole) return;
         
         let coverage = window._greenGridCoverage || 'ALL';
-        let ptsCount = (hole.greenData && hole.greenData.points) ? hole.greenData.points.length : 0;
+        let shapeKey = window.greenShapeKey(hole.greenData);
         let terrainRev = window._terrainRevision || 0;
         let hmStep = 0.50;  // 50 cm smooth grid resolution
-        let cacheKey = `hm_${holeIndex}_${terrainRev}_${coverage}_${ptsCount}_${hmStep}`;
+        let cacheKey = `hm_${holeIndex}_${terrainRev}_${coverage}_${shapeKey}_${hmStep}`;
         
         if (!forceRebuild && window._greenHeatmapCacheKey === cacheKey && window.greenHeatmapMesh) {
             return;
@@ -404,8 +409,11 @@
         let vertMap = new Int32Array(cols * rows);
         vertMap.fill(-1);
         
+        // The slope (not a colour) goes on each corner, and the shader turns it into a colour per pixel: blending the colours of the
+        // corners across a band edge (cyan next to gold) gave in-between shades that are not in the legend.
         let positions = [];
-        let colors = [];
+        let slopes = [];
+        let fgFlags = [];
         let indices = [];
         let vertCount = 0;
         
@@ -424,12 +432,11 @@
             let y = curH + 0.005; // 5 mm elevation above grass to eliminate z-fighting
             
             let isFg = (innerPoly && fgWidth > 0.05) ? !window.pointInPolygon(wx, wz, innerPoly) : false;
-            let rgb = (typeof window.getGreenSlopeColor === 'function')
-                ? window.getGreenSlopeColor(wx, wz, isFg)
-                : [0.38, 0.82, 0.38];
-                
+            let grad = (typeof window.sampleGreenGradient === 'function') ? window.sampleGreenGradient(wx, wz, 0.25) : { slopePercent: 0 };
+
             positions.push(wx, y, wz);
-            colors.push(rgb[0], rgb[1], rgb[2]);
+            slopes.push(grad.slopePercent);
+            fgFlags.push(isFg ? 1 : 0);
             
             let newIdx = vertCount++;
             vertMap[mapIdx] = newIdx;
@@ -472,14 +479,20 @@
         
         let geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.setAttribute('aSlope', new THREE.Float32BufferAttribute(slopes, 1));
+        geo.setAttribute('aFg', new THREE.Float32BufferAttribute(fgFlags, 1));
         geo.setIndex(indices);
-        geo.computeVertexNormals();
         
-        let mat = new THREE.MeshBasicMaterial({
-            vertexColors: true,
+        let mat = new THREE.ShaderMaterial({
+            uniforms: { uOpacity: { value: 0.68 } },
+            vertexShader: [
+                'attribute float aSlope;', 'attribute float aFg;', 'varying float vSlope;', 'varying float vFg;',
+                'void main() {', '    vSlope = aSlope; vFg = aFg;',
+                '    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);', '}'
+            ].join('\n'),
+            fragmentShader: 'uniform float uOpacity;\nvarying float vSlope;\nvarying float vFg;\n' + SLOPE_COLOR_GLSL +
+                'void main() {\n    vec3 c = slopeColor(vSlope) * (vFg > 0.5 ? ' + glslNum(FOREGREEN_DIM) + ' : 1.0);\n    gl_FragColor = vec4(c, uOpacity);\n}\n',
             transparent: true,
-            opacity: 0.68,
             depthTest: true,
             depthWrite: false,
             polygonOffset: true,
@@ -708,7 +721,7 @@
                 for (const p of r.path) closest = Math.min(closest, Math.hypot(p.x - cup[0], p.y - cup[1]));
                 const last = r.path[r.path.length - 1];
                 const holed = !!(r.metrics && r.metrics.holed);
-                return { az: azOff, r: r, closest: closest, holed: !!holed, rest: Math.hypot(last.x - cup[0], last.y - cup[1]) };
+                return { az: azOff, v: v, r: r, closest: closest, holed: !!holed, rest: Math.hypot(last.x - cup[0], last.y - cup[1]) };
             };
             // signed miss at the closest pass: which side of the cup the ball goes, so the aim can be bracketed and bisected
             const side = function (t) {
@@ -740,7 +753,7 @@
             // when several aims drop in, take the middle of them: the line with the most margin
             const holes = trials.filter(function (t) { return t.holed; }).sort(function (a, b) { return a.az - b.az; });
             if (holes.length) best = holes[Math.floor(holes.length / 2)];
-            window._breakLineInfo = { aimOffsetDeg: best.az, speedMph: v, holed: best.holed, closestM: best.closest, trials: trials.length };
+            window._breakLineInfo = { aimOffsetDeg: best.az, speedMph: best.v, holed: best.holed, closestM: best.closest, trials: trials.length };
             // the path up to the cup, or to the closest point when it misses
             let pts = [], stride = Math.max(1, Math.floor(best.r.path.length / 120));
             const path = best.r.path;
