@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=22">
+<link rel="stylesheet" href="arcade.css?v=23">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -195,22 +195,22 @@
                     <span id="lie-text" style="color:#fff; font-size:16px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">FAIRWAY</span>
                 </div>
                 <div style="display:flex; flex-direction:column; align-items:flex-end;">
-                    <div style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Elevation</div>
+                    <div class="lie-lbl" style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Elevation</div>
                     <div id="lie-elevation" style="color:#fff; font-size:16px; font-weight:900;">+ 0.0m</div>
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; gap: 25px;">
                 <div style="display:flex; flex-direction:column;">
-                    <div style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Target</div>
+                    <div class="lie-lbl" style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Target</div>
                     <div id="lie-distance" style="color:#38bdf8; font-size:20px; font-weight:900;">0.0 yds</div>
                 </div>
                 <div style="display:flex; gap: 15px;">
                     <div style="display:flex; flex-direction:column; align-items:flex-end;">
-                        <div style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Power</div>
+                        <div class="lie-lbl" style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Power</div>
                         <div id="lie-power" style="color:#4ade80; font-size:14px; font-weight:800;">100%</div>
                     </div>
                     <div style="display:flex; flex-direction:column; align-items:flex-end;">
-                        <div style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Spin</div>
+                        <div class="lie-lbl" style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Spin</div>
                         <div id="lie-spin" style="color:#4ade80; font-size:14px; font-weight:800;">100%</div>
                     </div>
                 </div>
@@ -3852,6 +3852,12 @@
         }
     };
     
+    // phone layout: the shot tiles are one short row (carry, total); a tap on it shows all of them, another hides them again
+    document.addEventListener('DOMContentLoaded', function () {
+        const dh = document.getElementById('dynamic-hud');
+        if (dh) dh.addEventListener('click', function () { if (window.isPhonePlayLayout && window.isPhonePlayLayout()) dh.classList.toggle('dh-open'); });
+    });
+
     window.renderDynamicHUD = function() {
         let container = document.getElementById('dynamic-hud');
         if (!container) return;
@@ -11253,6 +11259,11 @@
         safeSetDisplay('perf-hud', (mode === 'BUILD' && !!window._perfHudEnabled) ? 'flex' : 'none');
         safeSetDisplay('tool-hints', mode === 'BUILD' ? 'block' : 'none');
         safeSetDisplay('lm-status', mode === 'BUILD' ? 'none' : 'flex');
+        // body classes for the play layout (arcade.css): a round being played, and whether it is on the range. The phone layout
+        // (narrow screens, see "PHONE PLAY LAYOUT" in arcade.css) keys off them.
+        document.body.classList.toggle('play-ui', mode === 'TEST' || mode === 'PLAY');
+        document.body.classList.toggle('range-ui', !!window._isRangeMode);
+        if (mode !== 'TEST' && mode !== 'PLAY') document.body.classList.remove('mm-open');
         safeSetDisplay('green-read-panel', ((mode === 'TEST' || mode === 'PLAY') && !window._isRangeMode) ? 'block' : 'none');
         
         let tb = document.getElementById('top-bar');
@@ -12893,11 +12904,36 @@
         });
     })();
 
+    // --- MINIMAP BOX ---
+    // Where the minimap is drawn: inside the container's border, as the CSS places and sizes it (220 x 340 bottom right on a computer,
+    // a small box top right in the phone layout, full size when opened). WebGL viewport coordinates: y from the bottom of the canvas.
+    window.minimapBox = function () {
+        const el = document.getElementById('minimap-container'), cv = renderer.domElement;
+        const cw = cv.clientWidth || window.innerWidth;
+        if (!el || !el.clientWidth || !el.clientHeight) return { x: cw - 240, y: 20, w: 220, h: 340 };
+        const r = el.getBoundingClientRect(), c = cv.getBoundingClientRect();
+        return { x: Math.round(r.left - c.left + el.clientLeft), y: Math.round(c.bottom - (r.top + el.clientTop + el.clientHeight)), w: el.clientWidth, h: el.clientHeight };
+    };
+
+    // The phone layout for a round on a course (arcade.css, "PHONE PLAY LAYOUT"): a narrow screen while a course is played
+    window.isPhonePlayLayout = function () {
+        const b = document.body;
+        return !!(window.matchMedia && window.matchMedia('(max-width: 520px)').matches && b.classList.contains('play-ui') && !b.classList.contains('range-ui'));
+    };
+    // Open / close the minimap: the phone layout keeps it as a small box until it is opened (the ⤢ in its header, or a tap on the box)
+    window.toggleMinimap = function (open) {
+        const on = open === undefined ? !document.body.classList.contains('mm-open') : !!open;
+        document.body.classList.toggle('mm-open', on);
+    };
+
     // --- MINIMAP CLICK TO AIM ---
     document.addEventListener('DOMContentLoaded', () => {
         const mmc = document.getElementById('minimap-container');
         if(mmc) {
             mmc.addEventListener('mousedown', (e) => {
+                // the ⤢ in the header opens / closes the map (it did nothing before); on a phone a tap on the small box opens it rather than aim
+                if (e.target && e.target.id === 'minimap-expand') { window.toggleMinimap(); e.stopPropagation(); return; }
+                if (window.isPhonePlayLayout() && !document.body.classList.contains('mm-open')) { window.toggleMinimap(true); e.stopPropagation(); return; }
                 if ((appMode !== 'PLAY' && appMode !== 'TEST') || playState !== 'ROUND_IDLE') return;
                 
                 let rect = mmc.getBoundingClientRect();
@@ -14740,6 +14776,8 @@ window.triggerExplosion = function(x, y, z) {
                 
                 let elTotal = document.getElementById('hud-total');
                 if (elTotal) elTotal.innerText = window.formatDistStr(totalM);
+                let dynHud = document.getElementById('dynamic-hud');
+                if (dynHud && !dynHud.classList.contains('has-data')) dynHud.classList.add('has-data');
                 
                 let elCarry = document.getElementById('hud-carry');
                 // Om bollen fortfarande flyger, uppdatera Carry. Annars stannar den på det värde den landade på!
@@ -15549,10 +15587,12 @@ window.triggerExplosion = function(x, y, z) {
         let mapCont = document.getElementById('minimap-container');
         if ((appMode === 'PLAY' || appMode === 'TEST') && (playState === 'ROUND_IDLE' || playState === 'ROUND_FLYING')) {
             if (mapCont) mapCont.style.display = 'block';
-            let mapW = 220; let mapH = 340;
-            // GSPro karta i nedre högra hörnet = window.innerWidth - mapW - 20
-            let mX = window.innerWidth - mapW - 20; 
-            let mY = 20; 
+            // the map is drawn inside the container's border, wherever and however large the CSS makes it (bottom right, 220 x 340, on a
+            // computer; a small box top right on a phone, full size when opened). WebGL counts y from the bottom.
+            let mmBox = window.minimapBox();
+            let mapW = mmBox.w, mapH = mmBox.h;
+            let mX = mmBox.x;
+            let mY = mmBox.y; 
             
             renderer.setViewport(mX, mY, mapW, mapH);
             renderer.setScissor(mX, mY, mapW, mapH);
@@ -15586,7 +15626,7 @@ window.triggerExplosion = function(x, y, z) {
                     // Asymmetric frustum: 90% forward, 10% behind tee
                     let rangeView = Math.max(dist, 250); // At least 250m visible
                     let behindTee = 25; // Small margin behind tee
-                    let aspect = 220 / 340; // minimap aspect ratio
+                    let aspect = mapW / mapH; // minimap aspect ratio
                     let halfWidth = (rangeView + behindTee) * aspect / 2;
                     
                     minimapCamera.top = rangeView;       // Lots of space forward
@@ -15606,8 +15646,8 @@ window.triggerExplosion = function(x, y, z) {
                     let pad = 20 + offsetDist;
                     minimapCamera.left = -(dist/2 + pad); 
                     minimapCamera.right = (dist/2 + pad);
-                    minimapCamera.top = (dist/2 + pad) / 0.64;
-                    minimapCamera.bottom = -(dist/2 + pad) / 0.64;
+                    minimapCamera.top = (dist/2 + pad) * mapH / mapW;      // the map's own aspect (220 x 340 on a computer: / 0.647)
+                    minimapCamera.bottom = -(dist/2 + pad) * mapH / mapW;
                 }
                 
                 minimapCamera.updateProjectionMatrix();
@@ -15655,8 +15695,8 @@ window.triggerExplosion = function(x, y, z) {
                 let pF = fv.clone().project(minimapCamera);
                 
                 // Transformera från NDS [-1, 1] till Pixel Coordinates [0, 220] & [0, 340]
-                let toX = (v) => (v.x * 0.5 + 0.5) * 220;
-                let toY = (v) => (-v.y * 0.5 + 0.5) * 340;
+                let toX = (v) => (v.x * 0.5 + 0.5) * mapW;
+                let toY = (v) => (-v.y * 0.5 + 0.5) * mapH;
                 
                 let bx = toX(pB), by = toY(pB);
                 let ax = toX(pA), ay = toY(pA);
