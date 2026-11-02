@@ -2,6 +2,13 @@
     window._greenGridCoverage = window._greenGridCoverage || 'ALL'; // 'ALL' = Green + Foregreen, 'GREEN_ONLY' = Puttyta
     window._greenGridColorMode = window._greenGridColorMode || 'HEATMAP'; // 'HEATMAP' = TrackMan slope colors, 'WHITE' = Vit
 
+    // The hole the slope view belongs to: the hole being played in a round (PLAY/TEST), otherwise the hole open in the builder.
+    // In a round currentHoleIndex stays on the builder's hole while playingHoleIndex moves on, so it must not be used there.
+    window.slopeVizHoleIndex = function() {
+        const inRound = typeof appMode !== 'undefined' && (appMode === 'PLAY' || appMode === 'TEST') && typeof playingHoleIndex !== 'undefined';
+        return inRound ? playingHoleIndex : window.currentHoleIndex;
+    };
+
     window.setGreenGridCoverage = function(cov) {
         window._greenGridCoverage = cov;
         let bAll = document.getElementById('gs-grid-cov-all');
@@ -16,9 +23,10 @@
             bGreen.style.color = (cov === 'GREEN_ONLY') ? '#38bdf8' : '#94a3b8';
             bGreen.style.borderColor = (cov === 'GREEN_ONLY') ? '#38bdf8' : '#334155';
         }
-        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        let vizIdx = window.slopeVizHoleIndex();
+        let hole = window.courseHoles && window.courseHoles[vizIdx];
         if (hole && typeof window.buildGreenGrid === 'function') {
-            window.buildGreenGrid(hole, window.currentHoleIndex, true);
+            window.buildGreenGrid(hole, vizIdx, true);
         }
     };
 
@@ -36,9 +44,10 @@
             bWh.style.color = (style === 'WHITE') ? '#4ade80' : '#94a3b8';
             bWh.style.borderColor = (style === 'WHITE') ? '#4ade80' : '#334155';
         }
-        let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
+        let vizIdx = window.slopeVizHoleIndex();
+        let hole = window.courseHoles && window.courseHoles[vizIdx];
         if (hole && typeof window.buildGreenGrid === 'function') {
-            window.buildGreenGrid(hole, window.currentHoleIndex, true);
+            window.buildGreenGrid(hole, vizIdx, true);
         }
     };
 
@@ -496,48 +505,51 @@
         let ballSurf = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(ballX, -ballZ) : null;
         if (!ballSurf || ballSurf.type !== 'GREEN') return;
         
+        // Quick estimate, drawn at once; the physics line replaces it a moment later. Stepping toward the flag while the slope
+        // pushes the ball downhill gives a path that sags to the LOW side of the straight line, but a putt that drops has to start
+        // out on the HIGH side and fall in. So the sag is mirrored across the straight line ball -> flag: same shape, right side.
         let steps = 60;
-        let pts = null;   // the quick estimate is drawn at once; the physics line replaces it a moment later
-        if (!pts) {
-        pts = [];
-        
+        let pts = [];
         let dx = flagX - ballX;
         let dz = flagZ - ballZ;
         let dist = Math.hypot(dx, dz);
         let dirX = dx / dist;
         let dirZ = dz / dist;
-        
+        let nX = -dirZ, nZ = dirX;   // unit normal of the straight line
         let simX = ballX;
         let simZ = ballZ;
         let stepSize = dist / steps;
         let slopeInfluence = 0.35; // How much slope affects the line
-        
+
         for (let i = 0; i <= steps; i++) {
-            let h = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(simX, simZ) + 0.04 : 0.04;
-            pts.push(simX, h, simZ);
-            
+            let off = (simX - ballX) * nX + (simZ - ballZ) * nZ;   // signed distance from the straight line (downhill side)
+            let px = simX - 2 * off * nX;
+            let pz = simZ - 2 * off * nZ;
+            let h = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(px, pz) + 0.04 : 0.04;
+            pts.push(px, h, pz);
+
             if (i < steps) {
                 let grad = (typeof window.sampleGreenGradient === 'function')
                     ? window.sampleGreenGradient(simX, simZ, 0.20)
                     : { downhillX: 0, downhillZ: 0, slopeMagnitude: 0 };
-                
+
                 let toFlagX = flagX - simX;
                 let toFlagZ = flagZ - simZ;
                 let toFlagDist = Math.hypot(toFlagX, toFlagZ);
+                let sx = dirX, sz = dirZ;
                 if (toFlagDist > 0.01) {
-                    dirX = toFlagX / toFlagDist;
-                    dirZ = toFlagZ / toFlagDist;
+                    sx = toFlagX / toFlagDist;
+                    sz = toFlagZ / toFlagDist;
                 }
-                
+
                 // Downhill slope deflection
                 let deflectX = grad.downhillX * grad.slopeMagnitude * slopeInfluence;
                 let deflectZ = grad.downhillZ * grad.slopeMagnitude * slopeInfluence;
-                simX += (dirX + deflectX) * stepSize;
-                simZ += (dirZ + deflectZ) * stepSize;
+                simX += (sx + deflectX) * stepSize;
+                simZ += (sz + deflectZ) * stepSize;
             }
         }
-        }
-        
+
         // Build THREE.js line
         let geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));

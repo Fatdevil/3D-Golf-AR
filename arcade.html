@@ -6842,7 +6842,8 @@
         window._globalGreenGridEnabled = (window._greenSlopeMode !== 'OFF');
         let mode = window._greenSlopeMode;
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-        let hole = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null);
+        let vizIdx = window.slopeVizHoleIndex();   // the hole being played in a round, the builder's hole otherwise
+        let hole = (window.courseHoles && window.courseHoles[vizIdx]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[vizIdx] : null);
         let hasGreen = hole && hole.greenData && hole.greenData.points && hole.greenData.points.length >= 3;
         let leg = document.getElementById('green-slope-hud-legend');
 
@@ -6856,7 +6857,7 @@
             if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = false;
             if (hasGreen) {
                 if (typeof window.buildGreenGrid === 'function') {
-                    window.buildGreenGrid(hole, window.currentHoleIndex, true);
+                    window.buildGreenGrid(hole, vizIdx, true);
                 }
                 if (window.greenGridMesh) window.greenGridMesh.visible = true;
                 if (leg) leg.style.display = 'flex';
@@ -6869,7 +6870,7 @@
             if (typeof window.clearGreenBeads === 'function') window.clearGreenBeads();
             if (hasGreen) {
                 if (typeof window.buildGreenHeatmapMesh === 'function') {
-                    window.buildGreenHeatmapMesh(hole, window.currentHoleIndex, true);
+                    window.buildGreenHeatmapMesh(hole, vizIdx, true);
                 }
                 if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = true;
                 if (leg) leg.style.display = 'flex';
@@ -10002,6 +10003,7 @@
 
     function applyEditorState(state) {
         if (!state) return;
+        window._terrainRevision = (window._terrainRevision || 0) + 1;   // undo/redo can bring back other ground: the slope view rebuilds
         // Cancel any pending hole auto-advance timer immediately
         if (window._autoAdvanceTimer) {
             clearTimeout(window._autoAdvanceTimer);
@@ -11042,6 +11044,7 @@
             if (window.slopeOverlayActive) window.updateSlopeOverlay();
             if (window.contourLinesActive) window.updateContourLines();
             if (window.elevationHeatmapActive) window.updateElevationHeatmap();
+            window._terrainRevision = (window._terrainRevision || 0) + 1;   // the green slope grid, heatmap and beads are cached per revision
             if (options.save) debounceSaveCourse(1500);
         }
         
@@ -14002,14 +14005,18 @@ window.triggerExplosion = function(x, y, z) {
         let showGreenViz = false;
         let vizHole = null;
         let isStudioMode = false;
+        let vizHoleIdx = -1;
 
         if (isStudioLutning || isGlobalSlopeActive) {
-            vizHole = (window.courseHoles && window.courseHoles[window.currentHoleIndex]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null);
+            // Green Studio works on the builder's hole; the slope button in a round shows the hole being played
+            vizHoleIdx = isStudioLutning ? window.currentHoleIndex : window.slopeVizHoleIndex();
+            vizHole = (window.courseHoles && window.courseHoles[vizHoleIdx]) || ((typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[vizHoleIdx] : null);
             if (vizHole && vizHole.greenData && vizHole.greenData.points && vizHole.greenData.points.length >= 3) {
                 showGreenViz = true;
                 isStudioMode = true;
             }
         } else if (typeof courseHoles !== 'undefined' && courseHoles && typeof playingHoleIndex !== 'undefined') {
+            vizHoleIdx = playingHoleIndex;
             vizHole = courseHoles[playingHoleIndex];
             if (vizHole && vizHole.flag && playState === 'ROUND_IDLE' && window.ballPos) {
                 let dx = window.ballPos.x - vizHole.flag.x;
@@ -14069,7 +14076,7 @@ window.triggerExplosion = function(x, y, z) {
                 let covKey = window._greenGridCoverage || 'ALL';
                 let revKey = window._terrainRevision || 0;
                 let stepKey = window._greenGridSpacing || 2.0;
-                let currentHoleKey = (isStudioMode ? ('studio_' + window.currentHoleIndex) : ('play_' + (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0))) + '_' + covKey + '_' + revKey + '_' + stepKey;
+                let currentHoleKey = (isStudioMode ? 'studio_' : 'play_') + vizHoleIdx + '_' + covKey + '_' + revKey + '_' + stepKey;
                 
                 // TrackMan / GSPro 2.0m Grid Alignment Bounding Box
                 let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -14205,24 +14212,14 @@ window.triggerExplosion = function(x, y, z) {
             }
             
             // --- GREEN GRID ---
-            if (window.greenGridMesh) {
-                window.greenGridMesh.visible = showGrid;
-            } else if (showGrid) {
-                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
-                window.buildGreenGrid(hole, holeIdx);
-                if (window.greenGridMesh) window.greenGridMesh.visible = true;
-            }
+            // Called every frame while shown: the builder returns at once when its cache key (hole, terrain revision, coverage, ...)
+            // still matches, and rebuilds when the mesh belongs to another hole or older ground (hole change, tilt, sculpt, undo).
+            if (showGrid) window.buildGreenGrid(hole, vizHoleIdx);
+            if (window.greenGridMesh) window.greenGridMesh.visible = showGrid;
 
             // --- GREEN HEATMAP ---
-            if (window.greenHeatmapMesh) {
-                window.greenHeatmapMesh.visible = showHeatmap;
-            } else if (showHeatmap) {
-                let holeIdx = isStudioMode ? window.currentHoleIndex : (typeof playingHoleIndex !== 'undefined' ? playingHoleIndex : 0);
-                if (typeof window.buildGreenHeatmapMesh === 'function') {
-                    window.buildGreenHeatmapMesh(hole, holeIdx);
-                }
-                if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = true;
-            }
+            if (showHeatmap && typeof window.buildGreenHeatmapMesh === 'function') window.buildGreenHeatmapMesh(hole, vizHoleIdx);
+            if (window.greenHeatmapMesh) window.greenHeatmapMesh.visible = showHeatmap;
 
             // --- TRACKMAN SLOPE HUD LEGEND ---
             let slopeLegend = document.getElementById('green-slope-hud-legend');
