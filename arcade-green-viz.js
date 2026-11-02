@@ -94,6 +94,42 @@
         return [r, g, b];
     };
 
+    // Height of the drawn ground (the terrain triangles); the bilinear height where that is not available
+    function surfaceHeight(x, z) {
+        if (typeof window.getTerrainSurfaceHeight === 'function') return window.getTerrainSurfaceHeight(x, z);
+        return (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(x, z) : 0;
+    }
+
+    // The point on the outline of poly nearest to (px, pz)
+    function nearestOnPolygon(px, pz, poly) {
+        let best = Infinity, bx = px, bz = pz;
+        for (let i = 0, n = poly.length, j = n - 1; i < n; j = i++) {
+            const ax = poly[j].x, az = poly[j].z, ex = poly[i].x - ax, ez = poly[i].z - az;
+            const l2 = ex * ex + ez * ez;
+            let t = l2 > 0 ? ((px - ax) * ex + (pz - az) * ez) / l2 : 0;
+            t = t < 0 ? 0 : (t > 1 ? 1 : t);
+            const qx = ax + t * ex, qz = az + t * ez, d = (px - qx) * (px - qx) + (pz - qz) * (pz - qz);
+            if (d < best) { best = d; bx = qx; bz = qz; }
+        }
+        return { x: bx, z: bz };
+    }
+    window._nearestOnPolygon = nearestOnPolygon;   // for the tests
+
+    // Lines have no polygon offset in WebGL (it only applies to filled triangles), so the grid gets its own depth bias: the line is
+    // pulled toward the camera by a fixed step in depth-buffer space. In metres that grows with the square of the distance
+    // (about 3 mm at 10 m, 7 cm at 50 m, 0.7 m at 150 m), which is what the depth buffer loses with distance and what the coarser
+    // far terrain chunks need, while up close it stays far too small to show the grid through a ridge.
+    const GRID_DEPTH_BIAS = 3e-6;
+    function addLineDepthBias(mat) {
+        mat.onBeforeCompile = function (shader) {
+            shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>',
+                '#include <project_vertex>\n\tgl_Position.z -= ' + GRID_DEPTH_BIAS.toExponential() + ' * gl_Position.w;');
+        };
+        mat.customProgramCacheKey = function () { return 'greenGridDepthBias'; };
+        return mat;
+    }
+    window._addLineDepthBias = addLineDepthBias;   // for the tests
+
     window.buildGreenGrid = function(hole, holeIndex, forceRebuild = false) {
         if (!hole) return;
         
@@ -159,7 +195,7 @@
             return window.pointInPolygon(wx, wz, innerPoly);
         }
 
-        // Clean single-stroke line at 8mm height to cling tightly to the turf
+        // Clean single-stroke line 8 mm above the drawn ground (the terrain triangles, see surfaceHeight)
         const lineH = 0.008;
 
         // --- 1. HORIZONTAL GRID LINES (constant Z, running along X) ---
@@ -190,13 +226,13 @@
                 
                 // Sample points along terrain
                 let prevX = xStart;
-                let prevY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(prevX, z) + lineH : lineH;
+                let prevY = surfaceHeight(prevX, z) + lineH;
                 let prevIsFg = !isPointInInnerGreen(prevX, z);
                 let prevColor = getSlopeColor(prevX, z, prevIsFg);
                 
                 let curX = xStart + subStep;
                 while (curX < xEnd) {
-                    let curY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(curX, z) + lineH : lineH;
+                    let curY = surfaceHeight(curX, z) + lineH;
                     let curIsFg = !isPointInInnerGreen(curX, z);
                     let curColor = getSlopeColor(curX, z, curIsFg);
                     
@@ -212,7 +248,7 @@
                 }
                 
                 // Final exact endpoint to xEnd
-                let endY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(xEnd, z) + lineH : lineH;
+                let endY = surfaceHeight(xEnd, z) + lineH;
                 let endIsFg = !isPointInInnerGreen(xEnd, z);
                 let endColor = getSlopeColor(xEnd, z, endIsFg);
                 
@@ -247,13 +283,13 @@
                 if (zEnd - zStart < 0.05) continue;
                 
                 let prevZ = zStart;
-                let prevY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(x, prevZ) + lineH : lineH;
+                let prevY = surfaceHeight(x, prevZ) + lineH;
                 let prevIsFg = !isPointInInnerGreen(x, prevZ);
                 let prevColor = getSlopeColor(x, prevZ, prevIsFg);
                 
                 let curZ = zStart + subStep;
                 while (curZ < zEnd) {
-                    let curY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(x, curZ) + lineH : lineH;
+                    let curY = surfaceHeight(x, curZ) + lineH;
                     let curIsFg = !isPointInInnerGreen(x, curZ);
                     let curColor = getSlopeColor(x, curZ, curIsFg);
                     
@@ -268,7 +304,7 @@
                     curZ += subStep;
                 }
                 
-                let endY = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(x, zEnd) + lineH : lineH;
+                let endY = surfaceHeight(x, zEnd) + lineH;
                 let endIsFg = !isPointInInnerGreen(x, zEnd);
                 let endColor = getSlopeColor(x, zEnd, endIsFg);
                 
@@ -285,16 +321,13 @@
             gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPositions, 3));
             gridGeo.setAttribute('color', new THREE.Float32BufferAttribute(gridColors, 3));
             
-            let gridMat = new THREE.LineBasicMaterial({
+            let gridMat = addLineDepthBias(new THREE.LineBasicMaterial({
                 vertexColors: true,
                 transparent: true,
                 opacity: 0.95,
                 depthTest: true,
-                depthWrite: false,
-                polygonOffset: true,
-                polygonOffsetFactor: -2.0,
-                polygonOffsetUnits: -2.0
-            });
+                depthWrite: false
+            }));
             window.greenGridMesh = new THREE.LineSegments(gridGeo, gridMat);
             window.greenGridMesh.renderOrder = 998;
             let isStudioLutning = !!(window.GreenStudio && window.GreenStudio.isOpen && window.GreenStudio.activeTab === 'lutning');
@@ -376,12 +409,18 @@
         let indices = [];
         let vertCount = 0;
         
+        // A corner outside the green is moved onto its outline: the cells along the edge are cut back to it, so the heatmap ends at
+        // the edge of the green instead of reaching up to a cell (50 cm) out over the bank in steps.
         function getOrCreateVertex(col, row, wx, wz) {
             let mapIdx = row * cols + col;
             if (vertMap[mapIdx] !== -1) {
                 return vertMap[mapIdx];
             }
-            let curH = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight(wx, wz) : 0;
+            if (!window.pointInPolygon(wx, wz, targetPoly)) {
+                let q = nearestOnPolygon(wx, wz, targetPoly);
+                wx = q.x; wz = q.z;
+            }
+            let curH = surfaceHeight(wx, wz);
             let y = curH + 0.005; // 5 mm elevation above grass to eliminate z-fighting
             
             let isFg = (innerPoly && fgWidth > 0.05) ? !window.pointInPolygon(wx, wz, innerPoly) : false;

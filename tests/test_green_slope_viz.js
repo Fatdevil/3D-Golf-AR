@@ -118,5 +118,104 @@ check('sculpt och ångra/gör om räknar upp terrängversionen',
   check('lutningsvyn (sampleGreenGradient) använder terrainSlopeAt', /window\.terrainSlopeAt\(wx, wz\)/.test(grad) && !/getTerrainHeight\(wx \+ d/.test(grad));
 }
 
+// ---- 5 och 6: heatmapen slutar vid greenens kant, rutnätet ligger på den ritade marken ----
+let REAL_THREE = null;
+try { REAL_THREE = require(path.join(__dirname, 'node_modules', 'three')); } catch (e) { /* CI's unit job has no browser libraries */ }
+{
+  // getTerrainSurfaceHeight: the height on the drawn triangles
+  const a = html.indexOf('window.getTerrainSurfaceHeight = function');
+  const src = html.slice(a, html.indexOf('\n    };', a) + 7);
+  const SEGS = 6, SIZE = 6, stride = SEGS + 1;
+  const heights = []; for (let i = 0; i < stride * stride; i++) heights.push(Math.sin(i * 1.7) * 0.3 + (i % 5) * 0.05);
+  const arr = new Float32Array(stride * stride * 3);
+  for (let i = 0; i < stride * stride; i++) arr[i * 3 + 2] = heights[i];
+  const w = { TERRAIN_SEGS: SEGS, _arcadePlaneGeo: { attributes: { position: { array: arr } } } };
+  vm.runInContext(src, vm.createContext({ window: w, TERRAIN_SIZE: SIZE }));
+  // the triangles as three.js PlaneGeometry cuts them (the real one when it is installed, else its r128 index rule)
+  let tris = [];
+  if (REAL_THREE) {
+    const g = new REAL_THREE.PlaneGeometry(SIZE, SIZE, SEGS, SEGS), idx = g.index.array;
+    for (let i = 0; i < idx.length; i += 3) tris.push([idx[i], idx[i + 1], idx[i + 2]]);
+  } else {
+    for (let iy = 0; iy < SEGS; iy++) for (let ix = 0; ix < SEGS; ix++) {
+      const A = ix + stride * iy, B = ix + stride * (iy + 1), C = ix + 1 + stride * (iy + 1), D = ix + 1 + stride * iy;
+      tris.push([A, B, D], [B, C, D]);
+    }
+  }
+  // vertex i of PlaneGeometry: column i % stride, row floor(i / stride); row r is world z = -SIZE/2 + r (see getTerrainHeight)
+  const vx = function (i) { return -SIZE / 2 + (i % stride); }, vz = function (i) { return -SIZE / 2 + Math.floor(i / stride); };
+  function onTriangles(x, z) {
+    for (const t of tris) {
+      const [p, q, r] = t;
+      const d = (vz(q) - vz(r)) * (vx(p) - vx(r)) + (vx(r) - vx(q)) * (vz(p) - vz(r));
+      const l1 = ((vz(q) - vz(r)) * (x - vx(r)) + (vx(r) - vx(q)) * (z - vz(r))) / d;
+      const l2 = ((vz(r) - vz(p)) * (x - vx(r)) + (vx(p) - vx(r)) * (z - vz(r))) / d;
+      const l3 = 1 - l1 - l2;
+      if (l1 >= -1e-9 && l2 >= -1e-9 && l3 >= -1e-9) return l1 * heights[p] + l2 * heights[q] + l3 * heights[r];
+    }
+    return NaN;
+  }
+  let worst = 0;
+  for (let k = 0; k < 400; k++) {
+    const x = -SIZE / 2 + ((k * 0.6180339) % 1) * SIZE, z = -SIZE / 2 + ((k * 0.4142135) % 1) * SIZE;
+    worst = Math.max(worst, Math.abs(w.getTerrainSurfaceHeight(x, z) - onTriangles(x, z)));
+  }
+  check('rutnätets höjd ligger på terrängens trianglar (' + (REAL_THREE ? 'riktiga three.js PlaneGeometry' : 'PlaneGeometrys indexregel') + ')', worst < 1e-5, 'största fel ' + worst.toExponential(2) + ' m');
+}
+{
+  // the line depth bias reaches the shader (polygonOffset does nothing on lines)
+  const mat = win._addLineDepthBias({});
+  const vs = REAL_THREE ? REAL_THREE.ShaderLib.basic.vertexShader : 'void main() {\n\t#include <project_vertex>\n}';
+  const shader = { vertexShader: vs };
+  mat.onBeforeCompile(shader);
+  check('rutnätets linjer får en djupförskjutning i shadern' + (REAL_THREE ? ' (three r' + REAL_THREE.REVISION + ')' : ''),
+    /#include <project_vertex>\n\tgl_Position\.z -= [0-9.e-]+ \* gl_Position\.w;/.test(shader.vertexShader) && typeof mat.customProgramCacheKey === 'function');
+  const viz = fs.readFileSync(path.join(__dirname, '..', 'arcade-green-viz.js'), 'utf8');
+  const gridMat = viz.slice(viz.indexOf('let gridMat ='), viz.indexOf('window.greenGridMesh = new THREE.LineSegments'));
+  check('rutnätets material använder den, inte polygonOffset', /addLineDepthBias\(/.test(gridMat) && !/polygonOffset/.test(gridMat));
+}
+{
+  // nearest point on an outline
+  const sq = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 4 }, { x: 0, z: 4 }];
+  const q1 = win._nearestOnPolygon(6, 1, sq), q2 = win._nearestOnPolygon(-1, -1, sq);
+  check('närmaste punkt på konturen', Math.abs(q1.x - 4) < 1e-9 && Math.abs(q1.z - 1) < 1e-9 && Math.abs(q2.x) < 1e-9 && Math.abs(q2.z) < 1e-9);
+}
+if (REAL_THREE) {
+  // the heatmap of a round green: every corner inside the green or on its outline
+  const R = 7.3, circle = []; for (let i = 0; i < 120; i++) circle.push({ x: 1.1 + R * Math.cos(i / 120 * 2 * Math.PI), z: -0.7 + R * Math.sin(i / 120 * 2 * Math.PI) });
+  const pip = function (px, pz, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const pi = poly[i], pj = poly[j];
+      if (((pi.z > pz) !== (pj.z > pz)) && (px < (pj.x - pi.x) * (pz - pi.z) / (pj.z - pi.z + 1e-12) + pi.x)) inside = !inside;
+    }
+    return inside;
+  };
+  const hw = { pointInPolygon: pip, getActiveGreenPolygon: function () { return circle; }, getTerrainSurfaceHeight: function () { return 0; },
+               sampleGreenGradient: function () { return { slopePercent: 0 }; } };
+  const added = [];
+  const hctx = vm.createContext({ window: hw, THREE: REAL_THREE, console: { log() {}, warn() {}, error() {} },
+    document: { getElementById() { return null; } }, scene: { add(m) { added.push(m); }, remove() {} } });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'arcade-green-viz.js'), 'utf8'), hctx);
+  hw.buildGreenHeatmapMesh({ greenData: { points: [1, 2, 3], foregreenWidth: 0 } }, 0, true);
+  const mesh = hw.greenHeatmapMesh, pos = mesh && mesh.geometry.attributes.position.array;
+  let outside = 0, worstOut = 0;
+  for (let i = 0; pos && i < pos.length; i += 3) {
+    const r = Math.hypot(pos[i] - 1.1, pos[i + 2] + 0.7);
+    if (r > R + 1e-4) { outside++; worstOut = Math.max(worstOut, r - R); }
+  }
+  check('heatmapen sticker inte ut utanför greenen', !!pos && outside === 0, pos ? (outside + ' hörn utanför, längst ' + worstOut.toFixed(3) + ' m') : 'ingen heatmap');
+  // and it still covers the green: the area of its triangles is close to the circle's
+  let area = 0; const idx = mesh.geometry.index.array;
+  for (let i = 0; i < idx.length; i += 3) {
+    const A = idx[i] * 3, B = idx[i + 1] * 3, C = idx[i + 2] * 3;
+    area += Math.abs((pos[B] - pos[A]) * (pos[C + 2] - pos[A + 2]) - (pos[C] - pos[A]) * (pos[B + 2] - pos[A + 2])) / 2;
+  }
+  const circleArea = Math.PI * R * R;
+  check('heatmapen täcker hela greenen (yta inom 2 %)', Math.abs(area - circleArea) / circleArea < 0.02, 'yta ' + area.toFixed(1) + ' mot ' + circleArea.toFixed(1) + ' m²');
+} else {
+  console.log('  (heatmapens kant provas bara med three.js installerat: npm --prefix tests install)');
+}
+
 console.log(failed ? '\n' + failed + ' failed' : '\nAll green slope view checks passed');
 process.exit(failed ? 1 : 0);
