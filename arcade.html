@@ -6706,7 +6706,7 @@
     };
 
 </script>
-<script src="arcade-green-viz.js?v=2"></script>
+<script src="arcade-green-viz.js?v=3"></script>
 <script>
     
     const brushGeo = new THREE.RingGeometry(3.5, 4.0, 32);
@@ -15368,7 +15368,13 @@ window.triggerExplosion = function(x, y, z) {
                 let dist = window.ballMesh.position.distanceTo(window.aimTarget);
                 let elevDiff = window.aimTarget.y - window.ballMesh.position.y;
                 document.getElementById('aim-bb-dist').innerText = window.formatDistRaw(dist, 0);   // in the player's unit
-                document.getElementById('aim-bb-elev').innerText = window.formatDistRaw(Math.abs(elevDiff), 1) + (window.useMeters ? 'm' : 'y');
+                // a putt's height difference is a few centimetres: in cm, not as 0.0 m / 0.1 y, and ground to ground from the ball to the cup
+                // (the same number as the putt read below), not from the ball's centre to the aim point
+                let puttRise = (window.isPuttingMode && hole && hole.flag && window.getTerrainHeight)
+                    ? window.getTerrainHeight(hole.flag.x, hole.flag.z) - window.getTerrainHeight(window.ballMesh.position.x, window.ballMesh.position.z) : null;
+                if (puttRise !== null) elevDiff = puttRise;
+                document.getElementById('aim-bb-elev').innerText = puttRise !== null ? Math.round(Math.abs(elevDiff) * 100) + ' cm'
+                    : window.formatDistRaw(Math.abs(elevDiff), 1) + (window.useMeters ? 'm' : 'y');
                 document.getElementById('aim-bb-arrow').innerText = elevDiff > 0 ? '▲' : '▼';
                 document.getElementById('aim-bb-arrow').style.color = elevDiff > 0 ? '#4ade80' : '#f87171'; // Grön upp, Röd ner
 
@@ -15403,7 +15409,7 @@ window.triggerExplosion = function(x, y, z) {
                 // on a course with a launch monitor: the club from the player's own bag (the range's launch-monitor shots) whose average total is
                 // nearest to what the shot plays like (the distance to the aim minus what wind and slope add, from the shot plan once it is worked out)
                 let bagAim = null;
-                if (planEl && !rangeAim && !window._isRangeMode && window.PlayerBag && window.PlayerBag.suggestFor &&
+                if (planEl && !rangeAim && !window.isPuttingMode && !window._isRangeMode && window.PlayerBag && window.PlayerBag.suggestFor &&
                     window.SwingEngine && window.SwingEngine.getInputMode && window.SwingEngine.getInputMode() === 'LM') {
                     let flatD = Math.hypot(window.aimTarget.x - window.ballMesh.position.x, window.aimTarget.z - window.ballMesh.position.z);
                     let playsLike = pl ? pl.target - pl.wind - pl.terrain : flatD;
@@ -15423,6 +15429,24 @@ window.triggerExplosion = function(x, y, z) {
                         : '<span style="color:' + (g.diff < 0 ? '#f87171' : '#fbbf24') + '">≈' + d0(Math.abs(g.diff)) + u + (g.diff < 0 ? (sv ? ' kort' : ' short') : (sv ? ' långt' : ' long')) + '</span>';
                     document.getElementById('aim-bb-fx').innerHTML = (pl ? '<span style="color:' + col(pl.wind) + '">💨 ' + sgn(pl.wind) + '</span> · <span style="color:' + col(pl.terrain) + '">⛰ ' + sgn(pl.terrain) + '</span> · ' : '') +
                         'plays ' + d0(bagAim.playsLike) + u + ' · ' + fit;
+                } else if (planEl && !rangeAim && window.isPuttingMode) {
+                    // --- PUTT READ: break, uphill/downhill and (full putt assist) the aim of the planned line, ball to cup ---
+                    let level = window.getPuttAssist ? window.getPuttAssist() : 'FULL';
+                    let bpos = window.ballMesh.position, lines = null;
+                    if (level !== 'OFF' && hole && hole.flag && window.puttRead) {
+                        let key = bpos.x.toFixed(2) + '|' + bpos.z.toFixed(2) + '|' + hole.flag.x + '|' + hole.flag.z + '|' + (window._terrainRevision || 0);
+                        if (!window._puttReadCache || window._puttReadCache.key !== key) window._puttReadCache = { key: key, read: window.puttRead(bpos.x, bpos.z, hole.flag.x, hole.flag.z) };
+                        let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                        lines = window.puttReadLines(window._puttReadCache.read, sv, level, window.puttAimOffsetM(bpos.x, bpos.z, hole.flag.x, hole.flag.z));
+                    }
+                    if (!lines) planEl.style.display = 'none';
+                    else {
+                        planEl.style.display = 'block';
+                        planEl.style.opacity = '1';
+                        document.getElementById('aim-bb-club').innerText = lines.head;
+                        document.getElementById('aim-bb-reach').innerText = lines.along;
+                        document.getElementById('aim-bb-fx').innerText = lines.detail;
+                    }
                 } else if (planEl && !rangeAim) {
                     if (!pl) planEl.style.display = 'none';
                     else {

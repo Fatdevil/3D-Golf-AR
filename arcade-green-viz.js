@@ -796,7 +796,7 @@
             // when several aims drop in, take the middle of them: the line with the most margin
             const holes = trials.filter(function (t) { return t.holed; }).sort(function (a, b) { return a.az - b.az; });
             if (holes.length) best = holes[Math.floor(holes.length / 2)];
-            window._breakLineInfo = { aimOffsetDeg: best.az, speedMph: best.v, holed: best.holed, closestM: best.closest, trials: trials.length };
+            window._breakLineInfo = { ballX: ballX, ballZ: ballZ, flagX: hole.flag.x, flagZ: hole.flag.z, distM: dist, aimOffsetDeg: best.az, speedMph: best.v, holed: best.holed, closestM: best.closest, trials: trials.length };
             // the path up to the cup, or to the closest point when it misses
             let pts = [], stride = Math.max(1, Math.floor(best.r.path.length / 120));
             const path = best.r.path;
@@ -814,6 +814,64 @@
         } finally {
             console.log = quiet;
         }
+    };
+
+    // === PUTT READ (the aim billboard in putting mode) ===
+    // The straight line from the ball to the cup, read with the slope the ball rolls on (terrainSlopeAt): how much it rises or falls, how
+    // much the ground falls across it and to which side (the way the putt breaks), and where along it the side slope is steepest.
+    // Three.js world coordinates. "Right" is right as the player looks from the ball at the cup.
+    //   distM, riseM (+ uphill), alongPct (+ uphill), crossPct (average side slope, + = the ground falls to the right, the putt breaks
+    //   right), maxCrossPct and maxCrossFromCupM (where the side slope is steepest, metres before the cup)
+    window.puttRead = function(ballX, ballZ, cupX, cupZ) {
+        const dx = cupX - ballX, dz = cupZ - ballZ, dist = Math.hypot(dx, dz);
+        if (!(dist > 0.05) || typeof window.terrainSlopeAt !== 'function') return null;
+        const ux = dx / dist, uz = dz / dist, rx = -uz, rz = ux;   // along the line, and to its right (y up, looking along u)
+        const N = Math.max(8, Math.min(60, Math.round(dist / 0.25)));
+        let sum = 0, maxAbs = -1, maxVal = 0, maxAt = 0;
+        for (let i = 0; i <= N; i++) {
+            const t = i / N, x = ballX + dx * t, z = ballZ + dz * t;
+            const g = window.terrainSlopeAt(x, z);
+            const cross = -(g.dhdx * rx + g.dhdz * rz) * 100;   // how much the ground falls to the right, %
+            sum += (i === 0 || i === N) ? cross / 2 : cross;    // trapezoid: the average over the line
+            if (Math.abs(cross) > maxAbs) { maxAbs = Math.abs(cross); maxVal = cross; maxAt = dist * (1 - t); }
+        }
+        const h = (typeof window.getTerrainHeight === 'function') ? window.getTerrainHeight : function () { return 0; };
+        const rise = h(cupX, cupZ) - h(ballX, ballZ);
+        return { distM: dist, riseM: rise, alongPct: rise / dist * 100, crossPct: sum / N, maxCrossPct: maxVal, maxCrossFromCupM: maxAt };
+    };
+
+    // The aim the planned (physics) line takes, as metres left (-) or right (+) of the cup at the cup's distance, when that line was
+    // worked out for this ball and cup; else null
+    window.puttAimOffsetM = function(ballX, ballZ, cupX, cupZ) {
+        const bi = window._breakLineInfo;
+        if (!bi || bi.ballX === undefined || Math.abs(bi.ballX - ballX) > 0.01 || Math.abs(bi.ballZ - ballZ) > 0.01 ||
+            Math.abs(bi.flagX - cupX) > 0.01 || Math.abs(bi.flagZ - cupZ) > 0.01) return null;
+        return bi.distM * Math.tan(bi.aimOffsetDeg * Math.PI / 180);   // the aim's bearing is measured clockwise: + is right
+    };
+
+    // The read as the billboard's three lines. level: the putt assist ('FULL' adds the aim, 'SLOPE' the read only); aimM from puttAimOffsetM.
+    window.puttReadLines = function(read, sv, level, aimM) {
+        if (!read) return null;
+        const pct = function (v) { return (Math.round(Math.abs(v) * 10) / 10).toFixed(1) + ' %'; };
+        const cm = function (m) { return Math.round(Math.abs(m) * 100) + ' cm'; };
+        const straight = Math.abs(read.crossPct) < 0.3;
+        const right = read.crossPct > 0;
+        const head = straight ? (sv ? 'Rak putt' : 'Straight putt')
+            : (sv ? 'Bryter ' + (right ? 'höger →' : '← vänster') : 'Breaks ' + (right ? 'right →' : '← left')) + ' ' + pct(read.crossPct);
+        // the height difference itself is on the billboard's row above (riseM), so this line is the slope only
+        const along = Math.abs(read.alongPct) < 0.3 ? (sv ? 'Plant' : 'Level')
+            : (read.alongPct > 0 ? (sv ? 'Uppför ' : 'Uphill ') : (sv ? 'Nedför ' : 'Downhill ')) + pct(read.alongPct);
+        const parts = [];
+        // where it breaks most, only when that is clearly steeper than the average (on an evenly tilted green it says nothing)
+        if (!straight && Math.abs(read.maxCrossPct) - Math.abs(read.crossPct) >= 0.5) {
+            const at = read.maxCrossFromCupM < 0.5 ? (sv ? 'vid hålet' : 'at the cup') : (Math.round(read.maxCrossFromCupM * 10) / 10).toFixed(1) + (sv ? ' m före hålet' : ' m before the cup');
+            parts.push((sv ? 'Mest bryt ' : 'Most break ') + at + ' (' + pct(read.maxCrossPct) + ')');
+        }
+        if (level === 'FULL' && aimM !== null && aimM !== undefined) {
+            parts.push(Math.abs(aimM) < 0.03 ? (sv ? 'Sikta på hålet' : 'Aim at the cup')
+                : (sv ? 'Sikta ' + cm(aimM) + (aimM > 0 ? ' höger' : ' vänster') : 'Aim ' + cm(aimM) + (aimM > 0 ? ' right' : ' left')));
+        }
+        return { head: head, along: along, detail: parts.join(' · ') };
     };
 
     // Putt assist for the round, chosen in the round settings: 'FULL' (planned line, aim line and slope view), 'SLOPE' (slope grid/heatmap
