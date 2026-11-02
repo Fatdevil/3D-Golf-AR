@@ -37,6 +37,7 @@ function bodyLimit(path) {
   if (/^\/api\/(auth|users|admin)\b/.test(path)) return '100kb';
   if (/^\/api\/courses\/[^/]+\/(like|results|rating)$/.test(path)) return '1mb';
   if (/^\/api\/collections\b/.test(path)) return '1mb';
+  if (/^\/api\/ranges\/[^/]+\/approach$/.test(path)) return '1mb';
   return '50mb';
 }
 

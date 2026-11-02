@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=21">
+<link rel="stylesheet" href="arcade.css?v=22">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -3994,8 +3994,8 @@
 <script src="arcade-shot-plan.js?v=1"></script>
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="arcade-bag.js?v=2"></script>
-<script src="arcade-range-session.js?v=7"></script>
-<script src="arcade-range-practice.js?v=6"></script>
+<script src="arcade-range-session.js?v=8"></script>
+<script src="arcade-range-practice.js?v=7"></script>
 <script src="arcade-range-template.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=1"></script>
 <script src="arcade-relief.js?v=2"></script>
@@ -11372,7 +11372,9 @@
                     }
                     // approach practice against the range's greens (puts the ball on its spot when the player had it on)
                     if (window.RangePractice && window.RangePractice.start) {
-                        window.RangePractice.start({ key: rangeKey, tee: tee, scene: scene, holes: function () { return courseHoles; } });
+                        // the range's approach test leaderboard: a published range's own, or the ready practice range's (a draft has none)
+                        let boardCode = window._practiceOnly ? 'GOLFOS-PRACTICE' : (window._loadedShareCode && !window._loadedIsDraft ? window._loadedShareCode : null);
+                        window.RangePractice.start({ key: rangeKey, tee: tee, scene: scene, board: boardCode, holes: function () { return courseHoles; } });
                     }
                 } else {
                     // COURSE MODE: Default camera behind ball

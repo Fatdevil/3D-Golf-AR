@@ -266,6 +266,25 @@ async function initDB() {
             `);
         } catch(e) { console.log('Ratings migration note:', e.message); }
 
+        // Approach tests on a range: one row per finished test (its score worked out here from its shots), for the range's leaderboard
+        try {
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS approach_results (
+                    id SERIAL PRIMARY KEY,
+                    range_code VARCHAR(20) NOT NULL,
+                    test_key VARCHAR(24) NOT NULL,
+                    user_id VARCHAR(80) NOT NULL,
+                    player_name VARCHAR(40),
+                    score SMALLINT NOT NULL,
+                    greens SMALLINT,
+                    prox REAL,
+                    shots JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await pool.query(`CREATE INDEX IF NOT EXISTS approach_results_board ON approach_results (range_code, test_key, user_id, score DESC)`);
+        } catch(e) { console.log('Approach results migration note:', e.message); }
+
         console.log("✅ Database schema ready (v3 — HCP system)");
     } catch(err) {
         console.error("❌ Database schema error:", err);
@@ -1282,6 +1301,7 @@ app.delete('/api/courses/:code', requireDB, authMiddleware, async (req, res) => 
         // Delete leaderboard records first (foreign key integrity), and the course's ratings
         await pool.query('DELETE FROM course_records WHERE course_code = ANY($1)', [doomed]);
         await pool.query('DELETE FROM course_ratings WHERE share_code = ANY($1)', [doomed]);
+        await pool.query('DELETE FROM approach_results WHERE range_code = ANY($1)', [doomed]);
         
         // Delete the course
         await pool.query('DELETE FROM courses WHERE share_code = ANY($1)', [doomed]);
@@ -1464,6 +1484,85 @@ app.delete('/api/collections/:id', requireDB, authMiddleware, async (req, res) =
 
 // --- RANGES API --- (the same list as the courses', of the published ranges: a hidden one is left out here too)
 app.get('/api/ranges', requireDB, optionalAuth, (req, res) => listPublished(req, res, true));
+
+// --- APPROACH TEST LEADERBOARDS (per range and test: shots, band, unit) ---
+// The ready practice range (arcade-range-template.js) has no share code: its board is under this one
+const PRACTICE_RANGE_CODE = 'GOLFOS-PRACTICE';
+const APPROACH_SHOTS = [9, 18], APPROACH_BANDS = ['30-80', '50-150', '100-180'];
+// A test as the game names it: "9|50-150|m". null when it is not one of the game's tests
+function approachTest(key) {
+    const m = /^(\d+)\|(\d+)-(\d+)\|(m|yd)$/.exec(String(key || ''));
+    if (!m || APPROACH_SHOTS.indexOf(+m[1]) < 0 || APPROACH_BANDS.indexOf(m[2] + '-' + m[3]) < 0) return null;
+    const k = m[4] === 'm' ? 1 : 0.9144;
+    return { n: +m[1], lo: +m[2] * k, hi: +m[3] * k };
+}
+// The score of a test, worked out here from its shots (the same points as the game's: arcade-range-practice.js points()), or null when
+// the shots do not make the test: the wrong number, a distance outside the band, a distance from the pin that is not one
+function approachScore(test, shots) {
+    if (!Array.isArray(shots) || shots.length !== test.n) return null;
+    let sum = 0, greens = 0, prox = 0;
+    for (const s of shots) {
+        const dist = Number(s && s.dist), d = Number(s && s.prox), holed = !!(s && s.holed);
+        if (!isFinite(dist) || dist < test.lo - 1.5 || dist > test.hi + 1.5) return null;
+        if (!isFinite(d) || d < 0 || d > 1000) return null;
+        sum += holed ? 100 : Math.round(100 * Math.max(0, 1 - d / (0.2 * dist)));
+        if (holed || s.onGreen) greens++;
+        prox += d;
+    }
+    return { score: Math.round(sum / shots.length), greens: greens, prox: Math.round(prox / shots.length * 10) / 10 };
+}
+async function approachRangeOk(code) {
+    if (code === PRACTICE_RANGE_CODE) return true;
+    const r = (await pool.query('SELECT 1 FROM courses WHERE share_code = $1 AND is_range = true AND (is_draft = false OR is_draft IS NULL) AND (is_hidden = false OR is_hidden IS NULL)', [code])).rows;
+    return r.length > 0;
+}
+// The board: each player's best, the best first (the earlier of two equal scores first), and where the caller stands
+async function approachBoard(code, key, userId, limit) {
+    const best = `SELECT DISTINCT ON (user_id) user_id, player_name, score, created_at FROM approach_results
+                  WHERE range_code = $1 AND test_key = $2 ORDER BY user_id, score DESC, created_at ASC`;
+    const top = (await pool.query(`SELECT * FROM (${best}) b ORDER BY score DESC, created_at ASC LIMIT $3`, [code, key, limit])).rows;
+    const players = (await pool.query(`SELECT COUNT(DISTINCT user_id)::int AS n FROM approach_results WHERE range_code = $1 AND test_key = $2`, [code, key])).rows[0].n;
+    let me = null;
+    if (userId) {
+        const mine = (await pool.query(`SELECT score, created_at FROM approach_results WHERE range_code = $1 AND test_key = $2 AND user_id = $3 ORDER BY score DESC, created_at ASC LIMIT 1`, [code, key, userId])).rows[0];
+        if (mine) {
+            const ahead = (await pool.query(`SELECT COUNT(*)::int AS n FROM (${best}) b WHERE b.score > $3 OR (b.score = $3 AND b.created_at < $4)`, [code, key, mine.score, mine.created_at])).rows[0].n;
+            me = { best: mine.score, rank: ahead + 1 };
+        }
+    }
+    return {
+        players: players, me: me,
+        top: top.map((r, i) => Object.assign(hidePlayer({ player_id: r.user_id, player_name: r.player_name || 'Golfer', score: r.score }, userId), { rank: i + 1 }))
+    };
+}
+app.get('/api/ranges/:code/approach', requireDB, optionalAuth, async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase(), key = String(req.query.test || '');
+        if (!approachTest(key)) return res.status(400).json({ error: 'Unknown test' });
+        res.json(await approachBoard(code, key, req.userId, Math.max(1, Math.min(50, parseInt(req.query.limit, 10) || 10))));
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// A finished test: its shots (distance, distance from the pin, on the green, in the hole) go in, the score is worked out here
+app.post('/api/ranges/:code/approach', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const code = req.params.code.toUpperCase(), key = String(req.body && req.body.test_key || ''), test = approachTest(key);
+        if (!test) return res.status(400).json({ error: 'Unknown test' });
+        if (!(await approachRangeOk(code))) return res.status(404).json({ error: 'Range not found' });
+        const result = approachScore(test, req.body.shots);
+        if (!result) return res.status(400).json({ error: 'The shots do not make this test' });
+        const name = String(req.body.player_name || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) || 'Golfer';
+        const shots = req.body.shots.map(s => ({ dist: Math.round(Number(s.dist) * 10) / 10, prox: Math.round(Number(s.prox) * 10) / 10, onGreen: !!s.onGreen, holed: !!s.holed }));
+        await pool.query(`INSERT INTO approach_results (range_code, test_key, user_id, player_name, score, greens, prox, shots) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [code, key, req.userId, name, result.score, result.greens, result.prox, JSON.stringify(shots)]);
+        res.json(Object.assign({ success: true, score: result.score }, await approachBoard(code, key, req.userId, 10)));
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
 
 // --- ASSET MANAGER API ---
 

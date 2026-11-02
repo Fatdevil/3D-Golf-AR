@@ -83,14 +83,16 @@
                   lmHint: 'Launch monitorn skickar inte klubban: välj den här.',
                   bagNote: 'Dina launch monitor-slag sparas i din bag (senaste 40 per klubba) och styr klubbförslaget på banan från 3 slag.',
                   tabApproach: 'Inspel', distance: 'Avstånd', greens: 'Green', toPin: 'Till pinne', best: 'Bäst', toPinNote: 'Snitt och bästa avstånd till pinnen per övat avstånd',
-                  tests: 'Inspeltest', last: 'Senast', avg5: 'Snitt 5 senaste', played: 'test', testTip: 'Test {i}: {v} p', rateRange: 'Rangen' },
+                  tests: 'Inspeltest', last: 'Senast', avg5: 'Snitt 5 senaste', played: 'test', testTip: 'Test {i}: {v} p', rateRange: 'Rangen',
+                  board: 'Topplista på rangen', you: 'Du', of: 'av', pts: 'p' },
             en: { title: 'Session', shots: 'shots', pick: 'Which club are you hitting?', tabShots: 'Shots', tabClubs: 'Clubs', club: 'Club', carry: 'Carry', total: 'Total',
                   offline: 'Offline', n: 'Shots', spread: 'Spread', empty: 'Hit a shot and it shows up here.', csv: 'Export CSV', clear: 'New session',
                   confirmClear: 'Start a new session? The shots of this session are removed.', ellipse: 'The ellipse shows where about 2 in 3 shots with {c} land.',
                   lmHint: 'The launch monitor does not send the club: pick it here.',
                   bagNote: 'Your launch monitor shots go to your bag (the last 40 per club) and set the club suggestion on a course from 3 shots.',
                   tabApproach: 'Approach', distance: 'Distance', greens: 'Greens', toPin: 'To pin', best: 'Best', toPinNote: 'Average and best distance to the pin per practised distance',
-                  tests: 'Approach tests', last: 'Latest', avg5: 'Avg of last 5', played: 'tests', testTip: 'Test {i}: {v} pts', rateRange: 'The range' }
+                  tests: 'Approach tests', last: 'Latest', avg5: 'Avg of last 5', played: 'tests', testTip: 'Test {i}: {v} pts', rateRange: 'The range',
+                  board: 'Leaderboard on this range', you: 'You', of: 'of', pts: 'pts' }
         };
         const COLORS = { Dr: 0xef4444, '3W': 0xf97316, '5W': 0xf59e0b, Hy: 0xeab308, '4i': 0x84cc16, '5i': 0x22c55e, '6i': 0x10b981, '7i': 0x14b8a6,
                          '8i': 0x06b6d4, '9i': 0x0ea5e9, PW: 0x3b82f6, GW: 0x6366f1, SW: 0x8b5cf6, LW: 0xd946ef };
@@ -158,7 +160,8 @@
                             const tr = x.trend;
                             h += '<div class="rs-test"><div class="rs-test-head"><span class="rs-test-name">' + esc(x.label) + '</span><span class="rs-test-n">' + tr.n + ' ' + esc(t('played')) + '</span></div>' +
                                  root.RangePractice.sparkSVG(tr.series, { width: 256, height: 44, best: tr.best, label: x.label, tip: function (i, v) { return t('testTip').replace('{i}', tr.n - tr.series.length + i + 1).replace('{v}', v); } }) +
-                                 '<div class="rs-test-stats"><span>' + esc(t('last')) + ' <b>' + tr.last + '</b></span><span>' + esc(t('best')) + ' <b>' + tr.best + '</b></span><span>' + esc(t('avg5')) + ' <b>' + tr.avg5 + '</b></span></div></div>';
+                                 '<div class="rs-test-stats"><span>' + esc(t('last')) + ' <b>' + tr.last + '</b></span><span>' + esc(t('best')) + ' <b>' + tr.best + '</b></span><span>' + esc(t('avg5')) + ' <b>' + tr.avg5 + '</b></span></div>' +
+                                 boardHtml(root.RangePractice.board && root.RangePractice.board(x.key)) + '</div>';
                         });
                         h += '</div>';
                     }
@@ -200,6 +203,17 @@
             panel.classList.toggle('collapsed', !state.open);
         }
 
+        // A test's leaderboard on this range (RangePractice fetches it): the top five, and the player's own place when they are further down
+        function boardHtml(b) {
+            if (!b || !b.top || !b.top.length) return '';
+            let h = '<div class="rs-board"><div class="rs-sub">' + esc(t('board')) + '</div><ol>';
+            b.top.slice(0, 5).forEach(function (r) {
+                h += '<li class="' + (r.is_me ? 'me' : '') + '"><span class="rs-board-rank">' + r.rank + '</span><span class="rs-board-name">' + esc(r.player_name) + '</span><b>' + r.score + '</b></li>';
+            });
+            h += '</ol>';
+            if (b.me && b.me.rank > 5) h += '<div class="rs-board-me">' + esc(t('you')) + ': ' + b.me.rank + ' ' + esc(t('of')) + ' ' + b.players + ' · ' + b.me.best + ' ' + esc(t('pts')) + '</div>';
+            return h + '</div>';
+        }
         function onClick(e) {
             const b = e.target.closest('button');
             if (!b) return;
