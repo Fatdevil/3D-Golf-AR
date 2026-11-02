@@ -786,6 +786,15 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session .rp-spark { display: block; max-width: 100%; height: auto; }
   #range-session .rs-test-stats { display: flex; gap: 10px; color: #94a3b8; font-size: 11px; font-variant-numeric: tabular-nums; }
   #range-session .rs-test-stats b { color: #fff; font-weight: 900; }
+  /* a test's leaderboard on the range */
+  #range-session .rs-board { margin-top: 6px; }
+  #range-session .rs-board ol { list-style: none; margin: 2px 0 0; padding: 0; }
+  #range-session .rs-board li { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: 6px; font-size: 12px; color: #cbd5e1; font-variant-numeric: tabular-nums; }
+  #range-session .rs-board li.me { background: rgba(250,204,21,0.12); color: #fde68a; }
+  #range-session .rs-board-rank { width: 16px; text-align: right; color: #64748b; font-weight: 800; }
+  #range-session .rs-board-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #range-session .rs-board li b { color: #fff; font-weight: 900; }
+  #range-session .rs-board-me { font-size: 11px; color: #fde68a; padding: 2px 4px; font-weight: 700; }
   #range-session .rs-actions { display: flex; gap: 6px; padding: 8px 12px 10px; }
   #range-session .rs-actions button { flex: 1; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 11px; font-weight: 700; }
   #range-session .rs-actions button:disabled { opacity: 0.4; cursor: default; }
@@ -855,6 +864,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-practice .rp-mic:hover { background: rgba(255,255,255,0.08); }
   #range-practice .rp-mic.on { background: #dc2626; border-color: #fecaca; color: #fff; animation: voicePulse 1.4s ease-in-out infinite; }
   @media (prefers-reduced-motion: reduce) { #range-practice .rp-mic.on { animation: none; } }
+  #range-practice .rp-place { color: #fde68a; font-weight: 800; }
   #range-practice .rp-up { color: #4ade80; font-weight: 800; }
   #range-practice .rp-down { color: #f87171; font-weight: 800; }
   /* the club from the player's bag for this distance */

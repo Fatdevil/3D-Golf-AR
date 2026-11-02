@@ -198,9 +198,10 @@
                   left: 'vänster', right: 'höger', holed: 'I hål!', moved: 'Flyttad åt sidan (vatten eller utanför banan)',
                   blocked: 'Inget spelbart läge på det avståndet (vatten eller utanför banan) – välj ett annat', later: 'Gäller från nästa slag',
                   test: '🏆 Test', testTitle: 'Inspeltest', shots: 'slag', start: 'Starta test', cancel: 'Avbryt', record: 'Rekord', noRecord: 'Inget rekord än',
-                  shot: 'Slag', avg: 'snitt', p: 'p', result: 'Resultat', newRecord: '🏆 Nytt rekord!', again: 'Kör igen', done: 'Klar', greens: 'Green',
+                  shot: 'Slag', avg: 'snitt', p: 'p', result: 'Resultat', newRecord: '🏆 Nytt personbästa!', again: 'Kör igen', done: 'Klar', greens: 'Green',
                   toPin: 'till pinnen', testBlocked: 'Testet avbröts: inget spelbart läge på avstånden', plot: 'Var slagen hamnade runt pinnen',
                   testHint: 'Slumpade avstånd · upp till 100 p per slag efter hur nära pinnen', bagAvg: 'snitt', plays: 'spelar', prev: 'Förra gången',
+                  place: '🏅 Plats {r} av {n} på rangen', placeWait: '🏅 Topplistan räknas…', placeBest: 'ditt bästa {b} p',
                   bagTip: 'Klubban i din bag vars snittlängd ligger närmast (launch monitor-slag från rangen)',
                   mic: 'Röststyrning: säg till exempel 75 meter, green två, matta eller starta test', locked: 'Låst under testet', noGreen: 'Ingen green',
                   opened: 'Inspel', closed: 'Tillbaka till rangen', cancelled: 'Testet avbrutet', noTest: 'Inget test pågår' },
@@ -209,9 +210,10 @@
                   left: 'left', right: 'right', holed: 'In the hole!', moved: 'Moved aside (water or out of bounds)',
                   blocked: 'Nowhere playable at that distance (water or out of bounds) – pick another', later: 'From the next shot',
                   test: '🏆 Test', testTitle: 'Approach test', shots: 'shots', start: 'Start test', cancel: 'Cancel', record: 'Best', noRecord: 'No best yet',
-                  shot: 'Shot', avg: 'avg', p: 'pts', result: 'Score', newRecord: '🏆 New best!', again: 'Go again', done: 'Done', greens: 'Greens',
+                  shot: 'Shot', avg: 'avg', p: 'pts', result: 'Score', newRecord: '🏆 New personal best!', again: 'Go again', done: 'Done', greens: 'Greens',
                   toPin: 'to the pin', testBlocked: 'Test stopped: nowhere playable at its distances', plot: 'Where the shots finished around the pin',
                   testHint: 'Random distances · up to 100 pts a shot by how close to the pin', bagAvg: 'avg', plays: 'plays', prev: 'Last time',
+                  place: '🏅 Place {r} of {n} on this range', placeWait: '🏅 Working out the leaderboard…', placeBest: 'your best {b} pts',
                   bagTip: 'The club in your bag whose average length is nearest (launch monitor shots from the range)',
                   mic: 'Voice control: say for example 75 metres, green two, mat or start test', locked: 'Locked during the test', noGreen: 'No green',
                   opened: 'Approach', closed: 'Back to the range', cancelled: 'Test cancelled', noTest: 'No test running' }
@@ -307,8 +309,51 @@
                 const greens = test.shots.filter(function (s) { return s.onGreen || s.holed; }).length;
                 const prox = test.shots.reduce(function (a, s) { return a + s.prox; }, 0) / test.shots.length;
                 saveHistory(addResult(h, { t: Date.now(), k: k, score: test.score, greens: greens, shots: test.shots.length, prox: Math.round(prox * 10) / 10 }));
+                submit(test, k);
             }
         }
+
+        // ── The range's leaderboard of each test (a published range, or the ready practice range): a finished test goes in (the server
+        //    works its score out from the shots), and each test's board is fetched once for the panel ──
+        const boards = {};   // test key -> { data } (data null while it is fetched, or when it could not be)
+        function boardHeaders() {
+            const h = { 'Content-Type': 'application/json' };
+            let id = null;
+            try { id = (root.GolfAuth && root.GolfAuth.userId) || localStorage.getItem('golf_os_device_id'); } catch (e) { /* none */ }
+            if (id) h['x-user-id'] = id;
+            return h;
+        }
+        function boardUrl() { return (api.base || '') + '/api/ranges/' + encodeURIComponent(ctx.board) + '/approach'; }
+        function boardChanged() {
+            render();
+            if (root.RangeSession && root.RangeSession.render) root.RangeSession.render();
+        }
+        function submit(tt, key) {
+            if (!ctx || !ctx.board) return;
+            let name = 'Golfer';
+            try { name = localStorage.getItem('golf_os_display_name') || (root.GolfAuth && root.GolfAuth.user && root.GolfAuth.user.display_name) || 'Golfer'; } catch (e) { /* none */ }
+            tt.board = { pending: true };
+            fetch(boardUrl(), { method: 'POST', headers: boardHeaders(), body: JSON.stringify({ test_key: key, player_name: name,
+                shots: tt.shots.map(function (s) { return { dist: s.dist, prox: s.prox, onGreen: !!s.onGreen, holed: !!s.holed }; }) }) })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .catch(function () { return null; })
+                .then(function (j) {
+                    tt.board = j;
+                    if (j) boards[key] = { data: j };
+                    boardChanged();
+                });
+        }
+        // A test's board on this range: what is known now (null while it is fetched; the panel is drawn again when it comes)
+        api.board = function (key) {
+            if (!ctx || !ctx.board || !key) return null;
+            if (boards[key]) return boards[key].data;
+            boards[key] = { data: null };
+            fetch(boardUrl() + '?test=' + encodeURIComponent(key) + '&limit=5', { headers: boardHeaders() })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .catch(function () { return null; })
+                .then(function (j) { boards[key] = { data: j }; if (j) boardChanged(); });
+            return null;
+        };
 
         // ── 3D: where the shots at this green finished around the pin (the test's, else those from this distance), and their ellipse ──
         function spreadShots() {
@@ -450,6 +495,11 @@
                     h += '<div class="rp-sum-title">' + esc(t('result')) + '</div><div class="rp-score">' + test.score + '<span>' + esc(t('p')) + '</span></div>';
                     if (test.record) h += '<div class="rp-sum-best rp-new">' + esc(t('newRecord')) + '</div>';
                     else if (test.best !== null) h += '<div class="rp-sum-best">' + esc(t('record') + ' ' + test.best + ' ' + t('p')) + '</div>';
+                    if (test.board && test.board.pending) h += '<div class="rp-sub">' + esc(t('placeWait')) + '</div>';
+                    else if (test.board && test.board.me) {
+                        h += '<div class="rp-place">' + esc(t('place').replace('{r}', test.board.me.rank).replace('{n}', test.board.players)) +
+                             (test.board.me.best !== test.score ? ' · ' + esc(t('placeBest').replace('{b}', test.board.me.best)) : '') + '</div>';
+                    }
                     if (num(test.prev) !== null) {
                         const dd = test.score - test.prev;
                         h += '<div class="rp-sub">' + esc(t('prev')) + ' ' + test.prev + ' ' + esc(t('p')) + ' <span class="' + (dd > 0 ? 'rp-up' : (dd < 0 ? 'rp-down' : '')) + '">(' + (dd > 0 ? '+' : (dd < 0 ? '−' : '±')) + Math.abs(dd) + ')</span></div>';
@@ -496,7 +546,7 @@
         api.start = function (opts) {
             if (!opts || !opts.tee) return;
             ctx = { key: String(opts.key || 'draft'), tee: { x: opts.tee.x, y: opts.tee.y, z: opts.tee.z, rot: opts.tee.rot || 0 }, holes: opts.holes || function () { return []; },
-                    scene: opts.scene || null };
+                    scene: opts.scene || null, board: opts.board || null };   // board: the code of the range's leaderboard (a published range, or the practice range)
             test = null;
             load();
             ensureBar().style.display = '';
