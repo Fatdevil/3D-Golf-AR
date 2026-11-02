@@ -67,6 +67,14 @@ window.GolfPhysics = (function() {
     // (skid) är en glidande boll och får full tyngd.
     const ROLLING_SLOPE_FACTOR = 5 / 7;
 
+    // Brantaste lutning (i %) där en rullande boll blir liggande på underlaget, samma villkor som stoppet i rullningen nedan:
+    // g sin(v) * 5/7 <= mu g cos(v)  =>  tan(v) <= mu / (5/7). Green: mu ur stimp (7,8 % vid stimp 10, 6,0 % vid 13); övriga underlag: rullbromsen.
+    // Lutningsvyn färgar det som är brantare som "bollen stannar inte".
+    function restSlopeLimitPct(surface, stimp) {
+        const mu = surface === 'GREEN' ? greenMu(stimp) : (ROLL_DECEL[surface] !== undefined ? ROLL_DECEL[surface] : GROUND.rollingDecel) / 9.81;
+        return 100 * mu / ROLLING_SLOPE_FACTOR;
+    }
+
     // Flyer-lie från rough: chans per slag, lägsta utgångsvinkel (en driver/trä flyger inte), och hur mycket fart/spinn som blir kvar.
     // Farten behålls, spinnet minskar; resten gör bollens egen aerodynamik (mindre spinn = mindre luftmotstånd = längre carry).
     // Kalibrerat över hela kraftskalan (10-100 %, alla klubbor som kan få flyer): rough ger +2 till +15 % carry mot fairway, deep rough
@@ -1185,6 +1193,7 @@ window.GolfPhysics = (function() {
     return {
         simulateFlight: simulateFlight,
         greenMu: greenMu,
+        restSlopeLimitPct: restSlopeLimitPct,
         lieMultipliers: lieMultipliers,
         lieRange: lieRange,
         lieEffectText: lieEffectText

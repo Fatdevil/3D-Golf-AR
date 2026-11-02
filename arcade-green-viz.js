@@ -60,13 +60,30 @@
         [3.8, 6.3, [1.00, 0.55, 0.15], [1.00, 0.20, 0.15]]    // severe: coral red
     ];
     const FOREGREEN_DIM = 0.65;   // softer on the foregreen so the putting surface stands out
+    // "The ball does not stay here": steeper than the physics lets a rolling ball come to rest on (GolfPhysics.restSlopeLimitPct, from
+    // the stimp on the green). Magenta, away from the red of the severe band so it reads as its own thing.
+    const NO_REST_COLOR = [0.85, 0.20, 1.00];
 
-    window.slopePercentToColor = function(slopePct, isForegreen = false) {
+    // The stimp the slope view is drawn for: the round's (matchSettings), else the one the physics last used, else 10
+    window.slopeViewStimp = function() {
+        return (window.matchSettings && window.matchSettings.greenStimp) || window.GREEN_STIMP || 10.0;
+    };
+    // Steepest slope (%) a ball comes to rest on: { green, foregreen }. The same function as the ball's own stop in physics.js.
+    window.restSlopeLimits = function(stimp) {
+        const st = stimp || window.slopeViewStimp();
+        const P = window.GolfPhysics;
+        if (P && typeof P.restSlopeLimitPct === 'function') return { green: P.restSlopeLimitPct('GREEN', st), foregreen: P.restSlopeLimitPct('FOREGREEN', st) };
+        return { green: 100 * 0.056 * (10 / Math.max(6, Math.min(14, st))) * 1.4, foregreen: 100 * (0.88 / 9.81) * 1.4 };   // same formulas
+    };
+
+    // noRestPct: the slope from which the ball does not stay (restSlopeLimits); left out, there is no such colour
+    window.slopePercentToColor = function(slopePct, isForegreen = false, noRestPct) {
+        const k = isForegreen ? FOREGREEN_DIM : 1;
+        if (noRestPct !== undefined && slopePct >= noRestPct) return NO_REST_COLOR.map(function (c) { return c * k; });
         let band = SLOPE_BANDS[SLOPE_BANDS.length - 1];
         for (const bd of SLOPE_BANDS) { if (slopePct < bd[1]) { band = bd; break; } }
         let t = (slopePct - band[0]) / (band[1] - band[0]);
         t = t < 0 ? 0 : (t > 1 ? 1 : t);
-        const k = isForegreen ? FOREGREEN_DIM : 1;
         return [0, 1, 2].map(function (i) { return (band[2][i] + t * (band[3][i] - band[2][i])) * k; });
     };
 
@@ -80,12 +97,27 @@
     window._slopeColorGLSL = SLOPE_COLOR_GLSL;   // for the tests
 
     // Global TrackMan Slope Color Mapping (Used by the 3D Grid and the legend's bands)
-    window.getGreenSlopeColor = function(wx, wz, isForegreen = false) {
+    window.getGreenSlopeColor = function(wx, wz, isForegreen = false, limits) {
         let grad = (typeof window.sampleGreenGradient === 'function')
             ? window.sampleGreenGradient(wx, wz, 0.25)
             : { slopePercent: 0 };
-        return window.slopePercentToColor(grad.slopePercent, isForegreen);
+        const lim = limits || window.restSlopeLimits();
+        return window.slopePercentToColor(grad.slopePercent, isForegreen, isForegreen ? lim.foregreen : lim.green);
     };
+
+    // The legend's last two labels at the current stimp: "3.8–7.8%" (red) and "Won't stop ≥ 7.8%" (magenta), one decimal
+    window.slopeLegendTexts = function(isSv) {
+        const g = window.restSlopeLimits().green;
+        const f = function (v) { return (Math.round(v * 10) / 10).toFixed(1); };
+        const sev = SLOPE_BANDS[SLOPE_BANDS.length - 1][0];
+        return {
+            severe: g > sev ? f(sev) + '–' + f(g) + '%' : '> ' + f(sev) + '%',
+            noRest: (isSv ? 'Stannar inte ≥ ' : "Won't stop ≥ ") + f(g) + '%'
+        };
+    };
+
+    // Part of the cache keys: the colours depend on the stimp through the no-rest limit
+    function stimpKey() { return 's' + window.slopeViewStimp().toFixed(2); }
 
     // Height of the drawn ground (the terrain triangles); the bilinear height where that is not available
     function surfaceHeight(x, z) {
@@ -143,7 +175,7 @@
         let shapeKey = window.greenShapeKey(hole.greenData);
         let terrainRev = window._terrainRevision || 0;
         let gridStep = window._greenGridSpacing || 2.0;  // 2.0 meter TrackMan/GSPro standard spacing
-        let cacheKey = `${holeIndex}_${terrainRev}_${coverage}_${colorMode}_${shapeKey}_${gridStep}`;
+        let cacheKey = `${holeIndex}_${terrainRev}_${coverage}_${colorMode}_${shapeKey}_${gridStep}_${stimpKey()}`;
         
         if (!forceRebuild && window._greenGridCacheKey === cacheKey && window.greenGridMesh) {
             return;
@@ -187,11 +219,12 @@
         let gridColors = [];
         
         // TrackMan Color Mapping Function (High-contrast against green turf)
+        const limits = window.restSlopeLimits();
         function getSlopeColor(wx, wz, isForegreen) {
             if (!isHeatmap) {
                 return isForegreen ? [0.70, 0.70, 0.70] : [1.0, 1.0, 1.0];
             }
-            return window.getGreenSlopeColor(wx, wz, isForegreen);
+            return window.getGreenSlopeColor(wx, wz, isForegreen, limits);
         }
 
         // Helper: Check if point is inside inner green
@@ -368,7 +401,7 @@
         let shapeKey = window.greenShapeKey(hole.greenData);
         let terrainRev = window._terrainRevision || 0;
         let hmStep = 0.50;  // 50 cm smooth grid resolution
-        let cacheKey = `hm_${holeIndex}_${terrainRev}_${coverage}_${shapeKey}_${hmStep}`;
+        let cacheKey = `hm_${holeIndex}_${terrainRev}_${coverage}_${shapeKey}_${hmStep}_${stimpKey()}`;
         
         if (!forceRebuild && window._greenHeatmapCacheKey === cacheKey && window.greenHeatmapMesh) {
             return;
@@ -483,15 +516,18 @@
         geo.setAttribute('aFg', new THREE.Float32BufferAttribute(fgFlags, 1));
         geo.setIndex(indices);
         
+        const limits = window.restSlopeLimits();
         let mat = new THREE.ShaderMaterial({
-            uniforms: { uOpacity: { value: 0.68 } },
+            uniforms: { uOpacity: { value: 0.68 }, uNoRest: { value: limits.green }, uNoRestFg: { value: limits.foregreen } },
             vertexShader: [
                 'attribute float aSlope;', 'attribute float aFg;', 'varying float vSlope;', 'varying float vFg;',
                 'void main() {', '    vSlope = aSlope; vFg = aFg;',
                 '    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);', '}'
             ].join('\n'),
-            fragmentShader: 'uniform float uOpacity;\nvarying float vSlope;\nvarying float vFg;\n' + SLOPE_COLOR_GLSL +
-                'void main() {\n    vec3 c = slopeColor(vSlope) * (vFg > 0.5 ? ' + glslNum(FOREGREEN_DIM) + ' : 1.0);\n    gl_FragColor = vec4(c, uOpacity);\n}\n',
+            fragmentShader: 'uniform float uOpacity;\nuniform float uNoRest;\nuniform float uNoRestFg;\nvarying float vSlope;\nvarying float vFg;\n' + SLOPE_COLOR_GLSL +
+                'void main() {\n    bool fg = vFg > 0.5;\n' +
+                '    vec3 c = vSlope >= (fg ? uNoRestFg : uNoRest) ? ' + glslVec(NO_REST_COLOR) + ' : slopeColor(vSlope);\n' +
+                '    gl_FragColor = vec4(c * (fg ? ' + glslNum(FOREGREEN_DIM) + ' : 1.0), uOpacity);\n}\n',
             transparent: true,
             depthTest: true,
             depthWrite: false,
