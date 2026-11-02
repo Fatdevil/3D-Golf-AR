@@ -1388,6 +1388,19 @@
             if (!hole || !hole.greenData) return;
             let gd = hole.greenData;
 
+            // Flag placement check: the slope within 1 m of the cup (fair / steep / the ball won't stop), after every change
+            let pinEl = document.getElementById('gs-pin-check');
+            if (pinEl) {
+                let chk = (typeof window.pinSlopeCheck === 'function') ? window.pinSlopeCheck(hole) : null;
+                let t = chk && window.pinSlopeText(chk, window.getGolfLanguage && window.getGolfLanguage() === 'sv');
+                pinEl.style.display = t ? 'block' : 'none';
+                if (t) {
+                    pinEl.textContent = t.text;
+                    pinEl.style.color = t.color;
+                    pinEl.style.borderColor = chk.level === 'OK' ? '#1e293b' : t.color;
+                }
+            }
+
             // Ensure locked defaults
             if (gd.tension === undefined) gd.tension = 0.5;
             if (gd.edgeSharpness === undefined) gd.edgeSharpness = 100;

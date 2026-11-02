@@ -874,6 +874,47 @@
         return { head: head, along: along, detail: parts.join(' · ') };
     };
 
+    // === FLAG PLACEMENT CHECK (Green Studio, and a toast when a flag is placed) ===
+    // The slope around the cup, with the slope the ball rolls on (terrainSlopeAt): at the flag and on two rings around it (0.5 m and
+    // 1 m, 8 directions each). A fair pin sits where it is at most about 3 %; steeper is a hard pin; from the no-rest limit at this
+    // stimp (restSlopeLimits, the physics' own) a ball cannot stop near the cup at all.
+    const PIN_FAIR_PCT = 3.0;
+    window.pinSlopeCheck = function(hole, stimp) {
+        if (!hole || !hole.flag || typeof window.terrainSlopeAt !== 'function') return null;
+        const fx = hole.flag.x, fz = hole.flag.z;
+        const pctAt = function (x, z) { const g = window.terrainSlopeAt(x, z); return Math.hypot(g.dhdx, g.dhdz) * 100; };
+        const centerPct = pctAt(fx, fz);
+        let maxPct = centerPct;
+        for (const r of [0.5, 1.0]) for (let k = 0; k < 8; k++) {
+            const a = k / 8 * 2 * Math.PI;
+            maxPct = Math.max(maxPct, pctAt(fx + Math.cos(a) * r, fz + Math.sin(a) * r));
+        }
+        const st = stimp || window.slopeViewStimp();
+        const limitPct = window.restSlopeLimits(st).green;
+        const level = maxPct >= limitPct ? 'NO_REST' : (maxPct > PIN_FAIR_PCT ? 'STEEP' : 'OK');
+        return { centerPct: centerPct, maxPct: maxPct, limitPct: limitPct, stimp: st, level: level };
+    };
+
+    // The check as one line for the panel and the toast: { text, color }
+    window.pinSlopeText = function(chk, sv) {
+        if (!chk) return null;
+        const pct = function (v) { return (Math.round(v * 10) / 10).toFixed(1) + ' %'; };
+        if (chk.level === 'OK') return { text: (sv ? '⛳ Flaggan: ' : '⛳ Flag: ') + pct(chk.maxPct) + ' ✓', color: '#4ade80' };
+        if (chk.level === 'STEEP') return { text: (sv ? '⚠️ Brant flaggplacering: ' + pct(chk.maxPct) + ' inom 1 m (över 3 %)' : '⚠️ Steep pin: ' + pct(chk.maxPct) + ' within 1 m (over 3 %)'), color: '#fbbf24' };
+        return { text: (sv ? '⛔ Bollen stannar inte vid flaggan: ' + pct(chk.maxPct) + ' (gräns ' + pct(chk.limitPct) + ' vid stimp ' + chk.stimp + ')'
+            : "⛔ The ball won't stop at the flag: " + pct(chk.maxPct) + ' (limit ' + pct(chk.limitPct) + ' at stimp ' + chk.stimp + ')'), color: '#f87171' };
+    };
+
+    // After a flag is placed or moved: a toast only when the pin is steep (a fair pin needs no message)
+    window.warnPinSlope = function(hole) {
+        const chk = window.pinSlopeCheck(hole);
+        if (!chk || chk.level === 'OK' || typeof window.showBuildToast !== 'function') return chk;
+        const sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+        const t = window.pinSlopeText(chk, sv);
+        window.showBuildToast(t.text, t.color);
+        return chk;
+    };
+
     // Putt assist for the round, chosen in the round settings: 'FULL' (planned line, aim line and slope view), 'SLOPE' (slope grid/heatmap
     // only, no lines) or 'OFF' (none of them). Outside a round (build mode, Green Studio, tests) everything is available.
     window.getPuttAssist = function () {
