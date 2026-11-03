@@ -47,6 +47,16 @@ check('putting: the pace is for the cup (120 m here) whatever side the aim point
 putting = false; win.aimTarget.z = -120; win.aimTarget.x = 0;
 check('onTap builds the shot from that distance', /const distToHoleM = aimDistanceM\(\)/.test(require('fs').readFileSync(__dirname + '/../arcade-swing-engine.js', 'utf8')));
 
+// the phone's ◀ ▶ (stepClub): one club longer / shorter in the bag's order, a pick of the player's own, stops at the ends
+SE.newShot(); SE.selectClub('I7'); SE.stepClub(-1);
+check('◀ one club longer (7-iron -> 5-iron), a pick of the player', SE.getClub() === 'I5' && SE.isManualClub(), SE.getClub());
+SE.stepClub(1); SE.stepClub(1);
+check('▶ twice: 9-iron', SE.getClub() === 'I9', SE.getClub());
+SE.selectClub('DRIVER'); SE.stepClub(-1);
+check('◀ at the driver stays the driver', SE.getClub() === 'DRIVER');
+SE.selectClub('PUTT'); SE.stepClub(1);
+check('▶ at the putter stays the putter', SE.getClub() === 'PUTT');
+
 // a suggestion that arrives during a swing waits for the swing to be over
 (async function () {
   SE.newShot();
@@ -56,6 +66,8 @@ check('onTap builds the shot from that distance', /const distToHoleM = aimDistan
   SE.enableSwingMode();
   SE.onTap();                 // power phase starts
   SE.suggestClub('PW');       // the shot plan finishes during the swing
+  const mid = SE.getClub(); SE.stepClub(1);
+  check('◀ ▶ do nothing in the middle of a swing', SE.getClub() === mid, SE.getClub());
   check('a suggestion during the power phase does not change the club', SE.getClub() === before, SE.getClub());
   SE.onTap();                 // power locked, direction phase
   SE.suggestClub('SW');

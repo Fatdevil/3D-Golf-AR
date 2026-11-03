@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=29">
+<link rel="stylesheet" href="arcade.css?v=30">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -31,7 +31,7 @@
 <script src="ratings.js?v=2"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=13"></script>
+<script src="arcade-swing-engine.js?v=14"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -3291,14 +3291,19 @@
     </div>
 
     <!-- Shot shape: intentional draw / straight / fade -->
-    <div id="shape-selector">
+    <!-- on a phone (window.isPhonePlayLayout) the row is one button with the shape in use: a tap opens the three, a pick folds them -->
+    <div id="shape-selector" onclick="if (typeof isPhonePlayLayout === 'function' && isPhonePlayLayout()) { var b = event.target.closest('.shape-btn'); if (b && b.classList.contains('selected') && !this.classList.contains('shapes-open')) { this.classList.add('shapes-open'); event.stopPropagation(); } else if (b) { this.classList.remove('shapes-open'); } }">
         <button class="shape-btn" data-shape="-1" onclick="SwingEngine.setShotShape(-1)" title="Draw: kurvar åt vänster, kickar vänster på greenen">↶ Draw</button>
         <button class="shape-btn selected" data-shape="0" onclick="SwingEngine.setShotShape(0)" title="Rak">Rak</button>
         <button class="shape-btn" data-shape="1" onclick="SwingEngine.setShotShape(1)" title="Fade: kurvar åt höger, kickar höger på greenen">Fade ↷</button>
     </div>
 
-    <!-- Club selector swipebar -->
-    <div id="club-selector" onclick="if (document.body.classList.contains('phase-putt')) { var b = event.target.closest('.club-btn'); if (b && b.classList.contains('selected') && !this.classList.contains('clubs-open')) { this.classList.add('clubs-open'); event.stopPropagation(); } else if (b) { this.classList.remove('clubs-open'); } }">
+    <!-- Club selector swipebar. The buttons sit in .club-row, centred by its auto margins: a row wider than the screen starts at its
+         left edge and scrolls (centring the scroll container itself cut the driver off out of reach). On a phone the row is the club in
+         hand with a step either side (◀ longer, ▶ shorter, SwingEngine.stepClub); a tap on the club opens the whole row, a pick folds it -->
+    <div id="club-selector" onclick="if (document.body.classList.contains('phase-putt') || (typeof isPhonePlayLayout === 'function' && isPhonePlayLayout())) { var b = event.target.closest('.club-btn'); if (b && b.classList.contains('selected') && !this.classList.contains('clubs-open')) { this.classList.add('clubs-open'); event.stopPropagation(); } else if (b) { this.classList.remove('clubs-open'); } }">
+        <button class="club-step" data-step="-1" onclick="SwingEngine.stepClub(-1)" title="Längre klubba" aria-label="Längre klubba">◀</button>
+        <div class="club-row">
         <button class="club-btn selected" data-club="DRIVER"  onclick="SwingEngine.selectClub('DRIVER')">
             <span class="club-icon">🏌️</span><span>Driver</span><span class="club-dist">220y</span>
         </button>
@@ -3326,6 +3331,8 @@
         <button class="club-btn" data-club="PUTT"  onclick="SwingEngine.selectClub('PUTT')">
             <span class="club-icon">🥅</span><span>Putter</span><span class="club-dist">---</span>
         </button>
+        </div>
+        <button class="club-step" data-step="1" onclick="SwingEngine.stepClub(1)" title="Kortare klubba" aria-label="Kortare klubba">▶</button>
     </div>
 
     <!-- Main swing launch button -->
@@ -15400,7 +15407,9 @@ window.triggerExplosion = function(x, y, z) {
                 window._playPhase = phase;
                 ['aim', 'putt', 'flight'].forEach(function (p) { document.body.classList.toggle('phase-' + p, phase === p); });
                 let cs = document.getElementById('club-selector');
-                if (cs) cs.classList.remove('clubs-open');   // a club row opened for a chip folds again on the next putt
+                if (cs) cs.classList.remove('clubs-open');   // an opened club row folds again when the phase changes
+                let ss = document.getElementById('shape-selector');
+                if (ss) ss.classList.remove('shapes-open');
             }
             // what the round's optional buttons are for (arcade.css, "PLAY CLEAN-UP"):
             //   on-tee         the hole's first shot: the flyover previews the hole
