@@ -388,6 +388,7 @@
         uniform vec3 uSemiCol;
         uniform float uWorld;
         uniform float uCells;
+        uniform float uCardH;     // the player's height for the 2D grass (1 = the shell heights)
         varying vec3 vCol;
         varying vec2 vUv;
         varying float vDist;
@@ -395,7 +396,7 @@
         varying vec2 vWaterUv;
         void main() {
             vWaterUv = vec2(iBase.x / uWorld + 0.5, 0.5 - iBase.z / uWorld);
-            float h = iParam.x, t = position.y;                     // t: 0 at the root, 1 at the top of the card
+            float h = iParam.x * uCardH, t = position.y;                     // t: 0 at the root, 1 at the top of the card
             vec3 l = vec3(position.x, t, position.z) * vec3(h * 1.2, h, h * 1.2);   // a tuft is a little wider than tall
             float c = cos(iParam.y), s = sin(iParam.y);
             vec3 wp = iBase + vec3(l.x * c + l.z * s, l.y, -l.x * s + l.z * c);
@@ -447,6 +448,10 @@
         HIGH: { radius: 50, density: 3.5 }
     };
     const CARD_CHUNK = 16;       // metres
+    // the 2D grass's own sliders: amount 25-300 % of the quality's density, height 50-250 % of the shell heights
+    const CARD_AMOUNT_MIN = 0.25, CARD_AMOUNT_MAX = 3, CARD_HEIGHT_MIN = 0.5, CARD_HEIGHT_MAX = 2.5;
+    function clampCardAmount(a) { return Math.min(CARD_AMOUNT_MAX, Math.max(CARD_AMOUNT_MIN, +a || 1)); }
+    function clampCardHeight(h) { return Math.min(CARD_HEIGHT_MAX, Math.max(CARD_HEIGHT_MIN, +h || 1)); }
     const CARD_CELLS = 4;        // tuft variants in the atlas
 
     // The tuft atlas, painted by code: CARD_CELLS cells side by side, each a tuft of tapered, curved blades, dark at the
@@ -549,6 +554,13 @@
                 cardFlag = localStorage.getItem('golf_grass_cards');
             } catch (e) { /* storage blocked: stays off */ }
             this.cardsOn = cardFlag === '1';
+            // the 2D grass's own amount (x the quality's density) and height (x the shell heights), from the grass menu
+            this.cardAmount = 1; this.cardHeight = 1;
+            try {
+                const a = parseFloat(localStorage.getItem('golf_grass_cards_amount')), h = parseFloat(localStorage.getItem('golf_grass_cards_height'));
+                if (isFinite(a)) this.cardAmount = clampCardAmount(a);
+                if (isFinite(h)) this.cardHeight = clampCardHeight(h);
+            } catch (e) { /* storage blocked: the defaults */ }
             this.cards = new Map();  // chunk key -> { mesh, count }
             this._cardMat = null;
             this._cardAtlas = null;
@@ -1147,6 +1159,16 @@
             for (let b of this.blades) b.mesh.visible = Math.hypot(cp.x - b.cx, cp.z - b.cz) - b.r < maxD;
         }
 
+        // The 2D grass's own amount and height (the grass menu's sliders). The height is a uniform (live, nothing rebuilt); a new amount
+        // drops the chunks and they are built again around the camera (two per frame).
+        setCardTuning(amount, height) {
+            if (amount !== undefined && amount !== null) {
+                const a = clampCardAmount(amount);
+                if (a !== this.cardAmount) { this.cardAmount = a; this._clearCards(); }
+            }
+            if (height !== undefined && height !== null) this.cardHeight = clampCardHeight(height);
+        }
+
         setCards(on) {
             this.cardsOn = !!on;
             if (this.cardsOn) this._ensureEdgeMap();   // the cards are placed from the class map built with the edge map
@@ -1179,7 +1201,7 @@
             const n = 1024, cls = this._cls, world = window.TERRAIN_SIZE || 600, half = world / 2, cell = world / n;
             const gh = typeof window.getTerrainHeight === 'function' ? window.getTerrainHeight : null;
             const heights = [0, this.roughHeight, this.deepHeight, this.semiHeight];
-            const tries = Math.round(preset.density * CARD_CHUNK * CARD_CHUNK);
+            const tries = Math.round(preset.density * this.cardAmount * CARD_CHUNK * CARD_CHUNK);
             const x0 = ix * CARD_CHUNK - half, z0 = iz * CARD_CHUNK - half;
             const ck = ix * 4099 + iz;
             const rnd = function (k) { let h = Math.imul(ck + 7, 374761393) ^ Math.imul(k + 1, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -1213,7 +1235,7 @@
             geo.setAttribute('iParam', new THREE.InstancedBufferAttribute(new Float32Array(param), 4));
             geo.setAttribute('iClass', new THREE.InstancedBufferAttribute(new Float32Array(klass), 1));
             geo.instanceCount = count;
-            geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(x0 + CARD_CHUNK / 2, (minY + maxY) / 2, z0 + CARD_CHUNK / 2), CARD_CHUNK * 0.71 + (maxY - minY) + maxH * 1.5 + 1);
+            geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(x0 + CARD_CHUNK / 2, (minY + maxY) / 2, z0 + CARD_CHUNK / 2), CARD_CHUNK * 0.71 + (maxY - minY) + maxH * 1.5 * CARD_HEIGHT_MAX + 1);   // (any height the slider can give)
             const mesh = new THREE.Mesh(geo, this._cardMat);
             mesh.frustumCulled = true;
             mesh.renderOrder = 121;
@@ -1229,7 +1251,7 @@
                 this._cardAtlas = makeCardAtlas();
                 this._cardMat = new THREE.ShaderMaterial({
                     uniforms: {
-                        uAtlas: { value: this._cardAtlas }, uCells: { value: CARD_CELLS }, uWorld: { value: window.TERRAIN_SIZE || 600 },
+                        uAtlas: { value: this._cardAtlas }, uCells: { value: CARD_CELLS }, uWorld: { value: window.TERRAIN_SIZE || 600 }, uCardH: { value: this.cardHeight },
                         uWaterMap: { value: this._dummyWaterTex }, uMaxDist: { value: preset.radius },
                         uRoughCol: { value: this._roughCol.clone() }, uDeepCol: { value: this._deepCol.clone() }, uSemiCol: { value: this._semiCol.clone() },
                         uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
@@ -1243,6 +1265,7 @@
             u.uWaterMap.value = this.waterTex || window.waterTex || this._dummyWaterTex;
             u.uWorld.value = window.TERRAIN_SIZE || 600;
             u.uMaxDist.value = preset.radius;
+            u.uCardH.value = this.cardHeight;
             u.uLightDir.value.set(lx, ly, lz); u.uDirColor.value.set(dirR, dirG, dirB); u.uAmbColor.value.set(ambR, ambG, ambB);
             u.uRoughCol.value.copy(this._roughCol); u.uDeepCol.value.copy(this._deepCol); u.uSemiCol.value.copy(this._semiCol);
 

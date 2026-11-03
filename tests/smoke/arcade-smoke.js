@@ -1290,6 +1290,42 @@ function serve() {
       return out;
     });
     checks.push({ name: '2D grass cards: off by default; on, tufts stand on the grass around the camera (not on the fairway), compile, keep the shared template on a drop, and the buttons switch and remember them', ok: cards.defaultOff && cards.n > 500 && cards.onFairway === 0 && cards.far === 0 && cards.badClass === 0 && cards.attrsAtDispose === 0 && cards.tplKept && cards.rebuilt && cards.shown && cards.stored && cards.off && cards.errs.length === 0, detail: JSON.stringify(cards) });
+    // the 2D grass's own sliders: shown while it is on; the amount rebuilds the tufts at that many per m2, the height is a live uniform,
+    // both are clamped and remembered
+    const ct = await pp.evaluate(async function () {
+      const sh = window._terrainShells, out = {};
+      const cam = new THREE.PerspectiveCamera(55, 1.5, 0.05, 2000); cam.position.set(6, 2, 0); cam.lookAt(12, 0, -6); cam.updateMatrixWorld(true);
+      const count = function () { let n = 0; for (const c of sh.cards.values()) n += c.count; return n; };
+      const tune = document.getElementById('grass-cards-tuning');
+      window.setGrassExtra('cards', '0');
+      out.hiddenOff = !!tune && tune.style.display === 'none';
+      window.setGrassExtra('cards', '1');
+      out.shownOn = tune.style.display === 'block';
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      const n1 = count();
+      window.setGrassCardTuning('amount', '2', false);
+      out.labelOnly = sh.cardAmount === 1 && document.getElementById('grass-cards-amount-val').textContent === '200%';
+      window.setGrassCardTuning('amount', '2', true);
+      out.dropped = sh.cards.size === 0;
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      const n2 = count();
+      out.ratio = n1 ? +(n2 / n1).toFixed(2) : 0;
+      window.setGrassCardTuning('height', '1.8', true);
+      sh.update(3, cam);
+      out.uniform = sh._cardMat && Math.abs(sh._cardMat.uniforms.uCardH.value - 1.8) < 1e-9;
+      out.noRebuild = count() === n2;
+      out.stored = localStorage.getItem('golf_grass_cards_amount') === '2' && localStorage.getItem('golf_grass_cards_height') === '1.8';
+      sh.setCardTuning(10, 0.1);
+      out.clamped = sh.cardAmount === 3 && sh.cardHeight === 0.5;
+      window.syncGrassExtraUI();
+      out.synced = document.getElementById('grass-cards-amount').value === '3' && document.getElementById('grass-cards-height-val').textContent === '50%';
+      renderer.render(scene, cam);
+      sh.setCardTuning(1, 1); localStorage.removeItem('golf_grass_cards_amount'); localStorage.removeItem('golf_grass_cards_height');
+      window.setGrassExtra('cards', '0');
+      Object.assign(out, { n1: n1, n2: n2 });
+      return out;
+    });
+    checks.push({ name: '2D grass sliders: shown while it is on; the amount rebuilds about twice the tufts at 200 % (applied on release), the height is a live uniform (nothing rebuilt), clamped and remembered', ok: ct.hiddenOff && ct.shownOn && ct.n1 > 500 && ct.labelOnly && ct.dropped && ct.ratio > 1.8 && ct.ratio < 2.2 && ct.uniform && ct.noRebuild && ct.stored && ct.clamped && ct.synced, detail: JSON.stringify(ct) });
     // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };
