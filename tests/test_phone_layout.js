@@ -5,6 +5,8 @@
  * 3. ⤢ öppnar/stänger kartan; på telefon öppnar ett tryck på den lilla rutan den i stället för att sikta.
  * 4. arcade.css: blocket för telefon (max 520 px, play-ui) med raderna för varje panel; flyover/lutning bara på en bana.
  * 4b. Rangen: inspel mot green uppe till vänster, sessionspanelen en remsa under, ihopfälld som standard på telefon.
+ * 4c. Slagraden: klubban i handen med ◀ ▶ (SwingEngine.stepClub), ett tryck fäller ut raden; slagformen en knapp bredvid. Klubbraden
+ *     centreras med .club-row:s marginaler (en centrerad rullruta klippte bort drivern). Klubbpillret bara med avståndet till flaggan.
  * 5. minimapBox räknar rätt: innanför ramen, y nerifrån, och samma ruta som förut på en dator.
  * Run: node tests/test_phone_layout.js
  */
@@ -44,7 +46,7 @@ const blk = css.slice(css.indexOf('PHONE PLAY LAYOUT'), css.indexOf('PLAY PHASES
 check('ett block för max 520 px', /@media \(max-width: 520px\)/.test(blk));
 [
   ['slagrutorna: en rad, dolda utan värden, två tills de öppnas', ['#dynamic-hud { top: 122px', '#dynamic-hud:not(.has-data) { display: none !important; }', '#dynamic-hud:not(.dh-open) .dh-tile:nth-child(n+3) { display: none; }']],
-  ['lägespanelen: en rad ovanför slagformen, utan etiketter', ['#lie-conditions-hud { bottom: 222px !important;', '#lie-conditions-hud .lie-lbl { display: none; }']],
+  ['lägespanelen: en rad ovanför slagraden, utan etiketter', ['#lie-conditions-hud { bottom: 172px !important;', '#lie-conditions-hud .lie-lbl { display: none; }']],
   ['minikartan: liten ruta uppe till höger, full storlek öppen', ['#minimap-container { top: 122px !important; bottom: auto !important; right: 8px !important; width: 88px !important; height: 136px !important;']],
   ['flyover/lutning under den lilla kartan', ['#green-read-panel { top: 266px !important;']],
   ['LM-status bara med launch monitor', [':not(.input-lm) #lm-status { display: none !important; }']]
@@ -90,6 +92,43 @@ console.log('\n4b. Rangen');
     check('telefonfrågan står före raden', /const phone = !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\)'\)\.matches\);\s*try \{ const v = localStorage/.test(rs));
   }
 }
+
+console.log('\n4c. Slagraden');
+[
+  ['klubbraden: bara klubban i handen tills den fälls ut', 'body.play-ui #club-selector:not(.clubs-open) .club-btn:not(.selected) { display: none; }'],
+  ['◀ ▶ bredvid klubban, inte vid putt', 'body.play-ui:not(.phase-putt) #club-selector:not(.clubs-open) .club-step { display: flex; }'],
+  ['den ihopfällda radens ruta tar inga tryck (formknappen bredvid går att trycka på)', 'body.play-ui #club-selector:not(.clubs-open) > * { pointer-events: auto; }'],
+  ['slagformen: en knapp till höger om klubban', 'body.play-ui #shape-selector:not(.shapes-open) { bottom: 110px; left: auto; right: 8px; transform: none; }'],
+  ['slagformen: bara formen i bruk tills den fälls ut', 'body.play-ui #shape-selector:not(.shapes-open) .shape-btn:not(.selected) { display: none; }'],
+  ['rak är grå (draw/fade lyser)', 'body.play-ui #shape-selector:not(.shapes-open) .shape-btn.selected[data-shape="0"] { background: rgba(15,23,42,0.85);'],
+  ['öppen form: lägesraden viker undan', 'body.play-ui:has(#shape-selector.shapes-open) #lie-conditions-hud { visibility: hidden; }'],
+  ['öppen klubbrad: formknappen viker undan', 'body.play-ui:has(#club-selector.clubs-open) #shape-selector:not(.shapes-open) { display: none; }']
+].forEach(function (c) { check(c[0], blk.indexOf(c[1]) >= 0); });
+{
+  const all = css.slice(0, css.indexOf('PHONE PLAY LAYOUT'));
+  check('klubbraden centreras med .club-row:s marginaler, inte rullrutan (drivern klipptes bort)', /#club-selector \{[^}]*justify-content: flex-start;/.test(all) && all.indexOf('#club-selector .club-row { display: flex; flex: 0 0 auto; margin: 0 auto; }') >= 0);
+  const row = html.slice(html.indexOf('<div id="club-selector"'), html.indexOf('<!-- Main swing launch button -->'));
+  check('raden: ◀, knapparna i .club-row, ▶', /onclick="SwingEngine\.stepClub\(-1\)"[^>]*>◀<\/button>\s*<div class="club-row">/.test(row) && /<\/div>\s*<button class="club-step" data-step="1" onclick="SwingEngine\.stepClub\(1\)"/.test(row) && (row.match(/class="club-btn/g) || []).length === 9);
+  const cl = css.slice(css.indexOf('PLAY CLEAN-UP'));
+  check('klubbpillret bara med avståndet till flaggan (klubban står i raden)', cl.indexOf('body.play-ui #swing-info:has(#si-dist-label:empty) { display: none !important; }') >= 0);
+  check('lägesbyte fäller ihop formen också', /if \(ss\) ss\.classList\.remove\('shapes-open'\);/.test(html));
+}
+// the handlers: on a phone a tap on the club / shape in use opens the row, a pick folds it
+function tapRow(id, cls, open, selected, phone) {
+  const m = html.match(new RegExp('<div id="' + id + '" onclick="([^"]+)">'));
+  if (!m) return 'no handler';
+  const list = new Set(open ? [cls + '-open'] : []);
+  const self = { classList: { contains: function (c) { return list.has(c); }, add: function (c) { list.add(c); }, remove: function (c) { list.delete(c); } } };
+  const btn = { classList: { contains: function (c) { return c === 'selected' && selected; } } };
+  const g = global.document, gp = global.isPhonePlayLayout;
+  global.document = { body: { classList: { contains: function () { return false; } } } };
+  global.isPhonePlayLayout = function () { return phone; };
+  try { new Function('event', m[1]).call(self, { target: { closest: function () { return btn; } }, stopPropagation: function () {} }); } finally { global.document = g; global.isPhonePlayLayout = gp; }
+  return list.has(cls + '-open');
+}
+check('telefon: tryck på klubban i handen fäller ut raden, ett val fäller ihop den', tapRow('club-selector', 'clubs', false, true, true) === true && tapRow('club-selector', 'clubs', true, false, true) === false);
+check('telefon: tryck på formen i bruk fäller ut formerna, ett val fäller ihop dem', tapRow('shape-selector', 'shapes', false, true, true) === true && tapRow('shape-selector', 'shapes', true, false, true) === false);
+check('dator: raderna rörs inte', tapRow('club-selector', 'clubs', false, true, false) === false && tapRow('shape-selector', 'shapes', false, true, false) === false);
 
 console.log('\n5. minimapBox');
 const fnSrc = html.slice(html.indexOf('window.minimapBox = function () {'), html.indexOf('\n    };', html.indexOf('window.minimapBox = function () {')) + 7);

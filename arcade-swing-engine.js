@@ -456,6 +456,14 @@ const SwingEngine = (function() {
         _applyClub(key);
     }
 
+    // One club longer (-1) or shorter (1) in the bag's order, as the arrow keys do: the phone's ◀ ▶ beside the club in hand.
+    // Between swings only (a club does not change in the middle of one).
+    function stepClub(dir) {
+        if (_phase !== 'idle') return;
+        const i = CLUB_ORDER.indexOf(_clubKey), j = Math.max(0, Math.min(CLUB_ORDER.length - 1, i + (dir < 0 ? -1 : 1)));
+        if (i >= 0 && j !== i) selectClub(CLUB_ORDER[j]);
+    }
+
     // Välj avsiktlig kurva: -1 draw, 0 rak, 1 fade. Gäller alla slag tills spelaren ändrar den.
     function setShotShape(shape) {
         _shape = shape > 0 ? 1 : shape < 0 ? -1 : 0;
@@ -686,7 +694,7 @@ const SwingEngine = (function() {
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
-    return { onTap, selectClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
+    return { onTap, selectClub, stepClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
              updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, shapeStartDeg, setInputMode, applyInputMode, setBridgeConnected, acceptsBridgeShots, isLabEnabled, getInputMode: () => _inputMode, CLUB_PROFILES };
 })();
 

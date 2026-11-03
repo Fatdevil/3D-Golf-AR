@@ -586,7 +586,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       bottom: 100px;
       left: 0; right: 0;
       z-index: 4999;
-      justify-content: center;
+      justify-content: flex-start;   /* (centred by .club-row's auto margins: a centred scroll container cuts off its left end) */
       gap: 0;
       overflow-x: auto;
       padding: 0 10px;
@@ -595,6 +595,10 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   }
   #club-selector::-webkit-scrollbar { display: none; }
   body.swing-mode #club-selector { display: flex; }
+  #club-selector .club-row { display: flex; flex: 0 0 auto; margin: 0 auto; }
+  /* one club longer / shorter: only on a phone, beside the club in hand (the phone play layout below) */
+  #club-selector .club-step { display: none; flex: 0 0 auto; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 10px;
+      background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.12); color: #e2e8f0; font-size: 15px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 
   .club-btn {
       flex: 0 0 auto;
@@ -898,7 +902,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       body.play-ui #dynamic-hud .dh-val { font-size: 13px; }
       body.play-ui #dynamic-hud:not(.dh-open) .dh-tile:nth-child(n+3) { display: none; }
 
-      body.play-ui #lie-conditions-hud { bottom: 222px !important; left: 8px !important; }
+      body.play-ui #lie-conditions-hud { bottom: 172px !important; left: 8px !important; }
       body.play-ui #lie-conditions-hud > div { flex-direction: row !important; align-items: center; gap: 10px !important; padding: 5px 10px !important; border-radius: 16px !important; }
       body.play-ui #lie-conditions-hud > div > div { border-bottom: none !important; padding-bottom: 0 !important; gap: 8px !important; }
       body.play-ui #lie-conditions-hud .lie-lbl { display: none; }
@@ -926,6 +930,24 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       /* the map is drawn in the 3D canvas and its box is see-through: panels over it would cover the opened map */
       body.play-ui.mm-open:not(.range-ui) #green-read-panel,
       body.play-ui.mm-open #dynamic-hud { display: none !important; }
+
+      /* the shot row: the club in hand with ◀ ▶ either side (a tap on the club opens the whole row, a pick folds it), and the shot shape
+         as one button beside it (a tap opens draw / straight / fade above, a pick folds them; a draw or fade stays lit, straight is grey) */
+      /* (the folded row's box still spans the screen: only its buttons take a tap, so the shape button beside them can be tapped) */
+      body.play-ui #club-selector:not(.clubs-open) { justify-content: center; align-items: center; gap: 6px; padding-right: 96px; pointer-events: none; }   /* centred left of the shape button */
+      body.play-ui #club-selector:not(.clubs-open) > * { pointer-events: auto; }
+      body.play-ui:has(#club-selector.clubs-open) #shape-selector:not(.shapes-open) { display: none; }
+      body.play-ui #club-selector:not(.clubs-open) .club-row { margin: 0; }
+      body.play-ui #club-selector:not(.clubs-open) .club-btn:not(.selected) { display: none; }
+      body.play-ui #club-selector:not(.clubs-open) .club-btn.selected { min-width: 84px; border-radius: 12px; border-right: 1px solid #38bdf8; }
+      body.play-ui:not(.phase-putt) #club-selector:not(.clubs-open) .club-step { display: flex; }
+      body.play-ui #shape-selector:not(.shapes-open) { bottom: 110px; left: auto; right: 8px; transform: none; }
+      body.play-ui #shape-selector:not(.shapes-open) .shape-btn:not(.selected) { display: none; }
+      body.play-ui #shape-selector:not(.shapes-open) .shape-btn.selected { border-radius: 12px; border-right: 1px solid #38bdf8; }
+      body.play-ui #shape-selector:not(.shapes-open) .shape-btn.selected[data-shape="0"] { background: rgba(15,23,42,0.85); border-color: rgba(255,255,255,0.12); color: #cbd5e1; }
+      body.play-ui #shape-selector:not(.shapes-open) .shape-btn.selected[data-shape="0"]::before { content: 'Form · '; color: #64748b; }
+      /* the opened shapes sit where the lie row is */
+      body.play-ui:has(#shape-selector.shapes-open) #lie-conditions-hud { visibility: hidden; }
 
       /* the range: the session panel is a column left of the map (the map is drawn in the canvas: a hidden box would fall back to
          the computer's place, a panel over it would cover it); "approach to a green" pushes the map and the panel down under it */
@@ -972,7 +994,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   /* =====================================================================================================================
      PLAY CLEAN-UP (every screen): each number in one place, an optional button only where it does something
      - the distance to the aim is on the aim billboard: the lie panel's target and elevation (the same numbers) are gone, and the
-       club pill shows the distance to the flag only when the aim is elsewhere (set by the render loop)
+       club pill shows only then, with the distance to the flag when the aim is elsewhere (set by the render loop)
      - the lie panel's power and spin only when the lie takes something from the shot (.lie-costs, from GolfPhysics.lieEffectText)
      - flyover on the screen only on the hole's first shot (body.on-tee), and in the menu (#hb-flyover) during a round; slope within 50 m of the flag or while the slope view is on
        (body.show-slope-btn); their panel goes when neither button is there
@@ -984,6 +1006,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #lie-conditions-hud:not(.lie-costs) .lie-row2 { display: none !important; }
   #lie-conditions-hud:not(.lie-costs) .lie-row1 { border-bottom: none !important; padding-bottom: 0 !important; }
   #si-dist-label:empty { display: none; }
+  /* the club pill only when it has something of its own: the distance to the flag with the aim elsewhere (the club is in the club row) */
+  body.play-ui #swing-info:has(#si-dist-label:empty) { display: none !important; }
 
   body:not(.on-tee) #game-btn-flyover,
   body:not(.show-slope-btn) #game-btn-slope-toggle { display: none !important; }

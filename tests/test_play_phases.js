@@ -41,7 +41,7 @@ const build = phaseFor({ mode: 'BUILD', playState: 'ROUND_IDLE', prev: 'aim' });
 check('byggläget: inget läge, klasserna tas bort', build.phase === '' && build.classes.length === 0, JSON.stringify(build));
 check('rundan klar: inget läge', phaseFor({ mode: 'PLAY', playState: 'ROUND_COMPLETE' }).phase === '');
 check('samma läge igen: ingenting rörs', phaseFor({ mode: 'PLAY', playState: 'ROUND_IDLE', putting: true, prev: 'putt' }).folded === 0);
-check('byte av läge fäller ihop en utfälld klubbrad', phaseFor({ mode: 'PLAY', playState: 'ROUND_IDLE', putting: true, prev: 'flight' }).folded === 1);
+check('byte av läge fäller ihop en utfälld klubbrad och slagform', phaseFor({ mode: 'PLAY', playState: 'ROUND_IDLE', putting: true, prev: 'flight' }).folded === 2);
 
 console.log('\n1b. Knappar som bara syns där de gör något, och avståndet till flaggan');
 {
