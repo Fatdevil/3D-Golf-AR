@@ -872,3 +872,51 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-practice .rp-bag { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 7px; background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.35); color: #bbf7d0; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
   #range-practice .rp-bag b { color: #fff; font-weight: 900; }
   @media (max-width: 1100px) { #range-practice { max-width: calc(100vw - 32px); top: 76px; } }
+
+  /* =====================================================================================================================
+     PHONE PLAY LAYOUT (a round on a course, screens up to 520 px wide; body.play-ui is set by setMode, body.range-ui on the range)
+     The bottom of the screen belongs to the shot (club row, shot shape, SWING); everything else sits above it or is folded away:
+     - the lie panel is one row just above the shot shape
+     - the shot tiles are a short row top left (carry, total), shown once there is a shot; a tap shows them all (.dh-open)
+     - the minimap is a small box top right (the map follows its box, window.minimapBox); a tap or its ⤢ opens it (body.mm-open)
+     - flyover / slope sit under the small map; the elevation profile only shows with the map open, and the shot tiles and flyover /
+       slope are hidden while it is open (the map is drawn in the 3D canvas, its box is see-through, a panel over it would cover it)
+     - the launch monitor status only shows when a launch monitor is the input
+     ===================================================================================================================== */
+  @media (max-width: 520px) {
+      body.play-ui:not(.range-ui) #dynamic-hud { top: 122px; left: 8px; right: 108px; flex-direction: row; flex-wrap: wrap; gap: 4px; pointer-events: auto; cursor: pointer; }
+      body.play-ui:not(.range-ui) #dynamic-hud:not(.has-data) { display: none !important; }   /* the game sets display on it */
+      body.play-ui:not(.range-ui) #dynamic-hud .dh-tile { min-width: 0; padding: 4px 8px; gap: 6px; border-radius: 6px; }
+      body.play-ui:not(.range-ui) #dynamic-hud .dh-label { font-size: 9px; }
+      body.play-ui:not(.range-ui) #dynamic-hud .dh-val { font-size: 13px; }
+      body.play-ui:not(.range-ui) #dynamic-hud:not(.dh-open) .dh-tile:nth-child(n+3) { display: none; }
+
+      body.play-ui:not(.range-ui) #lie-conditions-hud { bottom: 222px !important; left: 8px !important; }
+      body.play-ui:not(.range-ui) #lie-conditions-hud > div { flex-direction: row !important; align-items: center; gap: 10px !important; padding: 5px 10px !important; border-radius: 16px !important; }
+      body.play-ui:not(.range-ui) #lie-conditions-hud > div > div { border-bottom: none !important; padding-bottom: 0 !important; gap: 8px !important; }
+      body.play-ui:not(.range-ui) #lie-conditions-hud .lie-lbl { display: none; }
+      body.play-ui:not(.range-ui) #lie-icon { width: 10px !important; height: 10px !important; }
+      body.play-ui:not(.range-ui) #lie-text { font-size: 12px !important; letter-spacing: 0.5px !important; }
+      body.play-ui:not(.range-ui) #lie-elevation,
+      body.play-ui:not(.range-ui) #lie-power,
+      body.play-ui:not(.range-ui) #lie-spin { font-size: 12px !important; }
+      body.play-ui:not(.range-ui) #lie-distance { font-size: 14px !important; }
+
+      body.play-ui:not(.range-ui) #minimap-container { top: 122px !important; bottom: auto !important; right: 8px !important; width: 88px !important; height: 136px !important; cursor: pointer; }
+      body.play-ui.mm-open:not(.range-ui) #minimap-container { width: 220px !important; height: 340px !important; z-index: 120 !important; }
+      body.play-ui:not(.mm-open):not(.range-ui) #minimap-container > div:first-child { height: 20px !important; justify-content: flex-end !important; padding: 0 6px !important; }
+      body.play-ui:not(.mm-open):not(.range-ui) #minimap-container > div:first-child > span:not(#minimap-expand) { display: none; }
+      body.play-ui:not(.mm-open):not(.range-ui) #minimap-container > div:last-child,
+      body.play-ui:not(.mm-open):not(.range-ui) #mm-dist-target,
+      body.play-ui:not(.mm-open):not(.range-ui) #mm-dist-flag { display: none !important; }
+      body.play-ui:not(.mm-open):not(.range-ui) #elevation-profile-container { display: none !important; }
+      body.play-ui.mm-open:not(.range-ui) #elevation-profile-container { top: 466px !important; bottom: auto !important; right: 8px !important; z-index: 120 !important; }
+
+      body.play-ui:not(.range-ui) #green-read-panel { top: 266px !important; bottom: auto !important; right: 8px !important; min-width: 0 !important; width: 88px; padding: 4px !important; box-sizing: border-box; }
+      body.play-ui:not(.range-ui) #green-read-panel button { font-size: 9px !important; padding: 6px 4px !important; letter-spacing: 0 !important; }
+
+      body.play-ui:not(.range-ui):not(.input-lm) #lm-status { display: none !important; }
+      /* the map is drawn in the 3D canvas and its box is see-through: panels over it would cover the opened map */
+      body.play-ui.mm-open:not(.range-ui) #green-read-panel,
+      body.play-ui.mm-open:not(.range-ui) #dynamic-hud { display: none !important; }
+  }

@@ -831,7 +831,7 @@
             
             // Range mode initialization (keep standard tools active)
             if (params.get('mode') === 'range') {
-                window._isRangeMode = true;
+                window._isRangeMode = true; document.body.classList.add('range-ui');   // the play layout tells the range apart (arcade.css)
                 // Auto-select Range Tee as default tool
                 if (!playNow) setTimeout(() => {
                     if (typeof setTool === 'function') setTool('HOLE');
@@ -1419,7 +1419,7 @@
         // A driving range stays a range whichever link opened it (the builder's card, a draft, a reload, the quick draft):
         // the saved course says so, the address may not
         if (params.get('mode') === 'range' || (savedStr && savedStr.is_range === true)) {
-            window._isRangeMode = true;
+            window._isRangeMode = true; document.body.classList.add('range-ui');   // the play layout tells the range apart (arcade.css)
             if (params.get('mode') !== 'range') {
                 try {
                     let u = new URL(window.location.href);
