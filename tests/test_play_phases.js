@@ -5,6 +5,9 @@
  * 2. Klubbraden i puttläge: ett tryck på den valda klubban fäller ut raden, ett val fäller ihop den.
  * 3. arcade.css: under flygning döljs klubbrad, slagform, SWING, klubbpiller, sifferinmatning, lägespanel, flyover/lutning och
  *    sikte; vid putt döljs slagformen och raden visar bara klubban i handen. Slagdata, karta och meny rörs inte.
+ * 4. Städningen (PLAY CLEAN-UP).
+ * 5. Siktet: markören kan dras vid fulla slag också (inte bara vid putt), inte på bollen och inte långt bortom flaggan; "Flag" bara
+ *    med siktet bredvid flaggan (#aim-controls.on-flag).
  * Run: node tests/test_play_phases.js
  */
 const fs = require('fs');
@@ -105,6 +108,29 @@ console.log('\n4. Städningen');
   check('LM-status bara med launch monitor, alla skärmar', /body\.play-ui:not\(\.input-lm\) #lm-status \{ display: none !important; \}/.test(cl));
   const eng = fs.readFileSync(path.join(__dirname, '..', 'arcade-swing-engine.js'), 'utf8');
   check('klubbpillret skriver inte längre "yds (m)" själv', !/yds  \(\$\{distM\.toFixed\(0\)\} m\)/.test(eng));
+}
+
+console.log('\n5. Siktet');
+{
+  const drag = html.slice(html.indexOf('let dragAim = null;'), html.indexOf("renderer.domElement.addEventListener('pointerup', endDragAim"));
+  const down = drag.slice(drag.indexOf("addEventListener('pointerdown'"), drag.indexOf("addEventListener('pointermove'"));
+  check('draget börjar vid fulla slag också (ingen spärr för putt)', /if \(!\(e\.button === 0 \|\| e\.pointerType === 'touch'\) \|\| !canAim\(\) \|\| !window\.aimTarget\) return;/.test(down) && !/isPuttingMode/.test(down));
+  check('trycket måste börja på markören (annars vrids kameran)', /Math\.hypot\(e\.clientX - sx, e\.clientY - sy\) > \(e\.pointerType === 'touch' \? 48 : 28\)\) return;/.test(down));
+  // the move: run the distance rule against stubs
+  const move = drag.slice(drag.indexOf("addEventListener('pointermove'"));
+  const rule = move.slice(move.indexOf('let bp = window.ballMesh.position'), move.indexOf('window.setAimPoint(pt.x, pt.y, pt.z);'));
+  const accepts = function (pt, putting, ref) {
+    const win = { ballMesh: { position: { x: 0, z: 0 } }, isPuttingMode: putting, aimReference: function () { return ref; } };
+    return new Function('window', 'pt', 'AIM_DRAG_MAX_M', rule + '\nreturn true;')(win, pt, 300) === true;
+  };
+  const flag = { x: 0, z: -380 };
+  check('fullt slag: 150 m bort går', accepts({ x: 20, z: -150 }, false, flag));
+  check('fullt slag: på bollen (1 m) räknas inte', !accepts({ x: 1, z: 0 }, false, flag));
+  check('fullt slag: 400 m mot en flagga på 380 m går (flaggan + 30 m), 420 m inte', accepts({ x: 0, z: -400 }, false, flag) && !accepts({ x: 0, z: -420 }, false, flag));
+  check('fullt slag: kort hål, gränsen är 300 m', accepts({ x: 0, z: -290 }, false, { x: 0, z: -120 }) && !accepts({ x: 0, z: -310 }, false, { x: 0, z: -120 }));
+  check('putt: 0,3 m bort går, ingen övre gräns', accepts({ x: 0.3, z: 0 }, true, flag) && accepts({ x: 0, z: -500 }, true, flag));
+  check('flaggknappen: klassen on-flag när siktet ligger på flaggan (0,5 m)', /let onRef = !!aimRef && Math\.hypot\(ap\.x - aimRef\.x, ap\.z - aimRef\.z\) < 0\.5;\s*if \(aimPanel && aimPanel\.classList\.contains\('on-flag'\) !== onRef\) aimPanel\.classList\.toggle\('on-flag', onRef\);/.test(html));
+  check('flaggknappen döljs men behåller sin plats', css.indexOf('#aim-controls.on-flag #aim-btn-flag { visibility: hidden; }') >= 0);
 }
 
 console.log(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
