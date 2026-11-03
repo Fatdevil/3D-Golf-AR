@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=23">
+<link rel="stylesheet" href="arcade.css?v=24">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -3294,7 +3294,7 @@
     </div>
 
     <!-- Club selector swipebar -->
-    <div id="club-selector">
+    <div id="club-selector" onclick="if (document.body.classList.contains('phase-putt')) { var b = event.target.closest('.club-btn'); if (b && b.classList.contains('selected') && !this.classList.contains('clubs-open')) { this.classList.add('clubs-open'); event.stopPropagation(); } else if (b) { this.classList.remove('clubs-open'); } }">
         <button class="club-btn selected" data-club="DRIVER"  onclick="SwingEngine.selectClub('DRIVER')">
             <span class="club-icon">🏌️</span><span>Driver</span><span class="club-dist">220y</span>
         </button>
@@ -15375,6 +15375,24 @@ window.triggerExplosion = function(x, y, z) {
 
         renderer.render(scene, camera);
         
+        // --- PLAY PHASE (body.phase-*): what the round's controls are for right now, so the CSS shows only those ---
+        //   aim     a full shot is lined up: clubs, shot shape, swing, aim, map
+        //   putt    a putt is lined up: no shot shape, the club row folded to the putter
+        //   flight  the ball is in the air or rolling, until the next shot can be hit: no controls, the ball and the shot data
+        {
+            let phase = '';
+            if (appMode === 'PLAY' || appMode === 'TEST') {
+                if (playState === 'ROUND_FLYING' || isFlying) phase = 'flight';
+                else if (playState === 'ROUND_IDLE') phase = window.isPuttingMode ? 'putt' : 'aim';
+            }
+            if (phase !== window._playPhase) {
+                window._playPhase = phase;
+                ['aim', 'putt', 'flight'].forEach(function (p) { document.body.classList.toggle('phase-' + p, phase === p); });
+                let cs = document.getElementById('club-selector');
+                if (cs) cs.classList.remove('clubs-open');   // a club row opened for a chip folds again on the next putt
+            }
+        }
+
         // --- GSPRO AIM BILLBOARD PROJECTION ---
         let bb = document.getElementById('aim-billboard');
         let aimActive = (appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget && window.ballMesh;

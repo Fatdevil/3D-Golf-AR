@@ -39,7 +39,7 @@ check('ett tryck på slagrutorna visar alla (telefon)', /dh\.classList\.toggle\(
 check('slagrutorna får has-data när ett slag har värden', /dynHud\.classList\.add\('has-data'\)/.test(html));
 
 console.log('\n4. CSS-blocket');
-const blk = css.slice(css.indexOf('PHONE PLAY LAYOUT'));
+const blk = css.slice(css.indexOf('PHONE PLAY LAYOUT'), css.indexOf('PLAY PHASES') > 0 ? css.indexOf('PLAY PHASES') : undefined);
 check('ett block för max 520 px', /@media \(max-width: 520px\)/.test(blk));
 const sel = 'body.play-ui:not(.range-ui)';
 [
