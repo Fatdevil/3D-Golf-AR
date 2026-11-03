@@ -516,7 +516,7 @@ Renderloopen sätter `body.phase-aim` / `phase-putt` / `phase-flight` ur `playSt
 `arcade.css`, blocket "PLAY CLEAN-UP" (alla skärmar):
 - Avståndet till siktet står på siktskylten. Lägespanelens mål och höjd (`.lie-dup`) är dolda; klubbpillret (`si-dist-label`, satt av renderloopen) visar avståndet till flaggan i spelarens enhet bara när siktet ligger mer än 3 m från flaggan ("⛳ 33 yds").
 - Lägespanelens kraft och spinn bara när läget kostar (`.lie-costs`, från `GolfPhysics.lieEffectText`: nivå warn/bad); på tee och fairway är panelen bara läget.
-- Flyover bara på hålets första slag (`body.on-tee`), lutning inom 50 m från flaggan eller när lutningsvyn är på (`body.show-slope-btn`); panelen döljs när ingen av knapparna syns.
+- Flyover på skärmen bara på hålets första slag (`body.on-tee`), och i menyn (`#hb-flyover`, flyger från bollen till flaggan) under en runda på en bana utom medan bollen flyger; lutning inom 50 m från flaggan eller när lutningsvyn är på (`body.show-slope-btn`); panelen döljs när ingen av knapparna syns.
 - LM-status bara med launch monitor; slagdata först när ett slag har värden.
 - Test: `tests/test_play_phases.js` (1b och 4).
 

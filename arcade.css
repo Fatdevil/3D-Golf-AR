@@ -949,7 +949,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
      - the distance to the aim is on the aim billboard: the lie panel's target and elevation (the same numbers) are gone, and the
        club pill shows the distance to the flag only when the aim is elsewhere (set by the render loop)
      - the lie panel's power and spin only when the lie takes something from the shot (.lie-costs, from GolfPhysics.lieEffectText)
-     - flyover only on the hole's first shot (body.on-tee); slope within 50 m of the flag or while the slope view is on
+     - flyover on the screen only on the hole's first shot (body.on-tee), and in the menu (#hb-flyover) during a round; slope within 50 m of the flag or while the slope view is on
        (body.show-slope-btn); their panel goes when neither button is there
      - the launch monitor status only with a launch monitor as the input
      - the shot data only once a shot has values
@@ -963,6 +963,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   body:not(.on-tee) #game-btn-flyover,
   body:not(.show-slope-btn) #game-btn-slope-toggle { display: none !important; }
   body:not(.on-tee):not(.show-slope-btn) #green-read-panel { display: none !important; }
+  /* the menu has the flyover for the rest of the hole (it flies from the ball to the flag): during a round on a course, while a shot waits */
+  #hb-flyover { display: none; }
+  body.play-ui:not(.range-ui):not(.phase-flight) #hb-flyover { display: block; }
 
   body.play-ui:not(.input-lm) #lm-status { display: none !important; }
   /* the shot data shows once a shot has values (it was a column of "---" before the first shot); on a phone it was already so */
