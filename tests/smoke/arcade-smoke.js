@@ -1349,6 +1349,17 @@ function serve() {
       out.lowLevel = sh.cardLevel(); out.nLow = count();
       out.stored = localStorage.getItem('golf_grass_cards_q') === 'LOW';
       out.btn = document.getElementById('grass-cq-LOW').style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
+      // sculpting with the 3D grass off: the stroke's syncHeights rebuilds the tufts from the new ground
+      sh.syncHeights();
+      await new Promise(function (r) { setTimeout(r, 400); });
+      out.sculptRebuild = sh.cards.size === 0;
+      // repainted while both grass modes were off: switching the 2D grass on again rebuilds the class map from the fresh mask
+      window.setGrassExtra('cards', '0');
+      let rebuilt = 0; const rb = window.rebuildRoughMask; window.rebuildRoughMask = function () { rebuilt++; return rb.apply(this, arguments); };
+      window._roughMaskDirty = true;
+      window.setGrassExtra('cards', '1');
+      window.rebuildRoughMask = rb;
+      out.repaintRebuild = rebuilt === 1 && window._roughMaskDirty === false;
       window.setGrassCardQuality('AUTO'); window.setGrassQuality('HIGH');
       out.followsHigh = sh.cardLevel() === 'HIGH';
       renderer.render(scene, cam);
@@ -1356,7 +1367,7 @@ function serve() {
       window.setGrassQuality(qWas);
       return out;
     });
-    checks.push({ name: '2D grass without the 3D grass: tufts are built from a class map made for it, its level follows the 3D grass (MED while off) or its own (LOW: fewer tufts, remembered), and its menu section shows', ok: dc.shells === 0 && dc.classMap && dc.autoLevel === 'MED' && dc.nOff > 500 && dc.section && dc.dropped && dc.lowLevel === 'LOW' && dc.nLow > 0 && dc.nLow < dc.nOff && dc.stored && dc.btn && dc.followsHigh, detail: JSON.stringify(dc) });
+    checks.push({ name: '2D grass without the 3D grass: tufts are built from a class map made for it, its level follows the 3D grass (MED while off) or its own (LOW: fewer tufts, remembered), it follows a sculpt and a repaint made while it was off, and its menu section shows', ok: dc.shells === 0 && dc.classMap && dc.autoLevel === 'MED' && dc.nOff > 500 && dc.section && dc.dropped && dc.lowLevel === 'LOW' && dc.nLow > 0 && dc.nLow < dc.nOff && dc.stored && dc.btn && dc.sculptRebuild && dc.repaintRebuild && dc.followsHigh, detail: JSON.stringify(dc) });
     // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };

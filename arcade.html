@@ -35,7 +35,7 @@
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
-<script src="terrain-shells.js?v=51"></script>
+<script src="terrain-shells.js?v=52"></script>
 <script src="arcade-perf-hud.js?v=1"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
 <script src="arcade-scene-engine.js?v=11"></script>
@@ -3058,7 +3058,7 @@
             try {
                 if (kind === 'edge') { sh.setEdgeWeighted(v === '1'); localStorage.setItem('golf_grass_edge', v === '1' ? '1' : '0'); }
                 else if (kind === 'blades') { sh.setBlades(v === '1'); localStorage.setItem('golf_grass_blades', v === '1' ? '1' : '0'); }
-                else if (kind === 'cards') { if (v === '1' && !window.terrainBiomeData && window.pCtx) window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data; sh.setCards(v === '1'); localStorage.setItem('golf_grass_cards', v === '1' ? '1' : '0'); }
+                else if (kind === 'cards') { if (v === '1' && (window._roughMaskDirty || !window.terrainBiomeData) && window.pCtx) window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data; sh.setCards(v === '1'); localStorage.setItem('golf_grass_cards', v === '1' ? '1' : '0'); }
                 else if (kind === 'tex') { sh.setGrassTex(v !== '0', v === '2' ? 2 : 1); localStorage.setItem('golf_grass_tex', v === '2' ? '2' : (v === '1' ? '1' : '0')); }
             } catch (e) { /* storage blocked: the mode still switches, it is just not remembered */ }
             window.syncGrassExtraUI();

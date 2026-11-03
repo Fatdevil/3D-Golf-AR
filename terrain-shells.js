@@ -731,7 +731,8 @@
         }
 
         syncHeights() {
-            if (this.shells.length === 0) return;
+            // with the 3D grass off the 2D grass still stands on the ground: its chunks are rebuilt from the new heights
+            if (this.shells.length === 0) { this._scheduleBladeHeights(); return; }
             this._resampleFromMaster();
             this._scheduleBladeHeights();
         }
@@ -1184,7 +1185,8 @@
         setCards(on) {
             this.cardsOn = !!on;
             // the cards are placed from the class map built with the edge map; with the 3D grass off it may never have been built
-            if (this.cardsOn && !this._cls) this._edgeStale = true;
+            // (or the terrain was repainted while both grass modes were off: the mask is dirty and the class map out of date)
+            if (this.cardsOn && (!this._cls || window._roughMaskDirty)) this._edgeStale = true;
             if (this.cardsOn) this._ensureEdgeMap();
             else this._clearCards();
         }
