@@ -1,9 +1,10 @@
 /**
- * Telefonlayouten under en runda på en bana (steg 1): nederkanten tillhör slaget, resten ovanför eller ihopfällt.
+ * Telefonlayouten under en runda på en bana (steg 1) och på rangen (steg 2): nederkanten tillhör slaget, resten ovanför eller ihopfällt.
  * 1. arcade.html: setMode sätter body.play-ui (spel/test) och body.range-ui (rangen), och tar bort mm-open utanför spel.
  * 2. Minikartan ritas i containerns ruta (minimapBox), inte i fasta 220 x 340: viewport, inramning och linjerna ovanpå.
  * 3. ⤢ öppnar/stänger kartan; på telefon öppnar ett tryck på den lilla rutan den i stället för att sikta.
- * 4. arcade.css: blocket för telefon (max 520 px, play-ui utan range-ui) med raderna för varje panel.
+ * 4. arcade.css: blocket för telefon (max 520 px, play-ui) med raderna för varje panel; flyover/lutning bara på en bana.
+ * 4b. Rangen: inspel mot green uppe till vänster, sessionspanelen en remsa under, ihopfälld som standard på telefon.
  * 5. minimapBox räknar rätt: innanför ramen, y nerifrån, och samma ruta som förut på en dator.
  * Run: node tests/test_phone_layout.js
  */
@@ -41,7 +42,6 @@ check('slagrutorna får has-data när ett slag har värden', /dynHud\.classList\
 console.log('\n4. CSS-blocket');
 const blk = css.slice(css.indexOf('PHONE PLAY LAYOUT'), css.indexOf('PLAY PHASES') > 0 ? css.indexOf('PLAY PHASES') : undefined);
 check('ett block för max 520 px', /@media \(max-width: 520px\)/.test(blk));
-const sel = 'body.play-ui:not(.range-ui)';
 [
   ['slagrutorna: en rad, dolda utan värden, två tills de öppnas', ['#dynamic-hud { top: 122px', '#dynamic-hud:not(.has-data) { display: none !important; }', '#dynamic-hud:not(.dh-open) .dh-tile:nth-child(n+3) { display: none; }']],
   ['lägespanelen: en rad ovanför slagformen, utan etiketter', ['#lie-conditions-hud { bottom: 222px !important;', '#lie-conditions-hud .lie-lbl { display: none; }']],
@@ -50,10 +50,46 @@ const sel = 'body.play-ui:not(.range-ui)';
   ['LM-status bara med launch monitor', [':not(.input-lm) #lm-status { display: none !important; }']]
 ].forEach(function (c) { check(c[0], c[1].every(function (s) { return blk.indexOf(s) >= 0; })); });
 check('rader för öppen karta: full storlek, höjdprofil under, paneler som skulle täcka den dolda',
-  blk.indexOf('body.play-ui.mm-open:not(.range-ui) #minimap-container { width: 220px !important; height: 340px !important;') >= 0 &&
-  blk.indexOf('body.play-ui:not(.mm-open):not(.range-ui) #elevation-profile-container { display: none !important; }') >= 0 &&
-  /body\.play-ui\.mm-open:not\(\.range-ui\) #green-read-panel,\s*body\.play-ui\.mm-open:not\(\.range-ui\) #dynamic-hud \{ display: none !important; \}/.test(blk));
-check('allt i blocket gäller bara en runda på en bana (play-ui, inte range-ui)', blk.split('\n').filter(function (l) { return /^\s+body/.test(l); }).every(function (l) { return /body\.play-ui(\.mm-open)?(:not\(\.mm-open\))?:not\(\.range-ui\)/.test(l); }));
+  blk.indexOf('body.play-ui.mm-open #minimap-container { width: 220px !important; height: 340px !important;') >= 0 &&
+  blk.indexOf('body.play-ui:not(.mm-open) #elevation-profile-container { display: none !important; }') >= 0 &&
+  /body\.play-ui\.mm-open:not\(\.range-ui\) #green-read-panel,\s*body\.play-ui\.mm-open #dynamic-hud \{ display: none !important; \}/.test(blk));
+const rules = blk.split('\n').filter(function (l) { return /^\s+body/.test(l); });
+check('allt i blocket gäller en runda (play-ui), bana som range', rules.length > 20 && rules.every(function (l) { return /^\s+body\.play-ui/.test(l); }));
+check('flyover/lutning bara på en bana', rules.filter(function (l) { return l.indexOf('#green-read-panel') >= 0; }).every(function (l) { return l.indexOf(':not(.range-ui)') >= 0; }));
+check('slagrutor, lägespanel och karta gäller rangen också (ingen :not(.range-ui))', rules.filter(function (l) { return /#(dynamic-hud|lie-|minimap-container|mm-dist|elevation-profile|lm-status)/.test(l) && !/range-ui[:.]/.test(l.replace(':not(.range-ui)', '')); }).every(function (l) { return l.indexOf('range-ui') < 0; }));
+check('isPhonePlayLayout: smal skärm och play-ui, rangen med', /window\.isPhonePlayLayout = function \(\) \{\s*const b = document\.body;\s*return !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\)'\)\.matches && b\.classList\.contains\('play-ui'\)\);/.test(html));
+
+console.log('\n4b. Rangen');
+[
+  ['inspel mot green uppe till vänster (menyknappen uppe till höger)', 'body.play-ui.range-ui #range-practice { top: 20px !important; left: 8px !important; right: 62px; transform: none !important;'],
+  ['svingpillret döljs medan inspel är öppet (samma plats)', 'body.play-ui.range-ui:has(#range-practice.on) #swing-info { display: none !important; }'],
+  ['sessionspanelen under, till vänster om kartan, ovanför slaget', 'body.play-ui.range-ui #range-session { top: 156px !important; bottom: auto !important; left: 8px; right: 108px !important; width: auto !important; max-height: calc(100vh - 156px - 260px) !important; }'],
+  ['ihopfälld: bara rubriken', 'body.play-ui.range-ui #range-session.collapsed { right: auto !important; }'],
+  ['med inspel öppet flyttas panelen och kartan ner', 'body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 236px !important;'],
+  ['(kartan döljs inte: en dold ruta ritas på datorns plats)', 'body.play-ui.range-ui:not(.mm-open):has(#range-practice.on) #minimap-container { top: 236px !important; }'],
+  ['kort telefon: hela panelen rullar', 'body.play-ui.range-ui #range-session { overflow-y: auto !important; }\n      body.play-ui.range-ui #range-session .rs-body { flex: none; overflow: visible; }'],
+  ['öppen karta: rangens paneler viker undan', 'body.play-ui.range-ui.mm-open #range-session,\n      body.play-ui.range-ui.mm-open #range-practice { display: none !important; }'],
+  ['öppen session: siktet väntar', 'body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-controls,\n      body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-billboard { display: none !important; }']
+].forEach(function (c) { check(c[0], blk.indexOf(c[1]) >= 0); });
+{
+  const rs = fs.readFileSync(path.join(__dirname, '..', 'arcade-range-session.js'), 'utf8');
+  const line = rs.match(/try \{ const v = localStorage\.getItem\('golf_range_session_open'\);[^\n]+/);
+  check('sessionspanelens öppna läge läses', !!line);
+  if (line) {
+    const open = function (phone, stored, throws) {
+      const state = {};
+      const win = { matchMedia: function () { return { matches: phone }; } };
+      const ls = { getItem: function () { if (throws) throw new Error('blocked'); return stored; } };
+      new Function('window', 'localStorage', 'state', "const phone = !!(window.matchMedia && window.matchMedia('(max-width: 520px)').matches);\n" + line[0])(win, ls, state);
+      return state.open;
+    };
+    check('telefon, inget sparat: ihopfälld', open(true, null) === false);
+    check('dator, inget sparat: öppen', open(false, null) === true);
+    check('spelarens val vinner (öppen på telefon, stängd på dator)', open(true, '1') === true && open(false, '0') === false);
+    check('blockerad lagring: telefon ihopfälld, dator öppen', open(true, null, true) === false && open(false, null, true) === true);
+    check('telefonfrågan står före raden', /const phone = !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\)'\)\.matches\);\s*try \{ const v = localStorage/.test(rs));
+  }
+}
 
 console.log('\n5. minimapBox');
 const fnSrc = html.slice(html.indexOf('window.minimapBox = function () {'), html.indexOf('\n    };', html.indexOf('window.minimapBox = function () {')) + 7);

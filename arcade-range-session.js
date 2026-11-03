@@ -117,7 +117,9 @@
                 state.shots = (s && Array.isArray(s.shots)) ? s.shots.slice(-MAX_SHOTS) : [];
                 state.club = (s && typeof s.club === 'string') ? s.club : null;
             } catch (e) { state.shots = []; state.club = null; }
-            try { state.open = localStorage.getItem('golf_range_session_open') !== '0'; } catch (e) { state.open = true; }
+            // folded by default on a phone (the range would be covered); what the player chose last time wins
+            const phone = !!(window.matchMedia && window.matchMedia('(max-width: 520px)').matches);
+            try { const v = localStorage.getItem('golf_range_session_open'); state.open = v === null ? !phone : v !== '0'; } catch (e) { state.open = !phone; }
         }
         function save() {
             try { localStorage.setItem(storageKey(), JSON.stringify({ shots: state.shots, club: state.club })); } catch (e) { /* private mode or full: the session lives on this page */ }
