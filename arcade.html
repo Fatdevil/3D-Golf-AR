@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=25">
+<link rel="stylesheet" href="arcade.css?v=26">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -31,7 +31,7 @@
 <script src="ratings.js?v=2"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=11"></script>
+<script src="arcade-swing-engine.js?v=12"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -189,22 +189,22 @@
     <!-- LIE & CONDITIONS HUD -->
     <div id="lie-conditions-hud" style="display:none; position:absolute; bottom: 70px; left: 20px; z-index:90; pointer-events:none; font-family:'Inter', sans-serif;">
         <div style="background:rgba(15,23,42,0.85); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 25px rgba(0,0,0,0.5); display:flex; flex-direction:column; gap:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; gap: 20px;">
+            <div class="lie-row1" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; gap: 20px;">
                 <div style="display:flex; align-items:center; gap:8px;">
                     <div id="lie-icon" style="width:16px; height:16px; border-radius:50%; border:2px solid #fff; background:#16a34a; box-shadow:0 0 10px rgba(0,0,0,0.5);"></div>
                     <span id="lie-text" style="color:#fff; font-size:16px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">FAIRWAY</span>
                 </div>
-                <div style="display:flex; flex-direction:column; align-items:flex-end;">
+                <div class="lie-dup" style="display:flex; flex-direction:column; align-items:flex-end;">
                     <div class="lie-lbl" style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Elevation</div>
                     <div id="lie-elevation" style="color:#fff; font-size:16px; font-weight:900;">+ 0.0m</div>
                 </div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; gap: 25px;">
-                <div style="display:flex; flex-direction:column;">
+            <div class="lie-row2" style="display:flex; justify-content:space-between; align-items:center; gap: 25px;">
+                <div class="lie-dup" style="display:flex; flex-direction:column;">
                     <div class="lie-lbl" style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Target</div>
                     <div id="lie-distance" style="color:#38bdf8; font-size:20px; font-weight:900;">0.0 yds</div>
                 </div>
-                <div style="display:flex; gap: 15px;">
+                <div class="lie-cost" style="display:flex; gap: 15px;">
                     <div style="display:flex; flex-direction:column; align-items:flex-end;">
                         <div class="lie-lbl" style="color:#94a3b8; font-size:10px; font-weight:700; text-transform:uppercase;">Power</div>
                         <div id="lie-power" style="color:#4ade80; font-size:14px; font-weight:800;">100%</div>
@@ -310,7 +310,7 @@
     <!-- FLYOVER & GREEN READ PANEL (above minimap in play mode) -->
     <div id="green-read-panel" style="display:none; position:absolute; bottom:375px; right:20px; background:rgba(15,23,42,0.92); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:6px; z-index:11; backdrop-filter:blur(8px); min-width:145px; pointer-events:auto;">
         <div style="display:flex; flex-direction:column; gap:5px;">
-            <button onclick="startFlyover()" style="width:100%; background:linear-gradient(135deg, #0d9488, #0891b2); color:#fff; border:none; padding:8px 10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:11px; letter-spacing:0.5px; transition:all 0.2s; text-align:center;">🚁 FLYOVER</button>
+            <button id="game-btn-flyover" onclick="startFlyover()" style="width:100%; background:linear-gradient(135deg, #0d9488, #0891b2); color:#fff; border:none; padding:8px 10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:11px; letter-spacing:0.5px; transition:all 0.2s; text-align:center;">🚁 FLYOVER</button>
             <button id="game-btn-slope-toggle" onclick="cycleGreenSlopeMode()" style="width:100%; background:rgba(15,23,42,0.85); color:#94a3b8; border:1px solid #334155; padding:8px 10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:11px; letter-spacing:0.4px; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:5px;" title="Växla greenlutning: Av ➔ Gridd & Bollar ➔ Heatmap [L]">
                 <span>⚡</span> <span id="game-slope-btn-label">Lutning: Av</span>
             </button>
@@ -15391,6 +15391,27 @@ window.triggerExplosion = function(x, y, z) {
                 let cs = document.getElementById('club-selector');
                 if (cs) cs.classList.remove('clubs-open');   // a club row opened for a chip folds again on the next putt
             }
+            // what the round's optional buttons are for (arcade.css, "PLAY CLEAN-UP"):
+            //   on-tee         the hole's first shot: the flyover previews the hole
+            //   show-slope-btn within 50 m of the flag, or the slope view on (so it can always be switched off again)
+            if (phase) {
+                let hole = courseHoles[playingHoleIndex], ap = window.players && window.players[window.activePlayerIndex];
+                let onTee = !window._isRangeMode && !!ap && ap.strokes === 0;
+                let nearGreen = !!(hole && hole.flag && window.ballMesh && Math.hypot(window.ballMesh.position.x - hole.flag.x, window.ballMesh.position.z - hole.flag.z) <= 50);
+                let showSlope = nearGreen || (window._greenSlopeMode && window._greenSlopeMode !== 'OFF');
+                if (onTee !== window._uiOnTee) { window._uiOnTee = onTee; document.body.classList.toggle('on-tee', onTee); }
+                if (showSlope !== window._uiShowSlope) { window._uiShowSlope = showSlope; document.body.classList.toggle('show-slope-btn', showSlope); }
+                // the club pill: the club, and the distance to the flag only when the aim is elsewhere (the aim billboard has the distance
+                // to the aim; with the aim on the flag the two would be the same number)
+                let distEl = document.getElementById('si-dist-label');
+                if (distEl && hole && hole.flag && window.ballMesh) {
+                    let b = window.ballMesh.position, at = window.aimTarget;
+                    let toFlag = Math.hypot(hole.flag.x - b.x, hole.flag.z - b.z);
+                    let aimOff = at ? Math.hypot(at.x - hole.flag.x, at.z - hole.flag.z) : 0;
+                    let txt = aimOff > 3 ? '⛳ ' + window.formatDistStr(toFlag, 0) : '';
+                    if (distEl.textContent !== txt) distEl.textContent = txt;
+                }
+            }
         }
 
         // --- GSPRO AIM BILLBOARD PROJECTION ---
@@ -15571,12 +15592,16 @@ window.triggerExplosion = function(x, y, z) {
                     
                     // what the lie takes from the shot comes from the physics itself (GolfPhysics.lieRange), so the text cannot drift from it;
                     // a launch monitor's numbers are converted for the lie as well (it measures a real ball on a mat), so the text is the same for it
-                    let powStr = "100%"; let spinStr = "100%"; let powCol = "#4ade80";
+                    let powStr = "100%"; let spinStr = "100%"; let powCol = "#4ade80"; let lieCosts = false;
                     if (!isTee && window.GolfPhysics && window.GolfPhysics.lieEffectText) {
                         let eff = window.GolfPhysics.lieEffectText(lType);
                         powStr = eff.power; spinStr = eff.spin;
                         powCol = eff.level === 'bad' ? "#f87171" : (eff.level === 'warn' ? "#fbbf24" : "#4ade80");
+                        lieCosts = eff.level !== 'ok';
                     }
+                    // power and spin only show when the lie takes something from the shot (rough, sand...); on the tee and the fairway the
+                    // panel is just the lie
+                    if (lieHud) lieHud.classList.toggle('lie-costs', lieCosts);
                     
                     if (document.getElementById('lie-power')) document.getElementById('lie-power').innerText = powStr;
                     if (document.getElementById('lie-power')) document.getElementById('lie-power').style.color = powCol;

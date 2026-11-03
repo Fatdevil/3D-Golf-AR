@@ -509,8 +509,7 @@ const SwingEngine = (function() {
                 const distM   = window.ballMesh.position.distanceTo(
                     new THREE.Vector3(h.flag.x, h.flag.y, h.flag.z)
                 );
-                const distYds = (distM * 1.09361).toFixed(0);
-                distEl.textContent = `${distYds} yds  (${distM.toFixed(0)} m)`;
+                // the text is the render loop's (arcade.html): the distance to the flag in the player's unit, only when the aim is elsewhere
 
                 // Auto-select club based on the distance to the aim point (the flag unless the player aimed elsewhere), unless the player picked one
                 if (!noAuto && !_manualClub) {

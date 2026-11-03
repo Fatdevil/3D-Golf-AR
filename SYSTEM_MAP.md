@@ -512,5 +512,13 @@ Renderloopen sätter `body.phase-aim` / `phase-putt` / `phase-flight` ur `playSt
 - **Putt**: klubbraden visar bara klubban i handen (puttern väljs själv på green). Slagformen döljs när puttern är klubban i handen (`body.club-putt`, satt av `SwingEngine` när klubban byts), inte efter läget: en wedge från greenen tar formen, så raden syns då. Ett tryck på den fäller ut raden (`.clubs-open`, för en chip från kanten), ett val fäller ihop den, och nästa lägesbyte fäller ihop den.
 - Test: `tests/test_play_phases.js`.
 
+## Städning av spelläget: varje siffra på ett ställe (2026-11)
+`arcade.css`, blocket "PLAY CLEAN-UP" (alla skärmar):
+- Avståndet till siktet står på siktskylten. Lägespanelens mål och höjd (`.lie-dup`) är dolda; klubbpillret (`si-dist-label`, satt av renderloopen) visar avståndet till flaggan i spelarens enhet bara när siktet ligger mer än 3 m från flaggan ("⛳ 33 yds").
+- Lägespanelens kraft och spinn bara när läget kostar (`.lie-costs`, från `GolfPhysics.lieEffectText`: nivå warn/bad); på tee och fairway är panelen bara läget.
+- Flyover bara på hålets första slag (`body.on-tee`), lutning inom 50 m från flaggan eller när lutningsvyn är på (`body.show-slope-btn`); panelen döljs när ingen av knapparna syns.
+- LM-status bara med launch monitor; slagdata först när ett slag har värden.
+- Test: `tests/test_play_phases.js` (1b och 4).
+
 ## Tester och CI (2026-10)
 `.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js`, `tests/e2e/ratings-e2e.js` och `tests/e2e/approach-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.
