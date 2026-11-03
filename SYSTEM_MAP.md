@@ -509,7 +509,7 @@ Varje avslutat inspeltest på en publicerad range (eller övningsrangen, under k
 ## Spellägen: en kontroll syns bara när den kan användas (2026-11)
 Renderloopen sätter `body.phase-aim` / `phase-putt` / `phase-flight` ur `playState`, `isFlying` och `isPuttingMode` (bara i spel och test, och klassen byts bara när läget byts). `arcade.css`, blocket "PLAY PHASES" (alla skärmar, bana och range):
 - **Flygning** (bollen i luften eller rullande, tills nästa slag kan slås): klubbrad, slagform, SWING, klubbpiller (`swing-info`), sifferinmatning (`manual-tools`), lägespanel, flyover/lutning och sikte döljs. Slagdata, karta och meny står kvar.
-- **Putt**: slagformen döljs (den gör inget för en putt) och klubbraden visar bara klubban i handen (puttern väljs själv på green). Ett tryck på den fäller ut raden (`.clubs-open`, för en chip från kanten), ett val fäller ihop den, och nästa lägesbyte fäller ihop den.
+- **Putt**: klubbraden visar bara klubban i handen (puttern väljs själv på green). Slagformen döljs när puttern är klubban i handen (`body.club-putt`, satt av `SwingEngine` när klubban byts), inte efter läget: en wedge från greenen tar formen, så raden syns då. Ett tryck på den fäller ut raden (`.clubs-open`, för en chip från kanten), ett val fäller ihop den, och nästa lägesbyte fäller ihop den.
 - Test: `tests/test_play_phases.js`.
 
 ## Tester och CI (2026-10)

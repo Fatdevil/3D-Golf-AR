@@ -466,6 +466,10 @@ const SwingEngine = (function() {
 
     function _applyClub(key) {
         _clubKey = key;
+        // the shot shape does nothing to a putt (shapeAxisDeg gives the putter 0): the CSS hides its row while the putter is in hand,
+        // and shows it again for any other club (a chip from the fringe with a wedge takes the shape)
+        const body = typeof document !== 'undefined' && document.body;
+        if (body && body.classList && typeof body.classList.toggle === 'function') body.classList.toggle('club-putt', key === 'PUTT');
         // Update selector highlight
         document.querySelectorAll('.club-btn').forEach(btn => {
             btn.classList.toggle('selected', btn.dataset.club === key);

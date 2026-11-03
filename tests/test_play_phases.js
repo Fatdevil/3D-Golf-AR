@@ -66,7 +66,9 @@ const flightHidden = ['#club-selector', '#shape-selector', '#swing-launch-btn', 
 const flightRule = blk.slice(0, blk.indexOf('{ display: none !important; }'));
 check('flygning döljer allt som inte kan användas', flightHidden.every(function (id) { return flightRule.indexOf('body.phase-flight ' + id) >= 0; }));
 check('flygning rör inte slagdata, karta eller meny', !/phase-flight #(dynamic-hud|minimap-container|hamburger-btn)/.test(blk));
-check('putt döljer slagformen', /body\.phase-putt #shape-selector \{ display: none !important; \}/.test(blk));
+check('slagformen döljs med puttern i handen, inte efter läget (en wedge vid putt tar formen)', /body\.club-putt #shape-selector \{ display: none !important; \}/.test(blk) && !/body\.phase-putt #shape-selector/.test(blk));
+const eng = fs.readFileSync(path.join(__dirname, '..', 'arcade-swing-engine.js'), 'utf8');
+check('SwingEngine sätter club-putt när klubban byts', /function _applyClub\(key\) \{\s*_clubKey = key;[\s\S]{0,400}body\.classList\.toggle\('club-putt', key === 'PUTT'\)/.test(eng));
 check('putt visar bara klubban i handen tills raden fälls ut', /body\.phase-putt #club-selector:not\(\.clubs-open\) \.club-btn:not\(\.selected\) \{ display: none; \}/.test(blk));
 check('blocket gäller alla skärmar (ingen media query)', !/@media/.test(blk));
 
