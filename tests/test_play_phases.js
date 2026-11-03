@@ -27,8 +27,10 @@ function phaseFor(state) {
   const classes = new Set(['play-ui']), cs = { removed: 0, classList: { remove: function () { cs.removed++; } } };
   const win = Object.assign({ _playPhase: state.prev }, { isPuttingMode: state.putting });
   const doc = { body: { classList: { toggle: function (c, on) { if (on) classes.add(c); else classes.delete(c); } } }, getElementById: function () { return cs; } };
-  new Function('window', 'document', 'appMode', 'playState', 'isFlying', blockSrc)(win, doc, state.mode, state.playState, !!state.flying);
-  return { phase: win._playPhase, classes: Array.from(classes).filter(function (c) { return /^phase-/.test(c); }), folded: cs.removed };
+  cs.textContent = '';
+  Object.assign(win, state.win || {});
+  new Function('window', 'document', 'appMode', 'playState', 'isFlying', 'courseHoles', 'playingHoleIndex', blockSrc)(win, doc, state.mode, state.playState, !!state.flying, state.holes || [], 0);
+  return { phase: win._playPhase, classes: Array.from(classes).filter(function (c) { return /^phase-/.test(c); }), folded: cs.removed, all: Array.from(classes), dist: cs.textContent };
 }
 const aim = phaseFor({ mode: 'PLAY', playState: 'ROUND_IDLE', putting: false });
 check('spel, väntar på slag, inte putt: sikta', aim.phase === 'aim' && aim.classes.join() === 'phase-aim', JSON.stringify(aim));
@@ -40,6 +42,26 @@ check('byggläget: inget läge, klasserna tas bort', build.phase === '' && build
 check('rundan klar: inget läge', phaseFor({ mode: 'PLAY', playState: 'ROUND_COMPLETE' }).phase === '');
 check('samma läge igen: ingenting rörs', phaseFor({ mode: 'PLAY', playState: 'ROUND_IDLE', putting: true, prev: 'putt' }).folded === 0);
 check('byte av läge fäller ihop en utfälld klubbrad', phaseFor({ mode: 'PLAY', playState: 'ROUND_IDLE', putting: true, prev: 'flight' }).folded === 1);
+
+console.log('\n1b. Knappar som bara syns där de gör något, och avståndet till flaggan');
+{
+  const hole = { flag: { x: 0, z: -100 } };
+  const at = function (bz, opt) {
+    opt = opt || {};
+    return phaseFor({ mode: 'PLAY', playState: 'ROUND_IDLE', holes: [hole], win: Object.assign({
+      ballMesh: { position: { x: 0, z: bz } }, aimTarget: opt.aim || { x: 0, z: -100 }, players: [{ strokes: opt.strokes || 0 }], activePlayerIndex: 0,
+      _greenSlopeMode: opt.slope || 'OFF', formatDistStr: function (m, d) { return m.toFixed(d) + ' m'; }, _isRangeMode: !!opt.range }, {}) });
+  };
+  const tee = at(0);
+  check('första slaget: on-tee (flyover), långt från greenen: ingen lutningsknapp', tee.all.indexOf('on-tee') >= 0 && tee.all.indexOf('show-slope-btn') < 0, JSON.stringify(tee.all));
+  const second = at(-70, { strokes: 1 });
+  check('andra slaget 30 m från flaggan: lutning men inte flyover', second.all.indexOf('on-tee') < 0 && second.all.indexOf('show-slope-btn') >= 0, JSON.stringify(second.all));
+  check('långt bort men lutningsvyn på: knappen syns (den måste kunna slås av)', at(0, { strokes: 1, slope: 'GRID' }).all.indexOf('show-slope-btn') >= 0);
+  check('rangen: aldrig on-tee', at(0, { range: true }).all.indexOf('on-tee') < 0);
+  check('siktet på flaggan: inget avstånd i klubbpillret (siktskylten har det)', tee.dist === '', JSON.stringify(tee.dist));
+  const layup = at(0, { aim: { x: 10, z: -60 } });
+  check('siktet 40 m från flaggan: avståndet till flaggan i spelarens enhet', layup.dist === '⛳ 100 m', JSON.stringify(layup.dist));
+}
 
 console.log('\n2. Klubbraden vid putt');
 const cs = html.match(/<div id="club-selector" onclick="([^"]+)">/);
@@ -71,6 +93,18 @@ const eng = fs.readFileSync(path.join(__dirname, '..', 'arcade-swing-engine.js')
 check('SwingEngine sätter club-putt när klubban byts', /function _applyClub\(key\) \{\s*_clubKey = key;[\s\S]{0,400}body\.classList\.toggle\('club-putt', key === 'PUTT'\)/.test(eng));
 check('putt visar bara klubban i handen tills raden fälls ut', /body\.phase-putt #club-selector:not\(\.clubs-open\) \.club-btn:not\(\.selected\) \{ display: none; \}/.test(blk));
 check('blocket gäller alla skärmar (ingen media query)', !/@media/.test(blk));
+
+console.log('\n4. Städningen');
+{
+  const cl = css.slice(css.indexOf('PLAY CLEAN-UP'));
+  check('lägespanelens mål och höjd dolda (siktskylten har dem)', /#lie-conditions-hud \.lie-dup \{ display: none !important; \}/.test(cl) && (html.match(/class="lie-dup"/g) || []).length === 2);
+  check('kraft och spinn bara när läget kostar', /#lie-conditions-hud:not\(\.lie-costs\) \.lie-cost,/.test(cl) && /lieHud\.classList\.toggle\('lie-costs', lieCosts\)/.test(html) && /lieCosts = eff\.level !== 'ok';/.test(html));
+  check('flyover bara vid utslaget, lutning bara nära greenen, panelen borta utan knappar', /body:not\(\.on-tee\) #game-btn-flyover,\s*body:not\(\.show-slope-btn\) #game-btn-slope-toggle \{ display: none !important; \}/.test(cl) && /body:not\(\.on-tee\):not\(\.show-slope-btn\) #green-read-panel \{ display: none !important; \}/.test(cl) && /id="game-btn-flyover"/.test(html));
+  check('slagdata först när ett slag har värden, alla skärmar', /body\.play-ui #dynamic-hud:not\(\.has-data\) \{ display: none !important; \}/.test(cl));
+  check('LM-status bara med launch monitor, alla skärmar', /body\.play-ui:not\(\.input-lm\) #lm-status \{ display: none !important; \}/.test(cl));
+  const eng = fs.readFileSync(path.join(__dirname, '..', 'arcade-swing-engine.js'), 'utf8');
+  check('klubbpillret skriver inte längre "yds (m)" själv', !/yds  \(\$\{distM\.toFixed\(0\)\} m\)/.test(eng));
+}
 
 console.log(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
 process.exit(failed ? 1 : 0);

@@ -943,3 +943,27 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   body.club-putt #shape-selector { display: none !important; }   /* the putter in hand (set by SwingEngine), not the phase: a chip with a wedge from the green keeps its shape */
   body.phase-putt #club-selector:not(.clubs-open) .club-btn:not(.selected) { display: none; }
   body.phase-putt #club-selector:not(.clubs-open) .club-btn.selected { border-radius: 12px; border-right: 1px solid rgba(255,255,255,0.12); }
+
+  /* =====================================================================================================================
+     PLAY CLEAN-UP (every screen): each number in one place, an optional button only where it does something
+     - the distance to the aim is on the aim billboard: the lie panel's target and elevation (the same numbers) are gone, and the
+       club pill shows the distance to the flag only when the aim is elsewhere (set by the render loop)
+     - the lie panel's power and spin only when the lie takes something from the shot (.lie-costs, from GolfPhysics.lieEffectText)
+     - flyover only on the hole's first shot (body.on-tee); slope within 50 m of the flag or while the slope view is on
+       (body.show-slope-btn); their panel goes when neither button is there
+     - the launch monitor status only with a launch monitor as the input
+     - the shot data only once a shot has values
+     ===================================================================================================================== */
+  #lie-conditions-hud .lie-dup { display: none !important; }
+  #lie-conditions-hud:not(.lie-costs) .lie-cost,
+  #lie-conditions-hud:not(.lie-costs) .lie-row2 { display: none !important; }
+  #lie-conditions-hud:not(.lie-costs) .lie-row1 { border-bottom: none !important; padding-bottom: 0 !important; }
+  #si-dist-label:empty { display: none; }
+
+  body:not(.on-tee) #game-btn-flyover,
+  body:not(.show-slope-btn) #game-btn-slope-toggle { display: none !important; }
+  body:not(.on-tee):not(.show-slope-btn) #green-read-panel { display: none !important; }
+
+  body.play-ui:not(.input-lm) #lm-status { display: none !important; }
+  /* the shot data shows once a shot has values (it was a column of "---" before the first shot); on a phone it was already so */
+  body.play-ui #dynamic-hud:not(.has-data) { display: none !important; }
