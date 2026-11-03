@@ -1000,12 +1000,15 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
        (body.show-slope-btn); their panel goes when neither button is there
      - the launch monitor status only with a launch monitor as the input
      - the shot data only once a shot has values
+     - "Flag" by the aim arrows only with the aim off the flag
      ===================================================================================================================== */
   #lie-conditions-hud .lie-dup { display: none !important; }
   #lie-conditions-hud:not(.lie-costs) .lie-cost,
   #lie-conditions-hud:not(.lie-costs) .lie-row2 { display: none !important; }
   #lie-conditions-hud:not(.lie-costs) .lie-row1 { border-bottom: none !important; padding-bottom: 0 !important; }
   #si-dist-label:empty { display: none; }
+  /* "Flag" only with the aim elsewhere (#aim-controls.on-flag, set by the render loop); it keeps its place so the arrows stay put */
+  #aim-controls.on-flag #aim-btn-flag { visibility: hidden; }
   /* the club pill only when it has something of its own: the distance to the flag with the aim elsewhere (the club is in the club row) */
   body.play-ui #swing-info:has(#si-dist-label:empty) { display: none !important; }
 

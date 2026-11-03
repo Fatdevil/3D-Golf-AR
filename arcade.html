@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=30">
+<link rel="stylesheet" href="arcade.css?v=31">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -12851,9 +12851,11 @@
             if (Math.hypot(pt.x - window.ballMesh.position.x, pt.z - window.ballMesh.position.z) < (window.isPuttingMode ? 0.25 : 1.5)) return;   // a tap on the ball itself is not an aim
             window.setAimPoint(pt.x, pt.y, pt.z);
         }, false);
-        // PUTTING: the aim marker can be dragged along the green; the break line follows live. The press must start on the marker
-        // (so a drag elsewhere still orbits the camera) and takes the pointer from the camera controls while it lasts.
+        // The aim marker can be dragged: along the green when putting (the break line follows live), over the ground on a full shot.
+        // The press must start on the marker (so a drag elsewhere still orbits the camera) and takes the pointer from the camera controls
+        // while it lasts; the camera stands still meanwhile (the aim camera's holdBeat), so the marker stays under the finger.
         let dragAim = null;
+        const AIM_DRAG_MAX_M = 300;   // the longest drive is short of this
         const groundAt = (e) => {
             let rect = renderer.domElement.getBoundingClientRect();
             let rc = new THREE.Raycaster();
@@ -12862,7 +12864,7 @@
             return hits.length ? hits[0].point : null;
         };
         renderer.domElement.addEventListener('pointerdown', (e) => {
-            if (!(e.button === 0 || e.pointerType === 'touch') || !canAim() || !window.isPuttingMode || !window.aimTarget) return;
+            if (!(e.button === 0 || e.pointerType === 'touch') || !canAim() || !window.aimTarget) return;
             let rect = renderer.domElement.getBoundingClientRect();
             let sp = window.aimTarget.clone().project(camera);
             let sx = rect.left + (sp.x + 1) / 2 * rect.width, sy = rect.top + (1 - sp.y) / 2 * rect.height;
@@ -12877,7 +12879,15 @@
             if (!dragAim || e.pointerId !== dragAim.id) return;
             if (!canAim()) { dragAim = null; window._aimDragging = false; controls.enabled = true; return; }
             let pt = groundAt(e);
-            if (!pt || Math.hypot(pt.x - window.ballMesh.position.x, pt.z - window.ballMesh.position.z) < 0.25) return;
+            if (!pt) return;
+            // not onto the ball itself (as a tap), and on a full shot not far past the flag (near the skyline a finger's width is hundreds
+            // of metres): the longest drive, or a little past the flag on a long hole
+            let bp = window.ballMesh.position, dBall = Math.hypot(pt.x - bp.x, pt.z - bp.z);
+            if (dBall < (window.isPuttingMode ? 0.25 : 1.5)) return;
+            if (!window.isPuttingMode) {
+                let ref = window.aimReference && window.aimReference();
+                if (dBall > Math.max(AIM_DRAG_MAX_M, ref ? Math.hypot(ref.x - bp.x, ref.z - bp.z) + 30 : 0)) return;
+            }
             window.setAimPoint(pt.x, pt.y, pt.z);
         }, false);
         const endDragAim = (e) => { if (dragAim && e.pointerId === dragAim.id) { dragAim = null; window._aimDragging = false; controls.enabled = true; } };
@@ -15455,6 +15465,9 @@ window.triggerExplosion = function(x, y, z) {
             let aimRef = window.aimReference();
             let offEl = document.getElementById('aim-offset');
             if (offEl && aimRef && window.AimMath) offEl.innerText = window.AimMath.formatOffset(window.AimMath.offsetFromFlagDeg(bp, ap, aimRef));
+            // "Flag" only does something with the aim elsewhere: on the flag (or straight down the range) it keeps its place but is not shown
+            let onRef = !!aimRef && Math.hypot(ap.x - aimRef.x, ap.z - aimRef.z) < 0.5;
+            if (aimPanel && aimPanel.classList.contains('on-flag') !== onRef) aimPanel.classList.toggle('on-flag', onRef);
         }
         if ((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && window.aimTarget) {
             bb.style.display = 'block';

@@ -523,6 +523,11 @@ Renderloopen sätter `body.phase-aim` / `phase-putt` / `phase-flight` ur `playSt
 - LM-status bara med launch monitor; slagdata först när ett slag har värden.
 - Test: `tests/test_play_phases.js` (1b och 4).
 
+## Siktet: dra markören, Flag bara när den gör något (2026-11)
+- Siktmarkören kan dras vid fulla slag också, inte bara vid putt (`arcade.html`, "TAP THE GROUND TO AIM"). Trycket måste börja på markören (48 px med touch, 28 px med mus), annars vrids kameran som förut. Kameran står still medan man drar (`_aimDragging`, holdBeat i siktkameran), så markören stannar under fingret. Ett fullt slag tar inte en punkt närmare bollen än 1,5 m eller längre bort än 300 m (på ett långt hål: flaggan + 30 m); vid horisonten är en fingerbredd hundratals meter. Ett tryck på marken flyttar också siktet, som förut.
+- "Flag" vid siktpilarna syns bara med siktet bredvid flaggan (mer än 0,5 m; på rangen rakt ut längs rangen): `#aim-controls.on-flag` sätts av renderloopen, knappen behåller sin plats (`visibility`), så pilarna inte hoppar.
+- Test: `tests/test_play_phases.js` (del 5).
+
 ## Terrängens rutnät: samma på alla enheter (2026-11)
 `arcade.html` bygger terrängen med 600 × 600 rutor på alla enheter (`window.TERRAIN_SEGS`). Förut byggde en telefon eller en iPad (iPadOS räknas som mobil i `arcade.html`, och hubben skickar den inte till mobilsidan) 400 × 400, varefter `initAutoPerformanceLOD` satte `TERRAIN_SEGS = 600` utan att ändra geometrin. Alla höjduppslag, fysiken och terrängbitarna indexerar geometrin med `TERRAIN_SEGS`, så bitarna läste förbi slutet (NaN-höjder: hål där himlen syntes, de blå ränderna) och uppslagen läste fel hörn (0 eller NaN i stället för markens höjd). `initAutoPerformanceLOD` sätter nu bara värdet innan terrängen finns; en terräng med annan storlek samplas om med `updateTerrainResolution` (geometri, bitar, gräs och värde tillsammans). En telefon ritar marken med lägre detalj via terrängbitarna (350). `arcade_mobile.html` (dit hubben skickar telefoner) har sin egen konsekventa 400 × 400. Test: `tests/test_terrain_size.js`.
 
