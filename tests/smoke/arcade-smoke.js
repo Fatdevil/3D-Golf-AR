@@ -1332,7 +1332,6 @@ function serve() {
       const sh = window._terrainShells, out = {};
       const cam = new THREE.PerspectiveCamera(55, 1.5, 0.05, 2000); cam.position.set(6, 2, 0); cam.lookAt(12, 0, -6); cam.updateMatrixWorld(true);
       const count = function () { let n = 0; for (const c of sh.cards.values()) n += c.count; return n; };
-      const vis = function (id) { let el = document.getElementById(id); if (!el) return false; for (; el && el !== document.body; el = el.parentElement) if (el.style.display === 'none') return false; return true; };
       const qWas = sh.quality;
       window.setGrassQuality('OFF');
       sh._cls = null;   // as on a page that never had the 3D grass on
@@ -1342,7 +1341,9 @@ function serve() {
       for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
       out.autoLevel = sh.cardLevel();
       out.nOff = count();
-      out.section = vis('grass-cards-section') && document.getElementById('grass-height-controls').style.display === 'none';
+      // (the Environment panel itself is closed here: the section is outside the 3D grass controls, which are hidden, and not hidden itself)
+      const sec = document.getElementById('grass-cards-section'), hc = document.getElementById('grass-height-controls');
+      out.section = !!sec && sec.style.display !== 'none' && !hc.contains(sec) && hc.style.display === 'none' && document.getElementById('grass-cards-tuning').style.display === 'block';
       window.setGrassCardQuality('LOW');
       out.dropped = sh.cards.size === 0;
       for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
