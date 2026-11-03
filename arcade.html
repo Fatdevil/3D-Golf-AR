@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=26">
+<link rel="stylesheet" href="arcade.css?v=27">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -125,6 +125,8 @@
         
         <button class="hb-btn" onclick="window.location.href='arcade_hub.html'">← Return to Hub</button>
         <button class="hb-btn" onclick="toggleHamburgerMenu(); openMatchSettings();">⚙️ Match Settings</button>
+        <!-- the flyover from wherever the ball lies to the flag (on the screen only on the tee shot, see "PLAY CLEAN-UP" in arcade.css) -->
+        <button class="hb-btn" id="hb-flyover" onclick="toggleHamburgerMenu(); startFlyover();">🚁 Flyover</button>
         <div id="hb-input-mode">
             <div class="hb-section-title" style="cursor:default;">Slagsätt</div>
             <div class="hb-input-row">

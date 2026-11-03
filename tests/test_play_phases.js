@@ -101,6 +101,7 @@ console.log('\n4. Städningen');
   check('kraft och spinn bara när läget kostar', /#lie-conditions-hud:not\(\.lie-costs\) \.lie-cost,/.test(cl) && /lieHud\.classList\.toggle\('lie-costs', lieCosts\)/.test(html) && /lieCosts = eff\.level !== 'ok';/.test(html));
   check('flyover bara vid utslaget, lutning bara nära greenen, panelen borta utan knappar', /body:not\(\.on-tee\) #game-btn-flyover,\s*body:not\(\.show-slope-btn\) #game-btn-slope-toggle \{ display: none !important; \}/.test(cl) && /body:not\(\.on-tee\):not\(\.show-slope-btn\) #green-read-panel \{ display: none !important; \}/.test(cl) && /id="game-btn-flyover"/.test(html));
   check('slagdata först när ett slag har värden, alla skärmar', /body\.play-ui #dynamic-hud:not\(\.has-data\) \{ display: none !important; \}/.test(cl));
+  check('flyover i menyn under en runda på en bana, inte under flygning', /<button class="hb-btn" id="hb-flyover" onclick="toggleHamburgerMenu\(\); startFlyover\(\);">/.test(html) && /#hb-flyover \{ display: none; \}/.test(cl) && /body\.play-ui:not\(\.range-ui\):not\(\.phase-flight\) #hb-flyover \{ display: block; \}/.test(cl));
   check('LM-status bara med launch monitor, alla skärmar', /body\.play-ui:not\(\.input-lm\) #lm-status \{ display: none !important; \}/.test(cl));
   const eng = fs.readFileSync(path.join(__dirname, '..', 'arcade-swing-engine.js'), 'utf8');
   check('klubbpillret skriver inte längre "yds (m)" själv', !/yds  \(\$\{distM\.toFixed\(0\)\} m\)/.test(eng));
