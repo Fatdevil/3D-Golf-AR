@@ -920,3 +920,26 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       body.play-ui.mm-open:not(.range-ui) #green-read-panel,
       body.play-ui.mm-open:not(.range-ui) #dynamic-hud { display: none !important; }
   }
+
+  /* =====================================================================================================================
+     PLAY PHASES (every screen, course and range; body.phase-* is set by the render loop from playState and isPuttingMode)
+     A control only shows while it can be used:
+     - flight: the ball is in the air or rolling, until the next shot can be hit. Nothing can be done with the club row, shot shape,
+       swing, typed shot values, aim or flyover / slope, and they covered the ball and its trace: hidden. The shot data, the map and
+       the menu stay.
+     - putt: the putter is picked by itself on the green, so the club row is folded to the club in hand (a tap on it opens the row,
+       for a chip from the fringe: .clubs-open). The shot shape does nothing to a putt: its row is hidden while the putter is in hand
+       (body.club-putt), whatever the phase, and comes back with any other club, which does take the shape.
+     ===================================================================================================================== */
+  body.phase-flight #club-selector,
+  body.phase-flight #shape-selector,
+  body.phase-flight #swing-launch-btn,
+  body.phase-flight #swing-info,
+  body.phase-flight #manual-tools,
+  body.phase-flight #lie-conditions-hud,
+  body.phase-flight #green-read-panel,
+  body.phase-flight #aim-controls { display: none !important; }
+
+  body.club-putt #shape-selector { display: none !important; }   /* the putter in hand (set by SwingEngine), not the phase: a chip with a wedge from the green keeps its shape */
+  body.phase-putt #club-selector:not(.clubs-open) .club-btn:not(.selected) { display: none; }
+  body.phase-putt #club-selector:not(.clubs-open) .club-btn.selected { border-radius: 12px; border-right: 1px solid rgba(255,255,255,0.12); }

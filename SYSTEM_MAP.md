@@ -506,5 +506,11 @@ Varje avslutat inspeltest på en publicerad range (eller övningsrangen, under k
 - Flyover/lutning ligger under den lilla kartan; LM-status visas bara med launch monitor som inmatning.
 - Test: `tests/test_phone_layout.js`.
 
+## Spellägen: en kontroll syns bara när den kan användas (2026-11)
+Renderloopen sätter `body.phase-aim` / `phase-putt` / `phase-flight` ur `playState`, `isFlying` och `isPuttingMode` (bara i spel och test, och klassen byts bara när läget byts). `arcade.css`, blocket "PLAY PHASES" (alla skärmar, bana och range):
+- **Flygning** (bollen i luften eller rullande, tills nästa slag kan slås): klubbrad, slagform, SWING, klubbpiller (`swing-info`), sifferinmatning (`manual-tools`), lägespanel, flyover/lutning och sikte döljs. Slagdata, karta och meny står kvar.
+- **Putt**: klubbraden visar bara klubban i handen (puttern väljs själv på green). Slagformen döljs när puttern är klubban i handen (`body.club-putt`, satt av `SwingEngine` när klubban byts), inte efter läget: en wedge från greenen tar formen, så raden syns då. Ett tryck på den fäller ut raden (`.clubs-open`, för en chip från kanten), ett val fäller ihop den, och nästa lägesbyte fäller ihop den.
+- Test: `tests/test_play_phases.js`.
+
 ## Tester och CI (2026-10)
 `.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js`, `tests/e2e/ratings-e2e.js` och `tests/e2e/approach-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.
