@@ -930,6 +930,12 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       body.play-ui.range-ui #range-session.collapsed { right: auto !important; }
       body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 236px !important; max-height: calc(100vh - 236px - 260px) !important; }
       body.play-ui.range-ui:not(.mm-open):has(#range-practice.on) #minimap-container { top: 236px !important; }
+      /* a short phone leaves little height: the whole panel scrolls (the club chips wrap to three rows in the narrow column) */
+      body.play-ui.range-ui #range-session { overflow-y: auto !important; }
+      body.play-ui.range-ui #range-session .rs-body { flex: none; overflow: visible; }
+      /* the opened map covers the right two thirds of the top half: the range panels give way */
+      body.play-ui.range-ui.mm-open #range-session,
+      body.play-ui.range-ui.mm-open #range-practice { display: none !important; }
       /* an open session is for reading the shots: aiming waits until it is folded */
       body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-controls,
       body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-billboard { display: none !important; }

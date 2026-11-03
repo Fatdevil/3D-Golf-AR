@@ -67,6 +67,8 @@ console.log('\n4b. Rangen');
   ['ihopfälld: bara rubriken', 'body.play-ui.range-ui #range-session.collapsed { right: auto !important; }'],
   ['med inspel öppet flyttas panelen och kartan ner', 'body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 236px !important;'],
   ['(kartan döljs inte: en dold ruta ritas på datorns plats)', 'body.play-ui.range-ui:not(.mm-open):has(#range-practice.on) #minimap-container { top: 236px !important; }'],
+  ['kort telefon: hela panelen rullar', 'body.play-ui.range-ui #range-session { overflow-y: auto !important; }\n      body.play-ui.range-ui #range-session .rs-body { flex: none; overflow: visible; }'],
+  ['öppen karta: rangens paneler viker undan', 'body.play-ui.range-ui.mm-open #range-session,\n      body.play-ui.range-ui.mm-open #range-practice { display: none !important; }'],
   ['öppen session: siktet väntar', 'body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-controls,\n      body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-billboard { display: none !important; }']
 ].forEach(function (c) { check(c[0], blk.indexOf(c[1]) >= 0); });
 {
