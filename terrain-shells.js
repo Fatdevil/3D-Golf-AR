@@ -450,6 +450,7 @@
     const CARD_CHUNK = 16;       // metres
     // the 2D grass's own sliders: amount 25-300 % of the quality's density, height 50-250 % of the shell heights
     const CARD_AMOUNT_MIN = 0.25, CARD_AMOUNT_MAX = 3, CARD_HEIGHT_MIN = 0.5, CARD_HEIGHT_MAX = 2.5;
+    const CARD_QUALITIES = ['AUTO', 'LOW', 'MED', 'HIGH'];
     function clampCardAmount(a) { return Math.min(CARD_AMOUNT_MAX, Math.max(CARD_AMOUNT_MIN, +a || 1)); }
     function clampCardHeight(h) { return Math.min(CARD_HEIGHT_MAX, Math.max(CARD_HEIGHT_MIN, +h || 1)); }
     const CARD_CELLS = 4;        // tuft variants in the atlas
@@ -556,6 +557,9 @@
             this.cardsOn = cardFlag === '1';
             // the 2D grass's own amount (x the quality's density) and height (x the shell heights), from the grass menu
             this.cardAmount = 1; this.cardHeight = 1;
+            // its own level: AUTO follows the 3D grass (MED while the 3D grass is off), else LOW / MED / HIGH
+            this.cardQuality = 'AUTO';
+            try { const cq = localStorage.getItem('golf_grass_cards_q'); if (CARD_QUALITIES.indexOf(cq) >= 0) this.cardQuality = cq; } catch (e) { /* storage blocked */ }
             try {
                 const a = parseFloat(localStorage.getItem('golf_grass_cards_amount')), h = parseFloat(localStorage.getItem('golf_grass_cards_height'));
                 if (isFinite(a)) this.cardAmount = clampCardAmount(a);
@@ -610,7 +614,8 @@
         }
 
         update(time, camera) {
-            if (this.shells.length === 0) return;
+            // (the 2D grass runs on its own: with the 3D grass off it still needs the light, wind and colours below)
+            if (this.shells.length === 0 && !this.cardsOn) return;
 
             // Track and update colors if CURRENT_BIOME_CONFIG changed (for Autumn, Winter, custom color picker)
             let cfg = window.CURRENT_BIOME_CONFIG || {};
@@ -726,7 +731,8 @@
         }
 
         syncHeights() {
-            if (this.shells.length === 0) return;
+            // with the 3D grass off the 2D grass still stands on the ground: its chunks are rebuilt from the new heights
+            if (this.shells.length === 0) { this._scheduleBladeHeights(); return; }
             this._resampleFromMaster();
             this._scheduleBladeHeights();
         }
@@ -1169,9 +1175,19 @@
             if (height !== undefined && height !== null) this.cardHeight = clampCardHeight(height);
         }
 
+        // The 2D grass's own level (AUTO, LOW, MED, HIGH): a new reach and density, so the chunks are built again
+        setCardQuality(q) {
+            if (CARD_QUALITIES.indexOf(q) < 0 || q === this.cardQuality) return;
+            this.cardQuality = q;
+            this._clearCards();
+        }
+
         setCards(on) {
             this.cardsOn = !!on;
-            if (this.cardsOn) this._ensureEdgeMap();   // the cards are placed from the class map built with the edge map
+            // the cards are placed from the class map built with the edge map; with the 3D grass off it may never have been built
+            // (or the terrain was repainted while both grass modes were off: the mask is dirty and the class map out of date)
+            if (this.cardsOn && (!this._cls || window._roughMaskDirty)) this._edgeStale = true;
+            if (this.cardsOn) this._ensureEdgeMap();
             else this._clearCards();
         }
 
@@ -1190,8 +1206,11 @@
             g.dispose();
         }
 
+        // the level the 2D grass runs at: its own, or the 3D grass's (MED while that is off)
+        cardLevel() { return this.cardQuality !== 'AUTO' ? this.cardQuality : (CARDS[this.quality] ? this.quality : 'MED'); }
+
         _cardPreset() {
-            const p = CARDS[this.quality];
+            const p = CARDS[this.cardLevel()];
             if (!p) return null;
             return { radius: p.radius * (_isMobile ? 0.7 : 1), density: p.density };
         }

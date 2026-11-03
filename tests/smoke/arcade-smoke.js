@@ -1326,6 +1326,49 @@ function serve() {
       return out;
     });
     checks.push({ name: '2D grass sliders: shown while it is on; the amount rebuilds about twice the tufts at 200 % (applied on release), the height is a live uniform (nothing rebuilt), clamped and remembered', ok: ct.hiddenOff && ct.shownOn && ct.n1 > 500 && ct.labelOnly && ct.dropped && ct.ratio > 1.8 && ct.ratio < 2.2 && ct.uniform && ct.noRebuild && ct.stored && ct.clamped && ct.synced, detail: JSON.stringify(ct) });
+    // the 2D grass runs without the 3D grass: its own level (AUTO = the 3D grass's, MED while that is off), the class map is built for
+    // it with the 3D grass off, and its menu section shows while the 3D grass controls are hidden
+    const dc = await pp.evaluate(async function () {
+      const sh = window._terrainShells, out = {};
+      const cam = new THREE.PerspectiveCamera(55, 1.5, 0.05, 2000); cam.position.set(6, 2, 0); cam.lookAt(12, 0, -6); cam.updateMatrixWorld(true);
+      const count = function () { let n = 0; for (const c of sh.cards.values()) n += c.count; return n; };
+      const qWas = sh.quality;
+      window.setGrassQuality('OFF');
+      sh._cls = null;   // as on a page that never had the 3D grass on
+      window.setGrassExtra('cards', '1');
+      out.shells = sh.shells.length;
+      out.classMap = !!sh._cls;
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      out.autoLevel = sh.cardLevel();
+      out.nOff = count();
+      // (the Environment panel itself is closed here: the section is outside the 3D grass controls, which are hidden, and not hidden itself)
+      const sec = document.getElementById('grass-cards-section'), hc = document.getElementById('grass-height-controls');
+      out.section = !!sec && sec.style.display !== 'none' && !hc.contains(sec) && hc.style.display === 'none' && document.getElementById('grass-cards-tuning').style.display === 'block';
+      window.setGrassCardQuality('LOW');
+      out.dropped = sh.cards.size === 0;
+      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
+      out.lowLevel = sh.cardLevel(); out.nLow = count();
+      out.stored = localStorage.getItem('golf_grass_cards_q') === 'LOW';
+      out.btn = document.getElementById('grass-cq-LOW').style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
+      // sculpting with the 3D grass off: the stroke's syncHeights rebuilds the tufts from the new ground
+      sh.syncHeights();
+      await new Promise(function (r) { setTimeout(r, 400); });
+      out.sculptRebuild = sh.cards.size === 0;
+      // repainted while both grass modes were off: switching the 2D grass on again rebuilds the class map from the fresh mask
+      window.setGrassExtra('cards', '0');
+      let rebuilt = 0; const rb = window.rebuildRoughMask; window.rebuildRoughMask = function () { rebuilt++; return rb.apply(this, arguments); };
+      window._roughMaskDirty = true;
+      window.setGrassExtra('cards', '1');
+      window.rebuildRoughMask = rb;
+      out.repaintRebuild = rebuilt === 1 && window._roughMaskDirty === false;
+      window.setGrassCardQuality('AUTO'); window.setGrassQuality('HIGH');
+      out.followsHigh = sh.cardLevel() === 'HIGH';
+      renderer.render(scene, cam);
+      window.setGrassExtra('cards', '0'); localStorage.removeItem('golf_grass_cards_q');
+      window.setGrassQuality(qWas);
+      return out;
+    });
+    checks.push({ name: '2D grass without the 3D grass: tufts are built from a class map made for it, its level follows the 3D grass (MED while off) or its own (LOW: fewer tufts, remembered), it follows a sculpt and a repaint made while it was off, and its menu section shows', ok: dc.shells === 0 && dc.classMap && dc.autoLevel === 'MED' && dc.nOff > 500 && dc.section && dc.dropped && dc.lowLevel === 'LOW' && dc.nLow > 0 && dc.nLow < dc.nOff && dc.stored && dc.btn && dc.sculptRebuild && dc.repaintRebuild && dc.followsHigh, detail: JSON.stringify(dc) });
     // the three extra grass modes have buttons in Environment > 3D Grass, which switch the mode, show it and remember it
     const gx = await pp.evaluate(async function () {
       const sh = window._terrainShells, st = function (k, v) { const b = document.getElementById('grass-x-' + k + '-' + v); return !!b && b.style.background.replace(/\s/g, '') === 'rgb(74,222,128)'; };

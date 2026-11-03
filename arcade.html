@@ -35,7 +35,8 @@
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
-<script src="terrain-shells.js?v=50"></script>
+<script src="terrain-shells.js?v=52"></script>
+<script src="arcade-perf-hud.js?v=1"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
 <script src="arcade-scene-engine.js?v=11"></script>
 <script src="arcade-tracer-engine.js"></script>
@@ -1886,19 +1887,24 @@
                     <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;"><button id="grass-x-edge-0" data-i18n="env_grass_opt_off" onclick="setGrassExtra('edge','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-edge-1" data-i18n="env_grass_opt_on" onclick="setGrassExtra('edge','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_grass_blades" style="color:#94a3b8; font-size:9px; font-weight:bold;">Kantstrån</span></div>
                     <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;"><button id="grass-x-blades-0" data-i18n="env_grass_opt_off" onclick="setGrassExtra('blades','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-blades-1" data-i18n="env_grass_opt_on" onclick="setGrassExtra('blades','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_grass_cards" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs (tuvor nära kameran)</span></div>
-                    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;"><button id="grass-x-cards-0" data-i18n="env_grass_opt_off" onclick="setGrassExtra('cards','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-cards-1" data-i18n="env_grass_opt_on" onclick="setGrassExtra('cards','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
-                    <!-- the 2D grass's own amount and height (shown while it is on): the height changes live, the amount when the slider is let go -->
-                    <div id="grass-cards-tuning" style="display:none; margin-top:6px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span data-i18n="env_grass_cards_amount" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: mängd</span><span id="grass-cards-amount-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
-                        <input type="range" id="grass-cards-amount" min="0.25" max="3" step="0.25" value="1" oninput="setGrassCardTuning('amount', this.value, false)" onchange="setGrassCardTuning('amount', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:6px;"><span data-i18n="env_grass_cards_height" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: höjd</span><span id="grass-cards-height-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
-                        <input type="range" id="grass-cards-height" min="0.5" max="2.5" step="0.1" value="1" oninput="setGrassCardTuning('height', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
-                    </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_grass_tex" style="color:#94a3b8; font-size:9px; font-weight:bold;">Gräsmönster (deep rough)</span></div>
                     <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:4px;"><button id="grass-x-tex-0" data-i18n="env_grass_opt_off" onclick="setGrassExtra('tex','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-tex-1" data-i18n="env_grass_opt_pat1" onclick="setGrassExtra('tex','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Mönster 1</button><button id="grass-x-tex-2" data-i18n="env_grass_opt_pat2" onclick="setGrassExtra('tex','2')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Mönster 2</button></div>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_grass_tex_lift" style="color:#94a3b8; font-size:9px; font-weight:bold;">Mönsterljusstyrka</span><span id="grass-tex-lift-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
                     <input type="range" id="grass-tex-lift" min="0.7" max="2" value="1" step="0.05" oninput="setGrassTexLift(this.value)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                    </div>
+                </div>
+                <!-- 2D grass: its own section, so it works with the 3D grass off too (its level: the 3D grass's, or its own) -->
+                <div id="grass-cards-section" style="margin-top:10px; padding-top:8px; border-top:1px solid #334155;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;"><span data-i18n="env_grass_cards" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs (tuvor nära kameran)</span></div>
+                    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;"><button id="grass-x-cards-0" data-i18n="env_grass_opt_off" onclick="setGrassExtra('cards','0')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-x-cards-1" data-i18n="env_grass_opt_on" onclick="setGrassExtra('cards','1')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
+                    <!-- the 2D grass's own amount and height (shown while it is on): the height changes live, the amount when the slider is let go -->
+                    <div id="grass-cards-tuning" style="display:none; margin-top:6px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span data-i18n="env_grass_cards_level" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: nivå</span></div>
+                        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:6px;"><button id="grass-cq-AUTO" data-i18n="env_grass_cards_level_auto" onclick="setGrassCardQuality('AUTO')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Som 3D</button><button id="grass-cq-LOW" onclick="setGrassCardQuality('LOW')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">LOW</button><button id="grass-cq-MED" onclick="setGrassCardQuality('MED')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">MED</button><button id="grass-cq-HIGH" onclick="setGrassCardQuality('HIGH')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">HIGH</button></div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span data-i18n="env_grass_cards_amount" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: mängd</span><span id="grass-cards-amount-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
+                        <input type="range" id="grass-cards-amount" min="0.25" max="3" step="0.25" value="1" oninput="setGrassCardTuning('amount', this.value, false)" onchange="setGrassCardTuning('amount', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:6px;"><span data-i18n="env_grass_cards_height" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: höjd</span><span id="grass-cards-height-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
+                        <input type="range" id="grass-cards-height" min="0.5" max="2.5" step="0.1" value="1" oninput="setGrassCardTuning('height', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
                     </div>
                 </div>
             </div>
@@ -3010,6 +3016,11 @@
             // the 2D grass's sliders: shown while it is on, at its values
             const tune = document.getElementById('grass-cards-tuning');
             if (tune) tune.style.display = sh.cardsOn ? 'block' : 'none';
+            ['AUTO', 'LOW', 'MED', 'HIGH'].forEach(function(q) {
+                const b = document.getElementById('grass-cq-' + q); if (!b) return;
+                const on = sh.cardQuality === q;
+                b.style.background = on ? '#4ade80' : '#334155'; b.style.color = on ? '#0f172a' : '#94a3b8';
+            });
             [['amount', sh.cardAmount], ['height', sh.cardHeight]].forEach(function(kv) {
                 const el = document.getElementById('grass-cards-' + kv[0]), val = document.getElementById('grass-cards-' + kv[0] + '-val');
                 if (el && typeof kv[1] === 'number') { el.value = String(kv[1]); if (val) val.textContent = Math.round(kv[1] * 100) + '%'; }
@@ -3025,6 +3036,14 @@
 
         // The 2D grass's amount and height sliders: the label follows the slider; apply = false only updates the label (the amount is
         // applied when the slider is let go, as it rebuilds the tufts). Kept in localStorage.
+        // The 2D grass's own level (AUTO = the 3D grass's, MED while that is off): kept in localStorage
+        window.setGrassCardQuality = function(q) {
+            const sh = window._terrainShells; if (!sh || typeof sh.setCardQuality !== 'function') return;
+            sh.setCardQuality(q);
+            try { localStorage.setItem('golf_grass_cards_q', sh.cardQuality); } catch (e) { /* storage blocked: not remembered */ }
+            window.syncGrassExtraUI();
+        };
+
         window.setGrassCardTuning = function(kind, v, apply) {
             const val = document.getElementById('grass-cards-' + kind + '-val');
             if (val) val.textContent = Math.round(parseFloat(v) * 100) + '%';
@@ -3039,7 +3058,7 @@
             try {
                 if (kind === 'edge') { sh.setEdgeWeighted(v === '1'); localStorage.setItem('golf_grass_edge', v === '1' ? '1' : '0'); }
                 else if (kind === 'blades') { sh.setBlades(v === '1'); localStorage.setItem('golf_grass_blades', v === '1' ? '1' : '0'); }
-                else if (kind === 'cards') { sh.setCards(v === '1'); localStorage.setItem('golf_grass_cards', v === '1' ? '1' : '0'); }
+                else if (kind === 'cards') { if (v === '1' && (window._roughMaskDirty || !window.terrainBiomeData) && window.pCtx) window.terrainBiomeData = window.pCtx.getImageData(0, 0, 4096, 4096).data; sh.setCards(v === '1'); localStorage.setItem('golf_grass_cards', v === '1' ? '1' : '0'); }
                 else if (kind === 'tex') { sh.setGrassTex(v !== '0', v === '2' ? 2 : 1); localStorage.setItem('golf_grass_tex', v === '2' ? '2' : (v === '1' ? '1' : '0')); }
             } catch (e) { /* storage blocked: the mode still switches, it is just not remembered */ }
             window.syncGrassExtraUI();
@@ -5309,8 +5328,8 @@
 
     window.rebuildRoughMask = function() {
         if (!window.terrainBiomeData) return;
-        // CODEX H3 FIX: If 3D grass is OFF, skip the 16.8M pixel CPU loop and mark dirty
-        if (!window._terrainShells || window._terrainShells.quality === 'OFF') {
+        // CODEX H3 FIX: If 3D grass is OFF, skip the 16.8M pixel CPU loop and mark dirty (not while the 2D grass is on: it is placed from this mask)
+        if (!window._terrainShells || (window._terrainShells.quality === 'OFF' && !window._terrainShells.cardsOn)) {
             window._roughMaskDirty = true;
             return;
         }
@@ -15426,6 +15445,7 @@ window.triggerExplosion = function(x, y, z) {
         }
 
         renderer.render(scene, camera);
+        if (window.PerfHud) window.PerfHud.mainPass(renderer);   // ?fps=1: the frame-time meter reads the main picture's draw calls and triangles
         
         // --- PLAY PHASE (body.phase-*): what the round's controls are for right now, so the CSS shows only those ---
         //   aim     a full shot is lined up: clubs, shot shape, swing, aim, map
