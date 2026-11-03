@@ -4056,8 +4056,13 @@
 
     window.initAutoPerformanceLOD = function() {
         let isMobileDevice = window.isTouchDevice() || window.innerWidth <= 768;
-        // Always lock Green Physics to 600x600 minimum so ball breaks are 100% accurate
-        window.TERRAIN_SEGS = 600;
+        // Always lock Green Physics to 600x600 minimum so ball breaks are 100% accurate. TERRAIN_SEGS must say what the terrain geometry
+        // is: every height lookup, the physics and the terrain chunks index the geometry with it. It used to be set to 600 here after a
+        // phone had built a 400 x 400 terrain, so on a phone the chunks read past the end of it (NaN heights: holes where the sky showed
+        // through) and the height and slope lookups read the wrong vertices. Now: before the terrain exists only the value is set; once it
+        // exists with another size it is resampled to 600 (updateTerrainResolution changes the geometry, the chunks and the value together).
+        if (!window._arcadePlaneGeo) window.TERRAIN_SEGS = 600;
+        else if (window.TERRAIN_SEGS !== 600 && typeof window.updateTerrainResolution === 'function') window.updateTerrainResolution(600);
         
         // Automatically set Terrain LOD for non-green background areas
         let autoLodSegs = isMobileDevice ? 350 : 600;
@@ -5394,8 +5399,10 @@
     window.waterTex = waterTex;
     
     const TERRAIN_SIZE = 600; 
-    const _isMobile = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPadOS reports a Mac
-    window.TERRAIN_SEGS = window.TERRAIN_SEGS || (_isMobile ? 400 : 600); 
+    // 600 x 600 on every device (it was 400 on a phone, then initAutoPerformanceLOD set TERRAIN_SEGS to 600 without the geometry): the
+    // physics, the slope and the putt read work on the same grid everywhere. A phone draws the ground at a lower detail through the
+    // terrain chunks (initAutoPerformanceLOD: 350), whatever this grid is.
+    window.TERRAIN_SEGS = window.TERRAIN_SEGS || 600; 
     let planeGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, window.TERRAIN_SEGS, window.TERRAIN_SEGS);
     planeGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
     
