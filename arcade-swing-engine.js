@@ -600,22 +600,37 @@ const SwingEngine = (function() {
 
     // -----------------------------------------------------------
     // Input mode: how a shot is created. All three end in triggerRealShot(launchData).
-    //   SWING    a tap / click on the swing circle (phones, and desktop play): club, shape and a swing with misses
+    //   SWING    a tap / click on the swing circle: club, shape and a swing with misses (the default everywhere)
     //   LM       a launch monitor: the shots arrive from the bridge, no controls on the screen
-    //   NUMBERS  typed values, exact and without noise: the lab for testing the physics (range / test mode)
-    // The choice is kept in localStorage once the player makes it. Without one: SWING on a touch or narrow screen, else NUMBERS in the
-    // lab (test mode, driving range) and SWING in play.
+    //   NUMBERS  the physics lab: typed values, exact and without noise, for testing the ball physics. Not a way to play: it is behind
+    //            a developer switch (?lab=1 in the address, kept until ?lab=0) and only in the lab (test mode, driving range), never in
+    //            a round on a course; its choice is kept on its own (golfos_lab_input), so it never follows into a round.
+    // The player's choice of SWING / LM is kept in localStorage (golfos_input_mode); an old stored NUMBERS from before the switch is ignored.
     // -----------------------------------------------------------
     const INPUT_MODES = ['SWING', 'LM', 'NUMBERS'];
     // what a finished round is filed under on the leaderboard (arcade-round-result.js reads window.G.inputMode): the two boards are
-    // LAUNCH_MONITOR and SWING_METER, typed numbers are neither of them
+    // LAUNCH_MONITOR and SWING_METER; a lab round (MANUAL) is never filed (the client skips it, server.js refuses it)
     const LEADERBOARD_MODE = { SWING: 'SWING_METER', LM: 'LAUNCH_MONITOR', NUMBERS: 'MANUAL' };
     let _inputMode = null;
     let _picked = null;            // what the player chose on this page: it beats a connected launch monitor
     let _bridgeConnected = false;  // a launch monitor bridge is connected (arcade-lm-bridge.js)
+    let _ctxLab = null;            // the page is in the lab (test mode, range): true / false once play or test has started, null before
+
+    function _ls(fn) { try { return fn(window.localStorage); } catch (e) { return null; } }   // private mode or blocked storage
+    // The developer switch: ?lab=1 turns it on and ?lab=0 off (kept in localStorage), else what was kept
+    function isLabEnabled() {
+        let q = null;
+        try { q = new URLSearchParams(window.location.search).get('lab'); } catch (e) { /* no location */ }
+        if (q === '1') { _ls(function (s) { s.setItem('golfos_lab', '1'); }); return true; }
+        if (q === '0') { _ls(function (s) { s.removeItem('golfos_lab'); }); return false; }
+        return _ls(function (s) { return s.getItem('golfos_lab'); }) === '1';
+    }
+    // The lab can be picked: the switch is on and the page is not in a round on a course
+    function labAllowed() { return _ctxLab !== false && isLabEnabled(); }
 
     function _storedInputMode() {
-        try { const m = localStorage.getItem('golfos_input_mode'); return INPUT_MODES.indexOf(m) >= 0 ? m : null; } catch (e) { return null; }
+        const m = _ls(function (s) { return s.getItem('golfos_input_mode'); });
+        return (m === 'SWING' || m === 'LM') ? m : null;
     }
 
     function _showInputMode(mode) {
@@ -623,6 +638,7 @@ const SwingEngine = (function() {
         if (window.G) window.G.inputMode = LEADERBOARD_MODE[mode];
         document.body.classList.toggle('input-lm', mode === 'LM');
         document.body.classList.toggle('input-numbers', mode === 'NUMBERS');
+        document.body.classList.toggle('lab-allowed', labAllowed());
         document.querySelectorAll('.input-btn').forEach(function (b) { b.classList.toggle('selected', b.dataset.input === mode); });
         // enable / disable restart the swing (phase back to idle): leave a swing alone when the mode did not change
         const swingOn = document.body.classList.contains('swing-mode');
@@ -630,20 +646,30 @@ const SwingEngine = (function() {
         else if (mode !== 'SWING' && swingOn) disableSwingMode();
     }
 
-    // The player's own choice (the picker): kept for next time, and it beats the launch monitor for as long as the page is open
+    // The player's own choice (the picker): kept for next time, and it beats the launch monitor for as long as the page is open.
+    // The lab only when it is allowed (the switch, not in a round); picking swing or the launch monitor in the lab leaves it.
     function setInputMode(mode) {
         if (INPUT_MODES.indexOf(mode) < 0) return;
+        if (mode === 'NUMBERS') {
+            if (!labAllowed()) return;
+            _ls(function (s) { s.setItem('golfos_lab_input', '1'); });
+        } else {
+            _ls(function (s) { s.setItem('golfos_input_mode', mode); });
+            if (_ctxLab) _ls(function (s) { s.removeItem('golfos_lab_input'); });
+        }
         _picked = mode;
-        try { localStorage.setItem('golfos_input_mode', mode); } catch (e) { /* private mode */ }
         _showInputMode(mode);
     }
 
     // Called when the page leaves build mode (play, test) and when a launch monitor connects or disconnects.
-    // The player's choice on this page, else LM while a bridge is connected, else the stored choice, else the default for the screen and mode.
+    // The player's choice on this page, else LM while a bridge is connected, else the lab if it was left on, else the stored choice,
+    // else swing. The lab never applies in a round on a course.
     function applyInputMode(ctx) {
-        const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0), narrow = window.innerWidth < 768;
-        const lab = !!(ctx && ctx.lab);
-        _showInputMode(_picked || (_bridgeConnected ? 'LM' : null) || _storedInputMode() || ((touch || narrow) ? 'SWING' : (lab ? 'NUMBERS' : 'SWING')));
+        _ctxLab = !!(ctx && ctx.lab);
+        const lab = labAllowed();
+        const picked = (_picked === 'NUMBERS' && !lab) ? null : _picked;
+        const labKept = lab && _ls(function (s) { return s.getItem('golfos_lab_input'); }) === '1';
+        _showInputMode(picked || (_bridgeConnected ? 'LM' : null) || (labKept ? 'NUMBERS' : null) || _storedInputMode() || 'SWING');
     }
 
     // arcade-lm-bridge.js tells when the bridge connects or disconnects: in play and test the mode follows at once, in build mode it waits
@@ -661,7 +687,7 @@ const SwingEngine = (function() {
     // Public API
     // -----------------------------------------------------------
     return { onTap, selectClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
-             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, shapeStartDeg, setInputMode, applyInputMode, setBridgeConnected, acceptsBridgeShots, getInputMode: () => _inputMode, CLUB_PROFILES };
+             updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, shapeStartDeg, setInputMode, applyInputMode, setBridgeConnected, acceptsBridgeShots, isLabEnabled, getInputMode: () => _inputMode, CLUB_PROFILES };
 })();
 
 // Expose for devtools access
