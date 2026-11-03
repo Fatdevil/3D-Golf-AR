@@ -499,11 +499,12 @@ Varje avslutat inspeltest på en publicerad range (eller övningsrangen, under k
 - Test: `tests/test_green_slope_viz.js`.
 
 ## Telefonlayout under en runda (2026-11)
-`arcade.css`, blocket "PHONE PLAY LAYOUT" (skärmar upp till 520 px). `setMode` sätter `body.play-ui` i spel och test och `body.range-ui` på rangen (även `arcade-load.js` när rangen laddas). Steg 1 gäller en runda på en bana (`play-ui` utan `range-ui`); rangen och liggande läge är inte ändrade än.
+`arcade.css`, blocket "PHONE PLAY LAYOUT" (skärmar upp till 520 px). `setMode` sätter `body.play-ui` i spel och test och `body.range-ui` på rangen (även `arcade-load.js` när rangen laddas). Steg 1 gällde en runda på en bana; steg 2 tar med rangen (allt utom flyover/lutning gäller `play-ui`, och `window.isPhonePlayLayout()` gäller båda). Liggande läge är inte ändrat än.
 - Nederkanten tillhör slaget: klubbraden, slagformen och SWING. Lägespanelen (`lie-conditions-hud`) är en rad ovanför slagformen, etiketterna (`.lie-lbl`) dolda.
 - Slagrutorna (`dynamic-hud`) är en kort rad uppe till vänster (de två första), syns först när ett slag har värden (`.has-data`), och ett tryck visar alla (`.dh-open`).
 - Minikartan är en ruta på 88 × 136 uppe till höger; ett tryck på den eller på ⤢ (`window.toggleMinimap`, `body.mm-open`) visar den i full storlek. Kartan ritas i 3D-ytan i containerns ruta (`window.minimapBox()`: innanför ramen, y nerifrån), inte i fasta 220 × 340; på en dator är rutan densamma. Medan den är öppen döljs slagrutorna och flyover/lutning (de skulle täcka den, eftersom rutan är genomskinlig) och höjdprofilen visas under den.
 - Flyover/lutning ligger under den lilla kartan; LM-status visas bara med launch monitor som inmatning.
+- **Rangen:** "Inspel mot green" (`range-practice`) ligger uppe till vänster (menyknappen till höger), och klubbpillret döljs medan den är öppen (samma plats). Sessionspanelen (`range-session`) ligger under den till vänster om kartan (top 156, med inspel öppet 236 och kartan flyttas ner dit), slutar 260 px ovanför nederkanten, och är ihopfälld som standard på telefon (`arcade-range-session.js`; spelarens senaste val i `golf_range_session_open` vinner). Medan den är öppen döljs siktet (`aim-controls`, `aim-billboard`). Kartrutan döljs aldrig: en dold container ger `minimapBox` datorns 220 × 340 nere till höger.
 - Test: `tests/test_phone_layout.js`.
 
 ## Spellägen: en kontroll syns bara när den kan användas (2026-11)
