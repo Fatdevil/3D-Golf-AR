@@ -288,7 +288,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     check('build mode: no swing UI and no input picker', !st.swing && !st.pick, JSON.stringify(st));
     await page.evaluate(ENTER_TEST);
     st = await state();
-    check('lab (test mode) on a desktop browser: numbers by default, no swing UI', st.mode === 'NUMBERS' && st.numbers && !st.swing && !st.clubs && st.saved === null, JSON.stringify(st));
+    check('test mode on a desktop browser: swing by default (the physics lab is opt-in), numbers hidden', st.mode === 'SWING' && st.swing && !st.numbers && st.saved === null, JSON.stringify(st));
     await page.evaluate(function () { toggleHamburgerMenu(); });
     st = await state();
     check('the menu shows the input picker outside build mode', st.pick, JSON.stringify(st));
@@ -306,11 +306,21 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.click('#hb-input-mode .input-btn[data-input="LM"]');
     st = await state();
     check('Launch monitor: no controls on the screen (neither swing UI nor numbers)', st.mode === 'LM' && !st.swing && !st.clubs && !st.numbers && st.saved === 'LM', JSON.stringify(st));
+    const labBtn = function () { return page.evaluate(function () { const b = document.querySelector('#hb-input-mode .input-btn[data-input="NUMBERS"]'); return !!b && getComputedStyle(b).display !== 'none'; }); };
+    check('without the developer switch the physics lab is not in the menu', await labBtn() === false);
+    // the switch (?lab=1 keeps golfos_lab): the lab button shows in test mode
+    await page.evaluate(function () { localStorage.setItem('golfos_lab', '1'); SwingEngine.applyInputMode({ lab: true }); });
+    check('with the switch the physics lab is in the menu (test mode)', await labBtn() === true);
     await page.click('#hb-input-mode .input-btn[data-input="NUMBERS"]');
     st = await state();
-    check('Numbers: the typed values are back and the swing UI is off', st.mode === 'NUMBERS' && st.numbers && !st.swing && !st.clubs && st.saved === 'NUMBERS', JSON.stringify(st));
+    check('Physics lab: the typed values are back and the swing UI is off; the round-mode choice is untouched', st.mode === 'NUMBERS' && st.numbers && !st.swing && !st.clubs && st.saved === 'LM', JSON.stringify(st));
+    const fields = await page.evaluate(function () { return { labels: Array.from(document.querySelectorAll('#manual-tools .mt-field span')).map(function (e) { return e.textContent; }), badge: !!document.querySelector('#manual-tools .lab-badge') }; });
+    check('the lab fields are labelled and marked LABB', fields.labels.length === 5 && fields.badge, JSON.stringify(fields));
     const sel = await page.evaluate(function () { return Array.from(document.querySelectorAll('#hb-input-mode .input-btn.selected')).map(function (b) { return b.dataset.input; }); });
     check('exactly one picker button is highlighted', sel.length === 1 && sel[0] === 'NUMBERS', JSON.stringify(sel));
+    // a round on a course: the lab never applies there, and its button is gone
+    const round = await page.evaluate(function () { SwingEngine.applyInputMode({ lab: false }); const b = document.querySelector('#hb-input-mode .input-btn[data-input="NUMBERS"]'); const r = { mode: SwingEngine.getInputMode(), btn: getComputedStyle(b).display }; SwingEngine.applyInputMode({ lab: true }); r.back = SwingEngine.getInputMode(); return r; });
+    check('a round on a course: the stored choice instead of the lab, the lab button hidden; back in test mode the lab again', round.mode === 'LM' && round.btn === 'none' && round.back === 'NUMBERS', JSON.stringify(round));
     await page.evaluate(function () { SwingEngine.setInputMode('SWING'); });
     await page.reload({ waitUntil: 'load' });
     await page.waitForTimeout(6000);
@@ -449,7 +459,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.evaluate(ENTER_TEST);
     await page.evaluate(function () { SwingEngine.setBridgeConnected(false); });
     const st = await page.evaluate(function () { return { mode: SwingEngine.getInputMode(), filing: window.G.inputMode }; });
-    check('the bridge disconnects: test mode goes back to numbers on a desktop browser', st.mode === 'NUMBERS' && st.filing === 'MANUAL', JSON.stringify(st));
+    check('the bridge disconnects: test mode goes back to swing (the default) on a desktop browser', st.mode === 'SWING' && st.filing === 'SWING_METER', JSON.stringify(st));
     await o.ctx.close();
   }
 
@@ -486,7 +496,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
       const vis = function (sel) { const el = document.querySelector(sel); if (!el) return false; const r = el.getBoundingClientRect(); return getComputedStyle(el).display !== 'none' && r.width > 0 && r.height > 0; };
       return { mode: SwingEngine.getInputMode(), swing: document.body.classList.contains('swing-mode'), clubs: vis('#club-selector'), numbers: vis('#manual-tools') };
     });
-    check('a stored Numbers choice is respected on a phone: no swing UI, typed values shown', st.mode === 'NUMBERS' && !st.swing && !st.clubs && st.numbers, JSON.stringify(st));
+    check('an old stored Numbers choice (from before the physics lab switch) no longer applies: the swing UI', st.mode === 'SWING' && st.swing && st.clubs && !st.numbers, JSON.stringify(st));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
@@ -683,7 +693,7 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await o.ctx.close();
 
     POSTED.length = 0;
-    o = await play('PUTTCOURSE', function () { SwingEngine.setInputMode('NUMBERS'); });
+    o = await play('PUTTCOURSE', function () { localStorage.setItem('golfos_lab', '1'); SwingEngine.setInputMode('NUMBERS'); });
     st = await o.page.evaluate(function () { return document.getElementById('sc-status').textContent; });
     check('a round with typed numbers is not filed', POSTED.length === 0 && /typed numbers/.test(st), JSON.stringify({ st: st, n: POSTED.length }));
     await o.ctx.close();

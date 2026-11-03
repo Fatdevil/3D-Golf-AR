@@ -727,6 +727,8 @@ app.post('/api/courses/:code/results', requireDB, optionalAuth, async (req, res)
         const { total_score, score_vs_par, hole_scores, input_mode, lm_device, stats, player_name } = req.body;
         
         if (!total_score && total_score !== 0) return res.status(400).json({ error: 'Missing total_score' });
+        // the physics lab (typed numbers, MANUAL) is for testing the ball physics: its rounds are never filed (arcade-swing-engine.js)
+        if (input_mode === 'MANUAL') return res.status(400).json({ error: 'Physics lab rounds are not filed' });
         
         // Get current course version + hole_count for sanity check
         const courseResult = await pool.query(

@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=28">
+<link rel="stylesheet" href="arcade.css?v=29">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -31,7 +31,7 @@
 <script src="ratings.js?v=2"></script>
 <script src="arcade-storage-service.js?v=2"></script>
 <script src="arcade-surface.js?v=1"></script>
-<script src="arcade-swing-engine.js?v=12"></script>
+<script src="arcade-swing-engine.js?v=13"></script>
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
@@ -132,7 +132,7 @@
             <div class="hb-input-row">
                 <button class="input-btn" data-input="SWING" onclick="SwingEngine.setInputMode('SWING')" title="Slå med swing-cirkeln (klick eller tryck)">Swing</button>
                 <button class="input-btn" data-input="LM" onclick="SwingEngine.setInputMode('LM')" title="Slag från launch monitor">Launch monitor</button>
-                <button class="input-btn" data-input="NUMBERS" onclick="SwingEngine.setInputMode('NUMBERS')" title="Skriv in siffror: exakta slag för att testa fysiken">Siffror</button>
+                <button class="input-btn" data-input="NUMBERS" onclick="SwingEngine.setInputMode('NUMBERS')" title="Fysiklabb: skriv in exakta slag för att testa bollfysiken (utvecklarbrytare ?lab=1, bara i testläge och på rangen; räknas aldrig i topplistan)">Fysiklabb</button>
             </div>
         </div>
         <div id="hb-units">
@@ -3204,12 +3204,14 @@
     <div class="controls" id="play-controls">
         <button id="btn-start-round" onclick="startRound()" style="background:#38bdf8; color:#0f172a; padding:12px 30px; font-size:18px; border-radius:8px; font-weight:900; border:none; cursor:pointer;">⛳ START ROUND</button>
         <div id="play-tools" style="display:none; align-items:center; gap:10px;">
+            <!-- the physics lab (SwingEngine input mode NUMBERS, behind the ?lab=1 switch): exact typed shots, never a way to play a round -->
             <div id="manual-tools" style="display:flex; align-items:center; gap:10px;">
-                <input type="number" id="in-speed" value="130" title="Ball Speed (mph)" style="width:65px;">
-                <input type="number" id="in-la" value="14" title="Launch Angle (deg)" style="width:60px;">
-                <input type="number" id="in-hla" value="0" title="Azimuth / HLA (deg)" style="width:60px;">
-                <input type="number" id="in-backspin" value="2500" title="Backspin (rpm)" style="width:70px;">
-                <input type="number" id="in-sidespin" value="0" title="Sidespin (rpm)" style="width:70px;">
+                <span class="lab-badge" title="Fysiklabb: exakta slag för att testa bollfysiken, räknas aldrig i topplistan">LABB</span>
+                <label class="mt-field"><span>Fart mph</span><input type="number" id="in-speed" value="130" title="Ball Speed (mph)" style="width:65px;"></label>
+                <label class="mt-field"><span>Utgång °</span><input type="number" id="in-la" value="14" title="Launch Angle (deg)" style="width:60px;"></label>
+                <label class="mt-field"><span>Riktning °</span><input type="number" id="in-hla" value="0" title="Azimuth / HLA (deg)" style="width:60px;"></label>
+                <label class="mt-field"><span>Backspinn rpm</span><input type="number" id="in-backspin" value="2500" title="Backspin (rpm)" style="width:70px;"></label>
+                <label class="mt-field"><span>Sidospinn rpm</span><input type="number" id="in-sidespin" value="0" title="Sidespin (rpm)" style="width:70px;"></label>
                 <button onclick="fireShot()">🔥 SHOOT</button>
             </div>
             <input type="hidden" id="in-stimp" value="10.0">
@@ -9008,7 +9010,7 @@
 
 </script>
 <script src="arcade-handicap.js?v=1"></script>
-<script src="arcade-round-result.js?v=1"></script>
+<script src="arcade-round-result.js?v=2"></script>
 <script>
     
     window.updateTerrainResolution = function(newSegs) {
@@ -11257,7 +11259,7 @@
         if (mode === 'BUILD' && typeof window.disableSwingMode === 'function') {
             window.disableSwingMode();
         } else if (mode !== 'BUILD' && window.SwingEngine && SwingEngine.applyInputMode) {
-            // play and test: the player's input mode (swing / launch monitor / numbers), else the default for the screen and mode
+            // play and test: the player's input mode (swing / launch monitor; the physics lab only in test and on the range, behind ?lab=1)
             SwingEngine.applyInputMode({ lab: mode === 'TEST' || !!window._isRangeMode });
         }
         safeSetDisplay('hb-input-mode', mode === 'BUILD' ? 'none' : 'block');

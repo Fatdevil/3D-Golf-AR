@@ -10,6 +10,19 @@
         
         let players = window.players || [];
         if (players.length === 0) return;
+        // the physics lab (typed numbers) is for testing the ball physics: its rounds never reach the leaderboard or the handicap
+        if (window.G && window.G.inputMode === 'MANUAL') {
+            console.log('Physics lab round — skipping leaderboard submit');
+            let endBtns = opts.silent ? null : document.getElementById('scorecard-endround-btns');
+            if (endBtns && !document.getElementById('sc-lab-note')) {
+                let note = document.createElement('div');
+                note.id = 'sc-lab-note';
+                note.style.cssText = 'color:#c4b5fd; font-size:13px; font-weight:700; margin-bottom:10px; text-align:center; width:100%;';
+                note.textContent = 'Fysiklabb: rundan sparas inte i topplistan.';
+                endBtns.parentNode.insertBefore(note, endBtns);
+            }
+            return;
+        }
 
         // A plate of a collection is a round of its own on that plate; the collection ties the plates of one go together, so its
         // leaderboard can add them up. Read before anything is awaited: the last plate clears it right after calling this.
