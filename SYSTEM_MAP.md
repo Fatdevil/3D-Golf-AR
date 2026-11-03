@@ -520,5 +520,8 @@ Renderloopen sätter `body.phase-aim` / `phase-putt` / `phase-flight` ur `playSt
 - LM-status bara med launch monitor; slagdata först när ett slag har värden.
 - Test: `tests/test_play_phases.js` (1b och 4).
 
+## Terrängens rutnät: samma på alla enheter (2026-11)
+`arcade.html` bygger terrängen med 600 × 600 rutor på alla enheter (`window.TERRAIN_SEGS`). Förut byggde en telefon eller en iPad (iPadOS räknas som mobil i `arcade.html`, och hubben skickar den inte till mobilsidan) 400 × 400, varefter `initAutoPerformanceLOD` satte `TERRAIN_SEGS = 600` utan att ändra geometrin. Alla höjduppslag, fysiken och terrängbitarna indexerar geometrin med `TERRAIN_SEGS`, så bitarna läste förbi slutet (NaN-höjder: hål där himlen syntes, de blå ränderna) och uppslagen läste fel hörn (0 eller NaN i stället för markens höjd). `initAutoPerformanceLOD` sätter nu bara värdet innan terrängen finns; en terräng med annan storlek samplas om med `updateTerrainResolution` (geometri, bitar, gräs och värde tillsammans). En telefon ritar marken med lägre detalj via terrängbitarna (350). `arcade_mobile.html` (dit hubben skickar telefoner) har sin egen konsekventa 400 × 400. Test: `tests/test_terrain_size.js`.
+
 ## Tester och CI (2026-10)
 `.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js`, `tests/e2e/ratings-e2e.js` och `tests/e2e/approach-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.
