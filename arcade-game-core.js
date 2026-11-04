@@ -154,23 +154,27 @@ const GolfEngine = (function() {
 
     // --- RULES ENGINE ---
     function handleShotResult(player, distanceToPinFt, isGreen, isFringe, isHoled, holePar, finalTerrain, penaltyEntryPoint, penaltyPrevLie) {
+        let maxConcede = state.settings.autoConcede;
+        let maxScore = holePar + maxConcede;
+
         // OB / Water Check
         if (isHoled === false) { // Don't penalize if it's magically in the hole
-            if (finalTerrain === 'WATER') {
+            if (finalTerrain === 'WATER' || finalTerrain === 'OB') {
                 player.penaltyStrokes++;
-                emit(GameEvent.PENALTY_APPLIED, { player, type: 'WATER', entryPoint: penaltyEntryPoint, previousLie: penaltyPrevLie });
-                return;
-            }
-            if (finalTerrain === 'OB') {
-                player.penaltyStrokes++;
-                emit(GameEvent.PENALTY_APPLIED, { player, type: 'OB', previousLie: penaltyPrevLie });
+                // the penalty stroke takes the hole to the Auto Concede limit: picked up now, no shot after it
+                if (maxConcede !== 99 && holeScore(player) >= maxScore) {
+                    player.strokes = maxScore - player.penaltyStrokes;
+                    _finishHole(player);
+                    emit(GameEvent.MATCH_COMPLETED, { player, reason: 'CONCEDE', maxScore });
+                    return;
+                }
+                if (finalTerrain === 'WATER') emit(GameEvent.PENALTY_APPLIED, { player, type: 'WATER', entryPoint: penaltyEntryPoint, previousLie: penaltyPrevLie });
+                else emit(GameEvent.PENALTY_APPLIED, { player, type: 'OB', previousLie: penaltyPrevLie });
                 return;
             }
         }
         
         // Auto Concede check
-        let maxConcede = state.settings.autoConcede;
-        let maxScore = holePar + maxConcede;
         let shouldConcede = (player.strokes + player.penaltyStrokes) >= maxScore && maxConcede !== 99;
 
         if (isHoled) {
