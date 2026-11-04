@@ -245,9 +245,15 @@
         if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
         if (window.activePlayerIndex !== lastIdx) window.activePlayerIndex = lastIdx;
         
-        p.holedOut = false;
-        if (p.scores) p.scores[playingHoleIndex] = null;
-        if (p.scoreVsPar) p.scoreVsPar[playingHoleIndex] = null;
+        if (p.holedOut) {
+            // the hole was finished for the shot (a gimme, auto-putt or concede added strokes that were never played): back to the
+            // count before the shot, plus the shot itself (stroke and distance), and the penalty below
+            if (p.prevStrokes !== undefined) p.strokes = p.prevStrokes + 1;
+            if (p.prevPenalty !== undefined) p.penaltyStrokes = p.prevPenalty;
+            p.holedOut = false;
+            if (p.scores) p.scores[playingHoleIndex] = null;
+            if (p.scoreVsPar) p.scoreVsPar[playingHoleIndex] = null;
+        }
         p.penaltyStrokes++;
         window.ballMesh.position.set(p.prevPos.x, p.prevPos.y, p.prevPos.z);
         p.prevPos = null;
