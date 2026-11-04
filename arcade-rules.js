@@ -1,3 +1,19 @@
+    // A drop that is being placed (the circle and its confirm button are up): window._pendingDrop = { player, penalty }.
+    // Cancelling it takes the circle and the button away and gives back the drop's own penalty strokes to its player, unless that player's
+    // counts are restored anyway (keepFor: the player a mulligan puts back to before the shot).
+    function cancelPendingDrop(keepFor) {
+        let d = window._pendingDrop;
+        if (!d) return;
+        window._pendingDrop = null;
+        if (d.player && d.penalty && d.player !== keepFor) d.player.penaltyStrokes = Math.max(0, d.player.penaltyStrokes - d.penalty);
+        if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); window._dropZoneCircle = null; }
+        let confirmBtn = document.getElementById('btn-confirm-drop');
+        if (confirmBtn) confirmBtn.remove();
+        window.camFollowMode = 'AUTO';
+        let btnCam = document.getElementById('btn-cam-mode');
+        if (btnCam) { btnCam.innerText = '🎥 AUTO'; btnCam.style.background = '#4f46e5'; }
+    }
+
     window.takeMulligan = function() {
         if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
         if (appMode === 'PLAY' && (!window.matchSettings || !window.matchSettings.mulligans)) return;
@@ -5,10 +21,12 @@
 
         let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
         let p = window.players[lastIdx];
-        
+
         if (p && p.prevPos) {
             if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
-            
+            // a drop being placed is called off: the mulligan replays the shot instead
+            cancelPendingDrop(p);
+
             if (window.activePlayerIndex !== lastIdx) {
                 window.activePlayerIndex = lastIdx;
             }
@@ -51,11 +69,13 @@
     // Relief by dropping: the player places the ball inside a circle (two club lengths) around a reference point, not nearer the hole than
     // that point, and never in water or out of bounds. Used for the water hazard drop (reference = where the ball entered the water) and for an
     // unplayable ball (reference = where the ball lies). onDone runs once the drop is confirmed.
-    // opts: { mode: 'lateral' (default) | 'line', mustBeIn, mustBeOutOf } as in arcade-relief.js (an unplayable ball in a bunker)
+    // opts: { mode: 'lateral' (default) | 'line', mustBeIn, mustBeOutOf } as in arcade-relief.js (an unplayable ball in a bunker),
+    // penalty: the strokes this drop itself added (given back if the drop is called off, see cancelPendingDrop)
     const DROP_RADIUS = window.ReliefRules.DROP_RADIUS;   // two club lengths, in metres
     window.startLateralDrop = function(ref, label, doneText, opts) {
         opts = opts || {};
         let p = window.players[window.activePlayerIndex];
+        window._pendingDrop = { player: p, penalty: opts.penalty || 0 };
         let hole = courseHoles[playingHoleIndex];
         let flag = hole ? hole.flag : null;
         let btnCam = document.getElementById('btn-cam-mode');
@@ -139,6 +159,7 @@
             p.lie = {x: dropX, y: dh, z: dropZ};
             p.prevPos = {x: dropX, y: dh, z: dropZ};
             p.penaltyResolved = true;   // relief taken: no Rehit on top of it
+            window._pendingDrop = null;
             if (window.resetAimTarget) window.resetAimTarget();
             if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); window._dropZoneCircle = null; }
             window.camFollowMode = 'AUTO';
@@ -161,7 +182,8 @@
         if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
         if (playState !== 'ROUND_IDLE') return;
         let p = window.players[window.activePlayerIndex];
-        if (!p || !p.lie) return;
+        // not for a player who has finished the hole (a penalty on a holed-out score), and not while a drop is already being placed
+        if (!p || !p.lie || p.holedOut || window._pendingDrop) return;
         let here = (typeof localGetTerrainAt === 'function') ? localGetTerrainAt(p.lie.x, -p.lie.z) : null;
         let inBunker = !!here && here.type === 'SAND';
         let opts = {}, penalty = 1;
@@ -177,6 +199,7 @@
         p.penaltyStrokes += penalty;
         document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
         if (typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+        opts.penalty = penalty;
         window.startLateralDrop({ x: p.lie.x, z: p.lie.z }, 'PENALTY DROP', '📍 Penalty drop (+' + penalty + ') — play on', opts);
     };
 
@@ -246,6 +269,7 @@
         let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
         let p = window.players[lastIdx];
         if (!p || !p.prevPos || p.penaltyResolved) return;   // after out of bounds or a water decision the relief is already taken
+        if (window._pendingDrop) return;   // a drop is being placed: that relief first (a mulligan calls it off)
         
         if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
         if (window.activePlayerIndex !== lastIdx) window.activePlayerIndex = lastIdx;
@@ -299,8 +323,11 @@
                 if (p && p.prevPos) {
                     if (actionsContainer) actionsContainer.style.display = 'block';
                     if (window.matchSettings && window.matchSettings.mulligans) mBtn.style.display = 'block';
-                    if (rBtn) rBtn.style.display = p.penaltyResolved ? 'none' : 'block';
-                    if (dBtn) dBtn.style.display = 'block';
+                    let dropping = !!window._pendingDrop;
+                    if (rBtn) rBtn.style.display = (p.penaltyResolved || dropping) ? 'none' : 'block';
+                    // the drop (unplayable) is for the player who is up, never for one who has finished the hole
+                    let up = window.players[window.activePlayerIndex];
+                    if (dBtn) dBtn.style.display = (up && !up.holedOut && !dropping) ? 'block' : 'none';
                     return;
                 }
             }

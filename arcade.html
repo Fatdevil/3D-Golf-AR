@@ -8419,6 +8419,7 @@
         });
 
         window.lastShotPlayerIndex = undefined;
+        window._pendingDrop = null;
         let startPlayerIdx = getNextPlayerIndex();
         switchTurnTo(startPlayerIdx);
     }
@@ -9558,6 +9559,15 @@
         }
     };
 
+    // A shot from the tee is teed up, whatever is painted under the tee: the first shot of the hole, and also a shot played again from the
+    // tee (out of bounds or water off the tee, Rehit) - the ball is back on the player's tee then (within half a metre).
+    function isFromTee(p) {
+        if (!p) return false;
+        if (p.strokes === 1) return true;
+        let t = p.teePosition, b = window.ballMesh && window.ballMesh.position;
+        return !!(t && b && Math.hypot(b.x - t.x, b.z - t.z) < 0.5);
+    }
+
     function executeArcadeShot(data) {
         if (window.camFollowMode === 'AUTO') {
             controls.enabled = false;
@@ -9644,7 +9654,7 @@
             isLiveData: data.isLiveData || false,
             // on the range every ball is hit from the Range Tee's hitting mat, whatever the ground under it (approach practice: the mat,
             // or the ground where the ball lies when the player chose that)
-            isTeeShot: window._isRangeMode ? !(window._rangePracticeSpot && window._rangePracticeSpot.lie === 'ground') : (window.players && window.players[window.activePlayerIndex] && window.players[window.activePlayerIndex].strokes === 1)
+            isTeeShot: window._isRangeMode ? !(window._rangePracticeSpot && window._rangePracticeSpot.lie === 'ground') : isFromTee(window.players && window.players[window.activePlayerIndex])
         };
 
         // a putt from the swing meter carries the distance it should roll: turn it into the speed that does it under this ball
@@ -11438,6 +11448,7 @@
             ghostBlock.visible = false;
             playState = 'ROUND_IDLE';
             window.ballLocked = false;   // a lock left from an earlier round
+            window._pendingDrop = null;
             window.activePlayerId = 'tester';
             window.activePlayerIndex = 0; // BUG-08 FIX: Set activePlayerIndex
             window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true, scores: Array(MAX_HOLES).fill(null), scoreVsPar: Array(MAX_HOLES).fill(null), holedOut: false, prevPos: null } ];

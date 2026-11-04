@@ -1841,6 +1841,38 @@ function serve() {
     });
     checks.push({ name: 'course: a Rehit that reaches the Auto Concede limit (5 on a par 4, limit 6) picks the hole up at 6 and keeps the ball locked: a shot right after is not played',
       ok: rehitConcede.after.total === 6 && rehitConcede.after.holedOut && rehitConcede.after.locked && rehitConcede.shot.total === 6 && rehitConcede.shot.holedOut && !rehitConcede.shot.flying, detail: JSON.stringify(rehitConcede) });
+    // the Drop button (unplayable) is not for a player who has holed out: it would put a penalty on a finished hole
+    const holedDrop = await cp.evaluate(function () {
+      return new Promise(function (res) {
+        appMode = 'PLAY'; window.matchSettings = Object.assign({}, window.matchSettings || {}, { mulligans: true, autoConcede: 99 });
+        const p = window.players[0];
+        p.holedOut = true; p.prevPos = { x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z };
+        window.lastShotPlayerIndex = 0; playState = 'ROUND_IDLE';
+        setTimeout(function () {
+          const pen = p.penaltyStrokes; window.takePenaltyDrop();
+          res({ drop: document.getElementById('btn-drop').style.display, mulligan: document.getElementById('btn-mulligan').style.display, penAdded: p.penaltyStrokes - pen, dropping: !!window._pendingDrop });
+        }, 700);
+      });
+    });
+    checks.push({ name: 'course: no Drop for a player who has holed out (the button is hidden, a call adds no penalty), the mulligan is still there', ok: holedDrop.drop === 'none' && holedDrop.mulligan === 'block' && holedDrop.penAdded === 0 && !holedDrop.dropping, detail: JSON.stringify(holedDrop) });
+    // a mulligan while a drop is being placed calls the drop off: Anna hit last, Bo (up) declares his ball unplayable, Anna takes a mulligan
+    const mullDrop = await cp.evaluate(function () {
+      return new Promise(function (res) {
+        const here = { x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z };
+        const A = window.players[0];
+        A.holedOut = false; A.strokes = 3; A.penaltyStrokes = 0; A.prevStrokes = 2; A.prevPenalty = 0; A.prevPos = here; A.penaltyResolved = false;
+        const B = { name: 'Bo', strokes: 2, penaltyStrokes: 0, holedOut: false, scores: [], scoreVsPar: [], lie: { x: here.x + 3, y: here.y, z: here.z - 20 }, teePosition: A.teePosition };
+        window.players = [A, B]; window.lastShotPlayerIndex = 0; window.activePlayerIndex = 1; window.ballLocked = false; playState = 'ROUND_IDLE';
+        window.takePenaltyDrop();
+        setTimeout(function () {
+          const during = { boPen: B.penaltyStrokes, confirm: !!document.getElementById('btn-confirm-drop'), rehit: document.getElementById('btn-rehit').style.display };
+          window.takeMulligan();
+          res({ during: during, after: { boPen: B.penaltyStrokes, anna: A.strokes + A.penaltyStrokes, active: window.activePlayerIndex, confirm: !!document.getElementById('btn-confirm-drop'), circle: !!window._dropZoneCircle, pending: !!window._pendingDrop, cam: window.camFollowMode } });
+        }, 700);
+      });
+    });
+    checks.push({ name: 'course: a mulligan while a drop is being placed calls the drop off (no circle, no confirm button, the camera back to AUTO) and gives the dropping player his penalty back; no Rehit during the drop',
+      ok: mullDrop.during.boPen === 1 && mullDrop.during.confirm && mullDrop.during.rehit === 'none' && mullDrop.after.boPen === 0 && mullDrop.after.anna === 2 && mullDrop.after.active === 0 && !mullDrop.after.confirm && !mullDrop.after.circle && !mullDrop.after.pending && mullDrop.after.cam === 'AUTO', detail: JSON.stringify(mullDrop) });
     await cp.close();
     checks.push({ name: 'course: with a launch monitor the aim billboard suggests the club from the player\'s bag (PW for 110), not with the swing', ok: /PW/.test(bagCourse.club) && /^Carry /.test(bagCourse.reach) && /plays/.test(bagCourse.fx) && !/^🎒/.test(swingClub), detail: JSON.stringify([bagCourse, swingClub]) });
     checks.push({ name: 'range: the quick draft of a range reopens as a range even without mode=range in the address', ok: reopenedRange.range && reopenedRange.url === 'range' && reopenedRange.teeBtn !== 'none' && reopenedRange.hasTee, detail: JSON.stringify(reopenedRange) });
