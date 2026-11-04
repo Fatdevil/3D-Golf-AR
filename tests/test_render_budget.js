@@ -38,8 +38,18 @@ console.log('\n2. Minikartan som egen bild');
 {
   const pass = html.slice(html.indexOf('// --- THE GSPRO MINIMAP PASS ---'), html.indexOf('// LM Bridge extracted'));
   check('en render target, 1,5 gånger rutans storlek, byggs om när storleken ändras', /new THREE\.WebGLRenderTarget\(rtW, rtH,/.test(pass) && /MM_SS = 1\.5/.test(pass) && /mmc\.rt\.width !== rtW \|\| mmc\.rt\.height !== rtH/.test(pass));
-  check('nyckeln: storlek, inramning, sikte, boll, hål, putt, lutningsvy', /const mmKey = \[rtW, rtH, r3\(minimapCamera\.position\)[\s\S]*r3\(window\.aimTarget\), r3\(window\.ballMesh\.position\), playingHoleIndex, window\.isPuttingMode \? 1 : 0, window\._greenSlopeMode \|\| ''\]/.test(pass));
-  check('ritas när nyckeln ändras, annars minst en gång per sekund, 20 gånger per sekund i luften', /if \(mmKey !== mmc\.key \|\| mmNow - mmc\.at > \(mmFlying \? 50 : 1000\)\)/.test(pass));
+  check('två nycklar: spelarens ändringar (storlek, sikte, hål, putt, lutningsvy) och det som följer bollen (inramning, boll)', /const mmHard = \[rtW, rtH, r3\(window\.aimTarget\), playingHoleIndex, window\.isPuttingMode \? 1 : 0, window\._greenSlopeMode \|\| ''\]/.test(pass) && /const mmSoft = \[r3\(minimapCamera\.position\)[\s\S]*r3\(window\.ballMesh\.position\)\]/.test(pass));
+  // the decision, run: spelarens ändring direkt; bollen i luften högst var 50:e ms; minst en gång per sekund
+  const cond = pass.match(/if \((mmHard !== mmc\.key[^{]+)\) \{/);
+  check('villkoret finns', !!cond);
+  if (cond) {
+    const due = new Function('mmHard', 'mmSoft', 'mmc', 'mmFlying', 'mmAge', 'return ' + cond[1] + ';');
+    const c = { key: 'H', soft: 'S' };
+    check('sikte ändrat: direkt, även i luften', due('H2', 'S', c, true, 5) && due('H2', 'S', c, false, 5));
+    check('bollen rör sig i luften: inte förrän 50 ms har gått', !due('H', 'S2', c, true, 16) && due('H', 'S2', c, true, 50));
+    check('inramningen ändrad utan flykt: direkt', due('H', 'S2', c, false, 16));
+    check('inget ändrat: en gång per sekund, i luften var 50:e ms', !due('H', 'S', c, false, 900) && due('H', 'S', c, false, 1001) && due('H', 'S', c, true, 51));
+  }
   check('scenen ritas bara in i bilden (render target), rutan får en kopia varje bild', (pass.match(/renderer\.render\(scene, minimapCamera\)/g) || []).length === 2 && /renderer\.setRenderTarget\(mmc\.rt\);[\s\S]*renderer\.setRenderTarget\(null\);[\s\S]*renderer\.render\(mmc\.quadScene, mmc\.quadCam\);/.test(pass));
   check('kopian: utan djup och utan tonmappning (bilden har redan sina färger)', /new THREE\.MeshBasicMaterial\(\{ map: mmc\.rt\.texture, depthTest: false, depthWrite: false, toneMapped: false \}\)/.test(pass));
 }

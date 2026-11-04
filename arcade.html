@@ -15979,11 +15979,14 @@ window.triggerExplosion = function(x, y, z) {
             }
             mmc.quad.material.map = mmc.rt.texture;
             const r3 = function (v) { return v ? Math.round(v.x * 20) + ':' + Math.round(v.y * 20) + ':' + Math.round(v.z * 20) : '-'; };
-            const mmKey = [rtW, rtH, r3(minimapCamera.position), Math.round(minimapCamera.left * 20), Math.round(minimapCamera.top * 20), Math.round(minimapCamera.bottom * 20),
-                r3(minimapCamera.up), r3(window.aimTarget), r3(window.ballMesh.position), playingHoleIndex, window.isPuttingMode ? 1 : 0, window._greenSlopeMode || ''].join('|');
-            const mmNow = performance.now(), mmFlying = isFlying || playState === 'ROUND_FLYING';
-            if (mmKey !== mmc.key || mmNow - mmc.at > (mmFlying ? 50 : 1000)) {
-                mmc.key = mmKey; mmc.at = mmNow; mmc.renders++;
+            // two keys: what the player changed is drawn at once (size, aim, hole, putting, slope view); what follows the ball (the ball, the
+            // framing) moves every frame in the air, so there it is drawn at most every 50 ms (else the map was drawn on every frame of a flight)
+            const mmHard = [rtW, rtH, r3(window.aimTarget), playingHoleIndex, window.isPuttingMode ? 1 : 0, window._greenSlopeMode || ''].join('|');
+            const mmSoft = [r3(minimapCamera.position), Math.round(minimapCamera.left * 20), Math.round(minimapCamera.top * 20), Math.round(minimapCamera.bottom * 20),
+                r3(minimapCamera.up), r3(window.ballMesh.position)].join('|');
+            const mmNow = performance.now(), mmFlying = isFlying || playState === 'ROUND_FLYING', mmAge = mmNow - mmc.at;
+            if (mmHard !== mmc.key || (mmSoft !== mmc.soft && (!mmFlying || mmAge >= 50)) || mmAge > (mmFlying ? 50 : 1000)) {
+                mmc.key = mmHard; mmc.soft = mmSoft; mmc.at = mmNow; mmc.renders++;
                 renderer.setRenderTarget(mmc.rt);
                 renderer.setScissorTest(false);
                 renderer.setClearColor(0x0f172a, 1.0);
