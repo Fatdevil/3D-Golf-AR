@@ -35,10 +35,10 @@
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
-<script src="terrain-shells.js?v=53"></script>
+<script src="terrain-shells.js?v=54"></script>
 <script src="arcade-perf-hud.js?v=2"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
-<script src="arcade-scene-engine.js?v=11"></script>
+<script src="arcade-scene-engine.js?v=12"></script>
 <script src="arcade-tracer-engine.js"></script>
 <script src="arcade-audio-engine.js"></script>
 <script src="arcade-particle-engine.js?v=2"></script>
@@ -5216,15 +5216,52 @@
     scene.add(ambientLight);
     
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(50, 100, 50);
+    // the sun's direction (from the light's target to the light): the time of day sets it (arcade-scene-engine.js); the light and its
+    // target follow the shadow's centre (window.updateShadowFocus), so whoever wants the sun's direction reads userData.sunDir
+    dirLight.userData.sunDir = new THREE.Vector3(50, 100, 50);
+    dirLight.position.copy(dirLight.userData.sunDir);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048; 
     dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.top = 100;
-    dirLight.shadow.camera.bottom = -100;
-    dirLight.shadow.camera.left = -100;
-    dirLight.shadow.camera.right = 100;
+    // SHADOWS follow the play: the shadow camera covers SHADOW_HALF m around a centre on the ball (in a round) or on the camera's look point
+    // (building), moved in steps when that point is SHADOW_RECENTRE m away. It used to stand still at the middle of the course (+-100 m), so
+    // the ball and the trees had no shadow out on most of a hole. 2048 texels over 160 m are 8 cm (they were 10).
+    const SHADOW_HALF = 80, SHADOW_RECENTRE = 25;
+    dirLight.shadow.camera.top = SHADOW_HALF;
+    dirLight.shadow.camera.bottom = -SHADOW_HALF;
+    dirLight.shadow.camera.left = -SHADOW_HALF;
+    dirLight.shadow.camera.right = SHADOW_HALF;
+    dirLight.shadow.camera.far = 600;
     scene.add(dirLight);
+    scene.add(dirLight.target);
+    // The shadow map is drawn only when something that casts a shadow can have moved (it used to be drawn on every render, the minimap's too):
+    // the centre or the sun moved, the ball moved, the ball is in the air, while building (anything can be edited), and at least twice a second.
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
+    const shadowFocus = { cx: 0, cz: 0, sun: new THREE.Vector3(), ball: new THREE.Vector3(1e9, 0, 0), at: 0, init: false };
+    window.updateShadowFocus = function () {
+        const play = appMode === 'PLAY' || appMode === 'TEST';
+        const focus = play && window.ballMesh ? window.ballMesh.position : (typeof controls !== 'undefined' ? controls.target : null);
+        let moved = false;
+        if (focus && (!shadowFocus.init || Math.hypot(focus.x - shadowFocus.cx, focus.z - shadowFocus.cz) > SHADOW_RECENTRE)) {
+            shadowFocus.cx = Math.round(focus.x / 5) * 5; shadowFocus.cz = Math.round(focus.z / 5) * 5;
+            shadowFocus.init = true; moved = true;
+        }
+        const sd = dirLight.userData.sunDir;
+        if (!shadowFocus.sun.equals(sd)) { shadowFocus.sun.copy(sd); moved = true; }
+        if (moved) {
+            let y = 0;
+            if (typeof getTerrainHeight === 'function') { const h = getTerrainHeight(shadowFocus.cx, shadowFocus.cz); if (isFinite(h)) y = h; }
+            dirLight.target.position.set(shadowFocus.cx, y, shadowFocus.cz);
+            dirLight.target.updateMatrixWorld();
+            dirLight.position.set(shadowFocus.cx, y, shadowFocus.cz).add(sd);
+        }
+        const now = performance.now(), b = window.ballMesh;
+        const ballMoved = !!b && shadowFocus.ball.distanceToSquared(b.position) > 1e-6;
+        if (ballMoved) shadowFocus.ball.copy(b.position);
+        if (moved || ballMoved || !play || isFlying || now - shadowFocus.at > 500) { renderer.shadowMap.needsUpdate = true; shadowFocus.at = now; }
+        return shadowFocus;
+    };
     
     // Create cinematic sun (large sphere at 13000m orbit, behind mountains)
     const sunGeo = new THREE.SphereGeometry(500, 32, 32);
@@ -13033,11 +13070,19 @@
     // Where the minimap is drawn: inside the container's border, as the CSS places and sizes it (220 x 340 bottom right on a computer,
     // a small box top right in the phone layout, full size when opened). WebGL viewport coordinates: y from the bottom of the canvas.
     window.minimapBox = function () {
+        // measured once per frame (window._frameNo, counted by the render loop, which also asks first, before it writes to the page):
+        // reading the layout after the page was written to forced the browser to lay it out again, every frame (3-4 ms on a phone)
+        const fc = window._mmBoxCache;
+        if (fc && window._frameNo !== undefined && fc.frame === window._frameNo) return fc.box;
+        const box = (function () {
         const el = document.getElementById('minimap-container'), cv = renderer.domElement;
         const cw = cv.clientWidth || window.innerWidth;
         if (!el || !el.clientWidth || !el.clientHeight) return { x: cw - 240, y: 20, w: 220, h: 340 };
         const r = el.getBoundingClientRect(), c = cv.getBoundingClientRect();
         return { x: Math.round(r.left - c.left + el.clientLeft), y: Math.round(c.bottom - (r.top + el.clientTop + el.clientHeight)), w: el.clientWidth, h: el.clientHeight };
+        })();
+        window._mmBoxCache = { frame: window._frameNo, box: box };
+        return box;
     };
 
     // The phone layout (arcade.css, "PHONE PLAY LAYOUT"): a narrow screen while a course or the range is played
@@ -14068,6 +14113,9 @@ window.triggerExplosion = function(x, y, z) {
     let lastAnimateTime = performance.now();
     function animate() {
         requestAnimationFrame(animate);
+        // the frame's number; the minimap's box is measured now, before this frame writes to the page (see window.minimapBox)
+        window._frameNo = (window._frameNo || 0) + 1;
+        if ((appMode === 'PLAY' || appMode === 'TEST') && window.minimapBox) window.minimapBox();
         let now = performance.now();
         let dt = (now - lastAnimateTime) / 1000;
         lastAnimateTime = now;
@@ -15489,7 +15537,7 @@ window.triggerExplosion = function(x, y, z) {
                 }
             }
             if (typeof dirLight !== 'undefined') {
-                wu.uSunDir.value.copy(dirLight.position).normalize();
+                wu.uSunDir.value.copy(dirLight.userData.sunDir || dirLight.position).normalize();
                 wu.uSunColor.value.copy(dirLight.color);
             }
 
@@ -15506,6 +15554,7 @@ window.triggerExplosion = function(x, y, z) {
             }
         }
 
+        window.updateShadowFocus();   // the shadow follows the ball; the shadow map is drawn only when something can have moved
         renderer.render(scene, camera);
         if (window.PerfHud) window.PerfHud.mainPass(renderer);   // ?fps=1: the frame-time meter reads the main picture's draw calls and triangles
         
@@ -15909,13 +15958,50 @@ window.triggerExplosion = function(x, y, z) {
                 dF.style.top = ((ay+fy)/2) + 'px';
             }
             
-            // depth är redan rensat via clear() ovan
-            // the minimap looks straight down: every range sign is shown there (the main view hides the crowded ones)
-            if (window.RangeMarkers && window.RangeMarkers.withAllSigns) {
-                window.RangeMarkers.withAllSigns(courseHoles.map(function (h) { return h && h.teeMeshes && h.teeMeshes.range; }), function () { renderer.render(scene, minimapCamera); });
-            } else {
-                renderer.render(scene, minimapCamera);
+            // The map is drawn into a picture of its own (a render target, 1.5x its size so the lines stay smooth) only when something on it
+            // changed: its size, its framing (ball, flag), the aim (marker and line), the hole, putting, the slope view, at least once a second,
+            // and about 20 times a second while the ball is in the air (the tracer). Every frame that picture is copied into the box. It used
+            // to be drawn from the whole scene every frame: about as many triangles again as the main picture.
+            // (the minimap looks straight down: every range sign is shown there, the main view hides the crowded ones)
+            const mmc = window._mmCache || (window._mmCache = { rt: null, key: '', at: 0, renders: 0 });
+            const pr = renderer.getPixelRatio(), MM_SS = 1.5;
+            const rtW = Math.max(1, Math.round(mapW * pr * MM_SS)), rtH = Math.max(1, Math.round(mapH * pr * MM_SS));
+            if (!mmc.rt || mmc.rt.width !== rtW || mmc.rt.height !== rtH) {
+                if (mmc.rt) mmc.rt.dispose();
+                mmc.rt = new THREE.WebGLRenderTarget(rtW, rtH, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
+                mmc.key = '';
             }
+            if (!mmc.quad) {
+                mmc.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+                mmc.quadScene = new THREE.Scene();
+                mmc.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: mmc.rt.texture, depthTest: false, depthWrite: false, toneMapped: false }));
+                mmc.quadScene.add(mmc.quad);
+            }
+            mmc.quad.material.map = mmc.rt.texture;
+            const r3 = function (v) { return v ? Math.round(v.x * 20) + ':' + Math.round(v.y * 20) + ':' + Math.round(v.z * 20) : '-'; };
+            // two keys: what the player changed is drawn at once (size, aim, hole, putting, slope view); what follows the ball (the ball, the
+            // framing) moves every frame in the air, so there it is drawn at most every 50 ms (else the map was drawn on every frame of a flight)
+            const mmHard = [rtW, rtH, r3(window.aimTarget), playingHoleIndex, window.isPuttingMode ? 1 : 0, window._greenSlopeMode || ''].join('|');
+            const mmSoft = [r3(minimapCamera.position), Math.round(minimapCamera.left * 20), Math.round(minimapCamera.top * 20), Math.round(minimapCamera.bottom * 20),
+                r3(minimapCamera.up), r3(window.ballMesh.position)].join('|');
+            const mmNow = performance.now(), mmFlying = isFlying || playState === 'ROUND_FLYING', mmAge = mmNow - mmc.at;
+            if (mmHard !== mmc.key || (mmSoft !== mmc.soft && (!mmFlying || mmAge >= 50)) || mmAge > (mmFlying ? 50 : 1000)) {
+                mmc.key = mmHard; mmc.soft = mmSoft; mmc.at = mmNow; mmc.renders++;
+                renderer.setRenderTarget(mmc.rt);
+                renderer.setScissorTest(false);
+                renderer.setClearColor(0x0f172a, 1.0);
+                renderer.clear(true, true, false);
+                if (window.RangeMarkers && window.RangeMarkers.withAllSigns) {
+                    window.RangeMarkers.withAllSigns(courseHoles.map(function (h) { return h && h.teeMeshes && h.teeMeshes.range; }), function () { renderer.render(scene, minimapCamera); });
+                } else {
+                    renderer.render(scene, minimapCamera);
+                }
+                renderer.setRenderTarget(null);
+            }
+            renderer.setViewport(mX, mY, mapW, mapH);
+            renderer.setScissor(mX, mY, mapW, mapH);
+            renderer.setScissorTest(true);
+            renderer.render(mmc.quadScene, mmc.quadCam);
             
             plane.material = oldMat; // Återställ markens material
             renderer.setClearColor(oldClearColor, 1.0); // Återställ clear color ifall den används på andra ställen

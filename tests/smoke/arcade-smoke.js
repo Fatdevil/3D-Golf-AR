@@ -1810,6 +1810,29 @@ function serve() {
       return r;
     });
     checks.push({ name: 'course builder: no Range Tee button, coloured tees shown, and the next hole still waits for the hole to be finished', ok: courseBuild.btn === 'none' && courseBuild.yellow !== 'none' && courseBuild.hole === 1, detail: JSON.stringify(courseBuild) });
+    // what the camera does not need is not drawn every frame: the minimap is a picture of its own, drawn when something on it changes
+    // (the aim) and about once a second otherwise; the shadow follows the ball and its map is drawn only when something can have moved
+    const budget = await cp.evaluate(function () {
+      const raf2 = function () { return new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); }); };
+      return raf2().then(function () {
+        const mm = window._mmCache, out = { cache: !!mm && !!mm.rt, autoUpdate: renderer.shadowMap.autoUpdate };
+        if (!mm) return out;
+        const r0 = mm.renders, f0 = window._frameNo;
+        return new Promise(function (res) { setTimeout(res, 2500); }).then(function () {
+          out.idleFrames = window._frameNo - f0; out.idleRenders = mm.renders - r0;
+          const r1 = mm.renders, a = window.aimTarget; window.setAimPoint(a.x + 12, a.y, a.z);
+          return raf2().then(function () {
+            out.aimRender = mm.renders - r1;
+            window.setAimPoint(a.x - 12, a.y, a.z);
+            const b = window.ballMesh.position, t = dirLight.target.position;
+            out.shadowToBall = +Math.hypot(t.x - b.x, t.z - b.z).toFixed(1);
+            out.sunKept = dirLight.position.clone().sub(t).distanceTo(dirLight.userData.sunDir) < 1e-6;
+            return out;
+          });
+        });
+      });
+    });
+    checks.push({ name: 'render budget: the minimap is drawn into a picture of its own when something changes (the aim at once, else about once a second, not every frame); the shadow follows the ball with the sun\'s direction kept, its map not drawn on every render', ok: budget.cache && budget.autoUpdate === false && budget.idleRenders <= 4 && (budget.idleFrames <= 4 || budget.idleRenders < budget.idleFrames) && budget.aimRender >= 1 && budget.shadowToBall <= 30 && budget.sunKept, detail: JSON.stringify(budget) });
     await cp.evaluate(function () { window.SwingEngine.setInputMode('SWING'); });
     // with the swing the game's own suggestion comes back once the shot plan is worked out again (the plan row is hidden meanwhile)
     await cp.waitForFunction(function () { return getComputedStyle(document.getElementById('aim-bb-plan')).display === 'block' && !/^🎒/.test(document.getElementById('aim-bb-club').innerText); }, null, { timeout: 60000, polling: 500 }).catch(function () {});

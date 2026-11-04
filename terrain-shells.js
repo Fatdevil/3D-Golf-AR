@@ -661,9 +661,10 @@
                 dirR = dl.color.r * di;
                 dirG = dl.color.g * di;
                 dirB = dl.color.b * di;
-                lx = dl.position.x;
-                ly = dl.position.y;
-                lz = dl.position.z;
+                const sd = (dl.userData && dl.userData.sunDir) || dl.position;   // the sun's direction (the light itself follows the shadow's centre)
+                lx = sd.x;
+                ly = sd.y;
+                lz = sd.z;
             }
 
             // Normalize light direction

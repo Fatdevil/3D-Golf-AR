@@ -141,7 +141,9 @@
                 dl.intensity = p.dirInt;
                 dl.color.setRGB(dirC[0]/255, dirC[1]/255, dirC[2]/255);
                 let angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
-                dl.position.set(Math.cos(angle) * 100, Math.max(10, p.sunY), Math.sin(angle) * 100);
+                // the sun's direction: the light and its target follow the shadow's centre (arcade.html, updateShadowFocus)
+                if (dl.userData && dl.userData.sunDir) dl.userData.sunDir.set(Math.cos(angle) * 100, Math.max(10, p.sunY), Math.sin(angle) * 100);
+                else dl.position.set(Math.cos(angle) * 100, Math.max(10, p.sunY), Math.sin(angle) * 100);
             }
 
             // 5. Sun mesh visual
