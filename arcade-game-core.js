@@ -105,8 +105,10 @@ const GolfEngine = (function() {
     function nextPlayer(distanceOf) {
         const cands = state.teeOrder.map(i => state.players[i]).filter(p => !p.holedOut);
         if (cands.length === 0) return null;
-        let best = cands[0], bd = distanceOf(best);
-        for (let k = 1; k < cands.length; k++) {
+        // everyone tees off before anyone plays a second shot, in the tee order (the honour), whatever the tees and however short a drive
+        const onTee = cands.find(p => p.strokes === 0 && p.penaltyStrokes === 0);
+        let best = onTee || cands[0], bd = distanceOf(best);
+        for (let k = 1; !onTee && k < cands.length; k++) {
             const d = distanceOf(cands[k]);
             if (d > bd + 0.05) { best = cands[k]; bd = d; }
         }
@@ -208,6 +210,14 @@ const GolfEngine = (function() {
                 else putts = 2;
             } else {
                 putts = distanceToPinFt < 10 ? 1 : (distanceToPinFt < 40 ? 2 : 3);
+            }
+            // the putts never take the hole past the Auto Concede limit
+            if (maxConcede !== 99 && holeScore(player) + putts > maxScore) {
+                putts = Math.max(1, maxScore - holeScore(player));
+                player.strokes += putts;
+                _finishHole(player);
+                emit(GameEvent.MATCH_COMPLETED, { player, reason: 'CONCEDE', maxScore });
+                return;
             }
             player.strokes += putts;
             _finishHole(player);

@@ -8358,10 +8358,11 @@
         let notHoledOut = players.map((p,i) => i).filter(i => !players[i].holedOut);
         if (notHoledOut.length === 0) return -1; 
         
-        let allOnTee = notHoledOut.every(i => players[i].strokes === 0 && players[i].penaltyStrokes === 0);
-        if (allOnTee) {
+        // everyone tees off before anyone plays a second shot (in the order of the honour), whatever the tees and however short a drive
+        let stillOnTee = notHoledOut.filter(i => players[i].strokes === 0 && players[i].penaltyStrokes === 0);
+        if (stillOnTee.length > 0) {
             let teeOrder = getTeeOrder();
-            let nextId = teeOrder.find(id => notHoledOut.includes(id) && players[id].strokes === 0);
+            let nextId = teeOrder.find(id => stillOnTee.includes(id));
             if(nextId !== undefined) return nextId;
         }
         
@@ -8402,6 +8403,10 @@
             p.holedOut = false;
             p.strokes = 0;
             p.penaltyStrokes = 0;
+            // the last shot belongs to the hole that was just played: a mulligan or rehit on the new hole has nothing to go back to
+            p.prevPos = null;
+            p.prevStrokes = undefined;
+            p.prevPenalty = undefined;
             
             let activeT = hole.tees[p.tee] || hole.tees.yellow || hole.tees.white || hole.tees.red || hole.tees.black;
             let lieY = activeT.y + 0.3;
@@ -8413,6 +8418,7 @@
             p.lie = { x: activeT.x, y: lieY, z: activeT.z }; 
         });
 
+        window.lastShotPlayerIndex = undefined;
         let startPlayerIdx = getNextPlayerIndex();
         switchTurnTo(startPlayerIdx);
     }
@@ -15139,11 +15145,17 @@ window.triggerExplosion = function(x, y, z) {
                                 putts = distFt < 10 ? 1 : (distFt < 40 ? 2 : 3);
                             }
                             
+                            // the putts never take the hole past the Auto Concede limit (par + the setting)
+                            let conceded = false;
+                            if (maxConcede !== 99 && p.strokes + p.penaltyStrokes + putts > maxScore) {
+                                putts = Math.max(1, maxScore - (p.strokes + p.penaltyStrokes));
+                                conceded = true;
+                            }
                             p.strokes += putts;
                             p.holedOut = true;
                             // === AUDIO: Auto-putt sound ===
                             if (window.AudioEngine) window.AudioEngine.playClick();
-                            pop.innerText = `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
+                            pop.innerText = conceded ? `AUTO CONCEDE (${maxScore})` : `AUTO-PUTT (${distFt.toFixed(1)} ft): ${putts} Putts`;
                             pop.style.opacity = '1';
                             window.nextTurnTimeout = setTimeout(() => { pop.style.opacity = '0'; evaluateNextTurn(); }, 1500);
                         } else {

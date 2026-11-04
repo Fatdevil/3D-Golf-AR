@@ -906,8 +906,13 @@
                 if (coursePayload.is_draft === true) { say('Draft course: the result is not saved.'); return; }
                 const mode = window.SwingEngine && SwingEngine.getInputMode ? SwingEngine.getInputMode() : null;
                 if (mode === 'NUMBERS') { say('Rounds with typed numbers are not saved to the leaderboard.'); return; }
-                const scores = sc.rows.map(r => r.score);
-                if (scores.length === 0 || scores.some(v => !Number.isFinite(v))) return;
+                // every player on the phone gets a record of their own (their seat goes with it: seat 0 is the account, the others are guests and
+                // do not count for the handicap, see server.js); a player whose card is not complete is left out
+                const enginePlayers = window.GolfEngine.getState().players;
+                const entries = enginePlayers.map((pl, seat) => ({ pl, seat, card: seat === 0 ? sc : window.GolfEngine.scorecard(pl) }))
+                    .map(x => Object.assign(x, { scores: x.card.rows.map(r => r.score) }))
+                    .filter(x => x.scores.length > 0 && x.scores.every(v => Number.isFinite(v)));
+                if (entries.length === 0 || entries[0].seat !== 0) return;
                 say('Saving the result…');
                 // leaving the page while the request is on its way would lose the round: Back to menu waits (and the wait is capped)
                 const back = document.getElementById('popup-btn');
@@ -915,23 +920,29 @@
                 try {
                     const send = async () => {
                         if (window.GolfAuth && !GolfAuth.isReady) await GolfAuth.init();
-                        const player = window.GolfEngine.getState().players[0];
-                        const name = (window.GolfAuth && GolfAuth.user && GolfAuth.user.display_name) || player.name || 'Player 1';
-                        const stats = { round_id: roundId };
+                        let token = null;
                         if (collection) {
                             // the plates of one go share the token: the collection adds them up (seat 0 is the owner of the phone)
-                            let token = null;
                             try { token = sessionStorage.getItem('collection_round_' + roundKey); } catch (e) { /* none */ }
                             if (!token) {
                                 token = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
                                 try { sessionStorage.setItem('collection_round_' + roundKey, token); } catch (e) { /* none */ }
                             }
-                            Object.assign(stats, { collection_id: roundKey, collection_round_id: token, plate_index: plateIndex, round_id: token + '-p' + plateIndex + '-0', player_slot: 0 });
                         }
-                        return window.ArcadeAPI.submitResult(coursePayload.share_code, {
-                            total_score: sc.score, score_vs_par: sc.vsPar, hole_scores: scores,
-                            input_mode: mode === 'LM' ? 'LAUNCH_MONITOR' : 'SWING_METER', lm_device: null, player_name: name, stats: stats
-                        }, collection ? { keepalive: true } : undefined);
+                        const one = ({ pl, seat, card, scores }) => {
+                            const name = (seat === 0 && window.GolfAuth && GolfAuth.user && GolfAuth.user.display_name) || pl.name || 'Player ' + (seat + 1);
+                            // the round id is per seat: the server keeps one record per player and round id, and a retry names the same ones
+                            const stats = collection
+                                ? { collection_id: roundKey, collection_round_id: token, plate_index: plateIndex, round_id: token + '-p' + plateIndex + '-' + seat, player_slot: seat }
+                                : { round_id: roundId + '-' + seat, player_slot: seat };
+                            return window.ArcadeAPI.submitResult(coursePayload.share_code, {
+                                total_score: card.score, score_vs_par: card.vsPar, hole_scores: scores,
+                                input_mode: mode === 'LM' ? 'LAUNCH_MONITOR' : 'SWING_METER', lm_device: null, player_name: name, stats: stats
+                            }, collection ? { keepalive: true } : undefined);
+                        };
+                        // all at once (a plate of a collection is left right after); the round is saved when every player's record is
+                        const results = await Promise.all(entries.map(one));
+                        return results.every(x => x && x.success) ? results[0] : null;
                     };
                     let timer;
                     const r = await Promise.race([send(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 20000); })]);

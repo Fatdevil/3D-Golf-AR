@@ -237,11 +237,17 @@
         if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
         if (playState !== 'ROUND_IDLE') return;
         
-        let p = window.players[window.activePlayerIndex];
+        // the rehit is for the player who hit the last shot (the button is shown for that player), even when the turn has moved on
+        let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
+        let p = window.players[lastIdx];
         if (!p || !p.prevPos) return;
         
         if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
+        if (window.activePlayerIndex !== lastIdx) window.activePlayerIndex = lastIdx;
         
+        p.holedOut = false;
+        if (p.scores) p.scores[playingHoleIndex] = null;
+        if (p.scoreVsPar) p.scoreVsPar[playingHoleIndex] = null;
         p.penaltyStrokes++;
         window.ballMesh.position.set(p.prevPos.x, p.prevPos.y, p.prevPos.z);
         p.prevPos = null;

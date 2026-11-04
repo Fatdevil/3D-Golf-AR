@@ -792,31 +792,36 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     await page.waitForFunction(function () { return document.getElementById('popup-title').innerText === 'COULD NOT SAVE'; }, null, { timeout: 15000 }).catch(function () {});
     const failed = await page.evaluate(function () { return { title: document.getElementById('popup-title').innerText, btn: document.getElementById('popup-btn').innerText, skip: !!document.getElementById('plate-skip'), url: location.search, disabled: document.getElementById('popup-btn').disabled }; });
     await page.waitForTimeout(3000);
-    check('a plate that could not be filed is not left behind: the page stays, with Try again and Continue without saving', failed.title === 'COULD NOT SAVE' && failed.btn === 'Try again' && failed.skip && /plate=0/.test(failed.url) && failed.disabled === false && /plate=0/.test(page.url()) && POSTED.length === 1, JSON.stringify({ failed: failed, n: POSTED.length, url: page.url() }));
+    check('a plate that could not be filed is not left behind: the page stays, with Try again and Continue without saving', failed.title === 'COULD NOT SAVE' && failed.btn === 'Try again' && failed.skip && /plate=0/.test(failed.url) && failed.disabled === false && /plate=0/.test(page.url()) && POSTED.length === 2, JSON.stringify({ failed: failed, n: POSTED.length, url: page.url() }));
     RESULT_MODE = 'ok';
     await page.click('#popup-btn');
     await page.waitForURL(/plate=1/, { timeout: 15000 }).catch(function () {});
     const url1 = page.url();
-    const p0 = POSTED[1] || { body: { stats: {} } };
-    check('Try again files it (the same round id as the failed try) as a plate of the collection (collection id, plate 0, seat 0) and the next page is plate 2 of the order the round started with (TESTCOURSE, not the swapped order)',
-      POSTED.length === 2 && POSTED[1].code === 'PUTTCOURSE' && POSTED[0].body.stats.round_id === p0.body.stats.round_id && p0.body.stats.collection_id === 'COL1' && p0.body.stats.plate_index === 0 && p0.body.stats.player_slot === 0 && /-p0-0$/.test(p0.body.stats.round_id) && /course=TESTCOURSE&collection=COL1&plate=1/.test(url1),
+    // every player on the phone is filed (one request each): the seat says whose record it is
+    const seatOf = function (list, seat) { return list.find(function (x) { return x.body.stats.player_slot === seat; }) || { body: { stats: {} } }; };
+    const p0 = seatOf(POSTED.slice(2), 0), p0b = seatOf(POSTED.slice(2), 1);
+    check('Try again files it (the same round ids as the failed try) as a plate of the collection (collection id, plate 0, seat 0) and the next page is plate 2 of the order the round started with (TESTCOURSE, not the swapped order)',
+      POSTED.length === 4 && p0.code === 'PUTTCOURSE' && seatOf(POSTED.slice(0, 2), 0).body.stats.round_id === p0.body.stats.round_id && p0.body.stats.collection_id === 'COL1' && p0.body.stats.plate_index === 0 && /-p0-0$/.test(p0.body.stats.round_id) && JSON.stringify(p0.body.hole_scores) === '[5]' && /course=TESTCOURSE&collection=COL1&plate=1/.test(url1),
       JSON.stringify({ n: POSTED.length, stats: p0.body.stats, url: url1 }));
+    check('the second player on the phone is filed too, as seat 1 of the same go (its own round id, its own scores)',
+      p0b.code === 'PUTTCOURSE' && p0b.body.stats.collection_round_id === p0.body.stats.collection_round_id && /-p0-1$/.test(p0b.body.stats.round_id) && JSON.stringify(p0b.body.hole_scores) === '[2]' && p0b.body.player_name === 'Sam',
+      JSON.stringify(p0b.body));
     await page.waitForTimeout(6000);
     const head1 = await page.evaluate(function () { return { hole: document.getElementById('ui-hole').innerText, names: window.GolfEngine.getState().players.map(function (x) { return x.name; }), scores: sessionStorage.getItem('collection_scores_COL1') }; });
     check('plate 2: the header goes on from hole 4 (Hole 4/6) with the same players, and the first plate\'s scores were kept', head1.hole === 'Hole 4/6' && head1.names.join() === 'Sam,Sam' && JSON.parse(head1.scores)[0].plateScores.length === 2, JSON.stringify(head1));
     await finish([[2, 2], [3, 3]]);   // seat 1: 5 + 4 = 9, seat 2: 2 + 6 = 8: seat 2 wins the course although it lost the last plate
     await page.waitForFunction(function () { return /Saved/.test((document.getElementById('sc-status') || {}).textContent || ''); }, null, { timeout: 15000 }).catch(function () {});
     const card = await page.evaluate(function () { return { text: document.getElementById('popup-desc').innerText.replace(/\s+/g, ' '), holes: Array.from(document.querySelectorAll('#popup-desc .sc-table tr')).map(function (r) { return r.cells[0].innerText; }).join(), allRow: Array.from(document.querySelectorAll('#popup-desc .sc-table tr.sc-total:last-child td')).map(function (c) { return c.innerText; }).join(), left: ['collection_scores_COL1', 'collection_round_COL1', 'collection_roster_COL1', 'collection_plates_COL1'].filter(function (k) { return sessionStorage.getItem(k) !== null; }) }; });
-    const p1 = POSTED[2] || { body: { stats: {} } };
-    check('the last plate is filed with the same round token as plate 1 (plate 1, seat 0), the card numbers the holes 4 and 5 and adds up the whole round, and the round\'s state is cleared',
-      POSTED.length === 3 && POSTED[2].code === 'TESTCOURSE' && p1.body.stats.plate_index === 1 && p1.body.stats.collection_round_id === p0.body.stats.collection_round_id && /-p1-0$/.test(p1.body.stats.round_id) && card.holes === 'Hole,4,5,Total,All 5' && card.allRow === 'All 5,,9,8' && /Sam wins with 8/.test(card.text) && card.left.length === 0,
+    const p1 = seatOf(POSTED.slice(4), 0);
+    check('the last plate is filed with the same round token as plate 1 (plate 1, seat 0 and seat 1), the card numbers the holes 4 and 5 and adds up the whole round, and the round\'s state is cleared',
+      POSTED.length === 6 && p1.code === 'TESTCOURSE' && /-p1-1$/.test(seatOf(POSTED.slice(4), 1).body.stats.round_id) && p1.body.stats.plate_index === 1 && p1.body.stats.collection_round_id === p0.body.stats.collection_round_id && /-p1-0$/.test(p1.body.stats.round_id) && card.holes === 'Hole,4,5,Total,All 5' && card.allRow === 'All 5,,9,8' && /Sam wins with 8/.test(card.text) && card.left.length === 0,
       JSON.stringify({ n: POSTED.length, stats: p1.body.stats, card: card }));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
     COLLECTION.plates = [COLLECTION.plates[1], COLLECTION.plates[0]];
   }
 
-  // two players on one phone: the farthest from the flag plays, the honour on the next tee, one scorecard for both, only player 1 on the board
+  // two players on one phone: the farthest from the flag plays, the honour on the next tee, one scorecard for both, both players on the board
   {
     const o = await open('/arcade_mobile.html?course=TESTCOURSE', { width: 390, height: 844 }, { init: function () {
       localStorage.setItem('golf_os_mobile_match', JSON.stringify({ settings: { gimmeDist: 10, autoPutt: 'OFF', autoConcede: 99 }, players: [{ name: 'Anna', color: '#ef4444' }, { name: 'Bo <b>x</b>', color: '#3b82f6' }] }));
@@ -890,7 +895,10 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
     });
     check('round complete: one scorecard with both players (Anna 5, Bo 3), the name shown as text, the winner named',
       fin.title === 'ROUND COMPLETE' && fin.heads.join('|') === 'Hole|Par|Anna|Bo <b>x</b>' && fin.bold === 0 && fin.rows === 4 && fin.totals === 'Total,7,5,3' && /Bo <b>x<\/b> wins with 3 \(-4\)/.test(fin.text), JSON.stringify(fin));
-    check('only player 1 (the owner of the phone) is filed on the leaderboard: Anna, 4 + 1 = 5', POSTED.length === 1 && POSTED[0].body.total_score === 5 && JSON.stringify(POSTED[0].body.hole_scores) === '[4,1]', JSON.stringify(POSTED));
+    const anna = POSTED.find(function (x) { return x.body.stats.player_slot === 0; }), bo = POSTED.find(function (x) { return x.body.stats.player_slot === 1; });
+    check('both players are filed on the leaderboard, each in their seat: Anna (seat 0) 4 + 1 = 5, Bo (seat 1) 2 + 1 = 3, with their own round ids',
+      POSTED.length === 2 && !!anna && !!bo && anna.body.total_score === 5 && JSON.stringify(anna.body.hole_scores) === '[4,1]' && bo.body.total_score === 3 && JSON.stringify(bo.body.hole_scores) === '[2,1]' && bo.body.player_name === 'Bo <b>x</b>' && anna.body.stats.round_id !== bo.body.stats.round_id,
+      JSON.stringify(POSTED));
     check('no page errors', o.errors.length === 0, o.errors.join(' | '));
     await o.ctx.close();
   }
