@@ -5,7 +5,7 @@
  *     (a stutter shows there, not in the mean)
  *   - the main picture's draw calls and triangles (arcade.html hands them over right after the main render: PerfHud.mainPass)
  *   - the drawing buffer (CSS size x the pixel ratio) and the grass state: the 3D grass level, the 2D grass on / off with its level,
- *     amount, height and the tufts it has built
+ *     amount and height for rough (R) and deep rough (D), semi-rough on / off and the tufts it has built
  * The frame time is the time between two animation frames, so it holds everything the page does in a frame (JS, GPU waits).
  * It only reads: nothing in the game changes while it is on.
  */
@@ -41,7 +41,9 @@
             let n = 0;
             if (sh.cards) for (const c of sh.cards.values()) n += c.count || 0;
             const lvl = typeof sh.cardLevel === 'function' ? sh.cardLevel() : '?';
-            cards = lvl + ' ' + Math.round((sh.cardAmount || 1) * 100) + '% h' + Math.round((sh.cardHeight || 1) * 100) + '% (' + n + ' tuvor)';
+            const t = sh.cardTune || {}, pc = function (v) { return Math.round((v === undefined ? 1 : v) * 100); };
+            const cl = function (k, c) { return k + ' ' + pc(c && c.amount) + '%/h' + pc(c && c.height) + '%'; };
+            cards = lvl + ' ' + cl('R', t.rough) + ' ' + cl('D', t.deep) + ' semi ' + (sh.cardSemi === false ? 'av' : 'på') + ' (' + n + ' tuvor)';
         }
         return '3D ' + (sh.quality || '?') + ' · 2D ' + cards;
     }

@@ -388,7 +388,7 @@
         uniform vec3 uSemiCol;
         uniform float uWorld;
         uniform float uCells;
-        uniform float uCardH;     // the player's height for the 2D grass (1 = the shell heights)
+        uniform vec3 uCardH;      // the player's height for the 2D grass per class: rough, deep rough, semi-rough (1 = the shell heights)
         varying vec3 vCol;
         varying vec2 vUv;
         varying float vDist;
@@ -396,7 +396,7 @@
         varying vec2 vWaterUv;
         void main() {
             vWaterUv = vec2(iBase.x / uWorld + 0.5, 0.5 - iBase.z / uWorld);
-            float h = iParam.x * uCardH, t = position.y;                     // t: 0 at the root, 1 at the top of the card
+            float h = iParam.x * (iClass < 0.5 ? uCardH.x : (iClass < 1.5 ? uCardH.y : uCardH.z)), t = position.y;                     // t: 0 at the root, 1 at the top of the card
             vec3 l = vec3(position.x, t, position.z) * vec3(h * 1.2, h, h * 1.2);   // a tuft is a little wider than tall
             float c = cos(iParam.y), s = sin(iParam.y);
             vec3 wp = iBase + vec3(l.x * c + l.z * s, l.y, -l.x * s + l.z * c);
@@ -448,11 +448,13 @@
         HIGH: { radius: 50, density: 3.5 }
     };
     const CARD_CHUNK = 16;       // metres
-    // the 2D grass's own sliders: amount 25-300 % of the quality's density, height 50-250 % of the shell heights
-    const CARD_AMOUNT_MIN = 0.25, CARD_AMOUNT_MAX = 3, CARD_HEIGHT_MIN = 0.5, CARD_HEIGHT_MAX = 2.5;
+    // the 2D grass's own sliders, per class (rough, deep rough): amount 0-600 % of the quality's density (0 = none on that class),
+    // height 25-300 % of the shell heights. Semi-rough is on or off and then takes the rough's.
+    const CARD_AMOUNT_MIN = 0, CARD_AMOUNT_MAX = 6, CARD_HEIGHT_MIN = 0.25, CARD_HEIGHT_MAX = 3;
     const CARD_QUALITIES = ['AUTO', 'LOW', 'MED', 'HIGH'];
-    function clampCardAmount(a) { return Math.min(CARD_AMOUNT_MAX, Math.max(CARD_AMOUNT_MIN, +a || 1)); }
-    function clampCardHeight(h) { return Math.min(CARD_HEIGHT_MAX, Math.max(CARD_HEIGHT_MIN, +h || 1)); }
+    const CARD_CLASSES = ['rough', 'deep'];
+    function clampCardAmount(a) { a = parseFloat(a); return isFinite(a) ? Math.min(CARD_AMOUNT_MAX, Math.max(CARD_AMOUNT_MIN, a)) : 1; }
+    function clampCardHeight(h) { h = parseFloat(h); return isFinite(h) ? Math.min(CARD_HEIGHT_MAX, Math.max(CARD_HEIGHT_MIN, h)) : 1; }
     const CARD_CELLS = 4;        // tuft variants in the atlas
 
     // The tuft atlas, painted by code: CARD_CELLS cells side by side, each a tuft of tapered, curved blades, dark at the
@@ -555,15 +557,21 @@
                 cardFlag = localStorage.getItem('golf_grass_cards');
             } catch (e) { /* storage blocked: stays off */ }
             this.cardsOn = cardFlag === '1';
-            // the 2D grass's own amount (x the quality's density) and height (x the shell heights), from the grass menu
-            this.cardAmount = 1; this.cardHeight = 1;
+            // the 2D grass's own amount (x the quality's density) and height (x the shell heights) per class, and semi-rough on / off
+            this.cardTune = { rough: { amount: 1, height: 1 }, deep: { amount: 1, height: 1 } };
+            this.cardSemi = true;
             // its own level: AUTO follows the 3D grass (MED while the 3D grass is off), else LOW / MED / HIGH
             this.cardQuality = 'AUTO';
             try { const cq = localStorage.getItem('golf_grass_cards_q'); if (CARD_QUALITIES.indexOf(cq) >= 0) this.cardQuality = cq; } catch (e) { /* storage blocked */ }
             try {
-                const a = parseFloat(localStorage.getItem('golf_grass_cards_amount')), h = parseFloat(localStorage.getItem('golf_grass_cards_height'));
-                if (isFinite(a)) this.cardAmount = clampCardAmount(a);
-                if (isFinite(h)) this.cardHeight = clampCardHeight(h);
+                // (the one amount / height kept before the classes were split is the start for both)
+                const oldA = localStorage.getItem('golf_grass_cards_amount'), oldH = localStorage.getItem('golf_grass_cards_height');
+                for (const c of CARD_CLASSES) {
+                    const a = localStorage.getItem('golf_grass_cards_' + c + '_amount'), h = localStorage.getItem('golf_grass_cards_' + c + '_height');
+                    if (a !== null || oldA !== null) this.cardTune[c].amount = clampCardAmount(a !== null ? a : oldA);
+                    if (h !== null || oldH !== null) this.cardTune[c].height = clampCardHeight(h !== null ? h : oldH);
+                }
+                if (localStorage.getItem('golf_grass_cards_semi') === '0') this.cardSemi = false;
             } catch (e) { /* storage blocked: the defaults */ }
             this.cards = new Map();  // chunk key -> { mesh, count }
             this._cardMat = null;
@@ -1165,14 +1173,23 @@
             for (let b of this.blades) b.mesh.visible = Math.hypot(cp.x - b.cx, cp.z - b.cz) - b.r < maxD;
         }
 
-        // The 2D grass's own amount and height (the grass menu's sliders). The height is a uniform (live, nothing rebuilt); a new amount
-        // drops the chunks and they are built again around the camera (two per frame).
-        setCardTuning(amount, height) {
-            if (amount !== undefined && amount !== null) {
-                const a = clampCardAmount(amount);
-                if (a !== this.cardAmount) { this.cardAmount = a; this._clearCards(); }
-            }
-            if (height !== undefined && height !== null) this.cardHeight = clampCardHeight(height);
+        // The 2D grass's own amount or height for a class ('rough' or 'deep'; the grass menu's sliders). The height is a uniform (live,
+        // nothing rebuilt); a new amount drops the chunks and they are built again around the camera (two per frame).
+        setCardTuning(cls, kind, value) {
+            const t = this.cardTune[cls];
+            if (!t) return;
+            if (kind === 'amount') {
+                const a = clampCardAmount(value);
+                if (a !== t.amount) { t.amount = a; this._clearCards(); }
+            } else if (kind === 'height') t.height = clampCardHeight(value);
+        }
+
+        // 2D grass on semi-rough (it then takes the rough's amount and height) or not: the chunks are built again
+        setCardSemi(on) {
+            on = !!on;
+            if (on === this.cardSemi) return;
+            this.cardSemi = on;
+            this._clearCards();
         }
 
         // The 2D grass's own level (AUTO, LOW, MED, HIGH): a new reach and density, so the chunks are built again
@@ -1220,21 +1237,25 @@
             const n = 1024, cls = this._cls, world = window.TERRAIN_SIZE || 600, half = world / 2, cell = world / n;
             const gh = typeof window.getTerrainHeight === 'function' ? window.getTerrainHeight : null;
             const heights = [0, this.roughHeight, this.deepHeight, this.semiHeight];
-            const tries = Math.round(preset.density * this.cardAmount * CARD_CHUNK * CARD_CHUNK);
+            // the amount per class (1 rough, 2 deep rough, 3 semi-rough): as many tries as the densest class needs, each class keeps its share
+            const r = this.cardTune.rough.amount, amt = [0, r, this.cardTune.deep.amount, this.cardSemi ? r : 0];
+            const maxA = Math.max(amt[1], amt[2], amt[3]);
+            if (maxA <= 0) return { mesh: null, count: 0 };
+            const tries = Math.round(preset.density * maxA * CARD_CHUNK * CARD_CHUNK);
             const x0 = ix * CARD_CHUNK - half, z0 = iz * CARD_CHUNK - half;
             const ck = ix * 4099 + iz;
             const rnd = function (k) { let h = Math.imul(ck + 7, 374761393) ^ Math.imul(k + 1, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
             const base = [], param = [], klass = [];
             let minY = 1e9, maxY = -1e9, maxH = 0;
             for (let k = 0; k < tries; k++) {
-                const wx = x0 + rnd(k * 6) * CARD_CHUNK, wz = z0 + rnd(k * 6 + 1) * CARD_CHUNK;
+                const wx = x0 + rnd(k * 7) * CARD_CHUNK, wz = z0 + rnd(k * 7 + 1) * CARD_CHUNK;
                 const cx = Math.floor((wx + half) / cell), cz = Math.floor((wz + half) / cell);
                 if (cx < 0 || cz < 0 || cx >= n || cz >= n) continue;
                 const c = cls[cz * n + cx];
-                if (!c) continue;
-                const y = gh ? gh(wx, wz) : 0, h = heights[c] * (0.8 + rnd(k * 6 + 2) * 0.45);
+                if (!c || rnd(k * 7 + 6) * maxA >= amt[c]) continue;
+                const y = gh ? gh(wx, wz) : 0, h = heights[c] * (0.8 + rnd(k * 7 + 2) * 0.45);
                 base.push(wx, y, wz);
-                param.push(h, rnd(k * 6 + 3) * Math.PI, Math.floor(rnd(k * 6 + 4) * CARD_CELLS), 0.85 + rnd(k * 6 + 5) * 0.25);
+                param.push(h, rnd(k * 7 + 3) * Math.PI, Math.floor(rnd(k * 7 + 4) * CARD_CELLS), 0.85 + rnd(k * 7 + 5) * 0.25);
                 klass.push(c - 1);
                 if (y < minY) minY = y; if (y > maxY) maxY = y; if (h > maxH) maxH = h;
             }
@@ -1270,7 +1291,7 @@
                 this._cardAtlas = makeCardAtlas();
                 this._cardMat = new THREE.ShaderMaterial({
                     uniforms: {
-                        uAtlas: { value: this._cardAtlas }, uCells: { value: CARD_CELLS }, uWorld: { value: window.TERRAIN_SIZE || 600 }, uCardH: { value: this.cardHeight },
+                        uAtlas: { value: this._cardAtlas }, uCells: { value: CARD_CELLS }, uWorld: { value: window.TERRAIN_SIZE || 600 }, uCardH: { value: new THREE.Vector3(1, 1, 1) },
                         uWaterMap: { value: this._dummyWaterTex }, uMaxDist: { value: preset.radius },
                         uRoughCol: { value: this._roughCol.clone() }, uDeepCol: { value: this._deepCol.clone() }, uSemiCol: { value: this._semiCol.clone() },
                         uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
@@ -1284,7 +1305,7 @@
             u.uWaterMap.value = this.waterTex || window.waterTex || this._dummyWaterTex;
             u.uWorld.value = window.TERRAIN_SIZE || 600;
             u.uMaxDist.value = preset.radius;
-            u.uCardH.value = this.cardHeight;
+            u.uCardH.value.set(this.cardTune.rough.height, this.cardTune.deep.height, this.cardTune.rough.height);
             u.uLightDir.value.set(lx, ly, lz); u.uDirColor.value.set(dirR, dirG, dirB); u.uAmbColor.value.set(ambR, ambG, ambB);
             u.uRoughCol.value.copy(this._roughCol); u.uDeepCol.value.copy(this._deepCol); u.uSemiCol.value.copy(this._semiCol);
 

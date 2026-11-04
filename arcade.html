@@ -35,8 +35,8 @@
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
-<script src="terrain-shells.js?v=52"></script>
-<script src="arcade-perf-hud.js?v=1"></script>
+<script src="terrain-shells.js?v=53"></script>
+<script src="arcade-perf-hud.js?v=2"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
 <script src="arcade-scene-engine.js?v=11"></script>
 <script src="arcade-tracer-engine.js"></script>
@@ -1901,10 +1901,17 @@
                     <div id="grass-cards-tuning" style="display:none; margin-top:6px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span data-i18n="env_grass_cards_level" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: nivå</span></div>
                         <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:6px;"><button id="grass-cq-AUTO" data-i18n="env_grass_cards_level_auto" onclick="setGrassCardQuality('AUTO')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Som 3D</button><button id="grass-cq-LOW" onclick="setGrassCardQuality('LOW')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">LOW</button><button id="grass-cq-MED" onclick="setGrassCardQuality('MED')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">MED</button><button id="grass-cq-HIGH" onclick="setGrassCardQuality('HIGH')" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">HIGH</button></div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span data-i18n="env_grass_cards_amount" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: mängd</span><span id="grass-cards-amount-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
-                        <input type="range" id="grass-cards-amount" min="0.25" max="3" step="0.25" value="1" oninput="setGrassCardTuning('amount', this.value, false)" onchange="setGrassCardTuning('amount', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:6px;"><span data-i18n="env_grass_cards_height" style="color:#94a3b8; font-size:9px; font-weight:bold;">2D-gräs: höjd</span><span id="grass-cards-height-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
-                        <input type="range" id="grass-cards-height" min="0.5" max="2.5" step="0.1" value="1" oninput="setGrassCardTuning('height', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        <!-- per class: rough and deep rough each their own amount (0-600 %, 0 = none) and height (25-300 %); semi-rough on / off, then as the rough -->
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span data-i18n="env_grass_cards_rough_amount" style="color:#94a3b8; font-size:9px; font-weight:bold;">Rough: mängd</span><span id="grass-cards-rough-amount-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
+                        <input type="range" id="grass-cards-rough-amount" min="0" max="6" step="0.25" value="1" oninput="setGrassCardTuning('rough', 'amount', this.value, false)" onchange="setGrassCardTuning('rough', 'amount', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:6px;"><span data-i18n="env_grass_cards_rough_height" style="color:#94a3b8; font-size:9px; font-weight:bold;">Rough: höjd</span><span id="grass-cards-rough-height-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
+                        <input type="range" id="grass-cards-rough-height" min="0.25" max="3" step="0.05" value="1" oninput="setGrassCardTuning('rough', 'height', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:6px;"><span data-i18n="env_grass_cards_deep_amount" style="color:#94a3b8; font-size:9px; font-weight:bold;">Deep rough: mängd</span><span id="grass-cards-deep-amount-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
+                        <input type="range" id="grass-cards-deep-amount" min="0" max="6" step="0.25" value="1" oninput="setGrassCardTuning('deep', 'amount', this.value, false)" onchange="setGrassCardTuning('deep', 'amount', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:6px;"><span data-i18n="env_grass_cards_deep_height" style="color:#94a3b8; font-size:9px; font-weight:bold;">Deep rough: höjd</span><span id="grass-cards-deep-height-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
+                        <input type="range" id="grass-cards-deep-height" min="0.25" max="3" step="0.05" value="1" oninput="setGrassCardTuning('deep', 'height', this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px; margin-top:8px;"><span data-i18n="env_grass_cards_semi" style="color:#94a3b8; font-size:9px; font-weight:bold;">Semi-rough (som rough)</span></div>
+                        <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px;"><button id="grass-cards-semi-0" data-i18n="env_grass_opt_off" onclick="setGrassCardSemi(false)" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="grass-cards-semi-1" data-i18n="env_grass_opt_on" onclick="setGrassCardSemi(true)" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
                     </div>
                 </div>
             </div>
@@ -3021,9 +3028,16 @@
                 const on = sh.cardQuality === q;
                 b.style.background = on ? '#4ade80' : '#334155'; b.style.color = on ? '#0f172a' : '#94a3b8';
             });
-            [['amount', sh.cardAmount], ['height', sh.cardHeight]].forEach(function(kv) {
-                const el = document.getElementById('grass-cards-' + kv[0]), val = document.getElementById('grass-cards-' + kv[0] + '-val');
-                if (el && typeof kv[1] === 'number') { el.value = String(kv[1]); if (val) val.textContent = Math.round(kv[1] * 100) + '%'; }
+            if (sh.cardTune) ['rough', 'deep'].forEach(function(c) {
+                ['amount', 'height'].forEach(function(k) {
+                    const v = sh.cardTune[c][k], el = document.getElementById('grass-cards-' + c + '-' + k), val = document.getElementById('grass-cards-' + c + '-' + k + '-val');
+                    if (el && typeof v === 'number') { el.value = String(v); if (val) val.textContent = Math.round(v * 100) + '%'; }
+                });
+            });
+            [['0', false], ['1', true]].forEach(function(b) {
+                const el = document.getElementById('grass-cards-semi-' + b[0]); if (!el) return;
+                const on = sh.cardSemi === b[1];
+                el.style.background = on ? '#4ade80' : '#334155'; el.style.color = on ? '#0f172a' : '#94a3b8';
             });
             ['edge', 'blades', 'cards', 'tex'].forEach(function(kind) {
                 ['0', '1', '2'].forEach(function(v) {
@@ -3034,8 +3048,8 @@
             });
         };
 
-        // The 2D grass's amount and height sliders: the label follows the slider; apply = false only updates the label (the amount is
-        // applied when the slider is let go, as it rebuilds the tufts). Kept in localStorage.
+        // The 2D grass's amount and height sliders per class ('rough', 'deep'): the label follows the slider; apply = false only updates the
+        // label (the amount is applied when the slider is let go, as it rebuilds the tufts). Kept in localStorage.
         // The 2D grass's own level (AUTO = the 3D grass's, MED while that is off): kept in localStorage
         window.setGrassCardQuality = function(q) {
             const sh = window._terrainShells; if (!sh || typeof sh.setCardQuality !== 'function') return;
@@ -3044,12 +3058,20 @@
             window.syncGrassExtraUI();
         };
 
-        window.setGrassCardTuning = function(kind, v, apply) {
-            const val = document.getElementById('grass-cards-' + kind + '-val');
+        window.setGrassCardTuning = function(cls, kind, v, apply) {
+            const val = document.getElementById('grass-cards-' + cls + '-' + kind + '-val');
             if (val) val.textContent = Math.round(parseFloat(v) * 100) + '%';
-            const sh = window._terrainShells; if (!sh || !apply || typeof sh.setCardTuning !== 'function') return;
-            if (kind === 'amount') sh.setCardTuning(parseFloat(v), null); else sh.setCardTuning(null, parseFloat(v));
-            try { localStorage.setItem('golf_grass_cards_' + kind, String(kind === 'amount' ? sh.cardAmount : sh.cardHeight)); } catch (e) { /* storage blocked: not remembered */ }
+            const sh = window._terrainShells; if (!sh || !apply || typeof sh.setCardTuning !== 'function' || !sh.cardTune || !sh.cardTune[cls]) return;
+            sh.setCardTuning(cls, kind, v);
+            try { localStorage.setItem('golf_grass_cards_' + cls + '_' + kind, String(sh.cardTune[cls][kind])); } catch (e) { /* storage blocked: not remembered */ }
+        };
+
+        // 2D grass on semi-rough or not (on, it takes the rough's amount and height): kept in localStorage
+        window.setGrassCardSemi = function(on) {
+            const sh = window._terrainShells; if (!sh || typeof sh.setCardSemi !== 'function') return;
+            sh.setCardSemi(on);
+            try { localStorage.setItem('golf_grass_cards_semi', sh.cardSemi ? '1' : '0'); } catch (e) { /* storage blocked: not remembered */ }
+            window.syncGrassExtraUI();
         };
 
         // the extra grass modes (edge shells, edge blades, 2D grass cards, blade texture): switched here or with ?grassedge / ?grassblades / ?grasscards / ?grasstex in the address
