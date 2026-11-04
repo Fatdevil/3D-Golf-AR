@@ -237,11 +237,23 @@
         if (typeof appMode === 'undefined' || (appMode !== 'PLAY' && appMode !== 'TEST')) return;
         if (playState !== 'ROUND_IDLE') return;
         
-        let p = window.players[window.activePlayerIndex];
+        // the rehit is for the player who hit the last shot (the button is shown for that player), even when the turn has moved on
+        let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
+        let p = window.players[lastIdx];
         if (!p || !p.prevPos) return;
         
         if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
+        if (window.activePlayerIndex !== lastIdx) window.activePlayerIndex = lastIdx;
         
+        if (p.holedOut) {
+            // the hole was finished for the shot (a gimme, auto-putt or concede added strokes that were never played): back to the
+            // count before the shot, plus the shot itself (stroke and distance), and the penalty below
+            if (p.prevStrokes !== undefined) p.strokes = p.prevStrokes + 1;
+            if (p.prevPenalty !== undefined) p.penaltyStrokes = p.prevPenalty;
+            p.holedOut = false;
+            if (p.scores) p.scores[playingHoleIndex] = null;
+            if (p.scoreVsPar) p.scoreVsPar[playingHoleIndex] = null;
+        }
         p.penaltyStrokes++;
         window.ballMesh.position.set(p.prevPos.x, p.prevPos.y, p.prevPos.z);
         p.prevPos = null;

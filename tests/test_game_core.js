@@ -100,6 +100,14 @@ out('\nConcede (högsta score på hålet)');
   q.strokes = 20;
   shot(q, { ft: 300 });
   check('autoConcede 99 betyder aldrig', !q.holedOut);
+  const r = fresh({ autoConcede: 2, autoPutt: 'FIXED' });   // par 4 + 2 = 6
+  r.strokes = 5;
+  shot(r, { green: true, ft: 60 });                         // 60 ft: tre puttar skulle ge 8
+  check('auto-putt går inte över concede-gränsen: 5 slag + puttar blir 6, inte 8', r.holedOut && r.scores[0] === 6 && names().indexOf(G.MATCH_COMPLETED) >= 0, 'score ' + r.scores[0]);
+  const s2 = fresh({ autoConcede: 3, autoPutt: 'FIXED' });  // par 4 + 3 = 7, två puttar ryms
+  s2.strokes = 4;
+  shot(s2, { green: true, ft: 20 });
+  check('auto-putt under gränsen räknas som vanligt (4 + 2 = 6)', s2.holedOut && s2.scores[0] === 6 && names().indexOf(G.GIMME_AWARDED) >= 0, 'score ' + s2.scores[0]);
 }
 
 out('\nHål och scorekort');
@@ -130,6 +138,23 @@ out('\nHål och scorekort');
   check('ett hål som inte är spelat har score null och räknas inte i totalen', sc.rows[0].score === null && sc.holesPlayed === 0 && sc.score === 0);
 }
 
+out('\nTurordning: alla slår ut innan någon slår sitt andra slag');
+{
+  E.initPlayers([{ name: 'Anna', color: '#f00' }, { name: 'Bo', color: '#0f0' }]);
+  E.updateSettings({ gimmeDist: 10, autoPutt: 'OFF', autoConcede: 99 });
+  E.startRound([{ par: 4 }]);
+  const [A, B] = E.getState().players;
+  const dist = { Anna: 400, Bo: 340 };   // Anna på bakre tee, Bo på röd tee
+  const d = p => dist[p.name];
+  check('olika tees: Anna har hedern och slår först', E.nextPlayer(d) === A);
+  A.strokes = 1; dist.Anna = 370;        // kort utslag, fortfarande längre bort än Bos tee
+  check('Anna slog kort (370 m) men Bo har inte slagit ut (340 m): Bo slår', E.nextPlayer(d) === B);
+  A.strokes = 1; dist.Anna = 410;        // bollen studsade bakåt
+  check('Annas boll bakom tee: Bo slår ändå ut först', E.nextPlayer(d) === B);
+  B.strokes = 1; dist.Bo = 200;
+  check('båda har slagit ut: längst bort (Anna 410 m) slår', E.nextPlayer(d) === A);
+}
+
 out('\nFlera spelare: turordning, hederslista, scorekort');
 {
   events.length = 0;
@@ -142,11 +167,11 @@ out('\nFlera spelare: turordning, hederslista, scorekort');
   check('på första tee spelar den som står först i listan (alla lika långt från flaggan)', E.nextPlayer(d) === A && E.getActivePlayer() === A);
   dist.Anna = 150; dist.Bo = 150; dist.Cia = 150;
   check('alla på tee: Anna först (turordningen avgör lika avstånd)', E.nextPlayer(d) === A);
-  dist.Anna = 40; dist.Bo = 150; dist.Cia = 150;
+  dist.Anna = 40; dist.Bo = 150; dist.Cia = 150; A.strokes = 1;
   check('längst från hålet spelar: Anna har slagit, nu Bo (Cia efter honom i ordningen)', E.nextPlayer(d) === B);
-  dist.Bo = 60;
+  dist.Bo = 60; B.strokes = 1;
   check('Bo slog till 60 m: Cia är fortfarande på tee (150 m) och spelar', E.nextPlayer(d) === C);
-  dist.Cia = 20;
+  dist.Cia = 20; C.strokes = 1;
   check('Cia på 20 m, Bo på 60 m, Anna på 40 m: Bo är längst bort och spelar igen', E.nextPlayer(d) === B);
   events.length = 0;
   B.strokes = 3; shot(B, { holed: true, ft: 0 });
