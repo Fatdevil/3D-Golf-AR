@@ -8525,7 +8525,9 @@
         let hole = courseHoles[playingHoleIndex];
         let maxConcede = window.matchSettings ? window.matchSettings.autoConcede : 99;
         let maxScore = hole ? (hole.par || 4) + maxConcede : 99;
-        
+        // the turn is being settled: no shot until the next turn is up (switchTurnTo unlocks, also via nextHole), whatever called this
+        window.ballLocked = true;
+
         p.lie = {x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z};
         
         // Rebuild break line if on green

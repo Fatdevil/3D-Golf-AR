@@ -1827,6 +1827,20 @@ function serve() {
     });
     checks.push({ name: 'course: a shot that comes in after the ball has stopped and before the next turn is up is not played (the ball is locked, the swing keys are off), and the turn change unlocks it',
       ok: lock.atStop.locked && !lock.atStop.keys && lock.second.strokes === lock.atStop.strokes && !lock.second.flying && lock.after.keys, detail: JSON.stringify(lock) });
+    // Rehit whose penalty reaches the Auto Concede limit picks the hole up: the ball stays locked until the next turn (a shot then would wipe it)
+    const rehitConcede = await cp.evaluate(function () {
+      window.matchSettings = Object.assign({}, window.matchSettings || {}, { autoConcede: 2 });
+      courseHoles[playingHoleIndex].par = 4;
+      const p = window.players[0], here = { x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z };
+      p.strokes = 5; p.penaltyStrokes = 0; p.prevPos = here; p.prevStrokes = 4; p.prevPenalty = 0; p.holedOut = false; p.penaltyResolved = false;
+      window.lastShotPlayerIndex = 0; playState = 'ROUND_IDLE'; window.ballLocked = false;
+      window.takeRehit();
+      const after = { total: p.strokes + p.penaltyStrokes, holedOut: p.holedOut, locked: !!window.ballLocked };
+      window.triggerRealShot({ ballSpeedMph: 70, launchAngleDeg: 20, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 0, isLiveData: true });
+      return { after: after, shot: { total: p.strokes + p.penaltyStrokes, holedOut: p.holedOut, flying: window.isBallFlying() } };
+    });
+    checks.push({ name: 'course: a Rehit that reaches the Auto Concede limit (5 on a par 4, limit 6) picks the hole up at 6 and keeps the ball locked: a shot right after is not played',
+      ok: rehitConcede.after.total === 6 && rehitConcede.after.holedOut && rehitConcede.after.locked && rehitConcede.shot.total === 6 && rehitConcede.shot.holedOut && !rehitConcede.shot.flying, detail: JSON.stringify(rehitConcede) });
     await cp.close();
     checks.push({ name: 'course: with a launch monitor the aim billboard suggests the club from the player\'s bag (PW for 110), not with the swing', ok: /PW/.test(bagCourse.club) && /^Carry /.test(bagCourse.reach) && /plays/.test(bagCourse.fx) && !/^🎒/.test(swingClub), detail: JSON.stringify([bagCourse, swingClub]) });
     checks.push({ name: 'range: the quick draft of a range reopens as a range even without mode=range in the address', ok: reopenedRange.range && reopenedRange.url === 'range' && reopenedRange.teeBtn !== 'none' && reopenedRange.hasTee, detail: JSON.stringify(reopenedRange) });
