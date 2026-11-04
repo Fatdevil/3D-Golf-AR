@@ -1290,42 +1290,52 @@ function serve() {
       return out;
     });
     checks.push({ name: '2D grass cards: off by default; on, tufts stand on the grass around the camera (not on the fairway), compile, keep the shared template on a drop, and the buttons switch and remember them', ok: cards.defaultOff && cards.n > 500 && cards.onFairway === 0 && cards.far === 0 && cards.badClass === 0 && cards.attrsAtDispose === 0 && cards.tplKept && cards.rebuilt && cards.shown && cards.stored && cards.off && cards.errs.length === 0, detail: JSON.stringify(cards) });
-    // the 2D grass's own sliders: shown while it is on; the amount rebuilds the tufts at that many per m2, the height is a live uniform,
-    // both are clamped and remembered
+    // the 2D grass's own sliders, per class: shown while it is on; rough and deep rough each their amount (0-600 %, rebuilt on release)
+    // and height (a live uniform per class, nothing rebuilt), semi-rough on / off (then as the rough); clamped and remembered.
+    // A class map with three 10 m bands (rough, deep rough, semi-rough) makes each class countable on its own.
     const ct = await pp.evaluate(async function () {
       const sh = window._terrainShells, out = {};
       const cam = new THREE.PerspectiveCamera(55, 1.5, 0.05, 2000); cam.position.set(6, 2, 0); cam.lookAt(12, 0, -6); cam.updateMatrixWorld(true);
-      const count = function () { let n = 0; for (const c of sh.cards.values()) n += c.count; return n; };
+      const perClass = function () { const n = [0, 0, 0]; for (const c of sh.cards.values()) { if (!c.mesh) continue; const k = c.mesh.geometry.attributes.iClass.array; for (let i = 0; i < c.count; i++) n[k[i]]++; } return n; };
+      const build = function () { for (let i = 0; i < 80; i++) sh.update(i / 30, cam); return perClass(); };
       const tune = document.getElementById('grass-cards-tuning');
       window.setGrassExtra('cards', '0');
       out.hiddenOff = !!tune && tune.style.display === 'none';
       window.setGrassExtra('cards', '1');
       out.shownOn = tune.style.display === 'block';
-      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
-      const n1 = count();
-      window.setGrassCardTuning('amount', '2', false);
-      out.labelOnly = sh.cardAmount === 1 && document.getElementById('grass-cards-amount-val').textContent === '200%';
-      window.setGrassCardTuning('amount', '2', true);
+      const clsWas = sh._cls, cls = new Uint8Array(1024 * 1024);
+      for (let cx = 0; cx < 1024; cx++) { const x = (cx + 0.5) / 1024 * 600 - 300, c = x >= 0 && x < 10 ? 1 : (x >= 10 && x < 20 ? 2 : (x >= 20 && x < 30 ? 3 : 0)); if (c) for (let cz = 0; cz < 1024; cz++) cls[cz * 1024 + cx] = c; }
+      sh._cls = cls; sh._clearCards();
+      const n1 = build();
+      window.setGrassCardTuning('deep', 'amount', '6', false);
+      out.labelOnly = sh.cardTune.deep.amount === 1 && document.getElementById('grass-cards-deep-amount-val').textContent === '600%';
+      window.setGrassCardTuning('deep', 'amount', '6', true);
       out.dropped = sh.cards.size === 0;
-      for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
-      const n2 = count();
-      out.ratio = n1 ? +(n2 / n1).toFixed(2) : 0;
-      window.setGrassCardTuning('height', '1.8', true);
+      window.setGrassCardTuning('rough', 'amount', '0.5', true);
+      window.setGrassCardSemi(false);
+      const n2 = build();
+      out.ratios = n1.map(function (v, i) { return v ? +(n2[i] / v).toFixed(2) : null; });
+      window.setGrassCardTuning('rough', 'height', '0.6', true);
+      window.setGrassCardTuning('deep', 'height', '2.4', true);
       sh.update(3, cam);
-      out.uniform = sh._cardMat && Math.abs(sh._cardMat.uniforms.uCardH.value - 1.8) < 1e-9;
-      out.noRebuild = count() === n2;
-      out.stored = localStorage.getItem('golf_grass_cards_amount') === '2' && localStorage.getItem('golf_grass_cards_height') === '1.8';
-      sh.setCardTuning(10, 0.1);
-      out.clamped = sh.cardAmount === 3 && sh.cardHeight === 0.5;
+      const u = sh._cardMat && sh._cardMat.uniforms.uCardH.value;
+      out.uniform = !!u && Math.abs(u.x - 0.6) < 1e-9 && Math.abs(u.y - 2.4) < 1e-9 && Math.abs(u.z - 0.6) < 1e-9;
+      out.noRebuild = JSON.stringify(perClass()) === JSON.stringify(n2);
+      out.stored = localStorage.getItem('golf_grass_cards_deep_amount') === '6' && localStorage.getItem('golf_grass_cards_rough_amount') === '0.5' && localStorage.getItem('golf_grass_cards_deep_height') === '2.4' && localStorage.getItem('golf_grass_cards_semi') === '0';
+      sh.setCardTuning('deep', 'amount', 10); sh.setCardTuning('rough', 'height', 0.1); sh.setCardTuning('rough', 'amount', -1);
+      out.clamped = sh.cardTune.deep.amount === 6 && sh.cardTune.rough.height === 0.25 && sh.cardTune.rough.amount === 0;
       window.syncGrassExtraUI();
-      out.synced = document.getElementById('grass-cards-amount').value === '3' && document.getElementById('grass-cards-height-val').textContent === '50%';
+      out.synced = document.getElementById('grass-cards-deep-amount').value === '6' && document.getElementById('grass-cards-rough-height-val').textContent === '25%' &&
+        document.getElementById('grass-cards-semi-0').style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
       renderer.render(scene, cam);
-      sh.setCardTuning(1, 1); localStorage.removeItem('golf_grass_cards_amount'); localStorage.removeItem('golf_grass_cards_height');
+      ['rough', 'deep'].forEach(function (c) { sh.setCardTuning(c, 'amount', 1); sh.setCardTuning(c, 'height', 1); ['amount', 'height'].forEach(function (k) { localStorage.removeItem('golf_grass_cards_' + c + '_' + k); }); });
+      sh.setCardSemi(true); localStorage.removeItem('golf_grass_cards_semi');
+      sh._cls = clsWas; sh._clearCards();
       window.setGrassExtra('cards', '0');
       Object.assign(out, { n1: n1, n2: n2 });
       return out;
     });
-    checks.push({ name: '2D grass sliders: shown while it is on; the amount rebuilds about twice the tufts at 200 % (applied on release), the height is a live uniform (nothing rebuilt), clamped and remembered', ok: ct.hiddenOff && ct.shownOn && ct.n1 > 500 && ct.labelOnly && ct.dropped && ct.ratio > 1.8 && ct.ratio < 2.2 && ct.uniform && ct.noRebuild && ct.stored && ct.clamped && ct.synced, detail: JSON.stringify(ct) });
+    checks.push({ name: '2D grass sliders per class: shown while it is on; rough 50 % halves the rough tufts, deep rough 600 % gives six times the deep tufts, semi-rough off leaves none there (applied on release); heights are a live uniform per class (nothing rebuilt); clamped and remembered', ok: ct.hiddenOff && ct.shownOn && ct.n1[0] > 300 && ct.n1[1] > 300 && ct.n1[2] > 300 && ct.labelOnly && ct.dropped && ct.ratios[0] > 0.4 && ct.ratios[0] < 0.6 && ct.ratios[1] > 5.4 && ct.ratios[1] < 6.6 && ct.n2[2] === 0 && ct.uniform && ct.noRebuild && ct.stored && ct.clamped && ct.synced, detail: JSON.stringify(ct) });
     // the 2D grass runs without the 3D grass: its own level (AUTO = the 3D grass's, MED while that is off), the class map is built for
     // it with the 3D grass off, and its menu section shows while the 3D grass controls are hidden
     const dc = await pp.evaluate(async function () {
