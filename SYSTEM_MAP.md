@@ -542,6 +542,14 @@ Slagsättet NUMBERS i `arcade-swing-engine.js` (exakta inskrivna slag, utan brus
 - Rutorna (`#manual-tools`) har etiketter (Fart mph, Utgång °, Riktning °, Backspinn rpm, Sidospinn rpm) och en LABB-märkning.
 - Test: `tests/test_physics_lab.js`, `tests/smoke/shot-shape-smoke.js` (input modes).
 
+## Det som ritas varje bild (2026-11)
+Mätt på ett genererat hål (kameran i roughen, 3D-gräs MED): minikartan ritade hela scenen varje bild, lika mycket som huvudbilden (telefon ca 305 000 trianglar, dator ca 490 000).
+- **Minikartan** (`arcade.html`, "THE GSPRO MINIMAP PASS") ritas in i en egen bild (`window._mmCache.rt`, en render target 1,5 gånger rutans storlek) bara när dess nyckel ändras: storlek, inramning (boll, flagga), sikte, boll, hål, putt, lutningsvy; annars minst en gång per sekund, och var 50:e ms medan bollen är i luften (spåret). Varje bild kopieras bilden in i rutan (en fyrkant, 1 ritanrop). Bilden ser likadan ut (medelskillnad under 0,3 av 255, bara i kantutjämningen).
+- **`window.minimapBox()`** mäts en gång per bild (`window._frameNo`), i början av renderloopen innan den skriver till sidan: förut läste den layouten efter skrivningarna och tvingade webbläsaren att lägga om sidan varje bild (3-4 ms i profilen).
+- **Skuggan** (`window.updateShadowFocus`, före huvudbilden): skuggkameran täcker ±80 m runt en mitt på bollen (i byggläget kamerans blickpunkt), flyttad i 5 m-steg när punkten är 25 m bort. Ljuset och dess mål (`dirLight.target`, i scenen) följer mitten; solens riktning är `dirLight.userData.sunDir` (sätts av tiden på dygnet i `arcade-scene-engine.js`, läses av gräset och vattnet). Förut stod skuggan still i banans mitt (±100 m): bollen och träden hade ingen skugga ute på det mesta av ett hål. Skuggkartan ritas inte automatiskt (`shadowMap.autoUpdate = false`): bara när mitten eller solen flyttats, bollen rört sig, bollen är i luften, i byggläget, och minst två gånger per sekund.
+- Kvar att göra (inte ändrat): föremålen (träd m.m.) är `InstancedMesh` med `frustumCulled = false`, så varje utplacerat föremål ritas varje bild, även bakom kameran och i skuggpasset.
+- Test: `tests/test_render_budget.js`, smoke "render budget" i `tests/smoke/arcade-smoke.js`.
+
 ## Bildtidsmätaren (2026-11)
 `arcade-perf-hud.js`: `?fps=1` i adressen slår på och minns (`golf_fps`), `?fps=0` stänger av. En liten ruta överst i mitten (`#fps-meter`, tar inga tryck; byggets "Perf. Budget" är `#perf-hud`, något annat) visar bildtiden (medel senaste sekunden, bilder per sekund, värsta bilden senaste 2 s), huvudbildens ritanrop och trianglar (`PerfHud.mainPass(renderer)` direkt efter huvudrenderingen i arcade.html), ritbuffertens storlek och pixelkvot, och gräset (3D-nivå, 2D av/på med nivå, mängd, höjd och antal tuvor). Bildtiden är tiden mellan två animationsbilder, så den rymmer allt sidan gör i en bild. Test: `tests/test_perf_hud.js`.
 
