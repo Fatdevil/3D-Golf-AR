@@ -108,6 +108,14 @@ out('\nConcede (högsta score på hålet)');
   s2.strokes = 4;
   shot(s2, { green: true, ft: 20 });
   check('auto-putt under gränsen räknas som vanligt (4 + 2 = 6)', s2.holedOut && s2.scores[0] === 6 && names().indexOf(G.GIMME_AWARDED) >= 0, 'score ' + s2.scores[0]);
+  const w = fresh({ autoConcede: 2 });                       // par 4 + 2 = 6
+  w.strokes = 5;
+  shot(w, { terrain: 'WATER', entry: { x: 1, z: 2 }, prev: { x: 0, z: 0 } });
+  check('ett straffslag som når gränsen avslutar hålet (5 slag + vatten = 6, ingen PENALTY_APPLIED, inget slag till)', w.holedOut && w.scores[0] === 6 && names().indexOf(G.MATCH_COMPLETED) >= 0 && names().indexOf(G.PENALTY_APPLIED) < 0, 'score ' + w.scores[0] + ' ' + names().join());
+  const o = fresh({ autoConcede: 2 });
+  o.strokes = 4;
+  shot(o, { terrain: 'OB', prev: { x: 0, z: 0 } });
+  check('ett straffslag under gränsen: vanlig PENALTY_APPLIED (4 slag + OB = 5)', !o.holedOut && E.holeScore(o) === 5 && names().indexOf(G.PENALTY_APPLIED) >= 0);
 }
 
 out('\nHål och scorekort');

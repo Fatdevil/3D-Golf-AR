@@ -1804,6 +1804,29 @@ function serve() {
     // with the swing the game's own suggestion comes back once the shot plan is worked out again (the plan row is hidden meanwhile)
     await cp.waitForFunction(function () { return getComputedStyle(document.getElementById('aim-bb-plan')).display === 'block' && !/^🎒/.test(document.getElementById('aim-bb-club').innerText); }, null, { timeout: 60000, polling: 500 }).catch(function () {});
     const swingClub = await cp.evaluate(function () { return document.getElementById('aim-bb-club').innerText; });
+    // a shot that comes in after the ball has stopped but before the next turn is up (a launch monitor, the swing keys) is not played:
+    // it would be played by the wrong player, or wipe a holed-out score
+    const lock = await cp.evaluate(function () {
+      const shot = function () { window.triggerRealShot({ ballSpeedMph: 70, launchAngleDeg: 20, totalSpinRpm: 6000, spinAxisDeg: 0, azimDeg: 0, isLiveData: true }); };
+      return new Promise(function (res) {
+        shot();
+        setTimeout(function () { if (window.skipFlight) window.skipFlight(); }, 600);
+        const t = setInterval(function () {
+          if (window.isBallFlying() || playState !== 'ROUND_IDLE') return;
+          clearInterval(t);
+          const atStop = { strokes: window.players[0].strokes, locked: !!window.ballLocked, keys: window.swingKeysAllowed() };
+          shot();
+          const second = { strokes: window.players[0].strokes, flying: window.isBallFlying() };
+          const u = setInterval(function () {
+            if (window.ballLocked) return;
+            clearInterval(u);
+            res({ atStop: atStop, second: second, after: { keys: window.swingKeysAllowed() } });
+          }, 50);
+        }, 5);
+      });
+    });
+    checks.push({ name: 'course: a shot that comes in after the ball has stopped and before the next turn is up is not played (the ball is locked, the swing keys are off), and the turn change unlocks it',
+      ok: lock.atStop.locked && !lock.atStop.keys && lock.second.strokes === lock.atStop.strokes && !lock.second.flying && lock.after.keys, detail: JSON.stringify(lock) });
     await cp.close();
     checks.push({ name: 'course: with a launch monitor the aim billboard suggests the club from the player\'s bag (PW for 110), not with the swing', ok: /PW/.test(bagCourse.club) && /^Carry /.test(bagCourse.reach) && /plays/.test(bagCourse.fx) && !/^🎒/.test(swingClub), detail: JSON.stringify([bagCourse, swingClub]) });
     checks.push({ name: 'range: the quick draft of a range reopens as a range even without mode=range in the address', ok: reopenedRange.range && reopenedRange.url === 'range' && reopenedRange.teeBtn !== 'none' && reopenedRange.hasTee, detail: JSON.stringify(reopenedRange) });

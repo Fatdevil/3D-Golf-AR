@@ -22,7 +22,9 @@
             p.penaltyStrokes = (p.prevPenalty !== undefined) ? p.prevPenalty : p.penaltyStrokes;
             
             p.prevPos = null;
+            p.penaltyResolved = false;
             window.lastShotPlayerIndex = undefined;
+            window.ballLocked = false;   // the player plays again now (the pending turn change was cancelled above)
 
             document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
             if(typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
@@ -71,6 +73,7 @@
             if (surf) h = surf.z + 0.1;
         }
         window.ballMesh.position.set(ref.x, h, ref.z);
+        window.ballLocked = true;   // no shot until the drop is confirmed (evaluateNextTurn > switchTurnTo unlocks)
         window.camFollowMode = 'FREE';
         if (btnCam) { btnCam.innerText = '🎥 DROP MODE'; btnCam.style.background = '#3b82f6'; }
         camera.position.set(ref.x, h + 8, ref.z + 12);
@@ -135,6 +138,7 @@
             window.ballPos.x = dropX; window.ballPos.y = dh; window.ballPos.z = dropZ;
             p.lie = {x: dropX, y: dh, z: dropZ};
             p.prevPos = {x: dropX, y: dh, z: dropZ};
+            p.penaltyResolved = true;   // relief taken: no Rehit on top of it
             if (window.resetAimTarget) window.resetAimTarget();
             if (window._dropZoneCircle) { scene.remove(window._dropZoneCircle); window._dropZoneCircle = null; }
             window.camFollowMode = 'AUTO';
@@ -206,6 +210,7 @@
         document.getElementById('penalty-decision-modal').style.display = 'none';
         let p = window.players[window.activePlayerIndex];
         let prevLie = window._penaltyPrevLie || p.teePosition || p.lie;
+        p.penaltyResolved = true;   // stroke and distance taken: no Rehit button on top of it
         
         window.ballMesh.position.set(prevLie.x, prevLie.y, prevLie.z);
         window.ballPos.x = prevLie.x;
@@ -240,7 +245,7 @@
         // the rehit is for the player who hit the last shot (the button is shown for that player), even when the turn has moved on
         let lastIdx = window.lastShotPlayerIndex !== undefined ? window.lastShotPlayerIndex : window.activePlayerIndex;
         let p = window.players[lastIdx];
-        if (!p || !p.prevPos) return;
+        if (!p || !p.prevPos || p.penaltyResolved) return;   // after out of bounds or a water decision the relief is already taken
         
         if (window.nextTurnTimeout) clearTimeout(window.nextTurnTimeout);
         if (window.activePlayerIndex !== lastIdx) window.activePlayerIndex = lastIdx;
@@ -258,9 +263,17 @@
         window.ballMesh.position.set(p.prevPos.x, p.prevPos.y, p.prevPos.z);
         p.prevPos = null;
         window.lastShotPlayerIndex = undefined;
+        window.ballLocked = false;   // the player plays again now (the pending turn change was cancelled above)
         
         document.getElementById('hud-play-strokes').innerText = p.strokes + p.penaltyStrokes;
         if (typeof window.updatePlayerBanner === 'function') window.updatePlayerBanner();
+        // the penalty may take the hole to the Auto Concede limit: then it is picked up, as after any other penalty
+        let concede = window.matchSettings ? window.matchSettings.autoConcede : 99;
+        let holeNow = typeof courseHoles !== 'undefined' ? courseHoles[playingHoleIndex] : null;
+        if (concede !== 99 && holeNow && p.strokes + p.penaltyStrokes >= (holeNow.par || 4) + concede && typeof window.evaluateNextTurn === 'function') {
+            window.evaluateNextTurn();
+            return;
+        }
         
         camera.position.set(window.ballMesh.position.x, window.ballMesh.position.y + 4, window.ballMesh.position.z + 10);
         controls.target.copy(window.ballMesh.position);
@@ -286,7 +299,7 @@
                 if (p && p.prevPos) {
                     if (actionsContainer) actionsContainer.style.display = 'block';
                     if (window.matchSettings && window.matchSettings.mulligans) mBtn.style.display = 'block';
-                    if (rBtn) rBtn.style.display = 'block';
+                    if (rBtn) rBtn.style.display = p.penaltyResolved ? 'none' : 'block';
                     if (dBtn) dBtn.style.display = 'block';
                     return;
                 }

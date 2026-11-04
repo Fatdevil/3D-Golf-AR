@@ -9382,6 +9382,15 @@
             }
             return;
         }
+        // On a course the ball is locked from the moment it stops until the next turn is up (switchTurnTo): the score, a penalty decision
+        // or the next player is still being worked out. A shot then would be played by the wrong player, or wipe a holed-out score.
+        if (window.ballLocked && (appMode === 'PLAY' || appMode === 'TEST') && !window._isRangeMode) {
+            if (typeof window.showBuildToast === 'function') {
+                let sv = window.getGolfLanguage && window.getGolfLanguage() === 'sv';
+                window.showBuildToast(sv ? '⏳ Vänta på nästa tur: slaget räknades inte' : '⏳ Wait for the next turn: the shot was not counted', '#f59e0b');
+            }
+            return;
+        }
         if (window.clearBreakLine) window.clearBreakLine();
         
         // RISK-02 FIX: Normalize BackSpin/SideSpin → TotalSpin/SpinAxis if bridge sends
@@ -9443,6 +9452,8 @@
     // the swing keys (Space / arrows / , . /) work while a round is up, not in the builder and not while the ball is flying
     window.swingKeysAllowed = function () {
         if (!((appMode === 'PLAY' || appMode === 'TEST') && playState === 'ROUND_IDLE' && !isFlying)) return false;
+        // not while the turn is being settled after a shot (see triggerRealShot)
+        if (window.ballLocked && !window._isRangeMode) return false;
         // not while the menu is open: its buttons own the keys then
         let hbMenu = document.getElementById('hamburger-menu');
         if (hbMenu && hbMenu.classList.contains('open')) return false;
@@ -9575,6 +9586,7 @@
             p.prevPos = { x: window.ballMesh.position.x, y: window.ballMesh.position.y, z: window.ballMesh.position.z };
             p.prevStrokes = p.strokes;
             p.prevPenalty = p.penaltyStrokes;
+            p.penaltyResolved = false;
             
             window.lastShotPlayerIndex = window.activePlayerIndex;
             
@@ -11423,6 +11435,7 @@
             controls.enabled = true;
             ghostBlock.visible = false;
             playState = 'ROUND_IDLE';
+            window.ballLocked = false;   // a lock left from an earlier round
             window.activePlayerId = 'tester';
             window.activePlayerIndex = 0; // BUG-08 FIX: Set activePlayerIndex
             window.players = [ { id: 'tester', name: 'TEST', color: '#ef4444', scoreOffset:0, holeScores:[], strokes:0, penaltyStrokes:0, isActive:true, scores: Array(MAX_HOLES).fill(null), scoreVsPar: Array(MAX_HOLES).fill(null), holedOut: false, prevPos: null } ];
@@ -14948,7 +14961,8 @@ window.triggerExplosion = function(x, y, z) {
                         // the ball back where it is hit from (the Range Tee, or the approach spot), the camera behind it in its aim phase
                         window.placeRangeBall(false);
                     } else {
-                        // COURSE MODE: Ball stays where it landed
+                        // COURSE MODE: Ball stays where it landed; no shot until the next turn is up (switchTurnTo unlocks)
+                        window.ballLocked = true;
                         window.ballPos.x = window.ballMesh.position.x;
                         window.ballPos.y = window.ballMesh.position.y;
                         window.ballPos.z = window.ballMesh.position.z;
@@ -15004,6 +15018,7 @@ window.triggerExplosion = function(x, y, z) {
                             // OB = Stroke & Distance — always rehit from previous
                             // BUG-C02 FIX: Use prevPos (position before this shot), not teePosition
                             let prevLie = p.prevPos || p.teePosition || p.lie;
+                            p.penaltyResolved = true;   // the relief is taken: no Rehit button on top of it (arcade-rules.js)
                             window.ballMesh.position.set(prevLie.x, prevLie.y, prevLie.z);
                             window.ballPos.x = prevLie.x;
                             window.ballPos.y = prevLie.y;
