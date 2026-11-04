@@ -1,23 +1,34 @@
-# The tests of tests/README.md, run on every pull request and every push to main.
+# The tests of tests/README.md, run on every pull request.
 #   unit     every tests/test_*.js (npm test): physics, rules, handicap, collections, the static checks
 #   api      collections-e2e: the real server.js against a real Postgres, over HTTP, no browser
 #   browser  the three browser tests in headless Chromium: the smoke test, the shape smoke test (phone and desktop) and the courses e2e (also Postgres)
+#
+# Actions minutes: unit and api take about a minute each, the browser tests about 40 together. So:
+#   - unit and api run on every pull request (and every push to it)
+#   - the browser tests run only when the pull request has the label "browser-tests" (adding the label starts them), or by hand
+#     (Actions > CI > Run workflow, which runs everything on the chosen branch)
+#   - nothing runs on the push to main after a merge (the pull request was already tested), nor for a change to docs only
 name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    types: [opened, synchronize, reopened, labeled]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# a new push cancels the run of the previous one; adding the label runs in a group of its own, so it does not cancel the unit/api run
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event.action == 'labeled' && 'label' || 'push' }}
   cancel-in-progress: true
 
 jobs:
   unit:
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -29,6 +40,7 @@ jobs:
       - run: npm test
 
   api:
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -57,6 +69,11 @@ jobs:
       - run: node tests/e2e/approach-e2e.js
 
   browser:
+    # by hand, or a pull request with the label "browser-tests" (pushed to, or the label just added; another label added does nothing)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.pull_request.labels.*.name, 'browser-tests') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'browser-tests'))
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:

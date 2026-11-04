@@ -19,4 +19,10 @@ The smoke test needs a Chromium. It uses `CHROMIUM_PATH`, else `/opt/pw-browsers
 
 ## CI
 
-`.github/workflows/ci.yml` runs the tests on every pull request and every push to `main`: `unit` (`npm test`), `api` (`collections-e2e.js` against a Postgres service) and `browser` (the smoke test, the shape smoke test and the courses e2e in headless Chromium, each as its own job). A job that fails shows which test it was in its log.
+`.github/workflows/ci.yml` runs on pull requests, kept small because Actions minutes are limited (about 43 minutes for everything, almost all of it the browser tests):
+
+- `unit` (`npm test`) and `api` (the e2e tests against a Postgres service) run on every pull request and every push to it, about a minute each.
+- `browser` (the smoke test, the shape smoke test and the courses e2e in headless Chromium, each as its own job) runs only when the pull request has the label `browser-tests`: adding the label starts them, and later pushes run them again. By hand: Actions → CI → Run workflow runs everything on the chosen branch.
+- Nothing runs on the push to `main` after a merge (the pull request was tested), nor when only `.md` files or `docs/` change.
+
+A job that fails shows which test it was in its log. The browser tests can also be run locally (see the table above) before pushing.
