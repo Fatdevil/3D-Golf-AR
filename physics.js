@@ -200,15 +200,19 @@ window.GolfPhysics = (function() {
         return Math.min(cd + cdSpin, 0.55); // Cap against unreasonable values
     }
 
+    // Omvänd Magnus (negativt lyft) för en långsam boll med lite spinn: upp till -0,10 under 18 m/s och nära 0 rpm. Den blandas in mjukt,
+    // mellan 22 och 18 m/s och avtagande mot 2 250 rpm. Förut bytte lyftet tvärt vid exakt 20 m/s och 2 250 rpm (från ca +0,25 till negativt):
+    // en chip på 45 mph flög 8 % längre med 2 300 rpm än med 2 200.
     function getLiftCoefficient(vMag, spinParam, spinRateRpm) {
-        // Världsnyhet: Reverse Magnus Effect
-        // Inträffar vid v < 20 m/s och backspin < 2250 rpm
-        if (vMag < 20.0 && spinRateRpm > 0 && spinRateRpm <= 2250) {
-            // Skapar upp till -0.10 negativt lyft
-            let intensity = lerp(1.0, 0.0, spinRateRpm / 2250.0);
-            return -0.10 * intensity;
-        }
-        
+        const cl = liftCurve(spinParam);
+        if (!(spinRateRpm > 0)) return cl;
+        const wSpeed = Math.max(0, Math.min(1, (22.0 - vMag) / 4.0));
+        const wSpin = Math.max(0, 1 - spinRateRpm / 2250.0);
+        const w = wSpeed * wSpin;
+        return w > 0 ? cl + (-0.10 - cl) * w : cl;
+    }
+
+    function liftCurve(spinParam) {
         // Trackmans Spin Factor kurva för lift kalibrering
         // Kalibrerad: driver 216y, 7-iron 180y, wedge 130y, lob 75y
         if (spinParam <= 0.08) return lerp(0.00, 0.20, spinParam / 0.08);         // Driver

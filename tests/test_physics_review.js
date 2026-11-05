@@ -5,6 +5,7 @@
  * 3. A slope at the start: uphill takes speed, downhill gives (the sign was the other way round).
  * 4. Sand takes the speed along the ground at any landing angle (a low ball rolled 14-23 m through a bunker); a putt from sand still rolls.
  * 5. The club row's distances and the distance rule of the suggestion come from the physics (full carry per club), not fixed numbers.
+ * 6. The reverse Magnus lift is blended in smoothly (18-22 m/s, towards 2 250 rpm): no jump in carry at 20 m/s or 2 250 rpm.
  * Run: node tests/test_physics_review.js
  */
 global.window = { GREEN_STIMP: 10, matchSettings: { greenFirmness: 'NORMAL' } };
@@ -67,6 +68,18 @@ check('180 m: 5-järn (carry ca 193 m), inte 3-trä som förut (234 m)', SE.auto
 check('300 m: driver; 5 m: putter', SE.autoSelectClub(300) === 'DRIVER' && SE.autoSelectClub(5) === 'PUTT');
 const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'arcade.html'), 'utf8');
 check('arcade.html sätter knapparnas längder vid start och när enheten byts', /window\.SwingEngine\.updateClubLabels\(\);\s*\};\s*\/\/ the club row's distances/.test(html) && /DOMContentLoaded', function \(\) \{ window\.syncUnitButtons\(\); if \(window\.SwingEngine && window\.SwingEngine\.updateClubLabels\) window\.SwingEngine\.updateClubLabels\(\); \}/.test(html));
+
+quiet('\n6. Omvänd Magnus utan hopp');
+{
+  const chip = function (mph, rpm) { return sim({ ballSpeedMph: mph, launchAngleDeg: 20, totalSpinRpm: rpm, startPos: [0, 0, 0] }, flat(0)).metrics.carryMeters; };
+  const a = chip(45, 2200), b = chip(45, 2300);
+  check('45 mph: 2 200 och 2 300 rpm flyger nästan lika långt (var 24,2 / 26,2 m)', Math.abs(a - b) / b < 0.02, a.toFixed(2) + ' / ' + b.toFixed(2));
+  const steps = []; for (let mph = 40; mph <= 52; mph += 0.5) steps.push(chip(mph, 1500));
+  const jumps = steps.slice(1).map(function (v, i) { return v - steps[i]; });
+  check('1 500 rpm, 40-52 mph i halva mph: carry växer jämnt (varje steg inom 0,1 m från det förra, inget hopp vid 20 m/s)', jumps.every(function (d, i) { return d > 0 && (i === 0 || Math.abs(d - jumps[i - 1]) < 0.1); }), jumps.map(function (d) { return d.toFixed(2); }).join(' '));
+  const low = chip(30, 300), spun = chip(30, 3000);
+  check('en långsam boll med nästan inget spinn har fortfarande negativt lyft (kortare än med 3 000 rpm)', low < spun, low.toFixed(2) + ' < ' + spun.toFixed(2));
+}
 
 quiet(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
 process.exit(failed ? 1 : 0);
