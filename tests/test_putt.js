@@ -1,7 +1,7 @@
 /**
  * Putt roll regression test (physics.js only, no browser).
  * A putt on a flat or sloped GREEN must roll roughly the distances below, further downhill and shorter uphill,
- * and a faster putt must always roll further. Flat distances are the engine's current behaviour at stimp 10, within 10 %. Sloped distances are v^2 / (2 a) with a = mu g cos(t) +- (5/7) g sin(t): a rolling ball gets 5/7 of the slope's pull (the grain adds a few percent).
+ * and a faster putt must always roll further. Flat distances are the engine's current behaviour at stimp 10, within 10 %. Sloped distances are v^2 / (2 a) with a = mu g cos(t) +- (5/7) g sin(t): a rolling ball gets 5/7 of the slope's pull.
  * Run: node tests/test_putt.js
  */
 global.window = { GREEN_STIMP: 10, matchSettings: {} };
