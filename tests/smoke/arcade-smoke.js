@@ -1362,7 +1362,8 @@ function serve() {
       out.btn = document.getElementById('grass-cq-LOW').style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
       // sculpting with the 3D grass off: the stroke's syncHeights rebuilds the tufts from the new ground
       sh.syncHeights();
-      await new Promise(function (r) { setTimeout(r, 400); });
+      // (the chunks are dropped 300 ms after the last change: wait for it, at most 3 s on a slow machine, without updating meanwhile)
+      for (let w = 0; w < 30 && sh.cards.size; w++) await new Promise(function (r) { setTimeout(r, 100); });
       out.sculptRebuild = sh.cards.size === 0;
       // repainted while both grass modes were off: switching the 2D grass on again rebuilds the class map from the fresh mask
       window.setGrassExtra('cards', '0');
