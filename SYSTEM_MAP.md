@@ -542,6 +542,16 @@ Slagsättet NUMBERS i `arcade-swing-engine.js` (exakta inskrivna slag, utan brus
 - Rutorna (`#manual-tools`) har etiketter (Fart mph, Utgång °, Riktning °, Backspinn rpm, Sidospinn rpm) och en LABB-märkning.
 - Test: `tests/test_physics_lab.js`, `tests/smoke/shot-shape-smoke.js` (input modes).
 
+## Granskning av bollfysiken (2026-11)
+Rättat i `physics.js` och `arcade-swing-engine.js`:
+- **Vinden över marken:** vindprofilen (logaritmisk, 10 m referenshöjd) räknar bollens höjd över marken under den (`state.groundZ`, terränghöjden i varje steg), inte över z = 0. Förut satte banans höjd vinden: samma 7-järn i 10 m/s motvind gick 108 m med marken på z = +30 och 158 m på z = -30 (118 m på z = 0, som nu överallt).
+- **Topphöjden** (`metrics.apexMeters`, visas i rangesessionen och CSV:n) är höjden över starten, inte över z = 0.
+- **Lutningen vid utslaget:** uppför tar fart och nedför ger (±0,2 % per grad, högst ±3 %); tecknet var omvänt.
+- **Sand** tar farten längs marken vid alla landningsvinklar (`e_t` = sandens bas). Förut behöll en flack landning nästan all fart och en låg boll rullade 14-23 m genom bunkern; nu under 0,5 m. En putt från sanden rullar som förut.
+- **Klubbornas längder:** `SwingEngine.fullCarryM()` räknar varje klubbas fulla carry (100 %, rak arm, klubbens egen fart, utgångsvinkel och spinn) med fysiken i standardläge (15 °C, havsnivå, stiltje, plan fairway) första gången den behövs. Klubbradens siffror (`updateClubLabels`, i spelarens enhet, vid start och när enheten byts) och gränserna i `autoSelectClub` (halvvägs mellan två klubbors carry) kommer därifrån. Förut fasta: drivern sa 220 y men flög 282, och 180 m föreslog 3-trä (234 m). Utan fysiken (enhetstester) gäller den gamla fasta regeln.
+Kvar (inte ändrat): studsen är för hög (normal-COR ca 0,40-0,44, första studsen 2-4 m efter ett fullt slag; Penners fartberoende COR vore nästa steg, ändrar utrullningen för alla klubbor), omvänd Magnus har ett hopp vid 20 m/s och 2 250 rpm, glid- till rullövergången ser inte på spinnets riktning, grain på greenen är ett slumpmönster ur positionen, och lyftkurvan mot TrackMan (se `docs/ball-flight-reference-report.md`).
+Test: `tests/test_physics_review.js`.
+
 ## Det som ritas varje bild (2026-11)
 Mätt på ett genererat hål (kameran i roughen, 3D-gräs MED): minikartan ritade hela scenen varje bild, lika mycket som huvudbilden (telefon ca 305 000 trianglar, dator ca 490 000).
 - **Minikartan** (`arcade.html`, "THE GSPRO MINIMAP PASS") ritas in i en egen bild (`window._mmCache.rt`, en render target 1,5 gånger rutans storlek) bara när dess nyckel ändras: storlek, inramning (boll, flagga), sikte, boll, hål, putt, lutningsvy; annars minst en gång per sekund, och var 50:e ms medan bollen är i luften (spåret). Varje bild kopieras bilden in i rutan (en fyrkant, 1 ritanrop). Bilden ser likadan ut (medelskillnad under 0,3 av 255, bara i kantutjämningen).

@@ -309,7 +309,9 @@ window.GolfPhysics = (function() {
         // Wind gradient: logarithmic boundary layer profile
         // Higher altitude = stronger wind. Reference height = 10m.
         // At 30m apex: ~27% more wind. At 5m punch: ~20% less wind.
-        let heightM = Math.max(0.03, state.pos[2]); // Current ball height
+        // The height is above the ground under the ball (groundZ, the terrain height of this tick), not above z = 0: the course's
+        // elevation used to set the wind (the same shot in the same headwind went 108 m with the ground at z = +30, 158 m at z = -30).
+        let heightM = Math.max(0.03, state.pos[2] - (state.groundZ || 0)); // Current ball height above the ground
         let z0 = 0.03;   // Surface roughness (grass = 0.03m)
         let refH = 10.0; // Reference measurement height
         let windScale = Math.log(heightM / z0) / Math.log(refH / z0);
@@ -479,7 +481,8 @@ window.GolfPhysics = (function() {
             
             // EFFECT 3: Speed factor from gravity component (marginal)
             // Downhill: +1% per 5° (gravity assist). Uphill: -1% per 5°. Max ±3%.
-            let slopeSpeedFactor = 1.0 + Math.max(-0.03, Math.min(0.03, slopeForwardDeg * 0.002));
+            // (slopeForwardDeg is positive uphill: the sign was the other way round, an uphill lie gave the faster ball)
+            let slopeSpeedFactor = 1.0 - Math.max(-0.03, Math.min(0.03, slopeForwardDeg * 0.002));
             speedMS *= slopeSpeedFactor;
             
             console.log(`⛰️ SLOPE LAUNCH: forward=${slopeForwardDeg.toFixed(1)}° side=${slopeSideDeg.toFixed(1)}° | LA: ${vla.toFixed(1)}°→${(launchRads*180/Math.PI).toFixed(1)}° | spinAxis: ${(spinAxisIn - (-slopeSideDeg*0.65)).toFixed(1)}°→${spinAxisIn.toFixed(1)}° | speed×${slopeSpeedFactor.toFixed(3)}`);
@@ -522,8 +525,12 @@ window.GolfPhysics = (function() {
         let tCelsius = (envCtx && envCtx.temperatureC !== undefined) ? envCtx.temperatureC : 15;
         let windVec = (envCtx && envCtx.wind) ? envCtx.wind : [0, 0, 0];
         
+        // the ground under the ball at the start (the wind profile counts the height above it, see evaluateState)
+        let startGround = startPosXZY[2];
+        if (envCtx && envCtx.getTerrainAt) { const g0 = envCtx.getTerrainAt(startPosXZY[0], startPosXZY[1], startPosXZY[2]); if (g0 && isFinite(g0.z)) startGround = g0.z; }
         let state = {
             phase: "flight",
+            groundZ: startGround,
             pos: [startPosXZY[0], startPosXZY[1], startPosXZY[2]], 
             vel: vel,
             spin: spin,
@@ -661,6 +668,7 @@ window.GolfPhysics = (function() {
                 tInfo = envCtx.getTerrainAt(state.pos[0], state.pos[1], state.pos[2]);
             }
             state.terrainNormal = tInfo.normal;
+            if (isFinite(tInfo.z)) state.groundZ = tInfo.z;
             
             let prevPos = [...state.pos];
             let prevVel = [...state.vel];
@@ -713,8 +721,8 @@ window.GolfPhysics = (function() {
             
             t += dt;
             
-            // Evaluera Apex
-            if (state.pos[2] > metrics.apexMeters) metrics.apexMeters = state.pos[2];
+            // Evaluera Apex: the height above the start (TrackMan's apex), not above z = 0 (that put the course's elevation into it)
+            if (state.pos[2] - startPosXZY[2] > metrics.apexMeters) metrics.apexMeters = state.pos[2] - startPosXZY[2];
 
             // Identifiera om vi svävar över koppen
             let overCup = false;
@@ -780,7 +788,7 @@ window.GolfPhysics = (function() {
                     if (impactRes && impactRes.type) impactTerrainType = impactRes.type;
                 }
                 
-                // Beräkna infallsvinkel (0° = lodrätt, 90° = horisontell längs marken)
+                // Beräkna infallsvinkel mot markytan (0° = längs marken, 90° = lodrätt ner)
                 let N = tInfo.normal;
                 let vMagImpact = vecMag(impactVel);
                 let vDotN_impact = impactVel[0]*N[0] + impactVel[1]*N[1] + impactVel[2]*N[2];
@@ -911,6 +919,9 @@ window.GolfPhysics = (function() {
                     // Floor: 0.40 for most surfaces, 0.15 for fescue (steep angles check the ball hard)
                     let e_t_floor = (impactTerrainType === 'FESCUE') ? 0.15 : 0.40;
                     e_t = Math.max(e_t_floor, e_t);
+                    // Sand takes the speed along the ground at any angle: a low ball does not skim through a bunker (with the angle rule a
+                    // 60 mph ball landing at 8° kept almost all of it and rolled 23 m through the sand). A putt from the sand rolls (rollsAtOnce).
+                    if (impactTerrainType === 'SAND') e_t = e_t_base;
                     // Putt 1.5°:  factor=0.001 → e_t=0.999 (zero loss)
                     // Chip 10°:   factor=0.049 → e_t=0.988
                     // 7-iron 25°: factor=0.309 → e_t=0.932 (fairway 0.88→0.963)
