@@ -69,6 +69,12 @@ window.GolfPhysics = (function() {
     // samma sätt (farten in i marken är så hög att taket aldrig nås), så det är orört.
     const BITE_FRICTION_MU = 0.55;
 
+    // Gräsets fartberoende broms för en rullande boll utanför greenen (1/m): a = mu g + k v^2. En snabb boll rullar inte rent över gräset utan
+    // hoppar över grästopparna och bromsas hårdare; en långsam (chip, utrullningens slut) märker nästan inget (2 m/s: +0,03 m/s^2). Förut var
+    // bromsen densamma i alla farter: en låg driver på halv kraft landade i 27 m/s och rullade 116 m på fairway efter 66 m carry.
+    // Greenen (stimp, puttar) är orörd.
+    const TURF_ROLL_DRAG = 0.007;
+
     // En rullande boll (inte en glidande) får bara 5/7 av tyngdkraften längs lutningen: en del av energin går åt till att få bollen att snurra
     // (solid klot, I = 2/5 m r^2, a = g sin(v) / (1 + 2/5)). Rullmotståndet (stimp) är redan en uppmätt retardation och rörs inte. Glidfasen
     // (skid) är en glidande boll och får full tyngd.
@@ -286,6 +292,7 @@ window.GolfPhysics = (function() {
             }
             
             let frictionAccelMag = mu * normalForceMag;
+            if (state.terrainType !== 'GREEN') frictionAccelMag += TURF_ROLL_DRAG * vSpeed * vSpeed;   // gräset bromsar en snabb boll hårdare
             
             // Skydda mot okontrollerad Topspin-boost - friktionen får aldrig bli negativ
             let effectiveFriction = Math.max(0, frictionAccelMag - spinTractionMag);

@@ -20,8 +20,9 @@ const SwingEngine = (function() {
     //         maxSpread (°): max azimuth deviation on full miss
     // -----------------------------------------------------------
     const CLUB_PROFILES = {
-        DRIVER: { maxSpeed: 167, baseLaunchAngle: 10.5, baseSpin:  2500, maxSpread: 12, name: 'Driver',  icon: '🏌️' },
-        W3:     { maxSpeed: 155, baseLaunchAngle: 12.0, baseSpin:  3500, maxSpread: 10, name: '3 Wood',  icon: '🪵' },
+        // (spinAtZeroPower: see SPIN_AT_ZERO_POWER; a driver and a wood keep most of their spin on a shorter swing)
+        DRIVER: { maxSpeed: 167, baseLaunchAngle: 10.5, baseSpin:  2500, maxSpread: 12, name: 'Driver',  icon: '🏌️', spinAtZeroPower: 0.7 },
+        W3:     { maxSpeed: 155, baseLaunchAngle: 12.0, baseSpin:  3500, maxSpread: 10, name: '3 Wood',  icon: '🪵', spinAtZeroPower: 0.7 },
         I5:     { maxSpeed: 140, baseLaunchAngle: 16.0, baseSpin:  5300, maxSpread:  8, name: '5 Iron',  icon: '⛳' },
         I7:     { maxSpeed: 128, baseLaunchAngle: 18.5, baseSpin:  7100, maxSpread:  7, name: '7 Iron',  icon: '⛳' },
         I9:     { maxSpeed: 115, baseLaunchAngle: 22.0, baseSpin:  8700, maxSpread:  6, name: '9 Iron',  icon: '⛳' },
@@ -252,7 +253,10 @@ const SwingEngine = (function() {
         const speedMph = club.maxSpeed * effectivePower;
         // Spinnet följer klubbhuvudets fart: full kraft ger klubbens fulla spinn, en chip på 10-20 % ca en fjärdedel till en tredjedel.
         // Förut gav 10 % kraft ändå 73 % av spinnet (7900 rpm på en 10 mph-chip), långt mer än farten kan ge.
-        const spinMult = SPIN_AT_ZERO_POWER + (1 - SPIN_AT_ZERO_POWER) * effectivePower;
+        // A driver and a wood keep most of their spin (spinAtZeroPower 0.7): with the wedges' rule a half-power drive had 1 500 rpm, almost no
+        // lift, flew 3 m high, landed at 13° and ran 116 m; it now lands at 17° (carry 81 m instead of 66 at 50 %).
+        const spinAtZero = club.spinAtZeroPower !== undefined ? club.spinAtZeroPower : SPIN_AT_ZERO_POWER;
+        const spinMult = spinAtZero + (1 - spinAtZero) * effectivePower;
         const spinRpm  = club.baseSpin * spinMult;
 
         const vlaOffset = (Math.abs(effectivePower - 0.85) > 0.2) ? -1.5 : 0;
