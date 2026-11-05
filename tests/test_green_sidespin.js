@@ -45,10 +45,13 @@ for (const firm of ['SOFT', 'NORMAL', 'FIRM']) {
     const kickF = fade.endX - fade.landX, kickD = draw.endX - draw.landX;
     check(club + ' ' + firm + ' fade: kick åt höger efter landning', kickF > 0.3, '(' + kickF.toFixed(2) + ' m)');
     check(club + ' ' + firm + ' draw: kick åt vänster efter landning', kickD < -0.3, '(' + kickD.toFixed(2) + ' m)');
-    check(club + ' ' + firm + ' fade/draw är spegelbilder', Math.abs(kickF + kickD) < 0.05 && Math.abs(fade.endY - draw.endY) < 0.05);
+    // (greenens grain är ett mönster ur läget och inte spegelvänt, så fade och draw skiljer några cm)
+    check(club + ' ' + firm + ' fade/draw är spegelbilder', Math.abs(kickF + kickD) < 0.10 && Math.abs(fade.endY - draw.endY) < 0.10);
     check(club + ' ' + firm + ' rak spinaxel ger ingen sidokick', Math.abs(straight.endX) < 0.02, '(' + straight.endX.toFixed(3) + ' m)');
-    if (firm !== 'FIRM') { // på hård green rullar bollen framåt trots spinn, men sidokicken gäller fortfarande
+    if (firm === 'SOFT' || (club === 'LW' && firm === 'NORMAL')) { // på hård green rullar bollen framåt trots spinn; med Penners lägre studs checkar SW på normal green (nedan)
       check(club + ' ' + firm + ' fade spinner bakåt och höger samtidigt', fade.endY < fade.landY - 0.3 && fade.endX > fade.landX, '(back ' + (fade.landY - fade.endY).toFixed(1) + ' m)');
+    } else if (firm === 'NORMAL') {
+      check(club + ' ' + firm + ' fade checkar nära landningen (inom 1 m) och går åt höger', Math.abs(fade.endY - fade.landY) < 1.0 && fade.endX > fade.landX, '(' + (fade.endY - fade.landY).toFixed(1) + ' m)');
     }
     check(club + ' ' + firm + ' fade stannar', fade.phase === 'stopped');
   }

@@ -48,7 +48,7 @@ console.log("=== ROLL DISTANCE REGRESSION TEST ===");
 console.log("Flat FAIRWAY, no wind, sea level, 25°C\n");
 
 const r1 = testShot("DRIVER", 130, 14, 2500, 0,
-    { carryMin: 210, carryMax: 220, rollMin: 18, rollMax: 30 });
+    { carryMin: 210, carryMax: 220, rollMin: 18, rollMax: 34 });   // (Penners studs: färre energiförluster i höga studsar, 31 yd)
 
 const r2 = testShot("7-IRON", 119, 18, 5500, 0,
     { carryMin: 170, carryMax: 190, rollMin: 8, rollMax: 18 });
