@@ -5,6 +5,9 @@
  * 3. A slope at the start: uphill takes speed, downhill gives (the sign was the other way round).
  * 4. Sand takes the speed along the ground at any landing angle (a low ball rolled 14-23 m through a bunker); a putt from sand still rolls.
  * 5. The club row's distances and the distance rule of the suggestion come from the physics (full carry per club), not fixed numbers.
+ * 6. The reverse Magnus lift is blended in smoothly (18-22 m/s, towards 2 250 rpm): no jump in carry at 20 m/s or 2 250 rpm.
+ * 7. The bounce: the COR comes from the speed into the ground (Penner), scaled per surface; a ball going over to the ground with slip
+ *    left loses 2/7 of it (it slides until it rolls). First bounces of full shots are about 0.3 m (were 2-4 m), full totals barely move.
  * Run: node tests/test_physics_review.js
  */
 global.window = { GREEN_STIMP: 10, matchSettings: { greenFirmness: 'NORMAL' } };
@@ -67,6 +70,39 @@ check('180 m: 5-järn (carry ca 193 m), inte 3-trä som förut (234 m)', SE.auto
 check('300 m: driver; 5 m: putter', SE.autoSelectClub(300) === 'DRIVER' && SE.autoSelectClub(5) === 'PUTT');
 const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'arcade.html'), 'utf8');
 check('arcade.html sätter knapparnas längder vid start och när enheten byts', /window\.SwingEngine\.updateClubLabels\(\);\s*\};\s*\/\/ the club row's distances/.test(html) && /DOMContentLoaded', function \(\) \{ window\.syncUnitButtons\(\); if \(window\.SwingEngine && window\.SwingEngine\.updateClubLabels\) window\.SwingEngine\.updateClubLabels\(\); \}/.test(html));
+
+quiet('\n6. Omvänd Magnus utan hopp');
+{
+  const chip = function (mph, rpm) { return sim({ ballSpeedMph: mph, launchAngleDeg: 20, totalSpinRpm: rpm, startPos: [0, 0, 0] }, flat(0)).metrics.carryMeters; };
+  const a = chip(45, 2200), b = chip(45, 2300);
+  check('45 mph: 2 200 och 2 300 rpm flyger nästan lika långt (var 24,2 / 26,2 m)', Math.abs(a - b) / b < 0.02, a.toFixed(2) + ' / ' + b.toFixed(2));
+  const steps = []; for (let mph = 40; mph <= 52; mph += 0.5) steps.push(chip(mph, 1500));
+  const jumps = steps.slice(1).map(function (v, i) { return v - steps[i]; });
+  check('1 500 rpm, 40-52 mph i halva mph: carry växer jämnt (varje steg inom 0,1 m från det förra, inget hopp vid 20 m/s)', jumps.every(function (d, i) { return d > 0 && (i === 0 || Math.abs(d - jumps[i - 1]) < 0.1); }), jumps.map(function (d) { return d.toFixed(2); }).join(' '));
+  const low = chip(30, 300), spun = chip(30, 3000);
+  check('en långsam boll med nästan inget spinn har fortfarande negativt lyft (kortare än med 3 000 rpm)', low < spun, low.toFixed(2) + ' < ' + spun.toFixed(2));
+}
+
+quiet('\n7. Studsen');
+{
+  const SW = require('./load_swing_engine.js')({ window: { GolfPhysics: P }, globals: { performance: performance } });
+  const full = function (club, surf, pw) {
+    const d = SW.mapCircleToPhysics(pw || 1.0, 0, club, 200);
+    const r = sim({ ballSpeedMph: d.ballSpeedMph, launchAngleDeg: d.launchAngleDeg, totalSpinRpm: d.totalSpinRpm, startPos: [0, 0, 0], isTeeShot: true }, flat(0, surf));
+    const p = r.path, i = p.findIndex(function (q) { return q.phase !== 'flight'; });
+    let h = 0; for (let j = i + 1; j < p.length && p[j].phase === 'bounce'; j++) { if (j > i + 2 && p[j].z <= 1e-6) break; h = Math.max(h, p[j].z); }
+    return { h: h, total: r.metrics.totalMeters, carry: r.metrics.carryMeters };
+  };
+  const hs = [];
+  ['DRIVER', 'I7', 'PW', 'LW'].forEach(function (c) { ['FAIRWAY', 'GREEN'].forEach(function (sf) { hs.push(c + ' ' + sf + ' ' + full(c, sf).h.toFixed(2)); }); });
+  check('första studsen efter ett fullt slag: högst 0,5 m (var 1,8-4,2 m)', hs.every(function (t) { return +t.split(' ')[2] <= 0.5; }), hs.join(', '));
+  // the full totals are about what they were (2026-11, before the change: driver 274.0 / 7-iron 165.8 / PW 114.0 / LW 67.0 m on fairway)
+  const was = { DRIVER: 274.0, I7: 165.8, PW: 114.0, LW: 67.0 };
+  const now = {}; Object.keys(was).forEach(function (c) { now[c] = full(c, 'FAIRWAY').total; });
+  check('fulla slag på fairway: total inom ±3 m från förut', Object.keys(was).every(function (c) { return Math.abs(now[c] - was[c]) <= 3; }), JSON.stringify(now));
+  const half = full('DRIVER', 'FAIRWAY', 0.5);
+  check('en låg driver på halv kraft rullar inte längre än förut (var 136 m efter 66 m carry)', half.total - half.carry < 130, (half.total - half.carry).toFixed(1));
+}
 
 quiet(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
 process.exit(failed ? 1 : 0);

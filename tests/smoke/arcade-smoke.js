@@ -1361,10 +1361,13 @@ function serve() {
       out.stored = localStorage.getItem('golf_grass_cards_q') === 'LOW';
       out.btn = document.getElementById('grass-cq-LOW').style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
       // sculpting with the 3D grass off: the stroke's syncHeights rebuilds the tufts from the new ground
+      // (the chunks are dropped 300 ms after the last change; the page's own render loop builds them again around its camera at once, so
+      // the drop is watched, not an empty map: wait for it, at most 3 s on a slow machine)
+      let drops = 0; const clr = sh._clearCards; sh._clearCards = function () { drops++; return clr.apply(this, arguments); };
       sh.syncHeights();
-      // (the chunks are dropped 300 ms after the last change: wait for it, at most 3 s on a slow machine, without updating meanwhile)
-      for (let w = 0; w < 30 && sh.cards.size; w++) await new Promise(function (r) { setTimeout(r, 100); });
-      out.sculptRebuild = sh.cards.size === 0;
+      for (let w = 0; w < 30 && !drops; w++) await new Promise(function (r) { setTimeout(r, 100); });
+      sh._clearCards = clr;
+      out.sculptRebuild = drops > 0;
       // repainted while both grass modes were off: switching the 2D grass on again rebuilds the class map from the fresh mask
       window.setGrassExtra('cards', '0');
       let rebuilt = 0; const rb = window.rebuildRoughMask; window.rebuildRoughMask = function () { rebuilt++; return rb.apply(this, arguments); };

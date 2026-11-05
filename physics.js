@@ -56,11 +56,18 @@ window.GolfPhysics = (function() {
     const PUTT_MAX_LAUNCH_DEG = 4;
     const PUTT_MAX_SPIN_RPM = 800;
 
+    // Penners studs på en green: COR ur farten rakt in i marken (m/s). Kurvans minimum ligger vid ca 20,8 m/s (0,12); över 20 m/s hålls den.
+    const PENNER_GREEN_BASE = 0.62;   // greenens baseCor (NORMAL) som kurvan står för; andra underlag skalas med sin baseCor / den
+    function pennerCor(vn) {
+        const v = Math.min(Math.max(0, vn), 20);
+        return 0.510 - 0.0375 * v + 0.000903 * v * v;
+    }
+
     // Spin-bite (se markstudsen) kan aldrig ta mer fart av bollen än friktionen hinner under själva nedslaget: farten längs marken ändras högst
     // BITE_FRICTION_MU * (1 + studskoefficient) * farten rakt in i marken (Coulomb, glidande kontakt). Utan taket vänder en lågfartschip med
     // fullt wedgespinn (t.ex. 10-20 % kraft med lobwedge) och rullar flera meter bakåt förbi startpunkten. Ett fullslag glider inte på
     // samma sätt (farten in i marken är så hög att taket aldrig nås), så det är orört.
-    const BITE_FRICTION_MU = 0.40;
+    const BITE_FRICTION_MU = 0.55;
 
     // En rullande boll (inte en glidande) får bara 5/7 av tyngdkraften längs lutningen: en del av energin går åt till att få bollen att snurra
     // (solid klot, I = 2/5 m r^2, a = g sin(v) / (1 + 2/5)). Rullmotståndet (stimp) är redan en uppmätt retardation och rörs inte. Glidfasen
@@ -200,15 +207,19 @@ window.GolfPhysics = (function() {
         return Math.min(cd + cdSpin, 0.55); // Cap against unreasonable values
     }
 
+    // Omvänd Magnus (negativt lyft) för en långsam boll med lite spinn: upp till -0,10 under 18 m/s och nära 0 rpm. Den blandas in mjukt,
+    // mellan 22 och 18 m/s och avtagande mot 2 250 rpm. Förut bytte lyftet tvärt vid exakt 20 m/s och 2 250 rpm (från ca +0,25 till negativt):
+    // en chip på 45 mph flög 8 % längre med 2 300 rpm än med 2 200.
     function getLiftCoefficient(vMag, spinParam, spinRateRpm) {
-        // Världsnyhet: Reverse Magnus Effect
-        // Inträffar vid v < 20 m/s och backspin < 2250 rpm
-        if (vMag < 20.0 && spinRateRpm > 0 && spinRateRpm <= 2250) {
-            // Skapar upp till -0.10 negativt lyft
-            let intensity = lerp(1.0, 0.0, spinRateRpm / 2250.0);
-            return -0.10 * intensity;
-        }
-        
+        const cl = liftCurve(spinParam);
+        if (!(spinRateRpm > 0)) return cl;
+        const wSpeed = Math.max(0, Math.min(1, (22.0 - vMag) / 4.0));
+        const wSpin = Math.max(0, 1 - spinRateRpm / 2250.0);
+        const w = wSpeed * wSpin;
+        return w > 0 ? cl + (-0.10 - cl) * w : cl;
+    }
+
+    function liftCurve(spinParam) {
         // Trackmans Spin Factor kurva för lift kalibrering
         // Kalibrerad: driver 216y, 7-iron 180y, wedge 130y, lob 75y
         if (spinParam <= 0.08) return lerp(0.00, 0.20, spinParam / 0.08);         // Driver
@@ -838,9 +849,11 @@ window.GolfPhysics = (function() {
                     baseCor = 0.32; cFriction = 0.25; // roll_mu 0.22
                 }
                 
-                // Variabel COR-ekvation (Sports Engineering 2023)
-                // En brant infallsvinkel (0-20°) droppar COR. Flack vinkel (60-90°) behåller hastigheten.
-                let cRestitution = Math.max(0.05, baseCor - 0.004 * incidenceAngleDeg);
+                // Studsens elasticitet (COR) ur farten rakt in i marken, Penners modell för en green (Penner 2002, "The run of a golf ball"):
+                // e = 0,510 - 0,0375 v + 0,000903 v^2 (v i m/s, gäller till ca 20 m/s). Underlagens skillnader behålls som kvoten mot greenens
+                // baseCor (0,62): fairway 0,94, rough 0,69, sand 0,48, mjuk / hård green 0,84 / 1,16. Förut var det baseCor - 0,004 x infallsvinkeln
+                // (0,40-0,44 för ett fullt slag) och första studsen blev 2-4 m hög; ett brant nedslag har nu den höga farten in i marken och den låga COR:en.
+                let cRestitution = Math.max(0.05, pennerCor(Math.abs(vDotN_impact)) * baseCor / PENNER_GREEN_BASE);
                 
                 if (impactTerrainType === 'WATER') {
                     // WATER SKIMMING TRACKMAN MACKA!
@@ -994,6 +1007,27 @@ window.GolfPhysics = (function() {
                             state.phase = "skid"; 
                         } else {
                             state.phase = "roll";
+                        }
+                        {
+                            // En boll som går över till marken med kvar glid (kontaktpunkten rör sig mot marken) glider tills den rullar rent och
+                            // tappar då 2/7 av glidet (samma impuls som spin-bite, 1 / 3,5, men utan taket: glidet hinner tas bort under glidsträckan).
+                            // Förut rullade bollen vidare med hela glidfarten (greenens glidfas har bara 1,7 x rullfriktionen): en låg boll med halv
+                            // kraft och driver rullade 136 m på fairway efter 66 m carry.
+                            if (!rollsAtOnce) {
+                                const s2 = state.spin, Vs = state.vel;
+                                const vC = [
+                                    Vs[0] - RADIUS * (s2[1] * N[2] - s2[2] * N[1]),
+                                    Vs[1] - RADIUS * (s2[2] * N[0] - s2[0] * N[2]),
+                                    Vs[2] - RADIUS * (s2[0] * N[1] - s2[1] * N[0])
+                                ];
+                                const dS = vecScale(vC, -1 / 3.5);
+                                state.vel = vecAdd(Vs, dS);
+                                state.spin = [
+                                    s2[0] - (2.5 / RADIUS) * (N[1] * dS[2] - N[2] * dS[1]),
+                                    s2[1] - (2.5 / RADIUS) * (N[2] * dS[0] - N[0] * dS[2]),
+                                    s2[2] - (2.5 / RADIUS) * (N[0] * dS[1] - N[1] * dS[0])
+                                ];
+                            }
                         }
                         
                         // Tvinga hastigheten att vara helt parallell med ytan (nolla vDotN lokalt)

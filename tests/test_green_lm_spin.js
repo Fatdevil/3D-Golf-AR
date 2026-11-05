@@ -50,8 +50,9 @@ console.log('Monitorn skickar BackSpin/SideSpin: fade kickar höger, draw vänst
   check('SideSpin blir positiv/negativ spinaxel', fade.norm.spinAxisDeg > 0 && draw.norm.spinAxisDeg < 0 && straight.norm.spinAxisDeg === 0,
         '(' + fade.norm.spinAxisDeg.toFixed(1) + '° / ' + draw.norm.spinAxisDeg.toFixed(1) + '°)');
   const kf = fade.endX - fade.landX, kd = draw.endX - draw.landX;
-  check('fade kickar åt höger efter landning', kf > 0.3, '(' + kf.toFixed(2) + ' m)');
-  check('draw kickar åt vänster efter landning', kd < -0.3, '(' + kd.toFixed(2) + ' m)');
+  // (med Penners studs, ca 0,3 m hög i stället för 2-4 m, är kicken mindre än förut: 0,30 m här)
+  check('fade kickar åt höger efter landning', kf > 0.2, '(' + kf.toFixed(2) + ' m)');
+  check('draw kickar åt vänster efter landning', kd < -0.2, '(' + kd.toFixed(2) + ' m)');
   check('fade och draw är spegelbilder', Math.abs(kf + kd) < 0.05 && Math.abs(fade.endY - draw.endY) < 0.05);
   check('utan sidospinn ingen sidokick', Math.abs(straight.endX - straight.landX) < 0.02, '(' + (straight.endX - straight.landX).toFixed(3) + ' m)');
   check('backspinnet checkar bollen bakåt', fade.endY < fade.landY - 0.3 && straight.endY < straight.landY - 0.3,
@@ -81,9 +82,9 @@ console.log('\nLutande green, studsen: första nedslaget på en lutande yta änd
   check('landningen påverkas inte av lutningen (den börjar först vid landningsområdet)',
         Math.abs(down.landX - flat.landX) < 0.1 && Math.abs(up.landX - flat.landX) < 0.1,
         '(' + down.landX.toFixed(2) + ' / ' + flat.landX.toFixed(2) + ' / ' + up.landX.toFixed(2) + ' m)');
-  check('fade nedför höger-sluttning kickar längre åt höger än på plan', kick(down) > kick(flat) + 0.3,
+  check('fade nedför höger-sluttning kickar längre åt höger än på plan', kick(down) > kick(flat) + 0.15,
         '(' + kick(down).toFixed(2) + ' vs ' + kick(flat).toFixed(2) + ' m)');
-  check('fade uppför höger-sluttning kickar kortare åt höger än på plan', kick(up) < kick(flat) - 0.3,
+  check('fade uppför höger-sluttning kickar kortare åt höger än på plan', kick(up) < kick(flat) - 0.1,
         '(' + kick(up).toFixed(2) + ' vs ' + kick(flat).toFixed(2) + ' m)');
 }
 
