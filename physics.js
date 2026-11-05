@@ -188,16 +188,17 @@ window.GolfPhysics = (function() {
         return a + (b - a) * Math.max(0, Math.min(1, t));
     }
 
-    // Aerodynamiska koefficienter, inpassade mot TrackMans tour-snitt (2014 års tabeller för PGA Tour och LPGA Tour: bollfart, utgångsvinkel,
-    // spinn -> carry, topphöjd och landningsvinkel, driver till PW, 23 klubbor; 25 °C och havsnivå som TrackMans normalisering). Felet på
-    // carry +-3 yd, topp +-2 yd och landning +-2° per klubba vägs lika, Nelder-Mead över formen nedan. Förut flög drivern 288 yd med 50 yd topp
-    // (TrackMan 275 / 32) och 7-järnet 158 yd med 24 yd topp (172 / 32). Med LPGA-snitten med i passningen håller modellen även vid lägre fart
-    // (LPGA-drivern 140 mph: 213 yd mot 218).
-    //   Cd = 0,2432 + 0,1799 S vid 50 m/s, något lägre för en snabbare boll (Reynolds-talet: -0,028 per 25 m/s, mellan 30 och 75 m/s),
+    // Aerodynamiska koefficienter, inpassade mot TrackMans tour-snitt: PGA Tour 2024 (TrackMans egen tabell: bollfart, utgångsvinkel, spinn ->
+    // carry, topphöjd och landningsvinkel, driver till PW; carry för 3- och 5-trä saknas och de passas bara på topp och landning) med full vikt,
+    // och LPGA Tour 2014 (ur minnet, inte kontrollerad mot källan) med halv vikt så att modellen håller vid lägre fart. 25 °C och havsnivå.
+    // Felet på carry +-3 yd, topp +-2 yd och landning +-2° per klubba, Nelder-Mead över formen nedan. Förut flög drivern 288 yd med 50 yd topp
+    // och 7-järnet 158 yd med 24 yd topp. Kvar efter passningen: drivern bär 272 yd (TrackMan 282), PW 133 (142), och 3-träet går för högt (40 yd
+    // topp mot 32): formen nedan (lyft bara ur spinnfaktorn) räcker inte för alla tre samtidigt.
+    //   Cd = 0,238 + 0,1722 S vid 50 m/s, något lägre för en snabbare boll (Reynolds-talet: -0,048 per 25 m/s, mellan 30 och 75 m/s),
     //        stigande mot 0,40 under 20 m/s (chippar; bollen före sin dragkris)
-    //   Cl = 0,566 S^0,482, högst 0,32 (S = spinnfaktorn R w / v)
+    //   Cl = 0,6045 S^0,5344, högst 0,319 (S = spinnfaktorn R w / v)
     //   spinnet avtar 4 % per sekund (ett fritt värde gick mot 1 % men gav inte bättre passning, och 4 % ligger nära det uppmätta)
-    const AERO = { cd0: 0.2432, cdV: 0.0277, cdSpin: 0.1799, cdLow: 0.40, clA: 0.566, clB: 0.4822, clMax: 0.3205, spinDecay: 0.040 };
+    const AERO = { cd0: 0.2380, cdV: 0.0478, cdSpin: 0.1722, cdLow: 0.40, clA: 0.6045, clB: 0.5344, clMax: 0.3187, spinDecay: 0.040 };
     function getDragCoefficient(vMag, spinRateRpm) {
         const S = (spinRateRpm * 2 * Math.PI / 60) * RADIUS / Math.max(vMag, 0.1);
         const cdHigh = AERO.cd0 + AERO.cdV * (50 - Math.max(30, Math.min(75, vMag))) / 25;

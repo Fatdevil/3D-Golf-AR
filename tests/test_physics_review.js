@@ -64,7 +64,7 @@ const fc = SE.fullCarryM();
 const order = ['DRIVER', 'W3', 'I5', 'I7', 'I9', 'PW', 'SW', 'LW'];
 check('full carry för varje klubba, längre klubba längre', !!fc && order.every(function (k, i) { return fc[k] > 0 && (i === 0 || fc[order[i - 1]] > fc[k]); }), JSON.stringify(fc));
 // (med TrackMan-profilerna och -kurvorna; förut 258 m och 67 m)
-check('drivern ca 235 m (257 yd), lobwedgen ca 73 m', fc && Math.abs(fc.DRIVER - 235) < 3 && Math.abs(fc.LW - 73) < 3, JSON.stringify(fc));
+check('drivern ca 244 m (267 yd), lobwedgen ca 73 m', fc && Math.abs(fc.DRIVER - 244) < 3 && Math.abs(fc.LW - 73) < 3, JSON.stringify(fc));
 SE.updateClubLabels();
 check('knapparna visar full carry i yards (putterns --- kvar)', labels.DRIVER.textContent === Math.round(fc.DRIVER * 1.09361) + 'y' && labels.I7.textContent === Math.round(fc.I7 * 1.09361) + 'y' && labels.PUTT.textContent === '---', labels.DRIVER.textContent + ' ' + labels.I7.textContent);
 const mid = function (a, b) { return (fc[a] + fc[b]) / 2; };
@@ -100,7 +100,7 @@ quiet('\n7. Studsen');
   ['DRIVER', 'I7', 'PW', 'LW'].forEach(function (c) { ['FAIRWAY', 'GREEN'].forEach(function (sf) { hs.push(c + ' ' + sf + ' ' + full(c, sf).h.toFixed(2)); }); });
   check('första studsen efter ett fullt slag: högst 0,5 m (var 1,8-4,2 m)', hs.every(function (t) { return +t.split(' ')[2] <= 0.5; }), hs.join(', '));
   // the full totals on fairway, set with the TrackMan aero fit and club profiles (2026-11; before them: driver 274.0 / 7-iron 165.8 / PW 114.0 / LW 67.0 m)
-  const was = { DRIVER: 249.0, I7: 152.6, PW: 116.1, LW: 72.0 };
+  const was = { DRIVER: 261.0, I7: 157.5, PW: 119.3, LW: 72.1 };
   const now = {}; Object.keys(was).forEach(function (c) { now[c] = full(c, 'FAIRWAY').total; });
   check('fulla slag på fairway: total inom ±3 m från förut', Object.keys(was).every(function (c) { return Math.abs(now[c] - was[c]) <= 3; }), JSON.stringify(now));
   const half = full('DRIVER', 'FAIRWAY', 0.5);
@@ -117,7 +117,7 @@ quiet('\n8. Halvslag med driver');
   const full = shot('DRIVER', 1.0), half = shot('DRIVER', 0.5);
   check('driver 50 %: 45-58 % av full längd (var 66 %)', half.totalMeters / full.totalMeters > 0.45 && half.totalMeters / full.totalMeters < 0.58, (half.totalMeters / full.totalMeters * 100).toFixed(0) + ' %');
   check('driver 50 %: rullar inte längre än den flyger (var 116 m rull efter 66 m carry)', half.totalMeters - half.carryMeters < half.carryMeters, half.carryMeters.toFixed(0) + ' / ' + (half.totalMeters - half.carryMeters).toFixed(0));
-  check('driver 100 %: ca 249 m (TrackMan-kurvorna; var 275)', Math.abs(full.totalMeters - 249) < 4, full.totalMeters.toFixed(1));
+  check('driver 100 %: ca 261 m (TrackMan-kurvorna; var 275)', Math.abs(full.totalMeters - 261) < 4, full.totalMeters.toFixed(1));
   const d50 = SW8.mapCircleToPhysics(0.5, 0, 'DRIVER', 200), sw20 = SW8.mapCircleToPhysics(0.2, 0, 'SW', 20);
   check('drivern behåller det mesta av spinnet (50 %: över 2 000 rpm), en wedgechip följer farten som förut (SW 20 %: ca 3 700 rpm)', d50.totalSpinRpm > 2000 && Math.abs(sw20.totalSpinRpm - 10200 * (0.2 + 0.8 * 0.2)) < 1, d50.totalSpinRpm.toFixed(0) + ' / ' + sw20.totalSpinRpm.toFixed(0));
   const chip = shot('PW', 0.3);

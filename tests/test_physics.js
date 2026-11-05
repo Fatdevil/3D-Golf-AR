@@ -96,24 +96,24 @@ function runTest(name, ballSpeedMph, launchAngleDeg, azimDeg, totalSpinRpm, spin
 console.log('\n🏌️ GOLF PHYSICS ENGINE - VALIDATION SUITE');
 console.log('=' .repeat(60));
 
-// Referensslagen är TrackMans tour-snitt (2014, 25 °C, havsnivå), samma som luftmodellen i physics.js är inpassad mot. Förut tre egna
+// Referensslagen är TrackMans tour-snitt (PGA Tour 2024 ur TrackMans egen tabell, LPGA 2014; 25 °C, havsnivå), samma som luftmodellen i physics.js är inpassad mot. Förut tre egna
 // referenser (130 mph / 14° / 2000 rpm skulle bära 215 yd), satta för den gamla modellen och inte mot någon mätning.
-// Test 1: Driver (PGA Tour: 167 mph / 10,9° / 2686 rpm -> 275 yd carry)
-const driver = runTest('TEST 1: DRIVER', 167, 10.9, 0, 2686, 0);
-const driverOk = driver.carryYds >= 255 && driver.carryYds <= 280;
-console.log(`  ✅ Target: 255-280 yds → ${driverOk ? 'PASS ✅' : 'FAIL ❌'}`);
+// Test 1: Driver (PGA Tour 2024: 171 mph / 10,4° / 2545 rpm -> 282 yd carry; motorn bär ca 272, se physics.js AERO)
+const driver = runTest('TEST 1: DRIVER', 171, 10.4, 0, 2545, 0);
+const driverOk = driver.carryYds >= 265 && driver.carryYds <= 290;
+console.log(`  ✅ Target: 265-290 yds → ${driverOk ? 'PASS ✅' : 'FAIL ❌'}`);
 
-// Test 2: 7-Iron (PGA Tour: 120 mph / 16,3° / 7097 rpm -> 172 yd)
-const iron7 = runTest('TEST 2: 7-IRON', 120, 16.3, 0, 7097, 0);
-const iron7Ok = iron7.carryYds >= 164 && iron7.carryYds <= 178;
-console.log(`  ✅ Target: 164-178 yds → ${iron7Ok ? 'PASS ✅' : 'FAIL ❌'}`);
+// Test 2: 7-Iron (PGA Tour 2024: 123 mph / 16,1° / 7124 rpm -> 176 yd)
+const iron7 = runTest('TEST 2: 7-IRON', 123, 16.1, 0, 7124, 0);
+const iron7Ok = iron7.carryYds >= 168 && iron7.carryYds <= 184;
+console.log(`  ✅ Target: 168-184 yds → ${iron7Ok ? 'PASS ✅' : 'FAIL ❌'}`);
 
-// Test 3: Wedge (PGA Tour PW: 102 mph / 24,2° / 9304 rpm -> 136 yd, 29 yd topp = 87 ft)
-const wedge = runTest('TEST 3: WEDGE', 102, 24.2, 0, 9304, 0);
-const wedgeOk = wedge.carryYds >= 125 && wedge.carryYds <= 140;
-const wedgeApexOk = wedge.apexFt >= 75 && wedge.apexFt <= 100;
-console.log(`  ✅ Carry Target: 125-140 yds → ${wedgeOk ? 'PASS ✅' : 'FAIL ❌'}`);
-console.log(`  ✅ Apex Target: 75-100 ft → ${wedgeApexOk ? 'PASS ✅' : 'FAIL ❌'}`);
+// Test 3: Wedge (PGA Tour 2024 PW: 104 mph / 23,7° / 9316 rpm -> 142 yd, 32 yd topp = 96 ft; motorn bär ca 133)
+const wedge = runTest('TEST 3: WEDGE', 104, 23.7, 0, 9316, 0);
+const wedgeOk = wedge.carryYds >= 128 && wedge.carryYds <= 148;
+const wedgeApexOk = wedge.apexFt >= 80 && wedge.apexFt <= 110;
+console.log(`  ✅ Carry Target: 128-148 yds → ${wedgeOk ? 'PASS ✅' : 'FAIL ❌'}`);
+console.log(`  ✅ Apex Target: 80-110 ft → ${wedgeApexOk ? 'PASS ✅' : 'FAIL ❌'}`);
 console.log(`  ✅ Roll Target: -2..6 yds → ${wedge.rollYds >= -2 && wedge.rollYds <= 6 ? 'PASS ✅' : 'FAIL ❌'}`);   // (en tour-PW stannar nära nedslaget)
 
 // Test 4: LPGA-driver (140 mph / 13,2° / 2611 rpm -> 218 yd): modellen ska hålla även vid lägre fart

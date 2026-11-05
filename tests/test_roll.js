@@ -47,16 +47,16 @@ function testShot(name, ballSpeed, launch, backspin, sidespin, targets) {
 console.log("=== ROLL DISTANCE REGRESSION TEST ===");
 console.log("Flat FAIRWAY, no wind, sea level, 25°C\n");
 
-// Slagen är TrackMans tour-snitt (PGA Tour 2014; LW är spelets egen profil), samma som luftmodellen är inpassad mot. Med TrackMan-kurvorna
+// Slagen är TrackMans tour-snitt (PGA Tour 2024; LW är spelets egen profil), samma som luftmodellen är inpassad mot. Med TrackMan-kurvorna
 // landar järn och wedgar brantare och med mer spinn än förut och rullar därför kortare (en tour-PW stannar nära nedslaget).
-const r1 = testShot("DRIVER", 167, 10.9, 2686, 0,
-    { carryMin: 255, carryMax: 280, rollMin: 15, rollMax: 40 });
+const r1 = testShot("DRIVER", 171, 10.4, 2545, 0,
+    { carryMin: 265, carryMax: 290, rollMin: 15, rollMax: 40 });
 
-const r2 = testShot("7-IRON", 120, 16.3, 7097, 0,
-    { carryMin: 164, carryMax: 178, rollMin: 1, rollMax: 10 });
+const r2 = testShot("7-IRON", 123, 16.1, 7124, 0,
+    { carryMin: 168, carryMax: 184, rollMin: 1, rollMax: 10 });
 
-const r3 = testShot("WEDGE (PW)", 102, 24.2, 9304, 0,
-    { carryMin: 125, carryMax: 140, rollMin: -2, rollMax: 5 });
+const r3 = testShot("WEDGE (PW)", 104, 23.7, 9316, 0,
+    { carryMin: 128, carryMax: 148, rollMin: -2, rollMax: 5 });
 
 const r4 = testShot("LOB WEDGE", 76, 34, 10800, 0,
     { carryMin: 70, carryMax: 90, rollMin: -3, rollMax: 3 });
