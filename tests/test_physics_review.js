@@ -8,6 +8,8 @@
  * 6. The reverse Magnus lift is blended in smoothly (18-22 m/s, towards 2 250 rpm): no jump in carry at 20 m/s or 2 250 rpm.
  * 7. The bounce: the COR comes from the speed into the ground (Penner), scaled per surface; a ball going over to the ground with slip
  *    left loses 2/7 of it (it slides until it rolls). First bounces of full shots are about 0.3 m (were 2-4 m), full totals barely move.
+ * 8. Half shots with the driver: the turf brakes a fast rolling ball harder (a = mu g + k v^2, not on the green), and a driver or wood keeps
+ *    most of its spin on a shorter swing. A half-power drive is about half the distance (it was 66 m carry and 116 m run, 66 % of full).
  * Run: node tests/test_physics_review.js
  */
 global.window = { GREEN_STIMP: 10, matchSettings: { greenFirmness: 'NORMAL' } };
@@ -102,6 +104,25 @@ quiet('\n7. Studsen');
   check('fulla slag på fairway: total inom ±3 m från förut', Object.keys(was).every(function (c) { return Math.abs(now[c] - was[c]) <= 3; }), JSON.stringify(now));
   const half = full('DRIVER', 'FAIRWAY', 0.5);
   check('en låg driver på halv kraft rullar inte längre än förut (var 136 m efter 66 m carry)', half.total - half.carry < 130, (half.total - half.carry).toFixed(1));
+}
+
+quiet('\n8. Halvslag med driver');
+{
+  const SW8 = require('./load_swing_engine.js')({ window: { GolfPhysics: P }, globals: { performance: performance } });
+  const shot = function (club, pw, surf) {
+    const d = SW8.mapCircleToPhysics(pw, 0, club, 200);
+    return sim({ ballSpeedMph: d.ballSpeedMph, launchAngleDeg: d.launchAngleDeg, totalSpinRpm: d.totalSpinRpm, startPos: [0, 0, 0], isTeeShot: club === 'DRIVER' }, flat(0, surf || 'FAIRWAY')).metrics;
+  };
+  const full = shot('DRIVER', 1.0), half = shot('DRIVER', 0.5);
+  check('driver 50 %: 45-58 % av full längd (var 66 %)', half.totalMeters / full.totalMeters > 0.45 && half.totalMeters / full.totalMeters < 0.58, (half.totalMeters / full.totalMeters * 100).toFixed(0) + ' %');
+  check('driver 50 %: rullar inte längre än den flyger (var 116 m rull efter 66 m carry)', half.totalMeters - half.carryMeters < half.carryMeters, half.carryMeters.toFixed(0) + ' / ' + (half.totalMeters - half.carryMeters).toFixed(0));
+  check('driver 100 %: som förut (ca 275 m)', Math.abs(full.totalMeters - 275) < 4, full.totalMeters.toFixed(1));
+  const d50 = SW8.mapCircleToPhysics(0.5, 0, 'DRIVER', 200), sw20 = SW8.mapCircleToPhysics(0.2, 0, 'SW', 20);
+  check('drivern behåller det mesta av spinnet (50 %: över 2 000 rpm), en wedgechip följer farten som förut (SW 20 %: ca 3 700 rpm)', d50.totalSpinRpm > 2000 && Math.abs(sw20.totalSpinRpm - 10200 * (0.2 + 0.8 * 0.2)) < 1, d50.totalSpinRpm.toFixed(0) + ' / ' + sw20.totalSpinRpm.toFixed(0));
+  const chip = shot('PW', 0.3);
+  check('en PW-chip på fairway rullar som förut (30 %: ca 22 m totalt)', Math.abs(chip.totalMeters - 22.4) < 1.0, chip.totalMeters.toFixed(1));
+  const putt = sim({ ballSpeedMph: 6.2, launchAngleDeg: 0, totalSpinRpm: 0, startPos: [0, 0, 0] }, flat(0, 'GREEN')).metrics.totalMeters;
+  check('en putt på greenen rullar som förut (6,2 mph: ca 7,0 m, greenen har ingen fartbroms)', Math.abs(putt - 7.0) < 0.3, putt.toFixed(2));
 }
 
 quiet(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');
