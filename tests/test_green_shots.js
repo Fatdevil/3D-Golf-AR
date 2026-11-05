@@ -65,7 +65,8 @@ console.log('\nGreenens hårdhet: hårdare green ger längre utrullning');
   const roll = r => r.end - r.carry;
   check('SW 70 %: SOFT < NORMAL < FIRM i utrullning', roll(soft) < roll(norm) && roll(norm) < roll(firm),
         '(' + roll(soft).toFixed(1) + ' < ' + roll(norm).toFixed(1) + ' < ' + roll(firm).toFixed(1) + ' m)');
-  check('SW 70 % NORMAL rullar framåt 1-8 m', roll(norm) > 1 && roll(norm) < 8, '(' + roll(norm).toFixed(1) + ' m)');
+  // (med TrackMan-kurvorna landar en pitch brantare och med mer spinn: den stannar nära nedslaget, som en tourspelares SW)
+  check('SW 70 % NORMAL stannar nära nedslaget (-1 till +5 m)', roll(norm) > -1 && roll(norm) < 5, '(' + roll(norm).toFixed(1) + ' m)');
 }
 
 console.log('\nFullslag med mycket spinn: backspinn bromsar, men bara någon meter');

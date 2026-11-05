@@ -45,23 +45,23 @@ const SwingEngine = (function() {
     const MISS_SPIN_AXIS_PER_DEG = 0.35;
 
     // Avsiktlig kurva (fade/draw): spinaxel i grader (Trackman-konvention, positiv = fade/höger) som spelaren väljer med formknappen.
-    // Wedgar får mest eftersom de spinner mest och en pitch ska kunna kicka åt sidan på greenen, långa klubbar får mindre så att kurvan
-    // inte blir orimligt stor (en driver med 8 graders axel kurvar redan ett tiotal meter).
-    const SHAPE_AXIS_DEG = { DRIVER: 8, W3: 9, I5: 9, I7: 12, I9: 12, PW: 15, SW: 15, LW: 15, PUTT: 0 };
+    // Med TrackMan-kurvorna (physics.js AERO) böjer en wedge med sitt höga spinn mycket per grad axel: 15° gav en PW 13 m åt sidan. Axlarna är
+    // därför satta så att en fade/draw tar bollen ca 4-5° åt sidan med driver och trä, 3-4° med järnen och 2-2,5° med wedgarna vid full kraft.
+    const SHAPE_AXIS_DEG = { DRIVER: 11, W3: 10, I5: 9, I7: 8, I9: 7, PW: 6, SW: 6, LW: 6, PUTT: 0 };
 
     // Startlinje för avsiktlig kurva: en fade startar till vänster om siktet och kurvar tillbaka, en draw tvärtom. Vinkeln är den som
     // kurvan tar bollen i sidled vid landning (uppmätt i physics.js med axlarna ovan, plan fairway, vindstilla), så att en rätt träffad
     // fade landar på siktlinjen. Kurvan växer med fart och flygtid, alltså med kraften: grader vid kraft SHAPE_START_POWERS.
     const SHAPE_START_POWERS = [0.3, 0.5, 0.7, 0.85, 1.0];
     const SHAPE_START_DEG = {
-        DRIVER: [0.37, 1.14, 2.75, 4.02, 5.17],
-        W3:     [0.18, 1.69, 3.86, 5.39, 6.70],
-        I5:     [0.42, 1.67, 3.39, 4.49, 5.45],
-        I7:     [0.31, 1.21, 2.49, 3.37, 4.16],
-        I9:     [0.07, 0.46, 0.98, 1.37, 1.76],
-        PW:     [0.08, 0.21, 0.55, 0.84, 1.14],
-        SW:     [0.06, 0.16, 0.30, 0.41, 0.51],
-        LW:     [0.05, 0.13, 0.24, 0.33, 0.42]
+        DRIVER: [0.51, 1.35, 2.70, 3.69, 4.69],
+        W3:     [0.45, 1.29, 2.80, 3.92, 5.00],
+        I5:     [0.35, 1.07, 2.50, 3.64, 4.76],
+        I7:     [0.34, 1.01, 2.19, 3.13, 4.07],
+        I9:     [0.29, 0.83, 1.68, 2.38, 3.08],
+        PW:     [0.25, 0.68, 1.34, 1.88, 2.43],
+        SW:     [0.23, 0.60, 1.13, 1.58, 2.05],
+        LW:     [0.17, 0.46, 0.87, 1.21, 1.58]
     };
 
     // SVG constants — circumference of r=100 ring
