@@ -6,12 +6,7 @@ const path = require('path');
 
 // Failures that exist today. Only the listed lines are tolerated: any other failing line in the same file still fails the run.
 // A KNOWN test that starts passing is flagged so the entry can be removed.
-const KNOWN = {
-  'test_physics.js': {
-    reason: '7-iron carry is outside the 180-188 yd target (physics was re-tuned after this test was written)',
-    lines: [/180-188 yds/, /7-Iron Carry/],
-  },
-};
+const KNOWN = {};
 const FAILURE_LINE = /❌|→ FAIL|REGRESSION DETECTED|OVERALL:\s+REGRESSION/;
 
 const files = fs.readdirSync(__dirname).filter(function (f) { return /^test_.*\.js$/.test(f); }).sort();

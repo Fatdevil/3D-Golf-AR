@@ -66,6 +66,7 @@
 
     const SLOW = { before: 0.55, rampIn: 0.25, hold: 0.45 };   // slow motion window around touch-down (path seconds); the speed comes with the profile
     const CLEAR = 1.6, TREE_CLEAR = 1.8, CAM_R = 1.5;           // metres: above the ground, above a treetop, and the reach around a tree
+    const LIFT_SLOPE = 0.5;                                     // the lift for trees rises and falls at most 0,5 m per metre of arc
     const PIN_NEAR = 35;                                        // an approach whose pin is this close to the landing point keeps the pin in the picture
 
     // The lowest the camera may be at (x, z): above the ground and above any tree it is over (obstacles: { x, z, r, top }, top = absolute height)
@@ -124,6 +125,11 @@
                 env = src.map((v, i) => { let sum = 0, n = 0; for (let k = -R; k <= R; k++) { sum += src[clamp(i + k, 0, N)]; n++; } return sum / n; });
             }
             env = env.map((v, i) => Math.max(v, need[i] * 0.999));   // the softening must not lower the lift below what a tree needs
+            // and the lift never rises or falls steeper than LIFT_SLOPE metres per metre of arc: a low flight (a short climb to the apex) hands
+            // over faster, and the camera then came down from a tree just beyond the start in jumps of almost 3 m per frame
+            const drop = LIFT_SLOPE * sp;
+            for (let i = 1; i <= N; i++) env[i] = Math.max(env[i], env[i - 1] - drop);
+            for (let i = N - 1; i >= 0; i--) env[i] = Math.max(env[i], env[i + 1] - drop);
             // the ends keep their lift: a tree just beyond the start or just before the landing view is planned for like any other. The tee cam
             // cranes up to the start lift during its hold (see step), and after the hand-over the camera comes down to the landing track from it
             p.lift = env;

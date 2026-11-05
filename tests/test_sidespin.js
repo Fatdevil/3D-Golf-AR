@@ -46,9 +46,11 @@ for (const [n, c] of [['driver', DRIVER], ['7-järn', I7], ['PW', PW]]) {
 console.log('\nStorlek: i nivå med vad en launch monitor visar för 10° spinaxel (ungefärliga spann)');
 {
   const d = curve(...DRIVER, 10), i = curve(...I7, 10), p = curve(...PW, 10);
-  check('driver 10° ger 25-40 yd', d.side > 25 && d.side < 40, '(' + f1(d.side) + ' yd; var −5,7)');
-  check('7-järn 10° ger 8-13 yd', i.side > 8 && i.side < 13, '(' + f1(i.side) + ' yd; var −3,2)');
-  check('PW 10° ger 0,5-3 yd', p.side > 0.5 && p.side < 3, '(' + f1(p.side) + ' yd; var −0,5)');
+  // Sidokurvan är lyftet gånger sin(axeln), och lyftet är inpassat mot TrackMans topphöjd och landningsvinkel (physics.js AERO). Spannen
+  // följer därför den modellen: förut 25-40 / 8-13 / 0,5-3 yd, vilket krävde mer lyft på drivern och mindre på järnen än TrackMan-höjderna ger.
+  check('driver 10° ger 14-24 yd', d.side > 14 && d.side < 24, '(' + f1(d.side) + ' yd)');
+  check('7-järn 10° ger 12-22 yd', i.side > 12 && i.side < 22, '(' + f1(i.side) + ' yd)');
+  check('PW 10° ger 5-13 yd', p.side > 5 && p.side < 13, '(' + f1(p.side) + ' yd)');
   const small = curve(...DRIVER, 5), big = curve(...DRIVER, 15);
   check('större axel ger mer kurva (5° < 10° < 15°)', small.side < d.side && d.side < big.side, '(' + f1(small.side) + ' < ' + f1(d.side) + ' < ' + f1(big.side) + ')');
 }

@@ -30,7 +30,9 @@ function check(name, ok, detail) {
 console.log('Vanligt rough-slag (ingen flyer) är kortare än fairway');
 for (const c of ['I5', 'I7', 'I9', 'PW', 'SW', 'LW']) {
   const fw = carry(c, 1, 'FAIRWAY', 0.5), rn = carry(c, 1, 'ROUGH', 0.5);
-  check(c + ': rough 3-16 % kortare', pct(rn, fw) < -3 && pct(rn, fw) > -16, '(' + f0(pct(rn, fw)) + ')');
+  // (5-järnet har TrackMans låga utgångsvinkel, 12°: carryn tappar mer av fartförlusten i rough, ca 20 %)
+  const lim = c === 'I5' ? -23 : -16;
+  check(c + ': rough 3-' + (-lim) + ' % kortare', pct(rn, fw) < -3 && pct(rn, fw) > lim, '(' + f0(pct(rn, fw)) + ')');
 }
 
 console.log('\nFlyer från rough på full kraft: längre än fairway, men bara några procent upp till ca 15');
@@ -57,7 +59,7 @@ console.log('\nHela kraftskalan: en flyer är aldrig kortare än fairway-slaget 
     for (const p of POWERS) {
       const la = SE.mapCircleToPhysics(p, 0, c, 0).launchAngleDeg;
       const fw = carry(c, p, 'FAIRWAY', 0.5), rn = carry(c, p, 'ROUGH', 0.5), fl = carry(c, p, 'ROUGH', 0.0);
-      if (la <= 15) { gated++; if (Math.abs(fl - rn) > 0.5) notLonger.push(c + ' ' + p * 100 + ' % ska inte få flyer'); continue; }
+      if (la <= 11.5) { gated++; if (Math.abs(fl - rn) > 0.5) notLonger.push(c + ' ' + p * 100 + ' % ska inte få flyer'); continue; }
       n++;
       const g = pct(fl, fw);
       if (g < worstLo) worstLo = g; if (g > worstHi) worstHi = g;
@@ -68,10 +70,10 @@ console.log('\nHela kraftskalan: en flyer är aldrig kortare än fairway-slaget 
   }
   check(n + ' flyer-slag (rough): aldrig kortare än fairway', badLo.length === 0, badLo.length ? '(' + badLo.slice(0, 3).join('; ') + ')' : '(lägst ' + f0(worstLo) + ')');
   check(n + ' flyer-slag (rough): aldrig mer än +17 % mot fairway', badHi.length === 0, badHi.length ? '(' + badHi.slice(0, 3).join('; ') + ')' : '(högst ' + f0(worstHi) + ')');
-  check('flyer är alltid längre än vanligt rough-slag (och slag under 15° utgångsvinkel får ingen)', notLonger.length === 0, notLonger.length ? '(' + notLonger.slice(0, 3).join('; ') + ')' : '(' + gated + ' slag under gränsen)');
+  check('flyer är alltid längre än vanligt rough-slag (och slag under 11,5° utgångsvinkel får ingen)', notLonger.length === 0, notLonger.length ? '(' + notLonger.slice(0, 3).join('; ') + ')' : '(' + gated + ' slag under gränsen)');
   let nd = 0, dLo = [], dHi = [], dWorstLo = 1e9, dWorstHi = -1e9;
   for (const c of ['I9', 'PW', 'SW', 'LW']) for (const p of POWERS) {
-    const la = SE.mapCircleToPhysics(p, 0, c, 0).launchAngleDeg; if (la <= 20) continue;
+    const la = SE.mapCircleToPhysics(p, 0, c, 0).launchAngleDeg; if (la <= 17) continue;
     const fw = carry(c, p, 'FAIRWAY', 0.5), fl = carry(c, p, 'DEEP ROUGH', 0.0), rfl = carry(c, p, 'ROUGH', 0.0);
     nd++; const g = pct(fl, fw);
     if (g < dWorstLo) dWorstLo = g; if (g > dWorstHi) dWorstHi = g;
@@ -104,8 +106,8 @@ console.log('\nChans och spärrar');
   check('ROUGH: slumptal 0,14 ger flyer, 0,16 ger vanligt slag', carry('PW', 1, 'ROUGH', 0.14) > fw * 1.05 && Math.abs(carry('PW', 1, 'ROUGH', 0.16) - fw) < 0.5);
   const dn = carry('PW', 1, 'DEEP ROUGH', 0.5);
   check('DEEP ROUGH: slumptal 0,24 ger flyer, 0,26 ger vanligt slag', carry('PW', 1, 'DEEP ROUGH', 0.24) > dn * 1.1 && Math.abs(carry('PW', 1, 'DEEP ROUGH', 0.26) - dn) < 0.5);
-  for (const c of ['DRIVER', 'W3']) check(c + ' får ingen flyer från rough (lägsta utgångsvinkel 15°)', Math.abs(carry(c, 1, 'ROUGH', 0.0) - carry(c, 1, 'ROUGH', 0.5)) < 0.5);
-  for (const c of ['I5', 'I7']) check(c + ' får ingen flyer från deep rough (lägsta utgångsvinkel 20°)', Math.abs(carry(c, 1, 'DEEP ROUGH', 0.0) - carry(c, 1, 'DEEP ROUGH', 0.5)) < 0.5);
+  for (const c of ['DRIVER', 'W3']) check(c + ' får ingen flyer från rough (lägsta utgångsvinkel 11,5°)', Math.abs(carry(c, 1, 'ROUGH', 0.0) - carry(c, 1, 'ROUGH', 0.5)) < 0.5);
+  for (const c of ['I5', 'I7']) check(c + ' får ingen flyer från deep rough (lägsta utgångsvinkel 17°)', Math.abs(carry(c, 1, 'DEEP ROUGH', 0.0) - carry(c, 1, 'DEEP ROUGH', 0.5)) < 0.5);
 }
 
 console.log('\nAndra lägen påverkas inte av slumptalet');

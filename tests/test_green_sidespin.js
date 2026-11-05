@@ -45,13 +45,16 @@ for (const firm of ['SOFT', 'NORMAL', 'FIRM']) {
     const kickF = fade.endX - fade.landX, kickD = draw.endX - draw.landX;
     check(club + ' ' + firm + ' fade: kick åt höger efter landning', kickF > 0.3, '(' + kickF.toFixed(2) + ' m)');
     check(club + ' ' + firm + ' draw: kick åt vänster efter landning', kickD < -0.3, '(' + kickD.toFixed(2) + ' m)');
-    // (greenens grain är ett mönster ur läget och inte spegelvänt, så fade och draw skiljer några cm)
-    check(club + ' ' + firm + ' fade/draw är spegelbilder', Math.abs(kickF + kickD) < 0.10 && Math.abs(fade.endY - draw.endY) < 0.10);
-    check(club + ' ' + firm + ' rak spinaxel ger ingen sidokick', Math.abs(straight.endX) < 0.02, '(' + straight.endX.toFixed(3) + ' m)');
+    // (greenens grain är ett mönster ur läget och inte spegelvänt, så fade och draw skiljer några cm; mer ju längre bollen rullar:
+    // en LW spinner tillbaka 2-4 m och grainet hinner flytta den upp till 0,2 m åt var sitt håll)
+    const grainTol = club === 'LW' ? 0.40 : 0.10;
+    check(club + ' ' + firm + ' fade/draw är spegelbilder', Math.abs(kickF + kickD) < grainTol && Math.abs(fade.endY - draw.endY) < grainTol,
+          '(' + kickF.toFixed(2) + ' / ' + kickD.toFixed(2) + ' m, längs ' + (fade.endY - draw.endY).toFixed(2) + ' m)');
+    check(club + ' ' + firm + ' rak spinaxel ger ingen sidokick', Math.abs(straight.endX) < grainTol / 2, '(' + straight.endX.toFixed(3) + ' m)');
     if (firm === 'SOFT' || (club === 'LW' && firm === 'NORMAL')) { // på hård green rullar bollen framåt trots spinn; med Penners lägre studs checkar SW på normal green (nedan)
       check(club + ' ' + firm + ' fade spinner bakåt och höger samtidigt', fade.endY < fade.landY - 0.3 && fade.endX > fade.landX, '(back ' + (fade.landY - fade.endY).toFixed(1) + ' m)');
     } else if (firm === 'NORMAL') {
-      check(club + ' ' + firm + ' fade checkar nära landningen (inom 1 m) och går åt höger', Math.abs(fade.endY - fade.landY) < 1.0 && fade.endX > fade.landX, '(' + (fade.endY - fade.landY).toFixed(1) + ' m)');
+      check(club + ' ' + firm + ' fade checkar nära landningen (inom 1,5 m) och går åt höger', Math.abs(fade.endY - fade.landY) < 1.5 && fade.endX > fade.landX, '(' + (fade.endY - fade.landY).toFixed(1) + ' m)');
     }
     check(club + ' ' + firm + ' fade stannar', fade.phase === 'stopped');
   }
@@ -71,7 +74,8 @@ console.log('\nLutande green, studsen: nedslaget på en lutande yta ändrar kick
   check('landningen påverkas inte av lutningen (den börjar först vid landningsområdet)',
         Math.abs(tiltR.landX - flat.landX) < 0.1 && Math.abs(tiltL.landX - flat.landX) < 0.1,
         '(' + tiltL.landX.toFixed(2) + ' / ' + flat.landX.toFixed(2) + ' / ' + tiltR.landX.toFixed(2) + ' m)');
-  check('Rak boll på sidolutning kickar nedför vid studsen (höger-sluttning -> höger)', roll(tiltR) > roll(flat) + 0.3 && roll(tiltL) < roll(flat) - 0.3,
+  // (med TrackMan-kurvorna landar SW:n brantare och med mer spinn, så studsen tar den bara drygt 0,1 m åt sidan på 3 % lutning; förut 0,3+)
+  check('Rak boll på sidolutning kickar nedför vid studsen (höger-sluttning -> höger)', roll(tiltR) > roll(flat) + 0.08 && roll(tiltL) < roll(flat) - 0.08,
         '(' + roll(tiltL).toFixed(2) + ' / ' + roll(flat).toFixed(2) + ' / ' + roll(tiltR).toFixed(2) + ' m)');
   const fadeDown = pitch('SW', 20, 'NORMAL', -0.03, 0), fadeUp = pitch('SW', 20, 'NORMAL', 0.03, 0), fadeFlat = pitch('SW', 20, 'NORMAL', 0, 0);
   check('Fade nedför höger-sluttning kickar längre åt höger än på plan', roll(fadeDown) > roll(fadeFlat) + 0.3, '(' + roll(fadeDown).toFixed(2) + ' vs ' + roll(fadeFlat).toFixed(2) + ' m)');
@@ -103,7 +107,8 @@ console.log('\nSpelets formval: SwingEngine.mapCircleToPhysics(..., shape) ger a
   check('utan formval är axeln oförändrad (0 vid rak arm)', ax('SW') === 0 && ax('SW', 0) === 0);
   check('fade ger positiv och draw negativ axel på pitch', ax('SW', 1) > 0 && ax('SW', -1) < 0 && ax('SW', 1) === -ax('SW', -1), '(' + ax('SW', 1) + '°)');
   check('putter påverkas inte', ax('PUTT', 1) === 0);
-  check('driver får mindre axel än wedge', Math.abs(ax('DRIVER', 1)) < Math.abs(ax('LW', 1)));
+  // (wedgen spinner mest och böjer mest per grad: den får minst axel så att fade/draw tar alla klubbor ungefär lika mycket åt sidan)
+  check('wedge får mindre axel än driver', Math.abs(ax('LW', 1)) < Math.abs(ax('DRIVER', 1)));
   window.matchSettings.greenFirmness = 'NORMAL';
   const kick = shape => { const d = Object.assign(SWING.mapCircleToPhysics(1.0, 0, 'SW', 0, shape), { startPos: [0, 0, 0] });
     const r = sim(d, greenEnv(0, 0)); const l = r.path.find(p => p.phase !== 'flight'); return r.path[r.path.length - 1].x - l.x; };

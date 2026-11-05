@@ -1,6 +1,57 @@
 # Bollflykt: dokumenterad kontroll mot TrackMans Tour-snitt
 
-**Status: utkast för granskning, 2026-10-12.** Det här är en dokumenterad kontroll, inte ett tillräckligt kalibreringsmål för att ändra fysiken: underlaget saknar miljöförhållanden och flygtid (se avsnitt 2 och 8). Inga lyft- eller luftmotståndskoefficienter är ändrade och `physics.js` är orörd. Alla siffror kommer från `tools/flight-reference-report.js`, som bara anropar motorn.
+## 0. Kalibreringen 2026-11 (genomförd)
+
+Lyft, luftmotstånd och spinnavtagning i `physics.js` (`AERO`) är inpassade mot TrackMans tour-snitt:
+
+- **PGA Tour 2024**, TrackMans egen tabell, med full vikt. Den anger klubbfart, träffvinkel, bollfart, smash, utgångsvinkel, spinn, topphöjd, landningsvinkel och carry för driver till PW. Tabellen har kommit från användaren som skärmbild. Carry för 3- och 5-trä är avklippt där och passas inte, bara deras topp och landning. Driverns carry, 282 yd, kommer från Golf Monthlys återgivning av samma data.
+- **LPGA Tour 2014**, med halv vikt, så att modellen håller vid lägre fart. **Raderna är skrivna ur minnet och inte kontrollerade mot källan.**
+
+Varje klubba ger bollfart, utgångsvinkel och spinn, och motorn jämförs mot carry, topphöjd och landningsvinkel. Avvikelserna normeras (carry ±3 yd, topp ±2 yd, landning ±2°). Anpassningen gjordes med Nelder-Mead vid 25 °C och havsnivå.
+
+- **Formen:** Cd = 0,238 + 0,1722 S vid 50 m/s, något lägre för en snabbare boll (-0,048 per 25 m/s mellan 30 och 75 m/s), och stigande mot 0,40 under 20 m/s. Cl = 0,6045 S^0,5344, högst 0,319. Spinnet avtar med 4 % per sekund. S är spinnfaktorn R ω / v.
+- **Spinnavtagningen:** fritt anpassad gick den mot 1 %/s utan att passningen blev bättre. Därför är den låst vid 4 %/s, nära det uppmätta. Med 1 %/s landade wedgarna med så mycket spinn att kicken på greenen och kurvan i luften blev för stora.
+- **Felsumman** blev 102, mot 1 562 med den gamla modellen. Den 2014-tabell ur minnet som först användes gav nästan samma kurvor; 2024-tabellen flyttade drivern från 268 till 272 yd.
+- **Kvar efter passningen:** drivern bär 272 yd mot 282, PW 133 mot 142, och 3-träet går för högt (40 yd topp mot 32). Formen, med lyftet bara ur spinnfaktorn, räcker inte för alla tre samtidigt.
+- **TrackMans optimeringsdiagram för drivern** (bollfart 80-180 mph mot träffvinkel; färgen är total längd i band om 25 yd) ger en kontroll för drivern över farterna. Med kolumnen för 0° träffvinkel och 25 °C ligger motorns totala längd 0-28 yd under bandet, och mest vid 120-160 mph. Banden är för grova för en passning, och den totala längden beror också på rullen.
+- **Klubbprofilerna** (`CLUB_PROFILES` i `arcade-swing-engine.js`) har 2024-snittens bollfart, utgångsvinkel och spinn för driver, 5-, 7- och 9-järn och PW. 3-träet behåller 2014-raden (158 mph, 9,2°, 3 655 rpm): 2024-raden har 169 mph och bar lika långt som drivern. SW och LW har egna, förlängda värden. Med fysikens standard (15 °C) bär drivern 267 yd och 7-järnet 170 yd.
+- **Följder i spelet:**
+  - Fade och draw har nya spinnaxlar och ny startlinje. Wedgen böjer mest per grad axel och får därför minst axel.
+  - Lie-reglernas vinkelgränser ligger 4° lägre, eftersom utgångsvinklarna är lägre än förut.
+  - Driver och 3-trä går högre på en kortare sving (+3° vid noll kraft), som i TrackMans diagram. Förut gav en halv drive 8,9° och rullade längre än den flög.
+  - Järn och wedgar landar brantare och rullar kortare. En tour-PW stannar nära nedslaget.
+
+Motorn vid 25 °C mot TrackMan (TrackMans värde inom parentes):
+
+| Klubba | Carry yd (TrackMan) | Topp yd (TrackMan) | Landning ° (TrackMan) |
+|---|---|---|---|
+| PGA 2024 Driver | 272 (282) | 35 (35) | 42 (39) |
+| PGA 2024 3W | 271 (saknas) | 40 (32) | 46 (44) |
+| PGA 2024 5W | 246 (saknas) | 37 (33) | 46 (48) |
+| PGA 2024 Hyb | 232 (231) | 35 (31) | 46 (49) |
+| PGA 2024 3i | 225 (218) | 32 (30) | 44 (48) |
+| PGA 2024 4i | 214 (209) | 31 (31) | 45 (49) |
+| PGA 2024 5i | 203 (199) | 32 (33) | 46 (50) |
+| PGA 2024 6i | 190 (188) | 35 (32) | 49 (50) |
+| PGA 2024 7i | 174 (176) | 34 (34) | 50 (51) |
+| PGA 2024 8i | 161 (164) | 32 (33) | 51 (51) |
+| PGA 2024 9i | 149 (152) | 31 (32) | 51 (52) |
+| PGA 2024 PW | 133 (142) | 30 (32) | 52 (52) |
+| LPGA 2014 D | 213 (218) | 26 (25) | 38 (37) |
+| LPGA 2014 3W | 191 (195) | 19 (23) | 31 (39) |
+| LPGA 2014 5W | 192 (185) | 26 (26) | 41 (41) |
+| LPGA 2014 7W | 181 (174) | 25 (25) | 41 (40) |
+| LPGA 2014 4i | 168 (169) | 24 (24) | 41 (43) |
+| LPGA 2014 5i | 159 (161) | 23 (23) | 41 (45) |
+| LPGA 2014 6i | 152 (152) | 25 (25) | 45 (46) |
+| LPGA 2014 7i | 140 (141) | 25 (26) | 46 (47) |
+| LPGA 2014 8i | 130 (130) | 24 (25) | 47 (47) |
+| LPGA 2014 9i | 117 (119) | 23 (26) | 48 (47) |
+| LPGA 2014 PW | 103 (107) | 21 (23) | 47 (48) |
+
+Avsnitten nedan är den ursprungliga kontrollen från 2026-10, gjord före kalibreringen, och siffrorna i dem gäller den gamla modellen. `tools/flight-reference-report.js` räknar samma tabeller med den nuvarande modellen.
+
+**Status (avsnitt 1-8): utkast för granskning, 2026-10-12, före kalibreringen i avsnitt 0.** Det här är en dokumenterad kontroll, inte ett tillräckligt kalibreringsmål för att ändra fysiken: underlaget saknar miljöförhållanden och flygtid (se avsnitt 2 och 8). Inga lyft- eller luftmotståndskoefficienter är ändrade och `physics.js` är orörd. Alla siffror kommer från `tools/flight-reference-report.js`, som bara anropar motorn.
 
 ## 1. Sammanfattning
 

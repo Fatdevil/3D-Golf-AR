@@ -19,16 +19,21 @@ const SwingEngine = (function() {
     // Fields: maxSpeed (mph), baseLaunchAngle (°), baseSpin (rpm),
     //         maxSpread (°): max azimuth deviation on full miss
     // -----------------------------------------------------------
+    // Full-swing launch per club: TrackMan's PGA Tour averages 2024 (TrackMan's own table; ball speed mph, launch deg, spin rpm) for driver, 5, 7
+    // and 9 iron and PW, which the physics' lift and drag are fitted to (physics.js, AERO). The 3 wood keeps the 2014 row (158 mph, 9.2°,
+    // 3 655 rpm): the 2024 row has 169 mph, almost the driver's speed, and with the fitted curves it carried as far as the driver (271 against
+    // 272 yd), so the bag had no gap. SW and LW (not in the table) continue the gaps below PW.
+    // The numbers used to be tuned to make up for the old lift curve (the 7-iron got 128 mph and 18.5° instead of 123 mph and 16.1°).
     const CLUB_PROFILES = {
         // (spinAtZeroPower: see SPIN_AT_ZERO_POWER; a driver and a wood keep most of their spin on a shorter swing)
-        DRIVER: { maxSpeed: 167, baseLaunchAngle: 10.5, baseSpin:  2500, maxSpread: 12, name: 'Driver',  icon: '🏌️', spinAtZeroPower: 0.7 },
-        W3:     { maxSpeed: 155, baseLaunchAngle: 12.0, baseSpin:  3500, maxSpread: 10, name: '3 Wood',  icon: '🪵', spinAtZeroPower: 0.7 },
-        I5:     { maxSpeed: 140, baseLaunchAngle: 16.0, baseSpin:  5300, maxSpread:  8, name: '5 Iron',  icon: '⛳' },
-        I7:     { maxSpeed: 128, baseLaunchAngle: 18.5, baseSpin:  7100, maxSpread:  7, name: '7 Iron',  icon: '⛳' },
-        I9:     { maxSpeed: 115, baseLaunchAngle: 22.0, baseSpin:  8700, maxSpread:  6, name: '9 Iron',  icon: '⛳' },
-        PW:     { maxSpeed: 103, baseLaunchAngle: 26.0, baseSpin:  9300, maxSpread:  5, name: 'Pitching', icon: '🏌️' },
-        SW:     { maxSpeed:  85, baseLaunchAngle: 32.0, baseSpin: 10200, maxSpread:  5, name: 'Sand',    icon: '🏖️' },
-        LW:     { maxSpeed:  72, baseLaunchAngle: 36.0, baseSpin: 10800, maxSpread:  4, name: 'Lob',     icon: '🎯' },
+        DRIVER: { maxSpeed: 171, baseLaunchAngle: 10.4, baseSpin:  2545, maxSpread: 12, name: 'Driver',  icon: '🏌️', spinAtZeroPower: 0.7, launchGainAtZeroPower: 3 },
+        W3:     { maxSpeed: 158, baseLaunchAngle: 9.2, baseSpin:  3655, maxSpread: 10, name: '3 Wood',  icon: '🪵', spinAtZeroPower: 0.7, launchGainAtZeroPower: 3 },
+        I5:     { maxSpeed: 135, baseLaunchAngle: 11.9, baseSpin:  5280, maxSpread:  8, name: '5 Iron',  icon: '⛳' },
+        I7:     { maxSpeed: 123, baseLaunchAngle: 16.1, baseSpin:  7124, maxSpread:  7, name: '7 Iron',  icon: '⛳' },
+        I9:     { maxSpeed: 112, baseLaunchAngle: 20.0, baseSpin:  8793, maxSpread:  6, name: '9 Iron',  icon: '⛳' },
+        PW:     { maxSpeed: 104, baseLaunchAngle: 23.7, baseSpin:  9316, maxSpread:  5, name: 'Pitching', icon: '🏌️' },
+        SW:     { maxSpeed:  90, baseLaunchAngle: 30.0, baseSpin: 10200, maxSpread:  5, name: 'Sand',    icon: '🏖️' },
+        LW:     { maxSpeed:  76, baseLaunchAngle: 34.0, baseSpin: 10800, maxSpread:  4, name: 'Lob',     icon: '🎯' },
         PUTT:   { maxSpeed:  22, baseLaunchAngle:  1.5, baseSpin:   300, maxSpread:  3, name: 'Putter',  icon: '🥅' },
     };
 
@@ -42,23 +47,23 @@ const SwingEngine = (function() {
     const MISS_SPIN_AXIS_PER_DEG = 0.35;
 
     // Avsiktlig kurva (fade/draw): spinaxel i grader (Trackman-konvention, positiv = fade/höger) som spelaren väljer med formknappen.
-    // Wedgar får mest eftersom de spinner mest och en pitch ska kunna kicka åt sidan på greenen, långa klubbar får mindre så att kurvan
-    // inte blir orimligt stor (en driver med 8 graders axel kurvar redan ett tiotal meter).
-    const SHAPE_AXIS_DEG = { DRIVER: 8, W3: 9, I5: 9, I7: 12, I9: 12, PW: 15, SW: 15, LW: 15, PUTT: 0 };
+    // Med TrackMan-kurvorna (physics.js AERO) böjer en wedge med sitt höga spinn mycket per grad axel: 15° gav en PW 13 m åt sidan. Axlarna är
+    // därför satta så att en fade/draw tar bollen ca 4-5° åt sidan med driver och trä, 3-4° med järnen och 2-2,5° med wedgarna vid full kraft.
+    const SHAPE_AXIS_DEG = { DRIVER: 11, W3: 10, I5: 9, I7: 8, I9: 7, PW: 6, SW: 6, LW: 6, PUTT: 0 };
 
     // Startlinje för avsiktlig kurva: en fade startar till vänster om siktet och kurvar tillbaka, en draw tvärtom. Vinkeln är den som
     // kurvan tar bollen i sidled vid landning (uppmätt i physics.js med axlarna ovan, plan fairway, vindstilla), så att en rätt träffad
     // fade landar på siktlinjen. Kurvan växer med fart och flygtid, alltså med kraften: grader vid kraft SHAPE_START_POWERS.
     const SHAPE_START_POWERS = [0.3, 0.5, 0.7, 0.85, 1.0];
     const SHAPE_START_DEG = {
-        DRIVER: [0.37, 1.14, 2.75, 4.02, 5.17],
-        W3:     [0.18, 1.69, 3.86, 5.39, 6.70],
-        I5:     [0.42, 1.67, 3.39, 4.49, 5.45],
-        I7:     [0.31, 1.21, 2.49, 3.37, 4.16],
-        I9:     [0.07, 0.46, 0.98, 1.37, 1.76],
-        PW:     [0.08, 0.21, 0.55, 0.84, 1.14],
-        SW:     [0.06, 0.16, 0.30, 0.41, 0.51],
-        LW:     [0.05, 0.13, 0.24, 0.33, 0.42]
+        DRIVER: [0.50, 1.41, 2.88, 3.93, 4.92],
+        W3:     [0.45, 1.35, 3.00, 4.16, 5.24],
+        I5:     [0.36, 1.11, 2.65, 3.84, 4.96],
+        I7:     [0.35, 1.07, 2.34, 3.31, 4.24],
+        I9:     [0.30, 0.86, 1.77, 2.50, 3.20],
+        PW:     [0.25, 0.70, 1.38, 1.94, 2.49],
+        SW:     [0.22, 0.60, 1.12, 1.57, 2.04],
+        LW:     [0.17, 0.46, 0.86, 1.20, 1.57]
     };
 
     // SVG constants — circumference of r=100 ring
@@ -259,7 +264,11 @@ const SwingEngine = (function() {
         const spinMult = spinAtZero + (1 - spinAtZero) * effectivePower;
         const spinRpm  = club.baseSpin * spinMult;
 
-        const vlaOffset = (Math.abs(effectivePower - 0.85) > 0.2) ? -1.5 : 0;
+        // A driver and a wood launch higher on a slower swing (TrackMan's driver chart: the launch for the same angle of attack goes from about 11° at
+        // 170 mph to 18° at 90 mph): +3° at zero power, +1,5° at half. With the irons' -1,5° a half-power drive left at 8,9° with the 2024 launch
+        // and rolled 68 m after 64 m carry; it now leaves at 11,9°. The irons keep the old rule.
+        const vlaOffset = club.launchGainAtZeroPower !== undefined ? club.launchGainAtZeroPower * (1 - Math.min(1, effectivePower))
+                                                                   : ((Math.abs(effectivePower - 0.85) > 0.2) ? -1.5 : 0);
 
         return {
             ballSpeedMph:   Math.max(speedMph, 10),

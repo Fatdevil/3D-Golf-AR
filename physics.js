@@ -90,13 +90,16 @@ window.GolfPhysics = (function() {
 
     // Flyer-lie från rough: chans per slag, lägsta utgångsvinkel (en driver/trä flyger inte), och hur mycket fart/spinn som blir kvar.
     // Farten behålls, spinnet minskar; resten gör bollens egen aerodynamik (mindre spinn = mindre luftmotstånd = längre carry).
-    // Kalibrerat över hela kraftskalan (10-100 %, alla klubbor som kan få flyer): rough ger +2 till +15 % carry mot fairway, deep rough
-    // +4 till +18 %. Farten höjs 2 % eftersom en minskad spinn annars låter ett lågfartsslag korsa gränsen för omvänd Magnus (negativt lyft
+    // Kalibrerat över hela kraftskalan (10-100 %, alla klubbor som kan få flyer): rough ger +1 till +8 % carry mot fairway, deep rough
+    // +7 till +9 % (med TrackMan-kurvorna, där spinnet betyder mindre för carryn). Farten höjs 3 % (deep 3,5 %) eftersom en minskad spinn annars låter ett lågfartsslag korsa gränsen för omvänd Magnus (negativt lyft
     // under 2250 rpm) och bli kortare än fairway. Gäller stiltje till måttlig vind: i motvind över ca 10 mph tappar flyern sin fördel (i
     // 11 mph ca -1 % mot fairway för 7-järn på låg kraft, i 20 mph ca -4 %, i 30 mph upp till ca -8 % för långa järn), medan medvind och
     // sidvind inte ändrar bilden. Slaget är fortfarande oftast bättre än ett vanligt rough-slag.
-    const FLYER_CHANCE_ROUGH = 0.15, FLYER_MIN_LAUNCH_ROUGH = 15, FLYER_ROUGH = { speed: 1.02, spin: 0.80 };
-    const FLYER_CHANCE_DEEP = 0.25, FLYER_MIN_LAUNCH_DEEP = 20, FLYER_DEEP = { speed: 1.02, spin: 0.75 };
+    // Utgångsvinklarna är TrackMans (ca 4° lägre än spelets gamla, t.ex. 5-järn 12,1° mot 16°), så vinkelgränserna nedan ligger 4° lägre än förut:
+    // samma klubba får samma straff och samma flyer-chans som innan (5-järnet kan få flyer, inte drivern eller 3-träet).
+    const LIE_VLA_BASE = 6;
+    const FLYER_CHANCE_ROUGH = 0.15, FLYER_MIN_LAUNCH_ROUGH = 11.5, FLYER_ROUGH = { speed: 1.03, spin: 0.80 };
+    const FLYER_CHANCE_DEEP = 0.25, FLYER_MIN_LAUNCH_DEEP = 17, FLYER_DEEP = { speed: 1.035, spin: 0.75 };
 
     // Underlaget bollen ligger på tar fart och spinn från slaget (inte från launch monitor: den mäter en riktig boll).
     // Rough och djup rough kan ge en flyer (slumpen avgörs av rand; utan rand blir det aldrig en flyer).
@@ -104,7 +107,7 @@ window.GolfPhysics = (function() {
     function lieMultipliers(lieType, vla, rand) {
         let speed = 1.0, spin = 1.0, flyer = false;
         if (lieType === 'ROUGH') {
-            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35));
+            let vlaFactor = Math.max(0, Math.min(1, (vla - LIE_VLA_BASE) / 35));
             if (rand && rand() < FLYER_CHANCE_ROUGH && vla > FLYER_MIN_LAUNCH_ROUGH) {
                 // Flyer: gräs mellan klubba och boll tar bort en del spinn, bollen flyger längre och landar varmare.
                 // Kalibrerat: carry blir +2 till +15 % mot fairway över hela kraftskalan (var +14 till +37 % vid hög kraft).
@@ -118,11 +121,11 @@ window.GolfPhysics = (function() {
             speed = 0.98; spin = 0.95;
         } else if (lieType === 'FESCUE') {
             // Fescue: stiff wiry grass wraps clubface — ball exits hot but spinless (flyer-lie)
-            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35));
+            let vlaFactor = Math.max(0, Math.min(1, (vla - LIE_VLA_BASE) / 35));
             speed = 1.0 - (0.20 - (0.10 * vlaFactor)); // 20% loss driver, 10% wedge (milder than DEEP ROUGH)
             spin = 1.0 - (0.65 - (0.45 * vlaFactor));  // 65% spin loss driver, 20% wedge (harder than DEEP ROUGH)
         } else if (lieType === 'DEEP ROUGH') {
-            let vlaFactor = Math.max(0, Math.min(1, (vla - 10) / 35));
+            let vlaFactor = Math.max(0, Math.min(1, (vla - LIE_VLA_BASE) / 35));
             if (rand && rand() < FLYER_CHANCE_DEEP && vla > FLYER_MIN_LAUNCH_DEEP) {
                 // Tyngre gräs ger en kraftigare flyer än rough: +4 till +18 % mot fairway (var +27 till +41 % vid hög kraft).
                 speed = FLYER_DEEP.speed; spin = FLYER_DEEP.spin; flyer = true;
@@ -131,7 +134,7 @@ window.GolfPhysics = (function() {
                 spin = 1.0 - (0.60 - (0.40 * vlaFactor));
             }
         } else if (lieType === 'SAND') {
-            let vlaFactor = Math.max(0, Math.min(1, (vla - 20) / 30));
+            let vlaFactor = Math.max(0, Math.min(1, (vla - LIE_VLA_BASE - 10) / 30));
             speed = 1.0 - (0.20 - (0.15 * vlaFactor));
             spin = 1.0 - (0.30 - (0.20 * vlaFactor));
         }
@@ -185,32 +188,22 @@ window.GolfPhysics = (function() {
         return a + (b - a) * Math.max(0, Math.min(1, t));
     }
 
-    // Aerodynamiska koefficient-kurvor (Trackman Data)
+    // Aerodynamiska koefficienter, inpassade mot TrackMans tour-snitt: PGA Tour 2024 (TrackMans egen tabell: bollfart, utgångsvinkel, spinn ->
+    // carry, topphöjd och landningsvinkel, driver till PW; carry för 3- och 5-trä saknas och de passas bara på topp och landning) med full vikt,
+    // och LPGA Tour 2014 (ur minnet, inte kontrollerad mot källan) med halv vikt så att modellen håller vid lägre fart. 25 °C och havsnivå.
+    // Felet på carry +-3 yd, topp +-2 yd och landning +-2° per klubba, Nelder-Mead över formen nedan. Förut flög drivern 288 yd med 50 yd topp
+    // och 7-järnet 158 yd med 24 yd topp. Kvar efter passningen: drivern bär 272 yd (TrackMan 282), PW 133 (142), och 3-träet går för högt (40 yd
+    // topp mot 32): formen nedan (lyft bara ur spinnfaktorn) räcker inte för alla tre samtidigt.
+    //   Cd = 0,238 + 0,1722 S vid 50 m/s, något lägre för en snabbare boll (Reynolds-talet: -0,048 per 25 m/s, mellan 30 och 75 m/s),
+    //        stigande mot 0,40 under 20 m/s (chippar; bollen före sin dragkris)
+    //   Cl = 0,6045 S^0,5344, högst 0,319 (S = spinnfaktorn R w / v)
+    //   spinnet avtar 4 % per sekund (ett fritt värde gick mot 1 % men gav inte bättre passning, och 4 % ligger nära det uppmätta)
+    const AERO = { cd0: 0.2380, cdV: 0.0478, cdSpin: 0.1722, cdLow: 0.40, clA: 0.6045, clB: 0.5344, clMax: 0.3187, spinDecay: 0.040 };
     function getDragCoefficient(vMag, spinRateRpm) {
-        let cd = 0.235;
-        
-        // Drag Crisis Re-kurva (Kalibrerad mot Trackman)
-        // Fix 4: Surgical C_D curve for each speed bracket:
-        //   Driver (55+ m/s): 0.235 → carry 215 yds
-        //   Iron (40-55 m/s): 0.24  → carry 185 yds  
-        //   Wedge/Lob (<40):  0.26  → carry via C_L balance
-        if (vMag > 55) cd = 0.235;
-        else if (vMag > 40) cd = lerp(0.26, 0.24, (vMag - 40) / 15);
-        else cd = 0.26;
-        
-        // Spin-dependent drag — Bearman & Harvey (1976) windtunnel data
-        // Spin ratio = ω×r / v — higher spin ratio = more drag
-        // Driver (2000rpm/130mph): spinRatio ≈ 0.18 → minimal effect
-        // Wedge (9000rpm/103mph): spinRatio ≈ 0.44 → significant drag increase
-        let omega = (spinRateRpm * 2 * Math.PI) / 60;
-        let spinRatio = (omega * RADIUS) / Math.max(vMag, 0.1);
-        
-        // Activate above spinRatio 0.10 to avoid disturbing low-spin shots
-        let cdSpin = spinRatio > 0.10
-            ? 0.18 * (spinRatio - 0.10)
-            : 0;
-        
-        return Math.min(cd + cdSpin, 0.55); // Cap against unreasonable values
+        const S = (spinRateRpm * 2 * Math.PI / 60) * RADIUS / Math.max(vMag, 0.1);
+        const cdHigh = AERO.cd0 + AERO.cdV * (50 - Math.max(30, Math.min(75, vMag))) / 25;
+        const cd = vMag > 30 ? cdHigh : (vMag > 20 ? lerp(AERO.cdLow, AERO.cd0 + AERO.cdV * 0.8, (vMag - 20) / 10) : AERO.cdLow);
+        return Math.min(cd + AERO.cdSpin * S, 0.65);
     }
 
     // Omvänd Magnus (negativt lyft) för en långsam boll med lite spinn: upp till -0,10 under 18 m/s och nära 0 rpm. Den blandas in mjukt,
@@ -226,17 +219,7 @@ window.GolfPhysics = (function() {
     }
 
     function liftCurve(spinParam) {
-        // Trackmans Spin Factor kurva för lift kalibrering
-        // Kalibrerad: driver 216y, 7-iron 180y, wedge 130y, lob 75y
-        if (spinParam <= 0.08) return lerp(0.00, 0.20, spinParam / 0.08);         // Driver
-        if (spinParam <= 0.13) return lerp(0.20, 0.28, (spinParam - 0.08) / 0.05);  // Långa järn
-        if (spinParam <= 0.20) return lerp(0.28, 0.32, (spinParam - 0.13) / 0.07);  // Mellanjärn
-        if (spinParam <= 0.28) return lerp(0.32, 0.30, (spinParam - 0.20) / 0.08);  // 7-iron → pitch
-        if (spinParam <= 0.40) return lerp(0.30, 0.18, (spinParam - 0.28) / 0.12);  // Wedgar
-        if (spinParam <= 0.55) return lerp(0.18, 0.06, (spinParam - 0.40) / 0.15);  // Lob
-        
-        // Extremt spin (>0.55)
-        return 0.04;
+        return Math.min(AERO.clMax, AERO.clA * Math.pow(Math.max(0, spinParam), AERO.clB));
     }
 
     function evaluateState(state, dt, dv) {
@@ -388,13 +371,8 @@ window.GolfPhysics = (function() {
         state.pos = vecAdd(state.pos, vecScale(dp, dt));
         state.vel = vecAdd(state.vel, vecScale(dv, dt));
         
-        // Fix 1: Spin decay — increased minimum from 2.8% to 5.0% per second
-        // Old: 2.8%-7.0% range gave only 3.6% average → 79% spin at impact (too high)
-        // New: 5.0%-7.0% range gives ~6% average → 63% spin at impact (matches Trackman)
-        // Verification: 9000 × e^(-0.060 × 6.62) = 9000 × 0.672 = 6048 rpm at landing
-        let speedMs = vecMag(state.vel);
-        let t_speed = Math.max(0, Math.min(1, (speedMs - 13.4) / (67.0 - 13.4)));
-        let decayRate = 0.050 + t_speed * (0.070 - 0.050);
+        // Spinnet avtar i luften med AERO.spinDecay (4 % per sekund), inpassat tillsammans med Cd och Cl. Förut 5-7 % per sekund.
+        let decayRate = AERO.spinDecay;
         
         state.spin = vecScale(state.spin, Math.exp(-decayRate * dt)); 
     }
