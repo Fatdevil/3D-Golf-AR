@@ -19,16 +19,19 @@ const SwingEngine = (function() {
     // Fields: maxSpeed (mph), baseLaunchAngle (°), baseSpin (rpm),
     //         maxSpread (°): max azimuth deviation on full miss
     // -----------------------------------------------------------
+    // Full-swing launch per club: TrackMan's PGA Tour averages (2014 table; ball speed mph, launch deg, spin rpm) for driver, 3 wood, 5, 7 and
+    // 9 iron and PW, which the physics' lift and drag are fitted to (physics.js, AERO). SW and LW (not in the table) continue the gaps below PW.
+    // The numbers used to be tuned to make up for the old lift curve (the 7-iron got 128 mph and 18.5° instead of 120 mph and 16.3°).
     const CLUB_PROFILES = {
         // (spinAtZeroPower: see SPIN_AT_ZERO_POWER; a driver and a wood keep most of their spin on a shorter swing)
-        DRIVER: { maxSpeed: 167, baseLaunchAngle: 10.5, baseSpin:  2500, maxSpread: 12, name: 'Driver',  icon: '🏌️', spinAtZeroPower: 0.7 },
-        W3:     { maxSpeed: 155, baseLaunchAngle: 12.0, baseSpin:  3500, maxSpread: 10, name: '3 Wood',  icon: '🪵', spinAtZeroPower: 0.7 },
-        I5:     { maxSpeed: 140, baseLaunchAngle: 16.0, baseSpin:  5300, maxSpread:  8, name: '5 Iron',  icon: '⛳' },
-        I7:     { maxSpeed: 128, baseLaunchAngle: 18.5, baseSpin:  7100, maxSpread:  7, name: '7 Iron',  icon: '⛳' },
-        I9:     { maxSpeed: 115, baseLaunchAngle: 22.0, baseSpin:  8700, maxSpread:  6, name: '9 Iron',  icon: '⛳' },
-        PW:     { maxSpeed: 103, baseLaunchAngle: 26.0, baseSpin:  9300, maxSpread:  5, name: 'Pitching', icon: '🏌️' },
-        SW:     { maxSpeed:  85, baseLaunchAngle: 32.0, baseSpin: 10200, maxSpread:  5, name: 'Sand',    icon: '🏖️' },
-        LW:     { maxSpeed:  72, baseLaunchAngle: 36.0, baseSpin: 10800, maxSpread:  4, name: 'Lob',     icon: '🎯' },
+        DRIVER: { maxSpeed: 167, baseLaunchAngle: 10.9, baseSpin:  2686, maxSpread: 12, name: 'Driver',  icon: '🏌️', spinAtZeroPower: 0.7 },
+        W3:     { maxSpeed: 158, baseLaunchAngle: 9.2, baseSpin:  3655, maxSpread: 10, name: '3 Wood',  icon: '🪵', spinAtZeroPower: 0.7 },
+        I5:     { maxSpeed: 132, baseLaunchAngle: 12.1, baseSpin:  5361, maxSpread:  8, name: '5 Iron',  icon: '⛳' },
+        I7:     { maxSpeed: 120, baseLaunchAngle: 16.3, baseSpin:  7097, maxSpread:  7, name: '7 Iron',  icon: '⛳' },
+        I9:     { maxSpeed: 109, baseLaunchAngle: 20.4, baseSpin:  8647, maxSpread:  6, name: '9 Iron',  icon: '⛳' },
+        PW:     { maxSpeed: 102, baseLaunchAngle: 24.2, baseSpin:  9304, maxSpread:  5, name: 'Pitching', icon: '🏌️' },
+        SW:     { maxSpeed:  90, baseLaunchAngle: 30.0, baseSpin: 10200, maxSpread:  5, name: 'Sand',    icon: '🏖️' },
+        LW:     { maxSpeed:  76, baseLaunchAngle: 34.0, baseSpin: 10800, maxSpread:  4, name: 'Lob',     icon: '🎯' },
         PUTT:   { maxSpeed:  22, baseLaunchAngle:  1.5, baseSpin:   300, maxSpread:  3, name: 'Putter',  icon: '🥅' },
     };
 

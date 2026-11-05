@@ -185,32 +185,17 @@ window.GolfPhysics = (function() {
         return a + (b - a) * Math.max(0, Math.min(1, t));
     }
 
-    // Aerodynamiska koefficient-kurvor (Trackman Data)
+    // Aerodynamiska koefficienter, inpassade mot TrackMans PGA Tour-snitt (2014 års tabell: bollfart, utgångsvinkel, spinn -> carry, topphöjd,
+    // landningsvinkel för driver till PW, 25 °C och havsnivå som TrackMans normalisering): ett fel på carry +-3 yd, topp +-2 yd och landning +-2°
+    // per klubba vägt lika, Nelder-Mead över formen nedan (tools/flight-reference-report.js visar jämförelsen). Förut flög drivern 288 yd med 50 yd
+    // topp (TrackMan 275 / 32) och 7-järnet 158 yd med 24 yd topp (172 / 32): fel tecken mellan klubbor, en formfråga i kurvorna.
+    //   Cd = 0,2418 + 0,1839 S över 30 m/s (bollen är förbi sin dragkris), stigande mot 0,40 under 20 m/s (chippar)
+    //   Cl = 0,773 S^0,658, högst 0,30 (S = spinnfaktorn R w / v)
+    const AERO = { cd0: 0.2418, cdSpin: 0.1839, cdLow: 0.40, clA: 0.773, clB: 0.6579, clMax: 0.2999, spinDecay: 0.010 };
     function getDragCoefficient(vMag, spinRateRpm) {
-        let cd = 0.235;
-        
-        // Drag Crisis Re-kurva (Kalibrerad mot Trackman)
-        // Fix 4: Surgical C_D curve for each speed bracket:
-        //   Driver (55+ m/s): 0.235 → carry 215 yds
-        //   Iron (40-55 m/s): 0.24  → carry 185 yds  
-        //   Wedge/Lob (<40):  0.26  → carry via C_L balance
-        if (vMag > 55) cd = 0.235;
-        else if (vMag > 40) cd = lerp(0.26, 0.24, (vMag - 40) / 15);
-        else cd = 0.26;
-        
-        // Spin-dependent drag — Bearman & Harvey (1976) windtunnel data
-        // Spin ratio = ω×r / v — higher spin ratio = more drag
-        // Driver (2000rpm/130mph): spinRatio ≈ 0.18 → minimal effect
-        // Wedge (9000rpm/103mph): spinRatio ≈ 0.44 → significant drag increase
-        let omega = (spinRateRpm * 2 * Math.PI) / 60;
-        let spinRatio = (omega * RADIUS) / Math.max(vMag, 0.1);
-        
-        // Activate above spinRatio 0.10 to avoid disturbing low-spin shots
-        let cdSpin = spinRatio > 0.10
-            ? 0.18 * (spinRatio - 0.10)
-            : 0;
-        
-        return Math.min(cd + cdSpin, 0.55); // Cap against unreasonable values
+        const S = (spinRateRpm * 2 * Math.PI / 60) * RADIUS / Math.max(vMag, 0.1);
+        const cd = vMag > 30 ? AERO.cd0 : (vMag > 20 ? lerp(AERO.cdLow, AERO.cd0, (vMag - 20) / 10) : AERO.cdLow);
+        return Math.min(cd + AERO.cdSpin * S, 0.65);
     }
 
     // Omvänd Magnus (negativt lyft) för en långsam boll med lite spinn: upp till -0,10 under 18 m/s och nära 0 rpm. Den blandas in mjukt,
@@ -226,17 +211,7 @@ window.GolfPhysics = (function() {
     }
 
     function liftCurve(spinParam) {
-        // Trackmans Spin Factor kurva för lift kalibrering
-        // Kalibrerad: driver 216y, 7-iron 180y, wedge 130y, lob 75y
-        if (spinParam <= 0.08) return lerp(0.00, 0.20, spinParam / 0.08);         // Driver
-        if (spinParam <= 0.13) return lerp(0.20, 0.28, (spinParam - 0.08) / 0.05);  // Långa järn
-        if (spinParam <= 0.20) return lerp(0.28, 0.32, (spinParam - 0.13) / 0.07);  // Mellanjärn
-        if (spinParam <= 0.28) return lerp(0.32, 0.30, (spinParam - 0.20) / 0.08);  // 7-iron → pitch
-        if (spinParam <= 0.40) return lerp(0.30, 0.18, (spinParam - 0.28) / 0.12);  // Wedgar
-        if (spinParam <= 0.55) return lerp(0.18, 0.06, (spinParam - 0.40) / 0.15);  // Lob
-        
-        // Extremt spin (>0.55)
-        return 0.04;
+        return Math.min(AERO.clMax, AERO.clA * Math.pow(Math.max(0, spinParam), AERO.clB));
     }
 
     function evaluateState(state, dt, dv) {
@@ -388,13 +363,9 @@ window.GolfPhysics = (function() {
         state.pos = vecAdd(state.pos, vecScale(dp, dt));
         state.vel = vecAdd(state.vel, vecScale(dv, dt));
         
-        // Fix 1: Spin decay — increased minimum from 2.8% to 5.0% per second
-        // Old: 2.8%-7.0% range gave only 3.6% average → 79% spin at impact (too high)
-        // New: 5.0%-7.0% range gives ~6% average → 63% spin at impact (matches Trackman)
-        // Verification: 9000 × e^(-0.060 × 6.62) = 9000 × 0.672 = 6048 rpm at landing
-        let speedMs = vecMag(state.vel);
-        let t_speed = Math.max(0, Math.min(1, (speedMs - 13.4) / (67.0 - 13.4)));
-        let decayRate = 0.050 + t_speed * (0.070 - 0.050);
+        // Spinnet avtar i luften, inpassat tillsammans med Cd och Cl (AERO.spinDecay, 1 % per sekund). Förut 5-7 % per sekund: med de nya
+        // kurvorna gav det för flacka landningar för järnen.
+        let decayRate = AERO.spinDecay;
         
         state.spin = vecScale(state.spin, Math.exp(-decayRate * dt)); 
     }
