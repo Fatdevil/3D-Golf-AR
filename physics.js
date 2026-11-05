@@ -284,20 +284,9 @@ window.GolfPhysics = (function() {
             let dir = vSpeed > 0.001 ? vecScale(currentV, 1/vSpeed) : [0,0,0];
             let frictionAccel = vecScale(dir, -effectiveFriction);
 
-            // GRASS GRAIN (Pseudorandom vector based on X/Y position)
-            if (state.terrainType === 'GREEN') {
-                // Skapa en svag ström baserat på position
-                let sx = Math.sin(state.pos[0] * 0.3 + state.pos[1] * 0.2);
-                let sy = Math.cos(state.pos[1] * 0.3 - state.pos[0] * 0.2);
-                let currentStimp = (typeof window !== 'undefined' && window.GREEN_STIMP) ? window.GREEN_STIMP : 10.0;
-                let grainAccelScale = 0.03 * (10.0 / currentStimp); // Grain påverkar mer på tröga greener
-                
-                // Endast tillämpa grain horisontellt (x/y)
-                let gl = Math.sqrt(sx*sx + sy*sy + 1e-6);
-                frictionAccel[0] += (sx / gl) * grainAccelScale;
-                frictionAccel[1] += (sy / gl) * grainAccelScale;
-            }
-            
+            // (Ingen grain: förut en osynlig kraft ur bollens läge, 0,03 m/s² vid stimp 10, som spelaren inte kunde läsa av och som puttlinjen
+            // och lutningsvyn inte visade. Den flyttade en lång putt eller en LW som spinner tillbaka upp till ett par decimeter.)
+
             let totalAccel = vecAdd(gParallel, frictionAccel);
             
             if (vSpeed < 0.05 && vecMag(gParallel) < frictionAccelMag) {
