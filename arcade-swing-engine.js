@@ -88,9 +88,56 @@ const SwingEngine = (function() {
     // window.currentBallSurface is populated by the animate-loop
     // terrain detector (localGetTerrainAt on every frame).
     // -----------------------------------------------------------
+    // The full carry of each club (100 % power, a straight arm: the club's own speed, launch and spin) in standard conditions (15 °C, sea
+    // level, calm, a flat fairway), worked out with the physics the first time it is asked for. The club row's distances and the distance
+    // rule below come from it: they used to be fixed numbers that did not match the physics (the driver said 220 y and carried 282).
+    const FULL_CLUBS = ['DRIVER', 'W3', 'I5', 'I7', 'I9', 'PW', 'SW', 'LW'];
+    let _fullCarry = null;
+    function fullCarryM() {
+        if (_fullCarry) return _fullCarry;
+        const P = window.GolfPhysics;
+        if (!P || typeof P.simulateFlight !== 'function') return null;
+        const out = {}, log = console.log, rnd = Math.random;
+        console.log = function () {};             // the physics logs every flight
+        Math.random = function () { return 0.5; };   // no flyer lottery (a fairway has none anyway)
+        try {
+            const flat = { getTerrainAt: function () { return { z: 0, normal: [0, 0, 1], type: 'FAIRWAY' }; }, altitudeFeet: 0, temperatureC: 15 };
+            for (const k of FULL_CLUBS) {
+                const c = CLUB_PROFILES[k];
+                const r = P.simulateFlight({ ballSpeedMph: c.maxSpeed, launchAngleDeg: c.baseLaunchAngle, totalSpinRpm: c.baseSpin, azimDeg: 0, spinAxisDeg: 0,
+                    startPos: [0, 0, 0], isTeeShot: k === 'DRIVER', isLiveData: false }, flat);
+                out[k] = r && r.metrics && isFinite(r.metrics.carryMeters) ? r.metrics.carryMeters : 0;
+            }
+        } catch (e) { return null; } finally { console.log = log; Math.random = rnd; }
+        _fullCarry = out;
+        return out;
+    }
+
+    // The club row's distances: each club's full carry in the player's unit (the putter keeps its "---")
+    function updateClubLabels() {
+        const fc = fullCarryM();
+        if (!fc || typeof document === 'undefined' || !document.querySelectorAll) return false;
+        const m = !!window.useMeters;
+        document.querySelectorAll('.club-btn[data-club]').forEach(function (b) {
+            const k = b.dataset.club, el = b.querySelector && b.querySelector('.club-dist');
+            if (!el || !(k in fc)) return;
+            el.textContent = Math.round(m ? fc[k] : fc[k] * 1.09361) + (m ? 'm' : 'y');
+        });
+        return true;
+    }
+
     function autoSelectClub(distMeters) {
         // Green override: ball on putting surface → Putter always
         if (window.currentBallSurface === 'GREEN') return 'PUTT';
+        // the club whose full carry is nearest: halfway between two clubs' carries is where the shorter one takes over
+        const fc = fullCarryM();
+        if (fc) {
+            for (let i = 0; i < FULL_CLUBS.length - 1; i++) {
+                if (distMeters > (fc[FULL_CLUBS[i]] + fc[FULL_CLUBS[i + 1]]) / 2) return FULL_CLUBS[i];
+            }
+            return distMeters > 9 ? 'LW' : 'PUTT';
+        }
+        // (without the physics: the old fixed rule)
         if (distMeters > 201) return 'DRIVER';
         if (distMeters > 174) return 'W3';
         if (distMeters > 151) return 'I5';
@@ -694,7 +741,7 @@ const SwingEngine = (function() {
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
-    return { onTap, selectClub, stepClub, suggestClub, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
+    return { onTap, selectClub, stepClub, suggestClub, fullCarryM, updateClubLabels, newShot, aimDistanceM, getClub: () => _clubKey, isManualClub: () => _manualClub, enableSwingMode, disableSwingMode,
              updateSwingInfoBar, autoSelectClub, mapCircleToPhysics, setShotShape, getShotShape: () => _shape, shapeAxisDeg, shapeStartDeg, setInputMode, applyInputMode, setBridgeConnected, acceptsBridgeShots, isLabEnabled, getInputMode: () => _inputMode, CLUB_PROFILES };
 })();
 
