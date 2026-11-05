@@ -46,15 +46,15 @@ for (const firm of ['SOFT', 'NORMAL', 'FIRM']) {
     check(club + ' ' + firm + ' fade: kick åt höger efter landning', kickF > 0.3, '(' + kickF.toFixed(2) + ' m)');
     check(club + ' ' + firm + ' draw: kick åt vänster efter landning', kickD < -0.3, '(' + kickD.toFixed(2) + ' m)');
     // (greenens grain är ett mönster ur läget och inte spegelvänt, så fade och draw skiljer några cm; mer ju längre bollen rullar:
-    // en LW spinner tillbaka 2-4 m och grainet hinner flytta den upp till 0,15 m åt var sitt håll)
-    const grainTol = club === 'LW' ? 0.30 : 0.10;
+    // en LW spinner tillbaka 2-4 m och grainet hinner flytta den upp till 0,2 m åt var sitt håll)
+    const grainTol = club === 'LW' ? 0.40 : 0.10;
     check(club + ' ' + firm + ' fade/draw är spegelbilder', Math.abs(kickF + kickD) < grainTol && Math.abs(fade.endY - draw.endY) < grainTol,
-          '(' + kickF.toFixed(2) + ' / ' + kickD.toFixed(2) + ' m)');
+          '(' + kickF.toFixed(2) + ' / ' + kickD.toFixed(2) + ' m, längs ' + (fade.endY - draw.endY).toFixed(2) + ' m)');
     check(club + ' ' + firm + ' rak spinaxel ger ingen sidokick', Math.abs(straight.endX) < grainTol / 2, '(' + straight.endX.toFixed(3) + ' m)');
     if (firm === 'SOFT' || (club === 'LW' && firm === 'NORMAL')) { // på hård green rullar bollen framåt trots spinn; med Penners lägre studs checkar SW på normal green (nedan)
       check(club + ' ' + firm + ' fade spinner bakåt och höger samtidigt', fade.endY < fade.landY - 0.3 && fade.endX > fade.landX, '(back ' + (fade.landY - fade.endY).toFixed(1) + ' m)');
     } else if (firm === 'NORMAL') {
-      check(club + ' ' + firm + ' fade checkar nära landningen (inom 1 m) och går åt höger', Math.abs(fade.endY - fade.landY) < 1.0 && fade.endX > fade.landX, '(' + (fade.endY - fade.landY).toFixed(1) + ' m)');
+      check(club + ' ' + firm + ' fade checkar nära landningen (inom 1,5 m) och går åt höger', Math.abs(fade.endY - fade.landY) < 1.5 && fade.endX > fade.landX, '(' + (fade.endY - fade.landY).toFixed(1) + ' m)');
     }
     check(club + ' ' + firm + ' fade stannar', fade.phase === 'stopped');
   }

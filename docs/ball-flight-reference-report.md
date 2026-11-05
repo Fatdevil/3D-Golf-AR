@@ -1,6 +1,50 @@
 # Bollflykt: dokumenterad kontroll mot TrackMans Tour-snitt
 
-**Status: utkast för granskning, 2026-10-12.** Det här är en dokumenterad kontroll, inte ett tillräckligt kalibreringsmål för att ändra fysiken: underlaget saknar miljöförhållanden och flygtid (se avsnitt 2 och 8). Inga lyft- eller luftmotståndskoefficienter är ändrade och `physics.js` är orörd. Alla siffror kommer från `tools/flight-reference-report.js`, som bara anropar motorn.
+## 0. Kalibreringen 2026-11 (genomförd)
+
+Lyft, luftmotstånd och spinnavtagning i `physics.js` (`AERO`) är nu inpassade mot TrackMans Tour-snitt från 2014, både PGA Tour och LPGA Tour, driver till PW (23 klubbor). Varje klubba ger bollfart, utgångsvinkel och spinn, och motorn jämförs mot carry, topphöjd och landningsvinkel. Avvikelserna är normerade (carry ±3 yd, topp ±2 yd, landning ±2°) och vägs lika. Anpassningen gjordes med Nelder-Mead vid 25 °C och havsnivå. Tabellen från 2014 användes eftersom den anger topp och landningsvinkel per klubba, något det underlag som beskrivs nedan saknar. **Källförbehåll:** båda tabellerna från 2014 (PGA och LPGA) är skrivna ur minnet av TrackMans spridda tabell över tour-snitt. De är inte kontrollerade mot en källa i den här miljön, där `trackman.com` inte går att nå (se avsnitt 2). Raderna bör stämmas av mot TrackMans egen tabell, och samma inpassning (Nelder-Mead över formen nedan) köras om ifall någon rad skiljer sig.
+
+- **Formen:** Cd = 0,2432 + 0,1799 S vid 50 m/s, något lägre för en snabbare boll (-0,028 per 25 m/s mellan 30 och 75 m/s), och stigande mot 0,40 under 20 m/s. Cl = 0,566 S^0,482, högst 0,32. Spinnet avtar med 4 % per sekund. S är spinnfaktorn R ω / v.
+- **Spinnavtagningen:** fritt anpassad gick den mot 1 %/s utan att passningen blev bättre (felsumma 64 mot 63 för enbart PGA). Därför är den låst vid 4 %/s, nära det uppmätta. Med 1 %/s landade wedgarna med så mycket spinn att kicken på greenen och kurvan i luften blev för stora.
+- **Felsumman** blev 113 över 23 klubbor, mot 1 562 med den gamla modellen. Med enbart PGA-raderna bar en LPGA-driver (140 mph) 207 yd mot 218. Med båda turerna i passningen bär den 213 yd.
+- **Klubbprofilerna** (`CLUB_PROFILES` i `arcade-swing-engine.js`) har PGA Tour-snittens bollfart, utgångsvinkel och spinn: driver 167 mph, 10,9° och 2 686 rpm; 7-järn 120 mph, 16,3° och 7 097 rpm; PW 102 mph, 24,2° och 9 304 rpm. SW och LW har egna, förlängda värden. Med fysikens standard (15 °C) bär drivern 257 yd och 7-järnet 165 yd.
+- **Följder i spelet:**
+  - Fade och draw har nya spinnaxlar och ny startlinje. Wedgen böjer mest per grad axel och får därför minst axel.
+  - Lie-reglernas vinkelgränser ligger 4° lägre, eftersom utgångsvinklarna är lägre än förut.
+  - Järn och wedgar landar brantare och rullar kortare. En tour-PW stannar nära nedslaget.
+- **Kontroll mot 2023 års snitt (tabell A nedan, 25 °C):** driver -5,0 %, 7-järn -1,7 % och PW -6,8 %. Datasetet för 2023 bär längre än det för 2014 (driver 282 mot 275 yd). Avvikelsen har nu samma tecken för alla klubbor och beror inte längre på klubban, vilket var formfrågan som avsnitt 1 beskriver.
+
+Motorn vid 25 °C mot TrackMan 2014 (TrackMans värde inom parentes):
+
+| Klubba | Carry yd (TrackMan) | Topp yd (TrackMan) | Landning ° (TrackMan) |
+|---|---|---|---|
+| PGA Driver | 262 (275) | 36 (32) | 43 (38) |
+| PGA 3W | 246 (243) | 33 (30) | 43 (43) |
+| PGA 5W | 235 (230) | 33 (31) | 45 (47) |
+| PGA Hyb | 224 (225) | 32 (29) | 44 (47) |
+| PGA 3i | 217 (212) | 31 (27) | 44 (46) |
+| PGA 4i | 207 (203) | 30 (28) | 44 (48) |
+| PGA 5i | 196 (194) | 31 (31) | 46 (49) |
+| PGA 6i | 184 (183) | 33 (30) | 49 (50) |
+| PGA 7i | 168 (172) | 32 (32) | 49 (50) |
+| PGA 8i | 156 (160) | 30 (31) | 50 (50) |
+| PGA 9i | 144 (148) | 29 (30) | 50 (51) |
+| PGA PW | 129 (136) | 29 (29) | 52 (52) |
+| LPGA D | 213 (218) | 27 (25) | 39 (37) |
+| LPGA 3W | 192 (195) | 19 (23) | 32 (39) |
+| LPGA 5W | 191 (185) | 26 (26) | 41 (41) |
+| LPGA 7W | 181 (174) | 25 (25) | 41 (40) |
+| LPGA 4i | 168 (169) | 24 (24) | 42 (43) |
+| LPGA 5i | 160 (161) | 23 (23) | 41 (45) |
+| LPGA 6i | 152 (152) | 26 (25) | 45 (46) |
+| LPGA 7i | 140 (141) | 25 (26) | 46 (47) |
+| LPGA 8i | 131 (130) | 24 (25) | 47 (47) |
+| LPGA 9i | 117 (119) | 24 (26) | 48 (47) |
+| LPGA PW | 103 (107) | 21 (23) | 47 (48) |
+
+Avsnitten nedan är den ursprungliga kontrollen från 2026-10, gjord före kalibreringen, och siffrorna i dem gäller den gamla modellen. `tools/flight-reference-report.js` räknar samma tabeller med den nuvarande modellen; procentsatserna för 2023 ovan kommer från den.
+
+**Status (avsnitt 1-8): utkast för granskning, 2026-10-12, före kalibreringen i avsnitt 0.** Det här är en dokumenterad kontroll, inte ett tillräckligt kalibreringsmål för att ändra fysiken: underlaget saknar miljöförhållanden och flygtid (se avsnitt 2 och 8). Inga lyft- eller luftmotståndskoefficienter är ändrade och `physics.js` är orörd. Alla siffror kommer från `tools/flight-reference-report.js`, som bara anropar motorn.
 
 ## 1. Sammanfattning
 
