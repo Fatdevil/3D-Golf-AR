@@ -1064,8 +1064,16 @@ window.GolfPhysics = (function() {
                 // BUG-05 FIX: Surface-specific skid→roll threshold.
                 // Previous universal 2.0 m/s was too high for fast greens (Stimp 12+).
                 if (state.phase === "skid") {
-                    // Så länge forward speed skiljer sig drastiskt från spinn-speed, sladdar vi!
-                    let spinSpeed = Math.sqrt(state.spin[0]*state.spin[0] + state.spin[1]*state.spin[1]) * RADIUS;
+                    // Bollen glider så länge kontaktpunkten rör sig mot marken: glidet är v - R (spinn x N), som i studsen. Förut jämfördes
+                    // bara farten med spinnets storlek, så en boll med lika mycket backspinn som fart (kontaktpunkten glider med dubbla farten)
+                    // räknades som rullande. I dag tar övergången till marken bort glidet helt (2/7-impulsen ovan), så kontrollen avgör inget
+                    // slag än; den ska vara rätt om glid kommer in en annan väg.
+                    const Ns = freshT.normal || [0, 0, 1], sk = state.spin, Vk = state.vel;
+                    const slip = vecMag([
+                        Vk[0] - RADIUS * (sk[1] * Ns[2] - sk[2] * Ns[1]),
+                        Vk[1] - RADIUS * (sk[2] * Ns[0] - sk[0] * Ns[2]),
+                        Vk[2] - RADIUS * (sk[0] * Ns[1] - sk[1] * Ns[0])
+                    ]);
                     const SKID_TO_ROLL_THRESHOLD = {
                         'GREEN':      0.8,  // Fast surface: low threshold
                         'TEE':        1.0,
@@ -1077,7 +1085,7 @@ window.GolfPhysics = (function() {
                         'WASTE':      1.5,
                     };
                     let skidThreshold = SKID_TO_ROLL_THRESHOLD[state.terrainType] || 1.5;
-                    if (Math.abs(speedXY - spinSpeed) < skidThreshold || speedXY < skidThreshold) {
+                    if (slip < skidThreshold || speedXY < skidThreshold) {
                         state.phase = "roll"; // Hjulet har fått fäste!
                     }
                 }

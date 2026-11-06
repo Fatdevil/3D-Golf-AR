@@ -560,7 +560,7 @@ Rättat i `physics.js` och `arcade-swing-engine.js`:
 
   Se `docs/ball-flight-reference-report.md`, avsnitt 0.
 - **Grain borttagen:** greenen hade en osynlig kraft ur bollens läge (0,03 m/s² vid stimp 10, åt olika håll på olika ställen) som spelaren inte kunde läsa av och som puttlinjen och lutningsvyn inte visade; den flyttade en lång putt eller en LW som spinner tillbaka upp till ett par decimeter. GSPro och TrackMan visar ingen grain heller. Fade och draw på green är nu exakta spegelbilder (test inom 2 cm).
-Kvar (inte ändrat): glid- till rullövergången ser inte på spinnets riktning.
+- **Glid till rull:** skid-fasen övergår till rull när kontaktpunktens glid (v - R (spinn x N), samma som i studsen) är under underlagets gräns, inte när farten och spinnets storlek är lika (en boll med lika mycket backspinn som fart räknades förut som rullande). Mätt: ingen skillnad i något slag i dag, eftersom övergången till marken redan tar bort glidet helt (2/7-impulsen) och skid-fasen därför slutar direkt.
 Test: `tests/test_physics_review.js`.
 
 ## Det som ritas varje bild (2026-11)
