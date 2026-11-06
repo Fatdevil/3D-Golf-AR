@@ -666,8 +666,13 @@
     // Safely build nature UI after all dependent functions are defined
     window.buildNatureUI();
 
-    // Global utility: map InstancedMesh instance ID to placedTrees index
-    window.getGlobalPropIndex = function(type, instanceId) {
+    // Global utility: map InstancedMesh instance ID to placedTrees index. The props are drawn per square (arcade.html, PROP_CHUNK): pass the
+    // mesh that was hit, whose userData.propIds turns its instanceId into the prop's index among the props of its type.
+    window.getGlobalPropIndex = function(type, instanceId, mesh) {
+        if (mesh && mesh.userData && mesh.userData.propIds) {
+            instanceId = mesh.userData.propIds[instanceId];
+            if (instanceId === undefined) return -1;
+        }
         let typeCount = 0;
         for (let i = 0; i < window.placedTrees.length; i++) {
             if (window.placedTrees[i].type === type) {
@@ -698,7 +703,7 @@
         if (!window._propMeshes || window._propMeshes.length === 0) return -1;
         const hits = rc.intersectObjects(window._propMeshes);
         if (hits.length === 0 || hits[0].instanceId === undefined) return -1;
-        const idx = window.getGlobalPropIndex(hits[0].object.propType, hits[0].instanceId);
+        const idx = window.getGlobalPropIndex(hits[0].object.propType, hits[0].instanceId, hits[0].object);
         const surfaces = (grounds || []).filter(Boolean);
         if (surfaces.length) {
             const g = rc.intersectObjects(surfaces);

@@ -97,6 +97,37 @@ function serve() {
     function check(name, ok, detail) { out.push({ name: name, ok: !!ok, detail: detail || '' }); }
     window.confirm = function () { return true; };
     setMode('TEST'); window.GREEN_STIMP = 10;
+    // placed props are drawn per 128 m square: a square outside the view is skipped (frustum culling on, a sphere around its own props),
+    // and a ray still picks the prop it hits (the square's instanceId is mapped back to the prop's index)
+    (function () {
+      const g = new THREE.Group(), leaves = new THREE.Mesh(new THREE.ConeGeometry(3, 8, 12, 4), new THREE.MeshLambertMaterial({ color: 0x2f7a2f }));
+      leaves.position.y = 7; g.add(leaves);
+      window.customModels = window.customModels || {}; window.customModels.zz_chunk = g; window.ASSET_REGISTRY.zz_chunk = { subcat: 'TREES' };
+      const n0 = window.placedTrees.length;
+      for (let i = 0; i < 40; i++) window.placedTrees.push({ type: 'zz_chunk', x: -380 + (i % 8) * 100, z: -380 + Math.floor(i / 8) * 180, y: 0, scale: 1, rot: 0 });
+      window.rebuildInstancePool('zz_chunk');
+      const meshes = window._propMeshes.filter(function (m) { return m.propType === 'zz_chunk'; });
+      const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 2000); cam.position.set(-380, 30, -300); cam.lookAt(-380, 0, -500); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+      const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+      const seen = meshes.filter(function (m) { return fr.intersectsObject(m); }).length;
+      const rc = new THREE.Raycaster(); let picked = 0;
+      [0, 13, 27, 39].forEach(function (k) {
+        const t = window.placedTrees[n0 + k]; rc.set(new THREE.Vector3(t.x, 60, t.z), new THREE.Vector3(0, -1, 0));
+        const h = rc.intersectObjects(window._propMeshes);
+        if (h.length && window.getGlobalPropIndex(h[0].object.propType, h[0].instanceId, h[0].object) === n0 + k) picked++;
+      });
+      const all = meshes.every(function (m) { return m.frustumCulled === true; });
+      check('props are drawn per square: frustum culling on, a square out of view is skipped, a ray picks the prop it hits',
+            meshes.length > 4 && all && seen >= 1 && seen < meshes.length && picked === 4, 'squares ' + meshes.length + ', in view ' + seen + ', picked ' + picked + '/4');
+      window.placedTrees.length = n0; destroyInstancePool('zz_chunk'); delete window.customModels.zz_chunk; delete window.ASSET_REGISTRY.zz_chunk;
+    })();
+    // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
+    // call has nothing left to compile
+    (function () {
+      const first = window.precompileShaders(), again = window.precompileShaders(), b = window._ballBeacon;
+      check('shader programs are compiled ahead: the ball\'s dot is made (hidden) and a second pass compiles nothing new',
+            typeof first === 'number' && again === 0 && !!b && b.visible === false && b.parent === scene, 'first ' + first + ', again ' + again);
+    })();
     // the whole map is putting green, in the green of the active palette (not a fixed colour: the palette changes)
     const gc = window.CURRENT_BIOME_CONFIG.greenColor, gr = parseInt(gc.slice(1, 3), 16), gg = parseInt(gc.slice(3, 5), 16), gb = parseInt(gc.slice(5, 7), 16);
     const d = window.terrainBiomeData; for (let i = 0; i < d.length; i += 4) { d[i] = gr; d[i + 1] = gg; d[i + 2] = gb; }
