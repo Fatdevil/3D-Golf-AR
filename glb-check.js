@@ -2,8 +2,8 @@
 // Runs in Node (tools/check-glb.js) and in the browser (the admin page). What it measures follows what arcade.html does with a model:
 //  - the model is scaled so its HEIGHT is the asset's targetHeight, centred in x/z, with the base on the ground (so the size and the pivot
 //    of the file do not matter, but a flat or very wide model gets absurd sizes);
-//  - every mesh in the model becomes one InstancedMesh (one draw call per mesh and tree type), with frustumCulled = false: every placed
-//    instance is always drawn, so triangles x placed instances is the real cost;
+//  - every mesh in the model becomes one InstancedMesh per 128 m square (one draw call per mesh, tree type and square in view): a square
+//    outside the camera's view is skipped, so triangles x the instances in view is the real cost;
 //  - TREES, PLANTS, ROCKS and LANDSCAPE get a fragment shader that re-colours by the biome: texels that are brown or grey count as
 //    "trunk", near-white as "snow" (left alone), everything else (green, but also pink, blue ...) as "foliage";
 //  - metalness and roughness maps are thrown away (metalness 0, roughness 1), the loader is GLTFLoader r128 with Draco but without the
