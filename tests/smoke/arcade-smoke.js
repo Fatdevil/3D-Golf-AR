@@ -119,6 +119,25 @@ function serve() {
       const all = meshes.every(function (m) { return m.frustumCulled === true; });
       check('props are drawn per square: frustum culling on, a square out of view is skipped, a ray picks the prop it hits',
             meshes.length > 4 && all && seen >= 1 && seen < meshes.length && picked === 4, 'squares ' + meshes.length + ', in view ' + seen + ', picked ' + picked + '/4');
+      // far squares draw cards (play and test mode): models near the camera, cards far away, the minimap draws the models, a click on a far
+      // tree still picks it (the hidden model is what a ray tests)
+      const savedMode = appMode, savedCam = camera.position.clone();
+      appMode = 'TEST'; camera.position.set(-380, 2, -380); camera.updateMatrixWorld();
+      window.updatePropLod();
+      const pool = window.instancePools.zz_chunk, chs = Array.from(pool.chunks.values());
+      const farC = chs.filter(function (c) { return c.far; }), nearC = chs.filter(function (c) { return !c.far; });
+      const lodOk = !!pool.impostor && farC.length > 0 && nearC.length > 0 &&
+        farC.every(function (c) { return c.impostorMesh.visible && c.meshes.every(function (m) { return !m.visible; }); }) &&
+        nearC.every(function (c) { return !c.impostorMesh.visible && c.meshes.every(function (m) { return m.visible; }); });
+      let fullOk = false;
+      window.withFullProps(function () { fullOk = chs.every(function (c) { return !c.impostorMesh.visible && c.meshes.every(function (m) { return m.visible; }); }); });
+      const backOk = farC.every(function (c) { return c.impostorMesh.visible; });
+      const ft = window.placedTrees[n0 + 39]; rc.set(new THREE.Vector3(ft.x, 60, ft.z), new THREE.Vector3(0, -1, 0));
+      const fh = rc.intersectObjects(window._propMeshes);
+      const farPick = fh.length > 0 && window.getGlobalPropIndex(fh[0].object.propType, fh[0].instanceId, fh[0].object) === n0 + 39;
+      appMode = savedMode; camera.position.copy(savedCam); camera.updateMatrixWorld(); window.updatePropLod();
+      check('far squares of trees draw cards in play: models near, cards far, the minimap draws the models, a far tree is still picked',
+            lodOk && fullOk && backOk && farPick, 'far ' + farC.length + ', near ' + nearC.length + ', minimap ' + fullOk + ', back ' + backOk + ', pick ' + farPick);
       window.placedTrees.length = n0; destroyInstancePool('zz_chunk'); delete window.customModels.zz_chunk; delete window.ASSET_REGISTRY.zz_chunk;
     })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
