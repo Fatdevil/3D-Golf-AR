@@ -172,6 +172,21 @@ function serve() {
       delete window.customModels.zz_oak; delete window.ASSET_REGISTRY.zz_oak;
       check('a GLTF model\'s colour textures are used as written (linear, like the rest of the game)', ok && encs.length > 0 && encs.every(function (e) { return e === THREE.LinearEncoding; }), 'loaded ' + ok + ', maps ' + JSON.stringify(encs));
     })();
+    // light and colour (arcade-post.js): each level draws a picture (not black), OFF draws as before; the level is restored after
+    (function () {
+      const gl = renderer.getContext(), was = window.PostFX.level(), px = new Uint8Array(4), seen = {};
+      ['OFF', 'LOW', 'HIGH'].forEach(function (l) {
+        window.PostFX.setLevel(l);
+        if (l === 'OFF') renderer.render(scene, camera); else window.PostFX.render(renderer, scene, camera);
+        gl.readPixels(Math.floor(gl.drawingBufferWidth / 2), Math.floor(gl.drawingBufferHeight * 0.8), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        seen[l] = { active: window.PostFX.active(), px: Array.from(px) };
+      });
+      window.PostFX.setLevel(was);
+      const lit = function (p) { return p[0] + p[1] + p[2] > 30; };
+      check('light and colour: off draws as before, colour and colour + glow draw the picture through the grade (not black)',
+            !seen.OFF.active && seen.LOW.active && seen.HIGH.active && lit(seen.OFF.px) && lit(seen.LOW.px) && lit(seen.HIGH.px) && JSON.stringify(seen.LOW.px) !== JSON.stringify(seen.OFF.px),
+            JSON.stringify(seen));
+    })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
     // call has nothing left to compile
     (function () {
