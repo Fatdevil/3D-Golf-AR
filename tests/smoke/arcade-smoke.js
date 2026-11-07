@@ -140,6 +140,28 @@ function serve() {
             lodOk && fullOk && backOk && farPick, 'far ' + farC.length + ', near ' + nearC.length + ', minimap ' + fullOk + ', back ' + backOk + ', pick ' + farPick);
       window.placedTrees.length = n0; destroyInstancePool('zz_chunk'); delete window.customModels.zz_chunk; delete window.ASSET_REGISTRY.zz_chunk;
     })();
+    // a tree type photographed again after the wind sway has patched its materials (undo, a cleared course): the card is not empty.
+    // The wind code for instanced meshes read instanceMatrix without a guard, so the plain model failed to compile and the card was blank.
+    await (async function () {
+      const g = new THREE.Group(), leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 1), new THREE.MeshLambertMaterial({ color: 0x2f7a2f }));
+      leaves.position.y = 6; g.add(leaves);
+      window.customModels.zz_wind = g; window.ASSET_REGISTRY.zz_wind = { subcat: 'TREES' };
+      const n0 = window.placedTrees.length;
+      window.placedTrees.push({ type: 'zz_wind', x: 30, z: -60, y: 0, scale: 1, rot: 0 });
+      const opaque = function () {
+        const rt = window.instancePools.zz_wind.impostor.rt, px = new Uint8Array(rt.width * rt.height * 4);
+        renderer.readRenderTargetPixels(rt, 0, 0, rt.width, rt.height, px);
+        let c = 0; for (let i = 3; i < px.length; i += 4) if (px[i] > 128) c++; return c;
+      };
+      window.rebuildInstancePool('zz_wind');
+      const first = opaque();
+      await new Promise(function (r) { setTimeout(r, 800); });   // the wind sway patches the materials in a frame
+      const patched = /uWindTime/.test(String(leaves.material.onBeforeCompile));
+      destroyInstancePool('zz_wind'); window.rebuildInstancePool('zz_wind');
+      const second = opaque();
+      window.placedTrees.length = n0; destroyInstancePool('zz_wind'); delete window.customModels.zz_wind; delete window.ASSET_REGISTRY.zz_wind;
+      check('a tree card photographed again after the wind sway patched the materials is not empty', first > 1000 && second > 1000, 'first ' + first + ', second ' + second + ', patched ' + patched);
+    })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
     // call has nothing left to compile
     (function () {
