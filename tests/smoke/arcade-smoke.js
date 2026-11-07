@@ -162,6 +162,16 @@ function serve() {
       window.placedTrees.length = n0; destroyInstancePool('zz_wind'); delete window.customModels.zz_wind; delete window.ASSET_REGISTRY.zz_wind;
       check('a tree card photographed again after the wind sway patched the materials is not empty', first > 1000 && second > 1000, 'first ' + first + ', second ' + second + ', patched ' + patched);
     })();
+    // a GLTF model's colour textures are used as they are written (the game draws without colour-space conversion): before, three.js decoded
+    // them from sRGB and an oak's crown came out almost black
+    await (async function () {
+      window.ASSET_REGISTRY.zz_oak = { file: 'Oaktree.glb', subcat: 'TREES', targetHeight: 12 };
+      const ok = await new Promise(function (r) { window.loadAsset('zz_oak', r); setTimeout(function () { r(false); }, 20000); });
+      const encs = [];
+      if (ok) window.customModels.zz_oak.traverse(function (o) { (Array.isArray(o.material) ? o.material : (o.material ? [o.material] : [])).forEach(function (m) { if (m.map) encs.push(m.map.encoding); }); });
+      delete window.customModels.zz_oak; delete window.ASSET_REGISTRY.zz_oak;
+      check('a GLTF model\'s colour textures are used as written (linear, like the rest of the game)', ok && encs.length > 0 && encs.every(function (e) { return e === THREE.LinearEncoding; }), 'loaded ' + ok + ', maps ' + JSON.stringify(encs));
+    })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
     // call has nothing left to compile
     (function () {
