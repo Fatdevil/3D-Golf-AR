@@ -172,6 +172,45 @@ function serve() {
       delete window.customModels.zz_oak; delete window.ASSET_REGISTRY.zz_oak;
       check('a GLTF model\'s colour textures are used as written (linear, like the rest of the game)', ok && encs.length > 0 && encs.every(function (e) { return e === THREE.LinearEncoding; }), 'loaded ' + ok + ', maps ' + JSON.stringify(encs));
     })();
+    // light and colour (arcade-post.js): each level draws a picture (not black), OFF draws as before; the level is restored after
+    (function () {
+      const gl = renderer.getContext(), was = window.PostFX.level(), px = new Uint8Array(4), seen = {};
+      ['OFF', 'LOW', 'HIGH'].forEach(function (l) {
+        window.PostFX.setLevel(l);
+        if (l === 'OFF') renderer.render(scene, camera); else window.PostFX.render(renderer, scene, camera);
+        gl.readPixels(Math.floor(gl.drawingBufferWidth / 2), Math.floor(gl.drawingBufferHeight * 0.8), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        seen[l] = { active: window.PostFX.active(), px: Array.from(px) };
+      });
+      window.PostFX.setLevel(was);
+      const lit = function (p) { return p[0] + p[1] + p[2] > 30; };
+      check('light and colour: off draws as before, colour and colour + glow draw the picture through the grade (not black)',
+            !seen.OFF.active && seen.LOW.active && seen.HIGH.active && lit(seen.OFF.px) && lit(seen.LOW.px) && lit(seen.HIGH.px) && JSON.stringify(seen.LOW.px) !== JSON.stringify(seen.OFF.px),
+            JSON.stringify(seen));
+    })();
+    // light and colour with a textured sky (which does not force three.js to clear): the scene's picture is cleared each frame, so a box
+    // that is gone does not leave its depth behind and hide the ground (the sky showed where the box had been)
+    (function () {
+      const gl = renderer.getContext(), px = new Uint8Array(4), was = window.PostFX.level(), prevBg = scene.background;
+      const camWas = { p: camera.position.clone(), q: camera.quaternion.clone() };
+      const cv = document.createElement('canvas'); cv.width = cv.height = 4; const cx = cv.getContext('2d'); cx.fillStyle = '#88ccee'; cx.fillRect(0, 0, 4, 4);
+      scene.background = new THREE.CanvasTexture(cv);
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0x884400 }));
+      ground.rotation.x = -Math.PI / 2; ground.position.set(camera.position.x, camera.position.y - 9.5, camera.position.z - 20); scene.add(ground);
+      camera.lookAt(camera.position.x, camera.position.y - 10, camera.position.z - 20); camera.updateMatrixWorld();
+      const read = function () { gl.readPixels(gl.drawingBufferWidth >> 1, gl.drawingBufferHeight >> 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return Array.from(px).slice(0, 3); };
+      const frame = function () { renderer.setRenderTarget(null); renderer.clear(); window.PostFX.render(renderer, scene, camera); return read(); };
+      window.PostFX.setLevel('LOW');
+      const before = frame();
+      const box = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial({ color: 0x0000ff }));
+      const dir = new THREE.Vector3(); camera.getWorldDirection(dir); box.position.copy(camera.position).addScaledVector(dir, 3); scene.add(box);
+      const withBox = frame();
+      scene.remove(box);
+      const after = frame();
+      scene.remove(ground); scene.background = prevBg; camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld();
+      window.PostFX.setLevel(was);
+      check('light and colour with a textured sky: what moves away does not leave its depth behind (the ground shows again, not the sky)',
+            JSON.stringify(after) === JSON.stringify(before) && JSON.stringify(withBox) !== JSON.stringify(before), JSON.stringify({ before: before, withBox: withBox, after: after }));
+    })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
     // call has nothing left to compile
     (function () {

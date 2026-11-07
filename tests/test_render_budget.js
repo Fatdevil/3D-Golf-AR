@@ -95,7 +95,8 @@ console.log('\n3. Skuggan följer bollen');
   step({ appMode: 'BUILD', isFlying: false });
   check('byggläget: mitten på kamerans blickpunkt, kartan varje bild', f.cx === -300 && f.cz === 100 && renderer.shadowMap.needsUpdate);
   check('skuggkameran ±80 m, ritas inte automatiskt', /const SHADOW_HALF = 80, SHADOW_RECENTRE = 25;/.test(html) && /renderer\.shadowMap\.autoUpdate = false;/.test(html) && /scene\.add\(dirLight\.target\);/.test(html));
-  check('renderloopen flyttar skuggan före huvudbilden', /window\.updateShadowFocus\(\);[^\n]*\n\s*renderer\.render\(scene, camera\);/.test(html));
+  // (huvudbilden ritas direkt, eller via efterbehandlingen när Ljus & färg är på: arcade-post.js)
+  check('renderloopen flyttar skuggan före huvudbilden', /window\.updateShadowFocus\(\);[^\n]*\n\s*if \(window\.PostFX && window\.PostFX\.active\(\)\) \{\s*window\.PostFX\.render\(renderer, scene, camera\);[^\n]*\n\s*\} else \{\s*renderer\.render\(scene, camera\);/.test(html));
   check('tid på dygnet sätter solens riktning, gräset och vattnet läser den', /dl\.userData\.sunDir\.set\(Math\.cos\(angle\) \* 100/.test(scene) && /const sd = \(dl\.userData && dl\.userData\.sunDir\) \|\| dl\.position;/.test(shells) && /wu\.uSunDir\.value\.copy\(dirLight\.userData\.sunDir \|\| dirLight\.position\)/.test(html));
 }
 
