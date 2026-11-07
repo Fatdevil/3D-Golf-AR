@@ -119,7 +119,48 @@ function serve() {
       const all = meshes.every(function (m) { return m.frustumCulled === true; });
       check('props are drawn per square: frustum culling on, a square out of view is skipped, a ray picks the prop it hits',
             meshes.length > 4 && all && seen >= 1 && seen < meshes.length && picked === 4, 'squares ' + meshes.length + ', in view ' + seen + ', picked ' + picked + '/4');
+      // far squares draw cards (play and test mode): models near the camera, cards far away, the minimap draws the models, a click on a far
+      // tree still picks it (the hidden model is what a ray tests)
+      const savedMode = appMode, savedCam = camera.position.clone();
+      appMode = 'TEST'; camera.position.set(-380, 2, -380); camera.updateMatrixWorld();
+      window.updatePropLod();
+      const pool = window.instancePools.zz_chunk, chs = Array.from(pool.chunks.values());
+      const farC = chs.filter(function (c) { return c.far; }), nearC = chs.filter(function (c) { return !c.far; });
+      const lodOk = !!pool.impostor && farC.length > 0 && nearC.length > 0 &&
+        farC.every(function (c) { return c.impostorMesh.visible && c.meshes.every(function (m) { return !m.visible; }); }) &&
+        nearC.every(function (c) { return !c.impostorMesh.visible && c.meshes.every(function (m) { return m.visible; }); });
+      let fullOk = false;
+      window.withFullProps(function () { fullOk = chs.every(function (c) { return !c.impostorMesh.visible && c.meshes.every(function (m) { return m.visible; }); }); });
+      const backOk = farC.every(function (c) { return c.impostorMesh.visible; });
+      const ft = window.placedTrees[n0 + 39]; rc.set(new THREE.Vector3(ft.x, 60, ft.z), new THREE.Vector3(0, -1, 0));
+      const fh = rc.intersectObjects(window._propMeshes);
+      const farPick = fh.length > 0 && window.getGlobalPropIndex(fh[0].object.propType, fh[0].instanceId, fh[0].object) === n0 + 39;
+      appMode = savedMode; camera.position.copy(savedCam); camera.updateMatrixWorld(); window.updatePropLod();
+      check('far squares of trees draw cards in play: models near, cards far, the minimap draws the models, a far tree is still picked',
+            lodOk && fullOk && backOk && farPick, 'far ' + farC.length + ', near ' + nearC.length + ', minimap ' + fullOk + ', back ' + backOk + ', pick ' + farPick);
       window.placedTrees.length = n0; destroyInstancePool('zz_chunk'); delete window.customModels.zz_chunk; delete window.ASSET_REGISTRY.zz_chunk;
+    })();
+    // a tree type photographed again after the wind sway has patched its materials (undo, a cleared course): the card is not empty.
+    // The wind code for instanced meshes read instanceMatrix without a guard, so the plain model failed to compile and the card was blank.
+    await (async function () {
+      const g = new THREE.Group(), leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 1), new THREE.MeshLambertMaterial({ color: 0x2f7a2f }));
+      leaves.position.y = 6; g.add(leaves);
+      window.customModels.zz_wind = g; window.ASSET_REGISTRY.zz_wind = { subcat: 'TREES' };
+      const n0 = window.placedTrees.length;
+      window.placedTrees.push({ type: 'zz_wind', x: 30, z: -60, y: 0, scale: 1, rot: 0 });
+      const opaque = function () {
+        const rt = window.instancePools.zz_wind.impostor.rt, px = new Uint8Array(rt.width * rt.height * 4);
+        renderer.readRenderTargetPixels(rt, 0, 0, rt.width, rt.height, px);
+        let c = 0; for (let i = 3; i < px.length; i += 4) if (px[i] > 128) c++; return c;
+      };
+      window.rebuildInstancePool('zz_wind');
+      const first = opaque();
+      await new Promise(function (r) { setTimeout(r, 800); });   // the wind sway patches the materials in a frame
+      const patched = /uWindTime/.test(String(leaves.material.onBeforeCompile));
+      destroyInstancePool('zz_wind'); window.rebuildInstancePool('zz_wind');
+      const second = opaque();
+      window.placedTrees.length = n0; destroyInstancePool('zz_wind'); delete window.customModels.zz_wind; delete window.ASSET_REGISTRY.zz_wind;
+      check('a tree card photographed again after the wind sway patched the materials is not empty', first > 1000 && second > 1000, 'first ' + first + ', second ' + second + ', patched ' + patched);
     })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
     // call has nothing left to compile

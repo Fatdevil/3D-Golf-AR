@@ -170,8 +170,12 @@
                 '#include <common>\n' + WIND_VERTEX_PARS
             );
 
-            // Inject displacement code AFTER the position transform
-            let vertexCode = isInstanced ? WIND_VERTEX_CODE : WIND_VERTEX_CODE_NOINSTANCE;
+            // Inject displacement code AFTER the position transform. The tree materials are shared by the instanced meshes and the model
+            // itself (drawn without instancing when a far-away card is photographed, arcade.html makePropImpostor): the instanced code reads
+            // instanceMatrix, which only exists with USE_INSTANCING, so the shader picks its branch by that define.
+            let vertexCode = isInstanced
+                ? '#ifdef USE_INSTANCING\n' + WIND_VERTEX_CODE + '\n#else\n' + WIND_VERTEX_CODE_NOINSTANCE + '\n#endif'
+                : WIND_VERTEX_CODE_NOINSTANCE;
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 '#include <begin_vertex>\n' + vertexCode
