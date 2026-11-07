@@ -5024,6 +5024,22 @@
     }
 #endif
 `;
+    // The game draws in the colours as they are written (no colour-space conversion: renderer.outputEncoding stays linear, and every colour
+    // and canvas texture of the game is used as is). GLTFLoader marks a model's colour textures as sRGB, so three.js decoded them to linear
+    // and never encoded the result back: the models came out much darker than made (an oak tree's crown almost black against the grass).
+    // A model's colour textures are therefore used as they are written too, like everything else in the game.
+    window.useAuthoredColors = function (root) {
+        root.traverse(function (o) {
+            const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+            mats.forEach(function (m) {
+                ['map', 'emissiveMap'].forEach(function (k) {
+                    const t = m[k];
+                    if (t && t.encoding === THREE.sRGBEncoding) { t.encoding = THREE.LinearEncoding; t.needsUpdate = true; m.needsUpdate = true; }
+                });
+            });
+        });
+        return root;
+    };
     const gltfLoader = new THREE.GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
     
@@ -5049,6 +5065,7 @@
             gltfLoader.load(url, function(gltf) {
             try {
                 let model = gltf.scene;
+                window.useAuthoredColors(model);
                 let box = new THREE.Box3().setFromObject(model);
                 let center = box.getCenter(new THREE.Vector3());
                 let size = box.getSize(new THREE.Vector3());
