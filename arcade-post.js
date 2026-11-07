@@ -114,6 +114,9 @@
         ensureTargets(renderer);
         const prev = renderer.getRenderTarget();
         renderer.setRenderTarget(rtScene);
+        // the game draws with renderer.autoClear off (the minimap), and its own clear in the frame loop is for the screen: this picture is
+        // cleared here, colour and depth, or with the textured sky (which does not force a clear) last frame's depth hid what moved behind it
+        renderer.clear(true, true, true);
         renderer.render(scene, camera);
         if (window.PerfHud) window.PerfHud.mainPass(renderer);
         let bloom = 0;
