@@ -988,14 +988,16 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       body.play-ui #dynamic-hud { top: 58px; right: auto; max-width: 46vw; }
 
       body.play-ui #minimap-container { top: 70px !important; width: 100px !important; height: 112px !important; }
-      body.play-ui.mm-open #minimap-container { top: 8px !important; width: 230px !important; height: calc(100vh - 16px) !important; }
+      /* the opened map: left of the menu button, down to just above the shot along the bottom */
+      body.play-ui.mm-open #minimap-container { top: 8px !important; right: 72px !important; width: 230px !important; height: calc(100vh - 80px) !important; }
       body.play-ui.mm-open #elevation-profile-container { display: none !important; }   /* no room beside the full-height map */
       body.play-ui:not(.range-ui) #green-read-panel { top: 188px !important; width: 100px; }
 
       body.play-ui.range-ui #range-practice { top: 8px !important; left: 8px !important; right: 120px; }
       body.play-ui.range-ui #range-session { top: 58px !important; left: auto; right: 116px !important; width: 260px !important; max-height: calc(100vh - 58px - 70px) !important; }
       body.play-ui.range-ui #range-session.collapsed { right: 116px !important; }
-      body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 58px !important; max-height: calc(100vh - 58px - 70px) !important; }
+      /* the approach bar is two rows when open: the session goes under it */
+      body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 112px !important; max-height: calc(100vh - 112px - 70px) !important; }
       body.play-ui.range-ui:not(.mm-open):has(#range-practice.on) #minimap-container { top: 70px !important; }
   }
 

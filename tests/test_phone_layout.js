@@ -61,6 +61,24 @@ check('flyover/lutning bara på en bana', rules.filter(function (l) { return l.i
 check('slagrutor, lägespanel och karta gäller rangen också (ingen :not(.range-ui))', rules.filter(function (l) { return /#(dynamic-hud|lie-|minimap-container|mm-dist|elevation-profile|lm-status)/.test(l) && !/range-ui[:.]/.test(l.replace(':not(.range-ui)', '')); }).every(function (l) { return l.indexOf('range-ui') < 0; }));
 check('isPhonePlayLayout: smal skärm eller telefon på sidan, och play-ui, rangen med', /window\.isPhonePlayLayout = function \(\) \{\s*const b = document\.body;\s*return !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\), \(max-height: 500px\) and \(orientation: landscape\)'\)\.matches && b\.classList\.contains\('play-ui'\)\);/.test(html));
 
+console.log('\n4d. Liggande läge (telefon på sidan)');
+{
+  const land = css.slice(css.indexOf('PHONE LANDSCAPE'), css.indexOf('PLAY PHASES'));
+  check('ett eget block för högst 500 px höjd i liggande läge, efter telefonblocket', css.indexOf('PHONE LANDSCAPE') > css.indexOf('PHONE PLAY LAYOUT') && land.indexOf('@media (max-height: 500px) and (orientation: landscape) {') >= 0);
+  [
+    ['SWING nere till höger', 'body.play-ui #swing-launch-btn { bottom: 12px; left: auto; right: 12px; transform: none;'],
+    ['klubban i handen längs nederkanten', 'body.play-ui #club-selector { bottom: 12px; }'],
+    ['slagformen till vänster om SWING', 'body.play-ui #shape-selector:not(.shapes-open) { bottom: 16px; right: 168px; }'],
+    ['lägesraden strax ovanför slaget', 'body.play-ui #lie-conditions-hud { bottom: 66px !important; }'],
+    ['liten karta uppe till höger, under menyknappen', 'body.play-ui #minimap-container { top: 70px !important; width: 100px !important; height: 112px !important; }'],
+    ['öppen karta: vänster om menyknappen, ner till strax ovanför slaget, utan höjdprofil', 'body.play-ui.mm-open #minimap-container { top: 8px !important; right: 72px !important; width: 230px !important; height: calc(100vh - 80px) !important; }'],
+    ['rangen: sessionen under inspelsraden när den är öppen', 'body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 112px !important;']
+  ].forEach(function (c) { check(c[0], land.indexOf(c[1]) >= 0); });
+  check('höjdprofilen döljs med öppen karta (ingen plats bredvid)', land.indexOf('body.play-ui.mm-open #elevation-profile-container { display: none !important; }') >= 0);
+  const lr = land.split('\n').filter(function (l) { return /^\s+body/.test(l); });
+  check('allt i blocket gäller en runda (play-ui)', lr.length > 10 && lr.every(function (l) { return /^\s+body\.play-ui/.test(l); }));
+}
+
 console.log('\n4b. Rangen');
 [
   ['inspel mot green uppe till vänster (menyknappen uppe till höger)', 'body.play-ui.range-ui #range-practice { top: 20px !important; left: 8px !important; right: 62px; transform: none !important;'],
