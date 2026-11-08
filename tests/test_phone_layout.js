@@ -68,6 +68,7 @@ console.log('\n4d. Liggande läge (telefon på sidan)');
   [
     ['SWING nere till höger', 'body.play-ui #swing-launch-btn { bottom: 12px; left: auto; right: 12px; transform: none;'],
     ['klubban i handen längs nederkanten', 'body.play-ui #club-selector { bottom: 12px; }'],
+    ['klubban centrerad till vänster om slagformen och SWING (inte över formknappen på en liten telefon)', 'body.play-ui #club-selector:not(.clubs-open) { padding-right: 270px; }'],
     ['slagformen till vänster om SWING', 'body.play-ui #shape-selector:not(.shapes-open) { bottom: 16px; right: 168px; }'],
     ['lägesraden strax ovanför slaget', 'body.play-ui #lie-conditions-hud { bottom: 66px !important; }'],
     ['liten karta uppe till höger, under menyknappen', 'body.play-ui #minimap-container { top: 70px !important; width: 100px !important; height: 112px !important; }'],

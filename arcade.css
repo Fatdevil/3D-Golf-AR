@@ -979,7 +979,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       body.play-ui #swing-launch-btn { bottom: 12px; left: auto; right: 12px; transform: none; padding: 12px 30px; font-size: 15px; }
       body.play-ui #swing-launch-btn:active { transform: scale(0.96); }
       body.play-ui #club-selector { bottom: 12px; }
-      body.play-ui #club-selector:not(.clubs-open) { padding-right: 0; }
+      /* centred in the width left of the shot shape and SWING (about 270 px): centred on the whole screen, a small phone (568 x 320)
+         put the right arrow over the shape button */
+      body.play-ui #club-selector:not(.clubs-open) { padding-right: 270px; }
       body.play-ui #club-selector.clubs-open { padding-right: 170px; }   /* the whole row, left of SWING */
       body.play-ui #shape-selector:not(.shapes-open) { bottom: 16px; right: 168px; }
       body.play-ui #shape-selector.shapes-open { bottom: 66px; left: auto; right: 12px; transform: none; }
