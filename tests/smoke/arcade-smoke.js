@@ -211,6 +211,25 @@ function serve() {
       check('light and colour with a textured sky: what moves away does not leave its depth behind (the ground shows again, not the sky)',
             JSON.stringify(after) === JSON.stringify(before) && JSON.stringify(withBox) !== JSON.stringify(before), JSON.stringify({ before: before, withBox: withBox, after: after }));
     })();
+    // ground detail (the terrain shader's noise): on, the ground close to the camera varies; off, it is as painted. Remembered.
+    (function () {
+      const gl = renderer.getContext(), was = window.terrainShaderUniforms.uDetail.value, pf = window.PostFX.level();
+      const camWas = { p: camera.position.clone(), q: camera.quaternion.clone() };
+      window.PostFX.setLevel('OFF');
+      camera.position.set(0, window.getTerrainHeight(0, 0) + 2, 0); camera.lookAt(0, window.getTerrainHeight(0, -6), -6); camera.updateMatrixWorld();
+      const spread = function () {
+        renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, camera);
+        // a 128 x 32 block of the ground near the camera (the whole map is green here, where the detail is weakest on purpose)
+        const w = 128, h = 32, blk = new Uint8Array(w * h * 4); gl.readPixels((gl.drawingBufferWidth >> 1) - 64, gl.drawingBufferHeight >> 4, w, h, gl.RGBA, gl.UNSIGNED_BYTE, blk);
+        let lo = 255, hi = 0; for (let i = 0; i < w * h; i++) { const g = blk[i * 4 + 1]; lo = Math.min(lo, g); hi = Math.max(hi, g); } return hi - lo;
+      };
+      window.setGroundDetail(false, false); const off = spread();
+      window.setGroundDetail(true, false); const on = spread();
+      window.setGroundDetail(false); const stored = (function () { try { return localStorage.getItem('golf_ground_detail'); } catch (e) { return null; } })();
+      window.setGroundDetail(was > 0.5);
+      camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld(); window.PostFX.setLevel(pf);
+      check('ground detail: on, the ground close to the camera varies more than painted; off is remembered', on >= off + 3 && stored === '0', 'green spread off ' + off + ', on ' + on + ', stored ' + stored);
+    })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
     // call has nothing left to compile
     (function () {

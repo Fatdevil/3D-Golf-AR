@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=40"></script>
+<script src="i18n.js?v=41"></script>
 <script src="physics.js?v=15"></script>
 <script src="hitbox-fit.js?v=1"></script>
 <script src="prop-collision.js?v=1"></script>
@@ -1930,6 +1930,8 @@
                     <button id="post-q-high" data-i18n="env_post_high" onclick="setPostQuality('HIGH')" style="background:#334155; color:#94a3b8; border:none; padding:6px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Färg + glöd</button>
                 </div>
                 <div data-i18n="env_post_hint" style="color:#475569; font-size:8px; margin-top:4px;">Färg: varmare, mättare, mjuk vinjett. Glöd: ljusa partier lyser (kostar mer på telefon).</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;"><span data-i18n="env_ground_detail" style="color:#94a3b8; font-size:9px; font-weight:bold;">Markdetalj (struktur nära, fläckar långt bort)</span></div>
+                <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;"><button id="ground-detail-0" data-i18n="env_grass_opt_off" onclick="setGroundDetail(false)" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">Av</button><button id="ground-detail-1" data-i18n="env_grass_opt_on" onclick="setGroundDetail(true)" style="background:#334155; color:#94a3b8; border:none; padding:5px 2px; font-size:10px; border-radius:6px; font-weight:bold; cursor:pointer;">På</button></div>
             </div>
 
             <div style="margin-top:6px; padding-top:10px; border-top:1px solid #334155;">
@@ -4162,6 +4164,9 @@
             window._terrainChunks.updateLOD(autoLodSegs);
         }
 
+        // ground detail (the terrain shader's noise): on unless the player switched it off
+        { let gd = null; try { gd = localStorage.getItem('golf_ground_detail'); } catch (e) { /* storage blocked */ } window.setGroundDetail(gd !== '0', false); }
+
         // light and colour after the picture is drawn (arcade-post.js): the stored choice, else LOW on a computer and OFF on a phone
         if (window.PostFX) window.PostFX.initLevel(isMobileDevice);
 
@@ -5570,7 +5575,31 @@
         uTeePos: { value: new THREE.Vector2(0, 0) },
         uWaterMap: { value: waterTex },
         uShoreColor: { value: new THREE.Color(0xc2b082) }, // Default: Sand #c2b082
-        uShoreBlend: { value: 1.0 }
+        uShoreBlend: { value: 1.0 },
+        uDetail: { value: 1.0 },   // ground detail (window.setGroundDetail): 0 off, 1 on
+        // the biome's surface colours (syncGroundDetailColors): the shader tells rough, deep, semi, foregreen and sand from the painted
+        // colour with the same distances as the grass mask (rebuildRoughMask), which is only built while the grass is on
+        uGdCols: { value: [0, 1, 2, 3, 4, 5, 6].map(function () { return new THREE.Color(); }) }
+    };
+    let _gdColsKey = '';
+    window.syncGroundDetailColors = function () {
+        const cfg = window.CURRENT_BIOME_CONFIG || {};
+        const hex = [cfg.roughColor || '#4c7d32', cfg.fescueColor || '#315b2b', cfg.semiColor || '#659a3f', cfg.foregreenColor || '#9acb67',
+                     cfg.bunkerColor || '#e0d8a4', cfg.greenColor || '#8acf72', cfg.fairwayColor || '#79b84f'];
+        const key = hex.join(',');
+        if (key === _gdColsKey) return;
+        _gdColsKey = key;
+        hex.forEach(function (h, i) { window.terrainShaderUniforms.uGdCols.value[i].set(h); });
+    };
+    // ground detail on / off (the noise in the terrain shader; remembered in golf_ground_detail)
+    window.setGroundDetail = function (on, remember) {
+        window.terrainShaderUniforms.uDetail.value = on ? 1.0 : 0.0;
+        if (remember !== false) { try { localStorage.setItem('golf_ground_detail', on ? '1' : '0'); } catch (e) { /* storage blocked: not remembered */ } }
+        ['0', '1'].forEach(function (v) {
+            const b = document.getElementById('ground-detail-' + v), act = (v === '1') === !!on;
+            if (b) { b.style.background = act ? '#4ade80' : '#334155'; b.style.color = act ? '#0f172a' : '#94a3b8'; }
+        });
+        return !!on;
     };
     planeMat.onBeforeCompile = (shader) => {
         shader.uniforms.uPlayMode = window.terrainShaderUniforms.uPlayMode;
@@ -5582,6 +5611,8 @@
         shader.uniforms.uWaterMap = window.terrainShaderUniforms.uWaterMap;
         shader.uniforms.uShoreColor = window.terrainShaderUniforms.uShoreColor;
         shader.uniforms.uShoreBlend = window.terrainShaderUniforms.uShoreBlend;
+        shader.uniforms.uDetail = window.terrainShaderUniforms.uDetail;
+        shader.uniforms.uGdCols = window.terrainShaderUniforms.uGdCols;
         
         shader.fragmentShader = `
             uniform float uPlayMode;
@@ -5593,6 +5624,16 @@
             uniform sampler2D uWaterMap;
             uniform vec3 uShoreColor;
             uniform float uShoreBlend;
+            uniform float uDetail;
+            uniform vec3 uGdCols[7];   // rough, deep, semi, foregreen, sand, green, fairway
+
+            // value noise for the ground detail (smooth, 0..1)
+            float gdHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+            float gdNoise(vec2 p) {
+                vec2 i = floor(p), f = fract(p);
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(mix(gdHash(i), gdHash(i + vec2(1.0, 0.0)), u.x), mix(gdHash(i + vec2(0.0, 1.0)), gdHash(i + vec2(1.0, 1.0)), u.x), u.y);
+            }
             
             float evalTerrainGridLine(vec2 p, float size, float halfWidth) {
                 vec2 coord = p / size;
@@ -5615,6 +5656,44 @@
                 }
                 vec4 texelColor = mapTexelToLinear( rawColor );
                 diffuseColor *= texelColor;
+
+                // --- GROUND DETAIL (window.setGroundDetail) ---
+                // The painted map has one colour per 15 cm and nothing below it: up close the ground was flat and even. Two layers of noise
+                // on the world position: fine grain (5-15 cm) that fades out where a pixel covers more than about 0.2 m (no shimmer at a
+                // distance), and large patches (10-40 m), a little lighter and drier, that break up even surfaces far away too. Strongest in
+                // rough and deep rough, less in semi-rough and sand, weakest on fairway, foregreen and green. The surface is told from the
+                // painted colour, closest biome colour within the grass mask's distances (rough/deep 3500, semi/foregreen 2500, sand 3000
+                // in 0-255 units), grass only where it is nearer than green and fairway.
+                if (uDetail > 0.0) {
+                    vec2 gp = vec2((vUv.x - 0.5) * 600.0, (0.5 - vUv.y) * 600.0);
+                    vec3 gc = rawColor.rgb;
+                    float gd0 = dot(gc - uGdCols[0], gc - uGdCols[0]), gd1 = dot(gc - uGdCols[1], gc - uGdCols[1]);
+                    float gd2 = dot(gc - uGdCols[2], gc - uGdCols[2]), gd3 = dot(gc - uGdCols[3], gc - uGdCols[3]);
+                    float gd4 = dot(gc - uGdCols[4], gc - uGdCols[4]);
+                    float gNo = min(dot(gc - uGdCols[5], gc - uGdCols[5]), dot(gc - uGdCols[6], gc - uGdCols[6]));
+                    float gBest = 1e9, gType = -1.0;
+                    if (gd0 < 0.0538 && gd0 < gBest && gd0 < gNo) { gBest = gd0; gType = 0.0; }
+                    if (gd1 < 0.0538 && gd1 < gBest && gd1 < gNo) { gBest = gd1; gType = 1.0; }
+                    if (gd2 < 0.0384 && gd2 < gBest && gd2 < gNo) { gBest = gd2; gType = 2.0; }
+                    if (gd3 < 0.0384 && gd3 < gBest && gd3 < gNo) { gBest = gd3; gType = 3.0; }
+                    if (gd4 < 0.0461 && gd4 < gBest) { gBest = gd4; gType = 4.0; }
+                    float gRough = (gType == 0.0 || gType == 1.0) ? 1.0 : 0.0;
+                    float gSemi = gType == 2.0 ? 1.0 : 0.0;
+                    float gFore = gType == 3.0 ? 1.0 : 0.0;
+                    float gSand = gType == 4.0 ? 1.0 : 0.0;
+                    float microAmp = 0.05;
+                    microAmp = mix(microAmp, 0.13, gRough);
+                    microAmp = mix(microAmp, 0.09, gSemi);
+                    microAmp = mix(microAmp, 0.07, gSand);
+                    microAmp = mix(microAmp, 0.03, gFore);
+                    float macroAmp = mix(0.05, 0.08, gRough);
+                    float pxm = length(fwidth(gp));
+                    float micro = gdNoise(gp * 7.0) * 0.55 + gdNoise(gp * 2.2 + 17.0) * 0.45 - 0.5;
+                    float microFade = 1.0 - smoothstep(0.04, 0.2, pxm);
+                    float macro = gdNoise(gp * 0.08) * 0.65 + gdNoise(gp * 0.023 + 5.0) * 0.35 - 0.5;
+                    diffuseColor.rgb *= 1.0 + (micro * 2.0 * microAmp * microFade + macro * 2.0 * macroAmp) * uDetail;
+                    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.02, 0.86), clamp(macro * 2.0, 0.0, 1.0) * (0.25 + 0.5 * gRough) * uDetail);
+                }
                 
                 // --- AUTOMATIC SHORELINE BANK (Sand / Mud / Stone) ---
                 if (uShoreBlend > 0.01) {
@@ -15839,6 +15918,7 @@ window.triggerExplosion = function(x, y, z) {
         }
 
         window.updatePropLod();   // far squares of trees draw cards instead of the models
+        window.syncGroundDetailColors();   // the ground detail tells the surfaces apart by the biome's colours
         window.updateShadowFocus();   // the shadow follows the ball; the shadow map is drawn only when something can have moved
         if (window.PostFX && window.PostFX.active()) {
             window.PostFX.render(renderer, scene, camera);   // light and colour (graphics option): the grade, and the bloom on HIGH
