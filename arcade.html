@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=31">
+<link rel="stylesheet" href="arcade.css?v=32">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -4100,7 +4100,7 @@
 <script src="arcade-shot-plan.js?v=1"></script>
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="arcade-bag.js?v=2"></script>
-<script src="arcade-range-session.js?v=9"></script>
+<script src="arcade-range-session.js?v=10"></script>
 <script src="arcade-range-practice.js?v=8"></script>
 <script src="arcade-range-template.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=2"></script>
@@ -13422,10 +13422,11 @@
         return box;
     };
 
-    // The phone layout (arcade.css, "PHONE PLAY LAYOUT"): a narrow screen while a course or the range is played
+    // The phone layout (arcade.css, "PHONE PLAY LAYOUT" and "PHONE LANDSCAPE"): a narrow screen, or a phone on its side, while a course or
+    // the range is played
     window.isPhonePlayLayout = function () {
         const b = document.body;
-        return !!(window.matchMedia && window.matchMedia('(max-width: 520px)').matches && b.classList.contains('play-ui'));
+        return !!(window.matchMedia && window.matchMedia('(max-width: 520px), (max-height: 500px) and (orientation: landscape)').matches && b.classList.contains('play-ui'));
     };
     // Open / close the minimap: the phone layout keeps it as a small box until it is opened (the ⤢ in its header, or a tap on the box)
     window.toggleMinimap = function (open) {

@@ -883,7 +883,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   @media (max-width: 1100px) { #range-practice { max-width: calc(100vw - 32px); top: 76px; } }
 
   /* =====================================================================================================================
-     PHONE PLAY LAYOUT (a round on a course or the range, screens up to 520 px wide; body.play-ui is set by setMode, body.range-ui on the range)
+     PHONE PLAY LAYOUT (a round on a course or the range, screens up to 520 px wide, and a phone on its side: up to 500 px high in
+     landscape, which then takes the PHONE LANDSCAPE block below; body.play-ui is set by setMode, body.range-ui on the range)
      The bottom of the screen belongs to the shot (club row, shot shape, SWING); everything else sits above it or is folded away:
      - the lie panel is one row just above the shot shape
      - the shot tiles are a short row top left (carry, total), shown once there is a shot; a tap shows them all (.dh-open)
@@ -894,7 +895,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
      - the range: "approach to a green" sits top left (the menu button top right), the swing pill hides while it is open; the session
        panel sits under it, left of the map, folded by default (arcade-range-session.js), and the aim controls wait while it is open
      ===================================================================================================================== */
-  @media (max-width: 520px) {
+  @media (max-width: 520px), (max-height: 500px) and (orientation: landscape) {
       body.play-ui #dynamic-hud { top: 122px; left: 8px; right: 108px; flex-direction: row; flex-wrap: wrap; gap: 4px; pointer-events: auto; cursor: pointer; }
       body.play-ui #dynamic-hud:not(.has-data) { display: none !important; }   /* the game sets display on it */
       body.play-ui #dynamic-hud .dh-tile { min-width: 0; padding: 4px 8px; gap: 6px; border-radius: 6px; }
@@ -966,6 +967,36 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       /* an open session is for reading the shots: aiming waits until it is folded */
       body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-controls,
       body.play-ui.range-ui:has(#range-session:not(.collapsed)) #aim-billboard { display: none !important; }
+  }
+
+  /* =====================================================================================================================
+     PHONE LANDSCAPE (a phone on its side: up to 500 px high; on top of the phone play layout above, which it shares)
+     The width is there but not the height: the shot is along the bottom edge (the club in hand centred, the shot shape left of
+     SWING, SWING bottom right under the thumb), the lie row just above it on the left, the shot tiles and the club pill along the
+     top, the small map top right under the menu button and the opened map the full height on the right.
+     ===================================================================================================================== */
+  @media (max-height: 500px) and (orientation: landscape) {
+      body.play-ui #swing-launch-btn { bottom: 12px; left: auto; right: 12px; transform: none; padding: 12px 30px; font-size: 15px; }
+      body.play-ui #swing-launch-btn:active { transform: scale(0.96); }
+      body.play-ui #club-selector { bottom: 12px; }
+      body.play-ui #club-selector:not(.clubs-open) { padding-right: 0; }
+      body.play-ui #club-selector.clubs-open { padding-right: 170px; }   /* the whole row, left of SWING */
+      body.play-ui #shape-selector:not(.shapes-open) { bottom: 16px; right: 168px; }
+      body.play-ui #shape-selector.shapes-open { bottom: 66px; left: auto; right: 12px; transform: none; }
+      body.play-ui #lie-conditions-hud { bottom: 66px !important; }
+      body.play-ui #swing-info { top: 10px; }
+      body.play-ui #dynamic-hud { top: 58px; right: auto; max-width: 46vw; }
+
+      body.play-ui #minimap-container { top: 70px !important; width: 100px !important; height: 112px !important; }
+      body.play-ui.mm-open #minimap-container { top: 8px !important; width: 230px !important; height: calc(100vh - 16px) !important; }
+      body.play-ui.mm-open #elevation-profile-container { display: none !important; }   /* no room beside the full-height map */
+      body.play-ui:not(.range-ui) #green-read-panel { top: 188px !important; width: 100px; }
+
+      body.play-ui.range-ui #range-practice { top: 8px !important; left: 8px !important; right: 120px; }
+      body.play-ui.range-ui #range-session { top: 58px !important; left: auto; right: 116px !important; width: 260px !important; max-height: calc(100vh - 58px - 70px) !important; }
+      body.play-ui.range-ui #range-session.collapsed { right: 116px !important; }
+      body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 58px !important; max-height: calc(100vh - 58px - 70px) !important; }
+      body.play-ui.range-ui:not(.mm-open):has(#range-practice.on) #minimap-container { top: 70px !important; }
   }
 
   /* =====================================================================================================================
