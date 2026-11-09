@@ -124,6 +124,8 @@ const LUCIDE_STUB = 'window.lucide = { createIcons: function () {} };';
   async function open(url, viewport, opts) {
     const touch = !(opts && opts.touch === false);
     const ctx = await browser.newContext({ viewport: viewport, hasTouch: touch, isMobile: touch, serviceWorkers: 'block' });
+    // the automatic graphics level off (the software renderer is slow: it would change the picture under the checks)
+    await ctx.addInitScript(function () { try { localStorage.setItem('golf_auto_q_on', '0'); } catch (e) { /* storage blocked */ } });
     if (opts && opts.init) await ctx.addInitScript(opts.init);
     await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
       const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
