@@ -44,7 +44,7 @@
 <script src="arcade-particle-engine.js?v=2"></script>
 <script src="arcade-wind-sway.js?v=2"></script>
 <script src="arcade-post.js?v=2"></script>
-<script src="arcade-surround-veg.js?v=1"></script>
+<script src="arcade-surround-veg.js?v=2"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
@@ -5055,6 +5055,8 @@
             if (typeof window.buildNatureUI === 'function') {
                 window.buildNatureUI();
             }
+            // the surroundings' vegetation picks its tree types from the library: a build before the library arrived found none
+            if (window.SurroundVeg) window.SurroundVeg.schedule();
         } catch(e) {
             console.error("Failed to load cloud assets", e);
         }
@@ -10774,6 +10776,9 @@
         if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
         if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
         if (typeof window.updateSBTeeControls === 'function') window.updateSBTeeControls();
+        // the vegetation in the surroundings is kept on the holes: after an undo / redo the live belt, its settings and controls follow
+        // the restored holes (else the next vegetation edit wrote the stale settings back over them)
+        if (window.SurroundVeg) window.SurroundVeg.restore();
         if (window._globalGreenGridEnabled && typeof window.buildGreenGrid === 'function') {
             let h = (typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null;
             if (h && h.greenData && h.greenData.points && h.greenData.points.length >= 3) {
