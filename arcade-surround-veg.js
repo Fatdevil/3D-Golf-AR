@@ -5,7 +5,8 @@
  *   AUTO    after the ground: deep rough / rough a forest (a desert biome: sparse desert plants), waste / sand palms, the mountain horizon a
  *           sparse forest, water and sky nothing
  *   NONE, FOREST, PALMS, DESERT (cacti and shrubs, a few palms), CUSTOM (the types picked in the panel)
- * Each tree has a soft shadow on the ground under it (a dark patch, the cards cast nothing into the shadow map).
+ * Each tree has a soft shadow on the ground (cast away from the sun, and a faint patch under the crown; the cards cast nothing into
+ * the shadow map).
  * The trees are cards that turn to the camera (the far-away cards of arcade.html, makePropImpostor: the same picture of the 3D model,
  * tinted by the biome like the models). No shadow, no collision: nothing outside the plate is played. A tree belongs to the side whose
  * weight is largest where it stands, the same weights the surround plane blends its colours with, so the vegetation follows the ground.
@@ -256,6 +257,7 @@
                         sm.setMatrixAt(i, mtx);
                     });
                     sg.boundingSphere = g.boundingSphere.clone();
+                    sg.boundingSphere.radius += (card.shadowReach || 0) * maxS;   // the cast shadow lies away from the sun
                     sm.instanceMatrix.needsUpdate = true;
                     sm.castShadow = false; sm.receiveShadow = false; sm.frustumCulled = true;
                     sm.raycast = function () {};

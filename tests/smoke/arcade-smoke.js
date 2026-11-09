@@ -367,8 +367,23 @@ function serve() {
       setVis(function () { return true; }); const withShadow = shoot([0, 20, -330], [0, 0, -420]);
       let darker = 0, lighter = 0;
       for (let i = 0; i < noShadow.length; i += 4) { const dl = (noShadow[i] + noShadow[i + 1] + noShadow[i + 2]) - (withShadow[i] + withShadow[i + 1] + withShadow[i + 2]); if (dl > 20) darker++; else if (dl < -20) lighter++; }
+      // (d) the shadows fall away from the sun: seen from above, the shade the shadows add lies further west with a low sun in the east
+      // than with one in the west
+      const sunWas = dirLight.userData.sunDir.clone();
+      const shadeX = function (sun) {
+        dirLight.userData.sunDir.set(sun[0], sun[1], sun[2]); window.updatePropLod();
+        setVis(function (u) { return !u.shadow; }); const a0 = shoot([0, 160, -398], [0, 0, -400]);
+        setVis(function () { return true; }); const a1 = shoot([0, 160, -398], [0, 0, -400]);
+        const w = gl.drawingBufferWidth; let sx = 0, n = 0;
+        for (let i = 0; i < a0.length; i += 4) if ((a0[i] + a0[i + 1] + a0[i + 2]) - (a1[i] + a1[i + 1] + a1[i + 2]) > 20) { sx += (i / 4) % w; n++; }
+        return n ? sx / n / w : null;
+      };
+      const east = shadeX([100, 40, 0]), west = shadeX([-100, 40, 0]);
+      dirLight.userData.sunDir.copy(sunWas); window.updatePropLod();
       camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld(); window.PostFX.setLevel(pf);
-      check('2D trees: a soft shadow on the ground under each tree (the ground under them darker, nothing lighter)', darker > 500 && lighter < darker / 50, 'darker ' + darker + ', lighter ' + lighter);
+      check('2D trees: a soft shadow on the ground under each tree (the ground under them darker, nothing lighter), falling away from the sun',
+            darker > 500 && lighter < darker / 50 && east !== null && west !== null && west - east > 0.01,
+            'darker ' + darker + ', lighter ' + lighter + ', shade centre (0 west, 1 east of the picture) with the sun east ' + (east && east.toFixed(3)) + ', west ' + (west && west.toFixed(3)));
       const outsideSeen = differs(eastNone, eastCards), topsAdded = differs(downStand, downBoth);
       check('2D trees: the standing cards face the camera (seen from outside the belt) and the lying cards add crowns looking steeply down',
             outsideSeen > 500 && topsAdded > 500, 'pixels: from outside ' + outsideSeen + ', crowns from above ' + topsAdded);

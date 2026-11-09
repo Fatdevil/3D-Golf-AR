@@ -44,7 +44,7 @@
 <script src="arcade-particle-engine.js?v=2"></script>
 <script src="arcade-wind-sway.js?v=2"></script>
 <script src="arcade-post.js?v=2"></script>
-<script src="arcade-surround-veg.js?v=5"></script>
+<script src="arcade-surround-veg.js?v=6"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
@@ -7708,12 +7708,18 @@
     // cards dissolve (dither) close to the camera, from 35 m in to 20 m: a flat card up close shows what it is. The far-away cards on the
     // plate start at 130 m and the surroundings at 320 m; only the trees filling the OB areas (arcade-surround-veg.js) come this close
     const PROP_CARD_NEAR = [20, 35];
-    // A soft dark patch on the ground under each card (a blob shadow): the cards cast nothing into the shadow map, and a tree without a
-    // shadow seems to stand on the grass rather than in it. One flat square per tree, in the same instance buffer layout as the cards,
-    // centred under the crown (turned with the tree), the width of the crown and a little more; darkest in the middle (PROP_SHADOW_ALPHA)
-    // and gone at the edge. Unlit, behind no depth write, a little above the ground (and pulled forward in depth) so it does not flicker
-    // in it; on a slope its edge can dip under the ground, where it was faint anyway. It dissolves near the camera with its card.
-    const PROP_SHADOW_ALPHA = 0.42, PROP_SHADOW_SIZE = 1.25, PROP_SHADOW_LIFT = 0.12;
+    // A soft shadow on the ground under each card: the cards cast nothing into the shadow map, and a tree without a shadow seems to stand
+    // on the grass rather than in it. Two flat squares per tree, in the same instance layout as the cards:
+    //   the cast shadow: the crown's shadow, moved away from the sun by the crown's height times the cotangent of the sun's elevation and
+    //     drawn out along that line by 1 / sin(elevation) (a ball's shadow on flat ground), both capped at 3 (a sunset would draw streaks);
+    //     a little lighter the longer it is (the same darkness spread over more ground)
+    //   the contact patch: a smaller, fainter patch right under the crown, where the ground is shaded whatever the sun does
+    // The sun is the scene's (dirLight.userData.sunDir, the time of day), read each frame (updatePropLod). Unlit, no depth write, a little
+    // above the ground and pulled forward in depth so it does not flicker in it; on a slope its edge can dip under the ground, where it
+    // was faint anyway. It dissolves near the camera with its card. The per-vertex shInfo attribute holds the crown's centre (x, z), its
+    // height above the foot and which square it is (1 cast, 0 contact): the material is shared by every type.
+    const PROP_SHADOW_ALPHA = 0.42, PROP_SHADOW_SIZE = 1.25, PROP_SHADOW_LIFT = 0.12, PROP_SHADOW_CONTACT = [0.6, 0.55], PROP_SHADOW_MAXK = 3;
+    const _propShadowSun = { value: new THREE.Vector3(0.4, 0.8, 0.4) };
     let _propShadowMat = null;
     function propShadowMaterial() {
         if (_propShadowMat) return _propShadowMat;
@@ -7723,23 +7729,64 @@
         x.fillStyle = g; x.fillRect(0, 0, 64, 64);
         const tex = new THREE.CanvasTexture(c);
         const f3 = function (v) { return (+v).toFixed(4); };
-        const mat = new THREE.MeshBasicMaterial({ color: 0x000000, map: tex, transparent: true, opacity: PROP_SHADOW_ALPHA, depthWrite: false,
+        const mat = new THREE.MeshBasicMaterial({ color: 0x000000, map: tex, transparent: true, opacity: PROP_SHADOW_ALPHA, depthWrite: false, side: THREE.DoubleSide,
                                                   polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
         mat.onBeforeCompile = function (shader) {
+            shader.uniforms.uShadowSun = _propShadowSun;
             shader.vertexShader = shader.vertexShader
-                .replace('#include <common>', '#include <common>\nvarying float vCardNear;')
+                .replace('#include <common>', '#include <common>\nattribute vec4 shInfo;\nuniform vec3 uShadowSun;\nvarying float vCardNear;\nvarying float vShA;')
                 .replace('#include <project_vertex>', [
-                    '#include <project_vertex>',
+                    'vec4 shW = modelMatrix * instanceMatrix * vec4(transformed, 1.0);',
+                    'vShA = ' + f3(PROP_SHADOW_CONTACT[1]) + ';',
+                    'if (shInfo.w > 0.5) {',
+                    '  vec3 sun = normalize(uShadowSun);',
+                    '  float sinE = max(sun.y, 0.05), horiz = length(sun.xz);',
+                    '  vec2 dir = horiz > 1e-4 ? -sun.xz / horiz : vec2(0.0, 1.0);',
+                    '  float k = min(1.0 / sinE, ' + f3(PROP_SHADOW_MAXK) + ');',
+                    '  float h = shInfo.z * length(instanceMatrix[1].xyz);',
+                    '  float len = h * min(horiz / sinE, ' + f3(PROP_SHADOW_MAXK) + ');',
+                    '  vec3 mid = (modelMatrix * instanceMatrix * vec4(shInfo.x, transformed.y, shInfo.y, 1.0)).xyz;',
+                    '  vec2 rel = shW.xz - mid.xz;',
+                    '  float along = dot(rel, dir);',
+                    '  shW.xz = mid.xz + (rel - dir * along) + dir * (along * k + len);',
+                    '  vShA = mix(1.0, 0.7, (k - 1.0) / ' + f3(PROP_SHADOW_MAXK - 1) + ');',
+                    '}',
+                    'vec4 mvPosition = viewMatrix * shW;',
+                    'gl_Position = projectionMatrix * mvPosition;',
                     CARD_CAM_GLSL,
                     'vCardNear = smoothstep(' + f3(PROP_CARD_NEAR[0]) + ', ' + f3(PROP_CARD_NEAR[1]) + ', length(cardCam - (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz));'
                 ].join('\n'));
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <common>', '#include <common>\nvarying float vCardNear;')
-                .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= vCardNear;');
+                .replace('#include <common>', '#include <common>\nvarying float vCardNear;\nvarying float vShA;')
+                .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= vCardNear * vShA;');
         };
-        mat.customProgramCacheKey = function () { return 'propShadow'; };
+        mat.customProgramCacheKey = function () { return 'propShadow2'; };
         _propShadowMat = mat;
         return mat;
+    }
+    // the shadows follow the sun (each frame; three.js uploads the uniform only when it is drawn)
+    function syncPropShadowSun() {
+        if (typeof dirLight !== 'undefined' && dirLight.userData.sunDir) _propShadowSun.value.copy(dirLight.userData.sunDir);
+    }
+    // the shadow's two squares for a model: the cast shadow (the crown's width x PROP_SHADOW_SIZE) and the contact patch, both centred under
+    // the crown at the foot; shInfo tells the shader the crown's centre and height and which square is which
+    function propShadowGeometry(cx, cz, footY, crownW, crownH) {
+        const pos = [], uv = [], info = [], idx = [];
+        [[crownW * PROP_SHADOW_SIZE, 1], [crownW * PROP_SHADOW_CONTACT[0], 0]].forEach(function (q, n) {
+            const h = q[0] / 2, b = n * 4;
+            [[-h, -h, 0, 0], [h, -h, 1, 0], [h, h, 1, 1], [-h, h, 0, 1]].forEach(function (v) {
+                pos.push(cx + v[0], footY + PROP_SHADOW_LIFT + n * 0.02, cz - v[1]); uv.push(v[2], v[3]); info.push(cx, cz, crownH, q[1]);
+            });
+            idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+        });
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        g.setAttribute('shInfo', new THREE.Float32BufferAttribute(info, 4));
+        g.setIndex(idx);
+        g.computeBoundingSphere();
+        return g;
     }
     const PROP_TOP_FADE = [Math.sin(25 * Math.PI / 180), Math.sin(50 * Math.PI / 180)];   // the lying card fades in between 25 and 50 degrees down
     // The camera's world position, from the view matrix: three.js r128 sends cameraPosition only to Phong, Standard, Toon and shader
@@ -7898,14 +7945,13 @@
                 .replace('#include <color_fragment>', PROP_TINT_GLSL)
                 .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\nfloat topDither = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);\nif (vTopFade <= topDither || vCardNear <= topDither) discard;');
         };
-        // the shadow under it: the crown's width and a little more, centred under the crown, at the foot
-        const shW = Math.max(size.x, size.z) * PROP_SHADOW_SIZE;
-        const shadowGeo = new THREE.PlaneGeometry(shW, shW);
-        shadowGeo.rotateX(-Math.PI / 2);
-        shadowGeo.translate(cx, box.min.y + PROP_SHADOW_LIFT, cz);
+        // the shadow under it (cast away from the sun, and a contact patch); its reach: how far the cast shadow can lie from the foot
+        const crownW = Math.max(size.x, size.z), crownH = size.y * 0.65;
+        const shadowGeo = propShadowGeometry(cx, cz, box.min.y, crownW, crownH);
+        const shadowReach = crownH * PROP_SHADOW_MAXK + crownW * PROP_SHADOW_SIZE * PROP_SHADOW_MAXK / 2;
         return { texture: rt.texture, rt: rt, geometry: geo, material: mat, radius: Math.hypot(S / 2, S / 2),
                  topTexture: rtTop.texture, topRt: rtTop, topGeometry: topGeo, topMaterial: topMat,
-                 shadowGeometry: shadowGeo, shadowMaterial: propShadowMaterial() };
+                 shadowGeometry: shadowGeo, shadowMaterial: propShadowMaterial(), shadowReach: shadowReach };
     }
 
     // a square's standing cards, or (top) its lying cards seen from above
@@ -7930,6 +7976,7 @@
 
     // Each frame before the main picture: models near the camera, cards far away (play and test mode only)
     window.updatePropLod = function () {
+        syncPropShadowSun();
         const useCards = (appMode === 'PLAY' || appMode === 'TEST') && !window._propLodOff;
         const cp = camera.position;
         for (const type in window.instancePools) {
@@ -8093,7 +8140,7 @@
                     _iMatrix.compose(_iPos, _iQuat, _iScale);
                     sm.setMatrixAt(i, _iMatrix);
                 });
-                sm.geometry.boundingSphere = new THREE.Sphere(ch.sphere.center.clone(), ch.sphere.radius + pool.impostor.radius);
+                sm.geometry.boundingSphere = new THREE.Sphere(ch.sphere.center.clone(), ch.sphere.radius + pool.impostor.radius + pool.impostor.shadowReach * 1.5);
                 sm.count = list.length;
                 sm.instanceMatrix.needsUpdate = true;
             }
