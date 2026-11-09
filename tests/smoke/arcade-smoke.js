@@ -229,21 +229,42 @@ function serve() {
       // the card sways with the wind as the models do (the same uniforms): the crown's centre moves along the wind between two moments,
       // and stands still with the sway off
       const wu = window.WindSway.uniforms, was = {}; Object.keys(wu).forEach(function (k) { was[k] = wu[k].value; });
-      const crownX = function (time, on) {
-        wu.uWindTime.value = time; wu.uWindStrength.value = 1; wu.uWindDirX.value = 1; wu.uWindDirZ.value = 0; wu.uSwayEnabled.value = on ? 1 : 0;
-        im.setMatrixAt(0, new THREE.Matrix4()); im.instanceMatrix.needsUpdate = true;
-        renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scn, cam); renderer.readRenderTargetPixels(rt, 0, 0, W, H, px);
+      const setWind = function (time, on) { wu.uWindTime.value = time; wu.uWindStrength.value = 1; wu.uWindDirX.value = 1; wu.uWindDirZ.value = 0; wu.uSwayEnabled.value = on ? 1 : 0; };
+      const shotX = function (scene) {
+        renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam); renderer.readRenderTargetPixels(rt, 0, 0, W, H, px);
         let sx = 0, n = 0; for (let i = 0; i < W * H; i++) if (px[i * 4 + 3] > 128) { sx += i % W; n++; } return n ? sx / n : null;
       };
+      const crownX = function (time, on, turn) {
+        setWind(time, on); im.setMatrixAt(0, new THREE.Matrix4().makeRotationY(turn || 0)); im.instanceMatrix.needsUpdate = true;
+        return shotX(scn);
+      };
       const swayOn = Math.abs(crownX(0.0, true) - crownX(1.3, true)), swayOff = Math.abs(crownX(0.0, false) - crownX(1.3, false));
+      // the wind blows in the world: a card and a 3D model turned 180 degrees sway the same way as unturned ones (the models' sway was
+      // in their own frame, so a turned tree swayed against the wind and jumped when it became a card)
+      const cardTurned = crownX(1.3, true, Math.PI) - crownX(0.0, true, Math.PI), cardStraight = crownX(1.3, true, 0) - crownX(0.0, true, 0);
+      window.customModels.zz_sway = ball(0); window.ASSET_REGISTRY.zz_sway = { subcat: 'TREES' };
+      const n0 = window.placedTrees.length, tree = { type: 'zz_sway', x: 0, z: 0, y: 0, scale: 1, rot: 0 };
+      window.placedTrees.push(tree);
+      const modelShift = function (turn) {
+        tree.rot = turn; window.rebuildInstancePool('zz_sway');
+        const pool = window.instancePools.zz_sway, mesh = pool.chunks.values().next().value.meshes[0];
+        window.WindSway.repatch(); window.WindSway.update(0); mesh.material.needsUpdate = true;
+        const own = new THREE.Scene(); own.add(new THREE.AmbientLight(0xffffff, 1)); const parent = mesh.parent; own.add(mesh);
+        setWind(0.0, true); const a0 = shotX(own); setWind(1.3, true); const a1 = shotX(own);
+        parent.add(mesh);
+        return a1 - a0;
+      };
+      const modelStraight = modelShift(0), modelTurned = modelShift(Math.PI);
+      window.placedTrees.length = n0; destroyInstancePool('zz_sway'); delete window.customModels.zz_sway; delete window.ASSET_REGISTRY.zz_sway;
       Object.keys(wu).forEach(function (k) { wu[k].value = was[k]; });
       renderer.setRenderTarget(null); rt.dispose();
       ['zz_round', 'zz_round2'].forEach(function (k) { delete window.customModels[k]; delete window.ASSET_REGISTRY[k]; });
       const keys = card.material.customProgramCacheKey() !== card2.material.customProgramCacheKey();
       check('2D trees: a card is as bright whatever way its tree is turned, and tree types with different centres get programs of their own',
             b.every(function (v) { return v > 0 && Math.abs(v - b[0]) <= 3; }) && keys, 'green by turn ' + b.join(', ') + ', own keys ' + keys);
-      check('2D trees sway in the wind as the 3D trees do (the crown moves along the wind; still with the sway off)',
-            swayOn > 3 && swayOff < 0.5, 'crown moved ' + swayOn.toFixed(1) + ' px with the sway on, ' + swayOff.toFixed(1) + ' px off');
+      check('2D trees sway in the wind as the 3D trees do (the crown moves along the wind; still with the sway off); a tree turned 180 degrees, model or card, sways the same way',
+            swayOn > 3 && swayOff < 0.5 && Math.abs(modelStraight) > 3 && Math.sign(cardTurned) === Math.sign(cardStraight) && Math.sign(modelTurned) === Math.sign(modelStraight) && Math.sign(modelStraight) === Math.sign(cardStraight),
+            'crown moved ' + swayOn.toFixed(1) + ' px with the sway on, ' + swayOff.toFixed(1) + ' px off; card ' + cardStraight.toFixed(1) + ' / turned ' + cardTurned.toFixed(1) + ', model ' + modelStraight.toFixed(1) + ' / turned ' + modelTurned.toFixed(1));
     })();
     // a GLTF model's colour textures are used as they are written (the game draws without colour-space conversion): before, three.js decoded
     // them from sRGB and an oak's crown came out almost black
