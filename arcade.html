@@ -42,7 +42,7 @@
 <script src="arcade-tracer-engine.js"></script>
 <script src="arcade-audio-engine.js"></script>
 <script src="arcade-particle-engine.js?v=2"></script>
-<script src="arcade-wind-sway.js?v=2"></script>
+<script src="arcade-wind-sway.js?v=3"></script>
 <script src="arcade-post.js?v=2"></script>
 <script src="arcade-auto-quality.js?v=2"></script>
 <script src="arcade-surround-veg.js?v=7"></script>
@@ -7803,6 +7803,29 @@
     // of the plate instead of the camera, and the lying ones never faded in. camera = -R^T t, where viewMatrix = [R | t].
     const CARD_CAM_GLSL = 'vec3 cardCam = -vec3(dot(viewMatrix[0].xyz, viewMatrix[3].xyz), dot(viewMatrix[1].xyz, viewMatrix[3].xyz), dot(viewMatrix[2].xyz, viewMatrix[3].xyz));';
 
+    // The cards sway in the wind as the 3D trees do (arcade-wind-sway.js: the same uniforms, the same sway, so a tree that turns into a
+    // card at 150 m keeps moving the same way): the crown is moved along the wind by up to 3 m at full wind, from the foot up (a model's
+    // height over 0.8 of its units sways fully, as the models do), each tree in its own phase from its position. The lying card above
+    // moves with its crown. Off when the wind sway is off or there is no wind.
+    const CARD_WIND_PARS = 'uniform float uWindTime;\nuniform float uWindStrength;\nuniform float uWindDirX;\nuniform float uWindDirZ;\nuniform float uSwayEnabled;';
+    const _cardWindStill = { uWindTime: { value: 0 }, uWindStrength: { value: 0 }, uWindDirX: { value: 0 }, uWindDirZ: { value: 0 }, uSwayEnabled: { value: 0 } };
+    function cardWindUniforms(shader) {
+        const wu = (window.WindSway && window.WindSway.uniforms) || _cardWindStill;
+        ['uWindTime', 'uWindStrength', 'uWindDirX', 'uWindDirZ', 'uSwayEnabled'].forEach(function (k) { shader.uniforms[k] = wu[k] || _cardWindStill[k]; });
+    }
+    // the sway (world xz) of a point at model height hY on the tree standing at root (world)
+    function cardWindGLSL(root, hY) {
+        return [
+            'vec2 cardSway = vec2(0.0);',
+            'if (uSwayEnabled > 0.5 && uWindStrength > 0.001) {',
+            '  float wHf = smoothstep(0.0, 0.8, ' + hY + ');',
+            '  float wHash = fract(sin(' + root + '.x * 12.9898 + ' + root + '.z * 78.233) * 43758.5453);',
+            '  float wOsc = (sin(uWindTime * 1.2 + wHash * 6.28) * 0.7 + sin(uWindTime * 3.1 + wHash * 12.56) * 0.3 + sin(uWindTime * 7.0 + wHf * 2.0 + wHash * 20.0) * 0.1) * wHf * uWindStrength;',
+            '  cardSway = vec2(uWindDirX, uWindDirZ) * wOsc * 3.0;',
+            '}'
+        ].join('\n');
+    }
+
     // (makePropImpostor and propColors are global functions of this page: the surroundings' 2D trees, arcade-surround-veg.js, use the
     // same card and the same colours as the far-away trees on the plate)
 
@@ -7883,8 +7906,9 @@
         const f3 = function (v) { return (+v).toFixed(4); };
         const mat = new THREE.MeshLambertMaterial({ map: rt.texture, alphaTest: 0.5, side: THREE.FrontSide });
         mat.onBeforeCompile = function (shader) {
+            cardWindUniforms(shader);
             shader.vertexShader = shader.vertexShader
-                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vCardView;\nvarying float vCardNear;')
+                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vCardView;\nvarying float vCardNear;\n' + CARD_WIND_PARS)
                 .replace('#include <color_vertex>', '#include <color_vertex>\nvInstanceTrunkColor = instanceTrunkColor;')
                 .replace('#include <beginnormal_vertex>', [
                     // the visible half of a crown faces the camera on average: the card is lit as if it faced the camera, tipped a little up
@@ -7902,6 +7926,8 @@
                     'vec3 toCam = cardCam - iPos; toCam.y = 0.0;',
                     'vec3 iRight = length(toCam) > 0.001 ? normalize(vec3(toCam.z, 0.0, -toCam.x)) : vec3(1.0, 0.0, 0.0);',
                     'vec3 iWorld = iPos + iMid + iRight * transformed.x * iSx + vec3(0.0, 1.0, 0.0) * transformed.y * iSy;',
+                    cardWindGLSL('iPos', 'transformed.y'),
+                    'iWorld.xz += cardSway;',
                     'vec4 mvPosition = viewMatrix * vec4(iWorld, 1.0);',
                     'gl_Position = projectionMatrix * mvPosition;',
                     // the camera's angle around the tree, in the tree's own frame (its turn about the vertical axis taken off), in views
@@ -7939,12 +7965,18 @@
         topGeo.translate(cx, box.min.y + size.y * 0.8, cz);
         const topMat = new THREE.MeshLambertMaterial({ map: rtTop.texture, alphaTest: 0.5, side: THREE.DoubleSide });
         topMat.onBeforeCompile = function (shader) {
+            cardWindUniforms(shader);
             shader.vertexShader = shader.vertexShader
-                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;\nvarying float vCardNear;')
+                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;\nvarying float vCardNear;\n' + CARD_WIND_PARS)
                 .replace('#include <color_vertex>', '#include <color_vertex>\nvInstanceTrunkColor = instanceTrunkColor;')
                 .replace('#include <project_vertex>', [
                     '#include <project_vertex>',
                     'vec4 tWorld = modelMatrix * instanceMatrix * vec4(transformed, 1.0);',
+                    // the crown sways: the lying card goes with it
+                    cardWindGLSL('(modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz', 'transformed.y'),
+                    'tWorld.xz += cardSway;',
+                    'mvPosition = viewMatrix * tWorld;',
+                    'gl_Position = projectionMatrix * mvPosition;',
                     CARD_CAM_GLSL,
                     'vTopFade = smoothstep(' + PROP_TOP_FADE[0].toFixed(3) + ', ' + PROP_TOP_FADE[1].toFixed(3) + ', normalize(cardCam - tWorld.xyz).y);',
                     'vCardNear = smoothstep(' + f3(PROP_CARD_NEAR[0]) + ', ' + f3(PROP_CARD_NEAR[1]) + ', length(cardCam - (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz));'

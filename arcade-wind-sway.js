@@ -250,6 +250,8 @@
     // PUBLIC API
     // ---------------------------------------------------------------
     window.WindSway = {
+        // the shared wind uniforms: the far-away trees' cards (arcade.html makePropImpostor) sway with the same wind
+        uniforms: WIND_UNIFORMS,
         init,
         update,
         setEnabled,

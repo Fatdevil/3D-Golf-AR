@@ -226,11 +226,24 @@ function serve() {
         let sum = 0, n = 0; for (let i = 0; i < W * H; i++) if (px[i * 4 + 3] > 128) { sum += px[i * 4 + 1]; n++; } return n ? Math.round(sum / n) : -1;
       };
       const b = [0, 1.6, 3.1, 4.7].map(mean);
+      // the card sways with the wind as the models do (the same uniforms): the crown's centre moves along the wind between two moments,
+      // and stands still with the sway off
+      const wu = window.WindSway.uniforms, was = {}; Object.keys(wu).forEach(function (k) { was[k] = wu[k].value; });
+      const crownX = function (time, on) {
+        wu.uWindTime.value = time; wu.uWindStrength.value = 1; wu.uWindDirX.value = 1; wu.uWindDirZ.value = 0; wu.uSwayEnabled.value = on ? 1 : 0;
+        im.setMatrixAt(0, new THREE.Matrix4()); im.instanceMatrix.needsUpdate = true;
+        renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scn, cam); renderer.readRenderTargetPixels(rt, 0, 0, W, H, px);
+        let sx = 0, n = 0; for (let i = 0; i < W * H; i++) if (px[i * 4 + 3] > 128) { sx += i % W; n++; } return n ? sx / n : null;
+      };
+      const swayOn = Math.abs(crownX(0.0, true) - crownX(1.3, true)), swayOff = Math.abs(crownX(0.0, false) - crownX(1.3, false));
+      Object.keys(wu).forEach(function (k) { wu[k].value = was[k]; });
       renderer.setRenderTarget(null); rt.dispose();
       ['zz_round', 'zz_round2'].forEach(function (k) { delete window.customModels[k]; delete window.ASSET_REGISTRY[k]; });
       const keys = card.material.customProgramCacheKey() !== card2.material.customProgramCacheKey();
       check('2D trees: a card is as bright whatever way its tree is turned, and tree types with different centres get programs of their own',
             b.every(function (v) { return v > 0 && Math.abs(v - b[0]) <= 3; }) && keys, 'green by turn ' + b.join(', ') + ', own keys ' + keys);
+      check('2D trees sway in the wind as the 3D trees do (the crown moves along the wind; still with the sway off)',
+            swayOn > 3 && swayOff < 0.5, 'crown moved ' + swayOn.toFixed(1) + ' px with the sway on, ' + swayOff.toFixed(1) + ' px off');
     })();
     // a GLTF model's colour textures are used as they are written (the game draws without colour-space conversion): before, three.js decoded
     // them from sRGB and an oak's crown came out almost black
