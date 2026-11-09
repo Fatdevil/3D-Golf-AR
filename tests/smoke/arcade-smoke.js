@@ -200,6 +200,31 @@ function serve() {
       check('2D trees: the card shows the side of the model the camera is on, turned with the tree (red ball left or right of the trunk as on the model, 4 sides)',
             ok && clear.length >= 2, JSON.stringify(res) + ' atlas ' + card.rt.width + 'x' + card.rt.height);
     })();
+    // a round tree looks the same from every side: its card is as bright whatever way the tree is turned (three.js turns the normal by the
+    // instance matrix, which now carries the turn); and two types with their centres in different places get programs of their own
+    (function () {
+      const ball = function (x) { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.SphereGeometry(3, 16, 12), new THREE.MeshLambertMaterial({ color: 0x3a8a3a })); m.position.set(x, 4, 0); g.add(m); return g; };
+      window.customModels.zz_round = ball(0); window.ASSET_REGISTRY.zz_round = { subcat: 'TREES' };
+      window.customModels.zz_round2 = ball(4); window.ASSET_REGISTRY.zz_round2 = { subcat: 'TREES' };
+      const card = window.makePropImpostor('zz_round'), card2 = window.makePropImpostor('zz_round2'), W = 120, H = 120;
+      const scn = new THREE.Scene(); scn.add(new THREE.AmbientLight(0xffffff, 0.2)); const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(40, 10, 60); scn.add(sun);
+      const geo = new THREE.BufferGeometry(); geo.setIndex(card.geometry.index); for (const k in card.geometry.attributes) geo.setAttribute(k, card.geometry.attributes[k]);
+      geo.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3));
+      const im = new THREE.InstancedMesh(geo, card.material, 1); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3); im.frustumCulled = false; scn.add(im);
+      const rt = new THREE.WebGLRenderTarget(W, H), cam = new THREE.PerspectiveCamera(30, 1, 0.5, 500), px = new Uint8Array(W * H * 4);
+      cam.position.set(0, 4, 40); cam.lookAt(0, 4, 0);
+      const mean = function (turn) {
+        im.setMatrixAt(0, new THREE.Matrix4().makeRotationY(turn)); im.instanceMatrix.needsUpdate = true;
+        renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scn, cam); renderer.readRenderTargetPixels(rt, 0, 0, W, H, px);
+        let sum = 0, n = 0; for (let i = 0; i < W * H; i++) if (px[i * 4 + 3] > 128) { sum += px[i * 4 + 1]; n++; } return n ? Math.round(sum / n) : -1;
+      };
+      const b = [0, 1.6, 3.1, 4.7].map(mean);
+      renderer.setRenderTarget(null); rt.dispose();
+      ['zz_round', 'zz_round2'].forEach(function (k) { delete window.customModels[k]; delete window.ASSET_REGISTRY[k]; });
+      const keys = card.material.customProgramCacheKey() !== card2.material.customProgramCacheKey();
+      check('2D trees: a card is as bright whatever way its tree is turned, and tree types with different centres get programs of their own',
+            b.every(function (v) { return v > 0 && Math.abs(v - b[0]) <= 3; }) && keys, 'green by turn ' + b.join(', ') + ', own keys ' + keys);
+    })();
     // a GLTF model's colour textures are used as they are written (the game draws without colour-space conversion): before, three.js decoded
     // them from sRGB and an oak's crown came out almost black
     await (async function () {
