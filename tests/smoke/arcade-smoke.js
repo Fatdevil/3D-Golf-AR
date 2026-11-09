@@ -367,23 +367,31 @@ function serve() {
       setVis(function () { return true; }); const withShadow = shoot([0, 20, -330], [0, 0, -420]);
       let darker = 0, lighter = 0;
       for (let i = 0; i < noShadow.length; i += 4) { const dl = (noShadow[i] + noShadow[i + 1] + noShadow[i + 2]) - (withShadow[i] + withShadow[i + 1] + withShadow[i + 2]); if (dl > 20) darker++; else if (dl < -20) lighter++; }
-      // (d) the shadows fall away from the sun: seen from above, the shade the shadows add lies further west with a low sun in the east
-      // than with one in the west
+      // (d) the shadows fall away from the sun: seen from above, the shade the shadows add with a low sun in the west is the shade with it
+      // in the east moved east (the best match of the two masks is at a shift to the east; the belt fills the picture, so a centroid
+      // hardly moves)
       const sunWas = dirLight.userData.sunDir.clone();
-      const shadeX = function (sun) {
+      const shadeMask = function (sun) {
         dirLight.userData.sunDir.set(sun[0], sun[1], sun[2]); window.updatePropLod();
         setVis(function (u) { return !u.shadow; }); const a0 = shoot([0, 160, -398], [0, 0, -400]);
         setVis(function () { return true; }); const a1 = shoot([0, 160, -398], [0, 0, -400]);
-        const w = gl.drawingBufferWidth; let sx = 0, n = 0;
-        for (let i = 0; i < a0.length; i += 4) if ((a0[i] + a0[i + 1] + a0[i + 2]) - (a1[i] + a1[i + 1] + a1[i + 2]) > 20) { sx += (i / 4) % w; n++; }
-        return n ? sx / n / w : null;
+        const m = new Uint8Array(a0.length / 4);
+        for (let i = 0; i < m.length; i++) m[i] = (a0[i * 4] + a0[i * 4 + 1] + a0[i * 4 + 2]) - (a1[i * 4] + a1[i * 4 + 1] + a1[i * 4 + 2]) > 20 ? 1 : 0;
+        return m;
       };
-      const east = shadeX([100, 40, 0]), west = shadeX([-100, 40, 0]);
+      const mEast = shadeMask([100, 40, 0]), mWest = shadeMask([-100, 40, 0]);
       dirLight.userData.sunDir.copy(sunWas); window.updatePropLod();
       camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld(); window.PostFX.setLevel(pf);
+      const bw = gl.drawingBufferWidth, bh = gl.drawingBufferHeight, reach = Math.round(bw / 6);
+      let bestDx = 0, best = -1;
+      for (let dx = -reach; dx <= reach; dx += 2) {
+        let n = 0;
+        for (let y = 0; y < bh; y += 2) for (let x = Math.max(0, -dx); x < Math.min(bw, bw - dx); x += 2) if (mEast[y * bw + x] && mWest[y * bw + x + dx]) n++;
+        if (n > best) { best = n; bestDx = dx; }
+      }
       check('2D trees: a soft shadow on the ground under each tree (the ground under them darker, nothing lighter), falling away from the sun',
-            darker > 500 && lighter < darker / 50 && east !== null && west !== null && west - east > 0.01,
-            'darker ' + darker + ', lighter ' + lighter + ', shade centre (0 west, 1 east of the picture) with the sun east ' + (east && east.toFixed(3)) + ', west ' + (west && west.toFixed(3)));
+            darker > 500 && lighter < darker / 50 && bestDx > 4,
+            'darker ' + darker + ', lighter ' + lighter + ', the shade with the sun in the west is the shade with it in the east moved ' + bestDx + ' px east');
       const outsideSeen = differs(eastNone, eastCards), topsAdded = differs(downStand, downBoth);
       check('2D trees: the standing cards face the camera (seen from outside the belt) and the lying cards add crowns looking steeply down',
             outsideSeen > 500 && topsAdded > 500, 'pixels: from outside ' + outsideSeen + ', crowns from above ' + topsAdded);
