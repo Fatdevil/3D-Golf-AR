@@ -184,6 +184,28 @@
                 scene.add(m);
                 meshes.push(m);
                 drawn += list.length;
+                // the lying card seen from above (arcade.html makePropImpostor): fades in as the camera looks down; each tree turned its own way
+                if (card.topGeometry) {
+                    const tg = new THREE.BufferGeometry();
+                    tg.setIndex(card.topGeometry.index);
+                    for (const k in card.topGeometry.attributes) tg.setAttribute(k, card.topGeometry.attributes[k]);
+                    tg.setAttribute('instanceTrunkColor', g.attributes.instanceTrunkColor.clone());
+                    const tm = new THREE.InstancedMesh(tg, card.topMaterial, list.length);
+                    tm.instanceColor = m.instanceColor.clone();
+                    const yAxis = new THREE.Vector3(0, 1, 0), tq = new THREE.Quaternion();
+                    list.forEach(function (p, i) {
+                        pos.set(p[0], 0, p[1]); scl.set(p[2], p[2], p[2]); tq.setFromAxisAngle(yAxis, p[3] * Math.PI * 2);
+                        mtx.compose(pos, tq, scl);
+                        tm.setMatrixAt(i, mtx);
+                    });
+                    tg.boundingSphere = g.boundingSphere.clone();
+                    tm.instanceMatrix.needsUpdate = true; tm.instanceColor.needsUpdate = true; tg.attributes.instanceTrunkColor.needsUpdate = true;
+                    tm.castShadow = false; tm.receiveShadow = false; tm.frustumCulled = true;
+                    tm.raycast = function () {};
+                    tm.userData.surroundVeg = { type: t, side: side, top: true };
+                    scene.add(tm);
+                    meshes.push(tm);
+                }
             });
         });
         const names = { FOREST: tr('veg_forest', 'Skog'), SPARSE: tr('veg_forest', 'Skog'), PALMS: tr('veg_palms', 'Palmer'), DESERT: tr('veg_desert', 'Öken'), CUSTOM: tr('veg_custom', 'Egen') };
@@ -260,7 +282,7 @@
         config: function () { return clone(cfg); },
         vegOf: vegOf, poolFor: poolFor, sideAt: sideAt,
         meshes: function () { return meshes.slice(); },
-        count: function () { let c = 0; meshes.forEach(function (m) { c += m.count; }); return c; },
+        count: function () { let c = 0; meshes.forEach(function (m) { if (!m.userData.surroundVeg.top) c += m.count; }); return c; },
         status: function () { return lastStatus; },
         setSide: function (side, veg) { if (SIDES.indexOf(side) < 0 || VEG.indexOf(veg) < 0) return; cfg.sides[side] = veg; save(); renderCustomList(); schedule(); },
         setDensity: function (v, done) { cfg.density = Math.max(0, Math.min(3, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
