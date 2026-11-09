@@ -163,42 +163,46 @@ function serve() {
       check('a tree card photographed again after the wind sway patched the materials is not empty', first > 1000 && second > 1000, 'first ' + first + ', second ' + second + ', patched ' + patched);
     })();
     // the card shows the side of the model the camera is on (8 photographs), turned with the tree: a lopsided model (a red ball out to +z,
-    // the crown out to +x), turned 0.6 rad, seen from 4 sides; the red ball is left or right of the trunk on the card as on the model.
+    // the crown out to +x), turned 0.6 rad seen from 4 sides, and unturned seen straight on and from behind; the ball and the crown are
+    // left or right of the trunk on the card as on the model.
     // (On a GPU where atan(0, x) gave half a turn, the card seen from straight ahead showed the back of the tree.)
     (function () {
       const g = new THREE.Group();
       const add = function (geo, col, x, y, z) { const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: col })); m.position.set(x, y, z); g.add(m); };
       add(new THREE.CylinderGeometry(0.4, 0.5, 6, 8), 0x6b4a2b, 0, 3, 0); add(new THREE.IcosahedronGeometry(2.6, 1), 0x2f7a2f, 2.2, 7, 0); add(new THREE.IcosahedronGeometry(1.2, 1), 0xd03030, 0, 5, 2.4);
       window.customModels.zz_asym = g; window.ASSET_REGISTRY.zz_asym = { subcat: 'TREES' };
-      const card = window.makePropImpostor('zz_asym'), turn = 0.6, W = 160, H = 200;
+      const card = window.makePropImpostor('zz_asym'), W = 160, H = 200;
       const scn = new THREE.Scene(); scn.add(new THREE.AmbientLight(0xffffff, 1));
-      const model = g.clone(); model.rotation.y = turn; scn.add(model);
+      const model = g.clone(); scn.add(model);
       const geo = new THREE.BufferGeometry(); geo.setIndex(card.geometry.index); for (const k in card.geometry.attributes) geo.setAttribute(k, card.geometry.attributes[k]);
       geo.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3));
       const im = new THREE.InstancedMesh(geo, card.material, 1); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3);
-      im.setMatrixAt(0, new THREE.Matrix4().makeRotationY(turn)); im.frustumCulled = false; scn.add(im);
+      im.frustumCulled = false; scn.add(im);
       const rt = new THREE.WebGLRenderTarget(W, H), cam = new THREE.PerspectiveCamera(35, W / H, 0.5, 500), px = new Uint8Array(W * H * 4);
-      // the red ball's side of the trunk, in pixels (+ right)
-      const side = function () {
+      // the red ball's and the crown's side of the trunk, in pixels (+ right)
+      const sides = function () {
         renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scn, cam); renderer.readRenderTargetPixels(rt, 0, 0, W, H, px);
-        let rx = 0, rn = 0, bx = 0, bn = 0;
+        let rx = 0, rn = 0, bx = 0, bn = 0, gx = 0, gn = 0;
         for (let i = 0; i < W * H; i++) { const r = px[i * 4], gg = px[i * 4 + 1], b = px[i * 4 + 2], x = i % W; if (px[i * 4 + 3] < 128) continue;
-          if (r > 150 && gg < 90) { rx += x; rn++; } else if (r > gg && gg > b && r < 150 && Math.floor(i / W) < H * 0.3) { bx += x; bn++; } }
-        return rn && bn ? Math.round(rx / rn - bx / bn) : null;
+          if (r > 150 && gg < 90) { rx += x; rn++; } else if (gg > r + 30) { gx += x; gn++; } else if (r > gg + 15 && gg > b + 15 && r < 150) { bx += x; bn++; } }
+        if (!bn) return [null, null];
+        return [rn ? Math.round(rx / rn - bx / bn) : null, gn ? Math.round(gx / gn - bx / bn) : null];
       };
-      const res = [];
-      [0, 90, 180, 270].forEach(function (a) {
-        const r = a * Math.PI / 180; cam.position.set(Math.sin(r) * 60, 6, Math.cos(r) * 60); cam.lookAt(0, 5, 0);
-        model.visible = true; im.visible = false; const m = side();
-        model.visible = false; im.visible = true; const c = side();
-        res.push([a, m, c]);
+      const res = [], clear = [];
+      // turned 0.6 rad from 4 sides, and unturned seen straight on (the camera's angle in the tree's frame exactly 0)
+      [[0.6, 0], [0.6, 90], [0.6, 180], [0.6, 270], [0, 0], [0, 180]].forEach(function (c) {
+        model.rotation.y = c[0]; im.setMatrixAt(0, new THREE.Matrix4().makeRotationY(c[0])); im.instanceMatrix.needsUpdate = true;
+        const r = c[1] * Math.PI / 180; cam.position.set(Math.sin(r) * 30, 5, Math.cos(r) * 30); cam.lookAt(0, 5, 0);
+        model.visible = true; im.visible = false; const m = sides();
+        model.visible = false; im.visible = true; const k = sides();
+        res.push([c[0], c[1], m, k]);
+        [0, 1].forEach(function (j) { if (m[j] !== null && Math.abs(m[j]) >= 4) clear.push([m[j], k[j]]); });
       });
       renderer.setRenderTarget(null); rt.dispose();
       delete window.customModels.zz_asym; delete window.ASSET_REGISTRY.zz_asym;
-      const clear = res.filter(function (e) { return e[1] !== null && Math.abs(e[1]) >= 4; });   // sides where the ball is clearly off the trunk
-      const ok = card.rt.width === 2 * card.rt.height && clear.every(function (e) { return e[2] !== null && Math.sign(e[1]) === Math.sign(e[2]); });
-      check('2D trees: the card shows the side of the model the camera is on, turned with the tree (red ball left or right of the trunk as on the model, 4 sides)',
-            ok && clear.length >= 2, JSON.stringify(res) + ' atlas ' + card.rt.width + 'x' + card.rt.height);
+      const ok = card.rt.width === 2 * card.rt.height && clear.every(function (e) { return e[1] !== null && Math.sign(e[0]) === Math.sign(e[1]); });
+      check('2D trees: the card shows the side of the model the camera is on, turned with the tree (ball and crown left or right of the trunk as on the model)',
+            ok && clear.length >= 6, JSON.stringify(res) + ' atlas ' + card.rt.width + 'x' + card.rt.height);
     })();
     // a round tree looks the same from every side: its card is as bright whatever way the tree is turned (three.js turns the normal by the
     // instance matrix, which now carries the turn); and two types with their centres in different places get programs of their own
