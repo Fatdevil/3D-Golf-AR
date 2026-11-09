@@ -314,6 +314,7 @@ function serve() {
       t += 2000; slow(80); t += 2000; slow(80); t += 2000; slow(80); t += 2000; slow(80);
       const low = { level: A.level(), post: window.PostFX.level(), detail: window.terrainShaderUniforms.uDetail.value, cap: window._autoPixelCap, pr: renderer.getPixelRatio(),
                     veg: window.SurroundVeg.autoScale() };
+      A.setLevel(5);   // a fresh window (the last slow frames would share the first smooth window)
       t += 2000; for (let w = 0; w < 3; w++) { for (let i = 0; i < 190; i++) A.feed(16, t += 16); }
       const up = A.level();
       // a stored choice of the player's is theirs
