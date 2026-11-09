@@ -5,6 +5,8 @@
  *   AUTO    after the ground: deep rough / rough a forest (a desert biome: sparse desert plants), waste / sand palms, the mountain horizon a
  *           sparse forest, water and sky nothing
  *   NONE, FOREST, PALMS, DESERT (cacti and shrubs, a few palms), CUSTOM (the types picked in the panel)
+ * Each tree has a soft shadow on the ground (cast away from the sun, and a faint patch under the crown; the cards cast nothing into
+ * the shadow map).
  * The trees are cards that turn to the camera (the far-away cards of arcade.html, makePropImpostor: the same picture of the 3D model,
  * tinted by the biome like the models). No shadow, no collision: nothing outside the plate is played. A tree belongs to the side whose
  * weight is largest where it stands, the same weights the surround plane blends its colours with, so the vegetation follows the ground.
@@ -243,6 +245,27 @@
                     scene.add(tm);
                     meshes.push(tm);
                 }
+                // the soft shadow on the ground under each tree (arcade.html makePropImpostor: the cards cast none into the shadow map)
+                if (card.shadowGeometry) {
+                    const sg = new THREE.BufferGeometry();
+                    sg.setIndex(card.shadowGeometry.index);
+                    for (const k in card.shadowGeometry.attributes) sg.setAttribute(k, card.shadowGeometry.attributes[k]);
+                    const sm = new THREE.InstancedMesh(sg, card.shadowMaterial, list.length);
+                    list.forEach(function (p, i) {
+                        pos.set(p[0], p[4], p[1]); scl.set(p[2], p[2], p[2]); tq.setFromAxisAngle(yAxis, p[3] * Math.PI * 2);
+                        mtx.compose(pos, tq, scl);
+                        sm.setMatrixAt(i, mtx);
+                    });
+                    sg.boundingSphere = g.boundingSphere.clone();
+                    sg.boundingSphere.radius += (card.shadowReach || 0) * maxS;   // the cast shadow lies away from the sun
+                    sm.instanceMatrix.needsUpdate = true;
+                    sm.castShadow = false; sm.receiveShadow = false; sm.frustumCulled = true;
+                    sm.raycast = function () {};
+                    sm.userData.surroundVeg = { type: t, side: side, shadow: true };
+                    if (side === 'OB') sm.visible = playing();
+                    scene.add(sm);
+                    meshes.push(sm);
+                }
             });
         });
         const names = { FOREST: tr('veg_forest', 'Skog'), SPARSE: tr('veg_forest', 'Skog'), PALMS: tr('veg_palms', 'Palmer'), DESERT: tr('veg_desert', 'Öken'), CUSTOM: tr('veg_custom', 'Egen') };
@@ -321,7 +344,7 @@
         config: function () { return clone(cfg); },
         vegOf: vegOf, poolFor: poolFor, sideAt: sideAt,
         meshes: function () { return meshes.slice(); },
-        count: function () { let c = 0; meshes.forEach(function (m) { if (!m.userData.surroundVeg.top) c += m.count; }); return c; },
+        count: function () { let c = 0; meshes.forEach(function (m) { const u = m.userData.surroundVeg; if (!u.top && !u.shadow) c += m.count; }); return c; },
         status: function () { return lastStatus; },
         setSide: function (side, veg) {
             if ((SIDES.indexOf(side) < 0 && side !== 'OB') || VEG.indexOf(veg) < 0) return;
