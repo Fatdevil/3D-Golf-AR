@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=42"></script>
+<script src="i18n.js?v=43"></script>
 <script src="physics.js?v=15"></script>
 <script src="hitbox-fit.js?v=1"></script>
 <script src="prop-collision.js?v=1"></script>
@@ -44,7 +44,7 @@
 <script src="arcade-particle-engine.js?v=2"></script>
 <script src="arcade-wind-sway.js?v=2"></script>
 <script src="arcade-post.js?v=2"></script>
-<script src="arcade-surround-veg.js?v=3"></script>
+<script src="arcade-surround-veg.js?v=4"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
@@ -1878,6 +1878,18 @@
                         <option value="CUSTOM" data-i18n="veg_opt_custom">✏️ Egen</option>
                     </select>
                 </div>
+                </div>
+                <div style="margin-top:6px;">
+                    <div data-i18n="env_veg_ob" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">OB-områden på banan</div>
+                    <select id="veg-OB" onchange="window.SurroundVeg && window.SurroundVeg.setSide('OB', this.value)" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                        <option value="NONE" data-i18n="veg_opt_none">❌ Ingen</option>
+                        <option value="AUTO" data-i18n="veg_opt_ob_auto">✨ Skog (öken i ökenbiom)</option>
+                        <option value="FOREST" data-i18n="veg_opt_forest">🌳 Skog</option>
+                        <option value="PALMS" data-i18n="veg_opt_palms">🌴 Palmer</option>
+                        <option value="DESERT" data-i18n="veg_opt_desert">🌵 Öken</option>
+                        <option value="CUSTOM" data-i18n="veg_opt_custom">✏️ Egen</option>
+                    </select>
+                    <div data-i18n="env_veg_ob_desc" style="font-size:9px; color:#64748b; line-height:1.4; margin-top:2px;">2D-träd i OB-målade områden, 10 m in från linjen. Syns i spel och test.</div>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-top:8px;"><span data-i18n="env_veg_density" style="color:#94a3b8; font-size:9px; font-weight:bold;">Täthet</span><span id="veg-density-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
                 <input type="range" id="veg-density" min="0" max="3" step="0.1" value="1" oninput="window.SurroundVeg && window.SurroundVeg.setDensity(this.value, false)" onchange="window.SurroundVeg && window.SurroundVeg.setDensity(this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
@@ -7682,14 +7694,20 @@
     }
 
     // ---- Far-away trees as cards (impostors) ----
-    // A tree type is photographed once from the side into a texture (makePropImpostor). A square whose nearest point is more than
+    // A tree type is photographed once from 8 sides into a texture (makePropImpostor). A square whose nearest point is more than
     // PROP_IMPOSTOR_FAR m from the camera draws a card per tree instead of the model: two triangles that turn about the vertical axis to face
     // the camera, tinted like the model (PROP_TINT_GLSL) and lit as if it faced the camera, tipped a little up (the visible half of a crown on
     // average). Measured from the ground: far trees as cards cover the same area as the models, with a mean colour about 7 % brighter, and
     // without the round shading of a crown. Only in play and test mode
     // (updatePropLod); building and the minimap always draw the models. The models stay in place (hidden), so a click still picks the tree.
     const PROP_IMPOSTOR_FAR = 150, PROP_IMPOSTOR_NEAR = 130;   // hysteresis: a square goes to cards beyond 150 m and back to models within 130 m
-    const PROP_IMPOSTOR_RES = 256;
+    const PROP_IMPOSTOR_RES = 256;   // per view
+    // photographed from 8 sides (45 degrees apart), 4 views a row: the card shows the side of the model the camera is on, so a tree that is
+    // not round (a leaning trunk, a lopsided crown) keeps its shape as the camera goes round it, and each tree shows its own turn
+    const PROP_IMPOSTOR_VIEWS = 8, PROP_IMPOSTOR_COLS = 4;
+    // cards dissolve (dither) close to the camera, from 35 m in to 20 m: a flat card up close shows what it is. The far-away cards on the
+    // plate start at 130 m and the surroundings at 320 m; only the trees filling the OB areas (arcade-surround-veg.js) come this close
+    const PROP_CARD_NEAR = [20, 35];
     const PROP_TOP_FADE = [Math.sin(25 * Math.PI / 180), Math.sin(50 * Math.PI / 180)];   // the lying card fades in between 25 and 50 degrees down
     // The camera's world position, from the view matrix: three.js r128 sends cameraPosition only to Phong, Standard, Toon and shader
     // materials (and those with an environment map), so in these Lambert cards it was (0, 0, 0): the standing cards turned to the middle
@@ -7712,15 +7730,23 @@
         model.updateWorldMatrix(true, true);
         const box = new THREE.Box3().setFromObject(model);
         if (box.isEmpty()) return null;
-        const size = box.getSize(new THREE.Vector3()), S = Math.max(size.x, size.y, size.z) * 1.02;
-        const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2, midY = box.min.y + S / 2;
-        // photograph: orthographic, from the side, plain white light (the card is lit in the scene), transparent background
-        const rt = new THREE.WebGLRenderTarget(PROP_IMPOSTOR_RES, PROP_IMPOSTOR_RES, { format: THREE.RGBAFormat });
+        const size = box.getSize(new THREE.Vector3());
+        const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+        // the frame holds the model from every side: its width seen from any angle is at most the diagonal of its footprint
+        const S = Math.max(Math.hypot(size.x, size.z), size.y) * 1.02, midY = box.min.y + S / 2;
+        // photographs: orthographic, from PROP_IMPOSTOR_VIEWS sides around the model (view k from angle k * 360 / VIEWS, view 0 from +z),
+        // plain white light (the card is lit in the scene), transparent background, side by side in one picture (PROP_IMPOSTOR_COLS wide)
+        const V = PROP_IMPOSTOR_VIEWS, C = PROP_IMPOSTOR_COLS, R = PROP_IMPOSTOR_RES, D = S * 1.5 + 5;
+        const rt = new THREE.WebGLRenderTarget(R * C, R * Math.ceil(V / C), { format: THREE.RGBAFormat });
         rt.texture.generateMipmaps = true;
         rt.texture.minFilter = THREE.LinearMipmapLinearFilter;
-        const cam = new THREE.OrthographicCamera(-S / 2, S / 2, S / 2, -S / 2, 0.01, S * 4 + 10);
-        cam.position.set(cx, midY, box.max.z + S + 5);
-        cam.lookAt(cx, midY, cz);
+        const views = [];
+        for (let k = 0; k < V; k++) {
+            const a = k * Math.PI * 2 / V, cam = new THREE.OrthographicCamera(-S / 2, S / 2, S / 2, -S / 2, 0.01, D + S * 2);
+            cam.position.set(cx + Math.sin(a) * D, midY, cz + Math.cos(a) * D);
+            cam.lookAt(cx, midY, cz);
+            views.push({ cam: cam, x: (k % C) * R, y: Math.floor(k / C) * R });
+        }
         // and from above (the lying card, faded in when the camera looks down): the crown seen straight down, x to the right, -z up
         const Sxz = Math.max(size.x, size.z) * 1.02;
         const rtTop = new THREE.WebGLRenderTarget(PROP_IMPOSTOR_RES, PROP_IMPOSTOR_RES, { format: THREE.RGBAFormat });
@@ -7740,11 +7766,19 @@
             renderer.shadowMap.autoUpdate = false;
             renderer.autoClear = true;
             renderer.setClearColor(0x000000, 0);
-            [[rt, cam], [rtTop, camTop]].forEach(function (pair) {
-                renderer.setRenderTarget(pair[0]);
-                renderer.clear(true, true, true);
-                renderer.render(tmp, pair[1]);
+            renderer.setRenderTarget(rt);
+            renderer.clear(true, true, true);
+            renderer.autoClear = false;   // each view draws into its own tile (the tiles do not overlap)
+            views.forEach(function (v) {
+                rt.viewport.set(v.x, v.y, R, R);
+                renderer.setRenderTarget(rt);
+                renderer.render(tmp, v.cam);
             });
+            rt.viewport.set(0, 0, rt.width, rt.height);
+            renderer.autoClear = true;
+            renderer.setRenderTarget(rtTop);
+            renderer.clear(true, true, true);
+            renderer.render(tmp, camTop);
         } finally {
             renderer.setRenderTarget(prevTarget);
             renderer.setClearColor(prevColor, prevAlpha);
@@ -7752,13 +7786,16 @@
             renderer.shadowMap.autoUpdate = prevShadow;
             tmp.remove(shot);
         }
-        // the card: a square S x S with its bottom at the model's foot, centred on the model
+        // the card: a square S x S with its bottom at the model's foot; the shader moves it to the model's centre (turned with the tree)
+        // and shows the photograph taken nearest the side the camera is on, relative to the tree's own turn (a dithered cross-over between
+        // two views was tried: a tree half-way showed the two pictures as a sparse, see-through mix; a far tree changes view rarely)
         const geo = new THREE.PlaneGeometry(S, S);
-        geo.translate(cx, midY, 0);
+        geo.translate(0, midY, 0);
+        const f3 = function (v) { return (+v).toFixed(4); };
         const mat = new THREE.MeshLambertMaterial({ map: rt.texture, alphaTest: 0.5, side: THREE.FrontSide });
         mat.onBeforeCompile = function (shader) {
             shader.vertexShader = shader.vertexShader
-                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;')
+                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vCardView;\nvarying float vCardNear;')
                 .replace('#include <color_vertex>', '#include <color_vertex>\nvInstanceTrunkColor = instanceTrunkColor;')
                 .replace('#include <beginnormal_vertex>', [
                     // the visible half of a crown faces the camera on average: the card is lit as if it faced the camera, tipped a little up
@@ -7769,15 +7806,35 @@
                 .replace('#include <project_vertex>', [
                     'vec3 iPos = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;',
                     'float iSx = length(instanceMatrix[0].xyz), iSy = length(instanceMatrix[1].xyz);',
+                    'vec3 iMid = (modelMatrix * instanceMatrix * vec4(' + f3(cx) + ', 0.0, ' + f3(cz) + ', 0.0)).xyz;',
                     'vec3 toCam = cardCam - iPos; toCam.y = 0.0;',
                     'vec3 iRight = length(toCam) > 0.001 ? normalize(vec3(toCam.z, 0.0, -toCam.x)) : vec3(1.0, 0.0, 0.0);',
-                    'vec3 iWorld = iPos + iRight * transformed.x * iSx + vec3(0.0, 1.0, 0.0) * transformed.y * iSy;',
+                    'vec3 iWorld = iPos + iMid + iRight * transformed.x * iSx + vec3(0.0, 1.0, 0.0) * transformed.y * iSy;',
                     'vec4 mvPosition = viewMatrix * vec4(iWorld, 1.0);',
-                    'gl_Position = projectionMatrix * mvPosition;'
+                    'gl_Position = projectionMatrix * mvPosition;',
+                    // the camera's angle around the tree, in the tree's own frame (its turn about the vertical axis taken off), in views
+                    // (the direction in the tree's axes; atan(y, x) with y exactly 0 gave half a turn on some GPUs, so y is kept off 0,
+                    // and the wrap is by hand: mod() of a negative number is not the same everywhere)
+                    'float iLx = dot(toCam, normalize(instanceMatrix[0].xyz)), iLz = dot(toCam, normalize(instanceMatrix[2].xyz));',
+                    'if (abs(iLx) < 1e-4) iLx = 1e-4;',
+                    'float iView = atan(iLx, iLz) * ' + f3(V / (Math.PI * 2)) + ';',
+                    'iView -= ' + V + '.0 * floor(iView / ' + V + '.0);',
+                    'float iK = floor(iView + 0.5);',
+                    'vCardView = iK > ' + (V - 0.5) + ' ? 0.0 : iK;',
+                    'vCardNear = smoothstep(' + f3(PROP_CARD_NEAR[0]) + ', ' + f3(PROP_CARD_NEAR[1]) + ', length(cardCam - iPos));'
                 ].join('\n'));
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <color_pars_fragment>', '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;')
-                .replace('#include <color_fragment>', PROP_TINT_GLSL);
+                .replace('#include <color_pars_fragment>', '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;\nvarying float vCardView;\nvarying float vCardNear;')
+                .replace('#include <color_fragment>', PROP_TINT_GLSL)
+                .replace('#include <map_fragment>', [
+                    'float cardDither = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);',
+                    'float cardK = floor(vCardView + 0.5);',
+                    'float cardRow = floor((cardK + 0.5) / ' + C + '.0);',
+                    'vec2 cardUv = (vUv + vec2(cardK - cardRow * ' + C + '.0, cardRow)) * vec2(' + f3(1 / C) + ', ' + f3(1 / Math.ceil(V / C)) + ');',
+                    'vec4 texelColor = mapTexelToLinear(texture2D(map, cardUv));',
+                    'diffuseColor *= texelColor;'
+                ].join('\n'))
+                .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\nif (vCardNear <= cardDither) discard;');
         };
         // the lying card: the crown from above, flat at 80 % of the tree's height. Seen from the side the standing card is the tree; as the
         // camera looks down the standing card thins to a line, so the lying one fades in (a screen-door dither, no sorting): nothing below
@@ -7788,18 +7845,19 @@
         const topMat = new THREE.MeshLambertMaterial({ map: rtTop.texture, alphaTest: 0.5, side: THREE.DoubleSide });
         topMat.onBeforeCompile = function (shader) {
             shader.vertexShader = shader.vertexShader
-                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;')
+                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;\nvarying float vCardNear;')
                 .replace('#include <color_vertex>', '#include <color_vertex>\nvInstanceTrunkColor = instanceTrunkColor;')
                 .replace('#include <project_vertex>', [
                     '#include <project_vertex>',
                     'vec4 tWorld = modelMatrix * instanceMatrix * vec4(transformed, 1.0);',
                     CARD_CAM_GLSL,
-                    'vTopFade = smoothstep(' + PROP_TOP_FADE[0].toFixed(3) + ', ' + PROP_TOP_FADE[1].toFixed(3) + ', normalize(cardCam - tWorld.xyz).y);'
+                    'vTopFade = smoothstep(' + PROP_TOP_FADE[0].toFixed(3) + ', ' + PROP_TOP_FADE[1].toFixed(3) + ', normalize(cardCam - tWorld.xyz).y);',
+                    'vCardNear = smoothstep(' + f3(PROP_CARD_NEAR[0]) + ', ' + f3(PROP_CARD_NEAR[1]) + ', length(cardCam - (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz));'
                 ].join('\n'));
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <color_pars_fragment>', '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;')
+                .replace('#include <color_pars_fragment>', '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;\nvarying float vCardNear;')
                 .replace('#include <color_fragment>', PROP_TINT_GLSL)
-                .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\nif (vTopFade <= fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453)) discard;');
+                .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\nfloat topDither = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);\nif (vTopFade <= topDither || vCardNear <= topDither) discard;');
         };
         return { texture: rt.texture, rt: rt, geometry: geo, material: mat, radius: Math.hypot(S / 2, S / 2),
                  topTexture: rtTop.texture, topRt: rtTop, topGeometry: topGeo, topMaterial: topMat };
@@ -7940,7 +7998,7 @@
                 list.forEach((e, i) => {
                     const t = e.t;
                     _iPos.set(t.x, (t.y || 0) + (t.yOffset || 0), t.z);
-                    _iQuat.identity();
+                    _iQuat.setFromAxisAngle(_yAxis, t.rot || 0);   // the card shows the side of the model the camera sees on this tree
                     _iScale.set(t.scale, t.scale, t.scale);
                     _iMatrix.compose(_iPos, _iQuat, _iScale);
                     im.setMatrixAt(i, _iMatrix);
@@ -11818,6 +11876,7 @@
             if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
         }
         appMode = mode;
+        if (window.SurroundVeg) window.SurroundVeg.modeChanged();   // the trees in the OB areas show in play and test only
         if (typeof window.updateActiveFairwayOutline === 'function') window.updateActiveFairwayOutline();
         if (typeof window.updateActiveBunkerOutline === 'function') window.updateActiveBunkerOutline();
         

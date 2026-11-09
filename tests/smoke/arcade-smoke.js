@@ -162,6 +162,44 @@ function serve() {
       window.placedTrees.length = n0; destroyInstancePool('zz_wind'); delete window.customModels.zz_wind; delete window.ASSET_REGISTRY.zz_wind;
       check('a tree card photographed again after the wind sway patched the materials is not empty', first > 1000 && second > 1000, 'first ' + first + ', second ' + second + ', patched ' + patched);
     })();
+    // the card shows the side of the model the camera is on (8 photographs), turned with the tree: a lopsided model (a red ball out to +z,
+    // the crown out to +x), turned 0.6 rad, seen from 4 sides; the red ball is left or right of the trunk on the card as on the model.
+    // (On a GPU where atan(0, x) gave half a turn, the card seen from straight ahead showed the back of the tree.)
+    (function () {
+      const g = new THREE.Group();
+      const add = function (geo, col, x, y, z) { const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: col })); m.position.set(x, y, z); g.add(m); };
+      add(new THREE.CylinderGeometry(0.4, 0.5, 6, 8), 0x6b4a2b, 0, 3, 0); add(new THREE.IcosahedronGeometry(2.6, 1), 0x2f7a2f, 2.2, 7, 0); add(new THREE.IcosahedronGeometry(1.2, 1), 0xd03030, 0, 5, 2.4);
+      window.customModels.zz_asym = g; window.ASSET_REGISTRY.zz_asym = { subcat: 'TREES' };
+      const card = window.makePropImpostor('zz_asym'), turn = 0.6, W = 160, H = 200;
+      const scn = new THREE.Scene(); scn.add(new THREE.AmbientLight(0xffffff, 1));
+      const model = g.clone(); model.rotation.y = turn; scn.add(model);
+      const geo = new THREE.BufferGeometry(); geo.setIndex(card.geometry.index); for (const k in card.geometry.attributes) geo.setAttribute(k, card.geometry.attributes[k]);
+      geo.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3));
+      const im = new THREE.InstancedMesh(geo, card.material, 1); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3);
+      im.setMatrixAt(0, new THREE.Matrix4().makeRotationY(turn)); im.frustumCulled = false; scn.add(im);
+      const rt = new THREE.WebGLRenderTarget(W, H), cam = new THREE.PerspectiveCamera(35, W / H, 0.5, 500), px = new Uint8Array(W * H * 4);
+      // the red ball's side of the trunk, in pixels (+ right)
+      const side = function () {
+        renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scn, cam); renderer.readRenderTargetPixels(rt, 0, 0, W, H, px);
+        let rx = 0, rn = 0, bx = 0, bn = 0;
+        for (let i = 0; i < W * H; i++) { const r = px[i * 4], gg = px[i * 4 + 1], b = px[i * 4 + 2], x = i % W; if (px[i * 4 + 3] < 128) continue;
+          if (r > 150 && gg < 90) { rx += x; rn++; } else if (r > gg && gg > b && r < 150 && Math.floor(i / W) < H * 0.3) { bx += x; bn++; } }
+        return rn && bn ? Math.round(rx / rn - bx / bn) : null;
+      };
+      const res = [];
+      [0, 90, 180, 270].forEach(function (a) {
+        const r = a * Math.PI / 180; cam.position.set(Math.sin(r) * 60, 6, Math.cos(r) * 60); cam.lookAt(0, 5, 0);
+        model.visible = true; im.visible = false; const m = side();
+        model.visible = false; im.visible = true; const c = side();
+        res.push([a, m, c]);
+      });
+      renderer.setRenderTarget(null); rt.dispose();
+      delete window.customModels.zz_asym; delete window.ASSET_REGISTRY.zz_asym;
+      const clear = res.filter(function (e) { return e[1] !== null && Math.abs(e[1]) >= 4; });   // sides where the ball is clearly off the trunk
+      const ok = card.rt.width === 2 * card.rt.height && clear.every(function (e) { return e[2] !== null && Math.sign(e[1]) === Math.sign(e[2]); });
+      check('2D trees: the card shows the side of the model the camera is on, turned with the tree (red ball left or right of the trunk as on the model, 4 sides)',
+            ok && clear.length >= 2, JSON.stringify(res) + ' atlas ' + card.rt.width + 'x' + card.rt.height);
+    })();
     // a GLTF model's colour textures are used as they are written (the game draws without colour-space conversion): before, three.js decoded
     // them from sRGB and an oak's crown came out almost black
     await (async function () {
@@ -252,6 +290,32 @@ function serve() {
       check('vegetation in the surroundings: AUTO follows the ground (deep rough forest, waste palms, ocean none), trees outside the plate on their own side, no click, saved on the holes',
             veg === 'FOREST,PALMS,NONE,NONE' && (per['N:zz_oak2'] || 0) > 0 && (per['E:zz_palm2'] || 0) > 0 && !Object.keys(per).some(function (k) { return /^(S|W):/.test(k); }) && outside && rightSide && hits.length === 0 && saved,
             JSON.stringify({ veg: veg, per: per, outside: outside, rightSide: rightSide, hits: hits.length, saved: saved, status: window.SurroundVeg.status() }));
+      // the OB areas on the plate: a painted OB block filled with the oak; the trees stand on OB ground at least 10 m in from its line,
+      // and show in play and test mode only
+      const obCheck = await (async function () {
+        const hex = window.CURRENT_BIOME_CONFIG.obColor || '#ef4444', cr = parseInt(hex.slice(1, 3), 16), cg = parseInt(hex.slice(3, 5), 16), cb = parseInt(hex.slice(5, 7), 16);
+        const d = window.terrainBiomeData, saved = [];
+        for (let z = -200; z < -100; z += 0.146) for (let x = -100; x < 100; x += 0.146) {
+          const i = (Math.floor((z + 300) / 600 * 4096) * 4096 + Math.floor((x + 300) / 600 * 4096)) * 4;
+          saved.push([i, d[i], d[i + 1], d[i + 2]]); d[i] = cr; d[i + 1] = cg; d[i + 2] = cb;
+        }
+        const customWas = window.SurroundVeg.config().custom.slice();
+        if (customWas.indexOf('zz_oak2') < 0) window.SurroundVeg.toggleCustom('zz_oak2');
+        window.SurroundVeg.setSide('OB', 'CUSTOM');
+        window.SurroundVeg.build();
+        const obMeshes = window.SurroundVeg.meshes().filter(function (m) { return m.userData.surroundVeg.side === 'OB'; });
+        let n = 0, inside = true; const mt = new THREE.Matrix4(), p = new THREE.Vector3();
+        obMeshes.forEach(function (m) { if (m.userData.surroundVeg.top) return; for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, mt); p.setFromMatrixPosition(mt); n++; if (p.x < -90.5 || p.x > 90.5 || p.z < -190.5 || p.z > -109.5 || !window.SurroundVeg.obClear(p.x, p.z)) inside = false; } });
+        const mode = window.getAppMode(), play = mode === 'PLAY' || mode === 'TEST';
+        const visOk = obMeshes.length > 0 && obMeshes.every(function (m) { return m.visible === play; });
+        window.SurroundVeg.setSide('OB', 'NONE');
+        if (customWas.indexOf('zz_oak2') < 0) window.SurroundVeg.toggleCustom('zz_oak2');
+        saved.forEach(function (e) { d[e[0]] = e[1]; d[e[0] + 1] = e[2]; d[e[0] + 2] = e[3]; });
+        window.SurroundVeg.build();
+        return { n: n, inside: inside, visOk: visOk, mode: mode, left: window.SurroundVeg.meshes().filter(function (m) { return m.userData.surroundVeg.side === 'OB'; }).length };
+      })();
+      check('2D trees in the OB areas: on OB ground at least 10 m in from the line, shown in play and test only, gone when set to none',
+            obCheck.n > 10 && obCheck.inside && obCheck.visOk && obCheck.left === 0, JSON.stringify(obCheck));
       // the cards face the camera, and the lying cards fade in from above: (a) seen from outside the belt (a camera far out east, looking
       // back at the plate) the standing cards show (they turned to the middle of the plate, three.js gives Lambert no cameraPosition, and
       // from out there their backs were culled); (b) looking steeply down, the lying cards add crowns where the standing ones are a line
