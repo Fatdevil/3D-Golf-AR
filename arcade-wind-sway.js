@@ -91,8 +91,13 @@
             float maxSwayWorld = 3.0;
             float swayModelSpace = oscillation * maxSwayWorld / max(modelScaleY, 0.1);
             
-            transformed.x += uWindDirX * swayModelSpace;
-            transformed.z += uWindDirZ * swayModelSpace;
+            // The wind blows in the world: its direction is taken into the tree's own frame (the instance matrix turns the model after
+            // this). Before, the model-space offset was turned with the tree, so a tree turned 180 degrees swayed against the wind (and
+            // its far-away card, which sways in the world, went the other way at the switch). d * M is M^T d; over the scale squared it
+            // is the turned-back direction (a uniform scale).
+            vec3 windLocal = (vec3(uWindDirX, 0.0, uWindDirZ) * mat3(instanceMatrix)) / max(modelScaleY * modelScaleY, 0.0001);
+            transformed.x += windLocal.x * oscillation * maxSwayWorld;
+            transformed.z += windLocal.z * oscillation * maxSwayWorld;
             transformed.y -= abs(swayModelSpace) * 0.03;
         }
     `;
@@ -250,6 +255,8 @@
     // PUBLIC API
     // ---------------------------------------------------------------
     window.WindSway = {
+        // the shared wind uniforms: the far-away trees' cards (arcade.html makePropImpostor) sway with the same wind
+        uniforms: WIND_UNIFORMS,
         init,
         update,
         setEnabled,
