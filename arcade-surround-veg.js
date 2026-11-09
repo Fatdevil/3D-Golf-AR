@@ -32,6 +32,7 @@
     const OB_MAX = 4000;
 
     let cfg = clone(DEFAULT);
+    let autoScale = 1;                   // the automatic graphics level's share of the density (arcade-auto-quality.js; not saved)
     let meshes = [];
     let impostors = {};                  // type -> card (texture, plane, material) of our own, when no prop pool has one
     let timer = null, tries = 0;
@@ -151,7 +152,7 @@
         const r = rng(cfg.seed || 1);
         const per = {};   // type -> side -> [x, z, s, rnd]
         let n = 0;
-        const candidates = Math.min(MAX_TREES * 4, Math.round(area * PER_M2 * Math.max(0, cfg.density)));
+        const candidates = Math.min(MAX_TREES * 4, Math.round(area * PER_M2 * Math.max(0, cfg.density) * autoScale));
         for (let i = 0; i < candidates && n < MAX_TREES; i++) {
             const x = (r() * 2 - 1) * outer, z = (r() * 2 - 1) * outer, keep = r(), which = r(), sc = r(), tint = r();
             if (Math.abs(x) < half && Math.abs(z) < half) continue;
@@ -169,7 +170,7 @@
         const obVeg = sideVeg.OB, obPool = pools[obVeg];
         if (obVeg !== 'NONE' && obPool && obPool.length && typeof root.localGetTerrainAt === 'function') {
             const plate = half - GAP, ro = rng(((cfg.seed || 1) * 7919 + 13) >>> 0);
-            const cand = Math.min(OB_MAX * 6, Math.round(4 * plate * plate * OB_PER_M2 * Math.max(0, cfg.density)));
+            const cand = Math.min(OB_MAX * 6, Math.round(4 * plate * plate * OB_PER_M2 * Math.max(0, cfg.density) * autoScale));
             let tot = 0; obPool.forEach(function (p) { tot += p.w; });
             let m = 0;
             for (let i = 0; i < cand && m < OB_MAX; i++) {
@@ -362,6 +363,9 @@
         setDepth: function (v, done) { cfg.depth = Math.max(40, Math.min(700, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
         toggleCustom: function (t) { const i = cfg.custom.indexOf(t); if (i >= 0) cfg.custom.splice(i, 1); else if (cfg.custom.length < 8) cfg.custom.push(t); save(); renderCustomList(); schedule(); },
         reseed: function () { cfg.seed = ((cfg.seed || 1) * 16807 + 11) % 2147483647; save(); schedule(); },
+        // the automatic graphics level thins the trees (0.3-1) without touching the saved density; grows them again when it changes
+        setAutoScale: function (f) { f = Math.max(0.3, Math.min(1, +f || 1)); if (f === autoScale) return; autoScale = f; schedule(); },
+        autoScale: function () { return autoScale; },
         restore: restore, schedule: schedule, build: build, clear: clear
     };
     root.SurroundVeg = api;

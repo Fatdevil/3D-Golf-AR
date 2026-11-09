@@ -57,6 +57,9 @@ function serve() {
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
   // a recogniser the test can talk to: the real one needs a microphone
   await ctx.addInitScript(function () {
+    // the automatic graphics level is off here (the software renderer is slow: it would lower the picture under the other checks);
+    // its own check turns it on
+    try { localStorage.setItem('golf_auto_q_on', '0'); } catch (e) { /* storage blocked */ }
     window.__sr = [];
     function FakeSR() { this.started = 0; this.aborted = false; window.__sr.push(this); }
     FakeSR.prototype.start = function () { this.started++; };
@@ -296,6 +299,35 @@ function serve() {
       window.setGroundDetail(was > 0.5);
       camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld(); window.PostFX.setLevel(pf);
       check('ground detail: on, the ground close to the camera varies more than painted; off is remembered', on >= off + 3 && stored === '0', 'green spread off ' + off + ', on ' + on + ', stored ' + stored);
+    })();
+    // the automatic graphics level (arcade-auto-quality.js): on, slow frames lower it (light & colour off, the pixel ratio capped, the
+    // 2D trees thinned) and smooth ones raise it again; a choice the player stored is left as it is; off, nothing moves
+    await (async function () {
+      const A = window.AutoQuality, pf = window.PostFX.level(), gdWas = window.terrainShaderUniforms.uDetail.value > 0.5;
+      const prWas = renderer.getPixelRatio(), lvWas = A.level();
+      const storedWas = { post: localStorage.getItem('golf_post_q'), gd: localStorage.getItem('golf_ground_detail') };
+      A.setOn(true); A.setLevel(1);
+      const at1 = { post: window.PostFX.level(), cap: window._autoPixelCap };
+      let t = performance.now() + 2000;
+      const slow = function (n) { for (let i = 0; i < n; i++) A.feed(40, t += 40); };
+      slow(80); const one = A.level();
+      t += 2000; slow(80); t += 2000; slow(80); t += 2000; slow(80); t += 2000; slow(80);
+      const low = { level: A.level(), post: window.PostFX.level(), detail: window.terrainShaderUniforms.uDetail.value, cap: window._autoPixelCap, pr: renderer.getPixelRatio(),
+                    veg: window.SurroundVeg.autoScale() };
+      t += 2000; for (let w = 0; w < 3; w++) { for (let i = 0; i < 190; i++) A.feed(16, t += 16); }
+      const up = A.level();
+      // a stored choice of the player's is theirs
+      A.setLevel(1); localStorage.setItem('golf_post_q', 'LOW'); window.PostFX.setLevel('LOW', false); A.setLevel(5); const mine = window.PostFX.level();
+      A.setOn(false); const fixedAt = A.level(); t += 2000; slow(300); const fixed = A.level();
+      // back as it was
+      if (storedWas.post === null) localStorage.removeItem('golf_post_q'); else localStorage.setItem('golf_post_q', storedWas.post);
+      if (storedWas.gd === null) localStorage.removeItem('golf_ground_detail'); else localStorage.setItem('golf_ground_detail', storedWas.gd);
+      A.setLevel(lvWas); window.PostFX.setLevel(pf, false); window.setGroundDetail(gdWas, false); window._autoPixelCap = Infinity;
+      renderer.setPixelRatio(window.getCapPixelRatio()); localStorage.setItem('golf_auto_q_on', '0');
+      check('automatic graphics: slow frames lower it a step at a time (light & colour off, pixel ratio capped at 1, ground detail off, the 2D trees thinned), smooth ones raise it; the player\'s choice is kept; off, it stays',
+            at1.post === 'LOW' && one === 2 && low.level === 5 && low.post === 'OFF' && low.detail === 0 && low.cap === 1 && low.pr <= 1 && low.veg === 0.4 &&
+            up === 4 && mine === 'LOW' && fixed === fixedAt && renderer.getPixelRatio() === prWas,
+            JSON.stringify({ at1: at1, one: one, low: low, up: up, mine: mine, fixedAt: fixedAt, fixed: fixed, pr: renderer.getPixelRatio(), prWas: prWas }));
     })();
     // vegetation in the surroundings (arcade-surround-veg.js): AUTO follows the ground of each side (deep rough a forest, waste palms,
     // ocean nothing); the trees stand outside the plate on the side they belong to, take no click, and the setting is saved on the holes
@@ -1263,6 +1295,7 @@ function serve() {
     await browser.close(); // and the pages below get a browser of their own (a clean profile: the stored draft is theirs alone)
     browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
     const ctx2 = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
+    await ctx2.addInitScript(function () { try { localStorage.setItem('golf_auto_q_on', '0'); } catch (e) { /* storage blocked */ } });
     await ctx2.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
       const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
       if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
@@ -1766,6 +1799,7 @@ function serve() {
   let rangeStep = 'start';
   try {
     const ctx3 = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
+    await ctx3.addInitScript(function () { try { localStorage.setItem('golf_auto_q_on', '0'); } catch (e) { /* storage blocked */ } });
     await ctx3.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
       const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
       if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
