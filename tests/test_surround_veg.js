@@ -5,6 +5,8 @@
  * 2. The pools: a forest is the trees on the course (as many as they are), palms the trees named "palm", desert cacti and shrubs.
  * 3. The settings live on the holes: restore() takes them from the first hole that has them, a bad value falls back to the default.
  * 4. arcade.html: an undo / redo restores the live vegetation from the holes, and the library arriving rebuilds the belt.
+ * 5. The OB areas on the plate: none by default, AUTO a forest (desert plants in a desert biome), a tree only on OB ground 10 m in from the
+ *    line, saved with the rest; arcade.html shows them in play and test only.
  * Run: node tests/test_surround_veg.js
  */
 const fs = require('fs');
@@ -79,6 +81,24 @@ console.log('\n4. arcade.html');
   check('sparas, laddas och nollställs med hålen', /surroundVeg: h\.surroundVeg \? JSON\.parse/.test(html) && /h\.surroundVeg = hState\.surroundVeg \|\| null;/.test(html) && /h\.surroundVeg = null;/.test(html) &&
         /surroundVeg: h\.surroundVeg \|\| null,/.test(fs.readFileSync(path.join(__dirname, '..', 'arcade-save.js'), 'utf8')) &&
         /if\(hSync\.surroundVeg\) h\.surroundVeg = hSync\.surroundVeg;/.test(fs.readFileSync(path.join(__dirname, '..', 'arcade-load.js'), 'utf8')));
+}
+
+console.log('\n5. OB-områdena');
+{
+  const win = { ASSET_REGISTRY: REG, placedTrees: [], surroundConfig: {}, courseHoles: [{}, {}], TERRAIN_SIZE: 600,
+                // OB where x > 100 (the plate's east part)
+                localGetTerrainAt: function (px, py) { return { z: 0, type: px > 100 ? 'OB' : 'ROUGH' }; } };
+  const V = load(win);
+  check('standard: inga träd i OB', V.config().ob === 'NONE' && V.vegOf('OB') === 'NONE');
+  V.setSide('OB', 'AUTO');
+  check('efter marken: skog, i ökenbiom ökenväxter; sparas på hålen', V.vegOf('OB') === 'FOREST' && win.courseHoles.every(function (h) { return h.surroundVeg.ob === 'AUTO'; }) &&
+        (win.ACTIVE_BIOME = 'DESERT', V.vegOf('OB') === 'DESERT'));
+  check('ett träd bara på OB-mark minst 10 m in från linjen och innanför plattan', V.obClear(150, 0) && V.obClear(111, 0) && !V.obClear(105, 0) && !V.obClear(50, 0) && !V.obClear(295, 0));
+  win.courseHoles = [{ surroundVeg: { ob: 'BOGUS' } }];
+  V.restore();
+  check('felaktigt värde: inga träd', V.config().ob === 'NONE');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'arcade.html'), 'utf8');
+  check('arcade.html: lägesbytet visar/döljer OB-träden, och väljaren finns', /appMode = mode;\s*if \(window\.SurroundVeg\) window\.SurroundVeg\.modeChanged\(\);/.test(html) && /id="veg-OB"/.test(html));
 }
 
 console.log(failed ? '\nOVERALL:  ❌ REGRESSION (' + failed + ' failed)' : '\nOVERALL:  ✅ ALL PASS');

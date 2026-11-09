@@ -8,19 +8,26 @@
  * The trees are cards that turn to the camera (the far-away cards of arcade.html, makePropImpostor: the same picture of the 3D model,
  * tinted by the biome like the models). No shadow, no collision: nothing outside the plate is played. A tree belongs to the side whose
  * weight is largest where it stands, the same weights the surround plane blends its colours with, so the vegetation follows the ground.
- * Saved as settings on the holes (hole.surroundVeg: sides, density, depth, custom types, seed), not as thousands of objects: the same belt
- * is grown from them on every load.
+ * Saved as settings on the holes (hole.surroundVeg: sides, density, depth, custom types, seed, ob), not as thousands of objects: the same
+ * belt is grown from them on every load.
+ * The OB areas on the plate (painted OB, drawn as rough in play) can be filled the same way (ob: a vegetation, NONE by default; AUTO a
+ * forest, desert plants in a desert biome): 2D trees on OB ground, at least OB_INSET m in from its edge (the ball's side of the line stays
+ * open), only in play and test mode (in building the OB paint is what is worked on). The cards dissolve close to the camera
+ * (PROP_CARD_NEAR in arcade.html). No collision: a ball in there is out of bounds already.
  */
 (function (root) {
     'use strict';
     const SIDES = ['N', 'E', 'S', 'W'];
     const VEG = ['AUTO', 'NONE', 'FOREST', 'PALMS', 'DESERT', 'CUSTOM'];
-    const DEFAULT = { sides: { N: 'AUTO', E: 'AUTO', S: 'AUTO', W: 'AUTO' }, density: 1, depth: 250, custom: [], seed: 1 };
+    const DEFAULT = { sides: { N: 'AUTO', E: 'AUTO', S: 'AUTO', W: 'AUTO' }, density: 1, depth: 250, custom: [], seed: 1, ob: 'NONE' };
     const PER_M2 = 1 / 550;              // candidate trees per m² at density 1 (a forest keeps all of them)
     const KEEP = { FOREST: 1, SPARSE: 0.25, PALMS: 0.3, DESERT: 0.22, CUSTOM: 0.8 };
     const GAP = 20;                      // m of open ground between the plate edge and the belt
     const MAX_TREES = 6000;
     const MAX_TYPES = 4;                 // per vegetation: each type is a model to load and a picture to take
+    const OB_PER_M2 = 1 / 300;           // candidate trees per m² of the plate for the OB areas at density 1 (denser: they are seen closer)
+    const OB_INSET = 10;                 // m between the OB line and the first tree
+    const OB_MAX = 4000;
 
     let cfg = clone(DEFAULT);
     let meshes = [];
@@ -46,9 +53,18 @@
         return 'NONE';
     }
     function vegOf(side) {
+        if (side === 'OB') { const o = cfg.ob || 'NONE'; return o === 'AUTO' ? (desertBiome() ? 'DESERT' : 'FOREST') : o; }
         const v = cfg.sides[side] || 'AUTO';
         return v === 'AUTO' ? autoVeg(root.surroundConfig && root.surroundConfig[side]) : v;
     }
+    // OB ground at x, z, and all round it OB_INSET m out (8 directions): a tree there stands well inside the OB area
+    function obAt(x, z) { const g = root.localGetTerrainAt && root.localGetTerrainAt(x, -z); return !!g && g.type === 'OB'; }
+    function obClear(x, z, half) {
+        if (Math.abs(x) > half - OB_INSET || Math.abs(z) > half - OB_INSET || !obAt(x, z)) return false;
+        for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; if (!obAt(x + Math.cos(a) * OB_INSET, z + Math.sin(a) * OB_INSET)) return false; }
+        return true;
+    }
+    function playing() { const m = typeof root.getAppMode === 'function' ? root.getAppMode() : 'PLAY'; return m === 'PLAY' || m === 'TEST'; }
 
     // the types a vegetation is made of, with weights: a forest is the trees already on the course (as many as they are), else the library's
     function pick(list, n) { return list.slice(0, n).map(function (t) { return { type: t, w: 1 }; }); }
@@ -112,7 +128,7 @@
         if (!scene || !root.THREE || !root.surroundConfig) return;
         clear();
         const sideVeg = {}, pools = {}, missing = [];
-        SIDES.forEach(function (s) {
+        SIDES.concat(['OB']).forEach(function (s) {
             const v = vegOf(s);
             sideVeg[s] = v;
             if (v !== 'NONE' && !pools[v]) { pools[v] = poolFor(v); if (!pools[v].length) missing.push(v); }
@@ -144,8 +160,26 @@
             let acc = which * tot, t = pool[pool.length - 1].type;
             for (let k = 0; k < pool.length; k++) { acc -= pool[k].w; if (acc <= 0) { t = pool[k].type; break; } }
             const byType = per[t] || (per[t] = {});
-            (byType[side] || (byType[side] = [])).push([x, z, 0.75 + sc * 0.55, tint]);
+            (byType[side] || (byType[side] = [])).push([x, z, 0.75 + sc * 0.55, tint, 0]);
             n++;
+        }
+        // the OB areas on the plate (their own random stream: changing the belt does not move them)
+        const obVeg = sideVeg.OB, obPool = pools[obVeg];
+        if (obVeg !== 'NONE' && obPool && obPool.length && typeof root.localGetTerrainAt === 'function') {
+            const plate = half - GAP, ro = rng(((cfg.seed || 1) * 7919 + 13) >>> 0);
+            const cand = Math.min(OB_MAX * 6, Math.round(4 * plate * plate * OB_PER_M2 * Math.max(0, cfg.density)));
+            let tot = 0; obPool.forEach(function (p) { tot += p.w; });
+            let m = 0;
+            for (let i = 0; i < cand && m < OB_MAX; i++) {
+                const x = (ro() * 2 - 1) * plate, z = (ro() * 2 - 1) * plate, keep = ro(), which = ro(), sc = ro(), tint = ro();
+                if (keep > Math.min(1, (KEEP[obVeg] || 0.5) * 1.5) || !obClear(x, z, plate)) continue;
+                let acc = which * tot, t = obPool[obPool.length - 1].type;
+                for (let k = 0; k < obPool.length; k++) { acc -= obPool[k].w; if (acc <= 0) { t = obPool[k].type; break; } }
+                const byType = per[t] || (per[t] = {});
+                const y = typeof root.getTerrainHeight === 'function' ? (root.getTerrainHeight(x, z) || 0) : 0;
+                (byType.OB || (byType.OB = [])).push([x, z, 0.75 + sc * 0.55, tint, y]);
+                m++;
+            }
         }
 
         const THREE = root.THREE, mtx = new THREE.Matrix4(), pos = new THREE.Vector3(), q = new THREE.Quaternion(), scl = new THREE.Vector3();
@@ -153,7 +187,7 @@
         Object.keys(per).forEach(function (t) {
             const card = cardFor(t);
             if (!card) return;
-            SIDES.forEach(function (side) {
+            SIDES.concat(['OB']).forEach(function (side) {
                 const list = per[t][side];
                 if (!list || !list.length) return;
                 const g = new THREE.BufferGeometry();
@@ -162,25 +196,28 @@
                 g.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array(list.length * 3), 3));
                 const m = new THREE.InstancedMesh(g, card.material, list.length);
                 m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(list.length * 3), 3);
-                let cx = 0, cz = 0, maxS = 0;
+                let cx = 0, cz = 0, maxS = 0, cy = 0;
+                const yAxis = new THREE.Vector3(0, 1, 0), tq = new THREE.Quaternion();
                 list.forEach(function (p, i) {
-                    pos.set(p[0], 0, p[1]); scl.set(p[2], p[2], p[2]);
-                    mtx.compose(pos, q, scl);
+                    // each tree turned its own way: the card shows the side of the model the camera sees on that tree (8 photographs)
+                    pos.set(p[0], p[4], p[1]); scl.set(p[2], p[2], p[2]); tq.setFromAxisAngle(yAxis, p[3] * Math.PI * 2);
+                    mtx.compose(pos, tq, scl);
                     m.setMatrixAt(i, mtx);
                     // (the colour as a placed tree of the type gets it: the biome's palette by position; a brightness off 1 would turn the
                     // tint shader on with a white colour and grey the crown)
                     const col = typeof root.propColors === 'function' ? root.propColors({ x: p[0], z: p[1] }, true) : null;
                     if (col) { m.setColorAt(i, col.canopy); g.attributes.instanceTrunkColor.setXYZ(i, col.trunk.r, col.trunk.g, col.trunk.b); }
                     else { m.setColorAt(i, new THREE.Color(1, 1, 1)); g.attributes.instanceTrunkColor.setXYZ(i, 1, 1, 1); }
-                    cx += p[0]; cz += p[1]; maxS = Math.max(maxS, p[2]);
+                    cx += p[0]; cz += p[1]; cy += p[4]; maxS = Math.max(maxS, p[2]);
                 });
-                cx /= list.length; cz /= list.length;
-                let rad = 0; list.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0] - cx, p[1] - cz)); });
-                g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, 0, cz), rad + card.radius * maxS + 20);
+                cx /= list.length; cz /= list.length; cy /= list.length;
+                let rad = 0; list.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0] - cx, p[1] - cz, p[4] - cy)); });
+                g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), rad + card.radius * maxS + 20);
                 m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; g.attributes.instanceTrunkColor.needsUpdate = true;
                 m.castShadow = false; m.receiveShadow = false; m.frustumCulled = true;
                 m.raycast = function () {};
                 m.userData.surroundVeg = { type: t, side: side };
+                if (side === 'OB') m.visible = playing();
                 scene.add(m);
                 meshes.push(m);
                 drawn += list.length;
@@ -192,9 +229,8 @@
                     tg.setAttribute('instanceTrunkColor', g.attributes.instanceTrunkColor.clone());
                     const tm = new THREE.InstancedMesh(tg, card.topMaterial, list.length);
                     tm.instanceColor = m.instanceColor.clone();
-                    const yAxis = new THREE.Vector3(0, 1, 0), tq = new THREE.Quaternion();
                     list.forEach(function (p, i) {
-                        pos.set(p[0], 0, p[1]); scl.set(p[2], p[2], p[2]); tq.setFromAxisAngle(yAxis, p[3] * Math.PI * 2);
+                        pos.set(p[0], p[4], p[1]); scl.set(p[2], p[2], p[2]); tq.setFromAxisAngle(yAxis, p[3] * Math.PI * 2);
                         mtx.compose(pos, tq, scl);
                         tm.setMatrixAt(i, mtx);
                     });
@@ -203,6 +239,7 @@
                     tm.castShadow = false; tm.receiveShadow = false; tm.frustumCulled = true;
                     tm.raycast = function () {};
                     tm.userData.surroundVeg = { type: t, side: side, top: true };
+                    if (side === 'OB') tm.visible = playing();
                     scene.add(tm);
                     meshes.push(tm);
                 }
@@ -235,6 +272,7 @@
         if (isFinite(c.depth)) out.depth = Math.max(40, Math.min(700, +c.depth));
         if (Array.isArray(c.custom)) out.custom = c.custom.filter(function (t) { return typeof t === 'string'; }).slice(0, 8);
         if (isFinite(c.seed)) out.seed = c.seed | 0;
+        if (VEG.indexOf(c.ob) >= 0) out.ob = c.ob;
         return out;
     }
     // the plate's setting from the holes (the first hole that has one), else the default (all sides AUTO)
@@ -249,6 +287,7 @@
     function syncUI() {
         if (typeof document === 'undefined') return;
         SIDES.forEach(function (s) { const el = document.getElementById('veg-' + s); if (el) el.value = cfg.sides[s]; });
+        const ob = document.getElementById('veg-OB'); if (ob) ob.value = cfg.ob;
         const d = document.getElementById('veg-density'), dv = document.getElementById('veg-density-val');
         if (d) d.value = cfg.density; if (dv) dv.textContent = Math.round(cfg.density * 100) + '%';
         const p = document.getElementById('veg-depth'), pv = document.getElementById('veg-depth-val');
@@ -259,7 +298,7 @@
     function renderCustomList() {
         const box = typeof document !== 'undefined' && document.getElementById('veg-custom-list');
         if (!box) return;
-        const any = SIDES.some(function (s) { return cfg.sides[s] === 'CUSTOM'; });
+        const any = SIDES.some(function (s) { return cfg.sides[s] === 'CUSTOM'; }) || cfg.ob === 'CUSTOM';
         box.style.display = any ? 'grid' : 'none';
         if (!any) return;
         const list = types('TREES').concat(types('PLANTS'));
@@ -284,7 +323,18 @@
         meshes: function () { return meshes.slice(); },
         count: function () { let c = 0; meshes.forEach(function (m) { if (!m.userData.surroundVeg.top) c += m.count; }); return c; },
         status: function () { return lastStatus; },
-        setSide: function (side, veg) { if (SIDES.indexOf(side) < 0 || VEG.indexOf(veg) < 0) return; cfg.sides[side] = veg; save(); renderCustomList(); schedule(); },
+        setSide: function (side, veg) {
+            if ((SIDES.indexOf(side) < 0 && side !== 'OB') || VEG.indexOf(veg) < 0) return;
+            if (side === 'OB') cfg.ob = veg; else cfg.sides[side] = veg;
+            save(); renderCustomList(); schedule();
+        },
+        // the OB trees show in play and test mode only; entering play also grows them again (the OB paint and the ground may have changed)
+        modeChanged: function () {
+            const on = playing();
+            meshes.forEach(function (m) { if (m.userData.surroundVeg.side === 'OB') m.visible = on; });
+            if (on && cfg.ob !== 'NONE') schedule(0);
+        },
+        obClear: function (x, z) { return obClear(x, z, ((root.G && root.G.TERRAIN_SIZE) || root.TERRAIN_SIZE || 600) / 2); },
         setDensity: function (v, done) { cfg.density = Math.max(0, Math.min(3, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
         setDepth: function (v, done) { cfg.depth = Math.max(40, Math.min(700, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
         toggleCustom: function (t) { const i = cfg.custom.indexOf(t); if (i >= 0) cfg.custom.splice(i, 1); else if (cfg.custom.length < 8) cfg.custom.push(t); save(); renderCustomList(); schedule(); },
