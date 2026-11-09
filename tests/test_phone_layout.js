@@ -43,7 +43,7 @@ check('slagrutorna får has-data när ett slag har värden', /dynHud\.classList\
 
 console.log('\n4. CSS-blocket');
 const blk = css.slice(css.indexOf('PHONE PLAY LAYOUT'), css.indexOf('PLAY PHASES') > 0 ? css.indexOf('PLAY PHASES') : undefined);
-check('ett block för max 520 px', /@media \(max-width: 520px\)/.test(blk));
+check('ett block för max 520 px och för en telefon på sidan (högst 500 px hög, liggande)', blk.indexOf('@media (max-width: 520px), (max-height: 500px) and (orientation: landscape) {') >= 0);
 [
   ['slagrutorna: en rad, dolda utan värden, två tills de öppnas', ['#dynamic-hud { top: 122px', '#dynamic-hud:not(.has-data) { display: none !important; }', '#dynamic-hud:not(.dh-open) .dh-tile:nth-child(n+3) { display: none; }']],
   ['lägespanelen: en rad ovanför slagraden, utan etiketter', ['#lie-conditions-hud { bottom: 172px !important;', '#lie-conditions-hud .lie-lbl { display: none; }']],
@@ -59,7 +59,26 @@ const rules = blk.split('\n').filter(function (l) { return /^\s+body/.test(l); }
 check('allt i blocket gäller en runda (play-ui), bana som range', rules.length > 20 && rules.every(function (l) { return /^\s+body\.play-ui/.test(l); }));
 check('flyover/lutning bara på en bana', rules.filter(function (l) { return l.indexOf('#green-read-panel') >= 0; }).every(function (l) { return l.indexOf(':not(.range-ui)') >= 0; }));
 check('slagrutor, lägespanel och karta gäller rangen också (ingen :not(.range-ui))', rules.filter(function (l) { return /#(dynamic-hud|lie-|minimap-container|mm-dist|elevation-profile|lm-status)/.test(l) && !/range-ui[:.]/.test(l.replace(':not(.range-ui)', '')); }).every(function (l) { return l.indexOf('range-ui') < 0; }));
-check('isPhonePlayLayout: smal skärm och play-ui, rangen med', /window\.isPhonePlayLayout = function \(\) \{\s*const b = document\.body;\s*return !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\)'\)\.matches && b\.classList\.contains\('play-ui'\)\);/.test(html));
+check('isPhonePlayLayout: smal skärm eller telefon på sidan, och play-ui, rangen med', /window\.isPhonePlayLayout = function \(\) \{\s*const b = document\.body;\s*return !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\), \(max-height: 500px\) and \(orientation: landscape\)'\)\.matches && b\.classList\.contains\('play-ui'\)\);/.test(html));
+
+console.log('\n4d. Liggande läge (telefon på sidan)');
+{
+  const land = css.slice(css.indexOf('PHONE LANDSCAPE'), css.indexOf('PLAY PHASES'));
+  check('ett eget block för högst 500 px höjd i liggande läge, efter telefonblocket', css.indexOf('PHONE LANDSCAPE') > css.indexOf('PHONE PLAY LAYOUT') && land.indexOf('@media (max-height: 500px) and (orientation: landscape) {') >= 0);
+  [
+    ['SWING nere till höger', 'body.play-ui #swing-launch-btn { bottom: 12px; left: auto; right: 12px; transform: none;'],
+    ['klubban i handen längs nederkanten', 'body.play-ui #club-selector { bottom: 12px; }'],
+    ['klubban centrerad till vänster om slagformen och SWING (inte över formknappen på en liten telefon)', 'body.play-ui #club-selector:not(.clubs-open) { padding-right: 270px; }'],
+    ['slagformen till vänster om SWING', 'body.play-ui #shape-selector:not(.shapes-open) { bottom: 16px; right: 168px; }'],
+    ['lägesraden strax ovanför slaget', 'body.play-ui #lie-conditions-hud { bottom: 66px !important; }'],
+    ['liten karta uppe till höger, under menyknappen', 'body.play-ui #minimap-container { top: 70px !important; width: 100px !important; height: 112px !important; }'],
+    ['öppen karta: vänster om menyknappen, ner till strax ovanför slaget, utan höjdprofil', 'body.play-ui.mm-open #minimap-container { top: 8px !important; right: 72px !important; width: 230px !important; height: calc(100vh - 80px) !important; }'],
+    ['rangen: sessionen under inspelsraden när den är öppen', 'body.play-ui.range-ui:has(#range-practice.on) #range-session { top: 112px !important;']
+  ].forEach(function (c) { check(c[0], land.indexOf(c[1]) >= 0); });
+  check('höjdprofilen döljs med öppen karta (ingen plats bredvid)', land.indexOf('body.play-ui.mm-open #elevation-profile-container { display: none !important; }') >= 0);
+  const lr = land.split('\n').filter(function (l) { return /^\s+body/.test(l); });
+  check('allt i blocket gäller en runda (play-ui)', lr.length > 10 && lr.every(function (l) { return /^\s+body\.play-ui/.test(l); }));
+}
 
 console.log('\n4b. Rangen');
 [
@@ -82,14 +101,14 @@ console.log('\n4b. Rangen');
       const state = {};
       const win = { matchMedia: function () { return { matches: phone }; } };
       const ls = { getItem: function () { if (throws) throw new Error('blocked'); return stored; } };
-      new Function('window', 'localStorage', 'state', "const phone = !!(window.matchMedia && window.matchMedia('(max-width: 520px)').matches);\n" + line[0])(win, ls, state);
+      new Function('window', 'localStorage', 'state', "const phone = !!(window.matchMedia && window.matchMedia('(max-width: 520px), (max-height: 500px) and (orientation: landscape)').matches);\n" + line[0])(win, ls, state);
       return state.open;
     };
     check('telefon, inget sparat: ihopfälld', open(true, null) === false);
     check('dator, inget sparat: öppen', open(false, null) === true);
     check('spelarens val vinner (öppen på telefon, stängd på dator)', open(true, '1') === true && open(false, '0') === false);
     check('blockerad lagring: telefon ihopfälld, dator öppen', open(true, null, true) === false && open(false, null, true) === true);
-    check('telefonfrågan står före raden', /const phone = !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\)'\)\.matches\);\s*try \{ const v = localStorage/.test(rs));
+    check('telefonfrågan står före raden', /const phone = !!\(window\.matchMedia && window\.matchMedia\('\(max-width: 520px\), \(max-height: 500px\) and \(orientation: landscape\)'\)\.matches\);\s*try \{ const v = localStorage/.test(rs));
   }
 }
 
