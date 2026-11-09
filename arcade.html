@@ -44,7 +44,7 @@
 <script src="arcade-particle-engine.js?v=2"></script>
 <script src="arcade-wind-sway.js?v=2"></script>
 <script src="arcade-post.js?v=2"></script>
-<script src="arcade-surround-veg.js?v=2"></script>
+<script src="arcade-surround-veg.js?v=3"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
@@ -7690,6 +7690,11 @@
     // (updatePropLod); building and the minimap always draw the models. The models stay in place (hidden), so a click still picks the tree.
     const PROP_IMPOSTOR_FAR = 150, PROP_IMPOSTOR_NEAR = 130;   // hysteresis: a square goes to cards beyond 150 m and back to models within 130 m
     const PROP_IMPOSTOR_RES = 256;
+    const PROP_TOP_FADE = [Math.sin(25 * Math.PI / 180), Math.sin(50 * Math.PI / 180)];   // the lying card fades in between 25 and 50 degrees down
+    // The camera's world position, from the view matrix: three.js r128 sends cameraPosition only to Phong, Standard, Toon and shader
+    // materials (and those with an environment map), so in these Lambert cards it was (0, 0, 0): the standing cards turned to the middle
+    // of the plate instead of the camera, and the lying ones never faded in. camera = -R^T t, where viewMatrix = [R | t].
+    const CARD_CAM_GLSL = 'vec3 cardCam = -vec3(dot(viewMatrix[0].xyz, viewMatrix[3].xyz), dot(viewMatrix[1].xyz, viewMatrix[3].xyz), dot(viewMatrix[2].xyz, viewMatrix[3].xyz));';
 
     // (makePropImpostor and propColors are global functions of this page: the surroundings' 2D trees, arcade-surround-veg.js, use the
     // same card and the same colours as the far-away trees on the plate)
@@ -7716,6 +7721,15 @@
         const cam = new THREE.OrthographicCamera(-S / 2, S / 2, S / 2, -S / 2, 0.01, S * 4 + 10);
         cam.position.set(cx, midY, box.max.z + S + 5);
         cam.lookAt(cx, midY, cz);
+        // and from above (the lying card, faded in when the camera looks down): the crown seen straight down, x to the right, -z up
+        const Sxz = Math.max(size.x, size.z) * 1.02;
+        const rtTop = new THREE.WebGLRenderTarget(PROP_IMPOSTOR_RES, PROP_IMPOSTOR_RES, { format: THREE.RGBAFormat });
+        rtTop.texture.generateMipmaps = true;
+        rtTop.texture.minFilter = THREE.LinearMipmapLinearFilter;
+        const camTop = new THREE.OrthographicCamera(-Sxz / 2, Sxz / 2, Sxz / 2, -Sxz / 2, 0.01, size.y + 20);
+        camTop.up.set(0, 0, -1);
+        camTop.position.set(cx, box.max.y + 5, cz);
+        camTop.lookAt(cx, box.min.y, cz);
         const tmp = new THREE.Scene();
         tmp.add(new THREE.AmbientLight(0xffffff, 1.0));
         const parent = model.parent, shot = parent ? model.clone() : model;
@@ -7725,10 +7739,12 @@
         try {
             renderer.shadowMap.autoUpdate = false;
             renderer.autoClear = true;
-            renderer.setRenderTarget(rt);
             renderer.setClearColor(0x000000, 0);
-            renderer.clear(true, true, true);
-            renderer.render(tmp, cam);
+            [[rt, cam], [rtTop, camTop]].forEach(function (pair) {
+                renderer.setRenderTarget(pair[0]);
+                renderer.clear(true, true, true);
+                renderer.render(tmp, pair[1]);
+            });
         } finally {
             renderer.setRenderTarget(prevTarget);
             renderer.setClearColor(prevColor, prevAlpha);
@@ -7746,13 +7762,14 @@
                 .replace('#include <color_vertex>', '#include <color_vertex>\nvInstanceTrunkColor = instanceTrunkColor;')
                 .replace('#include <beginnormal_vertex>', [
                     // the visible half of a crown faces the camera on average: the card is lit as if it faced the camera, tipped a little up
-                    'vec3 iCam = cameraPosition - (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz; iCam.y = 0.0;',
+                    CARD_CAM_GLSL,
+                    'vec3 iCam = cardCam - (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz; iCam.y = 0.0;',
                     'vec3 objectNormal = normalize((length(iCam) > 0.001 ? normalize(iCam) : vec3(0.0, 0.0, 1.0)) + vec3(0.0, 0.35, 0.0));'
                 ].join('\n'))
                 .replace('#include <project_vertex>', [
                     'vec3 iPos = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;',
                     'float iSx = length(instanceMatrix[0].xyz), iSy = length(instanceMatrix[1].xyz);',
-                    'vec3 toCam = cameraPosition - iPos; toCam.y = 0.0;',
+                    'vec3 toCam = cardCam - iPos; toCam.y = 0.0;',
                     'vec3 iRight = length(toCam) > 0.001 ? normalize(vec3(toCam.z, 0.0, -toCam.x)) : vec3(1.0, 0.0, 0.0);',
                     'vec3 iWorld = iPos + iRight * transformed.x * iSx + vec3(0.0, 1.0, 0.0) * transformed.y * iSy;',
                     'vec4 mvPosition = viewMatrix * vec4(iWorld, 1.0);',
@@ -7762,15 +7779,39 @@
                 .replace('#include <color_pars_fragment>', '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;')
                 .replace('#include <color_fragment>', PROP_TINT_GLSL);
         };
-        return { texture: rt.texture, rt: rt, geometry: geo, material: mat, radius: Math.hypot(S / 2, S / 2) };
+        // the lying card: the crown from above, flat at 80 % of the tree's height. Seen from the side the standing card is the tree; as the
+        // camera looks down the standing card thins to a line, so the lying one fades in (a screen-door dither, no sorting): nothing below
+        // about 25 degrees down, all of it from about 50 degrees. Its normal points up: it is lit as the top of a crown is.
+        const topGeo = new THREE.PlaneGeometry(Sxz, Sxz);
+        topGeo.rotateX(-Math.PI / 2);
+        topGeo.translate(cx, box.min.y + size.y * 0.8, cz);
+        const topMat = new THREE.MeshLambertMaterial({ map: rtTop.texture, alphaTest: 0.5, side: THREE.DoubleSide });
+        topMat.onBeforeCompile = function (shader) {
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <color_pars_vertex>', '#include <color_pars_vertex>\nattribute vec3 instanceTrunkColor;\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;')
+                .replace('#include <color_vertex>', '#include <color_vertex>\nvInstanceTrunkColor = instanceTrunkColor;')
+                .replace('#include <project_vertex>', [
+                    '#include <project_vertex>',
+                    'vec4 tWorld = modelMatrix * instanceMatrix * vec4(transformed, 1.0);',
+                    CARD_CAM_GLSL,
+                    'vTopFade = smoothstep(' + PROP_TOP_FADE[0].toFixed(3) + ', ' + PROP_TOP_FADE[1].toFixed(3) + ', normalize(cardCam - tWorld.xyz).y);'
+                ].join('\n'));
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <color_pars_fragment>', '#include <color_pars_fragment>\nvarying vec3 vInstanceTrunkColor;\nvarying float vTopFade;')
+                .replace('#include <color_fragment>', PROP_TINT_GLSL)
+                .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\nif (vTopFade <= fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453)) discard;');
+        };
+        return { texture: rt.texture, rt: rt, geometry: geo, material: mat, radius: Math.hypot(S / 2, S / 2),
+                 topTexture: rtTop.texture, topRt: rtTop, topGeometry: topGeo, topMaterial: topMat };
     }
 
-    function makeImpostorMesh(pool, cap) {
-        const src = pool.impostor.geometry, g = new THREE.BufferGeometry();
+    // a square's standing cards, or (top) its lying cards seen from above
+    function makeImpostorMesh(pool, cap, top) {
+        const src = top ? pool.impostor.topGeometry : pool.impostor.geometry, g = new THREE.BufferGeometry();
         g.setIndex(src.index);
         for (const name in src.attributes) g.setAttribute(name, src.attributes[name]);
         g.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3));
-        const m = new THREE.InstancedMesh(g, pool.impostor.material, cap);
+        const m = new THREE.InstancedMesh(g, top ? pool.impostor.topMaterial : pool.impostor.material, cap);
         m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
         m.count = 0;
         m.castShadow = false;
@@ -7800,6 +7841,7 @@
                     ch.far = far;
                     ch.meshes.forEach(m => { m.visible = !far; });
                     if (ch.impostorMesh) ch.impostorMesh.visible = far;
+                    if (ch.topMesh) ch.topMesh.visible = far;
                 }
             });
         }
@@ -7811,13 +7853,15 @@
             const pool = window.instancePools[type];
             if (pool && pool.chunks) pool.chunks.forEach(ch => { if (ch.far) back.push(ch); });
         }
-        back.forEach(ch => { ch.meshes.forEach(m => { m.visible = true; }); ch.impostorMesh.visible = false; });
-        try { return fn(); } finally { back.forEach(ch => { ch.meshes.forEach(m => { m.visible = false; }); ch.impostorMesh.visible = true; }); }
+        const cards = function (ch, on) { ch.impostorMesh.visible = on; if (ch.topMesh) ch.topMesh.visible = on; };
+        back.forEach(ch => { ch.meshes.forEach(m => { m.visible = true; }); cards(ch, false); });
+        try { return fn(); } finally { back.forEach(ch => { ch.meshes.forEach(m => { m.visible = false; }); cards(ch, true); }); }
     };
 
     function disposeChunk(ch) {
         ch.meshes.forEach(disposeChunkMesh);
         if (ch.impostorMesh) disposeChunkMesh(ch.impostorMesh);
+        if (ch.topMesh) disposeChunkMesh(ch.topMesh);
     }
 
     function rebuildInstancePool(type) {
@@ -7848,10 +7892,12 @@
             if (!ch) {
                 let cap = 16; while (cap < list.length) cap *= 2;
                 ch = { cap: cap, meshes: pool.subs.map((sub, mi) => makeChunkMesh(pool, mi, cap)),
-                       impostorMesh: pool.impostor ? makeImpostorMesh(pool, cap) : null };
+                       impostorMesh: pool.impostor ? makeImpostorMesh(pool, cap) : null,
+                       topMesh: pool.impostor ? makeImpostorMesh(pool, cap, true) : null };
                 pool.chunks.set(key, ch);
             }
             if (pool.impostor && !ch.impostorMesh) ch.impostorMesh = makeImpostorMesh(pool, ch.cap);
+            if (pool.impostor && !ch.topMesh) ch.topMesh = makeImpostorMesh(pool, ch.cap, true);
             ch.far = undefined;   // updatePropLod sets the models or the cards visible again
             ch.meshes.forEach((iMesh, mi) => {
                 const off = pool.subOffsets[mi], local = iMesh.userData.localSphere;
@@ -7908,6 +7954,26 @@
                 im.instanceColor.needsUpdate = true;
                 im.geometry.attributes.instanceTrunkColor.needsUpdate = true;
             }
+            // the lying cards: turned as the tree is (the photograph from above is of the unturned model)
+            const tm = ch.topMesh;
+            if (tm) {
+                list.forEach((e, i) => {
+                    const t = e.t;
+                    _iPos.set(t.x, (t.y || 0) + (t.yOffset || 0), t.z);
+                    _iQuat.setFromAxisAngle(_yAxis, t.rot || 0);
+                    _iScale.set(t.scale, t.scale, t.scale);
+                    _iMatrix.compose(_iPos, _iQuat, _iScale);
+                    tm.setMatrixAt(i, _iMatrix);
+                    const col = propColors(t, true);
+                    tm.setColorAt(i, col.canopy);
+                    tm.geometry.attributes.instanceTrunkColor.setXYZ(i, col.trunk.r, col.trunk.g, col.trunk.b);
+                });
+                tm.geometry.boundingSphere = new THREE.Sphere(ch.sphere.center.clone(), ch.sphere.radius + pool.impostor.radius);
+                tm.count = list.length;
+                tm.instanceMatrix.needsUpdate = true;
+                tm.instanceColor.needsUpdate = true;
+                tm.geometry.attributes.instanceTrunkColor.needsUpdate = true;
+            }
         });
 
         pool.meshes = [];
@@ -7920,7 +7986,10 @@
         let pool = window.instancePools[type];
         if (!pool) return;
         pool.chunks.forEach(disposeChunk);
-        if (pool.impostor) { pool.impostor.rt.dispose(); pool.impostor.geometry.dispose(); pool.impostor.material.dispose(); }
+        if (pool.impostor) {
+            pool.impostor.rt.dispose(); pool.impostor.geometry.dispose(); pool.impostor.material.dispose();
+            pool.impostor.topRt.dispose(); pool.impostor.topGeometry.dispose(); pool.impostor.topMaterial.dispose();
+        }
         delete window.instancePools[type];
     }
 

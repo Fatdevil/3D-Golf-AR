@@ -252,6 +252,27 @@ function serve() {
       check('vegetation in the surroundings: AUTO follows the ground (deep rough forest, waste palms, ocean none), trees outside the plate on their own side, no click, saved on the holes',
             veg === 'FOREST,PALMS,NONE,NONE' && (per['N:zz_oak2'] || 0) > 0 && (per['E:zz_palm2'] || 0) > 0 && !Object.keys(per).some(function (k) { return /^(S|W):/.test(k); }) && outside && rightSide && hits.length === 0 && saved,
             JSON.stringify({ veg: veg, per: per, outside: outside, rightSide: rightSide, hits: hits.length, saved: saved, status: window.SurroundVeg.status() }));
+      // the cards face the camera, and the lying cards fade in from above: (a) seen from outside the belt (a camera far out east, looking
+      // back at the plate) the standing cards show (they turned to the middle of the plate, three.js gives Lambert no cameraPosition, and
+      // from out there their backs were culled); (b) looking steeply down, the lying cards add crowns where the standing ones are a line
+      const gl = renderer.getContext(), camWas = { p: camera.position.clone(), q: camera.quaternion.clone() }, pf = window.PostFX.level();
+      window.PostFX.setLevel('OFF');
+      const shoot = function (pos, look) {
+        camera.position.set(pos[0], pos[1], pos[2]); camera.lookAt(look[0], look[1], look[2]); camera.updateMatrixWorld();
+        renderer.setRenderTarget(null); renderer.clear(); renderer.render(scene, camera);
+        const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return px;
+      };
+      const differs = function (a, b) { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 30) n++; return n; };
+      const setVis = function (fn) { window.SurroundVeg.meshes().forEach(function (m) { m.visible = fn(m.userData.surroundVeg); }); };
+      setVis(function () { return false; }); const eastNone = shoot([900, 12, 0], [300, 8, 0]);
+      setVis(function (u) { return !u.top; }); const eastCards = shoot([900, 12, 0], [300, 8, 0]);
+      setVis(function (u) { return !u.top; }); const downStand = shoot([0, 200, -330], [0, 0, -420]);
+      setVis(function () { return true; }); const downBoth = shoot([0, 200, -330], [0, 0, -420]);
+      camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld(); window.PostFX.setLevel(pf);
+      const outsideSeen = differs(eastNone, eastCards), topsAdded = differs(downStand, downBoth);
+      check('2D trees: the standing cards face the camera (seen from outside the belt) and the lying cards add crowns looking steeply down',
+            outsideSeen > 500 && topsAdded > 500, 'pixels: from outside ' + outsideSeen + ', crowns from above ' + topsAdded);
       window.surroundConfig = was; window.SurroundVeg.setSide('W', wasVeg.sides.W); window.SurroundVeg.clear();
       delete window.ASSET_REGISTRY.zz_oak2; delete window.ASSET_REGISTRY.zz_palm2;
     })();
