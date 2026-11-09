@@ -44,7 +44,7 @@
 <script src="arcade-particle-engine.js?v=2"></script>
 <script src="arcade-wind-sway.js?v=2"></script>
 <script src="arcade-post.js?v=2"></script>
-<script src="arcade-surround-veg.js?v=4"></script>
+<script src="arcade-surround-veg.js?v=5"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
@@ -7708,6 +7708,39 @@
     // cards dissolve (dither) close to the camera, from 35 m in to 20 m: a flat card up close shows what it is. The far-away cards on the
     // plate start at 130 m and the surroundings at 320 m; only the trees filling the OB areas (arcade-surround-veg.js) come this close
     const PROP_CARD_NEAR = [20, 35];
+    // A soft dark patch on the ground under each card (a blob shadow): the cards cast nothing into the shadow map, and a tree without a
+    // shadow seems to stand on the grass rather than in it. One flat square per tree, in the same instance buffer layout as the cards,
+    // centred under the crown (turned with the tree), the width of the crown and a little more; darkest in the middle (PROP_SHADOW_ALPHA)
+    // and gone at the edge. Unlit, behind no depth write, a little above the ground (and pulled forward in depth) so it does not flicker
+    // in it; on a slope its edge can dip under the ground, where it was faint anyway. It dissolves near the camera with its card.
+    const PROP_SHADOW_ALPHA = 0.42, PROP_SHADOW_SIZE = 1.25, PROP_SHADOW_LIFT = 0.12;
+    let _propShadowMat = null;
+    function propShadowMaterial() {
+        if (_propShadowMat) return _propShadowMat;
+        const c = document.createElement('canvas'); c.width = c.height = 64;
+        const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.45, 'rgba(255,255,255,0.75)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+        const tex = new THREE.CanvasTexture(c);
+        const f3 = function (v) { return (+v).toFixed(4); };
+        const mat = new THREE.MeshBasicMaterial({ color: 0x000000, map: tex, transparent: true, opacity: PROP_SHADOW_ALPHA, depthWrite: false,
+                                                  polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+        mat.onBeforeCompile = function (shader) {
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', '#include <common>\nvarying float vCardNear;')
+                .replace('#include <project_vertex>', [
+                    '#include <project_vertex>',
+                    CARD_CAM_GLSL,
+                    'vCardNear = smoothstep(' + f3(PROP_CARD_NEAR[0]) + ', ' + f3(PROP_CARD_NEAR[1]) + ', length(cardCam - (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz));'
+                ].join('\n'));
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', '#include <common>\nvarying float vCardNear;')
+                .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.a *= vCardNear;');
+        };
+        mat.customProgramCacheKey = function () { return 'propShadow'; };
+        _propShadowMat = mat;
+        return mat;
+    }
     const PROP_TOP_FADE = [Math.sin(25 * Math.PI / 180), Math.sin(50 * Math.PI / 180)];   // the lying card fades in between 25 and 50 degrees down
     // The camera's world position, from the view matrix: three.js r128 sends cameraPosition only to Phong, Standard, Toon and shader
     // materials (and those with an environment map), so in these Lambert cards it was (0, 0, 0): the standing cards turned to the middle
@@ -7865,17 +7898,24 @@
                 .replace('#include <color_fragment>', PROP_TINT_GLSL)
                 .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\nfloat topDither = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);\nif (vTopFade <= topDither || vCardNear <= topDither) discard;');
         };
+        // the shadow under it: the crown's width and a little more, centred under the crown, at the foot
+        const shW = Math.max(size.x, size.z) * PROP_SHADOW_SIZE;
+        const shadowGeo = new THREE.PlaneGeometry(shW, shW);
+        shadowGeo.rotateX(-Math.PI / 2);
+        shadowGeo.translate(cx, box.min.y + PROP_SHADOW_LIFT, cz);
         return { texture: rt.texture, rt: rt, geometry: geo, material: mat, radius: Math.hypot(S / 2, S / 2),
-                 topTexture: rtTop.texture, topRt: rtTop, topGeometry: topGeo, topMaterial: topMat };
+                 topTexture: rtTop.texture, topRt: rtTop, topGeometry: topGeo, topMaterial: topMat,
+                 shadowGeometry: shadowGeo, shadowMaterial: propShadowMaterial() };
     }
 
     // a square's standing cards, or (top) its lying cards seen from above
     function makeImpostorMesh(pool, cap, top) {
-        const src = top ? pool.impostor.topGeometry : pool.impostor.geometry, g = new THREE.BufferGeometry();
+        const imp = pool.impostor;
+        const src = top === 'shadow' ? imp.shadowGeometry : top ? imp.topGeometry : imp.geometry, g = new THREE.BufferGeometry();
         g.setIndex(src.index);
         for (const name in src.attributes) g.setAttribute(name, src.attributes[name]);
         g.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3));
-        const m = new THREE.InstancedMesh(g, top ? pool.impostor.topMaterial : pool.impostor.material, cap);
+        const m = new THREE.InstancedMesh(g, top === 'shadow' ? imp.shadowMaterial : top ? imp.topMaterial : imp.material, cap);
         m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
         m.count = 0;
         m.castShadow = false;
@@ -7906,6 +7946,7 @@
                     ch.meshes.forEach(m => { m.visible = !far; });
                     if (ch.impostorMesh) ch.impostorMesh.visible = far;
                     if (ch.topMesh) ch.topMesh.visible = far;
+                    if (ch.shadowMesh) ch.shadowMesh.visible = far;
                 }
             });
         }
@@ -7917,7 +7958,7 @@
             const pool = window.instancePools[type];
             if (pool && pool.chunks) pool.chunks.forEach(ch => { if (ch.far) back.push(ch); });
         }
-        const cards = function (ch, on) { ch.impostorMesh.visible = on; if (ch.topMesh) ch.topMesh.visible = on; };
+        const cards = function (ch, on) { ch.impostorMesh.visible = on; if (ch.topMesh) ch.topMesh.visible = on; if (ch.shadowMesh) ch.shadowMesh.visible = on; };
         back.forEach(ch => { ch.meshes.forEach(m => { m.visible = true; }); cards(ch, false); });
         try { return fn(); } finally { back.forEach(ch => { ch.meshes.forEach(m => { m.visible = false; }); cards(ch, true); }); }
     };
@@ -7926,6 +7967,7 @@
         ch.meshes.forEach(disposeChunkMesh);
         if (ch.impostorMesh) disposeChunkMesh(ch.impostorMesh);
         if (ch.topMesh) disposeChunkMesh(ch.topMesh);
+        if (ch.shadowMesh) disposeChunkMesh(ch.shadowMesh);
     }
 
     function rebuildInstancePool(type) {
@@ -7957,11 +7999,13 @@
                 let cap = 16; while (cap < list.length) cap *= 2;
                 ch = { cap: cap, meshes: pool.subs.map((sub, mi) => makeChunkMesh(pool, mi, cap)),
                        impostorMesh: pool.impostor ? makeImpostorMesh(pool, cap) : null,
-                       topMesh: pool.impostor ? makeImpostorMesh(pool, cap, true) : null };
+                       topMesh: pool.impostor ? makeImpostorMesh(pool, cap, true) : null,
+                       shadowMesh: pool.impostor ? makeImpostorMesh(pool, cap, 'shadow') : null };
                 pool.chunks.set(key, ch);
             }
             if (pool.impostor && !ch.impostorMesh) ch.impostorMesh = makeImpostorMesh(pool, ch.cap);
             if (pool.impostor && !ch.topMesh) ch.topMesh = makeImpostorMesh(pool, ch.cap, true);
+            if (pool.impostor && !ch.shadowMesh) ch.shadowMesh = makeImpostorMesh(pool, ch.cap, 'shadow');
             ch.far = undefined;   // updatePropLod sets the models or the cards visible again
             ch.meshes.forEach((iMesh, mi) => {
                 const off = pool.subOffsets[mi], local = iMesh.userData.localSphere;
@@ -8038,6 +8082,21 @@
                 tm.instanceColor.needsUpdate = true;
                 tm.geometry.attributes.instanceTrunkColor.needsUpdate = true;
             }
+            // the shadows under the cards: where the trees stand, turned as they are (the crown's centre is off the foot on some models)
+            const sm = ch.shadowMesh;
+            if (sm) {
+                list.forEach((e, i) => {
+                    const t = e.t;
+                    _iPos.set(t.x, (t.y || 0) + (t.yOffset || 0), t.z);
+                    _iQuat.setFromAxisAngle(_yAxis, t.rot || 0);
+                    _iScale.set(t.scale, t.scale, t.scale);
+                    _iMatrix.compose(_iPos, _iQuat, _iScale);
+                    sm.setMatrixAt(i, _iMatrix);
+                });
+                sm.geometry.boundingSphere = new THREE.Sphere(ch.sphere.center.clone(), ch.sphere.radius + pool.impostor.radius);
+                sm.count = list.length;
+                sm.instanceMatrix.needsUpdate = true;
+            }
         });
 
         pool.meshes = [];
@@ -8053,6 +8112,7 @@
         if (pool.impostor) {
             pool.impostor.rt.dispose(); pool.impostor.geometry.dispose(); pool.impostor.material.dispose();
             pool.impostor.topRt.dispose(); pool.impostor.topGeometry.dispose(); pool.impostor.topMaterial.dispose();
+            pool.impostor.shadowGeometry.dispose();   // (the shadow material is shared by every type)
         }
         delete window.instancePools[type];
     }

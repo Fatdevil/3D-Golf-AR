@@ -127,8 +127,8 @@ function serve() {
       const pool = window.instancePools.zz_chunk, chs = Array.from(pool.chunks.values());
       const farC = chs.filter(function (c) { return c.far; }), nearC = chs.filter(function (c) { return !c.far; });
       const lodOk = !!pool.impostor && farC.length > 0 && nearC.length > 0 &&
-        farC.every(function (c) { return c.impostorMesh.visible && c.meshes.every(function (m) { return !m.visible; }); }) &&
-        nearC.every(function (c) { return !c.impostorMesh.visible && c.meshes.every(function (m) { return m.visible; }); });
+        farC.every(function (c) { return c.impostorMesh.visible && c.shadowMesh.visible && c.meshes.every(function (m) { return !m.visible; }); }) &&
+        nearC.every(function (c) { return !c.impostorMesh.visible && !c.shadowMesh.visible && c.meshes.every(function (m) { return m.visible; }); });
       let fullOk = false;
       window.withFullProps(function () { fullOk = chs.every(function (c) { return !c.impostorMesh.visible && c.meshes.every(function (m) { return m.visible; }); }); });
       const backOk = farC.every(function (c) { return c.impostorMesh.visible; });
@@ -334,7 +334,7 @@ function serve() {
         window.SurroundVeg.build();
         const obMeshes = window.SurroundVeg.meshes().filter(function (m) { return m.userData.surroundVeg.side === 'OB'; });
         let n = 0, inside = true; const mt = new THREE.Matrix4(), p = new THREE.Vector3();
-        obMeshes.forEach(function (m) { if (m.userData.surroundVeg.top) return; for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, mt); p.setFromMatrixPosition(mt); n++; if (p.x < -90.5 || p.x > 90.5 || p.z < -190.5 || p.z > -109.5 || !window.SurroundVeg.obClear(p.x, p.z)) inside = false; } });
+        obMeshes.forEach(function (m) { if (m.userData.surroundVeg.top || m.userData.surroundVeg.shadow) return; for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, mt); p.setFromMatrixPosition(mt); n++; if (p.x < -90.5 || p.x > 90.5 || p.z < -190.5 || p.z > -109.5 || !window.SurroundVeg.obClear(p.x, p.z)) inside = false; } });
         const mode = window.getAppMode(), play = mode === 'PLAY' || mode === 'TEST';
         const visOk = obMeshes.length > 0 && obMeshes.every(function (m) { return m.visible === play; });
         window.SurroundVeg.setSide('OB', 'NONE');
@@ -359,10 +359,16 @@ function serve() {
       const differs = function (a, b) { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 30) n++; return n; };
       const setVis = function (fn) { window.SurroundVeg.meshes().forEach(function (m) { m.visible = fn(m.userData.surroundVeg); }); };
       setVis(function () { return false; }); const eastNone = shoot([900, 12, 0], [300, 8, 0]);
-      setVis(function (u) { return !u.top; }); const eastCards = shoot([900, 12, 0], [300, 8, 0]);
-      setVis(function (u) { return !u.top; }); const downStand = shoot([0, 200, -330], [0, 0, -420]);
-      setVis(function () { return true; }); const downBoth = shoot([0, 200, -330], [0, 0, -420]);
+      setVis(function (u) { return !u.top && !u.shadow; }); const eastCards = shoot([900, 12, 0], [300, 8, 0]);
+      setVis(function (u) { return !u.top && !u.shadow; }); const downStand = shoot([0, 200, -330], [0, 0, -420]);
+      setVis(function (u) { return !u.shadow; }); const downBoth = shoot([0, 200, -330], [0, 0, -420]);
+      // (c) the shadows: seen from 20 m up, the ground under the trees darker with them than without
+      setVis(function (u) { return !u.shadow; }); const noShadow = shoot([0, 20, -330], [0, 0, -420]);
+      setVis(function () { return true; }); const withShadow = shoot([0, 20, -330], [0, 0, -420]);
+      let darker = 0, lighter = 0;
+      for (let i = 0; i < noShadow.length; i += 4) { const dl = (noShadow[i] + noShadow[i + 1] + noShadow[i + 2]) - (withShadow[i] + withShadow[i + 1] + withShadow[i + 2]); if (dl > 20) darker++; else if (dl < -20) lighter++; }
       camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld(); window.PostFX.setLevel(pf);
+      check('2D trees: a soft shadow on the ground under each tree (the ground under them darker, nothing lighter)', darker > 500 && lighter < darker / 50, 'darker ' + darker + ', lighter ' + lighter);
       const outsideSeen = differs(eastNone, eastCards), topsAdded = differs(downStand, downBoth);
       check('2D trees: the standing cards face the camera (seen from outside the belt) and the lying cards add crowns looking steeply down',
             outsideSeen > 500 && topsAdded > 500, 'pixels: from outside ' + outsideSeen + ', crowns from above ' + topsAdded);
