@@ -1201,7 +1201,8 @@
                         h.par = hSync.par || 4;
                         if(hSync.panorama) h.panorama = hSync.panorama;
                         if(hSync.surrounding) h.surrounding = hSync.surrounding;
-                        if(hSync.surroundConfig) h.surroundConfig = hSync.surroundConfig;   // the four edges of the plate (restoreSurrounding reads them from the holes)
+                        if(hSync.surroundConfig) h.surroundConfig = hSync.surroundConfig;
+                        if(hSync.surroundVeg) h.surroundVeg = hSync.surroundVeg;   // the vegetation in the surroundings (arcade-surround-veg.js)   // the four edges of the plate (restoreSurrounding reads them from the holes)
                         if(hSync.tee) { h.tees.yellow = {x: hSync.tee.x, y: hSync.tee.y, z: hSync.tee.z}; }
                         if(hSync.tees) {
                             for(let tType in hSync.tees) {
