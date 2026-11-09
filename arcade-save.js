@@ -29,6 +29,7 @@
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null,
+            surroundVeg: h.surroundVeg || null,
             envObjects: window.serializeEnvObjects(h),
             greenData: h.greenData ? {
                 points: h.greenData.points,
@@ -806,6 +807,7 @@
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig || null,
+            surroundVeg: h.surroundVeg || null,
             envObjects: window.serializeEnvObjects(h)
         }));
         let dumpTrees = window.placedTrees ? window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, s: t.scale, r: t.rot, tilt: t.tiltX, roll: t.rollZ, c: t.color, tc: t.trunkColor, yOffset: t.yOffset || 0, brightness: t.brightness !== undefined ? t.brightness : 1.0})) : [];

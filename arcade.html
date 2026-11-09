@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=41"></script>
+<script src="i18n.js?v=42"></script>
 <script src="physics.js?v=15"></script>
 <script src="hitbox-fit.js?v=1"></script>
 <script src="prop-collision.js?v=1"></script>
@@ -44,6 +44,7 @@
 <script src="arcade-particle-engine.js?v=2"></script>
 <script src="arcade-wind-sway.js?v=2"></script>
 <script src="arcade-post.js?v=2"></script>
+<script src="arcade-surround-veg.js?v=2"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
@@ -1823,6 +1824,69 @@
                         <option value="horizonColor" data-i18n="surr_opt_horizon">🌫️ Bergshorisont</option>
                         <option value="skyColor" data-i18n="surr_opt_sky">⛅ Himmel (Sky)</option>
                     </select>
+                </div>
+            </div>
+
+            <!-- vegetation in the surroundings (arcade-surround-veg.js): 2D trees in a belt outside the plate, per side -->
+            <div id="env-veg-section" style="margin-top:6px; padding-top:10px; border-top:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label style="color:#94a3b8; font-size:10px; font-weight:bold;">🌲 <span data-i18n="env_veg_header">VEGETATION I OMGIVNINGEN</span></label>
+                </div>
+                <div data-i18n="env_veg_desc" style="font-size:9px; color:#64748b; line-height:1.4; margin-top:2px;">2D-träd utanför banan. "Efter marken": skog på rough, palmer på waste/sand, gles skog vid bergshorisont, inget på vatten.</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:6px;">
+                <div>
+                    <div data-i18n="env_surround_north" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Norr (N)</div>
+                    <select id="veg-N" onchange="window.SurroundVeg && window.SurroundVeg.setSide('N', this.value)" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                        <option value="AUTO" data-i18n="veg_opt_auto">✨ Efter marken</option>
+                        <option value="NONE" data-i18n="veg_opt_none">❌ Ingen</option>
+                        <option value="FOREST" data-i18n="veg_opt_forest">🌳 Skog</option>
+                        <option value="PALMS" data-i18n="veg_opt_palms">🌴 Palmer</option>
+                        <option value="DESERT" data-i18n="veg_opt_desert">🌵 Öken</option>
+                        <option value="CUSTOM" data-i18n="veg_opt_custom">✏️ Egen</option>
+                    </select>
+                </div>
+                <div>
+                    <div data-i18n="env_surround_east" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Öster (E)</div>
+                    <select id="veg-E" onchange="window.SurroundVeg && window.SurroundVeg.setSide('E', this.value)" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                        <option value="AUTO" data-i18n="veg_opt_auto">✨ Efter marken</option>
+                        <option value="NONE" data-i18n="veg_opt_none">❌ Ingen</option>
+                        <option value="FOREST" data-i18n="veg_opt_forest">🌳 Skog</option>
+                        <option value="PALMS" data-i18n="veg_opt_palms">🌴 Palmer</option>
+                        <option value="DESERT" data-i18n="veg_opt_desert">🌵 Öken</option>
+                        <option value="CUSTOM" data-i18n="veg_opt_custom">✏️ Egen</option>
+                    </select>
+                </div>
+                <div>
+                    <div data-i18n="env_surround_south" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Söder (S)</div>
+                    <select id="veg-S" onchange="window.SurroundVeg && window.SurroundVeg.setSide('S', this.value)" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                        <option value="AUTO" data-i18n="veg_opt_auto">✨ Efter marken</option>
+                        <option value="NONE" data-i18n="veg_opt_none">❌ Ingen</option>
+                        <option value="FOREST" data-i18n="veg_opt_forest">🌳 Skog</option>
+                        <option value="PALMS" data-i18n="veg_opt_palms">🌴 Palmer</option>
+                        <option value="DESERT" data-i18n="veg_opt_desert">🌵 Öken</option>
+                        <option value="CUSTOM" data-i18n="veg_opt_custom">✏️ Egen</option>
+                    </select>
+                </div>
+                <div>
+                    <div data-i18n="env_surround_west" style="color:#94a3b8; font-size:10px; font-weight:bold; margin-bottom:2px;">Väster (W)</div>
+                    <select id="veg-W" onchange="window.SurroundVeg && window.SurroundVeg.setSide('W', this.value)" style="width:100%; background:#1e293b; color:#cbd5e1; border:1px solid #334155; border-radius:6px; padding:5px; font-size:11px; cursor:pointer;">
+                        <option value="AUTO" data-i18n="veg_opt_auto">✨ Efter marken</option>
+                        <option value="NONE" data-i18n="veg_opt_none">❌ Ingen</option>
+                        <option value="FOREST" data-i18n="veg_opt_forest">🌳 Skog</option>
+                        <option value="PALMS" data-i18n="veg_opt_palms">🌴 Palmer</option>
+                        <option value="DESERT" data-i18n="veg_opt_desert">🌵 Öken</option>
+                        <option value="CUSTOM" data-i18n="veg_opt_custom">✏️ Egen</option>
+                    </select>
+                </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:8px;"><span data-i18n="env_veg_density" style="color:#94a3b8; font-size:9px; font-weight:bold;">Täthet</span><span id="veg-density-val" style="color:#4ade80; font-size:9px; font-weight:bold;">100%</span></div>
+                <input type="range" id="veg-density" min="0" max="3" step="0.1" value="1" oninput="window.SurroundVeg && window.SurroundVeg.setDensity(this.value, false)" onchange="window.SurroundVeg && window.SurroundVeg.setDensity(this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                <div style="display:flex; justify-content:space-between; margin-top:6px;"><span data-i18n="env_veg_depth" style="color:#94a3b8; font-size:9px; font-weight:bold;">Bältets djup</span><span id="veg-depth-val" style="color:#4ade80; font-size:9px; font-weight:bold;">250 m</span></div>
+                <input type="range" id="veg-depth" min="40" max="700" step="10" value="250" oninput="window.SurroundVeg && window.SurroundVeg.setDepth(this.value, false)" onchange="window.SurroundVeg && window.SurroundVeg.setDepth(this.value, true)" style="width:100%; accent-color:#4ade80; cursor:pointer;">
+                <div id="veg-custom-list" style="display:none; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:8px; max-height:140px; overflow-y:auto;"></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:6px;">
+                    <span id="veg-status" style="color:#64748b; font-size:9px;"></span>
+                    <button onclick="window.SurroundVeg && window.SurroundVeg.reseed()" data-i18n="env_veg_reseed" style="background:#334155; color:#cbd5e1; border:none; padding:5px 8px; font-size:9px; border-radius:6px; font-weight:bold; cursor:pointer;">🎲 Ny placering</button>
                 </div>
             </div>
 
@@ -4991,6 +5055,8 @@
             if (typeof window.buildNatureUI === 'function') {
                 window.buildNatureUI();
             }
+            // the surroundings' vegetation picks its tree types from the library: a build before the library arrived found none
+            if (window.SurroundVeg) window.SurroundVeg.schedule();
         } catch(e) {
             console.error("Failed to load cloud assets", e);
         }
@@ -6222,6 +6288,7 @@
         let cS = getCol(sK);
         let cW = getCol(wK);
         
+        if (window.SurroundVeg) window.SurroundVeg.schedule();   // AUTO vegetation follows the ground colour of its side
         if(window.surroundMat.userData.colorN) {
             window.surroundMat.userData.colorN.value.copy(cN);
             window.surroundMat.userData.colorE.value.copy(cE);
@@ -6267,6 +6334,7 @@
         }
         
         window.updateSurroundColors();
+        if (window.SurroundVeg) window.SurroundVeg.restore();   // the vegetation in the surroundings, from the holes
     };
     
     window.switchRightTab = function(tabName) {
@@ -7622,6 +7690,9 @@
     // (updatePropLod); building and the minimap always draw the models. The models stay in place (hidden), so a click still picks the tree.
     const PROP_IMPOSTOR_FAR = 150, PROP_IMPOSTOR_NEAR = 130;   // hysteresis: a square goes to cards beyond 150 m and back to models within 130 m
     const PROP_IMPOSTOR_RES = 256;
+
+    // (makePropImpostor and propColors are global functions of this page: the surroundings' 2D trees, arcade-surround-veg.js, use the
+    // same card and the same colours as the far-away trees on the plate)
 
     function propHasImpostor(type) {
         const reg = window.ASSET_REGISTRY && window.ASSET_REGISTRY[type];
@@ -10530,6 +10601,7 @@
             panorama: h.panorama || null,
             surrounding: h.surrounding || null,
             surroundConfig: h.surroundConfig ? JSON.parse(JSON.stringify(h.surroundConfig)) : null,
+            surroundVeg: h.surroundVeg ? JSON.parse(JSON.stringify(h.surroundVeg)) : null,
             rangeLinesEnabled: h.rangeLinesEnabled !== false
         }));
         
@@ -10672,6 +10744,7 @@
                 h.panorama = hState.panorama || null;
                 h.surrounding = hState.surrounding || null;
                 h.surroundConfig = hState.surroundConfig || null;
+                h.surroundVeg = hState.surroundVeg || null;
                 h.rangeLinesEnabled = hState.rangeLinesEnabled !== false;
 
                 // Restore envObjects
@@ -10703,6 +10776,9 @@
         if (typeof window.updateSBBunkerControls === 'function') window.updateSBBunkerControls();
         if (typeof window.updateSBFairwayControls === 'function') window.updateSBFairwayControls();
         if (typeof window.updateSBTeeControls === 'function') window.updateSBTeeControls();
+        // the vegetation in the surroundings is kept on the holes: after an undo / redo the live belt, its settings and controls follow
+        // the restored holes (else the next vegetation edit wrote the stale settings back over them)
+        if (window.SurroundVeg) window.SurroundVeg.restore();
         if (window._globalGreenGridEnabled && typeof window.buildGreenGrid === 'function') {
             let h = (typeof courseHoles !== 'undefined' && courseHoles) ? courseHoles[window.currentHoleIndex] : null;
             if (h && h.greenData && h.greenData.points && h.greenData.points.length >= 3) {
@@ -12486,6 +12562,7 @@
             h.panorama = null;
             h.surrounding = null;
             h.surroundConfig = null;
+            h.surroundVeg = null;
             if (h.envObjects) {
                 h.envObjects.forEach(obj => { if(obj && obj.mesh) scene.remove(obj.mesh); });
                 h.envObjects = [];

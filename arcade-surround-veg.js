@@ -1,0 +1,273 @@
+/**
+ * Vegetation in the surroundings (window.SurroundVeg): 2D trees in a belt outside the 600 x 600 m plate, per side (N, E, S, W).
+ * Each side has a ground colour already (the horizon panel: deep rough, rough, waste / sand, ocean, lake, mountain horizon, sky, none).
+ * Each side now also has a vegetation:
+ *   AUTO    after the ground: deep rough / rough a forest (a desert biome: sparse desert plants), waste / sand palms, the mountain horizon a
+ *           sparse forest, water and sky nothing
+ *   NONE, FOREST, PALMS, DESERT (cacti and shrubs, a few palms), CUSTOM (the types picked in the panel)
+ * The trees are cards that turn to the camera (the far-away cards of arcade.html, makePropImpostor: the same picture of the 3D model,
+ * tinted by the biome like the models). No shadow, no collision: nothing outside the plate is played. A tree belongs to the side whose
+ * weight is largest where it stands, the same weights the surround plane blends its colours with, so the vegetation follows the ground.
+ * Saved as settings on the holes (hole.surroundVeg: sides, density, depth, custom types, seed), not as thousands of objects: the same belt
+ * is grown from them on every load.
+ */
+(function (root) {
+    'use strict';
+    const SIDES = ['N', 'E', 'S', 'W'];
+    const VEG = ['AUTO', 'NONE', 'FOREST', 'PALMS', 'DESERT', 'CUSTOM'];
+    const DEFAULT = { sides: { N: 'AUTO', E: 'AUTO', S: 'AUTO', W: 'AUTO' }, density: 1, depth: 250, custom: [], seed: 1 };
+    const PER_M2 = 1 / 550;              // candidate trees per m² at density 1 (a forest keeps all of them)
+    const KEEP = { FOREST: 1, SPARSE: 0.25, PALMS: 0.3, DESERT: 0.22, CUSTOM: 0.8 };
+    const GAP = 20;                      // m of open ground between the plate edge and the belt
+    const MAX_TREES = 6000;
+    const MAX_TYPES = 4;                 // per vegetation: each type is a model to load and a picture to take
+
+    let cfg = clone(DEFAULT);
+    let meshes = [];
+    let impostors = {};                  // type -> card (texture, plane, material) of our own, when no prop pool has one
+    let timer = null, tries = 0;
+    let lastStatus = '';
+
+    function clone(o) { return JSON.parse(JSON.stringify(o)); }
+    function reg(t) { return (root.ASSET_REGISTRY && root.ASSET_REGISTRY[t]) || null; }
+    function nameOf(t) { const r = reg(t); return String((r && (r.name || (r.polyAttribution && r.polyAttribution.title))) || t); }
+    function isPalm(t) { return /palm/i.test(nameOf(t)); }
+    function isDesertPlant(t) { return /cact|kaktus|succul|agave|yucca|shrub|bush|buske|sage|joshua/i.test(nameOf(t)); }
+    function desertBiome() { return /DESERT/.test(String(root.ACTIVE_BIOME || '')); }
+    function types(sub) { return Object.keys(root.ASSET_REGISTRY || {}).filter(function (k) { const r = reg(k); return r && r.subcat === sub; }); }
+    function fitsBiome(t) { const r = reg(t), b = r && r.biomes; if (!b || !b.length) return true; const a = String(root.ACTIVE_BIOME || 'GLOBAL'); return b.indexOf('GLOBAL') >= 0 || b.indexOf('ALL') >= 0 || b.indexOf(a) >= 0; }
+    function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
+
+    // what a side grows when it is left on AUTO, from its ground colour
+    function autoVeg(groundKey) {
+        if (groundKey === 'fescueColor' || groundKey === 'roughColor') return desertBiome() ? 'DESERT' : 'FOREST';
+        if (groundKey === 'wasteColor') return 'PALMS';
+        if (groundKey === 'horizonColor') return 'SPARSE';
+        return 'NONE';
+    }
+    function vegOf(side) {
+        const v = cfg.sides[side] || 'AUTO';
+        return v === 'AUTO' ? autoVeg(root.surroundConfig && root.surroundConfig[side]) : v;
+    }
+
+    // the types a vegetation is made of, with weights: a forest is the trees already on the course (as many as they are), else the library's
+    function pick(list, n) { return list.slice(0, n).map(function (t) { return { type: t, w: 1 }; }); }
+    function poolFor(veg) {
+        if (veg === 'CUSTOM') return (cfg.custom || []).filter(reg).slice(0, 8).map(function (t) { return { type: t, w: 1 }; });
+        if (veg === 'FOREST' || veg === 'SPARSE') {
+            const count = {};
+            (root.placedTrees || []).forEach(function (o) { const r = o && reg(o.type); if (r && r.subcat === 'TREES' && !isPalm(o.type)) count[o.type] = (count[o.type] || 0) + 1; });
+            const onCourse = Object.keys(count).sort(function (a, b) { return count[b] - count[a]; }).slice(0, MAX_TYPES);
+            if (onCourse.length) return onCourse.map(function (t) { return { type: t, w: count[t] }; });
+            return pick(types('TREES').filter(function (t) { return !isPalm(t) && fitsBiome(t); }), MAX_TYPES);
+        }
+        if (veg === 'PALMS') return pick(types('TREES').filter(isPalm), 3);
+        if (veg === 'DESERT') {
+            const plants = pick(types('PLANTS').filter(isDesertPlant).concat(types('TREES').filter(function (t) { return !isPalm(t) && isDesertPlant(t); })), 3);
+            const palms = pick(types('TREES').filter(isPalm), 1).map(function (p) { p.w = 0.25; return p; });
+            return plants.concat(palms);
+        }
+        return [];
+    }
+
+    // ---- the belt -----------------------------------------------------------------------------------------------------------------------
+    function rng(seed) { let a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+    // the side whose weight is largest at x, z (as the surround plane's shader: E is +x, S is +z, W is -x, N is -z)
+    function sideAt(x, z) {
+        const a = Math.atan2(z, x), c = Math.cos(a), s = Math.sin(a);
+        const w = { E: Math.max(0, c), S: Math.max(0, s), W: Math.max(0, -c), N: Math.max(0, -s) };
+        let best = 'E'; SIDES.forEach(function (k) { if (w[k] > w[best]) best = k; }); return best;
+    }
+
+    function clear() {
+        meshes.forEach(function (m) {
+            if (m.parent) m.parent.remove(m);
+            const g = m.geometry, own = g.attributes.instanceTrunkColor;
+            g.attributes = {}; g.index = null; if (own) g.setAttribute('instanceTrunkColor', own);
+            g.dispose(); if (typeof m.dispose === 'function') m.dispose();
+        });
+        meshes = [];
+    }
+
+    function cardFor(type) {
+        const pool = root.instancePools && root.instancePools[type];
+        if (pool && pool.impostor) return pool.impostor;
+        if (impostors[type]) return impostors[type];
+        if (typeof root.makePropImpostor !== 'function') return null;
+        const c = root.makePropImpostor(type);
+        if (c) impostors[type] = c;
+        return c || null;
+    }
+
+    function setStatus(msg) {
+        lastStatus = msg;
+        const el = typeof document !== 'undefined' && document.getElementById('veg-status');
+        if (el) el.textContent = msg;
+    }
+
+    // grows the belt from the settings; waits for the models it needs (they load on demand)
+    function build() {
+        timer = null;
+        const scene = root.scene || (root.G && root.G.scene);
+        if (!scene || !root.THREE || !root.surroundConfig) return;
+        clear();
+        const sideVeg = {}, pools = {}, missing = [];
+        SIDES.forEach(function (s) {
+            const v = vegOf(s);
+            sideVeg[s] = v;
+            if (v !== 'NONE' && !pools[v]) { pools[v] = poolFor(v); if (!pools[v].length) missing.push(v); }
+        });
+        // the models: ask for those not loaded; build again when they are
+        let waiting = 0;
+        Object.keys(pools).forEach(function (v) {
+            pools[v].forEach(function (p) {
+                const m = root.customModels && root.customModels[p.type];
+                if (!m || m === 'LOADING') { waiting++; if (!m && typeof root.loadAsset === 'function') root.loadAsset(p.type, function () {}); }
+            });
+        });
+        if (waiting && tries < 20) { tries++; timer = setTimeout(build, 1500); setStatus(tr('veg_status_loading', 'Laddar trädmodeller…')); return; }
+        tries = 0;
+
+        const half = ((root.G && root.G.TERRAIN_SIZE) || root.TERRAIN_SIZE || 600) / 2 + GAP, outer = half + Math.max(40, cfg.depth || 250);
+        const area = 4 * outer * outer - 4 * half * half;
+        const r = rng(cfg.seed || 1);
+        const per = {};   // type -> side -> [x, z, s, rnd]
+        let n = 0;
+        const candidates = Math.min(MAX_TREES * 4, Math.round(area * PER_M2 * Math.max(0, cfg.density)));
+        for (let i = 0; i < candidates && n < MAX_TREES; i++) {
+            const x = (r() * 2 - 1) * outer, z = (r() * 2 - 1) * outer, keep = r(), which = r(), sc = r(), tint = r();
+            if (Math.abs(x) < half && Math.abs(z) < half) continue;
+            const side = sideAt(x, z), v = sideVeg[side];
+            if (v === 'NONE' || !pools[v] || !pools[v].length || keep > (KEEP[v] || 0.5)) continue;
+            const pool = pools[v];
+            let tot = 0; pool.forEach(function (p) { tot += p.w; });
+            let acc = which * tot, t = pool[pool.length - 1].type;
+            for (let k = 0; k < pool.length; k++) { acc -= pool[k].w; if (acc <= 0) { t = pool[k].type; break; } }
+            const byType = per[t] || (per[t] = {});
+            (byType[side] || (byType[side] = [])).push([x, z, 0.75 + sc * 0.55, tint]);
+            n++;
+        }
+
+        const THREE = root.THREE, mtx = new THREE.Matrix4(), pos = new THREE.Vector3(), q = new THREE.Quaternion(), scl = new THREE.Vector3();
+        let drawn = 0;
+        Object.keys(per).forEach(function (t) {
+            const card = cardFor(t);
+            if (!card) return;
+            SIDES.forEach(function (side) {
+                const list = per[t][side];
+                if (!list || !list.length) return;
+                const g = new THREE.BufferGeometry();
+                g.setIndex(card.geometry.index);
+                for (const k in card.geometry.attributes) g.setAttribute(k, card.geometry.attributes[k]);
+                g.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array(list.length * 3), 3));
+                const m = new THREE.InstancedMesh(g, card.material, list.length);
+                m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(list.length * 3), 3);
+                let cx = 0, cz = 0, maxS = 0;
+                list.forEach(function (p, i) {
+                    pos.set(p[0], 0, p[1]); scl.set(p[2], p[2], p[2]);
+                    mtx.compose(pos, q, scl);
+                    m.setMatrixAt(i, mtx);
+                    // (the colour as a placed tree of the type gets it: the biome's palette by position; a brightness off 1 would turn the
+                    // tint shader on with a white colour and grey the crown)
+                    const col = typeof root.propColors === 'function' ? root.propColors({ x: p[0], z: p[1] }, true) : null;
+                    if (col) { m.setColorAt(i, col.canopy); g.attributes.instanceTrunkColor.setXYZ(i, col.trunk.r, col.trunk.g, col.trunk.b); }
+                    else { m.setColorAt(i, new THREE.Color(1, 1, 1)); g.attributes.instanceTrunkColor.setXYZ(i, 1, 1, 1); }
+                    cx += p[0]; cz += p[1]; maxS = Math.max(maxS, p[2]);
+                });
+                cx /= list.length; cz /= list.length;
+                let rad = 0; list.forEach(function (p) { rad = Math.max(rad, Math.hypot(p[0] - cx, p[1] - cz)); });
+                g.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, 0, cz), rad + card.radius * maxS + 20);
+                m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; g.attributes.instanceTrunkColor.needsUpdate = true;
+                m.castShadow = false; m.receiveShadow = false; m.frustumCulled = true;
+                m.raycast = function () {};
+                m.userData.surroundVeg = { type: t, side: side };
+                scene.add(m);
+                meshes.push(m);
+                drawn += list.length;
+            });
+        });
+        const names = { FOREST: tr('veg_forest', 'Skog'), SPARSE: tr('veg_forest', 'Skog'), PALMS: tr('veg_palms', 'Palmer'), DESERT: tr('veg_desert', 'Öken'), CUSTOM: tr('veg_custom', 'Egen') };
+        if (missing.length) setStatus(tr('veg_status_missing', 'Inget i biblioteket för') + ': ' + missing.map(function (v) { return names[v] || v; }).join(', ') + ' · ' + drawn + ' ' + tr('veg_status_trees', 'träd'));
+        else setStatus(drawn + ' ' + tr('veg_status_trees', 'träd'));
+    }
+
+    function schedule(ms) {
+        if (timer) clearTimeout(timer);
+        tries = 0;
+        timer = setTimeout(build, ms === undefined ? 300 : ms);
+    }
+
+    // ---- settings ----------------------------------------------------------------------------------------------------------------------
+    function holes() { return (typeof root.courseHolesRef === 'function' ? root.courseHolesRef() : root.courseHoles) || []; }
+    function save() {
+        const hs = holes();
+        hs.forEach(function (h) { if (h) h.surroundVeg = clone(cfg); });   // one setting for the whole plate, like the ground colours
+        root._editRev = (root._editRev || 0) + 1;
+        if (typeof root.saveLevel === 'function') root.saveLevel(false, true);
+    }
+    function sanitize(c) {
+        const out = clone(DEFAULT);
+        if (!c || typeof c !== 'object') return out;
+        SIDES.forEach(function (s) { if (c.sides && VEG.indexOf(c.sides[s]) >= 0) out.sides[s] = c.sides[s]; });
+        if (isFinite(c.density)) out.density = Math.max(0, Math.min(3, +c.density));
+        if (isFinite(c.depth)) out.depth = Math.max(40, Math.min(700, +c.depth));
+        if (Array.isArray(c.custom)) out.custom = c.custom.filter(function (t) { return typeof t === 'string'; }).slice(0, 8);
+        if (isFinite(c.seed)) out.seed = c.seed | 0;
+        return out;
+    }
+    // the plate's setting from the holes (the first hole that has one), else the default (all sides AUTO)
+    function restore() {
+        let found = null;
+        holes().forEach(function (h) { if (!found && h && h.surroundVeg) found = h.surroundVeg; });
+        cfg = sanitize(found);
+        syncUI();
+        schedule(0);
+    }
+
+    function syncUI() {
+        if (typeof document === 'undefined') return;
+        SIDES.forEach(function (s) { const el = document.getElementById('veg-' + s); if (el) el.value = cfg.sides[s]; });
+        const d = document.getElementById('veg-density'), dv = document.getElementById('veg-density-val');
+        if (d) d.value = cfg.density; if (dv) dv.textContent = Math.round(cfg.density * 100) + '%';
+        const p = document.getElementById('veg-depth'), pv = document.getElementById('veg-depth-val');
+        if (p) p.value = cfg.depth; if (pv) pv.textContent = Math.round(cfg.depth) + ' m';
+        renderCustomList();
+        if (lastStatus) setStatus(lastStatus);
+    }
+    function renderCustomList() {
+        const box = typeof document !== 'undefined' && document.getElementById('veg-custom-list');
+        if (!box) return;
+        const any = SIDES.some(function (s) { return cfg.sides[s] === 'CUSTOM'; });
+        box.style.display = any ? 'grid' : 'none';
+        if (!any) return;
+        const list = types('TREES').concat(types('PLANTS'));
+        box.innerHTML = '';
+        list.forEach(function (t) {
+            const on = cfg.custom.indexOf(t) >= 0;
+            const b = document.createElement('button');
+            b.type = 'button'; b.textContent = (reg(t).icon || '🌳') + ' ' + nameOf(t).slice(0, 18);
+            b.setAttribute('data-type', t);
+            b.style.cssText = 'border:none; border-radius:6px; padding:5px 4px; font-size:9px; font-weight:bold; cursor:pointer; text-align:left; overflow:hidden; white-space:nowrap; ' +
+                (on ? 'background:#4ade80; color:#0f172a;' : 'background:#334155; color:#94a3b8;');
+            b.onclick = function () { api.toggleCustom(t); };
+            box.appendChild(b);
+        });
+        if (!list.length) box.textContent = tr('veg_custom_empty', 'Inga träd eller växter i biblioteket.');
+    }
+
+    const api = {
+        SIDES: SIDES, VEG: VEG,
+        config: function () { return clone(cfg); },
+        vegOf: vegOf, poolFor: poolFor, sideAt: sideAt,
+        meshes: function () { return meshes.slice(); },
+        count: function () { let c = 0; meshes.forEach(function (m) { c += m.count; }); return c; },
+        status: function () { return lastStatus; },
+        setSide: function (side, veg) { if (SIDES.indexOf(side) < 0 || VEG.indexOf(veg) < 0) return; cfg.sides[side] = veg; save(); renderCustomList(); schedule(); },
+        setDensity: function (v, done) { cfg.density = Math.max(0, Math.min(3, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
+        setDepth: function (v, done) { cfg.depth = Math.max(40, Math.min(700, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
+        toggleCustom: function (t) { const i = cfg.custom.indexOf(t); if (i >= 0) cfg.custom.splice(i, 1); else if (cfg.custom.length < 8) cfg.custom.push(t); save(); renderCustomList(); schedule(); },
+        reseed: function () { cfg.seed = ((cfg.seed || 1) * 16807 + 11) % 2147483647; save(); schedule(); },
+        restore: restore, schedule: schedule, build: build, clear: clear
+    };
+    root.SurroundVeg = api;
+})(typeof window !== 'undefined' ? window : globalThis);

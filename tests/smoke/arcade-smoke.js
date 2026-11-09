@@ -230,6 +230,31 @@ function serve() {
       camera.position.copy(camWas.p); camera.quaternion.copy(camWas.q); camera.updateMatrixWorld(); window.PostFX.setLevel(pf);
       check('ground detail: on, the ground close to the camera varies more than painted; off is remembered', on >= off + 3 && stored === '0', 'green spread off ' + off + ', on ' + on + ', stored ' + stored);
     })();
+    // vegetation in the surroundings (arcade-surround-veg.js): AUTO follows the ground of each side (deep rough a forest, waste palms,
+    // ocean nothing); the trees stand outside the plate on the side they belong to, take no click, and the setting is saved on the holes
+    await (async function () {
+      window.ASSET_REGISTRY.zz_oak2 = { file: 'Oaktree.glb', subcat: 'TREES', targetHeight: 12, name: 'Oak tree' };
+      window.ASSET_REGISTRY.zz_palm2 = { file: 'Oaktree_1.glb', subcat: 'TREES', targetHeight: 14, name: 'Palm (test)' };
+      const was = Object.assign({}, window.surroundConfig), wasVeg = window.SurroundVeg.config();
+      window.surroundConfig = { N: 'fescueColor', E: 'wasteColor', S: 'oceanColor', W: 'NONE' };
+      window.SurroundVeg.setSide('W', 'NONE');
+      await new Promise(function (r) { const t0 = Date.now(); (function wait() { window.SurroundVeg.build(); if ((window.SurroundVeg.count() > 0 && !/Laddar|Loading/.test(window.SurroundVeg.status())) || Date.now() - t0 > 60000) r(); else setTimeout(wait, 1500); })(); });
+      const half = 300, per = {}; let outside = true, rightSide = true;
+      window.SurroundVeg.meshes().forEach(function (m) {
+        const u = m.userData.surroundVeg; per[u.side + ':' + u.type] = (per[u.side + ':' + u.type] || 0) + m.count;
+        const mt = new THREE.Matrix4(), p = new THREE.Vector3();
+        for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, mt); p.setFromMatrixPosition(mt); if (Math.abs(p.x) <= half && Math.abs(p.z) <= half) outside = false; if (window.SurroundVeg.sideAt(p.x, p.z) !== u.side) rightSide = false; }
+      });
+      const rc = new THREE.Raycaster(new THREE.Vector3(0, 5, -320), new THREE.Vector3(0, 0, -1));
+      const hits = rc.intersectObjects(window.SurroundVeg.meshes());
+      const saved = courseHoles.every(function (h) { return !h || (h.surroundVeg && h.surroundVeg.sides.W === 'NONE'); });
+      const veg = ['N', 'E', 'S', 'W'].map(function (k) { return window.SurroundVeg.vegOf(k); }).join(',');
+      check('vegetation in the surroundings: AUTO follows the ground (deep rough forest, waste palms, ocean none), trees outside the plate on their own side, no click, saved on the holes',
+            veg === 'FOREST,PALMS,NONE,NONE' && (per['N:zz_oak2'] || 0) > 0 && (per['E:zz_palm2'] || 0) > 0 && !Object.keys(per).some(function (k) { return /^(S|W):/.test(k); }) && outside && rightSide && hits.length === 0 && saved,
+            JSON.stringify({ veg: veg, per: per, outside: outside, rightSide: rightSide, hits: hits.length, saved: saved, status: window.SurroundVeg.status() }));
+      window.surroundConfig = was; window.SurroundVeg.setSide('W', wasVeg.sides.W); window.SurroundVeg.clear();
+      delete window.ASSET_REGISTRY.zz_oak2; delete window.ASSET_REGISTRY.zz_palm2;
+    })();
     // the shader programs are compiled ahead (the start, a round, a hole change, a prop rebuild): the ball's dot exists, hidden, and a second
     // call has nothing left to compile
     (function () {
