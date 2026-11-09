@@ -581,10 +581,10 @@ Mätt på ett genererat hål (kameran i roughen, 3D-gräs MED): minikartan ritad
   Pixeltaket går via `window._autoPixelCap` i `getCapPixelRatio`.
 
   **Beslutsregler (`decide`, ren funktion):**
-  - Fönster om 3 s; hack över 250 ms räknas inte.
+  - Fönster om 3 s. Hack över 250 ms räknas inte, utom när de är minst en fjärdedel av bilderna, för då är de bildtakten. Ett fönster räknas från 5 bilder, så att en mycket trög enhet också stegar ner.
   - Snitt över 22,2 ms (under 45 fps) ger direkt ett steg ner.
   - Tre fönster i rad med snitt högst 17,5 ms och 90:e percentilen högst 21 ms ger ett steg upp.
-  - Ett steg upp som blir trögt inom två fönster spärrar den nivån i 1, 2, 4 … minuter. Med vsync syns aldrig marginalen, så ett steg upp är ett försök.
+  - Ett steg upp som blir trögt i något av de två första fönstren på den nya nivån spärrar den nivån i 1, 2, 4 … minuter. Det räknas i fönster, inte i tid. Med vsync syns aldrig marginalen, så ett steg upp är ett försök.
   - De första 1,5 s efter en ändring räknas inte.
 
   **Start och inställningar:**

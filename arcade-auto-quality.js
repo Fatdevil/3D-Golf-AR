@@ -10,10 +10,12 @@
  * Bloom (PostFX HIGH) is never chosen by it: it is the player's. An option the player has set (golf_post_q, golf_ground_detail in
  * localStorage, as the buttons store them) is theirs and is left as it is; the other levers still move. The first start begins at level 1
  * on a computer and 2 on a phone (as before); after that at the level the device ended on (golf_auto_q).
- * How it decides (decide()): frames are gathered over WINDOW_MS (hitches over 250 ms, a tab switch or a load, are left out).
+ * How it decides (decide()): frames are gathered over WINDOW_MS (hitches over 250 ms, a tab switch or a load, are left out, unless
+ * most frames are that slow: then they are the frame rate). A window counts from 5 frames, so a very slow device steps down too.
  *   slow:   the mean over SLOW_MS (under 45 frames a second): one step down at once
  *   smooth: the mean under SMOOTH_MS and nine frames in ten under 21 ms, three windows in a row: one step up, if that level has not
- *           failed lately; a level that is slow within two windows of stepping up to it is blocked for 1 minute, then 2, 4 ... minutes
+ *           failed lately; a level that is slow in either of the first two windows weighed after stepping up to it is blocked for 1 minute,
+ *           then 2, 4 ... minutes
  * After a change the next 1.5 s are not counted (shaders compile, the trees regrow). With vsync a frame never shows its room, so a step
  * up is a try, taken back when it does not hold.
  * Off (golf_auto_q_on = 0): nothing moves; the level stays where it is. Turning it on again forgets the player's own light & colour and
@@ -28,12 +30,15 @@
         { post: 'OFF', detail: false, pixel: 1.25,     veg: 0.6 },
         { post: 'OFF', detail: false, pixel: 1,        veg: 0.4 }
     ];
-    const WINDOW_MS = 3000, SETTLE_MS = 1500, HITCH_MS = 250;
+    const WINDOW_MS = 3000, SETTLE_MS = 1500, HITCH_MS = 250, MIN_FRAMES = 5;
     const SLOW_MS = 1000 / 45, SMOOTH_MS = 1000 / 57, SMOOTH_P90 = 21, SMOOTH_WINDOWS = 3, BLOCK_MS = 60000;
 
-    // the numbers of a window of frame times (ms), hitches left out
+    // the numbers of a window of frame times (ms), hitches left out; when most frames are that long they are the frame rate, not hitches
+    // (a phone at 3 frames a second must still step down)
     function stats(dts) {
-        const d = dts.filter(function (v) { return v > 0 && v < HITCH_MS; }).sort(function (a, b) { return a - b; });
+        const all = dts.filter(function (v) { return v > 0; });
+        const short = all.filter(function (v) { return v < HITCH_MS; });
+        const d = (short.length >= all.length * 0.75 ? short : all).sort(function (a, b) { return a - b; });
         if (!d.length) return null;
         let sum = 0; d.forEach(function (v) { sum += v; });
         return { mean: sum / d.length, p90: d[Math.min(d.length - 1, Math.floor(d.length * 0.9))], n: d.length };
@@ -43,15 +48,18 @@
     //   st.level      the current level (0-based)
     //   st.smooth     smooth windows in a row
     //   st.blocked    level -> { until, tries }
-    //   st.upAt       the time of the last step up and the level left (to tell a failed try)
+    //   st.upAt       the last step up: the level it went to and the windows weighed since (to tell a failed try)
+    // A window needs MIN_FRAMES frames to count (a few, so that a very slow device still steps down).
     function decide(st, s, now) {
-        const out = { level: st.level, smooth: st.smooth, blocked: Object.assign({}, st.blocked), upAt: st.upAt, changed: false };
-        if (!s || s.n < 20) return out;
+        const out = { level: st.level, smooth: st.smooth, blocked: Object.assign({}, st.blocked), upAt: st.upAt ? Object.assign({}, st.upAt) : null, changed: false };
+        if (!s || s.n < MIN_FRAMES) return out;
+        if (out.upAt) out.upAt.windows = (out.upAt.windows || 0) + 1;
         if (s.mean > SLOW_MS) {
             out.smooth = 0;
             if (out.level < LEVELS.length - 1) {
-                // a step up that did not hold: that level is blocked for a while, longer each time
-                if (out.upAt && now - out.upAt.t < WINDOW_MS * 2 + SETTLE_MS && out.upAt.to === out.level) {
+                // a step up that did not hold (slow within the first two windows weighed at the new level): that level is blocked for a
+                // while, longer each time
+                if (out.upAt && out.upAt.windows <= 2 && out.upAt.to === out.level) {
                     const b = out.blocked[out.level] || { tries: 0 };
                     b.tries++; b.until = now + BLOCK_MS * Math.pow(2, b.tries - 1);
                     out.blocked[out.level] = b;
@@ -64,9 +72,10 @@
             out.smooth++;
             if (out.smooth >= SMOOTH_WINDOWS && out.level > 0) {
                 const b = out.blocked[out.level - 1];
-                if (!b || now >= b.until) { out.upAt = { t: now, to: out.level - 1 }; out.level--; out.changed = true; out.smooth = 0; }
+                if (!b || now >= b.until) { out.upAt = { t: now, to: out.level - 1, windows: 0 }; out.level--; out.changed = true; out.smooth = 0; }
             }
         } else out.smooth = 0;
+        if (out.upAt && !out.changed && out.upAt.windows >= 2) out.upAt = null;   // it held for two windows
         return out;
     }
 

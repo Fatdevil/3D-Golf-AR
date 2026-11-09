@@ -56,7 +56,18 @@ console.log('1. Beslutet');
   check('misslyckas igen: spärren dubblas', again.blocked[0].tries === 2 && again.blocked[0].until === t + 3000 + 63000 + 120000);
   const hitchy = frames(16.7, 170).concat(frames(900, 10));
   check('hack (över 250 ms) räknas inte', A.stats(hitchy).n === 170 && Math.abs(A.stats(hitchy).mean - 16.7) < 0.01);
-  check('för få bilder: inget beslut', !A.decide(st0, A.stats(frames(40, 10)), 1).changed);
+  check('för få bilder (under 5): inget beslut', !A.decide(st0, A.stats(frames(40, 4)), 1).changed);
+  check('mycket trögt (5 fps, 15 bilder i fönstret): ett steg ner', A.decide(st0, A.stats(frames(200, 15)), 1).level === 2);
+  check('nästan alla bilder över 250 ms (3 fps): de är bildtakten, inte hack', A.stats(frames(330, 9)).n === 9 && A.decide(st0, A.stats(frames(330, 9)), 1).level === 2);
+  // a step up that held for one window and failed in the second is blocked too
+  let s3 = A.decide(Object.assign({}, st0, { smooth: 2 }), A.stats(frames(16.7)), 50000);
+  s3 = A.decide(s3, A.stats(frames(16.7)), 54500);
+  s3 = A.decide(s3, A.stats(frames(30)), 57600);
+  check('steget upp höll ett fönster men inte två: spärras ändå', s3.level === 1 && s3.blocked[0] && s3.blocked[0].tries === 1, JSON.stringify(s3));
+  let s4 = A.decide(Object.assign({}, st0, { smooth: 2 }), A.stats(frames(16.7)), 50000);
+  s4 = A.decide(s4, A.stats(frames(16.7)), 54500); s4 = A.decide(s4, A.stats(frames(16.7)), 57600);
+  s4 = A.decide(s4, A.stats(frames(30)), 60700);
+  check('höll två fönster: trögt senare spärrar inte (det var något annat)', s4.level === 1 && !s4.blocked[0], JSON.stringify(s4));
   check('ojämnt (snitt ok, men var tionde bild långsam): räknas inte som mjukt', A.decide(st0, A.stats(frames(15, 160).concat(frames(30, 20))), 1).smooth === 0);
 }
 
