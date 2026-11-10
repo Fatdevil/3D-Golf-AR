@@ -10825,12 +10825,48 @@
         return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     }
 
-    function captureEditorState(forceFull = false, texRect = null) {
+    // A paint brush stroke keeps only the 256 px tiles it touches (a whole 4096 x 4096 copy is 64 MB for every stroke, 20 strokes deep).
+    // The tiles are read just before the brush first draws on them (notePaintTiles), so they hold the picture before the stroke.
+    const PAINT_TILE = 256;
+    let strokePaintTiles = null;   // the tiles of the stroke that is running (the same Map as its undo state's texTiles), else null
+    function notePaintTiles(x0, y0, x1, y1) {
+        if (!strokePaintTiles) return;
+        const n = 4096 / PAINT_TILE;
+        const tx0 = Math.max(0, Math.floor(x0 / PAINT_TILE)), ty0 = Math.max(0, Math.floor(y0 / PAINT_TILE));
+        const tx1 = Math.min(n - 1, Math.floor(x1 / PAINT_TILE)), ty1 = Math.min(n - 1, Math.floor(y1 / PAINT_TILE));
+        for (let ty = ty0; ty <= ty1; ty++) {
+            for (let tx = tx0; tx <= tx1; tx++) {
+                const key = ty * n + tx;
+                if (strokePaintTiles.has(key)) continue;
+                try { strokePaintTiles.set(key, { x: tx * PAINT_TILE, y: ty * PAINT_TILE, img: pCtx.getImageData(tx * PAINT_TILE, ty * PAINT_TILE, PAINT_TILE, PAINT_TILE) }); } catch (e) { /* a canvas that cannot be read: this tile is not undone */ }
+            }
+        }
+    }
+    // the same tiles as they are now: what undo / redo keeps of the opposite state
+    function copyPaintTiles(tiles) {
+        const out = new Map();
+        tiles.forEach((t, key) => { try { out.set(key, { x: t.x, y: t.y, img: pCtx.getImageData(t.x, t.y, PAINT_TILE, PAINT_TILE) }); } catch (e) { /* not readable */ } });
+        return out;
+    }
+    // after pixels of the painted map were put back: the texture, the surface data and the grass masks follow
+    function afterPaintRestored() {
+        mapTex.needsUpdate = true;
+        window._biomeDirty = true;
+        window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
+        if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
+        if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
+        if (window._terrainShells) window._terrainShells.refresh();
+    }
+
+    // opts.strokeTiles: the state of a paint brush stroke that is about to start (tiles instead of the whole picture)
+    // opts.like: undo / redo capturing the opposite of a state: the same kind of picture data as that state carries, whatever tool is active now
+    function captureEditorState(forceFull = false, texRect = null, opts = null) {
         let posCopy = new Float32Array(planeGeo.attributes.position.array);
+        const like = opts && opts.like;
         
-        // Only clone heavy 4K textures if the current tool modifies textures (PAINT / WATER),
+        // Only clone the heavy 4K picture when the current tool repaints it as a whole (PAINT outside a brush stroke),
         // or if forceFull is true (e.g. before destructive operations like NUKE).
-        let needsColorCanvas = forceFull || (currentTool === 'PAINT');
+        let needsColorCanvas = forceFull || (like ? !!like.colorCanvas : (currentTool === 'PAINT' && !(opts && opts.strokeTiles)));
         let cCopy = null;
         if (needsColorCanvas && typeof paintCanvas !== 'undefined') {
             cCopy = document.createElement('canvas');
@@ -10848,14 +10884,12 @@
             }
         }
 
+        let texTiles = null;
+        if (opts && opts.strokeTiles) texTiles = new Map();
+        else if (like && like.texTiles && !cCopy) texTiles = copyPaintTiles(like.texTiles);
+
+        // The water picture is not kept: it is drawn from the water heights and the ground (rebuildWaterMask), which are both in the state.
         let wPosCopy = window.waterData ? new Float32Array(window.waterData) : null;
-        let needsWaterCanvas = forceFull || (currentTool === 'WATER');
-        let wCanvasCopy = null;
-        if (needsWaterCanvas && typeof waterCanvas !== 'undefined') {
-            wCanvasCopy = document.createElement('canvas');
-            wCanvasCopy.width = 4096; wCanvasCopy.height = 4096;
-            wCanvasCopy.getContext('2d', {willReadFrequently:true}).drawImage(waterCanvas, 0, 0);
-        }
         
         let blocksCopy = targets.map(b => ({x: b.mesh.position.x, y: b.mesh.position.y, z: b.mesh.position.z, color: b.defColor || 0xffffff}));
         let treesCopy = window.placedTrees.map(t => ({type: t.type, x: t.x, z: t.z, scale: t.scale, rot: t.rot, tilt: t.tiltX, roll: t.rollZ, color: t.color, trunkColor: t.trunkColor, yOffset: t.yOffset, brightness: t.brightness}));
@@ -10892,7 +10926,7 @@
             wHeights: wPosCopy, 
             colorCanvas: cCopy, 
             texPatch: texPatch,
-            waterColorCanvas: wCanvasCopy, 
+            texTiles: texTiles,
             blocks: blocksCopy, 
             trees: treesCopy,
             holes: holesCopy
@@ -10931,34 +10965,17 @@
             if (window.syncWaterVisual) window.syncWaterVisual();
         }
         
+        // the water picture follows the restored water heights and ground (it is drawn from them, as after a stroke and after loading)
+        if (state.wHeights && window.waterData && typeof rebuildWaterMask === 'function') rebuildWaterMask(true);
+
         if (state.colorCanvas) {
             pCtx.clearRect(0,0,4096,4096);
             pCtx.drawImage(state.colorCanvas, 0, 0);
-            mapTex.needsUpdate = true;
-            window._biomeDirty = true;
-            window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
-            if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
-            if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
-            if (window._terrainShells) window._terrainShells.refresh();
-        }
-        
-        if (state.texPatch && !state.colorCanvas) {
-            pCtx.putImageData(state.texPatch.img, state.texPatch.x, state.texPatch.y);
-            mapTex.needsUpdate = true;
-            window._biomeDirty = true;
-            window.terrainBiomeData = pCtx.getImageData(0, 0, 4096, 4096).data;
-            if (typeof window.rebuildGreenMask === 'function') window.rebuildGreenMask();
-            if (typeof window.rebuildRoughMask === 'function') window.rebuildRoughMask();
-            if (window._terrainShells) window._terrainShells.refresh();
-        }
-
-        if (state.waterColorCanvas && typeof wCtx !== 'undefined') {
-            wCtx.clearRect(0,0,4096,4096);
-            wCtx.drawImage(state.waterColorCanvas, 0, 0);
-            if (typeof waterTex !== 'undefined') {
-                waterTex.needsUpdate = true;
-                window._waterMaskDirty = true;
-            }
+            afterPaintRestored();
+        } else if (state.texPatch || (state.texTiles && state.texTiles.size > 0)) {
+            if (state.texPatch) pCtx.putImageData(state.texPatch.img, state.texPatch.x, state.texPatch.y);
+            if (state.texTiles) state.texTiles.forEach(t => pCtx.putImageData(t.img, t.x, t.y));
+            afterPaintRestored();
         }
         
         targets.forEach(t => scene.remove(t.mesh));
@@ -11072,7 +11089,7 @@
         if (undoStack.length === 0) return;
         window._editRev++;
         let state = undoStack.pop();
-        redoStack.push(captureEditorState(false, state.texPatch));
+        redoStack.push(captureEditorState(false, state.texPatch, { like: state }));
         applyEditorState(state);
         updateUndoRedoUI();
     };
@@ -11080,7 +11097,7 @@
     window.performRedo = function() {
         if (redoStack.length === 0) return;
         let state = redoStack.pop();
-        undoStack.push(captureEditorState(false, state.texPatch));
+        undoStack.push(captureEditorState(false, state.texPatch, { like: state }));
         applyEditorState(state);
         updateUndoRedoUI();
     };
@@ -11094,9 +11111,17 @@
         }
     };
 
-    function saveUndoState(forceFull = false) {
+    // The colour tool: the state from when the button went down becomes one undo step, the first time an object really changes colour
+    function commitColorizeUndo() {
+        if (!window._colorizePre) return;
+        saveUndoState(false, window._colorizePre);
+        window._colorizePre = null;
+    }
+
+    // state: a state captured before the change, for a click that only becomes an undo step once it has changed something
+    function saveUndoState(forceFull = false, state = null) {
         if (undoStack.length >= 20) undoStack.shift();
-        undoStack.push(captureEditorState(forceFull));
+        undoStack.push(state || captureEditorState(forceFull));
         redoStack.length = 0; // Clear redo history on new action
         updateUndoRedoUI();
         
@@ -11275,7 +11300,7 @@
         
         // === ERASER TOOL ===
         if (currentTool === 'ERASER' && e.button === 0) {
-            saveUndoState();
+            const beforeErase = captureEditorState();   // becomes an undo step only if the click erases something
             
             // 1. Try removing a nature object (prop) via precise raycast first
             raycaster.setFromCamera(mouse, camera);
@@ -11286,6 +11311,7 @@
                     let iid = propIntersects[0].instanceId;
                     let globalIdx = window.getGlobalPropIndex(hitMesh.propType, iid, hitMesh);
                     if (globalIdx >= 0) {
+                        saveUndoState(false, beforeErase);
                         let removedType = window.placedTrees[globalIdx].type;
                         window.placedTrees.splice(globalIdx, 1);
                         if (window.selectedPropIndex !== null) {
@@ -11308,6 +11334,7 @@
                     if (d < minDist) { minDist = d; closest = i; }
                 }
                 if (closest !== null) {
+                    saveUndoState(false, beforeErase);
                     let removedType = window.placedTrees[closest].type;
                     window.placedTrees.splice(closest, 1);
                     if (window.selectedPropIndex !== null) {
@@ -11327,6 +11354,7 @@
                 if(envObjs && envObjs.length > 0) {
                     for(let i = envObjs.length - 1; i >= 0; i--) {
                         if(envObjs[i].mesh === hit.object || (envObjs[i].mesh.children && envObjs[i].mesh.children.includes(hit.object))) {
+                            saveUndoState(false, beforeErase);
                             scene.remove(envObjs[i].mesh);
                             if(envObjs[i].mesh.geometry) envObjs[i].mesh.geometry.dispose();
                             if(envObjs[i].mesh.material) envObjs[i].mesh.material.dispose();
@@ -11344,6 +11372,7 @@
                 }
                 // 3. Try removing a block (prevent deleting horizon plane)
                 if (hit.object !== plane && hit.object !== window.surroundPlane) {
+                    saveUndoState(false, beforeErase);
                     scene.remove(hit.object);
                     let idx = targets.findIndex(t => t.mesh === hit.object);
                     if (idx !== -1) targets.splice(idx, 1);
@@ -11384,7 +11413,7 @@
             
             if (hitPoint) {
                 lastHitPoint = hitPoint;
-                if(!window._colorizeUndoSaved) { saveUndoState(); window._colorizeUndoSaved = true; }
+                window._colorizePre = captureEditorState();   // becomes an undo step when the first object changes colour (here or while dragging)
                 let col = window.activeColorizeColor || '#ffffff';
                 let tCol = window.activeTrunkColor || '#ffffff';
                 let rad = currentBrushSize || 10;
@@ -11392,9 +11421,11 @@
                 
                 if (directTargetIdx !== null) {
                     let t = window.placedTrees[directTargetIdx];
-                    t.color = col;
-                    t.trunkColor = tCol;
-                    poolsToRebuild.add(t.type);
+                    if (t.color !== col || t.trunkColor !== tCol) {
+                        t.color = col;
+                        t.trunkColor = tCol;
+                        poolsToRebuild.add(t.type);
+                    }
                 }
                 
                 for (let i = 0; i < window.placedTrees.length; i++) {
@@ -11408,6 +11439,7 @@
                         }
                     }
                 }
+                if (poolsToRebuild.size > 0) commitColorizeUndo();
                 poolsToRebuild.forEach(type => rebuildInstancePool(type));
             }
             controls.enabled = false;
@@ -11416,8 +11448,14 @@
         
         let isModifyingClick = e.button === 0 || e.button === 2;
         let isSculptFamily = (currentTool === 'SCULPT' || currentTool === 'SMOOTH' || currentTool === 'FLATTEN' || currentTool === 'RAMP' || currentTool === 'RIDGE' || currentTool === 'NOISE' || currentTool === 'WATER' || currentTool === 'PAINT');
+        // Objects and blocks: a click that places or removes nothing must not leave an undo step that undoes nothing. The single object
+        // and the block are saved after the click, if it changed something; the object brush saves when it drops its first object, the
+        // object polygon when it is filled (executePropsPolygon).
+        let clickPre = null, clickSig = null;
+        const clickSignature = () => window.placedTrees.length + '|' + targets.length;
         if(!isSculptFamily && isModifyingClick) { 
-             if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE' && currentTool !== 'SMART_BUILDER' && currentTool !== 'COLORIZE') saveUndoState(); 
+             if ((currentTool === 'PROPS' && window._propsToolMode === 'SINGLE') || currentTool === 'BLOCK') { clickPre = captureEditorState(); clickSig = clickSignature(); }
+             else if (currentTool !== 'MEASURE' && currentTool !== 'SPLINE' && currentTool !== 'SMART_BUILDER' && currentTool !== 'COLORIZE' && currentTool !== 'PROPS') saveUndoState(); 
         }
 
         if(currentTool === 'MEASURE') {
@@ -11782,7 +11820,9 @@
             sculptDirection = invert ? -baseDir : baseDir;
             
             // SF-13: Defer undo commit until first actual mutation
-            strokePendingUndo = captureEditorState();
+            const paintStroke = currentTool === 'PAINT';   // (the polygon mode of the paint tool never comes here)
+            strokePendingUndo = captureEditorState(false, null, paintStroke ? { strokeTiles: true } : null);
+            strokePaintTiles = paintStroke ? strokePendingUndo.texTiles : null;
             window._strokePreHeights = strokePendingUndo.heights; // the undo state is committed on the first mutation, keep the terrain-before copy
             strokeHasModified = false;
             
@@ -11837,6 +11877,7 @@
         } else {
             if(e.button === 0) onMouseClick(e);
             else if(e.button === 2) onRightClick(e);
+            if (clickPre && clickSignature() !== clickSig) saveUndoState(false, clickPre);
         }
     }, false);
 
@@ -11848,7 +11889,7 @@
         isSculpting = false;
         controls.enabled = true;
         previousFrameHitPoint = null;
-        window._colorizeUndoSaved = false;
+        strokePaintTiles = null;   // the stroke is over: its undo state keeps the tiles
         
         if (activeSculptPointerId !== null) {
             try {
@@ -11958,6 +11999,7 @@
 
     window.addEventListener('pointerup', e => {
         if (activeSculptPointerId !== null && e.pointerId !== undefined && e.pointerId !== activeSculptPointerId) return;
+        window._colorizePre = null;   // a colour press that changed nothing leaves no undo step
         if (window.GreenStudio && window.GreenStudio.onPointerUp) {
             window.GreenStudio.onPointerUp(e);
         }
@@ -13235,6 +13277,7 @@
                             }
                         }
                     }
+                    if (poolsToRebuild.size > 0) commitColorizeUndo();
                     poolsToRebuild.forEach(type => rebuildInstancePool(type));
                 }
                 
@@ -13458,7 +13501,7 @@
         event.preventDefault(); // Stoppa webbläsarens högerklicksmeny!
         
         if ((currentTool === 'PROPS' && window._propsToolMode === 'SINGLE')) {
-            saveUndoState();
+            // (the undo step is saved by the pointerdown handler, if an object was removed)
             // Try precise raycast first
             raycaster.setFromCamera(mouse, camera);
             let deleted = false;
@@ -14397,6 +14440,9 @@
             pCtx.strokeStyle = brushColor;
             pCtx.fillStyle = brushColor;
             pCtx.lineWidth = cRad * 2;
+            // undo: keep the tiles under this stamp as they were (the soft edge of the brush reaches a little further than its radius)
+            const tileReach = cRad + pCtx.shadowBlur * 2 + 4;
+            notePaintTiles(Math.min(pCtx1X, pCtx2X) - tileReach, Math.min(pCtx1Z, pCtx2Z) - tileReach, Math.max(pCtx1X, pCtx2X) + tileReach, Math.max(pCtx1Z, pCtx2Z) + tileReach);
             
             pCtx.beginPath();
             if (p1.distanceTo(p2) < 0.1) {
@@ -14657,6 +14703,7 @@
                                 createTree(params.type, randX, randZ, params.scale, params.rot, '#ffffff', '#ffffff', params.yOffset, params.brightness, true, params.tilt, params.roll);
                                 if (!window._brushPlacedTypes) window._brushPlacedTypes = new Set();
                                 window._brushPlacedTypes.add(params.type);
+                                strokeHasModified = true;   // the state from before the stroke becomes its undo step (finalizeSculptStroke)
                             } else {
                                 if (window.showBuildToast && !window._warnedBrushProps) {
                                     window.showBuildToast('⚠️ Select an asset first!', '#f59e0b');

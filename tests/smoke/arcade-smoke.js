@@ -1829,6 +1829,103 @@ function serve() {
 
   } catch (e) { checks.push({ name: 'quick draft reopen check ran', ok: false, detail: 'step ' + reopenStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
 
+  // The builder's undo list: a paint brush stroke keeps the tiles it touched (a copy of the whole 4096 x 4096 picture is 64 MB a stroke),
+  // a water stroke keeps no picture (the water picture is drawn again from the restored heights), undo and redo give the pictures back
+  // exactly, also after another tool was picked, and a click that changes nothing leaves no undo step
+  let undoStep = 'start';
+  try {
+    const ctxU = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });
+    await ctxU.addInitScript(function () { try { localStorage.setItem('golf_auto_q_on', '0'); } catch (e) { /* storage blocked */ } });
+    await ctxU.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\//, function (r) {
+      const k = Object.keys(CDN).find(function (n) { return r.request().url().endsWith(n); });
+      if (k) r.fulfill({ body: fs.readFileSync(CDN[k]), contentType: 'application/javascript' }); else r.abort();
+    });
+    await ctxU.route(/^https:\/\/(?!cdn)/, function (r) { r.abort(); });
+    const pu = await ctxU.newPage();
+    await pu.goto(base + '/arcade.html?autorun=new_build&template=blank&biome=GLOBAL', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await pu.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await pu.waitForTimeout(4000);
+    await pu.evaluate(function () { setMode('BUILD'); });
+    const snapU = function () {
+      return pu.evaluate(function () {
+        const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
+        const hash = function (src) { x.clearRect(0, 0, 512, 512); x.drawImage(src, 0, 0, 512, 512); const d = x.getImageData(0, 0, 512, 512).data; let h = 0; for (let i = 0; i < d.length; i += 4) h = (h * 31 + d[i] * 3 + d[i + 1] * 5 + d[i + 2] * 7 + d[i + 3]) % 1000000007; return h; };
+        let w = 0; if (window.waterData) for (let i = 0; i < window.waterData.length; i += 3) w += Math.abs(window.waterData[i]) * ((i % 13) + 1);
+        const a = planeGeo.attributes.position.array; let g = 0; for (let i = 2; i < a.length; i += 9) g += Math.abs(a[i]) * ((i % 97) + 1);
+        let whole = 0, tiles = 0;
+        undoStack.concat(redoStack).forEach(function (s) { for (const k in s) { if (s[k] && s[k].tagName === 'CANVAS') whole++; } if (s.texTiles) tiles += s.texTiles.size; });
+        return { paint: hash(paintCanvas), waterTex: hash(waterCanvas), water: Math.round(w), ground: Math.round(g * 100), undo: undoStack.length, redo: redoStack.length, whole: whole, tiles: tiles };
+      });
+    };
+    const dragU = async function (x, y, button) {
+      await pu.mouse.move(x, y); await pu.mouse.down({ button: button || 'left' });
+      for (let i = 1; i <= 5; i++) { await pu.mouse.move(x + i * 14, y + i * 5); await pu.waitForTimeout(80); }
+      await pu.mouse.up({ button: button || 'left' }); await pu.waitForTimeout(500);
+    };
+    const undoU = async function () { await pu.evaluate(function () { window.performUndo(); }); await pu.waitForTimeout(400); };
+    const redoU = async function () { await pu.evaluate(function () { window.performRedo(); }); await pu.waitForTimeout(400); };
+    undoStep = 'paint';
+    await pu.evaluate(function () { setTool('PAINT'); window.currentBrushHardness = 0.4; });
+    const u0 = await snapU();
+    await dragU(380, 420); const u1 = await snapU();
+    await dragU(520, 470); const u2 = await snapU();
+    await dragU(600, 400); const u3 = await snapU();
+    await pu.evaluate(function () { setTool('SCULPT'); });   // undo / redo below run with another tool active
+    await undoU(); const b2 = await snapU(); await undoU(); const b1 = await snapU(); await undoU(); const b0 = await snapU();
+    await redoU(); const f1 = await snapU(); await redoU(); const f2 = await snapU(); await redoU(); const f3 = await snapU();
+    const paintU = { steps: u3.undo - u0.undo, changed: u1.paint !== u0.paint && u2.paint !== u1.paint && u3.paint !== u2.paint, whole: [u0.whole, u3.whole, f3.whole], tiles: u3.tiles,
+      undone: b2.paint === u2.paint && b1.paint === u1.paint && b0.paint === u0.paint, redone: f1.paint === u1.paint && f2.paint === u2.paint && f3.paint === u3.paint };
+    checks.push({ name: 'undo: a paint brush stroke keeps the tiles it touched, not a copy of the whole picture; undo and redo give each picture back exactly (soft brush, another tool active)',
+      ok: paintU.steps === 3 && paintU.changed && paintU.whole[1] === paintU.whole[0] && paintU.whole[2] === paintU.whole[0] && paintU.tiles > 0 && paintU.tiles < 60 && paintU.undone && paintU.redone, detail: JSON.stringify(paintU) });
+    undoStep = 'water';
+    await pu.evaluate(function () { window.currentBrushHardness = 1.0; setTool('WATER'); });
+    const w0 = await snapU(); await dragU(420, 520); const w1 = await snapU(); await undoU(); const w2 = await snapU(); await redoU(); const w3 = await snapU(); await undoU();
+    const waterU = { dug: w1.ground !== w0.ground && w1.water !== w0.water && w1.waterTex !== w0.waterTex, step: w1.undo - w0.undo, whole: [w0.whole, w1.whole],
+      undone: w2.ground === w0.ground && w2.water === w0.water && w2.waterTex === w0.waterTex, redone: w3.ground === w1.ground && w3.water === w1.water && w3.waterTex === w1.waterTex };
+    checks.push({ name: 'undo: a water stroke keeps no copy of the water picture; undo and redo restore the ground, the water heights and the water picture',
+      ok: waterU.dug && waterU.step === 1 && waterU.whole[1] === waterU.whole[0] && waterU.undone && waterU.redone, detail: JSON.stringify(waterU) });
+    undoStep = 'empty clicks';
+    const emptyU = {};
+    for (const tool of ['ERASER', 'COLORIZE', 'PROPS', 'BLOCK']) {
+      await pu.evaluate(function (t) { if (t === 'PROPS') { window._propsToolMode = 'SINGLE'; window.currentNatureType = null; } setTool(t); }, tool);
+      const before = await snapU();
+      await pu.mouse.click(300, 430, { button: tool === 'BLOCK' ? 'right' : 'left' }); await pu.waitForTimeout(300);
+      const after = await snapU();
+      emptyU[tool] = after.undo - before.undo + (after.redo !== before.redo ? 100 : 0);
+    }
+    checks.push({ name: 'undo: a click that erases, colours, places or removes nothing leaves no undo step (eraser, colour, single object, block)',
+      ok: emptyU.ERASER === 0 && emptyU.COLORIZE === 0 && emptyU.PROPS === 0 && emptyU.BLOCK === 0, detail: JSON.stringify(emptyU) });
+    undoStep = 'objects';
+    const objU = await (async function () {
+      await pu.evaluate(function () {
+        const g = new THREE.Group(), leaves = new THREE.Mesh(new THREE.ConeGeometry(3, 8, 12, 4), new THREE.MeshLambertMaterial({ color: 0x2f7a2f }));
+        leaves.position.y = 7; g.add(leaves);
+        window.customModels = window.customModels || {}; window.customModels.zz_undo = g; window.ASSET_REGISTRY.zz_undo = { subcat: 'TREES' };
+        window.__gp = window.getPlacementParams;
+        window.getPlacementParams = function () { return { type: 'zz_undo', scale: 1, rot: 0, yOffset: 0, brightness: 1, tilt: 0, roll: 0 }; };
+        window._propsToolMode = 'SINGLE'; setTool('PROPS'); window.deselectProp();
+      });
+      const n = function () { return pu.evaluate(function () { return { trees: window.placedTrees.length, undo: undoStack.length, colors: window.placedTrees.map(function (t) { return t.color || ''; }).join(',') }; }); };
+      const a = await n();
+      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const placed = await n();
+      await pu.evaluate(function () { setTool('COLORIZE'); window.activeColorizeColor = '#ff0000'; window.activeTrunkColor = '#ffffff'; });
+      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const red = await n();
+      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const redAgain = await n();
+      await pu.evaluate(function () { window.activeColorizeColor = '#00ff00'; });
+      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const green = await n();
+      await undoU(); const backRed = await n();
+      await pu.evaluate(function () { setTool('ERASER'); });
+      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const erased = await n();
+      await undoU(); const back = await n();
+      await pu.evaluate(function () { window.getPlacementParams = window.__gp; window.placedTrees.length = 0; destroyInstancePool('zz_undo'); delete window.customModels.zz_undo; delete window.ASSET_REGISTRY.zz_undo; });
+      return { placed: [placed.trees - a.trees, placed.undo - a.undo], red: [red.colors !== placed.colors, red.undo - placed.undo], sameColour: redAgain.undo - red.undo,
+        green: [green.colors !== red.colors, green.undo - redAgain.undo], backRed: backRed.colors === red.colors, erased: [erased.trees - backRed.trees, erased.undo - backRed.undo], back: back.trees - backRed.trees };
+    })();
+    checks.push({ name: 'undo: placing, colouring (one step per press, none for the same colour again) and erasing an object are one undo step each, and undo brings the earlier state back',
+      ok: objU.placed[0] === 1 && objU.placed[1] === 1 && objU.red[0] && objU.red[1] === 1 && objU.sameColour === 0 && objU.green[0] && objU.green[1] === 1 && objU.backRed && objU.erased[0] === -1 && objU.erased[1] === 1 && objU.back === 0, detail: JSON.stringify(objU) });
+    await ctxU.close();
+  } catch (e) { checks.push({ name: 'undo checks ran', ok: false, detail: 'step ' + undoStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
+
   // The driving range: the range tee keeps the heading it was turned to, launch-monitor shots during a flight are played next,
   // offline is measured across the aim line, a hand-set aim stays, and a range reopened without "mode=range" in the address is still a range
   let rangeStep = 'start';
