@@ -1923,6 +1923,29 @@ function serve() {
     })();
     checks.push({ name: 'undo: placing, colouring (one step per press, none for the same colour again) and erasing an object are one undo step each, and undo brings the earlier state back',
       ok: objU.placed[0] === 1 && objU.placed[1] === 1 && objU.red[0] && objU.red[1] === 1 && objU.sameColour === 0 && objU.green[0] && objU.green[1] === 1 && objU.backRed && objU.erased[0] === -1 && objU.erased[1] === 1 && objU.back === 0, detail: JSON.stringify(objU) });
+    // a right-click with the block tool (or the mountain stamp) on the ground around the course used to take that ground out of the
+    // picture until the page was reloaded: only a block is removed
+    undoStep = 'right-click on the surroundings';
+    await pu.evaluate(function () { camera.position.set(300, 70, 160); controls.target.set(300, 0, 0); controls.update(); });
+    await pu.waitForTimeout(800);
+    const surPt = await pu.evaluate(function () {
+      const r = renderer.domElement.getBoundingClientRect(), rc = new THREE.Raycaster();
+      for (let fy = 0.3; fy < 0.95; fy += 0.05) for (let fx = 0.3; fx < 0.98; fx += 0.05) {
+        const x = r.left + r.width * fx, y = r.top + r.height * fy;
+        if (document.elementFromPoint(x, y) !== renderer.domElement) continue;
+        rc.setFromCamera(new THREE.Vector2(fx * 2 - 1, -(fy * 2 - 1)), camera);
+        const h = rc.intersectObjects([plane, window.surroundPlane])[0];
+        if (h && h.object === window.surroundPlane) return { x: x, y: y };
+      }
+      return null;
+    });
+    const surU = { point: !!surPt };
+    for (const tool of ['BLOCK', 'MTN']) {
+      await pu.evaluate(function (t) { setTool(t); if (t === 'MTN') window._mtnToolMode = 'STAMP'; }, tool);
+      if (surPt) { await pu.mouse.move(surPt.x, surPt.y); await pu.waitForTimeout(200); await pu.mouse.click(surPt.x, surPt.y, { button: 'right' }); await pu.waitForTimeout(300); }
+      surU[tool] = await pu.evaluate(function () { const inScene = !!window.surroundPlane.parent; if (!inScene) scene.add(window.surroundPlane); return inScene; });
+    }
+    checks.push({ name: 'a right-click with the block tool or the mountain stamp on the ground around the course leaves that ground in the picture', ok: surU.point && surU.BLOCK === true && surU.MTN === true, detail: JSON.stringify(surU) });
     await ctxU.close();
   } catch (e) { checks.push({ name: 'undo checks ran', ok: false, detail: 'step ' + undoStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
 

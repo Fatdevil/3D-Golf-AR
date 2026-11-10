@@ -13546,11 +13546,13 @@
             return;
         }
 
+        // A right-click removes the block under the pointer, and only a block: the ray also meets the ground around the course
+        // (surroundPlane) and the hole's scenery objects, which used to be taken out of the picture here until the page was reloaded.
         let hit = getIntersect();
-        if(hit && hit.object !== plane) {
+        let idx = hit ? targets.findIndex(t => t.mesh === hit.object) : -1;
+        if(idx !== -1) {
             scene.remove(hit.object);
-            let idx = targets.findIndex(t => t.mesh === hit.object);
-            if(idx !== -1) targets.splice(idx, 1);
+            targets.splice(idx, 1);
             saveLevel();
             ghostBlock.visible = false;
         }
