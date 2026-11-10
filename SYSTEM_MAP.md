@@ -614,5 +614,14 @@ Mätt på ett genererat hål (kameran i roughen, 3D-gräs MED): minikartan ritad
 ## Bildtidsmätaren (2026-11)
 `arcade-perf-hud.js`: `?fps=1` i adressen slår på och minns (`golf_fps`), `?fps=0` stänger av. En liten ruta överst i mitten (`#fps-meter`, tar inga tryck; byggets "Perf. Budget" är `#perf-hud`, något annat) visar bildtiden (medel senaste sekunden, bilder per sekund, värsta bilden senaste 2 s), huvudbildens ritanrop och trianglar (`PerfHud.mainPass(renderer)` direkt efter huvudrenderingen i arcade.html), ritbuffertens storlek och pixelkvot, och gräset (3D-nivå, 2D av/på med nivå, mängd, höjd och antal tuvor). Bildtiden är tiden mellan två animationsbilder, så den rymmer allt sidan gör i en bild. Test: `tests/test_perf_hud.js`.
 
+## Byggarens ångra-lista (2026-11)
+`captureEditorState` / `applyEditorState` i `arcade.html`. Listan rymmer 20 steg. Varje steg har markens höjder, vattnets höjder, föremål, block och hålens data.
+- **Målning med pensel:** steget har bara de rutor om 256 px som penseln rörde (`texTiles`, lästa i `notePaintTiles` precis innan penseln ritar på dem). Förut kopierades hela bilden (4096 × 4096, 64 MiB) för varje penseldrag. Ångra/gör om tar samma rutor som de är nu (`opts.like`), så det stämmer också när ett annat verktyg är valt.
+- **Vatten:** ingen kopia av vattnets bild. Den ritas om från de återställda höjderna (`rebuildWaterMask(true)`), som efter ett drag och efter laddning.
+- **Hela bilden** kopieras fortfarande när målarverktyget fyller en polygon (`executeSmartPaint`) och före Rensa (`saveUndoState(true)`); hålbyggaren sparar rutan runt hålet (`texPatch`).
+- **Inga tomma steg:** sudd, färga, enstaka föremål och block sparar ett steg först när klicket ändrade något (`saveUndoState(false, tillståndFöreKlicket)`). Färga ger ett steg per tryck, första gången ett föremål byter färg (`commitColorizeUndo`).
+- Föremålspenseln (`_propsToolMode` BRUSH) är inte nåbar: knappen är dold och `applySculpting` släpper inte igenom verktyget PROPS.
+- Test: kontrollerna "undo: …" i `tests/smoke/arcade-smoke.js`.
+
 ## Tester och CI (2026-10)
 `.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js`, `tests/e2e/ratings-e2e.js` och `tests/e2e/approach-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.
