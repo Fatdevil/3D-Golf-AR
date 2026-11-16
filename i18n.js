@@ -257,9 +257,13 @@
             "mtn_build": "⛰️ Build mountain",
             "mtn_clear": "❌ Clear",
             "mtn_help_hill": "💡 <b>Hill:</b> Press and drag to pull out a round hill, or click to draw a closed shape (at least 3 points). The hill is built inside the shape; the yellow pole shows how tall it will be. Right-click removes the last point. Near the edge of the plate the mountain is lowered smoothly to zero.",
+            "mtn_help_hill_touch": "💡 <b>Hill:</b> Press and drag to pull out a round hill, or tap to draw a closed shape (at least 3 points). The hill is built inside the shape; the yellow pole shows how tall it will be. Clear starts the shape over. Near the edge of the plate the mountain is lowered smoothly to zero.",
             "mtn_help_ridge": "💡 <b>Ridge:</b> Click to place points, or press and drag to draw freely (at least 2 points). Drag a dot to move it, right-click a dot to remove it. The ridge rises along the line. Near the edge of the plate the mountain is lowered smoothly to zero.",
+            "mtn_help_ridge_touch": "💡 <b>Ridge:</b> Tap to place points, or press and drag to draw freely (at least 2 points). Drag a dot to move it. Clear starts the line over (removing one dot needs a mouse: right-click). The ridge rises along the line. Near the edge of the plate the mountain is lowered smoothly to zero.",
             "mtn_hint_hill": "Drag: <b>pull out a round hill</b> · Click: <b>draw a shape</b> · Right-click: remove last point · Press <b>Build mountain</b>",
+            "mtn_hint_hill_touch": "Drag: <b>pull out a round hill</b> · Tap: <b>draw a shape</b> · Clear: start over · Press <b>Build mountain</b>",
             "mtn_hint_ridge": "Click or drag: <b>draw the line</b> · Drag a dot: move it · Right-click a dot: remove it · Press <b>Build mountain</b>",
+            "mtn_hint_ridge_touch": "Tap or drag: <b>draw the line</b> · Drag a dot: move it · Clear: start over · Press <b>Build mountain</b>",
             "mtn_hint_stamp": "Click on the ground: <b>capture or paste a terrain stamp</b>",
             "mtn_hint_paint": "Click on a mountain: <b>it is coloured automatically with the chosen style</b>",
             "mtn_need2": "⚠️ Draw at least 2 points for a ridge!",
@@ -547,7 +551,9 @@
             "sbk_tab_profil": "2. Profile & Lip",
             "sbk_tab_sand": "3. Sand & Finish",
             "sbk_step_draw_hint": "Click to place golf balls. Drag any ball to adjust shape. Right click to delete.",
+            "sbk_step_draw_hint_touch": "Tap to place golf balls. Drag any ball to adjust the shape. Undo point removes the last one.",
             "sbk_tip_drag": "💡 <b>Drag</b> large white golf balls to adjust shape. <b>Click yellow line</b> to add point, <b>right-click</b> to delete.",
+            "sbk_tip_drag_touch": "💡 <b>Drag</b> large white golf balls to adjust shape. <b>Tap the yellow line</b> to add a point. Removing one point needs a mouse (right-click).",
             "sbk_selected_badge": "● Bunker selected",
             "sbk_step2_btn": "Step 2: Adjust depth & lip ➔",
             "sbk_step3_btn": "Step 3: Sand color & finish ➔",
@@ -591,7 +597,9 @@
             "sb_fairway_draw_min_points_hint": "✏️ Click on ground to shape fairway (min 3 points)",
             "sf_step_draw": "Draw Shape",
             "sf_draw_hint": "Click on terrain to place fairway points. Drag any point to adjust shape. Right-click to delete.",
+            "sf_draw_hint_touch": "Tap the terrain to place fairway points. Drag any point to adjust the shape. Undo point removes the last one.",
             "sf_form_tip": "💡 Drag the 3D golf balls to mold the fairway. Click between two balls on the green line to insert a new handle. Right-click a ball to delete it.",
+            "sf_form_tip_touch": "💡 Drag the 3D golf balls to mold the fairway. Tap between two balls on the green line to insert a new handle. Removing one ball needs a mouse (right-click).",
             "sf_area_label": "Area",
             "sf_to_step2": "Step 2: Adjust Rough & Terrain",
             "sf_terrain_profile_title": "Undulation & Terrain Profile",
@@ -602,6 +610,9 @@
             "sf_finish": "Done with fairway!",
             "gs_step_draw": "Draw Shape",
             "gs_draw_hint": "Click on terrain to place golf balls. Drag any ball to adjust shape. Right-click to delete.",
+            "st_form_tip_touch": "💡 Drag white golf balls to edit shape. Tap the outline to add a point. Removing one point needs a mouse (right-click).",
+            "st_draw_hint_touch": "Tap to place corners around the tee. Drag points to adjust the shape. Undo point removes the last one.",
+            "gs_draw_hint_touch": "Tap the terrain to place golf balls. Drag any ball to adjust the shape. Undo point removes the last one.",
             "gs_undo_point": "Undo point",
             "gs_reset": "Start over",
             "gs_create_green": "Create Green",
@@ -925,9 +936,13 @@
             "mtn_build": "⛰️ Bygg berg",
             "mtn_clear": "❌ Rensa",
             "mtn_help_hill": "💡 <b>Kulle:</b> Tryck och dra för att dra ut en rund kulle, eller klicka för att rita en sluten form (minst 3 punkter). Kullen byggs inuti formen; den gula stolpen visar hur hög den blir. Högerklick tar bort sista punkten. Nära plattans kant sänks berget mjukt mot noll.",
+            "mtn_help_hill_touch": "💡 <b>Kulle:</b> Tryck och dra för att dra ut en rund kulle, eller tryck för att rita en sluten form (minst 3 punkter). Kullen byggs inuti formen; den gula stolpen visar hur hög den blir. Rensa börjar om formen. Nära plattans kant sänks berget mjukt mot noll.",
             "mtn_help_ridge": "💡 <b>Bergsrygg:</b> Klicka för att sätta ut punkter, eller håll nere och dra för att rita fritt (minst 2 punkter). Dra i en prick för att flytta den, högerklicka på en prick för att ta bort den. Ryggen reser sig längs linjen. Nära plattans kant sänks berget mjukt mot noll.",
+            "mtn_help_ridge_touch": "💡 <b>Bergsrygg:</b> Tryck för att sätta ut punkter, eller håll nere och dra för att rita fritt (minst 2 punkter). Dra i en prick för att flytta den. Rensa börjar om linjen (att ta bort en enskild prick kräver mus: högerklick). Ryggen reser sig längs linjen. Nära plattans kant sänks berget mjukt mot noll.",
             "mtn_hint_hill": "Dra: <b>dra ut en rund kulle</b> · Klicka: <b>rita en form</b> · Högerklick: ta bort sista punkten · Tryck <b>Bygg berg</b>",
+            "mtn_hint_hill_touch": "Dra: <b>dra ut en rund kulle</b> · Tryck: <b>rita en form</b> · Rensa: börja om · Tryck <b>Bygg berg</b>",
             "mtn_hint_ridge": "Klicka eller dra: <b>rita linjen</b> · Dra en prick: flytta · Högerklick på prick: ta bort · Tryck <b>Bygg berg</b>",
+            "mtn_hint_ridge_touch": "Tryck eller dra: <b>rita linjen</b> · Dra en prick: flytta · Rensa: börja om · Tryck <b>Bygg berg</b>",
             "mtn_hint_stamp": "Klicka på marken: <b>fånga eller klistra in en terrängstämpel</b>",
             "mtn_hint_paint": "Klicka på ett berg: <b>färgas automatiskt med vald stil</b>",
             "mtn_need2": "⚠️ Rita minst 2 punkter för en bergsrygg!",
@@ -1216,7 +1231,9 @@
             "sbk_tab_profil": "2. Profil & Vall",
             "sbk_tab_sand": "3. Sand & Finish",
             "sbk_step_draw_hint": "Klicka för att sätta golfbollar. Dra valfri boll för att justera formen. Högerklicka för att radera.",
+            "sbk_step_draw_hint_touch": "Tryck för att sätta golfbollar. Dra valfri boll för att justera formen. Ångra punkt tar bort den senaste.",
             "sbk_tip_drag": "💡 <b>Dra</b> de stora vita golfbollarna för att ändra form. <b>Klicka på den gula linjen</b> för att lägga till punkt, <b>högerklicka</b> för att ta bort.",
+            "sbk_tip_drag_touch": "💡 <b>Dra</b> de stora vita golfbollarna för att ändra form. <b>Tryck på den gula linjen</b> för att lägga till punkt. Att ta bort en enskild punkt kräver mus (högerklick).",
             "sbk_selected_badge": "● Bunker vald",
             "sbk_step2_btn": "Steg 2: Justera djup & vall ➔",
             "sbk_step3_btn": "Steg 3: Sandfärg & finish ➔",
@@ -1260,7 +1277,9 @@
             "sb_fairway_draw_min_points_hint": "✏️ Klicka på marken för att rita fairwayens form (minst 3 punkter)",
             "sf_step_draw": "Rita formen",
             "sf_draw_hint": "Klicka för att sätta ut fairway-punkter. Dra valfri punkt för att justera formen. Högerklicka för att radera.",
+            "sf_draw_hint_touch": "Tryck för att sätta ut fairway-punkter. Dra valfri punkt för att justera formen. Ångra punkt tar bort den senaste.",
             "sf_form_tip": "💡 Dra i 3D-golfbollarna för att skulptera fairwayen. Klicka mellan två bollar på den gröna linjen för att sätta in ett nytt handtag. Högerklicka på en boll för att radera.",
+            "sf_form_tip_touch": "💡 Dra i 3D-golfbollarna för att skulptera fairwayen. Tryck mellan två bollar på den gröna linjen för att sätta in ett nytt handtag. Att ta bort en enskild boll kräver mus (högerklick).",
             "sf_area_label": "Areal",
             "sf_to_step2": "Steg 2: Justera rufs & vågor",
             "sf_terrain_profile_title": "Böljande Mark (Terrängprofil)",
@@ -1271,6 +1290,9 @@
             "sf_finish": "Klar med fairwayen!",
             "gs_step_draw": "Rita formen",
             "gs_draw_hint": "Klicka för att sätta golfbollar. Dra valfri boll för att justera formen. Högerklicka för att radera.",
+            "st_form_tip_touch": "💡 Dra de vita golfbollarna för att ändra formen. Tryck på linjen för att lägga till punkt. Att ta bort en enskild punkt kräver mus (högerklick).",
+            "st_draw_hint_touch": "Tryck för att sätta ut hörn runt tee. Dra valfri punkt för att justera formen. Ångra punkt tar bort den senaste.",
+            "gs_draw_hint_touch": "Tryck för att sätta golfbollar. Dra valfri boll för att justera formen. Ångra punkt tar bort den senaste.",
             "gs_undo_point": "Ångra punkt",
             "gs_reset": "Börja om",
             "gs_create_green": "Skapa green",
@@ -1351,8 +1373,20 @@
         return localStorage.getItem(STORAGE_KEY) || 'sv';
     }
 
+    // A phone or a tablet has no mouse buttons: a help text that names them has a wording of its own under "<key>_touch".
+    // The same test as window.isTouchDevice in arcade.html (an iPad reports itself as a Macintosh with touch points).
+    function isTouchUI() {
+        try { return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1); }
+        catch (e) { return false; }
+    }
+
     function t(key) {
         const lang = getLang();
+        if (isTouchUI()) {
+            const touchKey = key + '_touch';
+            if (DICTIONARY[lang] && DICTIONARY[lang][touchKey]) return DICTIONARY[lang][touchKey];
+            if (DICTIONARY.en[touchKey]) return DICTIONARY.en[touchKey];
+        }
         if (DICTIONARY[lang] && DICTIONARY[lang][key]) {
             return DICTIONARY[lang][key];
         }
@@ -1433,6 +1467,7 @@
 
     // Expose globals
     window.t = t;
+    window.isTouchUI = isTouchUI;
     window.getGolfLanguage = getLang;
     window.setGolfLanguage = setLanguage;
     window.applyGolfI18n = applyToDOM;

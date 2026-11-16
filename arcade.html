@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=44"></script>
+<script src="i18n.js?v=45"></script>
 <script src="physics.js?v=15"></script>
 <script src="hitbox-fit.js?v=1"></script>
 <script src="prop-collision.js?v=1"></script>
@@ -12674,19 +12674,24 @@
         }
         
         let hintHtml = "";
+        // a phone or a tablet has no mouse buttons: the hints name the finger and the buttons that do the right-click's job there
+        const touchUI = !!(window.isTouchDevice && window.isTouchDevice());
         if (toolName === 'INSPECT') hintHtml = "<b>Safe Mode</b>: Look around without modifying terrain";
         else if (toolName === 'ENV') hintHtml = "<b>Miljö & Atmosfär</b>: Justera ljus, väder, horisont och gräskvalitet";
-        else if (toolName === 'BLOCK') hintHtml = "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
-        else if (toolName === 'PROPS') hintHtml = "Left Click: <b>Place Prop</b><br>Right Click: <b>Remove Prop</b>";
+        else if (toolName === 'BLOCK') hintHtml = touchUI ? "Tap: <b>Build Block</b><br>Remove: <b>the Erase tool in the top bar</b>" : "Left Click: <b>Build Block</b><br>Right Click: <b>Remove</b>";
+        else if (toolName === 'PROPS') hintHtml = touchUI ? "Tap: <b>Place Prop</b><br>Remove: <b>the Erase tool in the top bar</b>" : "Left Click: <b>Place Prop</b><br>Right Click: <b>Remove Prop</b>";
         else if (toolName === 'SCULPT') {
             let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
-            hintHtml = isSv
+            if (touchUI) hintHtml = isSv
+                ? "Håll fingret: <b>Höj mark</b><br>Sänk mark: <b>växla med knappen Höj/Sänk i panelen</b>"
+                : "Hold your finger: <b>Raise Ground</b><br>Lower Ground: <b>switch with the Raise/Lower button in the panel</b>";
+            else hintHtml = isSv
                 ? "Håll Vänster: <b>Höj mark</b><br>Håll Höger / Shift: <b>Sänk mark</b> (eller växla i panelen)"
                 : "Hold Left: <b>Raise Ground</b><br>Hold Right / Shift: <b>Lower Ground</b> (or toggle in panel)";
         }
-        else if (toolName === 'SMOOTH') hintHtml = "Hold Mouse: <b>Smooth Terrain</b>";
-        else if (toolName === 'FLATTEN') hintHtml = "Hold Mouse: <b>Flatten Surface</b>";
-        else if (toolName === 'PAINT') hintHtml = "Hold Mouse: <b>Paint Biome</b>";
+        else if (toolName === 'SMOOTH') hintHtml = (touchUI ? "Hold your finger" : "Hold Mouse") + ": <b>Smooth Terrain</b>";
+        else if (toolName === 'FLATTEN') hintHtml = (touchUI ? "Hold your finger" : "Hold Mouse") + ": <b>Flatten Surface</b>";
+        else if (toolName === 'PAINT') hintHtml = (touchUI ? "Hold your finger" : "Hold Mouse") + ": <b>Paint Biome</b>";
         else if (toolName === 'SMART_BUILDER') {
             let curH = window.courseHoles && window.courseHoles[window.currentHoleIndex];
             let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
@@ -12705,28 +12710,38 @@
             }
 
             if (sbType === 'GREEN' && curH && curH.greenData && curH.greenData.points && curH.greenData.points.length >= 3) {
-                hintHtml = isSv
+                if (touchUI) hintHtml = isSv
+                    ? "💡 <b>Dra golfbollarna</b> för att forma greenen<br>Tryck på linjen för ny punkt • Ta bort en punkt kräver mus (högerklick)"
+                    : "💡 <b>Drag golf balls</b> to shape green<br>Tap the line to add a point • Removing a point needs a mouse (right-click)";
+                else hintHtml = isSv
                     ? "💡 <b>Dra golfbollarna</b> för att forma greenen<br>Klicka på linjen för ny punkt • Högerklicka för att ta bort"
                     : "💡 <b>Drag golf balls</b> to shape green<br>Click line to add point • Right-click to remove";
             } else {
-                hintHtml = isSv
+                if (touchUI) hintHtml = isSv
+                    ? `Tryck: <b>Placera punkt</b><br>Knappen Ångra punkt: <b>tar bort den senaste</b><br>Sätt ut minst 3 punkter och tryck Skapa ${typeNameSv}`
+                    : `Tap: <b>Place Point</b><br>The Undo point button: <b>removes the last one</b><br>Define shape, then tap Build ${typeNameEn}`;
+                else hintHtml = isSv
                     ? `Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa ${typeNameSv}`
                     : `Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then click Build ${typeNameEn}`;
             }
         }
         else if (toolName === 'RIDGE') hintHtml = (window.getGolfLanguage && window.getGolfLanguage() === 'sv')
-            ? "Håll musen: <b>Dra en ås/terrass över terrängen</b>"
-            : "Hold Mouse: <b>Draw a Tier/Ridge line across terrain</b>";
-        else if (toolName === 'MEASURE') hintHtml = "Click: <b>Place Line</b> (1st = start, 2nd = end) max 20<br>Right Click: <b>Cancel / Remove Nearest</b>";
-        else if (toolName === 'ERASER') hintHtml = "Left Click: <b>Remove any object</b> (trees, rocks, blocks)";
-        else if (toolName === 'COLORIZE') hintHtml = "Left Click/Drag: <b>Paint object with selected color</b>";
-        else if (toolName === 'HOLE') hintHtml = window._isRangeMode ? "Left Click: <b>Place the Range Tee</b> (any dry ground, it brings its own mat) · Hold and drag: <b>turn it</b>" : "Left Click: <b>Place Selected Marker</b>";
-        else if (toolName === 'RAMP') hintHtml = "Left Drag: <b>Draw ramp</b> from start to cursor — creates linear slope";
-        else if (toolName === 'SPLINE') hintHtml = "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Draw spline line & select fence/wall type in panel";
+            ? (touchUI ? "Håll fingret" : "Håll musen") + ": <b>Dra en ås/terrass över terrängen</b>"
+            : (touchUI ? "Hold your finger" : "Hold Mouse") + ": <b>Draw a Tier/Ridge line across terrain</b>";
+        else if (toolName === 'MEASURE') hintHtml = touchUI
+            ? "Tap: <b>Place Line</b> (1st = start, 2nd = end) max 20<br>Remove: <b>UNDO LAST or CLEAR ALL in the box above</b>"
+            : "Click: <b>Place Line</b> (1st = start, 2nd = end) max 20<br>Right Click: <b>Cancel / Remove Nearest</b>";
+        else if (toolName === 'ERASER') hintHtml = (touchUI ? "Tap" : "Left Click") + ": <b>Remove any object</b> (trees, rocks, blocks)";
+        else if (toolName === 'COLORIZE') hintHtml = (touchUI ? "Tap/Drag" : "Left Click/Drag") + ": <b>Paint object with selected color</b>";
+        else if (toolName === 'HOLE') hintHtml = window._isRangeMode ? (touchUI ? "Tap" : "Left Click") + ": <b>Place the Range Tee</b> (any dry ground, it brings its own mat) · Hold and drag: <b>turn it</b>" : (touchUI ? "Tap" : "Left Click") + ": <b>Place Selected Marker</b>";
+        else if (toolName === 'RAMP') hintHtml = (touchUI ? "Drag" : "Left Drag") + ": <b>Draw ramp</b> from start to " + (touchUI ? "your finger" : "cursor") + " — creates linear slope";
+        else if (toolName === 'SPLINE') hintHtml = touchUI
+            ? "Tap: <b>Place Point</b><br>Start over: <b>the Clear button in the panel</b><br>Draw spline line & select fence/wall type in panel"
+            : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Draw spline line & select fence/wall type in panel";
         else if (toolName === 'FOREST') hintHtml = "Hold Mouse: <b>Scatter trees</b> (respects biome toggle)";
         else if (toolName === 'NOISE') hintHtml = (window.getGolfLanguage && window.getGolfLanguage() === 'sv')
-            ? "Håll Vänster: <b>Forma kupering</b><br>Håll Höger: <b>Gröp ur & erodera</b>"
-            : "Hold Left: <b>Add organic undulations</b><br>Hold Right: <b>Erode & carve hollows</b>";
+            ? (touchUI ? "Håll fingret: <b>Forma kupering</b><br>Gröpa ur kräver mus (högerknappen)" : "Håll Vänster: <b>Forma kupering</b><br>Håll Höger: <b>Gröp ur & erodera</b>")
+            : (touchUI ? "Hold your finger: <b>Add organic undulations</b><br>Carving hollows needs a mouse (right button)" : "Hold Left: <b>Add organic undulations</b><br>Hold Right: <b>Erode & carve hollows</b>");
         else if (toolName === 'MTN') hintHtml = (typeof window.mtnHintHtml === 'function') ? window.mtnHintHtml() : '';
         
         document.getElementById('tool-hints').innerHTML = hintHtml;
@@ -17583,10 +17598,10 @@ window.triggerExplosion = function(x, y, z) {
 
     </script>
 
-<script src="green-studio.js?v=32"></script>
-<script src="fairway-studio.js?v=7"></script>
-<script src="bunker-studio.js?v=2"></script>
-<script src="tee-studio.js?v=4"></script>
+<script src="green-studio.js?v=33"></script>
+<script src="fairway-studio.js?v=8"></script>
+<script src="bunker-studio.js?v=3"></script>
+<script src="tee-studio.js?v=5"></script>
 <script src="smart-builder.js?v=68"></script>
 <script src="voice-commands.js?v=3"></script>
 <script src="studio-reanchor.js?v=5"></script>
