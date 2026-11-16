@@ -207,15 +207,15 @@
 
             if (!isBuilt) {
                 th.innerHTML = isSv
-                    ? "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa bunker"
-                    : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build Bunker";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "Tryck: <b>Placera punkt</b><br>Knappen Ångra punkt: <b>tar bort den senaste</b><br>Sätt ut minst 3 punkter och tryck Skapa bunker" : "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa bunker")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "Tap: <b>Place Point</b><br>The Undo point button: <b>removes the last one</b><br>Define shape, then Build Bunker" : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build Bunker");
                 return;
             }
 
             if (this.activeTab === 'form') {
                 th.innerHTML = isSv
-                    ? "💡 <b>Dra de stora vita golfbollarna</b> för att justera formen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort"
-                    : "💡 <b>Drag white golf balls</b> to adjust shape<br>Click outline to add point • Right-click ball to remove";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Dra de stora vita golfbollarna</b> för att justera formen<br>Tryck på linjen för ny punkt • Ta bort en boll kräver mus (högerklick)" : "💡 <b>Dra de stora vita golfbollarna</b> för att justera formen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Drag white golf balls</b> to adjust shape<br>Tap the outline to add a point • Removing a ball needs a mouse (right-click)" : "💡 <b>Drag white golf balls</b> to adjust shape<br>Click outline to add point • Right-click ball to remove");
             } else if (this.activeTab === 'profil') {
                 th.innerHTML = isSv
                     ? "💡 <b>Välj profil och justera djup/vall</b><br>Vrid kompassen eller dra pilen i 3D för att rikta vallen"

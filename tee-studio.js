@@ -158,15 +158,15 @@
 
             if (!isBuilt) {
                 th.innerHTML = isSv
-                    ? "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa tee box"
-                    : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build Tee Box";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "Tryck: <b>Placera punkt</b><br>Knappen Ångra punkt: <b>tar bort den senaste</b><br>Sätt ut minst 3 punkter och tryck Skapa tee box" : "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa tee box")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "Tap: <b>Place Point</b><br>The Undo point button: <b>removes the last one</b><br>Define shape, then Build Tee Box" : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build Tee Box");
                 return;
             }
 
             if (this.activeTab === 'form') {
                 th.innerHTML = isSv
-                    ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen på tee-boxen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort"
-                    : "💡 <b>Drag white golf balls</b> to adjust tee box shape<br>Click outline to add point • Right-click ball to remove";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen på tee-boxen<br>Tryck på linjen för ny punkt • Ta bort en boll kräver mus (högerklick)" : "💡 <b>Dra de vita golfbollarna</b> för att justera formen på tee-boxen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Drag white golf balls</b> to adjust tee box shape<br>Tap the outline to add a point • Removing a ball needs a mouse (right-click)" : "💡 <b>Drag white golf balls</b> to adjust tee box shape<br>Click outline to add point • Right-click ball to remove");
             } else if (this.activeTab === 'hojd') {
                 th.innerHTML = isSv
                     ? "💡 <b>Justera platåhöjd och slänt</b> med reglagen<br>Välj vilka teer som placeras på denna box och rikta mot siktpunkten"

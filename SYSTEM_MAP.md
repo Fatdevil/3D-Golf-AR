@@ -623,5 +623,13 @@ Mätt på ett genererat hål (kameran i roughen, 3D-gräs MED): minikartan ritad
 - Föremålspenseln (`_propsToolMode` BRUSH) är inte nåbar: knappen är dold och `applySculpting` släpper inte igenom verktyget PROPS.
 - Test: kontrollerna "undo: …" i `tests/smoke/arcade-smoke.js`.
 
+## Hjälptexter på pekskärm (2026-11)
+En telefon eller surfplatta har inga musknappar. Texter som nämner vänster- och högerklick har därför en egen lydelse där.
+- **Översatta texter:** nyckeln `<nyckel>_touch` i `i18n.js` (båda språken). `t()` väljer den när `isTouchUI()` är sann (samma prov som `window.isTouchDevice` i `arcade.html`: mobil user agent, eller Macintosh med pekpunkter, alltså iPad). Tee-studions texter ligger i `TRANSLATIONS` i `arcade.html`, men deras pekskärmslydelse ligger i `i18n.js` och hittas först.
+- **Tipsraden under 3D-vyn** (`setTool` i `arcade.html`) och studiornas tips (`green-studio.js`, `fairway-studio.js`, `bunker-studio.js`, `tee-studio.js`) väljer lydelse i koden med `window.isTouchDevice()`.
+- Texterna pekar på knappen som gör högerklickets jobb: Ångra punkt, Höj/Sänk, Radera i toppfältet, Rensa, UNDO LAST / CLEAR ALL.
+- **Det som saknar knapp** sägs rakt ut ("kräver mus"): ta bort en enskild punkt i en färdig form, ta bort en enskild prick på en bergsrygg, gröpa ur med kuperingsverktyget.
+- Test: `tests/test_touch_help.js`.
+
 ## Tester och CI (2026-10)
 `.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js`, `tests/e2e/ratings-e2e.js` och `tests/e2e/approach-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.

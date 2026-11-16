@@ -297,15 +297,15 @@
 
             if (!isBuilt) {
                 th.innerHTML = isSv
-                    ? "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa green"
-                    : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "Tryck: <b>Placera punkt</b><br>Knappen Ångra punkt: <b>tar bort den senaste</b><br>Sätt ut minst 3 punkter och tryck Skapa green" : "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa green")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "Tap: <b>Place Point</b><br>The Undo point button: <b>removes the last one</b><br>Define shape, then Build" : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build");
                 return;
             }
 
             if (this.activeTab === 'form') {
                 th.innerHTML = isSv
-                    ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen • <b>Dra ringen</b> för att flytta hela greenen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort"
-                    : "💡 <b>Drag golf balls</b> to adjust shape • <b>Drag the ring</b> to move the whole green<br>Click line to add point • Right-click ball to remove";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen • <b>Dra ringen</b> för att flytta hela greenen<br>Tryck på linjen för ny punkt • Ta bort en boll kräver mus (högerklick)" : "💡 <b>Dra de vita golfbollarna</b> för att justera formen • <b>Dra ringen</b> för att flytta hela greenen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Drag golf balls</b> to adjust shape • <b>Drag the ring</b> to move the whole green<br>Tap the line to add a point • Removing a ball needs a mouse (right-click)" : "💡 <b>Drag golf balls</b> to adjust shape • <b>Drag the ring</b> to move the whole green<br>Click line to add point • Right-click ball to remove");
             } else if (this.activeTab === 'lutning') {
                 th.innerHTML = isSv
                     ? "💡 <b>Välj hur brant</b> och åt vilket håll greenen lutar, eller dra pilen i 3D<br>Golfbollarna kan dras för att anpassa formen samtidigt"
@@ -351,8 +351,8 @@
             let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
             if (tipEl) {
                 tipEl.innerHTML = isSv
-                    ? '💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Dra ringen i mitten</b> för att flytta hela greenen. <b>Klicka på linjen</b> för ny punkt, <b>högerklicka</b> för att ta bort.'
-                    : '💡 <b>Drag</b> golf balls to shape. <b>Drag the centre ring</b> to move the whole green. <b>Click spline</b> to add a point, <b>right-click</b> to delete one.';
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? '💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Dra ringen i mitten</b> för att flytta hela greenen. <b>Tryck på linjen</b> för ny punkt. Att ta bort en enskild punkt kräver mus (högerklick).' : '💡 <b>Dra</b> de vita golfbollarna för att ändra form. <b>Dra ringen i mitten</b> för att flytta hela greenen. <b>Klicka på linjen</b> för ny punkt, <b>högerklicka</b> för att ta bort.')
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? '💡 <b>Drag</b> golf balls to shape. <b>Drag the centre ring</b> to move the whole green. <b>Tap the line</b> to add a point. Removing one point needs a mouse (right-click).' : '💡 <b>Drag</b> golf balls to shape. <b>Drag the centre ring</b> to move the whole green. <b>Click spline</b> to add a point, <b>right-click</b> to delete one.');
             }
             this.updateVisibility();
         }

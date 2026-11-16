@@ -152,15 +152,15 @@
 
             if (!isBuilt) {
                 th.innerHTML = isSv
-                    ? "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa fairway"
-                    : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build Fairway";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "Tryck: <b>Placera punkt</b><br>Knappen Ångra punkt: <b>tar bort den senaste</b><br>Sätt ut minst 3 punkter och tryck Skapa fairway" : "Vänsterklick: <b>Placera punkt</b><br>Högerklick: <b>Ångra punkt</b><br>Sätt ut minst 3 punkter och klicka Skapa fairway")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "Tap: <b>Place Point</b><br>The Undo point button: <b>removes the last one</b><br>Define shape, then Build Fairway" : "Left Click: <b>Place Point</b><br>Right Click: <b>Remove Last Point</b><br>Define shape, then Build Fairway");
                 return;
             }
 
             if (this.activeTab === 'form') {
                 th.innerHTML = isSv
-                    ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort"
-                    : "💡 <b>Drag golf balls</b> to adjust shape<br>Click line to add point • Right-click ball to remove";
+                    ? ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Dra de vita golfbollarna</b> för att justera formen<br>Tryck på linjen för ny punkt • Ta bort en boll kräver mus (högerklick)" : "💡 <b>Dra de vita golfbollarna</b> för att justera formen<br>Klicka på linjen för ny punkt • Högerklicka på boll för att ta bort")
+                    : ((window.isTouchDevice && window.isTouchDevice()) ? "💡 <b>Drag golf balls</b> to adjust shape<br>Tap the line to add a point • Removing a ball needs a mouse (right-click)" : "💡 <b>Drag golf balls</b> to adjust shape<br>Click line to add point • Right-click ball to remove");
             } else if (this.activeTab === 'bredd') {
                 th.innerHTML = isSv
                     ? "💡 <b>Justera semi-rough och rough</b> med reglagen<br>Välj markens böljande profil bland de 4 terrängkorten"
