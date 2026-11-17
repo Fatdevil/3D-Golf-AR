@@ -633,5 +633,13 @@ En telefon eller surfplatta har inga musknappar. Texter som nämner vänster- oc
 - **Det som saknar knapp** sägs rakt ut ("kräver mus"): ta bort en enskild punkt i en färdig form, ta bort en enskild prick på en bergsrygg, gröpa ur med kuperingsverktyget.
 - Test: `tests/test_touch_help.js`.
 
+## Rundkonfigurationen (2026-11)
+`arcade-round-config.js` (`window.RoundConfig`): ett kontrollerat objekt för hur en runda spelas, första steget mot inställningssidan och turneringar. Version 1:
+`{ v: 1, mode: 'local', format: 'stroke', ruleset: 'standard'|'tournament', course: { code, collection: { id, plates: [{ code, version }] } | null }, players: [{ name, tee, hcp, slot }], rules: { gimmeDist, autoPutt, puttAssist, mulligans, autoConcede }, conditions: { windStrength, greenStimp, greenFirmness, altitude, temperatureC } }`.
+- **`normalize()` är enda vägen in:** annan version eller inget objekt ger `null`, okända nycklar tas bort, tal kläms till sitt spann (gimme 4-20, stimp 6-14 i halvsteg, vind 0-4, temperatur −5 till 40, altitud −500 till 5000), okända värden blir standard, högst fyra spelare med hcp 0-54 i tiondelar. **Turneringens gränser kommer sist** (gimme högst 12 ft, inga mulligans), så varken popupen eller en sparad konfiguration kan lyfta dem.
+- **Vid start** (`commitSettingsAndStart`): fälten läses som förut, blir en konfiguration (`fromMatchSettings`), och de kontrollerade värdena skrivs tillbaka till `window.matchSettings` (`toMatchSettings`). Den ligger i `window._roundConfig`.
+- **Samlingar:** konfigurationen sparas i `sessionStorage` under `collection_config_<NYCKEL>` (`collectionKey`, samma stil som spelarna och poängen). Platta 2 och framåt läser den i `arcade-load.js` (`window._pendingRoundConfig`); `startRound` fyller då popupens fält (`window.fillSetupForm`) och startar utan popup, samma väg som en start från popupen. Förut fick man ställa in rundan på nytt för varje platta. Nyckeln rensas vid platta 1 och när rundan är slut.
+- Test: `tests/test_round_config.js` och smoke "round configuration".
+
 ## Tester och CI (2026-10)
 `.github/workflows/ci.yml` kör på varje PR och push till main: `unit` (`node tests/run.js`, alla `tests/test_*.js`), `api` (`tests/e2e/collections-e2e.js`, `tests/e2e/ratings-e2e.js` och `tests/e2e/approach-e2e.js` mot Postgres) och `browser` (smoke, shape och courses-e2e i Chromium). Smokeprovet jämför mot `tests/smoke/baseline.json` (nya sidfel, förlorade `window`-globaler); webbläsarens egna globaler tas från en sida på samma origin så baslinjen inte beror på Chromium-version. Se `tests/README.md`.

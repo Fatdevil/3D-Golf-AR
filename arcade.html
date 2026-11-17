@@ -8862,7 +8862,8 @@
 
 </script>
 <script src="collection-round.js?v=1"></script>
-<script src="arcade-load.js?v=12"></script>
+<script src="arcade-round-config.js?v=1"></script>
+<script src="arcade-load.js?v=13"></script>
 <script>
     
     let isFlying = false;
@@ -9071,6 +9072,22 @@
         window.matchSettings.altitude = parseInt(document.getElementById('set-altitude').value);
         window.matchSettings.temperatureC = parseInt(document.getElementById('set-temperature').value);
         
+        // The round's configuration (arcade-round-config.js): the settings as one checked object. The tournament limits are applied
+        // there, from the data (a gimme over 12 ft or a mulligan cannot get into a tournament round), and the checked values go back
+        // into the game. A collection round keeps it for its next plates, which then start with the same settings and no popup.
+        if (window.RoundConfig) {
+            const col = window._activeCollection;
+            const course = { code: window._loadedShareCode || null,
+                             collection: col ? { id: col.id, plates: (col.plates || []).map(function (p) { const c = typeof p === 'string' ? p : p.plate_code; return { code: c, version: col.plate_versions ? col.plate_versions[c] : null }; }) } : null };
+            const cfg = window.RoundConfig.fromMatchSettings(window.matchSettings, window.setupPlayers, course);
+            if (cfg) {
+                Object.assign(window.matchSettings, window.RoundConfig.toMatchSettings(cfg));
+                window._roundConfig = cfg;
+                if (col && col.id !== undefined) window.RoundConfig.save(sessionStorage, window.RoundConfig.collectionKey(col.id), cfg);
+            }
+        }
+        window._pendingRoundConfig = null;
+
         window.GREEN_STIMP = window.matchSettings.greenStimp; 
         
         document.getElementById('settings-modal').style.display = 'none';
@@ -9130,7 +9147,40 @@
             if (window._loadedCourseAuthor) _parts.push('by ' + window._loadedCourseAuthor);
             _ci.textContent = _parts.join(' · ');
         }
+        // a configuration chosen before (the next plate of a collection round): the same settings, no popup
+        if (window._pendingRoundConfig && window.fillSetupForm && window.fillSetupForm(window._pendingRoundConfig)) {
+            window.commitSettingsAndStart();
+            return;
+        }
         document.getElementById('settings-modal').style.display = 'flex';
+    };
+
+    // The setup popup's fields from a configuration (arcade-round-config.js), so that starting from it goes the same way as a start
+    // from the popup (commitSettingsAndStart reads the fields). false: no configuration or a field is missing (the popup is shown).
+    window.fillSetupForm = function (cfg) {
+        if (!cfg || !window.RoundConfig) return false;
+        const ids = ['set-gimme-dist', 'set-autoputt-mode', 'set-putt-assist', 'set-mulligans', 'set-concede', 'set-wind', 'set-green-stimp',
+                     'set-green-firmness', 'set-altitude', 'set-temperature', 'set-tournament-mode'];
+        const el = {};
+        for (const id of ids) { el[id] = document.getElementById(id); if (!el[id]) return false; }
+        const tour = cfg.ruleset === 'tournament';
+        el['set-tournament-mode'].checked = tour;
+        window.toggleTournamentMode(tour);   // the popup's own limits (gimme max 12, mulligans off and locked)
+        const r = cfg.rules, c = cfg.conditions;
+        el['set-gimme-dist'].value = r.gimmeDist;
+        el['set-autoputt-mode'].value = r.autoPutt;
+        el['set-putt-assist'].value = r.puttAssist;
+        el['set-mulligans'].checked = r.mulligans;
+        el['set-concede'].value = String(r.autoConcede);
+        el['set-wind'].value = String(c.windStrength);
+        el['set-green-stimp'].value = c.greenStimp;
+        el['set-green-firmness'].value = c.greenFirmness;
+        el['set-altitude'].value = c.altitude;
+        el['set-temperature'].value = c.temperatureC;
+        const label = function (id, t) { const e = document.getElementById(id); if (e) e.innerText = t; };
+        label('gimme-val', r.gimmeDist + ' ft'); label('stimp-val', String(c.greenStimp)); label('temp-val', c.temperatureC + '°C');
+        // the players come with the round (collection_roster_), as before; a configuration without them keeps the page's
+        return true;
     };
 
     function getTeeOrder() {
@@ -9621,7 +9671,7 @@
             submitRoundResult();
             
             // Clean up collection session
-            if (col) { sessionStorage.removeItem('collection_scores_' + col.id); sessionStorage.removeItem('collection_round_' + col.id); sessionStorage.removeItem('collection_roster_' + col.id); sessionStorage.removeItem('collection_plates_' + col.id); sessionStorage.removeItem('collection_versions_' + col.id); }
+            if (col) { if (window.RoundConfig) sessionStorage.removeItem(window.RoundConfig.collectionKey(col.id)); sessionStorage.removeItem('collection_scores_' + col.id); sessionStorage.removeItem('collection_round_' + col.id); sessionStorage.removeItem('collection_roster_' + col.id); sessionStorage.removeItem('collection_plates_' + col.id); sessionStorage.removeItem('collection_versions_' + col.id); }
             return;
         }
         

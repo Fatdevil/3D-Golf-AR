@@ -967,7 +967,7 @@
                                 // earlier, abandoned go left behind (scores, round token, players) must not carry into this one
                                 let roundChanged = false;
                                 if (plateIndex === 0) {
-                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_'].forEach(function (k) { sessionStorage.removeItem(k + roundKey); }); } catch (e) {}
+                                    try { ['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_', 'collection_config_'].forEach(function (k) { sessionStorage.removeItem(k + roundKey); }); } catch (e) {}
                                     // the plates in the order they were when the round started (and the version each had): the collection can be edited meanwhile (another tab, another device)
                                     try { sessionStorage.setItem('collection_plates_' + roundKey, JSON.stringify(colRes.plates.map(function (p) { return typeof p === 'string' ? { plate_code: p } : { plate_code: p.plate_code, plate_name: p.plate_name }; }))); } catch (e) {}
                                     try { sessionStorage.setItem('collection_versions_' + roundKey, JSON.stringify(colRes.plate_versions || null)); } catch (e) {}
@@ -1010,6 +1010,8 @@
                                         window.setupPlayers = roster.slice(0, 4).map(function (p) { return { name: p.name, tee: p.tee || 'yellow', hcp: p.hcp === undefined ? null : p.hcp, slot: p.slot }; });
                                     }
                                 } catch (e) {}
+                                // Plate 2 and on: the round's settings come along too (arcade-round-config.js); startRound starts with them, no popup
+                                if (plateIndex > 0 && window.RoundConfig) window._pendingRoundConfig = window.RoundConfig.load(sessionStorage, window.RoundConfig.collectionKey(roundKey));
                                 console.log('📦 Collection loaded:', colRes.name, '| Plate', plateIndex + 1, '/', colRes.plates.length);
                                 }
                             }

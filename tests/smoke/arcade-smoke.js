@@ -2535,6 +2535,48 @@ function serve() {
     });
     checks.push({ name: 'course: a mulligan while a drop is being placed calls the drop off (no circle, no confirm button, the camera back to AUTO) and gives the dropping player his penalty back; no Rehit during the drop',
       ok: mullDrop.during.boPen === 1 && mullDrop.during.confirm && mullDrop.during.rehit === 'none' && mullDrop.after.boPen === 0 && mullDrop.after.anna === 2 && mullDrop.after.active === 0 && !mullDrop.after.confirm && !mullDrop.after.circle && !mullDrop.after.pending && mullDrop.after.cam === 'AUTO', detail: JSON.stringify(mullDrop) });
+    // The round's configuration (arcade-round-config.js): the popup builds it at the start, a tournament gets its limits from the data
+    // (a mulligan ticked behind the locked box is still off), a collection round keeps it, and the next plate starts with the same
+    // settings and no popup; an old or broken stored configuration falls back to the popup
+    const roundCfg = await cp.evaluate(async function () {
+      const modal = function () { return getComputedStyle(document.getElementById('settings-modal')).display; };
+      const KEY = window.RoundConfig.collectionKey('zzcol');
+      setMode('PLAY');
+      window._activeCollection = { id: 'zzcol', plates: ['ZZA', { plate_code: 'ZZB' }], plate_versions: { ZZA: 3, ZZB: 1 } };
+      window._pendingRoundConfig = null;
+      window.startRound();
+      const first = modal();
+      document.getElementById('set-tournament-mode').checked = true; window.toggleTournamentMode(true);
+      document.getElementById('set-mulligans').checked = true;   // behind the locked box: the data says no
+      document.getElementById('set-green-stimp').value = 12.5; document.getElementById('set-putt-assist').value = 'SLOPE'; document.getElementById('set-wind').value = '2';
+      window.commitSettingsAndStart();
+      const ms1 = Object.assign({}, window.matchSettings), saved = window.RoundConfig.load(sessionStorage, KEY);
+      // the next plate: the page starts over (the popup's defaults), with the stored configuration
+      document.getElementById('set-tournament-mode').checked = false; window.toggleTournamentMode(false);
+      document.getElementById('set-green-stimp').value = 10; document.getElementById('set-putt-assist').value = 'FULL'; document.getElementById('set-wind').value = '0';
+      Object.assign(window.matchSettings, { tournamentMode: false, greenStimp: 10, puttAssist: 'FULL', windStrength: 0, mulligans: true });
+      window._pendingRoundConfig = window.RoundConfig.load(sessionStorage, KEY);
+      window.startRound();
+      const second = { modal: modal(), ms: Object.assign({}, window.matchSettings), stimp: window.GREEN_STIMP, pending: window._pendingRoundConfig };
+      // an object of another version is not read: the popup again
+      sessionStorage.setItem(KEY, JSON.stringify({ v: 99, rules: {} }));
+      window._pendingRoundConfig = window.RoundConfig.load(sessionStorage, KEY);
+      window.startRound();
+      const old = { pending: window._pendingRoundConfig, modal: modal() };
+      document.getElementById('settings-modal').style.display = 'none';
+      sessionStorage.removeItem(KEY); window._activeCollection = null; window._pendingRoundConfig = null;
+      return { first: first, ms1: { t: ms1.tournamentMode, g: ms1.gimmeDist, m: ms1.mulligans, s: ms1.greenStimp, p: ms1.puttAssist, w: ms1.windStrength },
+               saved: saved && { ruleset: saved.ruleset, rules: saved.rules, stimp: saved.conditions.greenStimp, col: saved.course.collection },
+               second: { modal: second.modal, t: second.ms.tournamentMode, g: second.ms.gimmeDist, m: second.ms.mulligans, s: second.ms.greenStimp, p: second.ms.puttAssist, w: second.ms.windStrength, stimp: second.stimp, pending: second.pending },
+               old: old };
+    });
+    checks.push({ name: 'round configuration: built at the start (tournament limits from the data), kept for a collection round, the next plate starts with the same settings and no popup; another version falls back to the popup',
+      ok: roundCfg.first === 'flex' && roundCfg.ms1.t === true && roundCfg.ms1.g <= 12 && roundCfg.ms1.m === false && roundCfg.ms1.s === 12.5 && roundCfg.ms1.p === 'SLOPE' && roundCfg.ms1.w === 2 &&
+          !!roundCfg.saved && roundCfg.saved.ruleset === 'tournament' && roundCfg.saved.rules.mulligans === false && roundCfg.saved.col && roundCfg.saved.col.id === 'zzcol' &&
+          JSON.stringify(roundCfg.saved.col.plates) === JSON.stringify([{ code: 'ZZA', version: 3 }, { code: 'ZZB', version: 1 }]) &&
+          roundCfg.second.modal === 'none' && roundCfg.second.t === true && roundCfg.second.m === false && roundCfg.second.s === 12.5 && roundCfg.second.p === 'SLOPE' && roundCfg.second.w === 2 && roundCfg.second.stimp === 12.5 && roundCfg.second.pending === null &&
+          roundCfg.old.pending === null && roundCfg.old.modal === 'flex',
+      detail: JSON.stringify(roundCfg) });
     await cp.close();
     checks.push({ name: 'course: with a launch monitor the aim billboard suggests the club from the player\'s bag (PW for 110), not with the swing', ok: /PW/.test(bagCourse.club) && /^Carry /.test(bagCourse.reach) && /plays/.test(bagCourse.fx) && !/^🎒/.test(swingClub), detail: JSON.stringify([bagCourse, swingClub]) });
     checks.push({ name: 'range: the quick draft of a range reopens as a range even without mode=range in the address', ok: reopenedRange.range && reopenedRange.url === 'range' && reopenedRange.teeBtn !== 'none' && reopenedRange.hasTee, detail: JSON.stringify(reopenedRange) });
