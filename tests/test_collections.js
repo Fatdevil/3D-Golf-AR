@@ -71,7 +71,7 @@ check('varje spelare har en plats (slot) som följer hela rundan, och resultatet
 check('samlingens slaglista summerar per plats, inte per plats i den här sidans lista', /slotOf\(/.test(arcade) && (arcade.match(/slotOf\(/g) || []).length >= 4);
 check('spelarlistan rensas när sista plattan är klar och när en ny omgång startas', /removeItem\('collection_roster_' \+ col\.id\)/.test(arcade) && /removeItem\('collection_roster_' \+ collectionId\)/.test(read('build.html')));
 
-check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken och spelare rensas, vilken sida man än startade från', /if \(plateIndex === 0\) \{\s*try \{ \['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_'\]\.forEach/.test(load) && load.indexOf("if (plateIndex === 0) {") < load.indexOf("window._collectionScores = JSON.parse"));
+check('platta 1 av en samling börjar alltid om: gamla poäng, rundtoken, spelare och inställningar rensas, vilken sida man än startade från', /if \(plateIndex === 0\) \{\s*try \{ \['collection_scores_', 'collection_round_', 'collection_roster_', 'collection_plates_', 'collection_versions_', 'collection_config_'\]\.forEach/.test(load) && load.indexOf("if (plateIndex === 0) {") < load.indexOf("window._collectionScores = JSON.parse"));
 
 check('plattföljden fryses när en runda startar (platta 1) och plattorna 2 och framåt följer den, så en ändring av samlingen under rundan flyttar inte på vägen',
   /setItem\('collection_plates_' \+ roundKey/.test(load) && /getItem\('collection_plates_' \+ roundKey\)/.test(load) && /CollectionRound\.continueRound\(/.test(load) && /colRes\.plates = r\.plates/.test(load));

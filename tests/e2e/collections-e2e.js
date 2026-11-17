@@ -41,7 +41,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
   }
   try {
     let up = false;
-    for (let i = 0; i < 60 && !up; i++) { try { const r = await fetch(BASE + '/api/health'); up = (await r.json()).db_connected === true; } catch (e) { /* not yet */ } if (!up) await new Promise(function (r) { setTimeout(r, 500); }); }
+    for (let i = 0; i < 60 && !up; i++) { try { const r = await fetch(BASE + '/api/health'); { const j = await r.json(); up = j.db_connected === true && j.schema_ready !== false; } } catch (e) { /* not yet */ } if (!up) await new Promise(function (r) { setTimeout(r, 500); }); }
     if (!up) { console.error('server did not come up with a database'); await cleanup(); process.exit(2); }
 
     // three published plates, one draft, one range
