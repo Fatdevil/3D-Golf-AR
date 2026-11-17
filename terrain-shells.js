@@ -389,6 +389,9 @@
         uniform float uWorld;
         uniform float uCells;
         uniform vec3 uCardH;      // the player's height for the 2D grass per class: rough, deep rough, semi-rough (1 = the shell heights)
+        #ifdef CARD_WATER_VERTEX
+        uniform sampler2D uWaterMap;
+        #endif
         varying vec3 vCol;
         varying vec2 vUv;
         varying float vDist;
@@ -396,6 +399,11 @@
         varying vec2 vWaterUv;
         void main() {
             vWaterUv = vec2(iBase.x / uWorld + 0.5, 0.5 - iBase.z / uWorld);
+            #ifdef CARD_WATER_VERTEX
+            // no tuft in water: the test is at the root, the same for every pixel of the card, so it is made once per corner here and a
+            // wet card is moved out of the picture (all its corners, so no pixel of it is drawn); without vertex textures, per pixel below
+            if (texture2D(uWaterMap, vWaterUv).r > 0.05) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+            #endif
             float h = iParam.x * (iClass < 0.5 ? uCardH.x : (iClass < 1.5 ? uCardH.y : uCardH.z)), t = position.y;                     // t: 0 at the root, 1 at the top of the card
             vec3 l = vec3(position.x, t, position.z) * vec3(h * 1.2, h, h * 1.2);   // a tuft is a little wider than tall
             float c = cos(iParam.y), s = sin(iParam.y);
@@ -428,7 +436,9 @@
             if (vDist > uMaxDist) discard;
             vec4 a = texture2D(uAtlas, vUv);                        // r: shade (dark root, light tip), a: coverage
             if (a.a < 0.5) discard;
+            #ifndef CARD_WATER_VERTEX
             if (texture2D(uWaterMap, vWaterUv).r > 0.05) discard;
+            #endif
             float fade = 1.0 - smoothstep(uMaxDist * 0.6, uMaxDist, vDist);
             if (hash2(gl_FragCoord.xy) > fade) discard;
             float shade = a.r;
@@ -1312,7 +1322,8 @@
                         uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uDirColor: { value: new THREE.Vector3(1, 1, 1) }, uAmbColor: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
                         uTime: { value: 0 }, uWindDir: { value: this._windDir.clone() }, uWindStr: { value: this._windStr }
                     },
-                    vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, side: THREE.DoubleSide
+                    vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, side: THREE.DoubleSide,
+                    defines: window._vertexTextures === true ? { CARD_WATER_VERTEX: '' } : {}
                 });
             }
             const u = this._cardMat.uniforms;
