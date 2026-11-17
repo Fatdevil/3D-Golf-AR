@@ -2009,6 +2009,46 @@ function serve() {
     checks.push({ name: 'belt shadows grown after the plate\'s far-tree shadows were drawn: no frame throws (they share a material, both carry a colour per tree)',
       ok: beltSetup.mode === 'TEST' && beltSetup.shadows > 0 && beltState.trees > 0 && beltState.shadowMeshes > 0 && beltState.withColour === beltState.shadowMeshes && beltState.sharedMaterial && beltErrors.length === beforeBelt,
       detail: JSON.stringify({ setup: beltSetup, belt: beltState, errorsBefore: beforeBelt, errorsAfter: beltErrors.length, first: beltErrors[beforeBelt] || '' }) });
+    // The lying cards (a crown seen from above) are drawn only where the camera looks down at one steeply enough to show it: from eye
+    // height none of them, from high above they are; the minimap, from above, gets the belt's. The test is on the safe side: every lying
+    // card the shader would show from that camera belongs to a group that is drawn.
+    undoStep = 'lying cards';
+    const lying = await pb.evaluate(async function () {
+      const frame = function () { return new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); }); };
+      const fade = Math.sin(25 * Math.PI / 180), mt = new THREE.Matrix4(), v = new THREE.Vector3();
+      // the lying cards that the shader would show from the camera now (its own test, per card), and whether their group is drawn
+      const audit = function () {
+        const cp = camera.position, groups = [];
+        for (const t in window.instancePools) { const p = window.instancePools[t]; if (p && p.chunks) p.chunks.forEach(function (c) { if (c.topMesh && c.far) groups.push(c.topMesh); }); }
+        window.SurroundVeg.meshes().forEach(function (m) { if (m.userData.surroundVeg.top && (m.userData.surroundVeg.side !== 'OB' || appMode !== 'BUILD')) groups.push(m); });
+        let drawn = 0, wouldShow = 0, missed = 0;
+        groups.forEach(function (m) {
+          if (m.visible) drawn++;
+          const y0 = m.geometry.attributes.position.getY(0);
+          for (let i = 0; i < m.count; i++) {
+            m.getMatrixAt(i, mt); v.set(0, y0, 0).applyMatrix4(mt);
+            const d = Math.hypot(cp.x - v.x, cp.y - v.y, cp.z - v.z);
+            if (d > 0 && (cp.y - v.y) / d > fade) { wouldShow++; if (!m.visible) missed++; }
+          }
+        });
+        return { groups: groups.length, drawn: drawn, wouldShow: wouldShow, missed: missed };
+      };
+      const at = async function (x, y, z, tx, tz) { camera.position.set(x, y, z); camera.lookAt(tx, 0, tz); if (controls) { controls.target.set(tx, 0, tz); controls.update(); } camera.position.set(x, y, z); camera.lookAt(tx, 0, tz); for (let i = 0; i < 3; i++) await frame(); return audit(); };
+      window.SurroundVeg.setAutoScale(1); await new Promise(function (r) { setTimeout(r, 1500); });
+      const low = await at(0, 2, 250, 0, -200);
+      const mid = await at(0, 60, 380, 0, 0);
+      const high = await at(0, 500, 300, 0, 0);
+      // the minimap: from above, the belt's lying cards that the low camera hides are drawn for it
+      await at(0, 2, 250, 0, -200);
+      const hidden = window.SurroundVeg.lyingHidden().length;
+      let inMap = -1; window.withFullProps(function () { inMap = window.SurroundVeg.lyingHidden().filter(function (m) { return m.visible; }).length; });
+      const after = window.SurroundVeg.lyingHidden().filter(function (m) { return m.visible; }).length;
+      return { low: low, mid: mid, high: high, hidden: hidden, inMap: inMap, after: after };
+    });
+    checks.push({ name: 'lying tree cards are drawn only where one can show: none from eye height, some from above; none that would show is hidden; the minimap gets the belt\'s',
+      ok: lying.low.groups > 0 && lying.low.drawn === 0 && lying.low.wouldShow === 0 && lying.mid.missed === 0 && lying.high.drawn > 0 && lying.high.missed === 0 && lying.high.wouldShow > 0 &&
+          lying.hidden > 0 && lying.inMap === lying.hidden && lying.after === 0 && beltErrors.length === beforeBelt,
+      detail: JSON.stringify(lying) });
     await pb.close();
     await ctxU.close();
   } catch (e) { checks.push({ name: 'undo checks ran', ok: false, detail: 'step ' + undoStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }

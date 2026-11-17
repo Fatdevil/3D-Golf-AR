@@ -238,10 +238,12 @@
                         tm.setMatrixAt(i, mtx);
                     });
                     tg.boundingSphere = g.boundingSphere.clone();
+                    // where these lying cards can show from (updateLying: hidden when the camera is too low for any of them)
+                    const box = typeof root.lyingCardsBox === 'function' ? root.lyingCardsBox(list.map(function (p) { return { x: p[0], z: p[1], y: p[4], s: p[2] }; }), card.radius) : null;
                     tm.instanceMatrix.needsUpdate = true; tm.instanceColor.needsUpdate = true; tg.attributes.instanceTrunkColor.needsUpdate = true;
                     tm.castShadow = false; tm.receiveShadow = false; tm.frustumCulled = true;
                     tm.raycast = function () {};
-                    tm.userData.surroundVeg = { type: t, side: side, top: true };
+                    tm.userData.surroundVeg = { type: t, side: side, top: true, box: box };
                     if (side === 'OB') tm.visible = playing();
                     scene.add(tm);
                     meshes.push(tm);
@@ -364,6 +366,20 @@
             meshes.forEach(function (m) { if (m.userData.surroundVeg.side === 'OB') m.visible = on; });
             if (on && cfg.ob !== 'NONE') schedule(0);
         },
+        // each frame (arcade.html updatePropLod): the lying cards show only where the camera at cp looks down at one steeply enough
+        // (canShow: lyingCardsCanShow); the OB trees' only in play and test, as the rest of them
+        updateLying: function (cp, canShow) {
+            const on = playing();
+            meshes.forEach(function (m) {
+                const u = m.userData.surroundVeg;
+                if (!u.top) return;
+                const base = u.side !== 'OB' || on, v = base && (!u.box || canShow(u.box, cp));
+                u.camHidden = base && !v;
+                if (m.visible !== v) m.visible = v;
+            });
+        },
+        // the lying cards hidden only because the main camera is low (the minimap, from above, shows them: arcade.html withFullProps)
+        lyingHidden: function () { return meshes.filter(function (m) { return m.userData.surroundVeg.top && m.userData.surroundVeg.camHidden; }); },
         obClear: function (x, z) { return obClear(x, z, ((root.G && root.G.TERRAIN_SIZE) || root.TERRAIN_SIZE || 600) / 2); },
         setDensity: function (v, done) { cfg.density = Math.max(0, Math.min(3, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
         setDepth: function (v, done) { cfg.depth = Math.max(40, Math.min(700, +v)); syncUI(); if (done !== false) { save(); schedule(); } },
