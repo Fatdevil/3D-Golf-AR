@@ -45,7 +45,7 @@
 <script src="arcade-wind-sway.js?v=4"></script>
 <script src="arcade-post.js?v=2"></script>
 <script src="arcade-auto-quality.js?v=3"></script>
-<script src="arcade-surround-veg.js?v=8"></script>
+<script src="arcade-surround-veg.js?v=9"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
 <body>
@@ -7816,6 +7816,27 @@
         return g;
     }
     const PROP_TOP_FADE = [Math.sin(25 * Math.PI / 180), Math.sin(50 * Math.PI / 180)];   // the lying card fades in between 25 and 50 degrees down
+    // Can any lying card of a group show from the camera at cp? b: the group's trees as an xz box (x0..x1, z0..z1), the lowest foot (y) and a
+    // margin (pad: the widest card's half-width plus its sway). A lying card shows only where the camera looks down at it by more than
+    // PROP_TOP_FADE[0]; seen from lower down it is discarded pixel by pixel, but still drawn. The test is on the safe side: the nearest point
+    // of the box less the margin, and the feet (the cards lie higher up), so a group is hidden only when none of its cards can show.
+    function lyingCardsCanShow(b, cp) {
+        const dh = cp.y - b.y;
+        if (dh <= 0) return false;
+        const dx = Math.max(b.x0 - cp.x, 0, cp.x - b.x1), dz = Math.max(b.z0 - cp.z, 0, cp.z - b.z1);
+        const dxz = Math.max(0, Math.hypot(dx, dz) - b.pad);
+        return dh / Math.hypot(dxz, dh) > PROP_TOP_FADE[0];
+    }
+    window.lyingCardsCanShow = lyingCardsCanShow;
+    // the box of a list of trees for lyingCardsCanShow: x, z, the foot's y and the scale of each, the card's half-width (unscaled)
+    window.lyingCardsBox = function (list, half) {
+        const b = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity, y: Infinity, pad: 0 };
+        list.forEach(function (p) {
+            b.x0 = Math.min(b.x0, p.x); b.x1 = Math.max(b.x1, p.x); b.z0 = Math.min(b.z0, p.z); b.z1 = Math.max(b.z1, p.z);
+            b.y = Math.min(b.y, p.y); b.pad = Math.max(b.pad, (half + 3) * p.s);   // 3 m: the crown's sway at full wind (cardWindGLSL)
+        });
+        return isFinite(b.y) ? b : null;
+    };
     // The camera's world position, from the view matrix: three.js r128 sends cameraPosition only to Phong, Standard, Toon and shader
     // materials (and those with an environment map), so in these Lambert cards it was (0, 0, 0): the standing cards turned to the middle
     // of the plate instead of the camera, and the lying ones never faded in. camera = -R^T t, where viewMatrix = [R | t].
@@ -8053,11 +8074,17 @@
                     ch.far = far;
                     ch.meshes.forEach(m => { m.visible = !far; });
                     if (ch.impostorMesh) ch.impostorMesh.visible = far;
-                    if (ch.topMesh) ch.topMesh.visible = far;
                     if (ch.shadowMesh) ch.shadowMesh.visible = far;
+                }
+                // the lying cards only where one can show (the camera looks down at it steeply enough): from eye height none do, and
+                // a hidden group is a draw call saved
+                if (ch.topMesh) {
+                    const v = !!ch.far && (!ch.topBox || lyingCardsCanShow(ch.topBox, cp));
+                    if (ch.topMesh.visible !== v) ch.topMesh.visible = v;
                 }
             });
         }
+        if (window.SurroundVeg && window.SurroundVeg.updateLying) window.SurroundVeg.updateLying(cp, lyingCardsCanShow);   // the 2D trees around the course
     };
     // Draws fn with every square showing its models (the minimap looks from above, where a card is only a line); puts the cards back after
     window.withFullProps = function (fn) {
@@ -8066,9 +8093,16 @@
             const pool = window.instancePools[type];
             if (pool && pool.chunks) pool.chunks.forEach(ch => { if (ch.far) back.push(ch); });
         }
-        const cards = function (ch, on) { ch.impostorMesh.visible = on; if (ch.topMesh) ch.topMesh.visible = on; if (ch.shadowMesh) ch.shadowMesh.visible = on; };
-        back.forEach(ch => { ch.meshes.forEach(m => { m.visible = true; }); cards(ch, false); });
-        try { return fn(); } finally { back.forEach(ch => { ch.meshes.forEach(m => { m.visible = false; }); cards(ch, true); }); }
+        const tops = back.map(ch => !!(ch.topMesh && ch.topMesh.visible));
+        const cards = function (ch, on, top) { ch.impostorMesh.visible = on; if (ch.topMesh) ch.topMesh.visible = top; if (ch.shadowMesh) ch.shadowMesh.visible = on; };
+        // the lying cards of the 2D trees around the course that the main camera does not see: from above they are what shows
+        const lying = window.SurroundVeg && window.SurroundVeg.lyingHidden ? window.SurroundVeg.lyingHidden() : [];
+        back.forEach(ch => { ch.meshes.forEach(m => { m.visible = true; }); cards(ch, false, false); });
+        lying.forEach(m => { m.visible = true; });
+        try { return fn(); } finally {
+            back.forEach((ch, i) => { ch.meshes.forEach(m => { m.visible = false; }); cards(ch, true, tops[i]); });
+            lying.forEach(m => { m.visible = false; });
+        }
     };
 
     function disposeChunk(ch) {
@@ -8185,6 +8219,8 @@
                     tm.geometry.attributes.instanceTrunkColor.setXYZ(i, col.trunk.r, col.trunk.g, col.trunk.b);
                 });
                 tm.geometry.boundingSphere = new THREE.Sphere(ch.sphere.center.clone(), ch.sphere.radius + pool.impostor.radius);
+                // where these lying cards can show from (updatePropLod hides them when none can)
+                ch.topBox = window.lyingCardsBox(list.map(e => ({ x: e.t.x, z: e.t.z, y: (e.t.y || 0) + (e.t.yOffset || 0), s: e.t.scale || 1 })), pool.impostor.radius);
                 tm.count = list.length;
                 tm.instanceMatrix.needsUpdate = true;
                 tm.instanceColor.needsUpdate = true;
