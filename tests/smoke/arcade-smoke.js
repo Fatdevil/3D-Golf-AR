@@ -208,7 +208,8 @@ function serve() {
             ok && clear.length >= 6, JSON.stringify(res) + ' atlas ' + card.rt.width + 'x' + card.rt.height);
     })();
     // a round tree looks the same from every side: its card is as bright whatever way the tree is turned (three.js turns the normal by the
-    // instance matrix, which now carries the turn); and two types with their centres in different places get programs of their own
+    // instance matrix, which now carries the turn); and two types with their centres in different places share one program, each card
+    // still drawn at its own type's centre (the centre is a uniform per material)
     (function () {
       const ball = function (x) { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.SphereGeometry(3, 16, 12), new THREE.MeshLambertMaterial({ color: 0x3a8a3a })); m.position.set(x, 4, 0); g.add(m); return g; };
       window.customModels.zz_round = ball(0); window.ASSET_REGISTRY.zz_round = { subcat: 'TREES' };
@@ -257,11 +258,21 @@ function serve() {
       const modelStraight = modelShift(0), modelTurned = modelShift(Math.PI);
       window.placedTrees.length = n0; destroyInstancePool('zz_sway'); delete window.customModels.zz_sway; delete window.ASSET_REGISTRY.zz_sway;
       Object.keys(wu).forEach(function (k) { wu[k].value = was[k]; });
+      // the second type (its ball 4 m to the side) drawn right after the first with the same program: its card lies 4 m over
+      setWind(0, false); im.setMatrixAt(0, new THREE.Matrix4()); im.instanceMatrix.needsUpdate = true;
+      const progs0 = renderer.info.programs.length, x1 = shotX(scn);
+      const geo2 = new THREE.BufferGeometry(); geo2.setIndex(card2.geometry.index); for (const k in card2.geometry.attributes) geo2.setAttribute(k, card2.geometry.attributes[k]);
+      geo2.setAttribute('instanceTrunkColor', new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3));
+      const im2 = new THREE.InstancedMesh(geo2, card2.material, 1); im2.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array([1, 1, 1]), 3); im2.frustumCulled = false; im2.setMatrixAt(0, new THREE.Matrix4());   // (an instanced mesh starts with zero matrices)
+      scn.remove(im); scn.add(im2); const x2 = shotX(scn); const progs1 = renderer.info.programs.length; scn.remove(im2); scn.add(im);
+      const pxPerM = W / (2 * 40 * Math.tan(15 * Math.PI / 180)), shift = (x2 - x1) / pxPerM;
+      Object.keys(wu).forEach(function (k) { wu[k].value = was[k]; });
       renderer.setRenderTarget(null); rt.dispose();
       ['zz_round', 'zz_round2'].forEach(function (k) { delete window.customModels[k]; delete window.ASSET_REGISTRY[k]; });
-      const keys = card.material.customProgramCacheKey() !== card2.material.customProgramCacheKey();
-      check('2D trees: a card is as bright whatever way its tree is turned, and tree types with different centres get programs of their own',
-            b.every(function (v) { return v > 0 && Math.abs(v - b[0]) <= 3; }) && keys, 'green by turn ' + b.join(', ') + ', own keys ' + keys);
+      const shared = card.material.customProgramCacheKey() === card2.material.customProgramCacheKey() && progs1 === progs0;
+      check('2D trees: a card is as bright whatever way its tree is turned, and tree types with different centres share one program, each drawn at its own centre',
+            b.every(function (v) { return v > 0 && Math.abs(v - b[0]) <= 3; }) && shared && Math.abs(shift - 4) < 0.6,
+            'green by turn ' + b.join(', ') + ', shared ' + shared + ' (programs ' + progs0 + ' -> ' + progs1 + '), second type ' + (shift || 0).toFixed(2) + ' m over');
       check('2D trees sway in the wind as the 3D trees do (the crown moves along the wind; still with the sway off); a tree turned 180 degrees, model or card, sways the same way',
             swayOn > 3 && swayOff < 0.5 && Math.abs(modelStraight) > 3 && Math.sign(cardTurned) === Math.sign(cardStraight) && Math.sign(modelTurned) === Math.sign(modelStraight) && Math.sign(modelStraight) === Math.sign(cardStraight),
             'crown moved ' + swayOn.toFixed(1) + ' px with the sway on, ' + swayOff.toFixed(1) + ' px off; card ' + cardStraight.toFixed(1) + ' / turned ' + cardTurned.toFixed(1) + ', model ' + modelStraight.toFixed(1) + ' / turned ' + modelTurned.toFixed(1));
@@ -1677,6 +1688,19 @@ function serve() {
       out.attrsAtDispose = attrsAtDispose; out.tplKept = !!sh._cardTpl && sh._cardTpl.pos.array.length === 24;
       for (let i = 0; i < 80; i++) sh.update(i / 30, cam);
       out.rebuilt = sh.cards.size === out.chunks;
+      // no tuft in water: tested once per card corner when a vertex shader can read a texture (else per pixel); a wet water map hides
+      // every tuft, a dry one shows them
+      const tex = function (v) { const t = new THREE.DataTexture(new Uint8Array([v, v, v, 255]), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; return t; };
+      const wetPx = async function (t) {
+        const keep = sh.waterTex; sh.waterTex = t; sh.update(3, cam); sh.waterTex = keep;
+        const only = new THREE.Scene(), meshes = Array.from(sh.cards.values()).filter(function (c) { return c.mesh; }).map(function (c) { return c.mesh; });
+        meshes.forEach(function (m) { only.add(m); });
+        const rt = new THREE.WebGLRenderTarget(160, 106), buf = new Uint8Array(160 * 106 * 4);
+        renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(only, cam); renderer.readRenderTargetPixels(rt, 0, 0, 160, 106, buf);
+        renderer.setRenderTarget(null); rt.dispose(); meshes.forEach(function (m) { scene.add(m); });
+        let n = 0; for (let i = 3; i < buf.length; i += 4) if (buf[i] > 0) n++; return n;
+      };
+      out.water = { vertex: !!(sh._cardMat.defines && 'CARD_WATER_VERTEX' in sh._cardMat.defines), vertexTextures: window._vertexTextures, dry: await wetPx(tex(0)), wet: await wetPx(tex(255)) };
       const btn = document.getElementById('grass-x-cards-1');
       out.shown = !!btn && btn.style.background.replace(/\s/g, '') === 'rgb(74,222,128)';
       out.stored = localStorage.getItem('golf_grass_cards') === '1';
@@ -1686,7 +1710,7 @@ function serve() {
       out.errs = errs.filter(function (e) { return /shader|WebGLProgram/i.test(e); });
       return out;
     });
-    checks.push({ name: '2D grass cards: off by default; on, tufts stand on the grass around the camera (not on the fairway), compile, keep the shared template on a drop, and the buttons switch and remember them', ok: cards.defaultOff && cards.n > 500 && cards.onFairway === 0 && cards.far === 0 && cards.badClass === 0 && cards.attrsAtDispose === 0 && cards.tplKept && cards.rebuilt && cards.shown && cards.stored && cards.off && cards.errs.length === 0, detail: JSON.stringify(cards) });
+    checks.push({ name: '2D grass cards: off by default; on, tufts stand on the grass around the camera (not on the fairway), compile, keep the shared template on a drop, hide in water (tested per corner where the GPU can), and the buttons switch and remember them', ok: cards.water.dry > 200 && cards.water.wet === 0 && cards.water.vertex === (cards.water.vertexTextures === true) && cards.defaultOff && cards.n > 500 && cards.onFairway === 0 && cards.far === 0 && cards.badClass === 0 && cards.attrsAtDispose === 0 && cards.tplKept && cards.rebuilt && cards.shown && cards.stored && cards.off && cards.errs.length === 0, detail: JSON.stringify(cards) });
     // the 2D grass's own sliders, per class: shown while it is on; rough and deep rough each their amount (0-600 %, rebuilt on release)
     // and height (a live uniform per class, nothing rebuilt), semi-rough on / off (then as the rough); clamped and remembered.
     // A class map with three 10 m bands (rough, deep rough, semi-rough) makes each class countable on its own.
