@@ -575,8 +575,10 @@ Mätt på ett genererat hål (kameran i roughen, 3D-gräs MED): minikartan ritad
   1. Ljus & färg Färg, markdetalj på, full pixeltäthet och alla 2D-träd.
   2. Som 1 men utan Ljus & färg.
   3. Som 2 men med pixeltak 1,25.
-  4. Som 3 men utan markdetalj och med 2D-träden glesade till 60 % (`SurroundVeg.setAutoScale`; täthetsinställningen som sparas på hålen rörs inte).
-  5. Som 4 men med pixeltak 1 och 2D-träden på 40 %.
+  4. Som 3 men utan markdetalj och med 2D-träden glesade till 60 % (`SurroundVeg.setAutoScale`; täthetsinställningen som sparas på hålen rörs inte). 3D-gräset och 2D-gräset högst LOW, och träden på banan blir kort från 105 m i stället för 150 m.
+  5. Som 4 men med pixeltak 1, 2D-träden på 40 %, 3D-gräset av och träden som kort från 75 m.
+
+  **Gräset och korten:** nivån sätter tak, inga egna val. `window.setGrassAutoCap(gräs, kort)` (i arcade.html) ritar spelarens gräsnivå (`window._grassChosen`, sparad i `golf_grass_quality`) högst på taket; spelarens val sparas som vanligt även medan taket gäller och ritas igen när taket lyfts. Gräsknapparna visar valet, etiketten t.ex. "MED → LOW (auto)". 2D-gräsets tak går via `setCardCap` i `terrain-shells.js` (`cardLevel()` tar det minsta); nivån slår aldrig på 2D-gräset. Kortavståndet går via `window._autoCardFar` (andel av `PROP_IMPOSTOR_FAR`/`NEAR` i `updatePropLod`).
 
   Pixeltaket går via `window._autoPixelCap` i `getCapPixelRatio`.
 

@@ -5,8 +5,11 @@
  *   1  colour grading (PostFX LOW), ground detail, the full pixel ratio, all the trees in the surroundings and the OB areas
  *   2  grading off
  *   3  pixel ratio at most 1.25
- *   4  ground detail off, the 2D trees thinned to 60 %
- *   5  pixel ratio 1, the 2D trees at 40 %
+ *   4  ground detail off, the 2D trees thinned to 60 %, the 3D grass at most LOW, the 2D grass at most LOW, the trees on the plate
+ *      drawn as cards from 105 m instead of 150 m
+ *   5  pixel ratio 1, the 2D trees at 40 %, the 3D grass off, the trees on the plate as cards from 75 m
+ * The grass levels are caps on the player's choice, not a choice of their own: the player's grass level stays stored and comes back
+ * when the level goes up again (setGrassAutoCap, terrain-shells.js setCardCap). The 2D grass is never turned on by this.
  * Bloom (PostFX HIGH) is never chosen by it: it is the player's. An option the player has set (golf_post_q, golf_ground_detail in
  * localStorage, as the buttons store them) is theirs and is left as it is; the other levers still move. The first start begins at level 1
  * on a computer and 2 on a phone (as before); after that at the level the device ended on (golf_auto_q).
@@ -24,11 +27,13 @@
 (function (root) {
     'use strict';
     const LEVELS = [
-        { post: 'LOW', detail: true,  pixel: Infinity, veg: 1 },
-        { post: 'OFF', detail: true,  pixel: Infinity, veg: 1 },
-        { post: 'OFF', detail: true,  pixel: 1.25,     veg: 1 },
-        { post: 'OFF', detail: false, pixel: 1.25,     veg: 0.6 },
-        { post: 'OFF', detail: false, pixel: 1,        veg: 0.4 }
+        // grass: the highest 3D grass level (null: the player's), cards: the highest 2D grass level, far: the distance at which the trees
+        // on the plate turn into cards, as a share of its normal 150 m
+        { post: 'LOW', detail: true,  pixel: Infinity, veg: 1,   grass: null,  cards: null,  far: 1 },
+        { post: 'OFF', detail: true,  pixel: Infinity, veg: 1,   grass: null,  cards: null,  far: 1 },
+        { post: 'OFF', detail: true,  pixel: 1.25,     veg: 1,   grass: null,  cards: null,  far: 1 },
+        { post: 'OFF', detail: false, pixel: 1.25,     veg: 0.6, grass: 'LOW', cards: 'LOW', far: 0.7 },
+        { post: 'OFF', detail: false, pixel: 1,        veg: 0.4, grass: 'OFF', cards: 'LOW', far: 0.5 }
     ];
     const WINDOW_MS = 3000, SETTLE_MS = 1500, HITCH_MS = 250, MIN_FRAMES = 5;
     const SLOW_MS = 1000 / 45, SMOOTH_MS = 1000 / 57, SMOOTH_P90 = 21, SMOOTH_WINDOWS = 3, BLOCK_MS = 60000;
@@ -103,6 +108,8 @@
             }
         }
         if (root.SurroundVeg && root.SurroundVeg.setAutoScale) root.SurroundVeg.setAutoScale(L.veg);
+        if (typeof root.setGrassAutoCap === 'function') root.setGrassAutoCap(L.grass, L.cards);
+        root._autoCardFar = L.far;
         store('golf_auto_q', String(level + 1));
         syncUI();
     }

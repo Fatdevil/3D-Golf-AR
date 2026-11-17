@@ -35,7 +35,7 @@
 <script src="arcade-perlin.js"></script>
 <script src="terrain-auto-paint.js?v=8"></script>
 <script src="terrain-chunks.js?v=8"></script>
-<script src="terrain-shells.js?v=54"></script>
+<script src="terrain-shells.js?v=55"></script>
 <script src="arcade-perf-hud.js?v=2"></script>
 <script src="arcade-terrain-overlays.js?v=7"></script>
 <script src="arcade-scene-engine.js?v=12"></script>
@@ -44,7 +44,7 @@
 <script src="arcade-particle-engine.js?v=2"></script>
 <script src="arcade-wind-sway.js?v=4"></script>
 <script src="arcade-post.js?v=2"></script>
-<script src="arcade-auto-quality.js?v=2"></script>
+<script src="arcade-auto-quality.js?v=3"></script>
 <script src="arcade-surround-veg.js?v=8"></script>
 <script src="arcade-leaves.js?v=2"></script>
 </head>
@@ -3070,12 +3070,17 @@
         </div> <!-- End of tab-content-TOOLS -->
 
         <script>
+        // q is the chosen level (the player's, or the start's default). The automatic graphics level can cap what is drawn
+        // (window._grassAutoCap, setGrassAutoCap): the choice stays stored and comes back when the cap is lifted.
         window.setGrassQuality = function(q, isAuto) {
             if (!isAuto) {
                 // CODEX H1 FIX: Mark that quality was explicitly set by user so setMode() doesn't overwrite it
                 window._grassQualitySetByPlayer = true;
                 try { localStorage.setItem('golf_grass_quality', q); } catch(e) {}
             }
+            window._grassChosen = q;
+            const chosen = q, order = ['OFF', 'LOW', 'MED', 'HIGH'], cap = window._grassAutoCap;
+            if (cap && order.indexOf(cap) >= 0 && order.indexOf(q) > order.indexOf(cap)) q = cap;
             if (!window._terrainShells) return;
 
             // When switching ON: ensure rough mask is freshly rebuilt from current canvas if dirty
@@ -3093,15 +3098,16 @@
             }
 
             // Update button states
+            // the buttons show the choice; the label says when the automatic graphics level draws less
             ['off','low','med','high'].forEach(function(k) {
                 let btn = document.getElementById('grass-q-' + k);
                 if (btn) {
-                    btn.style.background = k.toUpperCase() === q ? '#4ade80' : '#334155';
-                    btn.style.color = k.toUpperCase() === q ? '#0f172a' : '#94a3b8';
+                    btn.style.background = k.toUpperCase() === chosen ? '#4ade80' : '#334155';
+                    btn.style.color = k.toUpperCase() === chosen ? '#0f172a' : '#94a3b8';
                 }
             });
             let label = document.getElementById('grass-quality-label');
-            if (label) label.textContent = q;
+            if (label) label.textContent = q === chosen ? q : chosen + ' → ' + q + ' (auto)';
             // Show/hide height controls
             let hc = document.getElementById('grass-height-controls');
             if (hc) hc.style.display = q === 'OFF' ? 'none' : 'block';
@@ -3151,6 +3157,17 @@
         // The 2D grass's amount and height sliders per class ('rough', 'deep'): the label follows the slider; apply = false only updates the
         // label (the amount is applied when the slider is let go, as it rebuilds the tufts). Kept in localStorage.
         // The 2D grass's own level (AUTO = the 3D grass's, MED while that is off): kept in localStorage
+        // The automatic graphics level's caps (arcade-auto-quality.js): grass the highest 3D grass level, cards the highest 2D grass
+        // level (null: none). Not stored: the player's own levels are drawn again when the caps are lifted.
+        window.setGrassAutoCap = function(grass, cards) {
+            const g = grass || null, changed = g !== (window._grassAutoCap || null);
+            window._grassAutoCap = g;
+            if (changed && window._grassChosen) window.setGrassQuality(window._grassChosen, true);
+            const sh = window._terrainShells;
+            if (sh && typeof sh.setCardCap === 'function') sh.setCardCap(cards || null);
+            else window._grassCardCapPending = cards || null;   // the shells are made later: the cap is handed over then
+        };
+
         window.setGrassCardQuality = function(q) {
             const sh = window._terrainShells; if (!sh || typeof sh.setCardQuality !== 'function') return;
             sh.setCardQuality(q);
@@ -6089,6 +6106,7 @@
     // v6: Shells render directly on master geometry — no chunk dependency
     if (window.TerrainShellManager) {
         window._terrainShells = new TerrainShellManager(planeGeo, plane, scene, mapTex, window.roughMaskTex, waterTex);
+        if (window._grassCardCapPending !== undefined) { window._terrainShells.setCardCap(window._grassCardCapPending); delete window._grassCardCapPending; }   // the automatic graphics level's 2D grass cap, set before the shells existed
     }
 
     // === TERRAIN CHUNKING: Split into 8x8 frustum-culled chunks with distance LOD ===
@@ -8027,7 +8045,9 @@
                 let far = false;
                 if (useCards && ch.impostorMesh && ch.sphere) {
                     const d = cp.distanceTo(ch.sphere.center) - ch.sphere.radius;
-                    far = ch.far ? d > PROP_IMPOSTOR_NEAR : d > PROP_IMPOSTOR_FAR;
+                    // the automatic graphics level can bring the cards closer (window._autoCardFar, a share of the distances)
+                    const k = window._autoCardFar > 0 ? window._autoCardFar : 1;
+                    far = ch.far ? d > PROP_IMPOSTOR_NEAR * k : d > PROP_IMPOSTOR_FAR * k;
                 }
                 if (far !== ch.far) {
                     ch.far = far;
