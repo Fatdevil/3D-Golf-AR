@@ -50,7 +50,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     server.kill(); await pool.end();
   }
   try {
-    for (let i = 0; i < 60; i++) { try { await new Promise(function (res, rej) { http.get(BASE + '/api/health', function (r) { let b = ''; r.on('data', function (c) { b += c; }); r.on('end', function () { /"db_connected":true/.test(b) ? res() : rej(); }); }).on('error', rej); }); break; } catch (e) { await wait(500); if (i === 59) throw new Error('server did not start'); } }
+    for (let i = 0; i < 60; i++) { try { await new Promise(function (res, rej) { http.get(BASE + '/api/health', function (r) { let b = ''; r.on('data', function (c) { b += c; }); r.on('end', function () { (/"db_connected":true/.test(b) && !/"schema_ready":false/.test(b)) ? res() : rej(); }); }).on('error', rej); }); break; } catch (e) { await wait(500); if (i === 59) throw new Error('server did not start'); } }
 
     browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
     const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, serviceWorkers: 'block' });

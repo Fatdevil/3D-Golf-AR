@@ -292,8 +292,10 @@ async function initDB() {
 }
 
 // Kör initDB om DATABASE_URL finns
+// SCHEMA_READY: every table and column above exists (the e2e tests wait for it before they write rows of their own)
+let SCHEMA_READY = !process.env.DATABASE_URL;
 if(process.env.DATABASE_URL) {
-    initDB();
+    initDB().then(() => { SCHEMA_READY = true; });
 }
 
 // --- HEALTH & DB CHECK ---
@@ -311,7 +313,7 @@ if (process.env.DATABASE_URL) {
 }
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', db_connected: DB_AVAILABLE });
+    res.json({ status: 'ok', db_connected: DB_AVAILABLE, schema_ready: SCHEMA_READY });
 });
 
 // Middleware: If no database, return graceful empty responses
