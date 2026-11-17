@@ -252,6 +252,12 @@
                     sg.setIndex(card.shadowGeometry.index);
                     for (const k in card.shadowGeometry.attributes) sg.setAttribute(k, card.shadowGeometry.attributes[k]);
                     const sm = new THREE.InstancedMesh(sg, card.shadowMaterial, list.length);
+                    // The shadow material is shared with the shadows of the far-away trees on the plate (arcade.html makeImpostorMesh),
+                    // and those carry a colour per tree. three.js r128 keeps one program per material and does not notice that the
+                    // next mesh has no instanceColor: when a plate shadow was drawn first, drawing this one threw in every frame
+                    // (it read the missing attribute) and the rest of the picture was not drawn. So this one carries a colour too
+                    // (white: the shadow shader does not use it).
+                    sm.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(list.length * 3).fill(1), 3);
                     list.forEach(function (p, i) {
                         pos.set(p[0], p[4], p[1]); scl.set(p[2], p[2], p[2]); tq.setFromAxisAngle(yAxis, p[3] * Math.PI * 2);
                         mtx.compose(pos, tq, scl);
