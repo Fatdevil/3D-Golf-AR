@@ -19,12 +19,13 @@ function check(name, ok, detail) {
 const src = fs.readFileSync(path.join(__dirname, '..', 'arcade-auto-quality.js'), 'utf8');
 function load(store) {
   const ls = { getItem: function (k) { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; }, setItem: function (k, v) { store[k] = String(v); }, removeItem: function (k) { delete store[k]; } };
-  const calls = { post: [], detail: [], veg: [] };
+  const calls = { post: [], detail: [], veg: [], grass: [] };
   let post = 'LOW';
   const win = {
     PostFX: { level: function () { return post; }, setLevel: function (q) { post = q; calls.post.push(q); } },
     setGroundDetail: function (on) { calls.detail.push(on); },
     SurroundVeg: { setAutoScale: function (f) { calls.veg.push(f); } },
+    setGrassAutoCap: function (g, c) { calls.grass.push([g, c]); },
     getAppMode: function () { return 'PLAY'; }
   };
   new Function('window', 'globalThis', 'localStorage', src)(win, win, ls);
@@ -77,6 +78,12 @@ console.log('\n2. Spakarna');
   win.getCapPixelRatio = function () { return 1; };
   A.setLevel(5);
   check('nivå 5: ljus & färg av, markdetalj av, pixeltak 1, 2D-träd 40 %', calls.post.slice(-1)[0] === 'OFF' && calls.detail.slice(-1)[0] === false && win._autoPixelCap === 1 && calls.veg.slice(-1)[0] === 0.4 && store.golf_auto_q === '5');
+  check('nivå 5: 3D-gräset av, 2D-gräset högst LOW, träden blir kort från halva avståndet', JSON.stringify(calls.grass.slice(-1)[0]) === '["OFF","LOW"]' && win._autoCardFar === 0.5);
+  A.setLevel(4);
+  check('nivå 4: 3D-gräset högst LOW, 2D-gräset högst LOW, kort från 70 % av avståndet', JSON.stringify(calls.grass.slice(-1)[0]) === '["LOW","LOW"]' && win._autoCardFar === 0.7);
+  A.setLevel(3);
+  check('nivå 3: inget tak på gräset, korten på vanligt avstånd', JSON.stringify(calls.grass.slice(-1)[0]) === '[null,null]' && win._autoCardFar === 1);
+  check('nivåerna sänker aldrig mindre längre ner (gräs, kortavstånd)', A.LEVELS.every(function (L, i) { const o = [null, 'HIGH', 'MED', 'LOW', 'OFF'], p = A.LEVELS[i - 1]; return !p || (L.far <= p.far && o.indexOf(L.grass) >= o.indexOf(p.grass)); }));
   A.setLevel(1);
   check('nivå 1: allt på igen', calls.post.slice(-1)[0] === 'LOW' && calls.detail.slice(-1)[0] === true && win._autoPixelCap === Infinity && calls.veg.slice(-1)[0] === 1);
   store.golf_post_q = 'HIGH'; store.golf_ground_detail = '1';

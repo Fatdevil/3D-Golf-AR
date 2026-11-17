@@ -1225,7 +1225,21 @@
         }
 
         // the level the 2D grass runs at: its own, or the 3D grass's (MED while that is off)
-        cardLevel() { return this.cardQuality !== 'AUTO' ? this.cardQuality : (CARDS[this.quality] ? this.quality : 'MED'); }
+        cardLevel() {
+            const q = this.cardQuality !== 'AUTO' ? this.cardQuality : (CARDS[this.quality] ? this.quality : 'MED');
+            // the automatic graphics level's cap (arcade-auto-quality.js): never above it, never turned on by it
+            const order = ['LOW', 'MED', 'HIGH'], cap = this.cardCap;
+            return cap && order.indexOf(cap) >= 0 && order.indexOf(q) > order.indexOf(cap) ? cap : q;
+        }
+
+        // The automatic graphics level's cap on the 2D grass (null: none). A new level means a new reach and density: the chunks go
+        setCardCap(cap) {
+            cap = cap || null;
+            if (cap === (this.cardCap || null)) return;
+            const before = this.cardLevel();
+            this.cardCap = cap;
+            if (this.cardLevel() !== before) this._clearCards();
+        }
 
         _cardPreset() {
             const p = CARDS[this.cardLevel()];

@@ -364,6 +364,27 @@ function serve() {
             up === 4 && mine === 'LOW' && fixed === fixedAt && renderer.getPixelRatio() === prWas,
             JSON.stringify({ at1: at1, one: one, low: low, up: up, mine: mine, fixedAt: fixedAt, fixed: fixed, pr: renderer.getPixelRatio(), prWas: prWas }));
     })();
+    // the automatic graphics level caps the grass (not the player's choice, which stays stored and comes back) and brings the trees'
+    // cards closer; the 2D grass is never turned on by it
+    (function () {
+      const A = window.AutoQuality, sh = window._terrainShells, lvWas = A.level();
+      const storedQ = localStorage.getItem('golf_grass_quality'), chosenWas = window._grassChosen || sh.quality;
+      const cardsOnWas = sh.cardsOn, cardQWas = sh.cardQuality;
+      window.setGrassQuality('MED', true); sh.setCardQuality('HIGH');
+      A.setLevel(1); const l1 = { q: sh.quality, cards: sh.cardLevel(), far: window._autoCardFar };
+      A.setLevel(4); const l4 = { q: sh.quality, cards: sh.cardLevel(), far: window._autoCardFar, chosen: window._grassChosen, label: (document.getElementById('grass-quality-label') || {}).textContent };
+      A.setLevel(5); const l5 = { q: sh.quality, cards: sh.cardLevel(), far: window._autoCardFar, cardsOn: sh.cardsOn, stored: localStorage.getItem('golf_grass_quality') };
+      A.setLevel(1); const back = { q: sh.quality, cards: sh.cardLevel(), far: window._autoCardFar };
+      // a choice made while capped is stored as the choice, and drawn capped
+      A.setLevel(5); window.setGrassQuality('HIGH', true); const capped = { q: sh.quality, chosen: window._grassChosen };
+      A.setLevel(lvWas); window.setGrassQuality(chosenWas, true); sh.setCardQuality(cardQWas); sh.setCards(cardsOnWas);
+      if (storedQ === null) localStorage.removeItem('golf_grass_quality'); else localStorage.setItem('golf_grass_quality', storedQ);
+      check('automatic graphics: level 4 caps the 3D and 2D grass at LOW and brings the tree cards to 70 % of the distance, level 5 turns the 3D grass off and the cards to 50 %; the chosen level stays and comes back at level 1; the 2D grass is not turned on',
+            l1.q === 'MED' && l1.cards === 'HIGH' && l1.far === 1 && l4.q === 'LOW' && l4.cards === 'LOW' && l4.far === 0.7 && l4.chosen === 'MED' && /MED.*LOW/.test(l4.label || '') &&
+            l5.q === 'OFF' && l5.cards === 'LOW' && l5.far === 0.5 && l5.cardsOn === cardsOnWas && l5.stored === storedQ &&
+            back.q === 'MED' && back.cards === 'HIGH' && back.far === 1 && capped.q === 'OFF' && capped.chosen === 'HIGH',
+            JSON.stringify({ l1: l1, l4: l4, l5: l5, back: back, capped: capped }));
+    })();
     // vegetation in the surroundings (arcade-surround-veg.js): AUTO follows the ground of each side (deep rough a forest, waste palms,
     // ocean nothing); the trees stand outside the plate on the side they belong to, take no click, and the setting is saved on the holes
     await (async function () {
