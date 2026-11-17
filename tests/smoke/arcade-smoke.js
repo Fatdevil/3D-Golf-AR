@@ -1946,6 +1946,49 @@ function serve() {
       surU[tool] = await pu.evaluate(function () { const inScene = !!window.surroundPlane.parent; if (!inScene) scene.add(window.surroundPlane); return inScene; });
     }
     checks.push({ name: 'a right-click with the block tool or the mountain stamp on the ground around the course leaves that ground in the picture', ok: surU.point && surU.BLOCK === true && surU.MTN === true, detail: JSON.stringify(surU) });
+    // The shadows under the belt's 2D trees share a material with the shadows under the far-away trees on the plate. Those carry a
+    // colour per tree; the belt's did not, and three.js r128 keeps one program per material: once a plate shadow had been drawn, the
+    // belt's shadow threw in every frame and the rest of the picture was not drawn. Here: far trees on the plate drawn as cards first,
+    // then the belt grows (and again, as the automatic graphics level does), and no frame throws.
+    undoStep = 'belt shadows after plate shadows';
+    const pb = await ctxU.newPage();
+    const beltErrors = [];
+    pb.on('pageerror', function (e) { beltErrors.push(e.message.slice(0, 120)); });
+    await pb.goto(base + '/arcade.html?autorun=new_build&mode=range', { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await pb.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
+    await pb.waitForTimeout(4000);
+    const beltSetup = await pb.evaluate(async function () {
+      const g = new THREE.Group(), leaves = new THREE.Mesh(new THREE.ConeGeometry(3, 8, 12, 4), new THREE.MeshLambertMaterial({ color: 0x2f7a2f }));
+      leaves.position.y = 7; g.add(leaves);
+      window.customModels = window.customModels || {}; window.customModels.zz_belt = g; window.ASSET_REGISTRY.zz_belt = { subcat: 'TREES', name: 'zz_belt' };
+      // trees far from the tee, so their squares are drawn as cards (with a shadow each) in test mode
+      for (let i = 0; i < 60; i++) window.placedTrees.push({ type: 'zz_belt', x: -250 + (i % 10) * 55, z: -260 + Math.floor(i / 10) * 30, y: 0, scale: 1, rot: i });
+      window.rebuildInstancePool('zz_belt');
+      const h = courseHoles[0]; h.tees = h.tees || {};
+      h.tees.range = { x: 0, y: window.getTerrainHeight ? window.getTerrainHeight(0, 250) : 0, z: 250, rot: Math.PI };
+      ['N', 'E', 'S', 'W'].forEach(function (sd) { window.SurroundVeg.setSide(sd, 'NONE'); });
+      window.confirm = function () { return true; };
+      setMode('TEST');
+      await new Promise(function (r) { setTimeout(r, 2500); });
+      let far = 0, shadows = 0;
+      for (const t in window.instancePools) { const p = window.instancePools[t]; if (p && p.chunks) p.chunks.forEach(function (c) { if (c.far) { far++; if (c.shadowMesh && c.shadowMesh.visible) shadows++; } }); }
+      return { mode: appMode, far: far, shadows: shadows };
+    });
+    const beforeBelt = beltErrors.length;
+    await pb.evaluate(function () { window.SurroundVeg.setSide('N', 'CUSTOM'); window.SurroundVeg.toggleCustom('zz_belt'); });
+    await pb.waitForTimeout(3000);
+    await pb.evaluate(function () { window.SurroundVeg.setAutoScale(0.6); });
+    await pb.waitForTimeout(2500);
+    const beltState = await pb.evaluate(function () {
+      const sh = window.SurroundVeg.meshes().filter(function (m) { return m.userData.surroundVeg.shadow; });
+      let plate = null;
+      for (const t in window.instancePools) { const p = window.instancePools[t]; if (p && p.chunks) p.chunks.forEach(function (c) { if (!plate && c.shadowMesh) plate = c.shadowMesh; }); }
+      return { trees: window.SurroundVeg.count(), shadowMeshes: sh.length, withColour: sh.filter(function (m) { return !!m.instanceColor; }).length, sharedMaterial: !!(plate && sh.length && sh[0].material === plate.material) };
+    });
+    checks.push({ name: 'belt shadows grown after the plate\'s far-tree shadows were drawn: no frame throws (they share a material, both carry a colour per tree)',
+      ok: beltSetup.mode === 'TEST' && beltSetup.shadows > 0 && beltState.trees > 0 && beltState.shadowMeshes > 0 && beltState.withColour === beltState.shadowMeshes && beltState.sharedMaterial && beltErrors.length === beforeBelt,
+      detail: JSON.stringify({ setup: beltSetup, belt: beltState, errorsBefore: beforeBelt, errorsAfter: beltErrors.length, first: beltErrors[beforeBelt] || '' }) });
+    await pb.close();
     await ctxU.close();
   } catch (e) { checks.push({ name: 'undo checks ran', ok: false, detail: 'step ' + undoStep + ': ' + String(e.message).split('\n')[0].slice(0, 160) }); }
 
