@@ -11,7 +11,9 @@
 
     const COLORS = { ok: '#4ade80', warn: '#fbbf24', bad: '#f87171' };
     const WALK_LONG = 150;                      // m from a green to the next tee: longer is flagged on the map
-    const NEAR_RINGS = [35, 50, 65, 80, 100, 125, 155, 190, 220];   // m from the previous green where a new hole's tee is looked for first
+    const NEAR_RINGS = [35, 50, 65, 80, 100, 125, 155, 190, 220];
+    const AHEAD_RINGS = [35, 55, 80, 110];   // m from a candidate green where the next hole's tee is tried (look-ahead)
+    const NO_NEXT_ROOM = 400;                // score penalty for a spot that leaves the next hole no room near this green   // m from the previous green where a new hole's tee is looked for first
     let S = null;   // open map state
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
@@ -374,12 +376,52 @@
         cur().heading += delta;
         settle(S.sel);
     }
+    // What comes after sketch i in the round: { plan } when the next hole is empty and not sketched yet (a typical, straight hole
+    // of its par stands in for it), { tee } when the next hole is built (its back tee), else null
+    function lookAhead(i) {
+        const HG = root.HoleGenerator, next = S.holes[i] + 1, k = S.holes.indexOf(next);
+        if (k >= 0) {
+            if (k < S.sketches.length) return null;   // already sketched: its own placement takes care of the walk
+            const h = root.courseHoles && root.courseHoles[next];
+            const par = clamp((h && h.par) || 4, 3, 6);
+            S.proxy = S.proxy || {};
+            if (!S.proxy[par]) {
+                let p = null;
+                for (let seed = 1; seed < 200; seed++) { p = HG.planFor(par, seed); if (!p.dogleg && p.length <= (HG.RULES[par].len[0] + HG.RULES[par].len[1]) / 2) break; }
+                S.proxy[par] = p;
+            }
+            return { plan: S.proxy[par] };
+        }
+        const h = root.courseHoles && root.courseHoles[next];
+        const tb = h && (h.teeBoxes || []).filter(function (t) { return t && t.points && t.points.length >= 3; })[0];
+        if (!tb) return null;
+        let x = 0, z = 0;
+        tb.points.forEach(function (p) { x += p.x; z += p.z; });
+        return { tee: { x: x / tb.points.length, z: z / tb.points.length } };
+    }
+    // Does `plan` (the stand-in for the next hole) fit with its tee near the green of `world` (this hole, placed)?
+    // env is this hole's environment: its soft neighbours become hard again, and this hole's green is soft for the next tee.
+    function nextFits(plan, world, env) {
+        const HG = root.HoleGenerator, split = HG.obstaclesSplit(world, 'green');
+        const hard = env.others.polygons.concat(split.polygons);
+        (env.others.soft || []).forEach(function (g) { g.polygons.forEach(function (p) { hard.push(p); }); });
+        const env2 = Object.assign({}, env, { others: { points: env.others.points.concat(split.points), polygons: hard, soft: [{ polygons: split.soft, mine: 'tee' }] } });
+        const g = world.greenCenter;
+        for (let r = 0; r < AHEAD_RINGS.length; r++) for (let a = 0; a < 12; a++) {
+            const ang = a / 12 * Math.PI * 2, o = { x: g.x + Math.cos(ang) * AHEAD_RINGS[r], z: g.z + Math.sin(ang) * AHEAD_RINGS[r] };
+            for (let t = 0; t < 6; t++) if (HG.evaluateSite(plan, o, ang + (t - 2.5) * 0.5, env2).ok) return true;
+        }
+        return false;
+    }
     // Find a good starting spot for sketch i: random tries first, then the closest legal spot around a few
     // anchor points, and finally another shape (a crowded map may only have room for a smaller one).
     // Each step runs in its own timer tick (the page stays responsive and the map can be closed) and the
     // whole search shares one deadline.
     // The search starts next to the previous green: rings outward, and from the first ring with room plus the one after it the best
     // spot wins (short walk, no reshaping, and a green that ends away from the map edge, so the NEXT hole also finds room near it).
+    // Look-ahead: when the next hole is still to be planned, a spot only counts as good if a typical hole of the next par still
+    // fits near ITS green (otherwise the next hole is pushed far away and the walk gets long); when the next hole is already built,
+    // the walk from this green to its tee counts too.
     // A shape that has no room there is swapped for another of the same par a few times (a shorter or straighter one often fits)
     // before the search falls back to the open map.
     function suggest(i) {
@@ -392,9 +434,13 @@
         const pg = prevGreen(i) || (S.holes[i] === 0 ? { x: starts[0], z: starts[1] } : null);
         let round = 0, step = pg ? -2 : -1;
         let ring = 0, cand = 0, best = null, lastRing = NEAR_RINGS.length - 1, nearShapes = 0;
-        const score = function (r, ev) {
+        const ahead = lookAhead(i);
+        const score = function (r, ev, env) {
             const g = ev.world.greenCenter, room = Math.min(150, S.half - Math.max(Math.abs(g.x), Math.abs(g.z)));
-            return r + ((ev.shaped && ev.shaped.length) ? 60 : 0) - 0.6 * room;
+            let sc = r + ((ev.shaped && ev.shaped.length) ? 60 : 0) - 0.6 * room;
+            if (ahead && ahead.tee) sc += Math.hypot(g.x - ahead.tee.x, g.z - ahead.tee.z);
+            const good = !(ahead && ahead.plan) || nextFits(ahead.plan, ev.world, env);
+            return { score: sc + (good ? 0 : NO_NEXT_ROOM), good: good };
         };
         const ANGLES = 16, TURNS = [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.6, -2.6, Math.PI];   // away from the green first
         S.busy = true; refreshUi();
@@ -421,9 +467,10 @@
                     const h = a + turn;   // play away from the green just finished
                     const ev = HG.evaluateSite(s.plan, o, h, env);
                     if (!ev.ok) continue;
-                    const sc = score(r, ev);
-                    if (!best) lastRing = Math.min(lastRing, ring + 1);
-                    if (!best || sc < best.score) best = { origin: o, heading: h, score: sc };
+                    const sc = score(r, ev, env);
+                    // the ring search ends one ring after the first spot that leaves room for the next hole
+                    if (sc.good && !(best && best.good)) lastRing = Math.min(lastRing, ring + 1);
+                    if (!best || sc.score < best.score) best = { origin: o, heading: h, score: sc.score, good: sc.good };
                 }
                 if (cand < total && Date.now() <= deadline) { setTimeout(tick, 0); return; }
                 ring++; cand = 0;
