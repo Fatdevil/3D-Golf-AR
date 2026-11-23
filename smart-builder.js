@@ -4362,7 +4362,9 @@ window.activateTeeLayoutMode = function() {
     window.showBuildToast(isSv ? '📍 Klicka på kartan där bak-teen ska ligga (Esc avbryter)' : '📍 Click the map where the back tee goes (Esc cancels)', '#38bdf8');
 };
 
-window.buildStandardTeeLayout = function(x, z) {
+// slots (optional): where each box (back / middle / front) stands, { f: metres along the line toward the target, l: metres to the left },
+// as HoleGenerator.teeSlots plans it (longer holes spread the boxes, a short par 3 steps them sideways). Without it: PITCH apart.
+window.buildStandardTeeLayout = function(x, z, slots) {
     let hole = window.courseHoles && window.courseHoles[window.currentHoleIndex];
     let target = hole && (hole.aimPoint || hole.flag || window.deriveTeeAim(hole));   // read-only until placement succeeds
     if (!target) { window._placingTeeLayout = false; return true; }
@@ -4394,7 +4396,9 @@ window.buildStandardTeeLayout = function(x, z) {
     window.ensureTeeAimPoint(hole);
     groups.forEach(function(g) {
         let colors = g.colors;
-        let cx = x + dx * PITCH * g.slot, cz = z + dz * PITCH * g.slot;
+        let sl = slots && slots[g.slot];
+        let fwd = sl && isFinite(sl.f) ? sl.f : PITCH * g.slot, lat = sl && isFinite(sl.l) ? sl.l : 0;
+        let cx = x + dx * fwd + px * lat, cz = z + dz * fwd + pz * lat;
         let pts = [[-HALF_W, -HALF_D], [HALF_W, -HALF_D], [HALF_W, HALF_D], [-HALF_W, HALF_D]].map(function(o) {
             let wx = cx + px * o[0] + dx * o[1], wz = cz + pz * o[0] + dz * o[1];
             let surf = window.localGetTerrainAt ? window.localGetTerrainAt(wx, -wz) : null;
