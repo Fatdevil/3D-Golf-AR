@@ -55,6 +55,10 @@ const centre = function (b) { let x = 0, z = 0; b.forEach(function (p) { x += p.
   check('dry ground: ok, no carry', dry.ok && !dry.carry);
   const over = HG.evaluateSite(plan, o, 0, pond(20, 50));
   check('par 3 over a pond: ok, with the carry from both tees', over.ok && over.carry && over.carry.front > 0 && over.carry.back > over.carry.front && over.carry.segs.length === 1, over.carry);
+  // a short par 3 steps the front tee sideways: water just ahead of it is still a carry for it
+  const p7 = HG.planFor(3, 7), w7 = HG.worldPlan(p7, { x: 0, z: 0 }, 0), f7 = centre(w7.teeBoxes[2]);
+  const side = HG.evaluateSite(p7, { x: 0, z: 0 }, 0, Object.assign({}, base, { isWater: function (x, z) { return x > f7.x + 3 && x < f7.x + 8 && Math.abs(z) < 40; } }));
+  check('water just ahead of a sideways front tee counts as its carry', side.ok && side.carry && side.carry.front > 0, side.carry && [side.carry.front, side.carry.back]);
   const wetGreen = HG.evaluateSite(plan, o, 0, pond(plan.length - 60, plan.length - 40));
   check('water under the green is still refused', !wetGreen.ok && wetGreen.reasons[0] === 'water', wetGreen.reasons);
   // A generated par 3 never leaves more than ~110 m from the front tee to the green's front edge, so the limit is a safety net:

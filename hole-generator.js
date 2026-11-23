@@ -778,7 +778,9 @@
         let centre = function (box) { let x = 0, z = 0; box.forEach(function (p) { x += p.x; z += p.z; }); return { x: x / box.length, z: z / box.length }; };
         let boxes = wp.teeBoxes || [];
         let back = boxes.length ? centre(boxes[0]) : wp.tee, front = boxes.length ? centre(boxes[boxes.length - 1]) : wp.tee;
-        let frontS = Math.hypot(front.x - back.x, front.z - back.z);
+        // how far along the line of play the front tee stands: its projection, not its distance (a short par 3 steps the
+        // boxes sideways, so the front tee can be far from the back tee yet only a little way up the line)
+        let frontS = (wp.teeSlots && wp.teeSlots[2]) ? wp.teeSlots[2].f : Math.hypot(front.x - back.x, front.z - back.z);
         let segs = [], start = -1, s = 0, res = { front: 0, back: 0, segs: segs };
         for (let i = 0; i <= pts.length; i++) {
             if (i > 0 && i < pts.length) s += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
