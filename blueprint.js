@@ -680,7 +680,7 @@
         const holes = emptyHolesFrom(root.currentHoleIndex);
         const half = (root.TERRAIN_SIZE || 600) / 2;
         const par = clamp(hole.par || 4, 3, 6);
-        const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 424, 760)));
+        const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 376, 760)));
         const dpr = Math.min(2, window.devicePixelRatio || 1);
 
         const overlay = document.createElement('div');
