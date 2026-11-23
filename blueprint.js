@@ -376,21 +376,21 @@
         cur().heading += delta;
         settle(S.sel);
     }
-    // What comes after sketch i in the round: { plan } when the next hole is empty and not sketched yet (a typical, straight hole
-    // of its par stands in for it), { tee } when the next hole is built (its back tee), else null
+    // What comes after sketch i in the round: { plan } when the next hole is empty and not sketched yet, { tee } when the next
+    // hole is built (its back tee), else null. The next hole's shape is drawn now (S.pending) and kept for when it is added, so
+    // the look-ahead tests the very shape that will have to fit.
     function lookAhead(i) {
         const HG = root.HoleGenerator, next = S.holes[i] + 1, k = S.holes.indexOf(next);
         if (k >= 0) {
             if (k < S.sketches.length) return null;   // already sketched: its own placement takes care of the walk
             const h = root.courseHoles && root.courseHoles[next];
             const par = clamp((h && h.par) || 4, 3, 6);
-            S.proxy = S.proxy || {};
-            if (!S.proxy[par]) {
-                let p = null;
-                for (let seed = 1; seed < 200; seed++) { p = HG.planFor(par, seed); if (!p.dogleg && p.length <= (HG.RULES[par].len[0] + HG.RULES[par].len[1]) / 2) break; }
-                S.proxy[par] = p;
+            S.pending = S.pending || {};
+            if (!S.pending[next] || S.pending[next].par !== par) {
+                const seed = Math.floor(Math.random() * 1e9);
+                S.pending[next] = { par: par, seed: seed, plan: HG.planFor(par, seed) };
             }
-            return { plan: S.proxy[par] };
+            return { plan: S.pending[next].plan };
         }
         const h = root.courseHoles && root.courseHoles[next];
         const tb = h && (h.teeBoxes || []).filter(function (t) { return t && t.points && t.points.length >= 3; })[0];
@@ -509,8 +509,13 @@
     function addHole() {
         if (S.busy || S.sketches.length >= S.holes.length) return;
         // keep the par the target hole already has (building syncs the hole to its sketch's par)
-        const target = root.courseHoles && root.courseHoles[S.holes[S.sketches.length]];
-        S.sketches.push(makeSketch(clamp((target && target.par) || 4, 3, 6)));
+        const idx = S.holes[S.sketches.length], target = root.courseHoles && root.courseHoles[idx];
+        const par = clamp((target && target.par) || 4, 3, 6), sk = makeSketch(par);
+        // the shape the previous hole's placement already made room for
+        const pend = S.pending && S.pending[idx];
+        if (pend && pend.par === par) { sk.seed = pend.seed; sk.plan = pend.plan; }
+        if (S.pending) delete S.pending[idx];
+        S.sketches.push(sk);
         S.sel = S.sketches.length - 1;
         S.note = null; S.noteBad = false;
         suggest(S.sel);
