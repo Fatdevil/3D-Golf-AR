@@ -10,6 +10,8 @@
     if (typeof document === 'undefined') return;
 
     const COLORS = { ok: '#4ade80', warn: '#fbbf24', bad: '#f87171' };
+    const WALK_LONG = 150;                      // m from a green to the next tee: longer is flagged on the map
+    const NEAR_RINGS = [35, 50, 65, 80, 100, 125, 155, 190, 220];   // m from the previous green where a new hole's tee is looked for first
     let S = null;   // open map state
 
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
@@ -59,15 +61,21 @@
     // ---- sketches ----------------------------------------------------------------------------------------
     function cur() { return S.sketches[S.sel]; }
     function holeNo(i) { return S.holes[i] + 1; }
-    // The base environment plus every OTHER sketch as an obstacle
+    // The base environment plus every OTHER sketch as an obstacle.
+    // Neighbours in the round (by hole number, built or sketched) are softer: the previous hole's green may lie
+    // HoleGenerator.TEE_NEAR (not CLEARANCE) from this hole's tee boxes, and the next hole's tee boxes that close to this green,
+    // so the walk between them can be short
     function envFor(i) {
-        const HG = root.HoleGenerator, base = S.baseEnv;
-        const others = { points: (base.others.points || []).slice(), polygons: (base.others.polygons || []).slice() };
+        const HG = root.HoleGenerator, base = S.baseEnv, idx = S.holes[i];
+        const others = HG.neighbourOthers(base.others, idx);
+        others.points = others.points.slice(); others.polygons = others.polygons.slice();
         S.sketches.forEach(function (s, j) {
             if (j === i || !s.ev) return;
-            const o = HG.obstaclesOf(s.ev.world);
+            const nb = S.holes[j] === idx - 1 ? 'green' : (S.holes[j] === idx + 1 ? 'tee' : null);
+            const o = nb ? HG.obstaclesSplit(s.ev.world, nb) : HG.obstaclesOf(s.ev.world);
             o.points.forEach(function (p) { others.points.push(p); });
             o.polygons.forEach(function (p) { others.polygons.push(p); });
+            if (nb) others.soft.push({ polygons: o.soft, mine: nb === 'green' ? 'tee' : 'green' });
         });
         return Object.assign({}, base, { others: others });
     }
@@ -82,6 +90,28 @@
     function makeSketch(par) {
         const seed = Math.floor(Math.random() * 1e9);
         return { par: par, seed: seed, plan: root.HoleGenerator.planFor(par, seed), origin: { x: 0, z: 0 }, heading: 0, ev: null };
+    }
+
+    // Where the player walks from to reach sketch i's tee: the green of the hole numbered just before it, a sketch or a built hole.
+    // null when there is none.
+    function prevGreen(i) {
+        const j = S.holes.indexOf(S.holes[i] - 1);
+        if (j >= 0 && j < S.sketches.length) { const ev = S.sketches[j].ev; return ev ? ev.world.greenCenter : null; }
+        if (j >= 0) return null;   // an empty hole without a sketch: no green to walk from
+        const h = root.courseHoles && root.courseHoles[S.holes[i] - 1];
+        if (!h) return null;
+        if (h.flag && typeof h.flag.x === 'number') return { x: h.flag.x, z: h.flag.z };
+        const g = h.greenData && h.greenData.points;
+        if (g && g.length >= 3) {
+            let x = 0, z = 0;
+            g.forEach(function (p) { x += p.x; z += p.z; });
+            return { x: x / g.length, z: z / g.length };
+        }
+        return null;
+    }
+    function walkOf(i) {
+        const g = prevGreen(i), o = S.sketches[i].origin;
+        return g && S.sketches[i].ev ? Math.round(Math.hypot(o.x - g.x, o.z - g.z)) : null;
     }
 
     // ---- geometry helpers --------------------------------------------------------------------------------
@@ -125,6 +155,12 @@
         ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath();
         wp.centerline.forEach(function (p, k) { if (k) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
         ctx.stroke(); ctx.setLineDash([]);
+        // water the shot has to carry
+        if (ev.ok && ev.carry) {
+            ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = selected ? 4 : 3;
+            ev.carry.segs.forEach(function (sg) { ctx.beginPath(); ctx.moveTo(cx(sg.a.x), cz(sg.a.z)); ctx.lineTo(cx(sg.b.x), cz(sg.b.z)); ctx.stroke(); });
+            ctx.lineWidth = selected ? 2.5 : 1.5;
+        }
         ctx.strokeStyle = col;
         wp.bunkers.forEach(function (b) { polyPath(ctx, b); ctx.fillStyle = 'rgba(253,230,138,0.9)'; ctx.fill(); ctx.stroke(); });
         polyPath(ctx, wp.green); ctx.fillStyle = ev.ok ? (warn ? 'rgba(245,158,11,0.9)' : 'rgba(34,197,94,0.85)') : 'rgba(239,68,68,0.8)'; ctx.fill(); ctx.stroke();
@@ -166,16 +202,29 @@
         // fences, walls and OB lines
         ctx.strokeStyle = 'rgba(146,64,14,0.95)'; ctx.lineWidth = 2.5;
         (S.baseEnv.walls || []).forEach(function (w) { ctx.beginPath(); ctx.moveTo(cx(w.a.x), cz(w.a.z)); ctx.lineTo(cx(w.b.x), cz(w.b.z)); ctx.stroke(); });
-        // the walk from each green to the next tee
-        ctx.setLineDash([3, 7]); ctx.strokeStyle = 'rgba(250,204,21,0.85)'; ctx.lineWidth = 2;
-        for (let i = 0; i < S.sketches.length - 1; i++) {
-            const a = S.sketches[i].ev, b = S.sketches[i + 1].ev;
-            if (!a || !b) continue;
-            ctx.beginPath(); ctx.moveTo(cx(a.world.greenCenter.x), cz(a.world.greenCenter.z)); ctx.lineTo(cx(S.sketches[i + 1].origin.x), cz(S.sketches[i + 1].origin.z)); ctx.stroke();
+        // the walk from each green to the next tee, with its length (red when it is a long walk)
+        ctx.lineWidth = 2;
+        const labels = [];
+        for (let i = 0; i < S.sketches.length; i++) {
+            const g = prevGreen(i), d = walkOf(i);
+            if (!g || d === null) continue;
+            const o = S.sketches[i].origin, long = d > WALK_LONG;
+            ctx.setLineDash([3, 7]); ctx.strokeStyle = long ? 'rgba(248,113,113,0.95)' : 'rgba(250,204,21,0.85)';
+            ctx.beginPath(); ctx.moveTo(cx(g.x), cz(g.z)); ctx.lineTo(cx(o.x), cz(o.z)); ctx.stroke();
+            labels.push({ x: (cx(g.x) + cx(o.x)) / 2, y: (cz(g.z) + cz(o.z)) / 2, text: '🚶 ' + d + ' m', long: long });
         }
         ctx.setLineDash([]);
         S.sketches.forEach(function (sk, i) { if (i !== S.sel) drawSketch(ctx, sk, i, false); });
         drawSketch(ctx, cur(), S.sel, true);
+        // walk labels on top, so a hole drawn over the line cannot hide them
+        ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        labels.forEach(function (l) {
+            const w = ctx.measureText(l.text).width + 10;
+            ctx.fillStyle = l.long ? 'rgba(127,29,29,0.92)' : 'rgba(15,23,42,0.85)';
+            ctx.fillRect(l.x - w / 2, l.y - 9, w, 18);
+            ctx.fillStyle = l.long ? '#fecaca' : '#fde68a';
+            ctx.fillText(l.text, l.x, l.y + 1);
+        });
     }
 
     // ---- status chip & buttons ---------------------------------------------------------------------------
@@ -183,6 +232,7 @@
         if (r === 'bounds') return tr('bp_r_bounds', 'Utanför banan');
         if (r === 'close') return tr('bp_r_close', 'För nära ett annat hål');
         if (r === 'water') return tr('bp_r_water', 'Vatten i vägen');
+        if (r === 'carry') return tr('bp_r_carry', 'För långt över vattnet från främre tee');
         if (r === 'object') return tr('bp_r_object', 'Träd eller byggnad i vägen');
         if (/_range$/.test(r)) return tr('bp_r_range', 'För ojämn mark');
         return tr('bp_r_slope', 'För brant');
@@ -195,6 +245,18 @@
         if (ev.shaped.indexOf('tee') >= 0) bits.push(tr('bp_shape_tee', 'tee ~{m} m').replace('{m}', m(w.tee || 0)));
         if (ev.shaped.indexOf('fairway') >= 0) bits.push(tr('bp_shape_fairway', 'fairway mjukas (max {p} %)').replace('{p}', String(w.fairway || 10)));
         return bits.join(', ');
+    }
+    // "💧 Över vatten: 85 m från främre tee, 141 m från bakre"
+    function carryText(ev) {
+        return tr('bp_carry', '💧 Över vatten: {f} m från främre tee, {b} m från bakre').replace('{f}', ev.carry.front).replace('{b}', ev.carry.back);
+    }
+    // Total par and length of the planned holes, and the longest walk between them
+    function summaryText() {
+        let par = 0, len = 0, walk = 0;
+        S.sketches.forEach(function (sk, i) { par += sk.par; len += sk.plan.length; const d = walkOf(i); if (d !== null) walk = Math.max(walk, d); });
+        let t = 'Par ' + par + ' · ' + Math.round(len) + ' m';
+        if (walk) t += ' · ' + (walk > WALK_LONG ? '⚠️ ' + tr('bp_walk_long', 'lång promenad') + ' ' : '🚶 ' + tr('bp_walk_max', 'max') + ' ') + walk + ' m';
+        return t;
     }
     function setStatus(text, ok) {
         const el = S.dom.status;
@@ -250,14 +312,17 @@
         // The detail row is reserved space (no layout jump) for what the one-line status cannot say: what a yellow site changes,
         // and the whole message whenever the status had to be cut off (narrow phones, where a tooltip is not reachable).
         const shapedNow = !S.busy && !S.note && ev && ev.ok && ev.shaped && ev.shaped.length;
+        const carryNow = !S.busy && ev && ev.ok && ev.carry;
         const stEl = S.dom.status, cutOff = stEl.scrollWidth > stEl.clientWidth + 1;
         let detailText = '';
         if (shapedNow) detailText = (cutOff ? stEl.textContent + ': ' : '') + shapeBits(ev);
         else if (cutOff) detailText = stEl.textContent;
+        if (carryNow) detailText = (detailText ? detailText + ' · ' : '') + carryText(ev);
         S.dom.detail.textContent = detailText;
-        S.dom.detail.style.color = shapedNow ? '#fde68a' : (ev && !ev.ok && !S.busy ? '#fca5a5' : '#cbd5e1');
+        S.dom.detail.style.color = shapedNow ? '#fde68a' : (carryNow ? '#7dd3fc' : (ev && !ev.ok && !S.busy ? '#fca5a5' : '#cbd5e1'));
         S.dom.detail.title = detailText;
         buildChips();
+        S.dom.summary.textContent = summaryText();
         draw();
     }
 
@@ -313,11 +378,25 @@
     // anchor points, and finally another shape (a crowded map may only have room for a smaller one).
     // Each step runs in its own timer tick (the page stays responsive and the map can be closed) and the
     // whole search shares one deadline.
+    // The search starts next to the previous green: rings outward, and from the first ring with room plus the one after it the best
+    // spot wins (short walk, no reshaping, and a green that ends away from the map edge, so the NEXT hole also finds room near it).
+    // A shape that has no room there is swapped for another of the same par a few times (a shorter or straighter one often fits)
+    // before the search falls back to the open map.
     function suggest(i) {
         const HG = root.HoleGenerator, s = S.sketches[i];
         const lim = S.half * 0.55, anchors = [[0, 0], [-lim, -lim], [lim, -lim], [-lim, lim], [lim, lim]];
         const deadline = Date.now() + 7000, token = ++S.findToken;
-        let round = 0, step = -1;
+        // the first hole of an empty course starts at the edge of the map, as from a clubhouse, so the round loops around the
+        // plate instead of the first hole taking the middle and leaving no room near its green for the next one
+        const edge = S.half * 0.78, starts = [[-edge, 0], [edge, 0], [0, -edge], [0, edge]][Math.floor(Math.random() * 4)];
+        const pg = prevGreen(i) || (S.holes[i] === 0 ? { x: starts[0], z: starts[1] } : null);
+        let round = 0, step = pg ? -2 : -1;
+        let ring = 0, cand = 0, best = null, lastRing = NEAR_RINGS.length - 1, nearShapes = 0;
+        const score = function (r, ev) {
+            const g = ev.world.greenCenter, room = Math.min(150, S.half - Math.max(Math.abs(g.x), Math.abs(g.z)));
+            return r + ((ev.shaped && ev.shaped.length) ? 60 : 0) - 0.6 * room;
+        };
+        const ANGLES = 16, TURNS = [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.6, -2.6, Math.PI];   // away from the green first
         S.busy = true; refreshUi();
         const finish = function (spot) {
             S.busy = false;
@@ -332,7 +411,35 @@
             if (!S || token !== S.findToken) return;
             const env = envFor(i);
             let spot = null;
-            if (step < 0) {
+            if (step === -2) {
+                // next to the previous green: a slice of the current ring per tick
+                const r = NEAR_RINGS[ring], total = ANGLES * TURNS.length, t0 = Date.now();
+                while (cand < total && Date.now() - t0 < 25) {
+                    const a = Math.floor(cand / TURNS.length) / ANGLES * Math.PI * 2, turn = TURNS[cand % TURNS.length];
+                    cand++;
+                    const o = { x: pg.x + Math.cos(a) * r, z: pg.z + Math.sin(a) * r };
+                    const h = a + turn;   // play away from the green just finished
+                    const ev = HG.evaluateSite(s.plan, o, h, env);
+                    if (!ev.ok) continue;
+                    const sc = score(r, ev);
+                    if (!best) lastRing = Math.min(lastRing, ring + 1);
+                    if (!best || sc < best.score) best = { origin: o, heading: h, score: sc };
+                }
+                if (cand < total && Date.now() <= deadline) { setTimeout(tick, 0); return; }
+                ring++; cand = 0;
+                if (best && (ring > lastRing || Date.now() > deadline)) return finish(best);
+                if (ring >= NEAR_RINGS.length) {
+                    ring = 0;
+                    if (++nearShapes < 5 && Date.now() < deadline) {
+                        s.seed = Math.floor(Math.random() * 1e9);
+                        s.plan = HG.planFor(s.par, s.seed);
+                    } else step = -1;
+                }
+                if (Date.now() > deadline) step = -1;
+                setTimeout(tick, 0);
+                return;
+            }
+            if (step === -1) {
                 const res = HG.place(s.plan, HG.mulberry32((s.seed ^ 0x5bd1e995) >>> 0), env);
                 if (res) spot = { origin: { x: res.origin.x, z: res.origin.z }, heading: res.heading };
             } else {
@@ -344,7 +451,7 @@
             step++;
             if (step >= anchors.length) {
                 if (++round >= 3) return finish(null);
-                step = -1;
+                step = -1;   // the ring search near the previous green is not repeated: a new shape rarely changes the answer there
                 s.seed = Math.floor(Math.random() * 1e9);
                 s.plan = HG.planFor(s.par, s.seed);
             }
@@ -373,6 +480,8 @@
         if (S.busy || j < 0 || j >= S.sketches.length) return;
         const t = S.sketches[S.sel]; S.sketches[S.sel] = S.sketches[j]; S.sketches[j] = t;
         S.sel = j;
+        // new neighbours: a tee that sat close to the old previous green may now be too close to a hole that is not its neighbour
+        S.sketches.forEach(function (s, k) { evaluate(k); });
         refreshUi();
     }
 
@@ -487,7 +596,7 @@
         const holes = emptyHolesFrom(root.currentHoleIndex);
         const half = (root.TERRAIN_SIZE || 600) / 2;
         const par = clamp(hole.par || 4, 3, 6);
-        const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 350, 760)));
+        const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 376, 760)));
         const dpr = Math.min(2, window.devicePixelRatio || 1);
 
         const overlay = document.createElement('div');
@@ -511,6 +620,9 @@
         detail.style.cssText = 'width:' + C + 'px; height:32px; box-sizing:border-box; overflow:hidden; color:#fde68a; font-size:12px; line-height:16px;';
         const chips = document.createElement('div');
         chips.style.cssText = 'width:' + C + 'px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;';
+        // total par / length and the longest walk (one fixed line, so the page does not move)
+        const summary = document.createElement('div');
+        summary.style.cssText = 'width:' + C + 'px; height:18px; line-height:18px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:#cbd5e1; font-size:12px; font-weight:bold;';
         const canvas = document.createElement('canvas');
         canvas.width = C * dpr; canvas.height = C * dpr;
         // arcade.css pins every <canvas> to the viewport with !important, so this one must override it
@@ -538,11 +650,11 @@
         [add, reroll, left, right, earlier, later, remove].forEach(function (b) { row2.appendChild(b); });
         const build_ = btn('', build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
-        [head, help, detail, chips, canvas, row1, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        [head, help, detail, chips, summary, canvas, row1, row2, build_].forEach(function (el) { overlay.appendChild(el); });
         document.body.appendChild(overlay);
 
         S = {
-            dom: { overlay: overlay, status: status, detail: detail, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
+            dom: { overlay: overlay, status: status, detail: detail, summary: summary, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, half: half, size: half * 2, mPerPx: half * 2 / C,
             baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
             drag: null, busy: false, snapToken: 0, findToken: 0, raf: 0, note: null, noteBad: false, handles: null
@@ -562,5 +674,5 @@
     }
 
     root.openHoleBlueprint = open;
-    root.HoleBlueprint = { renderTerrain: renderTerrain, open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
+    root.HoleBlueprint = { envFor: function (i) { return envFor(i); }, renderTerrain: renderTerrain, open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

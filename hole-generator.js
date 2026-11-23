@@ -26,10 +26,16 @@
     // ---- rules --------------------------------------------------------------
     const RULES = {
         3: { len: [105, 175], fairway: false, greenSide: [2, 3], fwBunkers: [0, 0], doglegChance: 0 },
-        4: { len: [300, 400], fairway: true, greenSide: [1, 3], fwBunkers: [0, 2], doglegChance: 0.5 },
-        5: { len: [450, 540], fairway: true, greenSide: [1, 3], fwBunkers: [0, 2], doglegChance: 0.6 },
-        6: { len: [545, 600], fairway: true, greenSide: [1, 3], fwBunkers: [1, 2], doglegChance: 0.85 }
+        4: { len: [300, 400], fairway: true, greenSide: [1, 3], fwBunkers: [1, 2], doglegChance: 0.5, doubleChance: 0 },
+        5: { len: [450, 540], fairway: true, greenSide: [1, 3], fwBunkers: [1, 2], doglegChance: 0.6, doubleChance: 0.35 },
+        6: { len: [545, 600], fairway: true, greenSide: [1, 3], fwBunkers: [1, 2], doglegChance: 0.85, doubleChance: 0.6 }
     };
+    // Where a good drive comes down (m from the back tee): doglegs bend here and the first fairway bunker guards it
+    const DRIVE = [210, 255];
+    // Where a par 5 / 6 lay-up comes down, counted back from the green (m)
+    const LAYUP = [95, 135];
+    // Water the line of play crosses (tees, fairway, green and bunkers stay dry): longest carry from the front tee (m)
+    const MAX_CARRY = 110;
     // Terrain limits per part: slope = rise/run (0.06 = 6 %), range = highest - lowest point inside the part (m)
     // soft: share of the part allowed to be steeper than `soft` (the rest must stay under `max`)
     const SLOPE = {
@@ -46,7 +52,12 @@
         fairway: { max: 0.30, soft: 0.18, softShare: 0.25, cap: 10 },
         blendPerMeter: 4, minBlend: 8, maxBlend: 15, teeMinBlend: 4, teeMaxBlend: 15
     };
-    const FAIRWAY_START = 80;     // the tee layout spans ~56 m forward of the back tee
+    const FAIRWAY_START = 80;     // the tee layout spans ~56-80 m forward of the back tee
+    // Tee layout: 3 boxes (back / middle / front). Neighbouring boxes must stay TEE_PITCH apart (centre to centre) or editing one
+    // box cuts into the next one's plateau (smart-builder buildStandardTeeLayout). On a short par 3 the boxes step sideways so the
+    // front tee still plays a real par 3.
+    const TEE_PITCH = 28;
+    const PAR3_FRONT = { min: 85, share: 0.7 };   // front tee to green at least this far (m) and this share of the length
     const MAP_HALF = 300;
     const MAP_MARGIN = 25;
 
@@ -87,21 +98,21 @@
     }
 
     // ---- centre line --------------------------------------------------------
-    function makePath(L, dogleg, side, bendDeg, kneeFrac) {
-        if (!dogleg) {
-            return { total: L, segs: [{ a: { f: 0, l: 0 }, b: { f: L, l: 0 }, len: L, s0: 0, dir: { f: 1, l: 0 } }], knee: null };
-        }
-        let L1 = L * kneeFrac, L2 = L - L1, phi = bendDeg * Math.PI / 180;
-        let K = { f: L1, l: 0 };
-        let d2 = { f: Math.cos(phi), l: side * Math.sin(phi) };
-        let E = { f: K.f + d2.f * L2, l: K.l + d2.l * L2 };
-        return {
-            total: L, knee: K,
-            segs: [
-                { a: { f: 0, l: 0 }, b: K, len: L1, s0: 0, dir: { f: 1, l: 0 } },
-                { a: K, b: E, len: L2, s0: L1, dir: d2 }
-            ]
-        };
+    // bends: [{ s, side, deg }] sorted by s (distance from the back tee along the line); side +1 turns left (+l), -1 right
+    function makePath(L, bends) {
+        let segs = [], knees = [], a = { f: 0, l: 0 }, dir = { f: 1, l: 0 }, ang = 0, s0 = 0;
+        (bends || []).forEach(function (b) {
+            let len = b.s - s0;
+            let B = { f: a.f + dir.f * len, l: a.l + dir.l * len };
+            segs.push({ a: a, b: B, len: len, s0: s0, dir: dir });
+            knees.push(B);
+            ang += b.side * b.deg * Math.PI / 180;
+            dir = { f: Math.cos(ang), l: Math.sin(ang) };
+            a = B; s0 = b.s;
+        });
+        let len = L - s0;
+        segs.push({ a: a, b: { f: a.f + dir.f * len, l: a.l + dir.l * len }, len: len, s0: s0, dir: dir });
+        return { total: L, segs: segs, knee: knees[0] || null, knees: knees, bends: bends || [] };
     }
     function pathAt(path, s) {
         s = Math.max(0, Math.min(path.total, s));
@@ -119,8 +130,25 @@
         let dogleg = rng() < R.doglegChance;
         let side = rng() < 0.5 ? -1 : 1;
         let bend = range(rng, 15, 38);
-        let kneeFrac = range(rng, 0.55, 0.7);
-        let path = makePath(L, dogleg, side, bend, kneeFrac);
+        // The bend sits where the tee shot comes down (a par 4 knee at 165 m was driven straight through); par 5 / 6 may bend at
+        // the lay-up instead, or twice (S-shape or a long sweep)
+        let bends = [];
+        if (dogleg) {
+            let driveS = Math.min(L - 90, range(rng, DRIVE[0], DRIVE[1]));
+            let layupS = L - range(rng, LAYUP[0], LAYUP[1]);
+            let double = rng() < (R.doubleChance || 0) && layupS - driveS >= 100;
+            if (double) {
+                let side2 = rng() < 0.55 ? -side : side;
+                let deg1 = range(rng, 14, 28), deg2 = range(rng, 14, 28);
+                if (side2 === side) deg2 = Math.min(deg2, 60 - deg1);   // a long sweep, not a hairpin
+                bends = [{ s: driveS, side: side, deg: deg1 }, { s: layupS, side: side2, deg: deg2 }];
+                bend = deg1;
+            } else {
+                let atLayup = par >= 5 && rng() < 0.4 && layupS - driveS >= 60;
+                bends = [{ s: atLayup ? layupS : driveS, side: side, deg: bend }];
+            }
+        }
+        let path = makePath(L, bends);
         let end = pathAt(path, L);
         let approach = end.dir;
         let approachAngle = Math.atan2(approach.l, approach.f);
@@ -140,13 +168,11 @@
             let samples = [];
             let n = Math.max(6, Math.round((fwS1 - fwS0) / 25));
             for (let i = 0; i <= n; i++) samples.push(fwS0 + (fwS1 - fwS0) * i / n);
-            if (path.knee) {   // make sure the bend gets a sample
-                let ks = path.segs[0].len;
-                if (ks > fwS0 + 15 && ks < fwS1 - 15) {
-                    samples.push(ks);
-                    samples.sort(function (a, b) { return a - b; });
-                }
-            }
+            path.bends.forEach(function (b) {   // make sure every bend gets a sample
+                let ks = b.s;
+                if (ks > fwS0 + 15 && ks < fwS1 - 15) samples.push(ks);
+            });
+            samples.sort(function (a, b) { return a - b; });
             let left = [], right = [];
             fwHalf = function () { return 0; };
             let halfAt = [];
@@ -202,13 +228,29 @@
         }
         if (R.fairway) {
             let nFw = Math.round(range(rng, R.fwBunkers[0] - 0.49, R.fwBunkers[1] + 0.49));
+            let sMin = fwS0 + 40, sMax = fwS1 - 50;
+            // Aimed spots first: the drive's landing zone (on a dogleg the inside of the corner, which punishes cutting it),
+            // then the lay-up zone on a par 5 / 6 or the far side of the landing zone on a par 4. Anything left is random.
+            let zones = [];
+            let firstBend = path.bends[0];
+            if (firstBend && firstBend.s <= DRIVE[1] + 20) zones.push({ s: firstBend.s - 6, spread: 8, sd: firstBend.side });
+            else zones.push({ s: range(rng, DRIVE[0] + 5, DRIVE[1] - 5), spread: 10, sd: rng() < 0.5 ? -1 : 1 });
+            if (par >= 5) {
+                let lb = path.bends.filter(function (b) { return b.s > DRIVE[1] + 40; })[0];
+                zones.push(lb ? { s: lb.s - 6, spread: 8, sd: lb.side } : { s: L - range(rng, LAYUP[0] + 10, LAYUP[1]), spread: 10, sd: -zones[0].sd });
+            } else {
+                zones.push({ s: zones[0].s + range(rng, 15, 30), spread: 8, sd: -zones[0].sd });
+            }
             for (let k = 0; k < nFw; k++) {
+                let zone = zones[k];
                 for (let tries = 0; tries < 12; tries++) {
-                    let s = range(rng, fwS0 + 40, Math.min(fwS1 - 70, fwS0 + 40 + (par >= 5 ? 190 : 150)));
-                    if (s <= fwS0 + 40) continue;
+                    let aimed = !!zone && tries < 8;
+                    let s = aimed ? zone.s + range(rng, -zone.spread, zone.spread) : range(rng, sMin, Math.min(sMax, fwS0 + 40 + (par >= 5 ? 190 : 150)));
+                    s = Math.max(sMin, Math.min(sMax, s));
+                    if (sMax <= sMin) break;
                     let c = pathAt(path, s);
                     let nrm = { f: -c.dir.l, l: c.dir.f };
-                    let sd = rng() < 0.5 ? -1 : 1;
+                    let sd = aimed ? zone.sd : (rng() < 0.5 ? -1 : 1);
                     let rb = range(rng, 4.5, 7.5);
                     let off = fwHalf(s) + rb * 0.4;
                     let cf = c.f + nrm.f * off * sd, cl = c.l + nrm.l * off * sd;
@@ -222,7 +264,7 @@
         }
 
         return {
-            par: par, length: L, dogleg: dogleg, side: side, bend: bend, path: path,
+            par: par, length: L, dogleg: dogleg, side: side, bend: bend, path: path, bends: path.bends.length,
             tee: { f: 0, l: 0 }, green: green, greenCenter: { f: end.f, l: end.l }, greenReach: greenReach,
             fairway: fairway, bunkers: bunkers,
             aim: path.knee ? { f: path.knee.f, l: path.knee.l } : null
@@ -258,14 +300,26 @@
         let c = Math.cos(heading), s = Math.sin(heading);
         return { x: origin.x + pt.f * c - pt.l * s, z: origin.z + pt.f * s + pt.l * c };
     }
-    // Footprints of the standard 3-box tee layout (matches buildStandardTeeLayout: 9 x 5 m boxes, 28 m apart, toward the aim)
+    // Where the back / middle / front boxes stand: { f: along the line toward the aim, l: to the left } from the back tee (m).
+    // Long holes spread the boxes further (about 13 % of the length); a short par 3 steps them sideways instead, so the front tee
+    // keeps at least PAR3_FRONT of the hole while every pair of boxes stays TEE_PITCH apart.
+    function teeSlots(plan) {
+        let L = plan.length, spread;
+        if (plan.par === 3) spread = Math.max(0, Math.min(2 * TEE_PITCH, L - Math.max(PAR3_FRONT.min, PAR3_FRONT.share * L)));
+        else spread = Math.max(2 * TEE_PITCH, Math.min(80, 0.13 * L));
+        let a = spread / 2;
+        let b = a >= TEE_PITCH ? 0 : Math.sqrt(TEE_PITCH * TEE_PITCH - a * a);
+        let sd = plan.side || 1;
+        return [{ f: 0, l: 0 }, { f: a, l: b * sd }, { f: 2 * a, l: -b * sd }];
+    }
+    // Footprints of the standard 3-box tee layout (matches buildStandardTeeLayout: 9 x 5 m boxes at teeSlots, toward the aim)
     function teeBoxes(plan, W) {
         let target = plan.aim || plan.greenCenter;
         let dx = target.f - plan.tee.f, dz = target.l - plan.tee.l, len = Math.hypot(dx, dz) || 1;
         dx /= len; dz /= len;
-        let px = -dz, pz = dx, boxes = [];
+        let px = -dz, pz = dx, boxes = [], slots = teeSlots(plan);
         for (let slot = 0; slot < 3; slot++) {
-            let cf = plan.tee.f + dx * 28 * slot, cl = plan.tee.l + dz * 28 * slot;
+            let cf = plan.tee.f + dx * slots[slot].f + px * slots[slot].l, cl = plan.tee.l + dz * slots[slot].f + pz * slots[slot].l;
             boxes.push([[-4.5, -2.5], [4.5, -2.5], [4.5, 2.5], [-4.5, 2.5]].map(function (o) {
                 return W({ f: cf + px * o[0] + dx * o[1], l: cl + pz * o[0] + dz * o[1] });
             }));
@@ -283,6 +337,7 @@
             greenReach: plan.greenReach,
             aim: plan.aim ? W(plan.aim) : null,
             teeBoxes: teeBoxes(plan, W),
+            teeSlots: teeSlots(plan),
             centerline: (function () {
                 let pts = [];
                 for (let s = 0; s <= plan.length; s += 20) pts.push(W(pathAt(plan.path, s)));
@@ -328,7 +383,7 @@
         return out;
     }
     function polys(wp) {
-        let list = [wp.green];
+        let list = wp.green && wp.green.length ? [wp.green] : [];
         if (wp.fairway) list.push(wp.fairway);
         wp.bunkers.forEach(function (b) { list.push(b); });
         (wp.teeBoxes || []).forEach(function (t) { list.push(t); });
@@ -345,13 +400,14 @@
     }
 
     // Lazy version of coverage(): stops at the first point where pred() is true, nothing is materialised
-    function anyCovered(wp, edgeStep, fillStep, pred) {
+    // (skipLine: only the built parts count, not the centre line between them)
+    function anyCovered(wp, edgeStep, fillStep, pred, skipLine) {
         let edge = function (a, b) {
             let k = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / edgeStep));
             for (let j = 0; j <= k; j++) if (pred(a.x + (b.x - a.x) * j / k, a.z + (b.z - a.z) * j / k)) return true;
             return false;
         };
-        let line = wp.centerline;
+        let line = skipLine ? [] : wp.centerline;
         for (let i = 0; i < line.length - 1; i++) if (edge(line[i], line[i + 1])) return true;
         let list = polys(wp);
         for (let q = 0; q < list.length; q++) {
@@ -474,28 +530,127 @@
     }
 
     // Other holes: loose points (flags, markers) and polygons (kept apart so interiors can be tested)
+    // byHole[i] keeps, by reference, the parts neighbourOthers() may soften: the green with the bunkers beside it (and the flag),
+    // and the tee boxes (and the tee markers)
     function otherHoles(holes, currentIndex) {
-        let points = [], polygons = [];
+        let points = [], polygons = [], byHole = {};
         (holes || []).forEach(function (h, i) {
             if (!h || i === currentIndex) return;
-            let addPoly = function (o) { if (o && o.points && o.points.length >= 3) polygons.push(o.points); };
+            let mine = byHole[i] = { green: [], greenPts: [], tees: [], teePts: [], fairways: [], greenAt: null, teeAt: [] };
+            let ok = function (o) { return o && o.points && o.points.length >= 3; };
+            let addPoly = function (o) { if (ok(o)) polygons.push(o.points); };
             addPoly(h.greenData);
-            (h.fairways || []).forEach(addPoly);
+            (h.fairways || []).forEach(function (f) { addPoly(f); if (ok(f)) mine.fairways.push(f.points); });
+            (h.teeBoxes || []).forEach(function (t) {
+                if (!ok(t)) return;
+                let x = 0, z = 0;
+                t.points.forEach(function (p) { x += p.x; z += p.z; });
+                mine.teeAt.push({ x: x / t.points.length, z: z / t.points.length });
+            });
             (h.bunkers || []).forEach(addPoly);
-            (h.teeBoxes || []).forEach(addPoly);
+            (h.teeBoxes || []).forEach(function (t) { addPoly(t); if (ok(t)) mine.tees.push(t.points); });
+            if (ok(h.greenData)) {
+                let g = h.greenData.points, gx = 0, gz = 0;
+                g.forEach(function (p) { gx += p.x; gz += p.z; });
+                gx /= g.length; gz /= g.length;
+                let reach = 0;
+                g.forEach(function (p) { reach = Math.max(reach, Math.hypot(p.x - gx, p.z - gz)); });
+                mine.greenAt = { x: gx, z: gz, r: reach };
+                mine.green.push(g);
+                (h.bunkers || []).forEach(function (b) {
+                    if (!ok(b)) return;
+                    let x = 0, z = 0;
+                    b.points.forEach(function (p) { x += p.x; z += p.z; });
+                    if (Math.hypot(x / b.points.length - gx, z / b.points.length - gz) < reach + 35) mine.green.push(b.points);
+                });
+                if (h.flag) mine.greenPts.push(h.flag);
+                // the tee builder's aim point sits on the flag on a straight hole: part of the green end too
+                if (h.aimPoint && Math.hypot(h.aimPoint.x - gx, h.aimPoint.z - gz) <= reach + 40) mine.greenPts.push(h.aimPoint);
+            }
             if (h.flag) points.push(h.flag);
-            if (h.tees) for (let k in h.tees) { if (h.tees[k]) points.push(h.tees[k]); }   // loose / legacy tee markers
+            if (h.tees) for (let k in h.tees) { if (h.tees[k]) { points.push(h.tees[k]); if (mine.tees.length) mine.teePts.push(h.tees[k]); } }   // loose / legacy tee markers
             if (h.aimPoint) points.push(h.aimPoint);
         });
-        return { points: points, polygons: polygons };
+        return { points: points, polygons: polygons, byHole: byHole };
+    }
+    // The others as seen from hole `idx`: the previous hole's green may lie TEE_NEAR from this hole's tee boxes and the next
+    // hole's tee boxes TEE_NEAR from this green (a short walk between holes, as on a real course); everything else keeps CLEARANCE
+    function neighbourOthers(others, idx) {
+        others = normOthers(others) || { points: [], polygons: [] };
+        let by = others.byHole || {}, prev = by[idx - 1], next = by[idx + 1];
+        let dropPolys = [], dropPts = [], addPolys = [], soft = (others.soft || []).slice();
+        // a neighbour's fairway runs into its green / starts just past its tees: that end is trimmed, as obstaclesSplit does for a plan
+        let trim = function (fairways, near) {
+            fairways.forEach(function (f) {
+                dropPolys.push(f);
+                let rest = f.filter(function (c) { return !near(c); });
+                if (rest.length >= 3) addPolys.push(rest);
+            });
+        };
+        if (prev && prev.green.length) {
+            soft.push({ polygons: prev.green, mine: 'tee' }); dropPolys = dropPolys.concat(prev.green); dropPts = dropPts.concat(prev.greenPts);
+            let ga = prev.greenAt;
+            if (ga) trim(prev.fairways, function (c) { return Math.hypot(c.x - ga.x, c.z - ga.z) <= ga.r + 50; });
+        }
+        if (next && next.tees.length) {
+            soft.push({ polygons: next.tees, mine: 'green' }); dropPolys = dropPolys.concat(next.tees); dropPts = dropPts.concat(next.teePts);
+            trim(next.fairways.filter(function (f) { return dropPolys.indexOf(f) < 0; }), function (c) { return next.teeAt.some(function (t) { return Math.hypot(c.x - t.x, c.z - t.z) <= 50; }); });
+        }
+        return {
+            points: (others.points || []).filter(function (p) { return dropPts.indexOf(p) < 0; }),
+            polygons: (others.polygons || []).filter(function (p) { return dropPolys.indexOf(p) < 0; }).concat(addPolys),
+            soft: soft, byHole: by
+        };
     }
 
     const CLEARANCE = 55;
+    // Between one hole's green and the NEXT hole's tee boxes (a short walk, as on a real course) this is enough
+    const TEE_NEAR = 30;
+    const BUILD_SLACK = 5;
+    // others.soft: [{ polygons, mine: 'tee' | 'green' }] - polygons that only that part of this hole may come TEE_NEAR to
+    // (the previous hole's green for my tee boxes, the next hole's tee boxes for my green); the rest of the hole keeps CLEARANCE
+    // others.slack (m): taken off both clearances. A hole built from a plan is re-checked against holes that were BUILT from plans,
+    // and a built hole is a little bigger than its plan (spline outlines, the flag and aim point off the green's centre), so the
+    // build allows a few metres the map did not
     function tooCloseToOthers(wp, others) {
         if (!others) return false;
-        let pts = others.points || [], polygons = others.polygons || [];
+        let slack = others.slack || 0;
+        if (others.soft && others.soft.length) {
+            if (tooCloseToOthers(wp, { points: others.points, polygons: others.polygons, slack: slack })) return true;
+            for (let k = 0; k < others.soft.length; k++) {
+                let g = others.soft[k];
+                if (!g.polygons || !g.polygons.length) continue;
+                let partOf = function (keepPart) {
+                    let o = { green: wp.green, bunkers: [], bunkerKinds: [], teeBoxes: [], fairway: null, centerline: [] };
+                    if (keepPart === 'tee') { o.green = []; o.teeBoxes = wp.teeBoxes || []; return o; }
+                    if (keepPart === 'green') {
+                        wp.bunkers.forEach(function (b, i) { if (wp.bunkerKinds && wp.bunkerKinds[i] === 'green') o.bunkers.push(b); });
+                        return o;
+                    }
+                    // everything except that part (and the bit of centre line that runs under it)
+                    o = Object.assign({}, wp);
+                    let near = nearPart(wp, g.mine, 15);
+                    o.centerline = wp.centerline.filter(function (c) { return !near(c); });
+                    o.fairway = trimmedFairway(wp, g.mine);
+                    if (g.mine === 'tee') o.teeBoxes = [];
+                    else {
+                        o.green = []; o.bunkers = []; o.bunkerKinds = [];
+                        wp.bunkers.forEach(function (b, i) { if (!(wp.bunkerKinds && wp.bunkerKinds[i] === 'green')) { o.bunkers.push(b); o.bunkerKinds.push(wp.bunkerKinds[i]); } });
+                    }
+                    return o;
+                };
+                if (tooCloseWithin(partOf(null), [], g.polygons, CLEARANCE - slack)) return true;
+                if (tooCloseWithin(partOf(g.mine), [], g.polygons, TEE_NEAR - slack)) return true;
+            }
+            return false;
+        }
+        return tooCloseWithin(wp, others.points || [], others.polygons || [], CLEARANCE - slack);
+    }
+    function tooCloseWithin(wp, pts, polygons, clearance) {
         if (!pts.length && !polygons.length) return false;
         let mine = coverage(wp, 10, 0);
+        if (!mine.length) return false;
+        const CLEARANCE = clearance;
         let c2 = CLEARANCE * CLEARANCE;
         // bounding box of this hole, grown by the clearance, to skip distant polygons quickly
         let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -614,34 +769,109 @@
         return false;
     }
 
+    // Water the line of play crosses. Tees, fairway, green and bunkers are already known to be dry, so wet ground on the centre
+    // line can only lie between them: in front of the tees (a par 3 over a pond) or between the tees and the fairway.
+    // Returns null when the line stays dry, else { front, back, segs }: the longest carry from the front and the back tee to the
+    // far bank (m) and the wet stretches as world segments (for the map).
+    function waterCarry(wp, isWater, step) {
+        let pts = densify(wp.centerline, step || 2, false);
+        let centre = function (box) { let x = 0, z = 0; box.forEach(function (p) { x += p.x; z += p.z; }); return { x: x / box.length, z: z / box.length }; };
+        let boxes = wp.teeBoxes || [];
+        let back = boxes.length ? centre(boxes[0]) : wp.tee, front = boxes.length ? centre(boxes[boxes.length - 1]) : wp.tee;
+        // how far along the line of play the front tee stands: its projection, not its distance (a short par 3 steps the
+        // boxes sideways, so the front tee can be far from the back tee yet only a little way up the line)
+        let frontS = (wp.teeSlots && wp.teeSlots[2]) ? wp.teeSlots[2].f : Math.hypot(front.x - back.x, front.z - back.z);
+        let segs = [], start = -1, s = 0, res = { front: 0, back: 0, segs: segs };
+        for (let i = 0; i <= pts.length; i++) {
+            if (i > 0 && i < pts.length) s += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+            let wet = i < pts.length && isWater(pts[i].x, pts[i].z);
+            if (wet && start < 0) start = i;
+            if (!wet && start >= 0) {
+                let a = pts[start], b = pts[i - 1];
+                segs.push({ a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z } });
+                res.back = Math.max(res.back, Math.hypot(b.x - back.x, b.z - back.z));
+                // water between the back and the front tee is no carry for the front tee
+                if (s > frontS) res.front = Math.max(res.front, Math.hypot(b.x - front.x, b.z - front.z));
+                start = -1;
+            }
+        }
+        if (!segs.length) return null;
+        res.front = Math.round(res.front); res.back = Math.round(res.back);
+        return res;
+    }
+
     // What a placed hole occupies, in the form tooCloseToOthers() takes: outlines plus the route as loose points
     function obstaclesOf(wp) {
         return { polygons: polys(wp), points: densify(wp.centerline, 20, false) };
+    }
+    // Is world point c "at" this part of the hole (the green end or the tee end)? Used to trim the centre line and the fairway where
+    // they run into that part, so a neighbour's softer clearance is not undone by them
+    function nearPart(wp, part, extra) {
+        if (part === 'green') {
+            let r = (wp.greenReach || 15) + extra;
+            return function (c) { return Math.hypot(c.x - wp.greenCenter.x, c.z - wp.greenCenter.z) <= r; };
+        }
+        let r = ((wp.teeSlots && wp.teeSlots[2] && wp.teeSlots[2].f) || 56) + extra;
+        return function (c) { return Math.hypot(c.x - wp.tee.x, c.z - wp.tee.z) <= r; };
+    }
+    // The fairway without its end at that part (a fairway reaches into its green and starts just past the front tee)
+    function trimmedFairway(wp, part) {
+        if (!wp.fairway) return null;
+        let near = nearPart(wp, part, 40);
+        let rest = wp.fairway.filter(function (c) { return !near(c); });
+        return rest.length >= 3 ? rest : null;
+    }
+    // The same, split for a neighbour in the round: `part` ('green' or 'tee') goes into soft (only the other hole's tee boxes
+    // resp. green may come TEE_NEAR to it), and the centre line is trimmed where it runs under that part
+    function obstaclesSplit(wp, part) {
+        let soft = [], hard = [];
+        let isGreenBunker = function (i) { return wp.bunkerKinds && wp.bunkerKinds[i] === 'green'; };
+        if (part === 'green') {
+            soft.push(wp.green);
+            wp.bunkers.forEach(function (b, i) { (isGreenBunker(i) ? soft : hard).push(b); });
+            (wp.teeBoxes || []).forEach(function (t) { hard.push(t); });
+        } else {
+            (wp.teeBoxes || []).forEach(function (t) { soft.push(t); });
+            hard.push(wp.green);
+            wp.bunkers.forEach(function (b) { hard.push(b); });
+        }
+        let fw = trimmedFairway(wp, part);
+        if (fw) hard.push(fw);
+        let near = nearPart(wp, part, 15);
+        let points = densify(wp.centerline, 20, false).filter(function (c) { return !near(c); });
+        return { points: points, polygons: hard, soft: soft };
     }
     function normOthers(others) {
         return Array.isArray(others) ? { points: others, polygons: [] } : others;
     }
     // Can this plan stand at origin (its tee) pointing along `heading`? Cheapest checks first.
-    // env: { isWater(x,z), others, half, heightAt, parts }. reasons: 'bounds' | 'close' | 'water' | '<part>_slope|range'
+    // env: { isWater(x,z), others, half, heightAt, parts }. reasons: 'bounds' | 'close' | 'water' | 'carry' | '<part>_slope|range'
+    // A good result may carry `carry` (see waterCarry) when the line of play crosses water.
     function evaluateSite(plan, origin, heading, env) {
         let limit = ((env && env.half) || MAP_HALF) - MAP_MARGIN;
         let wp = worldPlan(plan, origin, heading);
         let fail = function (r) { return { ok: false, reasons: [r], world: wp }; };
         if (!footprint(wp).every(function (p) { return Math.abs(p.x) <= limit && Math.abs(p.z) <= limit; })) return fail('bounds');
         if (tooCloseToOthers(wp, normOthers(env && env.others))) return fail('close');
+        let carry = null;
         if (env && env.isWater) {
             // coarse pass first (cheap, rejects most wet spots), then a pass at the water grid's resolution
-            // so a creek as narrow as one cell cannot slip between samples
+            // so a creek as narrow as one cell cannot slip between samples. Only what is built must be dry:
+            // the line of play may cross water as long as the front tee can carry it.
             let ws = env.waterStep || 2;
-            if (anyCovered(wp, 6, 12, env.isWater) || anyCovered(wp, ws, ws, env.isWater)) return fail('water');
+            if (anyCovered(wp, 6, 12, env.isWater, true) || anyCovered(wp, ws, ws, env.isWater, true)) return fail('water');
+            carry = waterCarry(wp, env.isWater, ws);
+            if (carry && carry.front > MAX_CARRY) return fail('carry');
         }
         if (env && ((env.objects && objectsBlock(wp, env.objects, env.parts)) || (env.walls && wallsBlock(wp, env.walls, env.parts)))) return fail('object');
+        let good = { ok: true, reasons: [], world: wp };
+        if (carry) good.carry = carry;
         if (env && env.heightAt) {
             let sc = scoreSite(wp, env);
             if (!sc.ok) return { ok: false, reasons: sc.reasons, world: wp };
-            if (sc.shaped && sc.shaped.length) return { ok: true, reasons: [], world: wp, shaped: sc.shaped, work: sc.work };
+            if (sc.shaped && sc.shaped.length) { good.shaped = sc.shaped; good.work = sc.work; }
         }
-        return { ok: true, reasons: [], world: wp };
+        return good;
     }
 
     // Find a seed-determined spot on the map where the whole hole fits.
@@ -885,6 +1115,8 @@
         let par = clampPar(opts.par != null ? opts.par : (hole.par || 4));
         // a blueprint sketch may stand on ground that needs reshaping (yellow); random placement stays strict
         let env = siteEnv(parts, { diag: true, allowShaping: !!(opts.placement && opts.seed != null) });
+        env.others = neighbourOthers(env.others, root.currentHoleIndex);
+        if (opts.placement && opts.seed != null) env.others.slack = BUILD_SLACK;   // a blueprint spot: see tooCloseToOthers
         let res;
         let shaped = null, shapeWork = {}, capMissed = false, cappedFairway = null;
         if (opts.placement && opts.seed != null) {
@@ -966,7 +1198,7 @@
                     }
                 }
                 if (typeof root.setSmartBuilderType === 'function') root.setSmartBuilderType('TEE');
-                root.buildStandardTeeLayout(wp.tee.x, wp.tee.z);
+                root.buildStandardTeeLayout(wp.tee.x, wp.tee.z, wp.teeSlots);
                 if (shaped && shaped.indexOf('tee') >= 0 && typeof root.applyTeePipeline === 'function') {
                     (hole.teeBoxes || []).forEach(function (tb) {
                         tb.blendRadius = Math.min(SHAPE.teeMaxBlend, Math.max(SHAPE.teeMinBlend, (shapeWork.tee || 0) * SHAPE.blendPerMeter));
@@ -1001,8 +1233,8 @@
     }
 
     root.HoleGenerator = {
-        RULES: RULES, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, SHAPE: SHAPE, cutDepth: cutDepth, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        RULES: RULES, CLEARANCE: CLEARANCE, TEE_NEAR: TEE_NEAR, DRIVE: DRIVE, LAYUP: LAYUP, MAX_CARRY: MAX_CARRY, TEE_PITCH: TEE_PITCH, teeSlots: teeSlots, waterCarry: waterCarry, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, obstaclesSplit: obstaclesSplit, neighbourOthers: neighbourOthers, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, SHAPE: SHAPE, cutDepth: cutDepth, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
