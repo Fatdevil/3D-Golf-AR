@@ -106,5 +106,28 @@ const centre = function (b) { let x = 0, z = 0; b.forEach(function (p) { x += p.
   check('a green 40 m from the previous green is still too close', wrongPart === 0, wrongPart);
 })();
 
+// the blueprint's shape buttons: bend left / straight / right and short / mid / long, all valid, the rest of the seed unchanged
+(function () {
+  [4, 5, 6].forEach(function (par) {
+    const R = HG.RULES[par], third = (R.len[1] - R.len[0]) / 3;
+    let bad = [];
+    ['left', 'straight', 'right'].forEach(function (d) {
+      ['short', 'mid', 'long'].forEach(function (l, li) {
+        for (let seed = 1; seed <= 60; seed++) {
+          const p = HG.planFor(par, seed, { dogleg: d, len: l });
+          const g = HG.worldPlan(p, { x: 0, z: 0 }, 0).greenCenter;   // heading 0: +z is to the right of the player
+          const sideOk = d === 'straight' ? (!p.dogleg && Math.abs(g.z) < 1e-6) : (p.dogleg && (d === 'right' ? g.z > 0 : g.z < 0));
+          const lenOk = p.length >= R.len[0] + third * li - 0.01 && p.length <= R.len[0] + third * (li + 1) + 0.01;
+          if (HG.validatePlan(p).length || !sideOk || !lenOk) bad.push([d, l, seed]);
+        }
+      });
+    });
+    check('par ' + par + ': every bend / length choice gives a valid hole of that shape', !bad.length, bad.slice(0, 4));
+  });
+  const p3 = HG.planFor(3, 5, { dogleg: 'left' });
+  check('par 3 ignores a bend choice (it never bends)', !p3.dogleg && !HG.validatePlan(p3).length);
+  check('no choice is the same as no shape at all', HG.planFor(4, 77, { dogleg: null, len: null }).length === HG.planFor(4, 77).length);
+})();
+
 console.log(failed ? '\n' + failed + ' check(s) failed' : '\nAll hole generator checks passed');
 process.exit(failed ? 1 : 0);

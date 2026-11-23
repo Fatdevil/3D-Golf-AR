@@ -1050,6 +1050,16 @@ function serve() {
       const narrow = { status: S.dom.status.textContent, detail: S.dom.detail.textContent };
       S.dom.status.style.maxWidth = '';
       check('a cut-off status is repeated in full in the detail row (touch screens)', narrow.status.length > 4 && narrow.detail === narrow.status, JSON.stringify(narrow));
+      // the bend / length buttons: "right" + "long" gives a long hole bending to the player's right; tapping "right" again goes back to random
+      for (let w = 0; w < 80 && S.busy; w++) await new Promise(function (r) { setTimeout(r, 100); });
+      const shapeBtn = function (k, v) { return S.dom.shapeBtns.filter(function (b) { return b.dataset.shapeKey === k && b.dataset.shapeVal === v; })[0]; };
+      const settle = async function () { for (let w = 0; w < 80 && S.busy; w++) await new Promise(function (r) { setTimeout(r, 100); }); };
+      sk.par = 4; shapeBtn('dogleg', 'right').click(); await settle(); shapeBtn('len', 'long').click(); await settle();
+      const R4 = window.HoleGenerator.RULES[4], gR = window.HoleGenerator.worldPlan(sk.plan, { x: 0, z: 0 }, 0).greenCenter;
+      const shapeSeen = { dogleg: sk.plan.dogleg, right: gR.z > 0, len: Math.round(sk.plan.length), pressed: S.dom.shapeBtns.filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; }).map(function (b) { return b.dataset.shapeVal; }) };
+      shapeBtn('dogleg', 'right').click(); await settle();
+      check('blueprint shape buttons: a long hole bending right, and a second tap goes back to random', shapeSeen.dogleg && shapeSeen.right && shapeSeen.len >= R4.len[1] - (R4.len[1] - R4.len[0]) / 3 - 0.5 &&
+        shapeSeen.pressed.join() === 'right,long' && sk.shape.dogleg === null && sk.shape.len === 'long' && /\d+ m/.test(S.dom.chips.textContent), JSON.stringify([shapeSeen, sk.shape, S.dom.chips.textContent]));
       BP.close(false);
     })();
 
