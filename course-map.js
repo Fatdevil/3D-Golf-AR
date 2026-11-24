@@ -230,6 +230,103 @@
         ctx.restore();
     }
 
+    // ---- zoom and pan -----------------------------------------------------------------------------------------
+    // A map's view: world point (ox, oz) in the middle of the canvas, magnified `zoom` times over the whole extent (half on each
+    // side). Pinch and two-finger drag on a touch screen, the wheel with a mouse, and +, - and "show all" buttons. One finger (or a
+    // mouse button) stays the map's own: it still moves holes and figures. opts: { half, C, max (zoom, default 5), onChange }
+    function makeZoom(opts) {
+        const half = opts.half, size = half * 2, C = opts.C, max = opts.max || 5;
+        const z = { zoom: 1, ox: 0, oz: 0 };
+        const pts = {};          // active touch pointers in canvas px
+        let pinch = null, suppress = false;
+        z.px = function (x) { return ((x - z.ox) * z.zoom + half) / size * C; };
+        z.pz = function (wz) { return ((wz - z.oz) * z.zoom + half) / size * C; };
+        z.m = function () { return C / size * z.zoom; };
+        z.toWorld = function (px, py) { return { x: (px / C * size - half) / z.zoom + z.ox, z: (py / C * size - half) / z.zoom + z.oz }; };
+        function clampView() {
+            z.zoom = clamp(z.zoom, 1, max);
+            const lim = half - half / z.zoom;
+            z.ox = clamp(z.ox, -lim, lim); z.oz = clamp(z.oz, -lim, lim);
+        }
+        function changed() { clampView(); if (opts.onChange) opts.onChange(z); }
+        // zoom by factor f keeping the world point under canvas px (px, py) where it is
+        z.zoomAt = function (f, px, py) {
+            const w = z.toWorld(px, py);
+            z.zoom = clamp(z.zoom * f, 1, max);
+            z.ox = w.x - (px / C * size - half) / z.zoom;
+            z.oz = w.z - (py / C * size - half) / z.zoom;
+            changed();
+        };
+        z.zoomBy = function (f) { z.zoomAt(f, C / 2, C / 2); };
+        z.reset = function () { z.zoom = 1; z.ox = 0; z.oz = 0; changed(); };
+        z.isZoomed = function () { return z.zoom > 1.001; };
+        z.wheel = function (e, rect) {
+            e.preventDefault();
+            const px = (e.clientX - rect.left) * (C / rect.width), py = (e.clientY - rect.top) * (C / rect.height);
+            z.zoomAt(Math.exp(-e.deltaY * 0.0015), px, py);
+        };
+        function canvasPt(e, rect) { return { x: (e.clientX - rect.left) * (C / rect.width), y: (e.clientY - rect.top) * (C / rect.height) }; }
+        function startPinch() {
+            const ids = Object.keys(pts), a = pts[ids[0]], b = pts[ids[1]];
+            const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+            pinch = { dist: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), zoom: z.zoom, world: z.toWorld(mid.x, mid.y) };
+        }
+        // Returns true when the event belongs to a two-finger gesture (or to its fingers' lifting): the map then leaves it alone
+        z.pointerDown = function (e, rect) {
+            if (e.pointerType !== 'touch') return false;
+            pts[e.pointerId] = canvasPt(e, rect);
+            if (Object.keys(pts).length >= 2) { startPinch(); suppress = true; return true; }
+            return suppress;
+        };
+        z.pointerMove = function (e, rect) {
+            if (!(e.pointerId in pts)) return suppress;
+            pts[e.pointerId] = canvasPt(e, rect);
+            if (!pinch || Object.keys(pts).length < 2) return suppress;
+            const ids = Object.keys(pts), a = pts[ids[0]], b = pts[ids[1]];
+            const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+            z.zoom = clamp(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist, 1, max);
+            // the world point that was under the fingers' midpoint stays under it (pinch and two-finger drag in one)
+            z.ox = pinch.world.x - (mid.x / C * size - half) / z.zoom;
+            z.oz = pinch.world.z - (mid.y / C * size - half) / z.zoom;
+            changed();
+            return true;
+        };
+        z.pointerUp = function (e) {
+            const had = e.pointerId in pts;
+            delete pts[e.pointerId];
+            const n = Object.keys(pts).length;
+            if (n < 2) pinch = null;
+            const eaten = suppress;
+            if (n === 0) suppress = false;       // the gesture ends when every finger is up
+            return had && eaten;
+        };
+        return z;
+    }
+    // +, - and "show all" buttons for a map, laid over its top-left corner (inside `wrap`, which must be position:relative)
+    function zoomButtons(wrap, z) {
+        const box = document.createElement('div');
+        box.style.cssText = 'position:absolute; left:8px; top:8px; display:flex; flex-direction:column; gap:4px; z-index:2;';
+        const mk = function (label, title, fn) {
+            const b = document.createElement('button');
+            b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
+            b.style.cssText = 'width:36px; height:36px; border:none; border-radius:9px; background:rgba(15,23,42,0.82); color:#f8fafc; font-size:18px; font-weight:bold; cursor:pointer; line-height:1;';
+            b.onclick = function (e) { e.stopPropagation(); fn(); };
+            box.appendChild(b);
+            return b;
+        };
+        const plus = mk('+', tr('cm_zoom_in', 'Zooma in'), function () { z.zoomBy(1.6); });
+        const minus = mk('−', tr('cm_zoom_out', 'Zooma ut'), function () { z.zoomBy(1 / 1.6); });
+        const all = mk('⤢', tr('cm_zoom_all', 'Visa hela kartan'), function () { z.reset(); });
+        wrap.appendChild(box);
+        // dim what does nothing at the current zoom
+        const sync = function () {
+            minus.style.opacity = z.isZoomed() ? '1' : '0.4';
+            all.style.opacity = z.isZoomed() ? '1' : '0.4';
+        };
+        sync();
+        return { el: box, sync: sync, plus: plus, minus: minus, all: all };
+    }
+
     // ---- the tabs that join the two maps: Hål (blueprint.js) | Omgivning (backdrop.js) ------------------------
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
     // The first empty hole on the plate (the current one first), or -1: the blueprint plans empty holes only
@@ -283,7 +380,7 @@
         TURF: TURF, TEE_COLORS: TEE_COLORS, MOW_PATTERNS: MOW_PATTERNS,
         renderTerrain: renderTerrain, polyPath: polyPath, paintMow: paintMow, turf: turf, sand: sand,
         drawFlag: drawFlag, teeMarker: teeMarker, holeAngle: holeAngle, drawBuiltHole: drawBuiltHole, drawBuiltHoles: drawBuiltHoles,
-        drawFurniture: drawFurniture, mapTabs: mapTabs, openTab: openTab, firstEmptyHole: firstEmptyHole
+        drawFurniture: drawFurniture, makeZoom: makeZoom, zoomButtons: zoomButtons, mapTabs: mapTabs, openTab: openTab, firstEmptyHole: firstEmptyHole
     };
     if (typeof module !== 'undefined' && module.exports) module.exports = root.CourseMap;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -256,9 +256,10 @@
         return off;
     }
 
-    function cx(x) { return (x + VIEW) / (2 * VIEW) * B.C; }
-    function cz(z) { return (z + VIEW) / (2 * VIEW) * B.C; }
-    function mToPx(m) { return m / (2 * VIEW) * B.C; }
+    // world metres to canvas px through the map's zoom and pan (course-map.js makeZoom; a plain fit when it is missing)
+    function cx(x) { return B.zoom ? B.zoom.px(x) : (x + VIEW) / (2 * VIEW) * B.C; }
+    function cz(z) { return B.zoom ? B.zoom.pz(z) : (z + VIEW) / (2 * VIEW) * B.C; }
+    function mToPx(m) { return m * (B.zoom ? B.zoom.m() : B.C / (2 * VIEW)); }
 
     // Figures shown on the map: big ones, and anything outside the plate (trees and bushes on the plate are too small to draw)
     function mapObjects() {
@@ -275,10 +276,11 @@
         const ctx = B.ctx, C = B.C, half = plateHalf();
         ctx.setTransform(B.dpr, 0, 0, B.dpr, 0, 0);
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(B.surround, 0, 0, C, C);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, C, C);
+        ctx.drawImage(B.surround, cx(-VIEW), cz(-VIEW), mToPx(2 * VIEW), mToPx(2 * VIEW));
         // distance rings every 500 m
         ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
-        [500, 1000].forEach(function (m) { ctx.beginPath(); ctx.arc(C / 2, C / 2, mToPx(m), 0, 7); ctx.stroke(); });
+        [500, 1000].forEach(function (m) { ctx.beginPath(); ctx.arc(cx(0), cz(0), mToPx(m), 0, 7); ctx.stroke(); });
         // the course plate: the same topographic picture and course-guide holes as the blueprint map (course-map.js)
         const CM = root.CourseMap, P = { x: cx, z: cz, m: mToPx(1) };
         ctx.drawImage(B.plate, cx(-half), cz(-half), mToPx(half * 2), mToPx(half * 2));
@@ -316,7 +318,11 @@
         // the plate's name just above its top edge (its middle now shows the holes), a scale bar and a north arrow
         ctx.fillStyle = 'rgba(248,250,252,0.85)'; ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
         ctx.fillText(tr('bd_plate', 'Banan'), cx(-half), cz(-half) - 3);
-        if (CM) CM.drawFurniture(ctx, P, C, 500);
+        // the scale bar: a round length that reads 60-150 px at the current zoom
+        const lens = [50, 100, 200, 250, 500, 1000];
+        let len = 1000;
+        for (let k = 0; k < lens.length; k++) if (mToPx(lens[k]) >= 60) { len = lens[k]; break; }
+        if (CM) CM.drawFurniture(ctx, P, C, len);
     }
 
     // ---- shelf & buttons -----------------------------------------------------------------------------------
@@ -549,7 +555,8 @@
     function toWorld(e) {
         const r = B.canvas.getBoundingClientRect();
         const px = (e.clientX - r.left) * (B.C / r.width), py = (e.clientY - r.top) * (B.C / r.height);
-        return { px: px, py: py, x: px / B.C * 2 * VIEW - VIEW, z: py / B.C * 2 * VIEW - VIEW };
+        const w = B.zoom ? B.zoom.toWorld(px, py) : { x: px / B.C * 2 * VIEW - VIEW, z: py / B.C * 2 * VIEW - VIEW };
+        return { px: px, py: py, x: w.x, z: w.z };
     }
     function hit(p) {
         const list = mapObjects();
@@ -564,6 +571,8 @@
     function onDown(e) {
         if (!B) return;
         e.preventDefault();
+        // a second finger makes it a pinch / two-finger drag of the map: the first finger's drag stops
+        if (B.zoom && B.zoom.pointerDown(e, B.canvas.getBoundingClientRect())) { finishDrag(); return; }
         dropStaleSelection();
         const p = toWorld(e), o = hit(p);
         if (o) {
@@ -583,7 +592,9 @@
         refresh();
     }
     function onMove(e) {
-        if (!B || !B.drag || !B.sel) return;
+        if (!B) return;
+        if (B.zoom && B.zoom.pointerMove(e, B.canvas.getBoundingClientRect())) { e.preventDefault(); return; }
+        if (!B.drag || !B.sel) return;
         e.preventDefault();
         const p = toWorld(e), o = B.sel;
         if (!B.drag.snapped) {
@@ -600,13 +611,19 @@
             draw();
         });
     }
-    function onUp() {
+    // End a figure drag: a figure that moved is rebuilt, saved and checked against the course (also when a pinch interrupts the drag)
+    function finishDrag() {
         if (!B || !B.drag) return;
         const moved = B.drag.snapped;
         B.drag = null;
         if (moved && B.sel) { rebuild(B.sel.type); persist(); }
         warnIfCovering(B.sel);
         refresh();
+    }
+    function onUp(e) {
+        if (!B) return;
+        if (e && B.zoom && B.zoom.pointerUp(e)) { B.drag = null; return; }
+        finishDrag();
     }
 
     // Terrain, holes and surround colours may have changed (undo/redo): take the pictures again
@@ -703,6 +720,10 @@
         const wrap = document.createElement('div');
         wrap.style.cssText = 'position:relative; width:' + C + 'px; height:' + C + 'px; flex:none;';
         wrap.appendChild(canvas);
+        // zoom and pan (course-map.js): pinch / two fingers, the wheel, and +, - and show-all buttons in the corner
+        const zoom = root.CourseMap ? root.CourseMap.makeZoom({ half: VIEW, C: C, max: 8, onChange: function () { if (B) { if (B.dom.zoomUi) B.dom.zoomUi.sync(); draw(); } } }) : null;
+        const zoomUi = zoom ? root.CourseMap.zoomButtons(wrap, zoom) : null;
+        if (zoomUi) { zoomUi.el.style.left = '10px'; zoomUi.el.style.top = '10px'; }
         const edgeChips = {};
         const pos = { N: 'top:8px; left:50%; transform:translateX(-50%);', S: 'bottom:8px; left:50%; transform:translateX(-50%);', W: 'left:8px; top:50%; transform:translateY(-50%);', E: 'right:8px; top:50%; transform:translateY(-50%);' };
         SIDES.forEach(function (side) {
@@ -726,7 +747,8 @@
         try { others = HG && HG.otherHoles ? HG.otherHoles(root.courseHoles, -1) : null; } catch (err) { others = null; }
         if (Array.isArray(others)) others = { points: others, polygons: [] };
         B = {
-            dom: { tabs: tabs, edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
+            zoom: zoom,
+            dom: { zoomUi: zoomUi, tabs: tabs, edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();
@@ -753,6 +775,7 @@
         canvas.addEventListener('pointermove', onMove);
         canvas.addEventListener('pointerup', onUp);
         canvas.addEventListener('pointercancel', onUp);
+        canvas.addEventListener('wheel', function (e) { if (B && B.zoom) B.zoom.wheel(e, canvas.getBoundingClientRect()); }, { passive: false });
         refreshEdges();
         refresh();
     }
