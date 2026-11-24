@@ -279,17 +279,13 @@
         // distance rings every 500 m
         ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
         [500, 1000].forEach(function (m) { ctx.beginPath(); ctx.arc(C / 2, C / 2, mToPx(m), 0, 7); ctx.stroke(); });
-        // the course plate
+        // the course plate: the same topographic picture and course-guide holes as the blueprint map (course-map.js)
+        const CM = root.CourseMap, P = { x: cx, z: cz, m: mToPx(1) };
         ctx.drawImage(B.plate, cx(-half), cz(-half), mToPx(half * 2), mToPx(half * 2));
         ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.5;
         ctx.strokeRect(cx(-half), cz(-half), mToPx(half * 2), mToPx(half * 2));
-        // holes already built
-        ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ((B.others && B.others.polygons) || []).forEach(function (poly) {
-            ctx.beginPath();
-            poly.forEach(function (p, i) { if (i) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
-            ctx.closePath(); ctx.fill(); ctx.stroke();
-        });
+        // the holes already built, numbered; far out on this map they are drawn without the finer details
+        if (CM) CM.drawBuiltHoles(ctx, P, { alpha: 0.95, small: P.m < 0.5 });
         // figures: the real outline of the base (same shape, size and turn as the 3D model); a circle until the model has loaded
         mapObjects().forEach(function (o) {
             const big = heightOf(o) >= BACKDROP_MIN, sel = o === B.sel, poly = outlineOf(o);
@@ -317,8 +313,10 @@
                 ctx.fillText(((d && d.name) || o.type) + ' · ' + Math.round(heightOf(o)) + ' m h' + size, cx(o.x), cz(o.z) + rr + 3);
             }
         });
-        ctx.fillStyle = 'rgba(248,250,252,0.85)'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(tr('bd_plate', 'Banan'), C / 2, C / 2);
+        // the plate's name just above its top edge (its middle now shows the holes), a scale bar and a north arrow
+        ctx.fillStyle = 'rgba(248,250,252,0.85)'; ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+        ctx.fillText(tr('bd_plate', 'Banan'), cx(-half), cz(-half) - 3);
+        if (CM) CM.drawFurniture(ctx, P, C, 500);
     }
 
     // ---- shelf & buttons -----------------------------------------------------------------------------------
@@ -621,7 +619,7 @@
         // undo/redo restore the saved surround on the holes; bring the live setting, the dropdowns and the scene in line
         if (typeof root.restoreSurrounding === 'function') root.restoreSurrounding();
         B.surround = surroundPicture();
-        if (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) B.plate = root.HoleBlueprint.renderTerrain(plateHalf());
+        if (root.CourseMap) B.plate = root.CourseMap.renderTerrain(plateHalf());
         dropStaleSelection();
         refresh();
     }
@@ -721,7 +719,7 @@
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();
-        B.plate = (root.HoleBlueprint && root.HoleBlueprint.renderTerrain) ? root.HoleBlueprint.renderTerrain(plateHalf()) : document.createElement('canvas');
+        B.plate = root.CourseMap ? root.CourseMap.renderTerrain(plateHalf()) : document.createElement('canvas');
         // Ctrl+Z / Ctrl+Y reach the editor's own undo while the map is open; keep the picture in step with it
         B.timer = setInterval(function () { if (!B) return; recheckLoaded(); const had = B.sel; dropStaleSelection(); if (had && !B.sel) refresh(); else draw(); }, 500);
         B.keyHandler = function (e) {

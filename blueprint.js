@@ -20,93 +20,9 @@
     function toast(msg, color) { if (typeof root.showBuildToast === 'function') root.showBuildToast(msg, color || '#38bdf8'); }
     function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-    // ---- terrain picture (rendered once when the map opens) ---------------------------------------------
-    // A topographic map: soft hill shading, contour lines (a heavier one every fifth), water with a light shore line.
-    // Drawn once at TERRAIN_PX so the lines stay crisp when the map is scaled to the screen.
-    const TERRAIN_PX = 900;
-    function niceStep(v) {
-        const steps = [0.5, 1, 2, 2.5, 5, 10, 20];
-        for (let k = 0; k < steps.length; k++) if (steps[k] >= v) return steps[k];
-        return 50;
-    }
-    function renderTerrain(half) {
-        const N = 150, size = half * 2, cell = size / N;
-        const hgt = new Float32Array(N * N), wet = new Uint8Array(N * N);
-        let lo = Infinity, hi = -Infinity;
-        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-            const x = -half + (i + 0.5) * cell, z = -half + (j + 0.5) * cell;
-            const s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null;
-            const h = s && typeof s.z === 'number' ? s.z : 0;
-            hgt[j * N + i] = h;
-            if (s && s.type === 'WATER') wet[j * N + i] = 1;
-            else { if (h < lo) lo = h; if (h > hi) hi = h; }
-        }
-        if (!isFinite(lo)) { lo = 0; hi = 1; }
-        // colour by height relative to the typical land level: flat ground reads green, hills lighter, dips darker
-        const land = [];
-        for (let k = 0; k < hgt.length; k += 7) if (!wet[k]) land.push(hgt[k]);
-        land.sort(function (a, b) { return a - b; });
-        const med = land.length ? land[land.length >> 1] : lo;
-        const span = Math.max(8, (hi - lo) * 0.5);
-        const base = document.createElement('canvas');
-        base.width = N; base.height = N;
-        const bctx = base.getContext('2d');
-        const img = bctx.createImageData(N, N);
-        const isWet = function (i, j) { return i >= 0 && j >= 0 && i < N && j < N && wet[j * N + i]; };
-        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-            const k = j * N + i, p = k * 4;
-            if (wet[k]) {
-                // shore: a wet cell next to dry ground is lighter
-                const shore = !isWet(i - 1, j) || !isWet(i + 1, j) || !isWet(i, j - 1) || !isWet(i, j + 1);
-                img.data[p] = shore ? 120 : 46; img.data[p + 1] = shore ? 184 : 118; img.data[p + 2] = shore ? 232 : 206; img.data[p + 3] = 255;
-                continue;
-            }
-            const hl = hgt[j * N + Math.max(0, i - 1)], hr = hgt[j * N + Math.min(N - 1, i + 1)];
-            const hu = hgt[Math.max(0, j - 1) * N + i], hd = hgt[Math.min(N - 1, j + 1) * N + i];
-            // light from the upper left
-            const shade = clamp(1 + ((hl - hr) + (hu - hd)) / cell * 1.4, 0.78, 1.22);
-            const t = clamp((hgt[k] - med) / span, -1, 1);
-            const up = Math.max(0, t), down = Math.max(0, -t);
-            const r = (74 + 30 * up - 12 * down) * shade, g = (124 + 10 * up - 20 * down) * shade, b = (66 + 6 * up - 6 * down) * shade;
-            img.data[p] = clamp(r, 0, 255); img.data[p + 1] = clamp(g, 0, 255); img.data[p + 2] = clamp(b, 0, 255); img.data[p + 3] = 255;
-        }
-        bctx.putImageData(img, 0, 0);
-        const off = document.createElement('canvas');
-        off.width = TERRAIN_PX; off.height = TERRAIN_PX;
-        const octx = off.getContext('2d');
-        octx.imageSmoothingEnabled = true;
-        octx.drawImage(base, 0, 0, TERRAIN_PX, TERRAIN_PX);
-        // contour lines by marching squares over the height grid (dry cells only)
-        const range = hi - lo;
-        if (range >= 0.6) {
-            const step = niceStep(range / 12), f = TERRAIN_PX / N;
-            const px = function (i) { return (i + 0.5) * f; };
-            for (let level = Math.ceil(lo / step) * step; level <= hi; level += step) {
-                const major = Math.abs(Math.round(level / step) % 5) === 0;
-                octx.beginPath();
-                for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
-                    const k = j * N + i;
-                    if (wet[k] || wet[k + 1] || wet[k + N] || wet[k + N + 1]) continue;
-                    const a = hgt[k], b = hgt[k + 1], c = hgt[k + N + 1], d = hgt[k + N];
-                    const pts = [];
-                    const edge = function (h1, h2, x1, y1, x2, y2) {
-                        if ((h1 < level) === (h2 < level)) return;
-                        const t = (level - h1) / (h2 - h1);
-                        pts.push([x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]);
-                    };
-                    edge(a, b, px(i), px(j), px(i + 1), px(j));
-                    edge(b, c, px(i + 1), px(j), px(i + 1), px(j + 1));
-                    edge(c, d, px(i + 1), px(j + 1), px(i), px(j + 1));
-                    edge(d, a, px(i), px(j + 1), px(i), px(j));
-                    for (let q = 0; q + 1 < pts.length; q += 2) { octx.moveTo(pts[q][0], pts[q][1]); octx.lineTo(pts[q + 1][0], pts[q + 1][1]); }
-                }
-                octx.strokeStyle = major ? 'rgba(28,52,22,0.42)' : 'rgba(28,52,22,0.2)';
-                octx.lineWidth = major ? 1.6 : 1;
-                octx.stroke();
-            }
-        }
-        return off;
-    }
+    // the map's look (terrain picture, turf, flags, built holes, scale bar) is shared with the backdrop map: course-map.js
+    const CM = root.CourseMap;
+    function renderTerrain(half) { return CM.renderTerrain(half); }
 
     // ---- sketches ----------------------------------------------------------------------------------------
     function cur() { return S.sketches[S.sel]; }
@@ -184,52 +100,16 @@
     // ---- drawing -----------------------------------------------------------------------------------------
     function cx(x) { return (x + S.half) / S.size * S.C; }
     function cz(z) { return (z + S.half) / S.size * S.C; }
-    function polyPath(ctx, pts) {
-        ctx.beginPath();
-        pts.forEach(function (p, i) { if (i) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
-        ctx.closePath();
-    }
-    // ---- the course-map look ------------------------------------------------------------------------------
-    const TURF = { rough: '#3d7034', fairway: '#7bbf55', fringe: '#6aae47', green: '#a3dd7a', sand: '#ecdca6', sandLip: 'rgba(120,88,36,0.5)' };
-    const TEE_COLORS = ['#111827', '#facc15', '#ef4444'];   // the back / middle / front box (black-white, yellow, red groups)
-    const MOW_PATTERNS = ['SOLID', 'STRIPES', 'CHECKERBOARD', 'DIAMOND'];   // what both the fairway and the green builders can paint
+    // this map's projection for course-map.js: world metres to canvas px
+    function proj() { return { x: cx, z: cz, m: S.C / S.size }; }
+    function polyPath(ctx, pts) { CM.polyPath(ctx, proj(), pts); }
+    // ---- the course-map look (course-map.js) ---------------------------------------------------------------
+    const TURF = CM.TURF, TEE_COLORS = CM.TEE_COLORS, MOW_PATTERNS = CM.MOW_PATTERNS;
     function pxPerM() { return S.C / S.size; }
-    // Mowing pattern inside the current path (clipped by the caller): bands along the line of play (angle), as the builders paint
-    // them, drawn wider than on the course (bandM) so they read at map scale
-    function paintMow(ctx, pts, pattern, angle, bandM, alpha) {
-        if (!pattern || pattern === 'SOLID') return;
-        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-        pts.forEach(function (p) { const x = cx(p.x), y = cz(p.z); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
-        const R = Math.hypot(x1 - x0, y1 - y0) / 2 + 2, band = Math.max(3, bandM * pxPerM());
-        ctx.save();
-        ctx.translate((x0 + x1) / 2, (y0 + y1) / 2);
-        ctx.rotate(angle + (pattern === 'DIAMOND' ? Math.PI / 4 : 0));
-        ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
-        const n = Math.ceil(R / band);
-        for (let a = -n; a < n; a++) {
-            if (pattern === 'STRIPES') { if (a % 2 === 0) ctx.fillRect(-R, a * band, 2 * R, band); continue; }
-            for (let b = -n; b < n; b++) if ((a + b) % 2 === 0) ctx.fillRect(b * band, a * band, band, band);
-        }
-        ctx.restore();
-    }
-    // A pin with a pennant at canvas point g; size in px
-    function drawFlag(ctx, g, size, color) {
-        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = Math.max(1.5, size * 0.12); ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(g.x, g.y - size); ctx.stroke();
-        ctx.fillStyle = color || '#ef4444';
-        ctx.beginPath(); ctx.moveTo(g.x, g.y - size); ctx.lineTo(g.x + size * 0.7, g.y - size * 0.78); ctx.lineTo(g.x, g.y - size * 0.56); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = 'rgba(15,23,42,0.55)';
-        ctx.beginPath(); ctx.ellipse(g.x, g.y, size * 0.22, size * 0.1, 0, 0, 7); ctx.fill();
-        ctx.lineCap = 'butt';
-    }
-    // The hole number on a round tee marker (the tee handle); the selected hole's marker is larger and ringed in sky blue
-    function teeMarker(ctx, pt, label, r, selected, statusCol) {
-        ctx.beginPath(); ctx.arc(pt.x, pt.y + 1.5, r, 0, 7); ctx.fillStyle = 'rgba(15,23,42,0.35)'; ctx.fill();
-        ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, 7); ctx.fillStyle = '#0f172a'; ctx.fill();
-        ctx.lineWidth = selected ? 3 : 2; ctx.strokeStyle = statusCol || (selected ? '#38bdf8' : '#f8fafc'); ctx.stroke();
-        ctx.fillStyle = '#f8fafc'; ctx.font = 'bold ' + Math.round(r * 0.95) + 'px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(label, pt.x, pt.y + 1);
-    }
+    function paintMow(ctx, pts, pattern, angle, bandM, alpha) { CM.paintMow(ctx, proj(), pts, pattern, angle, bandM, alpha); }
+    function drawFlag(ctx, g, size, color) { CM.drawFlag(ctx, g, size, color); }
+    // the hole number on a round tee marker (the tee handle); the selected hole's marker is larger and ringed in sky blue
+    function teeMarker(ctx, pt, label, r, selected, statusCol) { CM.teeMarker(ctx, pt, label, r, statusCol || (selected ? '#38bdf8' : '#f8fafc'), selected ? 3 : 2); }
     // The handle that turns the hole: the flag on a light disc
     function flagHandle(ctx, pt) {
         ctx.beginPath(); ctx.arc(pt.x, pt.y + 1.5, 15, 0, 7); ctx.fillStyle = 'rgba(15,23,42,0.35)'; ctx.fill();
@@ -267,13 +147,7 @@
         polyPath(ctx, wp.green); ctx.fillStyle = TURF.green; ctx.fill();
         ctx.save(); polyPath(ctx, wp.green); ctx.clip(); paintMow(ctx, wp.green, mow, angle, 3.5, 0.16); ctx.restore();
         // sand, darker on the lip that faces the light's far side
-        wp.bunkers.forEach(function (b) {
-            polyPath(ctx, b); ctx.fillStyle = TURF.sand; ctx.fill();
-            ctx.save(); polyPath(ctx, b); ctx.clip();
-            ctx.translate(1.6, 1.6); polyPath(ctx, b); ctx.strokeStyle = TURF.sandLip; ctx.lineWidth = 3; ctx.stroke();
-            ctx.restore();
-            polyPath(ctx, b); ctx.strokeStyle = 'rgba(60,45,20,0.35)'; ctx.lineWidth = 0.8; ctx.stroke();
-        });
+        wp.bunkers.forEach(function (b) { CM.sand(ctx, proj(), b); });
         (wp.teeBoxes || []).forEach(function (b, k) {
             polyPath(ctx, b); ctx.fillStyle = TURF.fairway; ctx.fill();
             ctx.strokeStyle = TEE_COLORS[k] || '#f8fafc'; ctx.lineWidth = 2; ctx.stroke();
@@ -297,40 +171,9 @@
             teeMarker(ctx, tee, String(holeNo(i)), 12, false, statusCol);
         }
     }
-    // Holes already built on the plate, in the same muted course colours (from the hole data, so each part keeps its kind)
-    function drawBuiltHoles(ctx) {
-        const all = root.courseHoles || [], ok = function (o) { return o && o.points && o.points.length >= 3; };
-        ctx.save(); ctx.globalAlpha = 0.7;
-        all.forEach(function (h, i) {
-            if (!h || S.holes.indexOf(i) >= 0) return;
-            (h.fairways || []).filter(ok).forEach(function (f) { polyPath(ctx, f.points); ctx.fillStyle = TURF.fairway; ctx.fill(); });
-            (h.bunkers || []).filter(ok).forEach(function (b) { polyPath(ctx, b.points); ctx.fillStyle = TURF.sand; ctx.fill(); });
-            if (ok(h.greenData)) { polyPath(ctx, h.greenData.points); ctx.fillStyle = TURF.green; ctx.fill(); }
-            (h.teeBoxes || []).filter(ok).forEach(function (t) { polyPath(ctx, t.points); ctx.fillStyle = '#e2e8f0'; ctx.fill(); });
-            if (h.flag && typeof h.flag.x === 'number') {
-                const g = { x: cx(h.flag.x), y: cz(h.flag.z) };
-                drawFlag(ctx, g, 11, '#f8fafc');
-                ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 10px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-                ctx.fillText(String(i + 1), g.x + 9, g.y - 8);
-            }
-        });
-        ctx.restore();
-    }
-    // A scale bar (bottom left) and a north arrow (top right): -z is north on the plate, up on the map
-    function drawMapFurniture(ctx, C) {
-        const m = pxPerM(), len = S.size > 900 ? 200 : 100, w = len * m, x = 12, y = C - 14;
-        ctx.save();
-        ctx.fillStyle = 'rgba(15,23,42,0.55)'; ctx.fillRect(x - 6, y - 16, w + 46, 24);
-        ctx.fillStyle = '#f8fafc'; ctx.fillRect(x, y - 2, w / 2, 4); ctx.fillStyle = '#0f172a'; ctx.fillRect(x + w / 2, y - 2, w / 2, 4);
-        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 1; ctx.strokeRect(x, y - 2, w, 4);
-        ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 10px system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-        ctx.fillText(len + ' m', x + w + 6, y);
-        const nx = C - 20, ny = 22;
-        ctx.beginPath(); ctx.arc(nx, ny, 13, 0, 7); ctx.fillStyle = 'rgba(15,23,42,0.55)'; ctx.fill();
-        ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.moveTo(nx, ny - 10); ctx.lineTo(nx + 5, ny + 2); ctx.lineTo(nx, ny - 1); ctx.lineTo(nx - 5, ny + 2); ctx.closePath(); ctx.fill();
-        ctx.font = 'bold 9px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('N', nx, ny + 7);
-        ctx.restore();
-    }
+    // holes already built on the plate (not the ones being planned), each in its own mowing pattern
+    function drawBuiltHoles(ctx) { CM.drawBuiltHoles(ctx, proj(), { skip: S.holes, alpha: 0.7 }); }
+    function drawMapFurniture(ctx, C) { CM.drawFurniture(ctx, proj(), C, S.size > 900 ? 200 : 100); }
     function draw() {
         if (!S) return;
         const ctx = S.ctx, C = S.C;
