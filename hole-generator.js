@@ -35,6 +35,9 @@
     // A typical drive and lay-up for the approach length (m), and the green radius it gets: GREEN_R.min for an approach of
     // GREEN_R.near m or less, GREEN_R.max from GREEN_R.far m (before the green's stretch and jitter)
     const DRIVE_CARRY = 230;
+    // Fairway width range (m) by par (5 = par 5 and 6), and the extra width where the drives land
+    const FAIRWAY_W = { 4: [30, 40], 5: [34, 44] };
+    const FAIRWAY_BULGE = 6;
     const GREEN_R = { min: 10.5, max: 15, near: 60, far: 190 };
     // Par 3 approach: a short strip of fairway in front of the green (m before the green's front edge, half width as a share of rg)
     const APRON = { len: [18, 30], halfNear: 0.55, halfAtGreen: 0.95 };
@@ -193,7 +196,8 @@
         if (R.fairway) {
             fwS0 = FAIRWAY_START;
             fwS1 = L - rg - 4;
-            let w0 = range(rng, par >= 5 ? 38 : 34, par >= 5 ? 50 : 46);
+            // fairway width (m) before the landing-zone bulge: real fairways are about 25-40 m; a little wider here for the arcade
+            let w0 = range(rng, par >= 5 ? FAIRWAY_W[5][0] : FAIRWAY_W[4][0], par >= 5 ? FAIRWAY_W[5][1] : FAIRWAY_W[4][1]);
             let samples = [];
             let n = Math.max(6, Math.round((fwS1 - fwS0) / 25));
             for (let i = 0; i <= n; i++) samples.push(fwS0 + (fwS1 - fwS0) * i / n);
@@ -207,7 +211,7 @@
             let halfAt = [];
             samples.forEach(function (s, i) {
                 let u = (s - fwS0) / (fwS1 - fwS0);
-                let w = w0 * (1 - 0.3 * smoothstep(0.7, 1, u)) + 8 * Math.exp(-Math.pow((u - 0.5) / 0.16, 2));
+                let w = w0 * (1 - 0.3 * smoothstep(0.7, 1, u)) + FAIRWAY_BULGE * Math.exp(-Math.pow((u - 0.5) / 0.16, 2));
                 if (i === 0 || i === samples.length - 1) w *= 0.6;
                 halfAt.push({ s: s, h: w / 2 });
             });

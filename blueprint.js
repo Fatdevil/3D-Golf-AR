@@ -187,7 +187,9 @@
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(S.terrain, 0, 0, C, C);
         ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
-        for (let g = -200; g <= 200; g += 100) {
+        // a line every 100 m (200 m on a big plate), centred on the plate, whatever its size
+        const step = S.size > 900 ? 200 : 100, g0 = -Math.floor((S.half - 1) / step) * step;
+        for (let g = g0; g < S.half; g += step) {
             ctx.beginPath(); ctx.moveTo(cx(g), 0); ctx.lineTo(cx(g), C); ctx.moveTo(0, cz(g)); ctx.lineTo(C, cz(g)); ctx.stroke();
         }
         // holes already on the course
@@ -434,8 +436,10 @@
         tb.points.forEach(function (p) { x += p.x; z += p.z; });
         return { tee: { x: x / tb.points.length, z: z / tb.points.length } };
     }
-    // Does `plan` (the stand-in for the next hole) fit with its tee near the green of `world` (this hole, placed)?
-    // env is this hole's environment: its soft neighbours become hard again, and this hole's green is soft for the next tee.
+    // Does `plan` (the next hole's shape) fit with its tee near the green of `world` (this hole, placed)? Returns the spot it fits
+    // at ({ origin, heading }), or null. env is this hole's environment: its soft neighbours become hard again, and this hole's
+    // green is soft for the next tee. The spot is handed on to the next hole's search (S.pending[..].spot -> sketch.hint), which
+    // samples other points around the green and could otherwise miss the very spot that was promised here.
     function nextFits(plan, world, env) {
         const HG = root.HoleGenerator, split = HG.obstaclesSplit(world, 'green');
         const hard = env.others.polygons.concat(split.polygons);
@@ -444,9 +448,12 @@
         const g = world.greenCenter;
         for (let r = 0; r < AHEAD_RINGS.length; r++) for (let a = 0; a < 12; a++) {
             const ang = a / 12 * Math.PI * 2, o = { x: g.x + Math.cos(ang) * AHEAD_RINGS[r], z: g.z + Math.sin(ang) * AHEAD_RINGS[r] };
-            for (let t = 0; t < 6; t++) if (HG.evaluateSite(plan, o, ang + (t - 2.5) * 0.5, env2).ok) return true;
+            for (let t = 0; t < 6; t++) {
+                const h = ang + (t - 2.5) * 0.5;
+                if (HG.evaluateSite(plan, o, h, env2).ok) return { origin: o, heading: h };
+            }
         }
-        return false;
+        return null;
     }
     // Find a good starting spot for sketch i: random tries first, then the closest legal spot around a few
     // anchor points, and finally another shape (a crowded map may only have room for a smaller one).
@@ -469,7 +476,7 @@
         const edge = S.half * 0.78, starts = [[-edge, 0], [edge, 0], [0, -edge], [0, edge]][Math.floor(Math.random() * 4)];
         const pg = prevGreen(i) || (S.holes[i] === 0 ? { x: starts[0], z: starts[1] } : null);
         let round = 0, step = pg ? -2 : -1;
-        let ring = 0, cand = 0, best = null, lastRing = NEAR_RINGS.length - 1, nearShapes = 0;
+        let ring = 0, cand = 0, best = null, lastRing = NEAR_RINGS.length - 1, nearShapes = 0, aheadShapes = 0;
         const ahead = lookAhead(i);
         const score = function (r, ev, env) {
             const g = ev.world.greenCenter, room = Math.min(150, S.half - Math.max(Math.abs(g.x), Math.abs(g.z)));
@@ -477,15 +484,22 @@
             if (ahead && ahead.tee) sc += Math.hypot(g.x - ahead.tee.x, g.z - ahead.tee.z);
             // the look-ahead is the expensive part: only for a spot that could still beat the best one found so far
             if (best && sc >= best.score) return { score: sc + NO_NEXT_ROOM, good: false };
-            const good = !(ahead && ahead.plan) || nextFits(ahead.plan, ev.world, env);
-            return { score: sc + (good ? 0 : NO_NEXT_ROOM), good: good };
+            const fit = (ahead && ahead.plan) ? nextFits(ahead.plan, ev.world, env) : null;
+            const good = !(ahead && ahead.plan) || !!fit;
+            return { score: sc + (good ? 0 : NO_NEXT_ROOM), good: good, fit: fit };
         };
+        // the spot the previous hole's placement found for this shape (see nextFits): tried first, the rings may still beat it
+        let hint = s.hint && pg ? s.hint : null;
+        s.hint = null;
         const ANGLES = 16, TURNS = [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.6, -2.6, Math.PI];   // away from the green first
         S.busy = true; refreshUi();
         const finish = function (spot) {
             S.busy = false;
             if (spot) { s.origin = spot.origin; s.heading = spot.heading; }
             else { s.origin = { x: -s.plan.length / 2, z: 0 }; s.heading = 0; }
+            // hand the next hole the spot its shape was found to fit at, next to this green
+            const nextPend = S.pending && S.pending[S.holes[i] + 1];
+            if (nextPend) nextPend.spot = (spot && spot.fit && ahead && ahead.plan === nextPend.plan) ? spot.fit : null;
             evaluate(i);
             revalidateOthers(i);
             if (!spot) flashNote(tr('bp_none', 'Ingen ledig plats här – flytta hålet'), true);
@@ -495,6 +509,19 @@
             if (!S || token !== S.findToken) return;
             const env = envFor(i);
             let spot = null;
+            if (step === -2 && hint) {
+                const h0 = hint; hint = null;
+                const ev0 = HG.evaluateSite(s.plan, h0.origin, h0.heading, env);
+                if (ev0.ok) {
+                    const r0 = Math.hypot(h0.origin.x - pg.x, h0.origin.z - pg.z), sc0 = score(r0, ev0, env);
+                    best = { origin: h0.origin, heading: h0.heading, score: sc0.score, good: sc0.good, fit: sc0.fit };
+                    if (sc0.good) {
+                        let k = 0;
+                        while (k < NEAR_RINGS.length - 1 && NEAR_RINGS[k] < r0 - 1) k++;
+                        lastRing = Math.min(lastRing, k + 1);
+                    }
+                }
+            }
             if (step === -2) {
                 // next to the previous green: a slice of the current ring per tick
                 const r = NEAR_RINGS[ring], total = ANGLES * TURNS.length, t0 = Date.now();
@@ -508,10 +535,38 @@
                     const sc = score(r, ev, env);
                     // the ring search ends one ring after the first spot that leaves room for the next hole
                     if (sc.good && !(best && best.good)) lastRing = Math.min(lastRing, ring + 1);
-                    if (!best || sc.score < best.score) best = { origin: o, heading: h, score: sc.score, good: sc.good };
+                    if (!best || sc.score < best.score) best = { origin: o, heading: h, score: sc.score, good: sc.good, fit: sc.fit };
                 }
                 if (cand < total && Date.now() <= deadline) { setTimeout(tick, 0); return; }
                 ring++; cand = 0;
+                // every spot found leaves the next hole's shape no room near this green: draw the next hole another shape and look
+                // again (a crowded plate fits a shorter or differently bent hole), a few times, before settling for a long walk
+                // (only in the first seconds of the search: the map must not keep the player waiting for a nicer walk)
+                if (best && !best.good && ring >= NEAR_RINGS.length && ahead && ahead.plan && aheadShapes < 3 && Date.now() < deadline - 3000) {
+                    aheadShapes++;
+                    const nextIdx = S.holes[i] + 1, pend = S.pending && S.pending[nextIdx];
+                    if (pend) {
+                        pend.seed = Math.floor(Math.random() * 1e9);
+                        pend.plan = HG.planFor(pend.par, pend.seed);
+                        pend.spot = null;
+                        ahead.plan = pend.plan;
+                        // keep the spot found so far (it may be the only legal one, e.g. the hint), scored against the new shape
+                        const keep = best;
+                        best = null; ring = 0; lastRing = NEAR_RINGS.length - 1;
+                        const evK = HG.evaluateSite(s.plan, keep.origin, keep.heading, env);
+                        if (evK.ok) {
+                            const rK = Math.hypot(keep.origin.x - pg.x, keep.origin.z - pg.z), scK = score(rK, evK, env);
+                            best = { origin: keep.origin, heading: keep.heading, score: scK.score, good: scK.good, fit: scK.fit };
+                            if (scK.good) {
+                                let k = 0;
+                                while (k < NEAR_RINGS.length - 1 && NEAR_RINGS[k] < rK - 1) k++;
+                                lastRing = Math.min(lastRing, k + 1);
+                            }
+                        }
+                        setTimeout(tick, 0);
+                        return;
+                    }
+                }
                 if (best && (ring > lastRing || Date.now() > deadline)) return finish(best);
                 if (ring >= NEAR_RINGS.length) {
                     ring = 0;
@@ -553,7 +608,7 @@
         const par = suggestPar(idx, S.holes, S.sketches), sk = makeSketch(par);
         // the shape the previous hole's placement already made room for
         const pend = S.pending && S.pending[idx];
-        if (pend && pend.par === par) { sk.seed = pend.seed; sk.plan = pend.plan; }
+        if (pend && pend.par === par) { sk.seed = pend.seed; sk.plan = pend.plan; sk.hint = pend.spot || null; }
         if (S.pending) delete S.pending[idx];
         S.sketches.push(sk);
         S.sel = S.sketches.length - 1;
@@ -704,7 +759,8 @@
         const holes = emptyHolesFrom(root.currentHoleIndex);
         const half = (root.TERRAIN_SIZE || 600) / 2;
         const par = suggestPar(holes[0], holes, []);
-        const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 376, 760)));
+        // the map plus its 2 px border on each side (+4) fits the screen with the 8 px page padding on each side (+16)
+        const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 20, window.innerHeight - 380, 760)));
         const dpr = Math.min(2, window.devicePixelRatio || 1);
 
         const overlay = document.createElement('div');
@@ -769,7 +825,10 @@
         const row2 = document.createElement('div');
         row2.style.cssText = 'width:' + C + 'px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:center;';
         const add = btn('➕ ' + tr('bp_add', 'Hål'), addHole);
-        const reroll = btn('🎲 ' + tr('bp_reroll', 'Annan form'), function () { if (!S.busy) newShape(); }, 'flex:1;');
+        // on a phone the row has no room for the words: the die alone, the words stay in the tooltip / screen-reader name
+        const reroll = btn(compact ? '🎲' : '🎲 ' + tr('bp_reroll', 'Annan form'), function () { if (!S.busy) newShape(); }, 'flex:1;' + (compact ? ' font-size:18px;' : ''));
+        reroll.title = tr('bp_reroll', 'Annan form');
+        reroll.setAttribute('aria-label', tr('bp_reroll', 'Annan form'));
         const left = btn('⟲', function () { if (!S.busy) turn(-Math.PI / 12); });
         const right = btn('⟳', function () { if (!S.busy) turn(Math.PI / 12); });
         const earlier = btn('◀', function () { moveHole(-1); });
