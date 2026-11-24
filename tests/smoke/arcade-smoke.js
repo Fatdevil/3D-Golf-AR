@@ -1058,8 +1058,8 @@ function serve() {
       const R4 = window.HoleGenerator.RULES[4], gR = window.HoleGenerator.worldPlan(sk.plan, { x: 0, z: 0 }, 0).greenCenter;
       const shapeSeen = { dogleg: sk.plan.dogleg, right: gR.z > 0, len: Math.round(sk.plan.length), pressed: S.dom.shapeBtns.filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; }).map(function (b) { return b.dataset.shapeVal; }) };
       shapeBtn('dogleg', 'right').click(); await settle();
-      check('blueprint shape buttons: a long hole bending right, and a second tap goes back to random', shapeSeen.dogleg && shapeSeen.right && shapeSeen.len >= R4.len[1] - (R4.len[1] - R4.len[0]) / 3 - 0.5 &&
-        shapeSeen.pressed.join() === 'right,long' && sk.shape.dogleg === null && sk.shape.len === 'long' && /\d+ m/.test(S.dom.chips.textContent), JSON.stringify([shapeSeen, sk.shape, S.dom.chips.textContent]));
+      check('blueprint shape buttons: a long hole bending right, and a second tap goes back to random; the scorecard shows its length', shapeSeen.dogleg && shapeSeen.right && shapeSeen.len >= R4.len[1] - (R4.len[1] - R4.len[0]) / 3 - 0.5 &&
+        shapeSeen.pressed.join() === 'right,long' && sk.shape.dogleg === null && sk.shape.len === 'long' && S.dom.card.textContent.indexOf(String(Math.round(sk.plan.length))) >= 0, JSON.stringify([shapeSeen, sk.shape, S.dom.card.textContent]));
       BP.close(false);
     })();
 

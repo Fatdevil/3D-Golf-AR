@@ -4,8 +4,8 @@
 //   npm --prefix tests install && npm --prefix tests run setup    (once; or set CHROMIUM_PATH)
 //   npm run smoke:builder
 // Checks: the course builder (no range tee), the 3D scene pauses while the map is open, three holes get good spots in time with a
-// par mix (4, 3, 5) and short walks between them, the map's rows keep their height, every hole is built (the par 3 with its
-// approach strip) and the scene runs again after the map closes. Set SHOTS=<dir> to also save screenshots.
+// par mix (4, 3, 5) and short walks between them, the scorecard shows par and metres per hole at full height, every hole is built
+// (the par 3 with its approach strip) with the mowing pattern picked on the map, and the scene runs again after the map closes. Set SHOTS=<dir> to also save screenshots.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -103,11 +103,13 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
       const g = S.sketches[i - 1].ev.world.greenCenter;
       return Math.round(Math.hypot(s.origin.x - g.x, s.origin.z - g.z));
     });
-    const sum = S.dom.summary;
+    const card = S.dom.card, rows = card.querySelectorAll('tr');
+    const cellsOf = function (r) { return Array.prototype.map.call(rows[r].children, function (c) { return c.textContent.trim(); }); };
     return {
       paused: paused, framesWhileOpen: framesWhileOpen, times: times,
       ok: S.sketches.map(function (s) { return !!(s.ev && s.ev.ok); }), pars: S.sketches.map(function (s) { return s.par; }), walks: walks,
-      buildEnabled: !S.dom.build.disabled, summary: sum.textContent, summaryHeight: sum.getBoundingClientRect().height,
+      buildEnabled: !S.dom.build.disabled, cardRows: rows.length, cardHeight: card.getBoundingClientRect().height,
+      parRow: cellsOf(1), lenRow: cellsOf(2), lengths: S.sketches.map(function (s) { return Math.round(s.plan.length); }),
       overlayScrolls: S.dom.overlay.scrollHeight >= S.dom.overlay.clientHeight
     };
   });
@@ -118,28 +120,40 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
   check('a new course gets a par mix: 4, 3, 5', plan.pars.join() === '4,3,5', plan.pars.join());
   // a crowded plate can now and then leave no room near a green; well past the map's long-walk warning (150 m) is a regression
   check('the walks from green to tee stay short', plan.walks.slice(1).every(function (w) { return w <= 260; }), JSON.stringify(plan.walks));
-  check('the summary row keeps its height (the page scrolls instead of squeezing it)', plan.summaryHeight >= 17 && /Par 12/.test(plan.summary), JSON.stringify({ h: plan.summaryHeight, text: plan.summary }));
+  check('the scorecard: a column per hole with par and metres, the totals, at full height (the page scrolls instead of squeezing it)',
+    plan.cardRows === 4 && plan.cardHeight >= 90 && plan.parRow.slice(1).join() === '4,3,5,12' &&
+    plan.lenRow.slice(1, 4).join() === plan.lengths.join() && Number(plan.lenRow[4]) === plan.lengths.reduce(function (a, b) { return a + b; }, 0),
+    JSON.stringify({ rows: plan.cardRows, h: plan.cardHeight, par: plan.parRow, len: plan.lenRow }));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-map.png') });
 
   // 3. build: every hole, the par 3 with its approach strip, and the scene runs again
   const built = await page.evaluate(async function () {
     const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     window._bpLastBuild = null;
+    const S = window.HoleBlueprint.state();
+    const mowBefore = window._smartMowPattern;
+    S.dom.mowBtns.filter(function (b) { return b.dataset.mow === 'CHECKERBOARD'; })[0].click();
+    const mowPicked = S.mow;
     window.HoleBlueprint.build();
     const paused = window._pause3D;
     for (let w = 0; w < 600 && !window._bpLastBuild; w++) await wait(200);
     await wait(500);
     return {
       pausedAfterClose: paused, last: window._bpLastBuild, overlay: !!document.getElementById('bp-overlay'),
+      mowPicked: mowPicked, mowBefore: mowBefore, mowAfter: window._smartMowPattern,
       holes: [0, 1, 2].map(function (i) {
         const h = courseHoles[i];
-        return { par: h.par, green: !!h.greenData, tees: (h.teeBoxes || []).length, fairways: (h.fairways || []).length };
+        return { par: h.par, green: !!h.greenData, tees: (h.teeBoxes || []).length, fairways: (h.fairways || []).length,
+          mow: [h.greenData && h.greenData.mowPattern].concat((h.fairways || []).map(function (f) { return f.mowPattern; })) };
       })
     };
   });
   check('closing the map lets the scene run again', built.pausedAfterClose === false, String(built.pausedAfterClose));
   check('every hole is built', !!built.last && built.last.jobs === 3 && built.last.failed.length === 0 && built.holes.every(function (h) { return h.green && h.tees === 3; }), JSON.stringify({ last: built.last, holes: built.holes }));
   check('the holes take the planned par; the par 3 has its approach strip, the others their fairway', built.holes.map(function (h) { return h.par; }).join() === '4,3,5' && built.holes.every(function (h) { return h.fairways === 1; }), JSON.stringify(built.holes));
+  check('the course style: the mowing pattern picked on the map is on every built fairway and green, and the global is put back',
+    built.mowPicked === 'CHECKERBOARD' && built.holes.every(function (h) { return h.mow.every(function (m) { return m === 'CHECKERBOARD'; }); }) && built.mowAfter === built.mowBefore,
+    JSON.stringify({ picked: built.mowPicked, holes: built.holes.map(function (h) { return h.mow; }), before: built.mowBefore, after: built.mowAfter }));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-built.png') });
 
   check('no page errors', errors.length === 0, errors.join(' | '));

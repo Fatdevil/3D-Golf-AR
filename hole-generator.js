@@ -1195,6 +1195,9 @@
         if (opts.syncPar && hole.par !== par && typeof root.changeHolePar === 'function') root.changeHolePar(par - hole.par);
         let realSave = root.saveUndoState;
         root.saveUndoState = function () { };
+        // the blueprint's course style: the fairway and green builders read the mowing pattern from this global while they build
+        let prevMow = root._smartMowPattern;
+        if (opts.mow) root._smartMowPattern = opts.mow;
         try {
             if (wp.fairway && parts.fairway) {
                 // a fairway on a hill gets a slope cap: the hill stays but becomes playable
@@ -1266,6 +1269,7 @@
             return fail('error', { message: String((e && e.stack) || e).slice(0, 600) });
         } finally {
             root.saveUndoState = realSave;
+            if (opts.mow) root._smartMowPattern = prevMow;
         }
         if (typeof root.saveLevel === 'function') root.saveLevel();
         if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
