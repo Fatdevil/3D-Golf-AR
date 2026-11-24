@@ -93,19 +93,20 @@
         const HG = root.HoleGenerator;
         const polys = [wp.green].concat(wp.fairway ? [wp.fairway] : [], wp.teeBoxes || []);
         if (polys.some(function (p) { return HG.inPoly(wx, wz, p); })) return true;
-        for (let i = 0; i < wp.centerline.length - 1; i++) if (distToSegment(wx, wz, wp.centerline[i], wp.centerline[i + 1]) < 14 * S.mPerPx) return true;
+        for (let i = 0; i < wp.centerline.length - 1; i++) if (distToSegment(wx, wz, wp.centerline[i], wp.centerline[i + 1]) < 14 / pxPerM()) return true;
         return false;
     }
 
     // ---- drawing -----------------------------------------------------------------------------------------
-    function cx(x) { return (x + S.half) / S.size * S.C; }
-    function cz(z) { return (z + S.half) / S.size * S.C; }
+    // world metres to canvas px through the map's zoom and pan (course-map.js makeZoom)
+    function cx(x) { return S.zoom.px(x); }
+    function cz(z) { return S.zoom.pz(z); }
     // this map's projection for course-map.js: world metres to canvas px
-    function proj() { return { x: cx, z: cz, m: S.C / S.size }; }
+    function proj() { return { x: cx, z: cz, m: S.zoom.m() }; }
     function polyPath(ctx, pts) { CM.polyPath(ctx, proj(), pts); }
     // ---- the course-map look (course-map.js) ---------------------------------------------------------------
     const TURF = CM.TURF, TEE_COLORS = CM.TEE_COLORS, MOW_PATTERNS = CM.MOW_PATTERNS;
-    function pxPerM() { return S.C / S.size; }
+    function pxPerM() { return S.zoom.m(); }
     function paintMow(ctx, pts, pattern, angle, bandM, alpha) { CM.paintMow(ctx, proj(), pts, pattern, angle, bandM, alpha); }
     function drawFlag(ctx, g, size, color) { CM.drawFlag(ctx, g, size, color); }
     // the hole number on a round tee marker (the tee handle); the selected hole's marker is larger and ringed in sky blue
@@ -173,13 +174,20 @@
     }
     // holes already built on the plate (not the ones being planned), each in its own mowing pattern
     function drawBuiltHoles(ctx) { CM.drawBuiltHoles(ctx, proj(), { skip: S.holes, alpha: 0.7 }); }
-    function drawMapFurniture(ctx, C) { CM.drawFurniture(ctx, proj(), C, S.size > 900 ? 200 : 100); }
+    // the scale bar is a round length that reads 60-150 px at the current zoom
+    function drawMapFurniture(ctx, C) {
+        const m = pxPerM(), lens = [10, 20, 25, 50, 100, 200, 250, 500, 1000];
+        let len = lens[lens.length - 1];
+        for (let k = 0; k < lens.length; k++) if (lens[k] * m >= 60) { len = lens[k]; break; }
+        CM.drawFurniture(ctx, proj(), C, len);
+    }
     function draw() {
         if (!S) return;
         const ctx = S.ctx, C = S.C;
         ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(S.terrain, 0, 0, C, C);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, C, C);
+        ctx.drawImage(S.terrain, cx(-S.half), cz(-S.half), S.size * pxPerM(), S.size * pxPerM());
         ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
         // a line every 100 m (200 m on a big plate), centred on the plate, whatever its size
         const step = S.size > 900 ? 200 : 100, g0 = -Math.floor((S.half - 1) / step) * step;
@@ -674,15 +682,25 @@
     function toWorldPt(e) {
         const r = S.canvas.getBoundingClientRect();
         const px = (e.clientX - r.left) * (S.C / r.width), py = (e.clientY - r.top) * (S.C / r.height);
-        return { px: px, py: py, x: px / S.C * S.size - S.half, z: py / S.C * S.size - S.half };
+        const w = S.zoom.toWorld(px, py);
+        return { px: px, py: py, x: w.x, z: w.z };
     }
     function onDown(e) {
-        if (!S || S.busy) return;
+        if (!S) return;
         e.preventDefault();
+        // a second finger makes it a pinch / two-finger drag of the map: whatever the first finger began is undone
+        if (S.zoom.pointerDown(e, S.canvas.getBoundingClientRect())) {
+            if (S.drag && S.drag.undo) { const u = S.drag.undo, sk = S.sketches[u.sel]; if (sk) { sk.origin = u.origin; sk.heading = u.heading; } S.sel = u.sel; queueEval(); }
+            S.drag = null;
+            return;
+        }
+        if (S.busy) return;
         const p = toWorldPt(e);
         S.snapToken++; S.note = null; S.noteBad = false;
         const near = function (h) { return h && Math.hypot(p.px - h.x, p.py - h.y) < 24; };
         let s = cur();
+        // what to put back if this turns into a pinch (the tap may move the selected hole, or select another)
+        const undoOrigin = s.origin, undoHeading = s.heading, undoSel = S.sel;
         if (near(S.handles && S.handles.green)) S.drag = { mode: 'rotate' };
         else if (near(S.handles && S.handles.tee) || hitSketch(s, p.x, p.z)) S.drag = { mode: 'move', dx: s.origin.x - p.x, dz: s.origin.z - p.z };
         else {
@@ -692,11 +710,14 @@
             if (hit >= 0) { S.sel = hit; s = cur(); S.drag = { mode: 'move', dx: s.origin.x - p.x, dz: s.origin.z - p.z }; }
             else { S.drag = { mode: 'move', dx: 0, dz: 0 }; s.origin = { x: p.x, z: p.z }; }
         }
+        if (S.drag) S.drag.undo = { sel: undoSel, origin: undoOrigin, heading: undoHeading };
         try { S.canvas.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
         queueEval();
     }
     function onMove(e) {
-        if (!S || !S.drag) return;
+        if (!S) return;
+        if (S.zoom.pointerMove(e, S.canvas.getBoundingClientRect())) { e.preventDefault(); return; }
+        if (!S.drag) return;
         e.preventDefault();
         const p = toWorldPt(e), s = cur();
         if (S.drag.mode === 'move') s.origin = { x: p.x + S.drag.dx, z: p.z + S.drag.dz };
@@ -706,8 +727,10 @@
         }
         queueEval();
     }
-    function onUp() {
-        if (!S || !S.drag) return;
+    function onUp(e) {
+        if (!S) return;
+        if (e && S.zoom.pointerUp(e)) { S.drag = null; return; }
+        if (!S.drag) return;
         S.drag = null;
         settle(S.sel);
     }
@@ -857,6 +880,13 @@
         canvas.width = C * dpr; canvas.height = C * dpr;
         // arcade.css pins every <canvas> to the viewport with !important, so this one must override it
         canvas.style.cssText = 'position:relative !important; top:auto !important; left:auto !important; width:' + C + 'px !important; height:' + C + 'px !important; flex:none; border-radius:12px; border:2px solid #334155; touch-action:none; cursor:grab; background:#0f172a !important;';
+        // zoom and pan (course-map.js): pinch / two fingers, the wheel, and +, - and show-all buttons over the map's corner
+        const zoom = CM.makeZoom({ half: half, C: C, max: 5, onChange: function () { if (S) { S.dom.zoomUi.sync(); draw(); } } });
+        const mapWrap = document.createElement('div');
+        mapWrap.style.cssText = 'position:relative; width:' + (C + 4) + 'px; height:' + (C + 4) + 'px; flex:none;';
+        mapWrap.appendChild(canvas);
+        const zoomUi = CM.zoomButtons(mapWrap, zoom);
+        zoomUi.el.style.left = '10px'; zoomUi.el.style.top = '10px';
         const row1 = document.createElement('div');
         row1.style.cssText = 'width:' + C + 'px; display:flex; gap:6px; align-items:center; justify-content:center;';
         const parBtns = [3, 4, 5, 6].map(function (n) {
@@ -934,7 +964,7 @@
             rowMow.appendChild(b);
             return b;
         });
-        [head, statusRow, help, detail, card, canvas, row1, rowShape, rowMow, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        [head, statusRow, help, detail, card, mapWrap, row1, rowShape, rowMow, row2, build_].forEach(function (el) { overlay.appendChild(el); });
         // every overlay row keeps its height: a page taller than the screen scrolls instead of squeezing the status and summary lines
         Array.prototype.forEach.call(overlay.children, function (el) { el.style.flexShrink = '0'; });
         document.body.appendChild(overlay);
@@ -942,7 +972,8 @@
         root._pause3D = true;
 
         S = {
-            dom: { overlay: overlay, status: status, detail: detail, card: card, mowBtns: mowBtns, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, add: add, remove: remove, earlier: earlier, later: later },
+            zoom: zoom,
+            dom: { zoomUi: zoomUi, overlay: overlay, status: status, detail: detail, card: card, mowBtns: mowBtns, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, add: add, remove: remove, earlier: earlier, later: later },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, half: half, size: half * 2, mPerPx: half * 2 / C,
             baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
             mow: MOW_PATTERNS.indexOf(root._bpMow) >= 0 ? root._bpMow : 'STRIPES',
@@ -958,6 +989,7 @@
         canvas.addEventListener('pointermove', onMove);
         canvas.addEventListener('pointerup', onUp);
         canvas.addEventListener('pointercancel', onUp);
+        canvas.addEventListener('wheel', function (e) { if (S) S.zoom.wheel(e, canvas.getBoundingClientRect()); }, { passive: false });
         // back from the Omgivning tab: the plan that was not built yet, if its holes are still the empty ones planned for
         const keep = root._bpKeep;
         root._bpKeep = null;

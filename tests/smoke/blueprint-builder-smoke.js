@@ -126,6 +126,40 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     JSON.stringify({ rows: plan.cardRows, h: plan.cardHeight, par: plan.parRow, len: plan.lenRow }));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-map.png') });
 
+  // 2a. zoom and pan: the + button, the wheel and a two-finger pinch zoom the map; a pinch does not move the hole the first finger
+  // touched; canvas and world coordinates still agree, and "show all" goes back to the whole plate
+  const zoomed = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    const S = window.HoleBlueprint.state(), cv = S.canvas, r = cv.getBoundingClientRect();
+    const sk = S.sketches[S.sel], origin0 = JSON.stringify(sk.origin);
+    S.dom.zoomUi.plus.click();
+    const afterPlus = S.zoom.zoom;
+    await wait(50);
+    // the tee marker is drawn where the hole's tee is: canvas -> world gives the tee back
+    const tw = S.zoom.toWorld(S.handles.tee.x, S.handles.tee.y), roundTrip = Math.hypot(tw.x - sk.origin.x, tw.z - sk.origin.z);
+    cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true }));
+    const afterWheel = S.zoom.zoom;
+    S.dom.zoomUi.all.click();
+    // a pinch that starts on the selected hole's tee: the first finger would move it, the second makes it a pinch
+    const tx = r.left + S.handles.tee.x * r.width / S.C, ty = r.top + S.handles.tee.y * r.height / S.C;
+    const pe = function (type, id, x, y) { cv.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 1, clientX: x, clientY: y, bubbles: true, cancelable: true })); };
+    pe('pointerdown', 1, tx, ty);
+    pe('pointermove', 1, tx + 20, ty + 10);
+    pe('pointerdown', 2, tx + 60, ty);
+    pe('pointermove', 2, tx + 160, ty);
+    pe('pointermove', 1, tx - 40, ty);
+    const afterPinch = S.zoom.zoom;
+    pe('pointerup', 2, tx + 160, ty);
+    pe('pointerup', 1, tx - 40, ty);
+    await wait(300);
+    const originAfter = JSON.stringify(S.sketches[S.sel].origin);
+    S.dom.zoomUi.all.click();
+    return { afterPlus: afterPlus, roundTrip: roundTrip, afterWheel: afterWheel, afterPinch: afterPinch, moved: originAfter !== origin0, reset: S.zoom.zoom, busy: S.busy };
+  });
+  check('zoom and pan: + / wheel / pinch zoom the map, a pinch leaves the hole where it was, coordinates agree, show-all resets',
+    Math.abs(zoomed.afterPlus - 1.6) < 1e-6 && zoomed.roundTrip < 0.5 && zoomed.afterWheel > zoomed.afterPlus && zoomed.afterPinch > 1.5 && !zoomed.moved && zoomed.reset === 1,
+    JSON.stringify(zoomed));
+
   // 2b. the tabs: to Omgivning and back keeps the plan that is not built yet; the Hål tab is the blueprint again
   const tabs = await page.evaluate(async function () {
     const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -222,6 +256,15 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     for (let k = 0; k < d.length; k += 4) if (Math.abs(d[k] - 0x7b) < 14 && Math.abs(d[k + 1] - 0xbf) < 14 && Math.abs(d[k + 2] - 0x55) < 14) turf++;
     return { api: true, canvas: true, turf: turf };
   });
+  const bdZoom = await page.evaluate(function () {
+    const B = window.Backdrop && window.Backdrop.state();
+    if (!B || !B.zoom) return { zoom: false };
+    B.dom.zoomUi.plus.click();
+    const z = B.zoom.zoom;
+    B.dom.zoomUi.all.click();
+    return { zoom: true, afterPlus: z, reset: B.zoom.zoom };
+  });
+  check('the backdrop map zooms too (+ and show all)', bdZoom.zoom && bdZoom.afterPlus > 1.5 && bdZoom.reset === 1, JSON.stringify(bdZoom));
   check('the backdrop map shows the built holes in the course-map colours (shared course-map.js)', backdrop.api && backdrop.canvas && backdrop.turf > 30, JSON.stringify(backdrop));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-backdrop.png') });
   // undo in the backdrop map empties a hole again: the Hål tab comes back on (it is off while every hole is built)
