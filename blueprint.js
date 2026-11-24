@@ -496,10 +496,10 @@
         const finish = function (spot) {
             S.busy = false;
             if (spot) { s.origin = spot.origin; s.heading = spot.heading; }
+            else { s.origin = { x: -s.plan.length / 2, z: 0 }; s.heading = 0; }
             // hand the next hole the spot its shape was found to fit at, next to this green
             const nextPend = S.pending && S.pending[S.holes[i] + 1];
             if (nextPend) nextPend.spot = (spot && spot.fit && ahead && ahead.plan === nextPend.plan) ? spot.fit : null;
-            else { s.origin = { x: -s.plan.length / 2, z: 0 }; s.heading = 0; }
             evaluate(i);
             revalidateOthers(i);
             if (!spot) flashNote(tr('bp_none', 'Ingen ledig plats här – flytta hålet'), true);
