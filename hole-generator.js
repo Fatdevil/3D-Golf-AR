@@ -32,6 +32,12 @@
     };
     // Where a good drive comes down (m from the back tee): doglegs bend here and the first fairway bunker guards it
     const DRIVE = [210, 255];
+    // A typical drive and lay-up for the approach length (m), and the green radius it gets: GREEN_R.min for an approach of
+    // GREEN_R.near m or less, GREEN_R.max from GREEN_R.far m (before the green's stretch and jitter)
+    const DRIVE_CARRY = 230;
+    const GREEN_R = { min: 10.5, max: 15, near: 60, far: 190 };
+    // Par 3 approach: a short strip of fairway in front of the green (m before the green's front edge, half width as a share of rg)
+    const APRON = { len: [18, 30], halfNear: 0.55, halfAtGreen: 0.95 };
     // Where a par 5 / 6 lay-up comes down, counted back from the green (m)
     const LAYUP = [95, 135];
     // Water the line of play crosses (tees, fairway, green and bunkers stay dry): longest carry from the front tee (m)
@@ -161,14 +167,29 @@
         let approach = end.dir;
         let approachAngle = Math.atan2(approach.l, approach.f);
 
-        // Green
-        let rg = range(rng, 11, 15);
+        // Green: sized for the shot that comes in. A long par 3 or a long second shot needs a big target, a wedge into a par 5 a small one.
+        // Approach = the tee shot on a par 3, what is left after a drive on a par 4, after two shots on a par 5 / 6.
+        let approachLen = par === 3 ? L : Math.max(40, L - DRIVE_CARRY * (par === 4 ? 1 : 2));
+        let rg = GREEN_R.min + (GREEN_R.max - GREEN_R.min) * smoothstep(GREEN_R.near, GREEN_R.far, approachLen) + range(rng, -1, 1);
         let stretch = range(rng, 1.0, 1.25);
         let green = blob(rng, end.f, end.l, rg, 9, stretch, approachAngle + range(rng, -0.5, 0.5), 0.1);
         let greenReach = rg * stretch * 1.12;
 
         // Fairway (par 4-5)
         let fairway = null, fwHalf = null, fwS0 = 0, fwS1 = 0;
+        if (par === 3) {
+            // the approach in front of a par 3 green: a short, slightly widening strip (built with the fairway tool), so the
+            // green does not sit straight in the rough
+            let s0 = L - greenReach - range(rng, APRON.len[0], APRON.len[1]), s1 = L - rg * 0.4;
+            let left = [], right = [], n = 5;
+            for (let i = 0; i <= n; i++) {
+                let u = i / n, sAt = s0 + (s1 - s0) * u;
+                let h = rg * (APRON.halfNear + (APRON.halfAtGreen - APRON.halfNear) * smoothstep(0, 1, u));
+                left.push({ f: sAt, l: h + range(rng, -0.8, 0.8) });
+                right.push({ f: sAt, l: -h + range(rng, -0.8, 0.8) });
+            }
+            fairway = [{ f: s0 - rg * 0.35, l: 0 }].concat(left, right.slice().reverse());
+        }
         if (R.fairway) {
             fwS0 = FAIRWAY_START;
             fwS1 = L - rg - 4;
@@ -286,7 +307,7 @@
         if (plan.length < R.len[0] - 0.01 || plan.length > R.len[1] + 0.01) problems.push('length');
         if (!polygonSimple(plan.green)) problems.push('green-crossing');
         if (plan.fairway && !polygonSimple(plan.fairway)) problems.push('fairway-crossing');
-        if (!!plan.fairway !== R.fairway) problems.push('fairway-rule');
+        if (!!plan.fairway !== R.fairway && plan.par !== 3) problems.push('fairway-rule');   // a par 3 has only its short approach
         plan.bunkers.forEach(function (b) {
             if (!polygonSimple(b.pts)) problems.push('bunker-crossing');
             let minD = Infinity;
@@ -708,7 +729,8 @@
     // The route only matters when both ends of a fairway-less hole are built
     function needsRoute(wp, parts) {
         let p = parts || normalizeParts(null);
-        return !wp.fairway && !!p.tee && !!p.green;
+        // a par 3's approach strip covers only the last metres: the shot from the tee still needs its route kept clear
+        return (wp.par === 3 || !wp.fairway) && !!p.tee && !!p.green;
     }
     const OBJECT_MARGIN = 2;      // m of clear ground around a trunk, rock or wall
     const ROUTE_HALF_WIDTH = 3;   // m kept clear on each side of a par-3 route

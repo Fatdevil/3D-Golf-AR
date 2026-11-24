@@ -393,6 +393,25 @@
         cur().heading += delta;
         settle(S.sel);
     }
+    // The par a new sketch for hole idx starts with. A par the player set on the hole (anything but the default 4) is kept;
+    // otherwise the course gets a mix: the par of 4, 3 and 5 used least on the plate so far (built holes and sketches), not the
+    // same as the hole before it when that ties, preferring 4, then 3, then 5. holes / sketches: the map's lists.
+    function suggestPar(idx, holes, sketches) {
+        const HG = root.HoleGenerator, all = root.courseHoles || [], h = all[idx];
+        if (h && h.par && h.par !== 4) return clamp(h.par, 3, 6);
+        const count = { 3: 0, 4: 0, 5: 0 }, parOf = {};
+        const total = Math.min(root.MAX_HOLES || all.length, all.length);
+        for (let i = 0; i < total; i++) {
+            const k = holes.indexOf(i);
+            if (k >= 0 && k < sketches.length) parOf[i] = sketches[k].par;
+            else if (i !== idx && all[i] && !HG.holeIsEmpty(all[i])) parOf[i] = all[i].par;
+        }
+        Object.keys(parOf).forEach(function (i) { if (count[parOf[i]] !== undefined) count[parOf[i]]++; });
+        const prev = parOf[idx - 1], pref = [4, 3, 5];
+        return pref.slice().sort(function (a, b) {
+            return (count[a] - count[b]) || ((a === prev ? 1 : 0) - (b === prev ? 1 : 0)) || (pref.indexOf(a) - pref.indexOf(b));
+        })[0];
+    }
     // What comes after sketch i in the round: { plan } when the next hole is empty and not sketched yet, { tee } when the next
     // hole is built (its back tee), else null. The next hole's shape is drawn now (S.pending) and kept for when it is added, so
     // the look-ahead tests the very shape that will have to fit.
@@ -400,8 +419,7 @@
         const HG = root.HoleGenerator, next = S.holes[i] + 1, k = S.holes.indexOf(next);
         if (k >= 0) {
             if (k < S.sketches.length) return null;   // already sketched: its own placement takes care of the walk
-            const h = root.courseHoles && root.courseHoles[next];
-            const par = clamp((h && h.par) || 4, 3, 6);
+            const par = suggestPar(next, S.holes, S.sketches);
             S.pending = S.pending || {};
             if (!S.pending[next] || S.pending[next].par !== par) {
                 const seed = Math.floor(Math.random() * 1e9);
@@ -525,9 +543,9 @@
     }
     function addHole() {
         if (S.busy || S.sketches.length >= S.holes.length) return;
-        // keep the par the target hole already has (building syncs the hole to its sketch's par)
-        const idx = S.holes[S.sketches.length], target = root.courseHoles && root.courseHoles[idx];
-        const par = clamp((target && target.par) || 4, 3, 6), sk = makeSketch(par);
+        // the par: see suggestPar (building syncs the hole to its sketch's par)
+        const idx = S.holes[S.sketches.length];
+        const par = suggestPar(idx, S.holes, S.sketches), sk = makeSketch(par);
         // the shape the previous hole's placement already made room for
         const pend = S.pending && S.pending[idx];
         if (pend && pend.par === par) { sk.seed = pend.seed; sk.plan = pend.plan; }
@@ -679,7 +697,7 @@
         if (S) close(false);
         const holes = emptyHolesFrom(root.currentHoleIndex);
         const half = (root.TERRAIN_SIZE || 600) / 2;
-        const par = clamp(hole.par || 4, 3, 6);
+        const par = suggestPar(holes[0], holes, []);
         const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 376, 760)));
         const dpr = Math.min(2, window.devicePixelRatio || 1);
 

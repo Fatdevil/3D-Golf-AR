@@ -53,7 +53,9 @@ const centre = function (b) { let x = 0, z = 0; b.forEach(function (p) { x += p.
   const pond = function (x0, x1) { return Object.assign({}, base, { isWater: function (x, z) { return x > x0 && x < x1 && Math.abs(z) < 60; } }); };
   const dry = HG.evaluateSite(plan, o, 0, base);
   check('dry ground: ok, no carry', dry.ok && !dry.carry);
-  const over = HG.evaluateSite(plan, o, 0, pond(20, 50));
+  // the pond lies between the front tee and the approach strip in front of the green (x = o.x + f at heading 0)
+  const apronStart = Math.min.apply(null, plan.fairway.map(function (q) { return q.f; }));
+  const over = HG.evaluateSite(plan, o, 0, pond(o.x + 45, o.x + apronStart - 3));
   check('par 3 over a pond: ok, with the carry from both tees', over.ok && over.carry && over.carry.front > 0 && over.carry.back > over.carry.front && over.carry.segs.length === 1, over.carry);
   // a short par 3 steps the front tee sideways: water just ahead of it is still a carry for it
   const p7 = HG.planFor(3, 7), w7 = HG.worldPlan(p7, { x: 0, z: 0 }, 0), f7 = centre(w7.teeBoxes[2]);
@@ -62,14 +64,14 @@ const centre = function (b) { let x = 0, z = 0; b.forEach(function (p) { x += p.
   const wetGreen = HG.evaluateSite(plan, o, 0, pond(plan.length - 60, plan.length - 40));
   check('water under the green is still refused', !wetGreen.ok && wetGreen.reasons[0] === 'water', wetGreen.reasons);
   // A generated par 3 never leaves more than ~110 m from the front tee to the green's front edge, so the limit is a safety net:
-  // test it on a par 3 pushed 60 m longer by hand
-  const p0 = HG.planFor(3, 99), push = function (q) { return { f: q.f + 60, l: q.l }; };
-  const long = Object.assign({}, p0, { length: p0.length + 60, green: p0.green.map(push), greenCenter: push(p0.greenCenter),
+  // test it on a par 3 pushed 110 m longer by hand
+  const p0 = HG.planFor(3, 99), push = function (q) { return { f: q.f + 110, l: q.l }; };
+  const long = Object.assign({}, p0, { length: p0.length + 110, green: p0.green.map(push), greenCenter: push(p0.greenCenter), fairway: p0.fairway && p0.fairway.map(push),
     bunkers: p0.bunkers.map(function (b) { return Object.assign({}, b, { pts: b.pts.map(push), center: push(b.center) }); }),
-    path: { total: p0.length + 60, segs: [{ a: { f: 0, l: 0 }, b: { f: p0.length + 60, l: 0 }, len: p0.length + 60, s0: 0, dir: { f: 1, l: 0 } }], knee: null, knees: [], bends: [] } });
+    path: { total: p0.length + 110, segs: [{ a: { f: 0, l: 0 }, b: { f: p0.length + 110, l: 0 }, len: p0.length + 110, s0: 0, dir: { f: 1, l: 0 } }], knee: null, knees: [], bends: [] } });
   const wp = HG.worldPlan(long, o, 0), front = centre(wp.teeBoxes[2]);
-  const gx = wp.greenCenter.x, gr = long.greenReach;
-  const farEv = HG.evaluateSite(long, o, 0, Object.assign({}, base, { isWater: function (x, z) { return x > front.x + 15 && x < gx - gr - 1 && Math.abs(z) < 3; } }));
+  const longApron = Math.min.apply(null, wp.fairway.map(function (q) { return q.x; }));   // the water stops at the approach strip
+  const farEv = HG.evaluateSite(long, o, 0, Object.assign({}, base, { isWater: function (x, z) { return x > front.x + 15 && x < longApron - 1 && Math.abs(z) < 3; } }));
   check('a carry longer than ' + HG.MAX_CARRY + ' m from the front tee is refused', !farEv.ok && farEv.reasons[0] === 'carry', [farEv.reasons, farEv.carry]);
 })();
 
@@ -127,6 +129,25 @@ const centre = function (b) { let x = 0, z = 0; b.forEach(function (p) { x += p.
   const p3 = HG.planFor(3, 5, { dogleg: 'left' });
   check('par 3 ignores a bend choice (it never bends)', !p3.dogleg && !HG.validatePlan(p3).length);
   check('no choice is the same as no shape at all', HG.planFor(4, 77, { dogleg: null, len: null }).length === HG.planFor(4, 77).length);
+})();
+
+// greens sized for the approach, and a par 3 gets a short approach strip in front of its green
+(function () {
+  const avgReach = function (par, len) { let n = 0, sum = 0; for (let seed = 1; seed <= 200; seed++) { const p = HG.planFor(par, seed, { len: len }); sum += p.greenReach; n++; } return sum / n; };
+  const p3s = avgReach(3, 'short'), p3l = avgReach(3, 'long'), p5 = avgReach(5, 'mid'), p4l = avgReach(4, 'long');
+  check('a long par 3 gets a bigger green than a short one (' + p3s.toFixed(1) + ' -> ' + p3l.toFixed(1) + ' m)', p3l > p3s + 2);
+  check('a par 5 (a wedge in) gets a smaller green than a long par 4 (' + p5.toFixed(1) + ' < ' + p4l.toFixed(1) + ' m)', p5 < p4l - 1);
+  let bad = [];
+  for (let seed = 1; seed <= 300; seed++) {
+    const p = HG.planFor(3, seed);
+    if (!p.fairway) { bad.push([seed, 'none']); continue; }
+    const fs = p.fairway.map(function (q) { return q.f; }), start = Math.min.apply(null, fs), end = Math.max.apply(null, fs);
+    // in front of the green (ends inside it), well clear of the front tee, not wider than the green
+    const front = HG.worldPlan(p, { x: 0, z: 0 }, 0).teeBoxes[2].reduce(function (a, q) { return a + q.x / 4; }, 0);
+    const wide = Math.max.apply(null, p.fairway.map(function (q) { return Math.abs(q.l); }));
+    if (end > p.greenCenter.f || end < p.greenCenter.f - p.greenReach || start < front + 15 || wide > p.greenReach * 1.1) bad.push([seed, Math.round(start), Math.round(end), Math.round(front)]);
+  }
+  check('every par 3 has its approach strip in front of the green, clear of the front tee', !bad.length, bad.slice(0, 4));
 })();
 
 console.log(failed ? '\n' + failed + ' check(s) failed' : '\nAll hole generator checks passed');

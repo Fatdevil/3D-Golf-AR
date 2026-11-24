@@ -1034,7 +1034,7 @@ function serve() {
       // (as here, where the test moves the hole itself), so clear it as a touch does: the checks below are about the status of each spot
       S.note = null; S.noteBad = false;
       const sk = S.sketches[0], seen = {}, tops = [];
-      sk.seed = 4242; sk.plan = window.HoleGenerator.planFor(sk.par, sk.seed); // the planner starts from a random seed: pin it so the test sees the same hole every run
+      sk.par = 4; sk.seed = 4242; sk.plan = window.HoleGenerator.planFor(sk.par, sk.seed); // the planner starts from a random seed: pin it so the test sees the same hole every run
       for (let hd = 0; hd < 6.3; hd += Math.PI / 4) for (let ox = -240; ox <= 240; ox += 40) for (let oz = -240; oz <= 240; oz += 40) {
         sk.origin = { x: ox, z: oz }; sk.heading = hd; BP.evaluate(0);
         const e = sk.ev, kind = !e.ok ? 'red' : ((e.shaped && e.shaped.length) ? 'yellow' : 'green');
