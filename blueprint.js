@@ -469,7 +469,7 @@
                     return;
                 }
                 if (ri === 1) { text = String(sk.par); par += sk.par; }
-                else if (ri === 2) { text = String(Math.round(sk.plan.length)); len += sk.plan.length; }
+                else if (ri === 2) { const m = Math.round(sk.plan.length); text = String(m); len += m; }   // the total adds the numbers shown
                 else { text = d === null ? '–' : String(d); if (d !== null) { walk += d; if (d > WALK_LONG) style += 'color:#b91c1c; font-weight:bold;'; } }
                 const td = cell(tr_, text, { style: style + 'cursor:pointer; color:' + (style.indexOf('color:#b91c1c') >= 0 ? '#b91c1c' : '#1f2d1f') + ';' });
                 td.onclick = function () { select(i); };
