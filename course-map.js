@@ -230,11 +230,60 @@
         ctx.restore();
     }
 
+    // ---- the tabs that join the two maps: Hål (blueprint.js) | Omgivning (backdrop.js) ------------------------
+    function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
+    // The first empty hole on the plate (the current one first), or -1: the blueprint plans empty holes only
+    function firstEmptyHole() {
+        const HG = root.HoleGenerator, holes = root.courseHoles || [];
+        if (!HG) return -1;
+        const total = Math.min(root.MAX_HOLES || 3, holes.length);
+        if (holes[root.currentHoleIndex] && root.currentHoleIndex < total && HG.holeIsEmpty(holes[root.currentHoleIndex])) return root.currentHoleIndex;
+        for (let i = 0; i < total; i++) if (HG.holeIsEmpty(holes[i])) return i;
+        return -1;
+    }
+    // Switch to a tab. The map that is open closes first (the blueprint keeps a plan that is not built yet, see blueprint.js)
+    function openTab(name) {
+        if (name === 'holes') {
+            const idx = firstEmptyHole();
+            if (idx < 0) return false;
+            if (root.Backdrop && root.Backdrop.close) root.Backdrop.close();
+            if (idx !== root.currentHoleIndex && typeof root.changeHoleTo === 'function') root.changeHoleTo(idx);
+            if (typeof root.openHoleBlueprint === 'function') root.openHoleBlueprint();
+            return true;
+        }
+        if (root.HoleBlueprint && root.HoleBlueprint.state && root.HoleBlueprint.state()) root.HoleBlueprint.close(false, true);
+        if (typeof root.openBackdropMap === 'function') root.openBackdropMap();
+        return true;
+    }
+    // A two-button tab strip for a map's header; active: 'holes' | 'surround'. The Hål tab is off when every hole is built.
+    function mapTabs(active) {
+        const box = document.createElement('div');
+        box.setAttribute('role', 'tablist');
+        box.style.cssText = 'display:flex; gap:2px; padding:3px; border-radius:12px; background:#0f172a; border:1px solid #1e293b; flex:1; min-width:0;';
+        const noHole = firstEmptyHole() < 0;
+        [['holes', '🗺️ ' + tr('cm_tab_holes', 'Hål')], ['surround', '🏔️ ' + tr('cm_tab_surround', 'Omgivning')]].forEach(function (t) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = t[1];
+            b.dataset.tab = t[0];
+            const on = t[0] === active, off = t[0] === 'holes' && !on && noHole;
+            b.setAttribute('role', 'tab');
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+            b.disabled = off;
+            if (off) b.title = tr('cm_all_built', 'Alla hål på plattan är byggda');
+            b.style.cssText = 'flex:1; min-height:38px; border:none; border-radius:9px; font-weight:bold; font-size:14px; white-space:nowrap; cursor:' + (on || off ? 'default' : 'pointer') + ';' +
+                'background:' + (on ? '#14532d' : 'transparent') + '; color:' + (on ? '#f8fafc' : (off ? '#475569' : '#cbd5e1')) + ';';
+            if (!on && !off) b.onclick = function () { openTab(t[0]); };
+            box.appendChild(b);
+        });
+        return box;
+    }
+
     root.CourseMap = {
         TURF: TURF, TEE_COLORS: TEE_COLORS, MOW_PATTERNS: MOW_PATTERNS,
         renderTerrain: renderTerrain, polyPath: polyPath, paintMow: paintMow, turf: turf, sand: sand,
         drawFlag: drawFlag, teeMarker: teeMarker, holeAngle: holeAngle, drawBuiltHole: drawBuiltHole, drawBuiltHoles: drawBuiltHoles,
-        drawFurniture: drawFurniture
+        drawFurniture: drawFurniture, mapTabs: mapTabs, openTab: openTab, firstEmptyHole: firstEmptyHole
     };
     if (typeof module !== 'undefined' && module.exports) module.exports = root.CourseMap;
 })(typeof window !== 'undefined' ? window : globalThis);

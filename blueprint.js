@@ -387,13 +387,13 @@
     }
     // Slide sketch i to the closest legal spot (async so the red state paints first)
     function snapToValid(i, announce) {
-        S.busy = true; refreshUi();
+        S.busy = true; S.searchIdx = i; refreshUi();   // searchIdx: the sketch whose spot is being looked for (kept on a tab switch)
         const token = ++S.snapToken;
         setTimeout(function () {
             if (!S || token !== S.snapToken) return;
             const s = S.sketches[i];
             const nv = root.HoleGenerator.nearestValidSite(s.plan, s.origin, s.heading, envFor(i));
-            S.busy = false;
+            S.busy = false; S.searchIdx = null;
             if (nv) {
                 s.origin = nv.origin; s.heading = nv.heading;
                 evaluate(i);
@@ -530,9 +530,9 @@
         let hint = s.hint && pg ? s.hint : null;
         s.hint = null;
         const ANGLES = 16, TURNS = [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.6, -2.6, Math.PI];   // away from the green first
-        S.busy = true; refreshUi();
+        S.busy = true; S.searchIdx = i; refreshUi();   // searchIdx: the sketch whose spot is being looked for (kept on a tab switch)
         const finish = function (spot) {
-            S.busy = false;
+            S.busy = false; S.searchIdx = null;
             if (spot) { s.origin = spot.origin; s.heading = spot.heading; }
             else { s.origin = { x: -s.plan.length / 2, z: 0 }; s.heading = 0; }
             // hand the next hole the spot its shape was found to fit at, next to this green
@@ -740,6 +740,25 @@
         if (f.code === 'not_empty') return tr('bp_fail_not_empty', 'hålet har redan delar');
         return tr('bp_fail_unknown', 'okänt fel');
     }
+    // After a build that went through: a small card that offers the next step, the Omgivning tab (it goes away by itself)
+    function offerNextStep(n) {
+        if (!root.CourseMap || typeof root.openBackdropMap !== 'function') return;
+        const old = document.getElementById('bp-next');
+        if (old) old.remove();
+        const card = document.createElement('div');
+        card.id = 'bp-next';
+        card.setAttribute('role', 'status');
+        card.style.cssText = 'position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:99999; display:flex; align-items:center; gap:10px; max-width:calc(100vw - 32px); box-sizing:border-box; padding:10px 10px 10px 14px; border-radius:14px; background:#0f172a; border:1px solid #334155; box-shadow:0 8px 24px rgba(0,0,0,0.45); color:#f1f5f9; font-size:14px; font-weight:bold;';
+        const txt = document.createElement('span');
+        txt.textContent = '✓ ' + tr('bp_built_n', '{n} hål byggda').replace('{n}', n);
+        txt.style.whiteSpace = 'nowrap';
+        const go = btn(tr('bp_next_surround', 'Fortsätt: Omgivning →'), function () { card.remove(); root.CourseMap.openTab('surround'); }, 'background:#14532d; color:#f8fafc; min-height:40px; padding:0 12px;');
+        const x = btn('✕', function () { card.remove(); }, 'min-width:40px;');
+        x.setAttribute('aria-label', tr('bp_cancel', 'Stäng'));
+        [txt, go, x].forEach(function (el) { card.appendChild(el); });
+        document.body.appendChild(card);
+        setTimeout(function () { if (card.parentNode) card.remove(); }, 15000);
+    }
     // failed: [{ no: hole number, why: text }]
     function runJobs(jobs, parts, k, failed) {
         const HG = root.HoleGenerator;
@@ -753,6 +772,7 @@
                     toast(tr('bp_done_some', '⚠️ Några hål kunde inte byggas. Öppna kartan och försök igen.') + ' (' + list + ')', '#f59e0b');
                 } else toast(tr('bp_done_all', '🗺️ Alla hål byggda! Ångra tar bort ett hål i taget.'), '#4ade80');
             }
+            if (!failed.length) offerNextStep(jobs.length);
             return;
         }
         const job = jobs[k];
@@ -772,9 +792,16 @@
         b.style.cssText = 'min-height:40px; min-width:34px; padding:0 7px; border:none; border-radius:10px; font-weight:bold; font-size:13px; white-space:nowrap; cursor:pointer; background:#1e293b; color:#e2e8f0;' + (extra || '');
         return b;
     }
-    function close(fade) {
+    // keepPlan (switching to the Omgivning tab): the holes planned but not built yet are kept and come back when the Hål tab opens
+    function close(fade, keepPlan) {
         if (!S) return;
         const el = S.dom.overlay;
+        root._bpKeep = keepPlan ? {
+            holes: S.holes.slice(), sel: S.sel, mow: S.mow, pending: S.pending || null,
+            // a spot search that was still running is started again when the plan comes back (its sketch has no good spot yet)
+            searching: S.busy && S.searchIdx != null ? S.searchIdx : null,
+            sketches: S.sketches.map(function (s) { return { par: s.par, seed: s.seed, shape: s.shape, plan: s.plan, origin: s.origin, heading: s.heading }; })
+        } : null;
         window.removeEventListener('keydown', S.keyHandler, true);
         cancelAnimationFrame(S.raf); clearTimeout(S.noteTimer);
         S = null;
@@ -806,11 +833,14 @@
         overlay.style.cssText = 'position:fixed; inset:0; z-index:100000; background:#020617; display:flex; flex-direction:column; align-items:center; gap:8px; padding:8px; box-sizing:border-box; overflow-y:auto; transition:opacity .35s, transform .35s; touch-action:pan-y; user-select:none; -webkit-user-select:none;';
         const head = document.createElement('div');
         head.style.cssText = 'margin-top:auto; width:' + C + 'px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:#f1f5f9;';
-        head.innerHTML = '<b style="font-size:16px;">🗺️ ' + tr('bp_title', 'Planera hålen') + '</b>';
+        // the tabs that join this map with the backdrop map (course-map.js); the status gets a row of its own below
+        head.appendChild(CM.mapTabs('holes'));
         const status = document.createElement('div');
         // one fixed-height line: a longer message used to wrap, grow the header and make the whole centred page jump while dragging
         status.style.cssText = 'flex:1; min-width:0; height:32px; line-height:20px; box-sizing:border-box; text-align:center; padding:6px 8px; border-radius:8px; font-size:13px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
-        head.appendChild(status);
+        const statusRow = document.createElement('div');
+        statusRow.style.cssText = 'width:' + C + 'px; display:flex;';
+        statusRow.appendChild(status);
         const x = btn('✕', function () { close(true); }, 'min-width:44px; min-height:44px;');
         x.title = tr('bp_cancel', 'Avbryt');
         head.appendChild(x);
@@ -904,7 +934,7 @@
             rowMow.appendChild(b);
             return b;
         });
-        [head, help, detail, card, canvas, row1, rowShape, rowMow, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        [head, statusRow, help, detail, card, canvas, row1, rowShape, rowMow, row2, build_].forEach(function (el) { overlay.appendChild(el); });
         // every overlay row keeps its height: a page taller than the screen scrolls instead of squeezing the status and summary lines
         Array.prototype.forEach.call(overlay.children, function (el) { el.style.flexShrink = '0'; });
         document.body.appendChild(overlay);
@@ -928,10 +958,23 @@
         canvas.addEventListener('pointermove', onMove);
         canvas.addEventListener('pointerup', onUp);
         canvas.addEventListener('pointercancel', onUp);
+        // back from the Omgivning tab: the plan that was not built yet, if its holes are still the empty ones planned for
+        const keep = root._bpKeep;
+        root._bpKeep = null;
+        if (keep && keep.holes.length === holes.length && keep.holes.every(function (h, k) { return h === holes[k]; })) {
+            S.sketches = keep.sketches.map(function (k) { return Object.assign(makeSketch(k.par), k); });
+            S.sel = clamp(keep.sel, 0, S.sketches.length - 1);
+            S.mow = keep.mow || S.mow;
+            S.pending = keep.pending;
+            S.sketches.forEach(function (sk, k) { evaluate(k); });
+            refreshUi();
+            if (keep.searching != null && keep.searching < S.sketches.length) suggest(keep.searching);
+            return;
+        }
         refreshUi();
         suggest(0);
     }
 
     root.openHoleBlueprint = open;
-    root.HoleBlueprint = { envFor: function (i) { return envFor(i); }, renderTerrain: renderTerrain, open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
+    root.HoleBlueprint = { keptPlan: function () { return root._bpKeep; }, envFor: function (i) { return envFor(i); }, renderTerrain: renderTerrain, open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

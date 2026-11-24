@@ -620,6 +620,12 @@
         if (typeof root.restoreSurrounding === 'function') root.restoreSurrounding();
         B.surround = surroundPicture();
         if (root.CourseMap) B.plate = root.CourseMap.renderTerrain(plateHalf());
+        // undo/redo may have emptied (or filled) a hole: the Hål tab is on only while there is an empty hole to plan
+        if (root.CourseMap && B.dom.tabs && B.dom.tabs.parentNode) {
+            const t = root.CourseMap.mapTabs('surround');
+            B.dom.tabs.parentNode.replaceChild(t, B.dom.tabs);
+            B.dom.tabs = t;
+        }
         dropStaleSelection();
         refresh();
     }
@@ -638,6 +644,7 @@
         cancelAnimationFrame(B.raf); clearInterval(B.timer);
         B = null;
         el.remove();
+        root._pause3D = false;
         refreshFog();
     }
     function open() {
@@ -652,11 +659,13 @@
         overlay.style.cssText = 'position:fixed; inset:0; z-index:100000; background:#020617; display:flex; flex-direction:column; align-items:center; gap:8px; padding:8px; box-sizing:border-box; overflow-y:auto; touch-action:pan-y; user-select:none; -webkit-user-select:none;';
         const head = document.createElement('div');
         head.style.cssText = 'margin-top:auto; width:' + C + 'px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:#f1f5f9;';
-        head.innerHTML = '<b style="font-size:16px;">🏔️ ' + tr('bd_title', 'Bakgrund') + '</b>';
+        // the tabs that join this map with the blueprint map (course-map.js); the help gets a row of its own below
+        const tabs = root.CourseMap ? root.CourseMap.mapTabs('surround') : null;
+        if (tabs) head.appendChild(tabs);
+        else head.innerHTML = '<b style="font-size:16px;">🏔️ ' + tr('bd_title', 'Bakgrund') + '</b>';
         const status = document.createElement('div');
-        status.style.cssText = 'flex:1; text-align:center; font-size:12px; color:#cbd5e1; line-height:1.3;';
+        status.style.cssText = 'width:' + C + 'px; text-align:left; font-size:12px; color:#94a3b8; line-height:1.35;';
         status.textContent = tr('bd_help', 'Välj en figur nedan och tryck på kartan utanför banan för att lägga den där. Dra i en figur för att flytta den.');
-        head.appendChild(status);
         const x = btn('✕', close, 'min-width:44px; min-height:44px;');
         head.appendChild(x);
 
@@ -706,7 +715,9 @@
         });
         const choices = document.createElement('div');
         choices.style.cssText = 'width:' + C + 'px; display:none; flex-wrap:wrap; gap:6px; flex:none;';
-        [head, wrap, choices, filters, shelf, row, done].forEach(function (el) { overlay.appendChild(el); });
+        [head, status, wrap, choices, filters, shelf, row, done].forEach(function (el) { overlay.appendChild(el); });
+        // the map covers the whole screen: the 3D scene behind it stops drawing (like the blueprint map)
+        root._pause3D = true;
         document.body.appendChild(overlay);
 
         const HG = root.HoleGenerator;
@@ -715,7 +726,7 @@
         try { others = HG && HG.otherHoles ? HG.otherHoles(root.courseHoles, -1) : null; } catch (err) { others = null; }
         if (Array.isArray(others)) others = { points: others, polygons: [] };
         B = {
-            dom: { edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
+            dom: { tabs: tabs, edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();
