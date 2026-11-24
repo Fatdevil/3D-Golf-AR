@@ -21,6 +21,14 @@
     function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
     // ---- terrain picture (rendered once when the map opens) ---------------------------------------------
+    // A topographic map: soft hill shading, contour lines (a heavier one every fifth), water with a light shore line.
+    // Drawn once at TERRAIN_PX so the lines stay crisp when the map is scaled to the screen.
+    const TERRAIN_PX = 900;
+    function niceStep(v) {
+        const steps = [0.5, 1, 2, 2.5, 5, 10, 20];
+        for (let k = 0; k < steps.length; k++) if (steps[k] >= v) return steps[k];
+        return 50;
+    }
     function renderTerrain(half) {
         const N = 150, size = half * 2, cell = size / N;
         const hgt = new Float32Array(N * N), wet = new Uint8Array(N * N);
@@ -40,23 +48,63 @@
         land.sort(function (a, b) { return a - b; });
         const med = land.length ? land[land.length >> 1] : lo;
         const span = Math.max(8, (hi - lo) * 0.5);
-        const off = document.createElement('canvas');
-        off.width = N; off.height = N;
-        const octx = off.getContext('2d');
-        const img = octx.createImageData(N, N);
+        const base = document.createElement('canvas');
+        base.width = N; base.height = N;
+        const bctx = base.getContext('2d');
+        const img = bctx.createImageData(N, N);
+        const isWet = function (i, j) { return i >= 0 && j >= 0 && i < N && j < N && wet[j * N + i]; };
         for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
             const k = j * N + i, p = k * 4;
-            if (wet[k]) { img.data[p] = 56; img.data[p + 1] = 130; img.data[p + 2] = 230; img.data[p + 3] = 255; continue; }
+            if (wet[k]) {
+                // shore: a wet cell next to dry ground is lighter
+                const shore = !isWet(i - 1, j) || !isWet(i + 1, j) || !isWet(i, j - 1) || !isWet(i, j + 1);
+                img.data[p] = shore ? 120 : 46; img.data[p + 1] = shore ? 184 : 118; img.data[p + 2] = shore ? 232 : 206; img.data[p + 3] = 255;
+                continue;
+            }
             const hl = hgt[j * N + Math.max(0, i - 1)], hr = hgt[j * N + Math.min(N - 1, i + 1)];
             const hu = hgt[Math.max(0, j - 1) * N + i], hd = hgt[Math.min(N - 1, j + 1) * N + i];
-            // light from the upper left, kept gentle so hills read as soft shapes
-            const shade = clamp(1 + ((hl - hr) + (hu - hd)) / cell * 0.9, 0.82, 1.18);
+            // light from the upper left
+            const shade = clamp(1 + ((hl - hr) + (hu - hd)) / cell * 1.4, 0.78, 1.22);
             const t = clamp((hgt[k] - med) / span, -1, 1);
             const up = Math.max(0, t), down = Math.max(0, -t);
-            const r = (86 + 34 * up - 14 * down) * shade, g = (142 + 8 * up - 24 * down) * shade, b = (76 + 6 * up - 8 * down) * shade;
+            const r = (74 + 30 * up - 12 * down) * shade, g = (124 + 10 * up - 20 * down) * shade, b = (66 + 6 * up - 6 * down) * shade;
             img.data[p] = clamp(r, 0, 255); img.data[p + 1] = clamp(g, 0, 255); img.data[p + 2] = clamp(b, 0, 255); img.data[p + 3] = 255;
         }
-        octx.putImageData(img, 0, 0);
+        bctx.putImageData(img, 0, 0);
+        const off = document.createElement('canvas');
+        off.width = TERRAIN_PX; off.height = TERRAIN_PX;
+        const octx = off.getContext('2d');
+        octx.imageSmoothingEnabled = true;
+        octx.drawImage(base, 0, 0, TERRAIN_PX, TERRAIN_PX);
+        // contour lines by marching squares over the height grid (dry cells only)
+        const range = hi - lo;
+        if (range >= 0.6) {
+            const step = niceStep(range / 12), f = TERRAIN_PX / N;
+            const px = function (i) { return (i + 0.5) * f; };
+            for (let level = Math.ceil(lo / step) * step; level <= hi; level += step) {
+                const major = Math.abs(Math.round(level / step) % 5) === 0;
+                octx.beginPath();
+                for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
+                    const k = j * N + i;
+                    if (wet[k] || wet[k + 1] || wet[k + N] || wet[k + N + 1]) continue;
+                    const a = hgt[k], b = hgt[k + 1], c = hgt[k + N + 1], d = hgt[k + N];
+                    const pts = [];
+                    const edge = function (h1, h2, x1, y1, x2, y2) {
+                        if ((h1 < level) === (h2 < level)) return;
+                        const t = (level - h1) / (h2 - h1);
+                        pts.push([x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]);
+                    };
+                    edge(a, b, px(i), px(j), px(i + 1), px(j));
+                    edge(b, c, px(i + 1), px(j), px(i + 1), px(j + 1));
+                    edge(c, d, px(i + 1), px(j + 1), px(i), px(j + 1));
+                    edge(d, a, px(i), px(j + 1), px(i), px(j));
+                    for (let q = 0; q + 1 < pts.length; q += 2) { octx.moveTo(pts[q][0], pts[q][1]); octx.lineTo(pts[q + 1][0], pts[q + 1][1]); }
+                }
+                octx.strokeStyle = major ? 'rgba(28,52,22,0.42)' : 'rgba(28,52,22,0.2)';
+                octx.lineWidth = major ? 1.6 : 1;
+                octx.stroke();
+            }
+        }
         return off;
     }
 
@@ -141,44 +189,147 @@
         pts.forEach(function (p, i) { if (i) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
         ctx.closePath();
     }
-    function badge(ctx, pt, label, fill, r) {
-        ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, 7); ctx.fillStyle = fill; ctx.fill();
-        ctx.lineWidth = 3; ctx.strokeStyle = '#0f172a'; ctx.stroke();
-        ctx.fillStyle = '#0f172a'; ctx.font = 'bold ' + Math.round(r * 0.95) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    // ---- the course-map look ------------------------------------------------------------------------------
+    const TURF = { rough: '#3d7034', fairway: '#7bbf55', fringe: '#6aae47', green: '#a3dd7a', sand: '#ecdca6', sandLip: 'rgba(120,88,36,0.5)' };
+    const TEE_COLORS = ['#111827', '#facc15', '#ef4444'];   // the back / middle / front box (black-white, yellow, red groups)
+    const MOW_PATTERNS = ['SOLID', 'STRIPES', 'CHECKERBOARD', 'DIAMOND'];   // what both the fairway and the green builders can paint
+    function pxPerM() { return S.C / S.size; }
+    // Mowing pattern inside the current path (clipped by the caller): bands along the line of play (angle), as the builders paint
+    // them, drawn wider than on the course (bandM) so they read at map scale
+    function paintMow(ctx, pts, pattern, angle, bandM, alpha) {
+        if (!pattern || pattern === 'SOLID') return;
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        pts.forEach(function (p) { const x = cx(p.x), y = cz(p.z); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+        const R = Math.hypot(x1 - x0, y1 - y0) / 2 + 2, band = Math.max(3, bandM * pxPerM());
+        ctx.save();
+        ctx.translate((x0 + x1) / 2, (y0 + y1) / 2);
+        ctx.rotate(angle + (pattern === 'DIAMOND' ? Math.PI / 4 : 0));
+        ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
+        const n = Math.ceil(R / band);
+        for (let a = -n; a < n; a++) {
+            if (pattern === 'STRIPES') { if (a % 2 === 0) ctx.fillRect(-R, a * band, 2 * R, band); continue; }
+            for (let b = -n; b < n; b++) if ((a + b) % 2 === 0) ctx.fillRect(b * band, a * band, band, band);
+        }
+        ctx.restore();
+    }
+    // A pin with a pennant at canvas point g; size in px
+    function drawFlag(ctx, g, size, color) {
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = Math.max(1.5, size * 0.12); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(g.x, g.y - size); ctx.stroke();
+        ctx.fillStyle = color || '#ef4444';
+        ctx.beginPath(); ctx.moveTo(g.x, g.y - size); ctx.lineTo(g.x + size * 0.7, g.y - size * 0.78); ctx.lineTo(g.x, g.y - size * 0.56); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(15,23,42,0.55)';
+        ctx.beginPath(); ctx.ellipse(g.x, g.y, size * 0.22, size * 0.1, 0, 0, 7); ctx.fill();
+        ctx.lineCap = 'butt';
+    }
+    // The hole number on a round tee marker (the tee handle); the selected hole's marker is larger and ringed in sky blue
+    function teeMarker(ctx, pt, label, r, selected, statusCol) {
+        ctx.beginPath(); ctx.arc(pt.x, pt.y + 1.5, r, 0, 7); ctx.fillStyle = 'rgba(15,23,42,0.35)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, 7); ctx.fillStyle = '#0f172a'; ctx.fill();
+        ctx.lineWidth = selected ? 3 : 2; ctx.strokeStyle = statusCol || (selected ? '#38bdf8' : '#f8fafc'); ctx.stroke();
+        ctx.fillStyle = '#f8fafc'; ctx.font = 'bold ' + Math.round(r * 0.95) + 'px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(label, pt.x, pt.y + 1);
     }
+    // The handle that turns the hole: the flag on a light disc
+    function flagHandle(ctx, pt) {
+        ctx.beginPath(); ctx.arc(pt.x, pt.y + 1.5, 15, 0, 7); ctx.fillStyle = 'rgba(15,23,42,0.35)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 15, 0, 7); ctx.fillStyle = 'rgba(248,250,252,0.95)'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = '#38bdf8'; ctx.stroke();
+        drawFlag(ctx, { x: pt.x - 3, y: pt.y + 8 }, 16, '#ef4444');
+    }
+    // One planned hole as on a course guide: rough edge, mown fairway, sand with a lip, green with its fringe, coloured tee boxes,
+    // the flag. Its status shows as an outline (amber: needs reshaping, red: does not fit) and a red wash when it does not fit.
     function drawSketch(ctx, sk, i, selected) {
         const ev = sk.ev, wp = ev && ev.world;
         if (!wp) return;
-        const warn = !!(ev.ok && ev.shaped && ev.shaped.length);   // yellow: fine after the builders reshape the ground
-        const col = ev.ok ? (warn ? COLORS.warn : COLORS.ok) : COLORS.bad;
-        ctx.globalAlpha = selected ? 1 : 0.6;
-        ctx.lineWidth = selected ? 2.5 : 1.5; ctx.strokeStyle = col;
-        if (wp.fairway) { polyPath(ctx, wp.fairway); ctx.fillStyle = ev.ok ? (warn ? 'rgba(251,191,36,0.38)' : 'rgba(74,222,128,0.38)') : 'rgba(248,113,113,0.38)'; ctx.fill(); ctx.stroke(); }
-        ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath();
+        const warn = !!(ev.ok && ev.shaped && ev.shaped.length);
+        const statusCol = ev.ok ? (warn ? COLORS.warn : null) : COLORS.bad;
+        const m = pxPerM(), angle = sk.heading, mow = S.mow;
+        ctx.save();
+        ctx.globalAlpha = selected ? 1 : 0.82;
+        ctx.lineJoin = 'round';
+        // the line of play under everything, faint
+        ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1.2; ctx.beginPath();
         wp.centerline.forEach(function (p, k) { if (k) ctx.lineTo(cx(p.x), cz(p.z)); else ctx.moveTo(cx(p.x), cz(p.z)); });
         ctx.stroke(); ctx.setLineDash([]);
+        if (wp.fairway) {
+            polyPath(ctx, wp.fairway); ctx.strokeStyle = TURF.rough; ctx.lineWidth = Math.max(3, 5 * m); ctx.stroke();   // semi-rough edge
+            polyPath(ctx, wp.fairway); ctx.fillStyle = TURF.fairway; ctx.fill();
+            ctx.save(); polyPath(ctx, wp.fairway); ctx.clip(); paintMow(ctx, wp.fairway, mow, angle, 9, 0.13); ctx.restore();
+        }
         // water the shot has to carry
         if (ev.ok && ev.carry) {
-            ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = selected ? 4 : 3;
+            ctx.strokeStyle = '#bae6fd'; ctx.lineWidth = selected ? 3.5 : 2.5;
             ev.carry.segs.forEach(function (sg) { ctx.beginPath(); ctx.moveTo(cx(sg.a.x), cz(sg.a.z)); ctx.lineTo(cx(sg.b.x), cz(sg.b.z)); ctx.stroke(); });
-            ctx.lineWidth = selected ? 2.5 : 1.5;
         }
-        ctx.strokeStyle = col;
-        wp.bunkers.forEach(function (b) { polyPath(ctx, b); ctx.fillStyle = 'rgba(253,230,138,0.9)'; ctx.fill(); ctx.stroke(); });
-        polyPath(ctx, wp.green); ctx.fillStyle = ev.ok ? (warn ? 'rgba(245,158,11,0.9)' : 'rgba(34,197,94,0.85)') : 'rgba(239,68,68,0.8)'; ctx.fill(); ctx.stroke();
-        (wp.teeBoxes || []).forEach(function (b) { polyPath(ctx, b); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill(); });
-        ctx.globalAlpha = 1;
-        const tee = { x: cx(sk.origin.x), y: cz(sk.origin.z) };
+        // green with its fringe
+        polyPath(ctx, wp.green); ctx.strokeStyle = TURF.fringe; ctx.lineWidth = Math.max(2.5, 3 * m); ctx.stroke();
+        polyPath(ctx, wp.green); ctx.fillStyle = TURF.green; ctx.fill();
+        ctx.save(); polyPath(ctx, wp.green); ctx.clip(); paintMow(ctx, wp.green, mow, angle, 3.5, 0.16); ctx.restore();
+        // sand, darker on the lip that faces the light's far side
+        wp.bunkers.forEach(function (b) {
+            polyPath(ctx, b); ctx.fillStyle = TURF.sand; ctx.fill();
+            ctx.save(); polyPath(ctx, b); ctx.clip();
+            ctx.translate(1.6, 1.6); polyPath(ctx, b); ctx.strokeStyle = TURF.sandLip; ctx.lineWidth = 3; ctx.stroke();
+            ctx.restore();
+            polyPath(ctx, b); ctx.strokeStyle = 'rgba(60,45,20,0.35)'; ctx.lineWidth = 0.8; ctx.stroke();
+        });
+        (wp.teeBoxes || []).forEach(function (b, k) {
+            polyPath(ctx, b); ctx.fillStyle = TURF.fairway; ctx.fill();
+            ctx.strokeStyle = TEE_COLORS[k] || '#f8fafc'; ctx.lineWidth = 2; ctx.stroke();
+        });
+        // what is wrong with the spot: an outline, and a red wash when it does not fit
+        if (statusCol) {
+            const parts = [wp.green].concat(wp.fairway ? [wp.fairway] : [], wp.bunkers, wp.teeBoxes || []);
+            if (!ev.ok) { ctx.fillStyle = 'rgba(239,68,68,0.38)'; parts.forEach(function (q) { polyPath(ctx, q); ctx.fill(); }); }
+            ctx.strokeStyle = statusCol; ctx.lineWidth = selected ? 2.5 : 1.8;
+            parts.forEach(function (q) { polyPath(ctx, q); ctx.stroke(); });
+        }
+        ctx.restore();
+        const tee = { x: cx(sk.origin.x), y: cz(sk.origin.z) }, gc = { x: cx(wp.greenCenter.x), y: cz(wp.greenCenter.z) };
         if (selected) {
-            // T handle carries the hole number (drag to move), G handle turns the hole
-            const gc = { x: cx(wp.greenCenter.x), y: cz(wp.greenCenter.z) };
-            badge(ctx, tee, String(holeNo(i)), '#f8fafc', 15);
-            badge(ctx, gc, 'G', '#38bdf8', 15);
+            // the tee marker carries the hole number (drag to move), the flag turns the hole
+            teeMarker(ctx, tee, String(holeNo(i)), 15, true, statusCol);
+            flagHandle(ctx, gc);
             S.handles = { tee: tee, green: gc };
         } else {
-            badge(ctx, tee, String(holeNo(i)), 'rgba(248,250,252,0.85)', 12);
+            drawFlag(ctx, gc, 13, '#ef4444');
+            teeMarker(ctx, tee, String(holeNo(i)), 12, false, statusCol);
         }
+    }
+    // Holes already built on the plate, in the same muted course colours (from the hole data, so each part keeps its kind)
+    function drawBuiltHoles(ctx) {
+        const all = root.courseHoles || [], ok = function (o) { return o && o.points && o.points.length >= 3; };
+        ctx.save(); ctx.globalAlpha = 0.7;
+        all.forEach(function (h, i) {
+            if (!h || S.holes.indexOf(i) >= 0) return;
+            (h.fairways || []).filter(ok).forEach(function (f) { polyPath(ctx, f.points); ctx.fillStyle = TURF.fairway; ctx.fill(); });
+            (h.bunkers || []).filter(ok).forEach(function (b) { polyPath(ctx, b.points); ctx.fillStyle = TURF.sand; ctx.fill(); });
+            if (ok(h.greenData)) { polyPath(ctx, h.greenData.points); ctx.fillStyle = TURF.green; ctx.fill(); }
+            (h.teeBoxes || []).filter(ok).forEach(function (t) { polyPath(ctx, t.points); ctx.fillStyle = '#e2e8f0'; ctx.fill(); });
+            if (h.flag && typeof h.flag.x === 'number') {
+                const g = { x: cx(h.flag.x), y: cz(h.flag.z) };
+                drawFlag(ctx, g, 11, '#f8fafc');
+                ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 10px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                ctx.fillText(String(i + 1), g.x + 9, g.y - 8);
+            }
+        });
+        ctx.restore();
+    }
+    // A scale bar (bottom left) and a north arrow (top right): -z is north on the plate, up on the map
+    function drawMapFurniture(ctx, C) {
+        const m = pxPerM(), len = S.size > 900 ? 200 : 100, w = len * m, x = 12, y = C - 14;
+        ctx.save();
+        ctx.fillStyle = 'rgba(15,23,42,0.55)'; ctx.fillRect(x - 6, y - 16, w + 46, 24);
+        ctx.fillStyle = '#f8fafc'; ctx.fillRect(x, y - 2, w / 2, 4); ctx.fillStyle = '#0f172a'; ctx.fillRect(x + w / 2, y - 2, w / 2, 4);
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 1; ctx.strokeRect(x, y - 2, w, 4);
+        ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 10px system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+        ctx.fillText(len + ' m', x + w + 6, y);
+        const nx = C - 20, ny = 22;
+        ctx.beginPath(); ctx.arc(nx, ny, 13, 0, 7); ctx.fillStyle = 'rgba(15,23,42,0.55)'; ctx.fill();
+        ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.moveTo(nx, ny - 10); ctx.lineTo(nx + 5, ny + 2); ctx.lineTo(nx, ny - 1); ctx.lineTo(nx - 5, ny + 2); ctx.closePath(); ctx.fill();
+        ctx.font = 'bold 9px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('N', nx, ny + 7);
+        ctx.restore();
     }
     function draw() {
         if (!S) return;
@@ -186,23 +337,19 @@
         ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(S.terrain, 0, 0, C, C);
-        ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
         // a line every 100 m (200 m on a big plate), centred on the plate, whatever its size
         const step = S.size > 900 ? 200 : 100, g0 = -Math.floor((S.half - 1) / step) * step;
         for (let g = g0; g < S.half; g += step) {
             ctx.beginPath(); ctx.moveTo(cx(g), 0); ctx.lineTo(cx(g), C); ctx.moveTo(0, cz(g)); ctx.lineTo(C, cz(g)); ctx.stroke();
         }
-        // holes already on the course
-        const others = S.baseEnv.others || { points: [], polygons: [] };
-        ctx.fillStyle = 'rgba(255,255,255,0.40)'; ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-        (others.polygons || []).forEach(function (poly) { polyPath(ctx, poly); ctx.fill(); ctx.stroke(); });
-        (others.points || []).forEach(function (p) { ctx.beginPath(); ctx.arc(cx(p.x), cz(p.z), 3, 0, 7); ctx.fill(); });
-        // trees, rocks and buildings on the plate (holes keep clear of them)
+        drawBuiltHoles(ctx);
+        // trees, rocks and buildings on the plate (holes keep clear of them): a canopy or a stone with its shadow
         (S.baseEnv.objects || []).forEach(function (o) {
-            const big = o.r >= 4, rr = Math.max(2, o.r / S.size * C);
-            ctx.beginPath(); ctx.arc(cx(o.x), cz(o.z), rr, 0, 7);
-            ctx.fillStyle = big ? 'rgba(120,113,108,0.85)' : 'rgba(21,94,52,0.75)'; ctx.fill();
-            ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(15,23,42,0.6)'; ctx.stroke();
+            const big = o.r >= 4, rr = Math.max(2, o.r / S.size * C), x = cx(o.x), y = cz(o.z);
+            ctx.beginPath(); ctx.ellipse(x + rr * 0.35, y + rr * 0.45, rr, rr * 0.85, 0, 0, 7); ctx.fillStyle = 'rgba(15,23,42,0.28)'; ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y, rr, 0, 7); ctx.fillStyle = big ? '#8a837c' : '#2f6b3a'; ctx.fill();
+            ctx.beginPath(); ctx.arc(x - rr * 0.3, y - rr * 0.3, rr * 0.45, 0, 7); ctx.fillStyle = big ? 'rgba(255,255,255,0.18)' : 'rgba(163,230,53,0.25)'; ctx.fill();
         });
         // fences, walls and OB lines
         ctx.strokeStyle = 'rgba(146,64,14,0.95)'; ctx.lineWidth = 2.5;
@@ -214,22 +361,26 @@
             const g = prevGreen(i), d = walkOf(i);
             if (!g || d === null) continue;
             const o = S.sketches[i].origin, long = d > WALK_LONG;
-            ctx.setLineDash([3, 7]); ctx.strokeStyle = long ? 'rgba(248,113,113,0.95)' : 'rgba(250,204,21,0.85)';
-            ctx.beginPath(); ctx.moveTo(cx(g.x), cz(g.z)); ctx.lineTo(cx(o.x), cz(o.z)); ctx.stroke();
-            labels.push({ x: (cx(g.x) + cx(o.x)) / 2, y: (cz(g.z) + cz(o.z)) / 2, text: '🚶 ' + d + ' m', long: long });
+            ctx.setLineDash([2, 6]); ctx.lineCap = 'round'; ctx.strokeStyle = long ? 'rgba(248,113,113,0.95)' : 'rgba(254,243,199,0.9)';
+            ctx.beginPath(); ctx.moveTo(cx(g.x), cz(g.z)); ctx.lineTo(cx(o.x), cz(o.z)); ctx.stroke(); ctx.lineCap = 'butt';
+            // the label sits a third of the way from the green and a little to the side, clear of the tee marker at the far end
+            const gx = cx(g.x), gy = cz(g.z), tx = cx(o.x), ty = cz(o.z), seg = Math.hypot(tx - gx, ty - gy) || 1;
+            const nx = -(ty - gy) / seg, ny = (tx - gx) / seg;
+            labels.push({ x: gx + (tx - gx) * 0.35 + nx * 14, y: gy + (ty - gy) * 0.35 + ny * 14, text: '🚶 ' + d + ' m', long: long });
         }
         ctx.setLineDash([]);
         S.sketches.forEach(function (sk, i) { if (i !== S.sel) drawSketch(ctx, sk, i, false); });
         drawSketch(ctx, cur(), S.sel, true);
         // walk labels on top, so a hole drawn over the line cannot hide them
-        ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         labels.forEach(function (l) {
-            const w = ctx.measureText(l.text).width + 10;
-            ctx.fillStyle = l.long ? 'rgba(127,29,29,0.92)' : 'rgba(15,23,42,0.85)';
-            ctx.fillRect(l.x - w / 2, l.y - 9, w, 18);
-            ctx.fillStyle = l.long ? '#fecaca' : '#fde68a';
+            const w = ctx.measureText(l.text).width + 12;
+            ctx.fillStyle = l.long ? 'rgba(127,29,29,0.92)' : 'rgba(15,23,42,0.82)';
+            ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(l.x - w / 2, l.y - 9, w, 18, 9); else ctx.rect(l.x - w / 2, l.y - 9, w, 18); ctx.fill();
+            ctx.fillStyle = l.long ? '#fecaca' : '#fef3c7';
             ctx.fillText(l.text, l.x, l.y + 1);
         });
+        drawMapFurniture(ctx, C);
     }
 
     // ---- status chip & buttons ---------------------------------------------------------------------------
@@ -275,20 +426,59 @@
         btn.style.opacity = on ? '1' : '0.4';
         btn.style.cursor = on ? 'pointer' : 'not-allowed';
     }
-    function buildChips() {
-        const box = S.dom.chips;
+    // The scorecard: one column per planned hole (tap to select it) with par, length and the walk to its tee, and the totals.
+    // A hole that does not fit is marked ⛔, one that needs reshaping ⚠️, a long walk in red.
+    function buildScorecard() {
+        const box = S.dom.card;
         box.textContent = '';
-        S.sketches.forEach(function (sk, i) {
-            const b = document.createElement('button');
-            b.type = 'button';
-            const bad = sk.ev && !sk.ev.ok;
-            const shapedHole = !!(sk.ev && sk.ev.ok && sk.ev.shaped && sk.ev.shaped.length);
-            b.textContent = (bad ? '⛔ ' : (shapedHole ? '⚠️ ' : '')) + tr('bp_hole', 'Hål') + ' ' + holeNo(i) + ' · Par ' + sk.par + ' · ' + Math.round(sk.plan.length) + ' m';
-            const on = i === S.sel;
-            b.style.cssText = 'min-height:36px; padding:0 12px; border-radius:18px; font-weight:bold; font-size:13px; cursor:pointer; border:2px solid ' + (on ? '#38bdf8' : '#334155') + '; background:' + (on ? '#0c4a6e' : '#1e293b') + '; color:#f1f5f9;';
-            b.onclick = function () { if (!S.busy) { S.sel = i; S.note = null; S.noteBad = false; refreshUi(); } };
-            box.appendChild(b);
+        const table = document.createElement('table');
+        table.style.cssText = 'width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; font-variant-numeric:tabular-nums;';
+        table.title = summaryText();
+        const cell = function (row, text, opts) {
+            const c = document.createElement(opts && opts.head ? 'th' : 'td');
+            c.textContent = text;
+            c.style.cssText = 'padding:4px 2px; text-align:center; border-left:1px solid ' + (opts && opts.head ? 'rgba(255,255,255,0.15)' : '#ddd5bd') + ';' + (opts && opts.style || '');
+            row.appendChild(c);
+            return c;
+        };
+        const select = function (i) { if (!S.busy) { S.sel = i; S.note = null; S.noteBad = false; refreshUi(); } };
+        const rows = [
+            { label: tr('bp_card_hole', 'Hål'), head: true },
+            { label: 'Par' }, { label: tr('bp_card_len', 'Meter') }, { label: '🚶 ' + tr('bp_card_walk', 'Gång') }
+        ];
+        let par = 0, len = 0, walk = 0;
+        rows.forEach(function (r, ri) {
+            const tr_ = document.createElement('tr');
+            if (r.head) tr_.style.background = '#14532d';
+            const lab = cell(tr_, r.label, { head: r.head, style: 'text-align:left; padding-left:8px; width:64px; border-left:none; font-weight:bold;' + (r.head ? 'color:#f8fafc;' : 'color:#3f4d3a;') });
+            lab.scope = r.head ? 'col' : 'row';
+            S.sketches.forEach(function (sk, i) {
+                const on = i === S.sel, bad = sk.ev && !sk.ev.ok, warnHole = !!(sk.ev && sk.ev.ok && sk.ev.shaped && sk.ev.shaped.length);
+                const d = walkOf(i);
+                let text = '', style = on ? 'background:' + (r.head ? '#166534' : '#fde68a') + ';' : '';
+                if (r.head) {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.textContent = (bad ? '⛔ ' : (warnHole ? '⚠️ ' : '')) + holeNo(i);
+                    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                    b.setAttribute('aria-label', tr('bp_hole', 'Hål') + ' ' + holeNo(i));
+                    b.style.cssText = 'all:unset; display:block; width:100%; min-height:28px; cursor:pointer; color:#f8fafc; font-weight:bold; font-size:14px;' + (on ? 'box-shadow:inset 0 -3px 0 #fde68a;' : '');
+                    b.onclick = function () { select(i); };
+                    const th = cell(tr_, '', { head: true, style: style + 'padding:0;' });
+                    th.appendChild(b);
+                    return;
+                }
+                if (ri === 1) { text = String(sk.par); par += sk.par; }
+                else if (ri === 2) { const m = Math.round(sk.plan.length); text = String(m); len += m; }   // the total adds the numbers shown
+                else { text = d === null ? '–' : String(d); if (d !== null) { walk += d; if (d > WALK_LONG) style += 'color:#b91c1c; font-weight:bold;'; } }
+                const td = cell(tr_, text, { style: style + 'cursor:pointer; color:' + (style.indexOf('color:#b91c1c') >= 0 ? '#b91c1c' : '#1f2d1f') + ';' });
+                td.onclick = function () { select(i); };
+            });
+            const tot = r.head ? tr('bp_card_total', 'Tot') : (ri === 1 ? String(par) : (ri === 2 ? String(Math.round(len)) : (walk ? String(walk) : '–')));
+            cell(tr_, tot, { head: r.head, style: 'width:56px; font-weight:bold;' + (r.head ? 'color:#f8fafc;' : 'background:#ece5cf; color:#1f2d1f;') });
+            table.appendChild(tr_);
         });
+        box.appendChild(table);
     }
     function refreshUi() {
         if (!S) return;
@@ -336,8 +526,13 @@
         S.dom.detail.textContent = detailText;
         S.dom.detail.style.color = shapedNow ? '#fde68a' : (carryNow ? '#7dd3fc' : (ev && !ev.ok && !S.busy ? '#fca5a5' : '#cbd5e1'));
         S.dom.detail.title = detailText;
-        buildChips();
-        S.dom.summary.textContent = summaryText();
+        buildScorecard();
+        S.dom.mowBtns.forEach(function (b) {
+            const on = b.dataset.mow === S.mow;
+            b.style.borderColor = on ? '#38bdf8' : '#334155';
+            b.style.background = on ? '#0c4a6e' : '#1e293b';
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
         draw();
     }
 
@@ -687,7 +882,7 @@
     function build() {
         if (!S || S.busy || !S.sketches.every(function (s) { return s.ev && s.ev.ok; })) return;
         const jobs = S.sketches.map(function (s, i) {
-            return { idx: S.holes[i], par: s.par, seed: s.seed, shape: s.shape, placement: { x: s.origin.x, z: s.origin.z, heading: s.heading } };
+            return { idx: S.holes[i], par: s.par, seed: s.seed, shape: s.shape, mow: S.mow, placement: { x: s.origin.x, z: s.origin.z, heading: s.heading } };
         });
         const parts = root._hgParts || null;
         close(true);
@@ -721,7 +916,7 @@
         toast(jobs.length > 1 ? tr('bp_busy_n', '⏳ Bygger hål {i} av {n}…').replace('{i}', k + 1).replace('{n}', jobs.length) : tr('hg_busy', '⏳ Bygger hålet…'), '#a855f7');
         setTimeout(function () {
             if (typeof root.changeHoleTo === 'function') root.changeHoleTo(job.idx);
-            const r = HG.generate({ par: job.par, seed: job.seed, shape: job.shape, parts: parts, placement: job.placement, syncPar: true });
+            const r = HG.generate({ par: job.par, seed: job.seed, shape: job.shape, mow: job.mow, parts: parts, placement: job.placement, syncPar: true });
             if (!r) failed.push({ no: job.idx + 1, why: failText(HG.lastFailure && HG.lastFailure()), detail: HG.lastFailure && HG.lastFailure() });
             runJobs(jobs, parts, k + 1, failed);
         }, 80);
@@ -778,15 +973,13 @@
         head.appendChild(x);
         const help = document.createElement('div');
         help.style.cssText = 'width:' + C + 'px; color:#94a3b8; font-size:12px; line-height:1.35;';
-        help.textContent = tr('bp_help', 'Dra hålet dit du vill ha det. Dra i den blå pricken (G) för att vrida. Tryck på kartan för att flytta teen dit.');
+        help.textContent = tr('bp_help', 'Dra hålet dit du vill ha det. Dra i flaggan för att vrida. Tryck på kartan för att flytta teen dit.');
         // what the builders will do on a yellow site; the height is reserved so the page does not move when it appears
         const detail = document.createElement('div');
         detail.style.cssText = 'width:' + C + 'px; height:32px; box-sizing:border-box; overflow:hidden; color:#fde68a; font-size:12px; line-height:16px;';
-        const chips = document.createElement('div');
-        chips.style.cssText = 'width:' + C + 'px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;';
-        // total par / length and the longest walk (one fixed line, so the page does not move)
-        const summary = document.createElement('div');
-        summary.style.cssText = 'width:' + C + 'px; height:18px; line-height:18px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:#cbd5e1; font-size:12px; font-weight:bold;';
+        // the scorecard (hole / par / metres / walk) in a cream card, like the one in a golfer's pocket
+        const card = document.createElement('div');
+        card.style.cssText = 'width:' + C + 'px; box-sizing:border-box; border-radius:10px; overflow:hidden; background:#f7f2e3; border:1px solid #d6cfb8; box-shadow:0 2px 0 rgba(0,0,0,0.25);';
         const canvas = document.createElement('canvas');
         canvas.width = C * dpr; canvas.height = C * dpr;
         // arcade.css pins every <canvas> to the viewport with !important, so this one must override it
@@ -840,7 +1033,35 @@
         [add, reroll, left, right, earlier, later, remove].forEach(function (b) { row2.appendChild(b); });
         const build_ = btn('', build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
-        [head, help, detail, chips, summary, canvas, row1, rowShape, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        // the course style: one mowing pattern for every fairway and green the map builds (the studios change single holes later)
+        const rowMow = document.createElement('div');
+        rowMow.style.cssText = 'width:' + C + 'px; display:flex; gap:4px; align-items:center;';
+        const mowLabel = document.createElement('span');
+        mowLabel.textContent = tr('bp_mow', 'Klippning');
+        mowLabel.style.cssText = 'color:#94a3b8; font-size:12px; font-weight:bold; margin-right:4px; white-space:nowrap;';
+        rowMow.appendChild(mowLabel);
+        const mowNames = { SOLID: tr('bp_mow_solid', 'Slät'), STRIPES: tr('bp_mow_stripes', 'Ränder'), CHECKERBOARD: tr('bp_mow_checker', 'Rutor'), DIAMOND: tr('bp_mow_diamond', 'Romber') };
+        const mowBtns = MOW_PATTERNS.map(function (pat) {
+            const b = btn('', function () { if (S && !S.busy) { S.mow = pat; root._bpMow = pat; refreshUi(); } }, 'flex:1; display:flex; align-items:center; justify-content:center; gap:6px; border:2px solid #334155; padding:0 4px;');
+            b.dataset.mow = pat;
+            b.title = mowNames[pat];
+            b.setAttribute('aria-label', tr('bp_mow', 'Klippning') + ': ' + mowNames[pat]);
+            // a swatch of the pattern
+            const sw = document.createElement('canvas');
+            sw.width = 44; sw.height = 28;
+            sw.style.cssText = 'width:22px !important; height:14px !important; position:static !important; border-radius:3px; flex:none;';
+            const sctx = sw.getContext('2d');
+            sctx.fillStyle = TURF.fairway; sctx.fillRect(0, 0, 44, 28);
+            sctx.fillStyle = 'rgba(255,255,255,0.28)';
+            if (pat === 'STRIPES') for (let k = 0; k < 44; k += 16) sctx.fillRect(k, 0, 8, 28);
+            if (pat === 'CHECKERBOARD') for (let a = 0; a < 4; a++) for (let c = 0; c < 6; c++) if ((a + c) % 2 === 0) sctx.fillRect(c * 8, a * 8, 8, 8);
+            if (pat === 'DIAMOND') { sctx.save(); sctx.translate(22, 14); sctx.rotate(Math.PI / 4); for (let a = -5; a < 5; a++) for (let c = -5; c < 5; c++) if ((a + c) % 2 === 0) sctx.fillRect(c * 8, a * 8, 8, 8); sctx.restore(); }
+            b.appendChild(sw);
+            if (!compact) { const t = document.createElement('span'); t.textContent = mowNames[pat]; t.style.fontSize = '12px'; b.appendChild(t); }
+            rowMow.appendChild(b);
+            return b;
+        });
+        [head, help, detail, card, canvas, row1, rowShape, rowMow, row2, build_].forEach(function (el) { overlay.appendChild(el); });
         // every overlay row keeps its height: a page taller than the screen scrolls instead of squeezing the status and summary lines
         Array.prototype.forEach.call(overlay.children, function (el) { el.style.flexShrink = '0'; });
         document.body.appendChild(overlay);
@@ -848,9 +1069,10 @@
         root._pause3D = true;
 
         S = {
-            dom: { overlay: overlay, status: status, detail: detail, summary: summary, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
+            dom: { overlay: overlay, status: status, detail: detail, card: card, mowBtns: mowBtns, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, add: add, remove: remove, earlier: earlier, later: later },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, half: half, size: half * 2, mPerPx: half * 2 / C,
             baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
+            mow: MOW_PATTERNS.indexOf(root._bpMow) >= 0 ? root._bpMow : 'STRIPES',
             drag: null, busy: false, snapToken: 0, findToken: 0, raf: 0, note: null, noteBad: false, handles: null
         };
         const env = HG.siteEnv(root._hgParts || null, { allowShaping: true });

@@ -1106,8 +1106,21 @@
             half: (root.TERRAIN_SIZE || 600) / 2,
             others: otherHoles(root.courseHoles, root.currentHoleIndex),
             waterStep: Math.min(3, (root.TERRAIN_SIZE || 600) / (root.TERRAIN_SEGS || 300)),
-            // the terrain lookup already knows painted water and per-cell water levels
-            isWater: function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; },
+            // the terrain lookup already knows painted water and per-cell water levels; it is slow (height, slope and surface for
+            // every call), so each square metre is asked once and remembered for the life of this environment (the blueprint map
+            // keeps one while it is open and tries thousands of spots on it)
+            isWater: (function () {
+                let raw = function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; };
+                let T = Math.ceil(root.TERRAIN_SIZE || 600), half = (root.TERRAIN_SIZE || 600) / 2, memo = null;
+                return function (x, z) {
+                    let ix = Math.floor(x + half), iz = Math.floor(z + half);
+                    if (ix < 0 || iz < 0 || ix >= T || iz >= T) return raw(x, z);
+                    if (!memo) memo = new Uint8Array(T * T);
+                    let k = iz * T + ix, v = memo[k];
+                    if (!v) { v = raw(ix - half + 0.5, iz - half + 0.5) ? 2 : 1; memo[k] = v; }
+                    return v === 2;
+                };
+            })(),
             heightAt: root.localGetTerrainAt ? surfaceY : null,
             objects: collectObjects(),
             walls: collectWalls(),
@@ -1195,6 +1208,9 @@
         if (opts.syncPar && hole.par !== par && typeof root.changeHolePar === 'function') root.changeHolePar(par - hole.par);
         let realSave = root.saveUndoState;
         root.saveUndoState = function () { };
+        // the blueprint's course style: the fairway and green builders read the mowing pattern from this global while they build
+        let prevMow = root._smartMowPattern;
+        if (opts.mow) root._smartMowPattern = opts.mow;
         try {
             if (wp.fairway && parts.fairway) {
                 // a fairway on a hill gets a slope cap: the hill stays but becomes playable
@@ -1266,6 +1282,7 @@
             return fail('error', { message: String((e && e.stack) || e).slice(0, 600) });
         } finally {
             root.saveUndoState = realSave;
+            if (opts.mow) root._smartMowPattern = prevMow;
         }
         if (typeof root.saveLevel === 'function') root.saveLevel();
         if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
