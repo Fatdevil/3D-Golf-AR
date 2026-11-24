@@ -451,7 +451,7 @@
     // Find a good starting spot for sketch i: random tries first, then the closest legal spot around a few
     // anchor points, and finally another shape (a crowded map may only have room for a smaller one).
     // Each step runs in its own timer tick (the page stays responsive and the map can be closed) and the
-    // whole search shares one deadline.
+    // whole search shares one deadline (the open-map fallback gets a few seconds of its own).
     // The search starts next to the previous green: rings outward, and from the first ring with room plus the one after it the best
     // spot wins (short walk, no reshaping, and a green that ends away from the map edge, so the NEXT hole also finds room near it).
     // Look-ahead: when the next hole is still to be planned, a spot only counts as good if a typical hole of the next par still
@@ -462,7 +462,8 @@
     function suggest(i) {
         const HG = root.HoleGenerator, s = S.sketches[i];
         const lim = S.half * 0.55, anchors = [[0, 0], [-lim, -lim], [lim, -lim], [-lim, lim], [lim, lim]];
-        const deadline = Date.now() + 7000, token = ++S.findToken;
+        let deadline = Date.now() + 7000;
+        const token = ++S.findToken;
         // the first hole of an empty course starts at the edge of the map, as from a clubhouse, so the round loops around the
         // plate instead of the first hole taking the middle and leaving no room near its green for the next one
         const edge = S.half * 0.78, starts = [[-edge, 0], [edge, 0], [0, -edge], [0, edge]][Math.floor(Math.random() * 4)];
@@ -474,6 +475,8 @@
             const g = ev.world.greenCenter, room = Math.min(150, S.half - Math.max(Math.abs(g.x), Math.abs(g.z)));
             let sc = r + ((ev.shaped && ev.shaped.length) ? 60 : 0) - 0.6 * room;
             if (ahead && ahead.tee) sc += Math.hypot(g.x - ahead.tee.x, g.z - ahead.tee.z);
+            // the look-ahead is the expensive part: only for a spot that could still beat the best one found so far
+            if (best && sc >= best.score) return { score: sc + NO_NEXT_ROOM, good: false };
             const good = !(ahead && ahead.plan) || nextFits(ahead.plan, ev.world, env);
             return { score: sc + (good ? 0 : NO_NEXT_ROOM), good: good };
         };
@@ -518,6 +521,8 @@
                     } else step = -1;
                 }
                 if (Date.now() > deadline) step = -1;
+                // the open-map search gets time of its own: a slow device must not end with no spot at all
+                if (step === -1) deadline = Math.max(deadline, Date.now() + 4000);
                 setTimeout(tick, 0);
                 return;
             }
@@ -680,6 +685,7 @@
         window.removeEventListener('keydown', S.keyHandler, true);
         cancelAnimationFrame(S.raf); clearTimeout(S.noteTimer);
         S = null;
+        root._pause3D = false;
         if (fade) { el.style.opacity = '0'; el.style.transform = 'scale(1.06)'; setTimeout(function () { el.remove(); }, 380); }
         else el.remove();
     }
@@ -776,7 +782,11 @@
         const build_ = btn('', build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
         [head, help, detail, chips, summary, canvas, row1, rowShape, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        // every overlay row keeps its height: a page taller than the screen scrolls instead of squeezing the status and summary lines
+        Array.prototype.forEach.call(overlay.children, function (el) { el.style.flexShrink = '0'; });
         document.body.appendChild(overlay);
+        // the map covers the whole screen: the 3D scene behind it stops drawing, so the search for good spots gets the time
+        root._pause3D = true;
 
         S = {
             dom: { overlay: overlay, status: status, detail: detail, summary: summary, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
