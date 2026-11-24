@@ -541,7 +541,8 @@
                 ring++; cand = 0;
                 // every spot found leaves the next hole's shape no room near this green: draw the next hole another shape and look
                 // again (a crowded plate fits a shorter or differently bent hole), a few times, before settling for a long walk
-                if (best && !best.good && ring >= NEAR_RINGS.length && ahead && ahead.plan && aheadShapes < 3 && Date.now() < deadline) {
+                // (only in the first seconds of the search: the map must not keep the player waiting for a nicer walk)
+                if (best && !best.good && ring >= NEAR_RINGS.length && ahead && ahead.plan && aheadShapes < 3 && Date.now() < deadline - 3000) {
                     aheadShapes++;
                     const nextIdx = S.holes[i] + 1, pend = S.pending && S.pending[nextIdx];
                     if (pend) {
