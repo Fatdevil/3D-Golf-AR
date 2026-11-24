@@ -273,7 +273,8 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     // count fairway-green pixels (the course-map turf colour) inside the plate in the middle of the map
     const ctx = cv.getContext('2d'), w = cv.width, d = ctx.getImageData(Math.round(w * 0.3), Math.round(w * 0.3), Math.round(w * 0.4), Math.round(w * 0.4)).data;
     let turf = 0;
-    for (let k = 0; k < d.length; k += 4) if (Math.abs(d[k] - 0x7b) < 14 && Math.abs(d[k + 1] - 0xbf) < 14 && Math.abs(d[k + 2] - 0x55) < 14) turf++;
+    const f = parseInt(window.CourseMap.TURF.fairway.slice(1), 16), fr = (f >> 16) & 255, fg = (f >> 8) & 255, fb = f & 255;
+    for (let k = 0; k < d.length; k += 4) if (Math.abs(d[k] - fr) < 14 && Math.abs(d[k + 1] - fg) < 14 && Math.abs(d[k + 2] - fb) < 14) turf++;
     return { api: true, canvas: true, turf: turf };
   });
   const bdZoom = await page.evaluate(function () {
@@ -285,6 +286,44 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     return { zoom: true, afterPlus: z, reset: B.zoom.zoom };
   });
   check('the backdrop map zooms too (+ and show all)', bdZoom.zoom && bdZoom.afterPlus > 1.5 && bdZoom.reset === 1, JSON.stringify(bdZoom));
+  // the shelf offers only figures tagged for the course's world in Admin; the rest are one tap away
+  const shelf = await page.evaluate(function () {
+    const B = window.Backdrop && window.Backdrop.state();
+    if (!B || !window.assetFitsBiome) return { api: false };
+    const R = window.ASSET_REGISTRY = window.ASSET_REGISTRY || {}, saved = {}, biome = window.ACTIVE_BIOME;
+    const fake = { _t_cactus: { name: 'T Cactus', targetHeight: 30, biomes: ['DESERT'] }, _t_pine: { name: 'T Pine', targetHeight: 30, biomes: ['AUTUMN'] } };
+    // only the test figures on the shelf: the others are moved aside for the check
+    Object.keys(R).forEach(function (k) { saved[k] = R[k]; delete R[k]; });
+    Object.assign(R, fake);
+    const names = function () { return Array.prototype.map.call(B.dom.shelf.querySelectorAll('button'), function (b) { return b.textContent; }); };
+    const toggle = function () { return B.dom.shelf.querySelector('.bd-world-toggle'); };
+    const out = { api: true };
+    try {
+      window.ACTIVE_BIOME = 'DESERT_SUNSET';
+      window.Backdrop.refresh();
+      out.desert = names();
+      toggle().click();
+      out.all = names();
+      toggle().click();
+      delete R._t_cactus;
+      window.Backdrop.refresh();
+      out.emptyText = (B.dom.shelf.querySelector('.bd-shelf-empty') || {}).textContent || '';
+      out.emptyToggle = !!toggle();
+      delete R._t_pine;
+      window.Backdrop.refresh();
+      out.noneText = (B.dom.shelf.querySelector('.bd-shelf-empty') || {}).textContent || '';
+    } finally {
+      Object.keys(fake).forEach(function (k) { delete R[k]; });
+      Object.assign(R, saved);
+      window.ACTIVE_BIOME = biome;
+      B.anyBiome = false;
+      window.Backdrop.refresh();
+    }
+    return out;
+  });
+  check('the shelf shows the desert figures in a desert world, other worlds behind one chip', shelf.api && shelf.desert.some(function (t) { return /T Cactus/.test(t); }) && !shelf.desert.some(function (t) { return /T Pine/.test(t); })
+    && shelf.desert.some(function (t) { return /^\+1 /.test(t); }) && shelf.all.some(function (t) { return /T Pine/.test(t); }), JSON.stringify(shelf));
+  check('an empty shelf says why: none for this world (with the chip), or none at all (20 m)', shelf.api && /Admin/.test(shelf.emptyText) && shelf.emptyToggle && /20 m/.test(shelf.noneText), JSON.stringify(shelf));
   check('the backdrop map shows the built holes in the course-map colours (shared course-map.js)', backdrop.api && backdrop.canvas && backdrop.turf > 30, JSON.stringify(backdrop));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-backdrop.png') });
   // undo in the backdrop map empties a hole again: the Hål tab comes back on (it is off while every hole is built)
@@ -301,6 +340,55 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     return { offBefore: offBefore, onAfter: !!t && !t.disabled, emptyHole: empty };
   });
   check('undo in the backdrop map turns the Hål tab back on when it empties a hole', undoTab.offBefore === true && undoTab.onAfter && undoTab.emptyHole >= 0, JSON.stringify(undoTab));
+  // the plate's painted ground: OB keeps the planner away, and the maps take the course's palette (a desert course reads as desert)
+  const ground = await page.evaluate(function () {
+    const HG = window.HoleGenerator, CM = window.CourseMap, data = window.terrainBiomeData;
+    if (!HG || !CM || !data || !window.CURRENT_BIOME_CONFIG) return { api: false };
+    const N = 4096, size = window.TERRAIN_SIZE || 600, ob = window.CURRENT_BIOME_CONFIG.obColor || '#ef4444';
+    const rgb = [parseInt(ob.slice(1, 3), 16), parseInt(ob.slice(3, 5), 16), parseInt(ob.slice(5, 7), 16)];
+    // paint OB straight into the surface data over x 150..250, z -250..-150 (the lookup reads it; the paint canvas is left alone)
+    const px = function (v) { return Math.floor((v + size / 2) / size * N); };
+    const saved = [];
+    for (let cz = px(-250); cz < px(-150); cz++) for (let cx = px(150); cx < px(250); cx++) {
+      const i = (cz * N + cx) * 4;
+      saved.push(data[i], data[i + 1], data[i + 2]);
+      data[i] = rgb[0]; data[i + 1] = rgb[1]; data[i + 2] = rgb[2];
+    }
+    const out = { api: true };
+    try {
+      const env = HG.siteEnv(null, {});
+      out.inside = env.isOB(200, -200); out.outside = env.isOB(-200, 200); out.waterThere = env.isWater(200, -200);
+      // a par 3 teeing off at x 40 towards +x ends in the painted patch; turned round it plays away from it
+      const plan = HG.planFor(3, 5);
+      out.len = plan.length;
+      out.across = HG.evaluateSite(plan, { x: 40, z: -200 }, 0, env).reasons;
+      out.away = HG.evaluateSite(plan, { x: 40, z: -200 }, Math.PI, env).reasons;
+      // the terrain picture: an OB cell has a red cast next to the plain ground
+      const pic = CM.renderTerrain(size / 2), c = pic.getContext('2d'), T = pic.width;
+      const at = function (x, z) { return Array.prototype.slice.call(c.getImageData(Math.round((x + size / 2) / size * T), Math.round((z + size / 2) / size * T), 1, 1).data, 0, 3); };
+      out.obPx = at(200, -200); out.plainPx = at(-280, 280);
+    } finally {
+      let k = 0;
+      for (let cz = px(-250); cz < px(-150); cz++) for (let cx = px(150); cx < px(250); cx++) {
+        const i = (cz * N + cx) * 4;
+        data[i] = saved[k++]; data[i + 1] = saved[k++]; data[i + 2] = saved[k++];
+      }
+    }
+    // the map colours follow the palette: summer as before, the desert's lime fairway and yellow sand in a desert world
+    const cfg = window.CURRENT_BIOME_CONFIG;
+    out.summer = { fairway: CM.TURF.fairway, green: CM.TURF.green, sand: CM.TURF.sand };
+    window.CURRENT_BIOME_CONFIG = Object.assign({}, cfg, window.BUILTIN_BIOMES.DESERT);
+    out.desert = { fairway: CM.TURF.fairway, green: CM.TURF.green, sand: CM.TURF.sand };
+    window.CURRENT_BIOME_CONFIG = cfg;
+    out.back = CM.TURF.fairway === out.summer.fairway;
+    return out;
+  });
+  const near = function (hex, ref, tol) { const a = parseInt(hex.slice(1), 16), b = parseInt(ref.slice(1), 16); return [16, 8, 0].every(function (sh) { return Math.abs(((a >> sh) & 255) - ((b >> sh) & 255)) <= tol; }); };
+  check('painted OB on the plate: the planner sees it (not as water) and will not build or play across it', ground.api && ground.inside === true && ground.outside === false && ground.waterThere === false
+    && ground.across[0] === 'ob' && ground.away[0] !== 'ob', JSON.stringify(ground));
+  check('the terrain picture shows painted OB with a red cast', ground.api && ground.obPx[0] - ground.obPx[1] > ground.plainPx[0] - ground.plainPx[1] + 25, JSON.stringify([ground.obPx, ground.plainPx]));
+  check('the map colours come from the course palette: summer close to the old map colours, the desert lime and yellow', ground.api && near(ground.summer.fairway, '#7bbf55', 14)
+    && near(ground.summer.green, '#a3dd7a', 18) && near(ground.desert.fairway, '#a3e635', 14) && /^#f[c-f][d-f][0-9a-f][0-9a-f][0-9a-f]$/.test(ground.desert.sand) && parseInt(ground.desert.sand.slice(5), 16) < 0x90 && ground.back, JSON.stringify([ground.summer, ground.desert]));
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();
   srv.close();

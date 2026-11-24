@@ -326,16 +326,42 @@
     }
 
     // ---- shelf & buttons -----------------------------------------------------------------------------------
+    // The figures the shelf offers: big ones (or all sizes), and only those tagged for the course's biome in Admin (the same rule as the
+    // builder's library and the 2D trees, assetFitsBiome in arcade-biomes.js) unless "other worlds" is on. `hidden` counts the
+    // figures of the right size the biome filter left out, `any` all figures of the right size.
+    function fitsHere(d) { return !root.assetFitsBiome || root.assetFitsBiome(d.biomes, root.ACTIVE_BIOME); }
     function shelfAssets() {
         const out = [];
+        out.hidden = 0; out.any = 0;
         Object.keys(root.ASSET_REGISTRY || {}).forEach(function (type) {
             const d = root.ASSET_REGISTRY[type];
             if (!d) return;
             const h = d.targetHeight || 0;
-            if (B.showAll ? true : h >= SHELF_MIN) out.push({ type: type, def: d, h: h });
+            if (!(B.showAll ? true : h >= SHELF_MIN)) return;
+            out.any++;
+            if (!fitsHere(d)) { out.hidden++; if (!B.anyBiome) return; }
+            out.push({ type: type, def: d, h: h });
         });
         out.sort(function (a, b) { return b.h - a.h; });
         return out;
+    }
+    // "öken", "vinter" ... for the shelf's messages; null for the summer world
+    function biomeWord() {
+        const a = String(root.ACTIVE_BIOME || '');
+        if (a.indexOf('DESERT') === 0) return tr('bd_world_desert', 'öknen');
+        if (a === 'WINTER' || a === 'SNOW') return tr('bd_world_winter', 'vinter');
+        if (a === 'AUTUMN') return tr('bd_world_autumn', 'höst');
+        if (a === 'MOON') return tr('bd_world_moon', 'månen');
+        return null;
+    }
+    function worldToggle(text) {
+        const t = document.createElement('button');
+        t.type = 'button';
+        t.className = 'bd-world-toggle';
+        t.style.cssText = 'flex:none; min-width:78px; min-height:44px; padding:4px 8px; border-radius:10px; cursor:pointer; color:#e2e8f0; font-size:11px; line-height:1.2; border:2px dashed #475569; background:transparent;';
+        t.textContent = text;
+        t.onclick = function () { B.anyBiome = !B.anyBiome; B.shelfType = null; refresh(); };
+        return t;
     }
     function buildShelf() {
         const box = B.dom.shelf;
@@ -343,11 +369,22 @@
         const list = shelfAssets();
         // a figure the active filter hides must not stay selected without anything showing it
         if (B.shelfType && !list.some(function (a) { return a.type === B.shelfType; })) B.shelfType = null;
+        const word = biomeWord();
         if (!list.length) {
             const m = document.createElement('div');
-            m.style.cssText = 'color:#94a3b8; font-size:12px; padding:8px; line-height:1.35;';
-            m.textContent = tr('bd_empty', 'Inga stora figurer än. Ladda upp en .glb i Admin med Target Height 80 m eller mer.');
-            box.appendChild(m);
+            m.className = 'bd-shelf-empty';
+            m.style.cssText = 'color:#94a3b8; font-size:12px; padding:8px; line-height:1.35; flex:1;';
+            if (list.hidden) {
+                // there are figures, just none tagged for this world yet
+                m.textContent = (word ? tr('bd_empty_biome', 'Inga figurer för {world} än. Kryssa i rätt miljö under Biomes i Admin.').replace('{world}', word)
+                    : tr('bd_empty_biome_any', 'Inga figurer för den här miljön än. Kryssa i rätt miljö under Biomes i Admin.'));
+                box.appendChild(m);
+                box.appendChild(worldToggle(tr('bd_other_worlds', 'Visa andra miljöer') + ' (' + list.hidden + ')'));
+            } else {
+                m.textContent = B.showAll ? tr('bd_empty_all', 'Inga figurer än. Ladda upp en .glb i Admin.')
+                    : tr('bd_empty', 'Inga stora figurer än. Ladda upp en .glb i Admin med Target Height {m} m eller mer.').replace('{m}', SHELF_MIN);
+                box.appendChild(m);
+            }
             return;
         }
         list.forEach(function (a) {
@@ -368,6 +405,9 @@
             b.onclick = function () { B.shelfType = on ? null : a.type; B.sel = null; B.edge = null; refresh(); };
             box.appendChild(b);
         });
+        // figures tagged for other worlds: one chip at the end to show them (an oasis palm in the desert is the builder's call)
+        if (list.hidden) box.appendChild(worldToggle(B.anyBiome ? (word ? tr('bd_only_world', 'Bara {world}').replace('{world}', word) : tr('bd_only_this', 'Bara den här miljön'))
+            : '+' + list.hidden + ' ' + tr('bd_more_worlds', 'andra miljöer')));
     }
     function enable(btn, on) { btn.disabled = !on; btn.style.opacity = on ? '1' : '0.4'; btn.style.cursor = on ? 'pointer' : 'not-allowed'; }
     function refresh() {
@@ -749,7 +789,7 @@
         B = {
             zoom: zoom,
             dom: { zoomUi: zoomUi, tabs: tabs, edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
-            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
+            canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, anyBiome: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();
         B.plate = root.CourseMap ? root.CourseMap.renderTerrain(plateHalf()) : document.createElement('canvas');

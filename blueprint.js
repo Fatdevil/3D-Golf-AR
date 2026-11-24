@@ -239,6 +239,7 @@
         if (r === 'bounds') return tr('bp_r_bounds', 'Utanför banan');
         if (r === 'close') return tr('bp_r_close', 'För nära ett annat hål');
         if (r === 'water') return tr('bp_r_water', 'Vatten i vägen');
+        if (r === 'ob') return tr('bp_r_ob', 'Målad OB-mark i vägen');
         if (r === 'carry') return tr('bp_r_carry', 'För långt över vattnet från främre tee');
         if (r === 'object') return tr('bp_r_object', 'Träd eller byggnad i vägen');
         if (/_range$/.test(r)) return tr('bp_r_range', 'För ojämn mark');

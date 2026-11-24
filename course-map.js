@@ -11,6 +11,40 @@
 
     function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
+    // ---- colours from the course's own palette ------------------------------------------------------------
+    // The maps take their colours from the active biome (CURRENT_BIOME_CONFIG, the palette the 3D view paints with), so a desert
+    // course reads as desert on the map too. Each map colour is a palette colour nudged for the small picture (greens a little
+    // lighter, the fringe and the fairway edge a little darker so they show); the summer palette gives the old hand-picked colours.
+    const SUMMER = { roughColor: '#4C7D32', semiColor: '#659A3F', fairwayColor: '#79B84F', foregreenColor: '#9ACB67', greenColor: '#8ACF72',
+        bunkerColor: '#E0D8A4', wasteColor: '#C2AF7C', teeColor: '#7cb54c', obColor: '#ef4444', fescueColor: '#315B2B' };
+    function rgbOf(hex, fb) {
+        const h = String(hex || fb || '').replace('#', '');
+        if (!/^[0-9a-fA-F]{6}$/.test(h)) return fb ? rgbOf(fb) : [76, 125, 50];
+        const n = parseInt(h, 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function palRgb(key) { const c = root.CURRENT_BIOME_CONFIG || {}; return rgbOf(c[key], SUMMER[key]); }
+    // t > 0 towards white, t < 0 towards black
+    function shadeRgb(c, t) { return c.map(function (v) { return Math.round(t >= 0 ? v + (255 - v) * t : v * (1 + t)); }); }
+    function hexOf(c) { return '#' + c.map(function (v) { return ('0' + clamp(Math.round(v), 0, 255).toString(16)).slice(-2); }).join(''); }
+    const TURF_FROM = { rough: ['semiColor', -0.35], fairway: ['fairwayColor', 0.02], fringe: ['foregreenColor', -0.25], green: ['greenColor', 0.15], sand: ['bunkerColor', 0.25] };
+    let turfMemo = { cfg: null, sig: '', out: {} };
+    function turfColour(name) {
+        const cfg = root.CURRENT_BIOME_CONFIG || null;
+        const sig = cfg ? [cfg.semiColor, cfg.fairwayColor, cfg.foregreenColor, cfg.greenColor, cfg.bunkerColor].join() : '';
+        if (turfMemo.cfg !== cfg || turfMemo.sig !== sig) turfMemo = { cfg: cfg, sig: sig, out: {} };
+        if (!turfMemo.out[name]) { const f = TURF_FROM[name]; turfMemo.out[name] = hexOf(shadeRgb(palRgb(f[0]), f[1])); }
+        return turfMemo.out[name];
+    }
+    // The ground under the holes on the terrain picture: the painted surface, in its palette colour. Rough, semi and deep rough all
+    // read as rough (the plain ground of a grass plate); a desert plate starts as waste and reads as waste. OB is rough with a red cast.
+    const GROUND_KEY = { 'SAND': 'bunkerColor', 'WASTE': 'wasteColor', 'GREEN': 'greenColor', 'TEE': 'teeColor', 'FOREGREEN': 'foregreenColor',
+        'FAIRWAY': 'fairwayColor', 'SEMI-ROUGH': 'roughColor', 'DEEP ROUGH': 'roughColor', 'ROUGH': 'roughColor' };
+    function groundRgb(type) {
+        if (type === 'OB') { const r = palRgb('roughColor'), o = palRgb('obColor'); return [r[0] * 0.6 + o[0] * 0.4, r[1] * 0.6 + o[1] * 0.4, r[2] * 0.6 + o[2] * 0.4]; }
+        return palRgb(GROUND_KEY[type] || 'roughColor');
+    }
+
     // ---- terrain picture (rendered once when the map opens) ---------------------------------------------
     // A topographic map: soft hill shading, contour lines (a heavier one every fifth), water with a light shore line.
     // Drawn once at TERRAIN_PX so the lines stay crisp when the map is scaled to the screen.
@@ -22,18 +56,20 @@
     }
     function renderTerrain(half) {
         const N = 150, size = half * 2, cell = size / N;
-        const hgt = new Float32Array(N * N), wet = new Uint8Array(N * N);
+        const hgt = new Float32Array(N * N), wet = new Uint8Array(N * N), kind = new Array(N * N);
         let lo = Infinity, hi = -Infinity;
         for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
             const x = -half + (i + 0.5) * cell, z = -half + (j + 0.5) * cell;
             const s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null;
             const h = s && typeof s.z === 'number' ? s.z : 0;
             hgt[j * N + i] = h;
+            kind[j * N + i] = s && s.type;
             if (s && s.type === 'WATER') wet[j * N + i] = 1;
             else { if (h < lo) lo = h; if (h > hi) hi = h; }
         }
         if (!isFinite(lo)) { lo = 0; hi = 1; }
-        // colour by height relative to the typical land level: flat ground reads green, hills lighter, dips darker
+        // colour: the painted ground in its palette colour, then by height relative to the typical land level (hills lighter, dips darker)
+        const groundOf = {};
         const land = [];
         for (let k = 0; k < hgt.length; k += 7) if (!wet[k]) land.push(hgt[k]);
         land.sort(function (a, b) { return a - b; });
@@ -58,7 +94,9 @@
             const shade = clamp(1 + ((hl - hr) + (hu - hd)) / cell * 1.4, 0.78, 1.22);
             const t = clamp((hgt[k] - med) / span, -1, 1);
             const up = Math.max(0, t), down = Math.max(0, -t);
-            const r = (74 + 30 * up - 12 * down) * shade, g = (124 + 10 * up - 20 * down) * shade, b = (66 + 6 * up - 6 * down) * shade;
+            const ty = kind[k] || 'ROUGH', c = groundOf[ty] || (groundOf[ty] = groundRgb(ty));
+            const lift = 0.2 * up, sink = 0.16 * down;
+            const r = (c[0] + (255 - c[0]) * lift - c[0] * sink) * shade, g = (c[1] + (255 - c[1]) * lift - c[1] * sink) * shade, b = (c[2] + (255 - c[2]) * lift - c[2] * sink) * shade;
             img.data[p] = clamp(r, 0, 255); img.data[p + 1] = clamp(g, 0, 255); img.data[p + 2] = clamp(b, 0, 255); img.data[p + 3] = 255;
         }
         bctx.putImageData(img, 0, 0);
@@ -71,6 +109,7 @@
         const range = hi - lo;
         if (range >= 0.6) {
             const step = niceStep(range / 12), f = TERRAIN_PX / N;
+            const ink = shadeRgb(palRgb('roughColor'), -0.65);   // the lines in a dark shade of the ground (dark green on grass, dark clay in the desert)
             const px = function (i) { return (i + 0.5) * f; };
             for (let level = Math.ceil(lo / step) * step; level <= hi; level += step) {
                 const major = Math.abs(Math.round(level / step) % 5) === 0;
@@ -91,7 +130,7 @@
                     edge(d, a, px(i), px(j + 1), px(i), px(j));
                     for (let q = 0; q + 1 < pts.length; q += 2) { octx.moveTo(pts[q][0], pts[q][1]); octx.lineTo(pts[q + 1][0], pts[q + 1][1]); }
                 }
-                octx.strokeStyle = major ? 'rgba(28,52,22,0.42)' : 'rgba(28,52,22,0.2)';
+                octx.strokeStyle = 'rgba(' + ink.join(',') + ',' + (major ? 0.42 : 0.2) + ')';
                 octx.lineWidth = major ? 1.6 : 1;
                 octx.stroke();
             }
@@ -100,7 +139,9 @@
     }
 
     // ---- the course-guide look ----------------------------------------------------------------------------
-    const TURF = { rough: '#3d7034', fairway: '#7bbf55', fringe: '#6aae47', green: '#a3dd7a', sand: '#ecdca6', sandLip: 'rgba(120,88,36,0.5)' };
+    // read through getters: always the active biome's colours (see turfColour above)
+    const TURF = { sandLip: 'rgba(120,88,36,0.5)' };
+    Object.keys(TURF_FROM).forEach(function (name) { Object.defineProperty(TURF, name, { enumerable: true, get: function () { return turfColour(name); } }); });
     const TEE_COLORS = ['#111827', '#facc15', '#ef4444'];   // the back / middle / front box (black-white, yellow, red groups)
     const MOW_PATTERNS = ['SOLID', 'STRIPES', 'CHECKERBOARD', 'DIAMOND'];   // what both the fairway and the green builders can paint
 
