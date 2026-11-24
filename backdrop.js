@@ -620,6 +620,12 @@
         if (typeof root.restoreSurrounding === 'function') root.restoreSurrounding();
         B.surround = surroundPicture();
         if (root.CourseMap) B.plate = root.CourseMap.renderTerrain(plateHalf());
+        // undo/redo may have emptied (or filled) a hole: the Hål tab is on only while there is an empty hole to plan
+        if (root.CourseMap && B.dom.tabs && B.dom.tabs.parentNode) {
+            const t = root.CourseMap.mapTabs('surround');
+            B.dom.tabs.parentNode.replaceChild(t, B.dom.tabs);
+            B.dom.tabs = t;
+        }
         dropStaleSelection();
         refresh();
     }
@@ -654,7 +660,8 @@
         const head = document.createElement('div');
         head.style.cssText = 'margin-top:auto; width:' + C + 'px; display:flex; align-items:center; justify-content:space-between; gap:8px; color:#f1f5f9;';
         // the tabs that join this map with the blueprint map (course-map.js); the help gets a row of its own below
-        if (root.CourseMap) head.appendChild(root.CourseMap.mapTabs('surround'));
+        const tabs = root.CourseMap ? root.CourseMap.mapTabs('surround') : null;
+        if (tabs) head.appendChild(tabs);
         else head.innerHTML = '<b style="font-size:16px;">🏔️ ' + tr('bd_title', 'Bakgrund') + '</b>';
         const status = document.createElement('div');
         status.style.cssText = 'width:' + C + 'px; text-align:left; font-size:12px; color:#94a3b8; line-height:1.35;';
@@ -719,7 +726,7 @@
         try { others = HG && HG.otherHoles ? HG.otherHoles(root.courseHoles, -1) : null; } catch (err) { others = null; }
         if (Array.isArray(others)) others = { points: others, polygons: [] };
         B = {
-            dom: { edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
+            dom: { tabs: tabs, edge: edgeChips, choices: choices, overlay: overlay, status: status, shelf: shelf, big: bigBtn, all: allBtn, ring: ring_, bigger: bigger, smaller: smaller, higher: higher, lower: lower, turnL: turnL, turnR: turnR, del: del },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, sel: null, shelfType: null, edge: null, showAll: false, drag: null, raf: 0, others: others
         };
         B.surround = surroundPicture();

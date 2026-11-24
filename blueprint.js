@@ -387,13 +387,13 @@
     }
     // Slide sketch i to the closest legal spot (async so the red state paints first)
     function snapToValid(i, announce) {
-        S.busy = true; refreshUi();
+        S.busy = true; S.searchIdx = i; refreshUi();   // searchIdx: the sketch whose spot is being looked for (kept on a tab switch)
         const token = ++S.snapToken;
         setTimeout(function () {
             if (!S || token !== S.snapToken) return;
             const s = S.sketches[i];
             const nv = root.HoleGenerator.nearestValidSite(s.plan, s.origin, s.heading, envFor(i));
-            S.busy = false;
+            S.busy = false; S.searchIdx = null;
             if (nv) {
                 s.origin = nv.origin; s.heading = nv.heading;
                 evaluate(i);
@@ -530,9 +530,9 @@
         let hint = s.hint && pg ? s.hint : null;
         s.hint = null;
         const ANGLES = 16, TURNS = [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.6, -2.6, Math.PI];   // away from the green first
-        S.busy = true; refreshUi();
+        S.busy = true; S.searchIdx = i; refreshUi();   // searchIdx: the sketch whose spot is being looked for (kept on a tab switch)
         const finish = function (spot) {
-            S.busy = false;
+            S.busy = false; S.searchIdx = null;
             if (spot) { s.origin = spot.origin; s.heading = spot.heading; }
             else { s.origin = { x: -s.plan.length / 2, z: 0 }; s.heading = 0; }
             // hand the next hole the spot its shape was found to fit at, next to this green
@@ -798,6 +798,8 @@
         const el = S.dom.overlay;
         root._bpKeep = keepPlan ? {
             holes: S.holes.slice(), sel: S.sel, mow: S.mow, pending: S.pending || null,
+            // a spot search that was still running is started again when the plan comes back (its sketch has no good spot yet)
+            searching: S.busy && S.searchIdx != null ? S.searchIdx : null,
             sketches: S.sketches.map(function (s) { return { par: s.par, seed: s.seed, shape: s.shape, plan: s.plan, origin: s.origin, heading: s.heading }; })
         } : null;
         window.removeEventListener('keydown', S.keyHandler, true);
@@ -966,6 +968,7 @@
             S.pending = keep.pending;
             S.sketches.forEach(function (sk, k) { evaluate(k); });
             refreshUi();
+            if (keep.searching != null && keep.searching < S.sketches.length) suggest(keep.searching);
             return;
         }
         refreshUi();

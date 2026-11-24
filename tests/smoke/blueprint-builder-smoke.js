@@ -144,6 +144,24 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
   check('tabs: Omgivning opens the backdrop map in place of the blueprint (the scene stays paused), and Hål brings the unbuilt plan back unchanged',
     tabs.onSurround.backdrop && !tabs.onSurround.blueprint && tabs.onSurround.paused && tabs.onSurround.selected === 'true' &&
     !tabs.backdropAfter && !!tabs.after && tabs.after.join() === tabs.before.join() && tabs.allOk, JSON.stringify(tabs));
+  // switching tabs while a hole's spot is still being looked for: the search starts again when the plan comes back
+  const midSearch = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    const tabBtn = function (name) { return document.querySelector('[role=tablist] [data-tab="' + name + '"]'); };
+    let S = window.HoleBlueprint.state();
+    S.sel = S.sketches.length - 1;
+    S.dom.remove.click();                       // drop the last hole and add it again: its search starts
+    window.HoleBlueprint.addHole();
+    const busyAtSwitch = window.HoleBlueprint.state().busy;
+    tabBtn('surround').click();
+    await wait(300);
+    tabBtn('holes').click();
+    await wait(200);
+    S = window.HoleBlueprint.state();
+    for (let w = 0; w < 300 && S && S.busy; w++) await wait(100);
+    return { busyAtSwitch: busyAtSwitch, n: S && S.sketches.length, ok: S ? S.sketches.map(function (s) { return !!(s.ev && s.ev.ok); }) : null, buildEnabled: S && !S.dom.build.disabled };
+  });
+  check('tabs: a hole whose spot was still being found when the tab changed gets its search again and a good spot', midSearch.busyAtSwitch && midSearch.n === 3 && midSearch.ok.every(Boolean) && midSearch.buildEnabled, JSON.stringify(midSearch));
 
   // 3. build: every hole, the par 3 with its approach strip, and the scene runs again
   const built = await page.evaluate(async function () {
@@ -206,6 +224,20 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
   });
   check('the backdrop map shows the built holes in the course-map colours (shared course-map.js)', backdrop.api && backdrop.canvas && backdrop.turf > 30, JSON.stringify(backdrop));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-backdrop.png') });
+  // undo in the backdrop map empties a hole again: the Hål tab comes back on (it is off while every hole is built)
+  const undoTab = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    if (!window.Backdrop.state()) { window.openBackdropMap(); await wait(800); }
+    const tab = function () { return document.querySelector('#bd-overlay [role=tablist] [data-tab="holes"]') || document.querySelector('[role=tablist] [data-tab="holes"]'); };
+    const offBefore = tab().disabled;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true }));
+    await wait(1500);
+    const t = tab();
+    const empty = window.CourseMap.firstEmptyHole();
+    if (window.Backdrop.state()) window.Backdrop.close();
+    return { offBefore: offBefore, onAfter: !!t && !t.disabled, emptyHole: empty };
+  });
+  check('undo in the backdrop map turns the Hål tab back on when it empties a hole', undoTab.offBefore === true && undoTab.onAfter && undoTab.emptyHole >= 0, JSON.stringify(undoTab));
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();
   srv.close();
