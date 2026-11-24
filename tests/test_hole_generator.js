@@ -61,6 +61,14 @@ const centre = function (b) { let x = 0, z = 0; b.forEach(function (p) { x += p.
   const p7 = HG.planFor(3, 7), w7 = HG.worldPlan(p7, { x: 0, z: 0 }, 0), f7 = centre(w7.teeBoxes[2]);
   const side = HG.evaluateSite(p7, { x: 0, z: 0 }, 0, Object.assign({}, base, { isWater: function (x, z) { return x > f7.x + 3 && x < f7.x + 8 && Math.abs(z) < 40; } }));
   check('water just ahead of a sideways front tee counts as its carry', side.ok && side.carry && side.carry.front > 0, side.carry && [side.carry.front, side.carry.back]);
+  // painted OB (a starter plate's canyon): nothing built on it and the line of play does not cross it, unlike water
+  const canyon = function (x0, x1) { return Object.assign({}, base, { isOB: function (x, z) { return x > x0 && x < x1 && Math.abs(z) < 60; } }); };
+  const overOB = HG.evaluateSite(plan, o, 0, canyon(o.x + 45, o.x + apronStart - 3));
+  check('par 3 over painted OB: refused (ob), where the same pond is a carry', !overOB.ok && overOB.reasons[0] === 'ob', overOB.reasons);
+  const thin = HG.evaluateSite(plan, o, 0, Object.assign({}, base, { isOB: function (x, z) { return x > o.x + 60 && x < o.x + 61.5; } }));
+  check('a 1.5 m strip of OB across the line of play is found', !thin.ok && thin.reasons[0] === 'ob', thin.reasons);
+  const besideOB = HG.evaluateSite(plan, o, 0, Object.assign({}, base, { isOB: function (x, z) { return Math.abs(z) > 120; } }));
+  check('OB well off to the side leaves the hole alone', besideOB.ok, besideOB.reasons);
   const wetGreen = HG.evaluateSite(plan, o, 0, pond(plan.length - 60, plan.length - 40));
   check('water under the green is still refused', !wetGreen.ok && wetGreen.reasons[0] === 'water', wetGreen.reasons);
   // A generated par 3 never leaves more than ~110 m from the front tee to the green's front edge, so the limit is a safety net:

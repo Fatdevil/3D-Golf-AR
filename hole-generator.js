@@ -559,7 +559,7 @@
     // so "too hilly" is only the answer when steep rejections are the biggest real cause and a visible share of all tries
     function failedBecauseSteep(diag) {
         let d = diag || {}, steep = d.steep || 0;
-        return steep > 0 && steep > (d.water || 0) && steep > (d.close || 0) && steep >= 0.05 * (d.bounds || 0);
+        return steep > 0 && steep > (d.water || 0) && steep > (d.ob || 0) && steep > (d.close || 0) && steep >= 0.05 * (d.bounds || 0);
     }
 
     // Other holes: loose points (flags, markers) and polygons (kept apart so interiors can be tested)
@@ -879,7 +879,7 @@
         return Array.isArray(others) ? { points: others, polygons: [] } : others;
     }
     // Can this plan stand at origin (its tee) pointing along `heading`? Cheapest checks first.
-    // env: { isWater(x,z), others, half, heightAt, parts }. reasons: 'bounds' | 'close' | 'water' | 'carry' | '<part>_slope|range'
+    // env: { isWater(x,z), isOB(x,z), others, half, heightAt, parts }. reasons: 'bounds' | 'close' | 'ob' | 'water' | 'carry' | '<part>_slope|range'
     // A good result may carry `carry` (see waterCarry) when the line of play crosses water.
     function evaluateSite(plan, origin, heading, env) {
         let limit = ((env && env.half) || MAP_HALF) - MAP_MARGIN;
@@ -888,6 +888,13 @@
         if (!footprint(wp).every(function (p) { return Math.abs(p.x) <= limit && Math.abs(p.z) <= limit; })) return fail('bounds');
         if (tooCloseToOthers(wp, normOthers(env && env.others))) return fail('close');
         let carry = null;
+        if (env && env.isOB) {
+            // ground painted OB (a starter plate's canyon, a strip the builder marked out): nothing is built there and the line of
+            // play does not cross it. Waste is not blocked: a desert plate is painted waste from edge to edge, it is its plain ground.
+            // Coarse pass over everything, then the outlines and the line of play every metre (a thin painted strip has to cross one;
+            // the lookup is remembered per square metre, so the fine pass is cheap).
+            if (anyCovered(wp, 6, 12, env.isOB, false) || anyCovered(wp, 1, 0, env.isOB, false)) return fail('ob');
+        }
         if (env && env.isWater) {
             // coarse pass first (cheap, rejects most wet spots), then a pass at the water grid's resolution
             // so a creek as narrow as one cell cannot slip between samples. Only what is built must be dry:
@@ -1102,6 +1109,21 @@
 
     // The environment a hole is placed in: terrain water/height, other holes, placed objects, map size
     function siteEnv(parts, o) {
+        let groundAt = (function () {
+            let raw = function (x, z) {
+                let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null;
+                return !s ? 1 : (s.type === 'WATER' ? 2 : (s.type === 'OB' ? 3 : 1));
+            };
+            let T = Math.ceil(root.TERRAIN_SIZE || 600), half = (root.TERRAIN_SIZE || 600) / 2, memo = null;
+            return function (x, z) {
+                let ix = Math.floor(x + half), iz = Math.floor(z + half);
+                if (ix < 0 || iz < 0 || ix >= T || iz >= T) { let v = raw(x, z); return v === 3 ? 1 : v; }
+                if (!memo) memo = new Uint8Array(T * T);
+                let k = iz * T + ix, v = memo[k];
+                if (!v) { v = raw(ix - half + 0.5, iz - half + 0.5); memo[k] = v; }
+                return v;
+            };
+        })();
         let env = {
             half: (root.TERRAIN_SIZE || 600) / 2,
             others: otherHoles(root.courseHoles, root.currentHoleIndex),
@@ -1109,18 +1131,9 @@
             // the terrain lookup already knows painted water and per-cell water levels; it is slow (height, slope and surface for
             // every call), so each square metre is asked once and remembered for the life of this environment (the blueprint map
             // keeps one while it is open and tries thousands of spots on it)
-            isWater: (function () {
-                let raw = function (x, z) { let s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return !!s && s.type === 'WATER'; };
-                let T = Math.ceil(root.TERRAIN_SIZE || 600), half = (root.TERRAIN_SIZE || 600) / 2, memo = null;
-                return function (x, z) {
-                    let ix = Math.floor(x + half), iz = Math.floor(z + half);
-                    if (ix < 0 || iz < 0 || ix >= T || iz >= T) return raw(x, z);
-                    if (!memo) memo = new Uint8Array(T * T);
-                    let k = iz * T + ix, v = memo[k];
-                    if (!v) { v = raw(ix - half + 0.5, iz - half + 0.5) ? 2 : 1; memo[k] = v; }
-                    return v === 2;
-                };
-            })(),
+            // isWater and isOB share one memo (1 dry, 2 water, 3 painted OB); outside the plate is the bounds check's business
+            isWater: function (x, z) { return groundAt(x, z) === 2; },
+            isOB: function (x, z) { return groundAt(x, z) === 3; },
             heightAt: root.localGetTerrainAt ? surfaceY : null,
             objects: collectObjects(),
             walls: collectWalls(),

@@ -37,4 +37,15 @@ const options = (admin.match(/<select id="theme-selector"[\s\S]*?<\/select>/) ||
 const ids = ['GLOBAL', 'AUTUMN', 'WINTER', 'DESERT', 'DESERT_AUTUMN', 'DESERT_WINTER', 'MOON'];
 check('the admin theme list has the ids the game and the new-course page use', ids.every(function (id) { return options.indexOf('value="' + id + '"') >= 0; }), ids.filter(function (id) { return options.indexOf('value="' + id + '"') < 0; }).join(','));
 
+// one rule for which assets belong in a world (the builder's library, the 2D trees, the backdrop shelf)
+const fits = win.assetFitsBiome;
+check('assetFitsBiome: GLOBAL-tagged and untagged figures fit everywhere',
+  !!fits && fits(['GLOBAL'], 'DESERT') && fits(undefined, 'MOON') && fits([], 'AUTUMN'), '');
+check('assetFitsBiome: a desert cactus is in every desert world, not in summer',
+  fits(['DESERT'], 'DESERT') && fits(['DESERT'], 'DESERT_SUNSET') && fits(['DESERT'], 'DESERT_WINTER') && !fits(['DESERT'], 'GLOBAL') && !fits(['DESERT'], 'AUTUMN'), '');
+check('assetFitsBiome: winter and autumn figures follow the season (also in the desert)',
+  fits(['SNOW'], 'WINTER') && fits(['WINTER'], 'SNOW') && fits(['SNOW'], 'DESERT_WINTER') && fits(['AUTUMN'], 'DESERT_AUTUMN') && !fits(['SNOW'], 'DESERT'), '');
+check('assetFitsBiome: no biome picked yet (ALL) shows everything', fits(['MOON'], 'ALL') && fits(['DESERT'], undefined) === false, '');
+
+
 process.exit(failed ? 1 : 0);

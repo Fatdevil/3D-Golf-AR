@@ -45,7 +45,12 @@
     function isDesertPlant(t) { return /cact|kaktus|succul|agave|yucca|shrub|bush|buske|sage|joshua/i.test(nameOf(t)); }
     function desertBiome() { return /DESERT/.test(String(root.ACTIVE_BIOME || '')); }
     function types(sub) { return Object.keys(root.ASSET_REGISTRY || {}).filter(function (k) { const r = reg(k); return r && r.subcat === sub; }); }
-    function fitsBiome(t) { const r = reg(t), b = r && r.biomes; if (!b || !b.length) return true; const a = String(root.ACTIVE_BIOME || 'GLOBAL'); return b.indexOf('GLOBAL') >= 0 || b.indexOf('ALL') >= 0 || b.indexOf(a) >= 0; }
+    function fitsBiome(t) {
+        const r = reg(t), b = r && r.biomes;
+        if (!b || !b.length) return true;
+        if (root.assetFitsBiome) return root.assetFitsBiome(b, root.ACTIVE_BIOME);   // the shared rule (arcade-biomes.js): DESERT_SUNSET takes desert plants too
+        const a = String(root.ACTIVE_BIOME || 'GLOBAL'); return b.indexOf('GLOBAL') >= 0 || b.indexOf('ALL') >= 0 || b.indexOf(a) >= 0;
+    }
     function tr(key, fb) { return (root.t && root.t(key) !== key) ? root.t(key) : fb; }
 
     // what a side grows when it is left on AUTO, from its ground colour

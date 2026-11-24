@@ -118,6 +118,20 @@
         horizonColor: '#0f172a'      // Dark cosmic horizon
     };
 
+    // Does an asset tagged with `biomes` (the admin page's checkboxes: GLOBAL, DESERT, SNOW, AUTUMN, MOON) belong in the active biome?
+    // GLOBAL (the default tag) fits everywhere; 'ALL' (no biome picked yet) shows everything.
+    // The seasonal desert worlds take desert figures, and their winter and autumn also the winter and autumn ones.
+    // One rule for the builder's library, the surroundings' 2D trees (arcade-surround-veg.js) and the backdrop shelf (backdrop.js).
+    window.assetFitsBiome = function (biomes, active) {
+        const b = (biomes && biomes.length) ? biomes : ['GLOBAL'];
+        const a = String(active || 'GLOBAL');
+        if (a === 'ALL' || b.indexOf('GLOBAL') >= 0 || b.indexOf('ALL') >= 0 || b.indexOf(a) >= 0) return true;
+        if (a.indexOf('DESERT') === 0 && b.indexOf('DESERT') >= 0) return true;
+        if ((a === 'WINTER' || a === 'SNOW' || a === 'DESERT_WINTER') && (b.indexOf('SNOW') >= 0 || b.indexOf('WINTER') >= 0)) return true;
+        if ((a === 'AUTUMN' || a === 'DESERT_AUTUMN') && b.indexOf('AUTUMN') >= 0) return true;
+        return false;
+    };
+
     // A copy of the built-in palettes. A database row (fetchCloudBiomes) replaces a whole palette, and the admin page has not always saved every
     // colour: what a row lacks is filled in from here (see changeBiome), not from the biome that happened to be active before.
     window.BUILTIN_BIOMES = {};
