@@ -326,20 +326,109 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
   check('an empty shelf says why: none for this world (with the chip), or none at all (20 m)', shelf.api && /Admin/.test(shelf.emptyText) && shelf.emptyToggle && /20 m/.test(shelf.noneText), JSON.stringify(shelf));
   check('the backdrop map shows the built holes in the course-map colours (shared course-map.js)', backdrop.api && backdrop.canvas && backdrop.turf > 30, JSON.stringify(backdrop));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-backdrop.png') });
-  // undo in the backdrop map empties a hole again: the Hål tab comes back on (it is off while every hole is built)
-  const undoTab = await page.evaluate(async function () {
+  // step 5: the map is the course map. With every hole built the Hål tab opens an overview; a tap on a built hole offers to edit
+  // it in the builder (the map closes, the hole is current, the camera flies there)
+  const overview = await page.evaluate(async function () {
     const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     if (!window.Backdrop.state()) { window.openBackdropMap(); await wait(800); }
-    const tab = function () { return document.querySelector('#bd-overlay [role=tablist] [data-tab="holes"]') || document.querySelector('[role=tablist] [data-tab="holes"]'); };
-    const offBefore = tab().disabled;
+    const tab = document.querySelector('[role=tablist] [data-tab="holes"]');
+    const tabOn = !!tab && !tab.disabled;
+    tab.click();
+    await wait(600);
+    const S = window.HoleBlueprint.state();
+    if (!S) return { tabOn: tabOn, opened: false };
+    const out = { tabOn: tabOn, opened: true, sketches: S.sketches.length, status: S.dom.status.textContent, buildHidden: S.dom.build.style.visibility === 'hidden', mapBtn: !!document.getElementById('topbar-btn-map') };
+    // tap the middle of hole 2's green
+    const h = window.courseHoles[1], g = h.greenData.points, c = g.reduce(function (a, p) { return { x: a.x + p.x / g.length, z: a.z + p.z / g.length }; }, { x: 0, z: 0 });
+    const r = S.canvas.getBoundingClientRect(), k = r.width / S.C;
+    const px = r.left + S.zoom.px(c.x) * k, py = r.top + S.zoom.pz(c.z) * k;
+    const pe = function (type) { S.canvas.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: 'mouse', isPrimary: true, clientX: px, clientY: py, bubbles: true, cancelable: true, button: 0 })); };
+    pe('pointerdown'); pe('pointerup');
+    await wait(100);
+    out.builtSel = S.builtSel;
+    out.card = S.dom.builtCard.style.display === 'flex' ? S.dom.builtText.textContent : '';
+    window.changeHoleTo(0);
+    S.dom.builtEdit.click();
+    await wait(500);
+    out.closed = !window.HoleBlueprint.state();
+    out.current = window.currentHoleIndex;
+    const t = (typeof controls !== 'undefined' && controls) ? controls.target : null;
+    out.camNear = t ? Math.round(Math.hypot(t.x - c.x, t.z - c.z)) : null;
+    return out;
+  });
+  check('every hole built: the Hål tab still opens, as an overview of the course (nothing to plan, no Build button), and the top bar has a map button',
+    overview.tabOn && overview.opened && overview.sketches === 0 && overview.buildHidden && overview.mapBtn, JSON.stringify(overview));
+  check('a tap on a built hole shows its card; "Ändra i buildern" closes the map on that hole with the camera over it',
+    overview.builtSel === 1 && /2 · Par/.test(overview.card) && overview.closed && overview.current === 1 && overview.camNear !== null && overview.camNear < 200, JSON.stringify(overview));
+
+  // undo empties a hole: the map plans it again. The plan is kept when the map closes (✕, "Forma marken här"), its outline shows in
+  // the 3D view and the map button has a dot, it comes back where it was, "Börja om" throws it away, and a planned hole built in the
+  // builder meanwhile drops out of the plan
+  const kp = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    const settle = async function (S) { for (let w = 0; w < 300 && S.busy; w++) await wait(100); };
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true }));
     await wait(1500);
-    const t = tab();
     const empty = window.CourseMap.firstEmptyHole();
-    if (window.Backdrop.state()) window.Backdrop.close();
-    return { offBefore: offBefore, onAfter: !!t && !t.disabled, emptyHole: empty };
+    window.openHoleBlueprint();
+    let S = window.HoleBlueprint.state();
+    const out = { empty: empty, holes: S.holes.slice(), sketches: S.sketches.length };
+    await settle(S);
+    const at = { x: S.sketches[0].origin.x, z: S.sketches[0].origin.z, h: S.sketches[0].heading, ok: !!(S.sketches[0].ev && S.sketches[0].ev.ok) };
+    out.at = at;
+    // ✕ keeps the plan
+    document.querySelector('#bp-overlay button[title]') && Array.prototype.filter.call(document.querySelectorAll('#bp-overlay button'), function (b) { return b.textContent === '✕' && b.style.minHeight === '44px'; })[0].click();
+    await wait(800);
+    const keep = window.HoleBlueprint.keptPlan();
+    out.kept = keep ? keep.sketches.length : 0;
+    const m = window.HoleBlueprint.planMarkers();
+    out.marker = m ? { visible: m.visible, lines: m.children.length } : null;
+    const badge = document.querySelector('#topbar-btn-map .bp-badge');
+    out.badge = badge ? badge.style.display !== 'none' : null;
+    // the map button brings it back where it was
+    document.getElementById('topbar-btn-map').click();
+    await wait(400);
+    S = window.HoleBlueprint.state();
+    out.back = !!S && S.sketches.length === 1 && Math.abs(S.sketches[0].origin.x - at.x) < 1e-6 && Math.abs(S.sketches[0].origin.z - at.z) < 1e-6 && S.sketches[0].heading === at.h;
+    out.markerHidden = !window.HoleBlueprint.planMarkers().visible;
+    // "Forma marken här": closed, plan kept, the planned hole current, the camera over its spot
+    window.changeHoleTo(0);
+    S.dom.shapeHere.click();
+    await wait(600);
+    const wp = window.HoleBlueprint.keptPlan() && window.HoleBlueprint.keptPlan().sketches[0];
+    const t = (typeof controls !== 'undefined' && controls) ? controls.target : null;
+    // focusCamera aims at the middle of the line from the tee to the green
+    const w = wp ? window.HoleGenerator.worldPlan(wp.plan, wp.origin, wp.heading) : null;
+    const mid = w ? { x: (w.tee.x + w.greenCenter.x) / 2, z: (w.tee.z + w.greenCenter.z) / 2 } : null;
+    out.shape = { closed: !window.HoleBlueprint.state(), kept: !!wp, current: window.currentHoleIndex, camNear: t && mid ? Math.round(Math.hypot(t.x - mid.x, t.z - mid.z)) : null };
+    // "Börja om" throws the plan away and suggests anew
+    window.openHoleBlueprint();
+    await wait(300);
+    S = window.HoleBlueprint.state();
+    const seed = S.sketches[0].seed;
+    S.dom.restart.click();
+    await settle(S);
+    out.restart = { sketches: S.sketches.length, newSeed: S.sketches[0].seed !== seed, ok: !!(S.sketches[0].ev && S.sketches[0].ev.ok) };
+    // a planned hole built in the builder while the map was closed drops out of the plan (here: a tee box put on it by hand)
+    window.HoleBlueprint.close(false, true, true);
+    const idx = window.HoleBlueprint.keptPlan().holes[0], hole = window.courseHoles[idx];
+    const tb = hole.teeBoxes;
+    hole.teeBoxes = [{ points: [{ x: 0, z: 0 }, { x: 5, z: 0 }, { x: 5, z: 5 }, { x: 0, z: 5 }] }];
+    window.openHoleBlueprint();
+    await wait(300);
+    S = window.HoleBlueprint.state();
+    out.dropped = { idx: idx, holes: S.holes.slice(), note: S.dom.detail.textContent };
+    window.HoleBlueprint.close(false);
+    hole.teeBoxes = tb;
+    out.keptAfterClose = window.HoleBlueprint.keptPlan();
+    return out;
   });
-  check('undo in the backdrop map turns the Hål tab back on when it empties a hole', undoTab.offBefore === true && undoTab.onAfter && undoTab.emptyHole >= 0, JSON.stringify(undoTab));
+  check('undo empties a hole: the map plans it again', kp.empty >= 0 && kp.holes.indexOf(kp.empty) >= 0 && kp.sketches === 1 && kp.at.ok, JSON.stringify(kp));
+  check('✕ keeps the plan: its outline shows in the 3D view and the map button has a dot; the map button brings it back where it was (outline hidden while the map is open)',
+    kp.kept === 1 && kp.marker && kp.marker.visible && kp.marker.lines >= 3 && kp.badge === true && kp.back && kp.markerHidden, JSON.stringify(kp));
+  check('"Forma marken här" closes the map with the plan kept, on the planned hole, the camera over its spot', kp.shape.closed && kp.shape.kept && kp.shape.current === kp.holes[0] && kp.shape.camNear !== null && kp.shape.camNear < 5, JSON.stringify(kp.shape));
+  check('"Börja om" suggests a new hole', kp.restart.sketches === 1 && kp.restart.newSeed && kp.restart.ok, JSON.stringify(kp.restart));
+  check('a planned hole built in the builder meanwhile drops out of the plan (the map says so)', kp.dropped.holes.indexOf(kp.dropped.idx) < 0 && /^1 /.test(kp.dropped.note) && kp.keptAfterClose === null, JSON.stringify(kp.dropped));
   // the plate's painted ground: OB keeps the planner away, and the maps take the course's palette (a desert course reads as desert)
   const ground = await page.evaluate(function () {
     const HG = window.HoleGenerator, CM = window.CourseMap, data = window.terrainBiomeData;
@@ -357,6 +446,7 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     const out = { api: true };
     try {
       const env = HG.siteEnv(null, {});
+      env.others = { points: [], polygons: [] }; env.objects = []; env.walls = [];   // only the paint counts here, not where the holes happen to lie
       out.inside = env.isOB(200, -200); out.outside = env.isOB(-200, 200); out.waterThere = env.isWater(200, -200);
       // a par 3 teeing off at x 40 towards +x ends in the painted patch; turned round it plays away from it
       const plan = HG.planFor(3, 5);
