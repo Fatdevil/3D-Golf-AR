@@ -156,6 +156,23 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     JSON.stringify({ picked: built.mowPicked, holes: built.holes.map(function (h) { return h.mow; }), before: built.mowBefore, after: built.mowAfter }));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-built.png') });
 
+  // 4. the backdrop map draws the same course: the shared course map module, the built holes on the plate in course colours
+  const backdrop = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    if (typeof window.openBackdropMap !== 'function' || !window.CourseMap) return { api: false };
+    window.openBackdropMap();
+    await wait(1200);
+    // the map canvas is the largest canvas in the newest full-screen layer
+    const cv = Array.prototype.slice.call(document.querySelectorAll('canvas')).filter(function (c) { return c.offsetParent !== null && c.width >= 400 && c.width === c.height; }).pop();
+    if (!cv) return { api: true, canvas: false };
+    // count fairway-green pixels (the course-map turf colour) inside the plate in the middle of the map
+    const ctx = cv.getContext('2d'), w = cv.width, d = ctx.getImageData(Math.round(w * 0.3), Math.round(w * 0.3), Math.round(w * 0.4), Math.round(w * 0.4)).data;
+    let turf = 0;
+    for (let k = 0; k < d.length; k += 4) if (Math.abs(d[k] - 0x7b) < 14 && Math.abs(d[k + 1] - 0xbf) < 14 && Math.abs(d[k + 2] - 0x55) < 14) turf++;
+    return { api: true, canvas: true, turf: turf };
+  });
+  check('the backdrop map shows the built holes in the course-map colours (shared course-map.js)', backdrop.api && backdrop.canvas && backdrop.turf > 30, JSON.stringify(backdrop));
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-backdrop.png') });
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close();
   srv.close();
