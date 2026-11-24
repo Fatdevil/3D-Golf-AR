@@ -126,6 +126,25 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     JSON.stringify({ rows: plan.cardRows, h: plan.cardHeight, par: plan.parRow, len: plan.lenRow }));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-map.png') });
 
+  // 2b. the tabs: to Omgivning and back keeps the plan that is not built yet; the Hål tab is the blueprint again
+  const tabs = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    const before = window.HoleBlueprint.state().sketches.map(function (s) { return [s.par, Math.round(s.origin.x), Math.round(s.origin.z)].join(':'); });
+    const tabBtn = function (name) { return document.querySelector('[role=tablist] [data-tab="' + name + '"]'); };
+    tabBtn('surround').click();
+    await wait(800);
+    const onSurround = { backdrop: !!(window.Backdrop && window.Backdrop.state()), blueprint: !!window.HoleBlueprint.state(), paused: window._pause3D === true,
+      selected: (tabBtn('surround') || {}).getAttribute && tabBtn('surround').getAttribute('aria-selected') };
+    tabBtn('holes').click();
+    await wait(800);
+    const S = window.HoleBlueprint.state();
+    const after = S ? S.sketches.map(function (s) { return [s.par, Math.round(s.origin.x), Math.round(s.origin.z)].join(':'); }) : null;
+    return { onSurround: onSurround, backdropAfter: !!(window.Backdrop && window.Backdrop.state()), before: before, after: after, allOk: !!S && S.sketches.every(function (s) { return s.ev && s.ev.ok; }) };
+  });
+  check('tabs: Omgivning opens the backdrop map in place of the blueprint (the scene stays paused), and Hål brings the unbuilt plan back unchanged',
+    tabs.onSurround.backdrop && !tabs.onSurround.blueprint && tabs.onSurround.paused && tabs.onSurround.selected === 'true' &&
+    !tabs.backdropAfter && !!tabs.after && tabs.after.join() === tabs.before.join() && tabs.allOk, JSON.stringify(tabs));
+
   // 3. build: every hole, the par 3 with its approach strip, and the scene runs again
   const built = await page.evaluate(async function () {
     const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -140,6 +159,7 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     await wait(500);
     return {
       pausedAfterClose: paused, last: window._bpLastBuild, overlay: !!document.getElementById('bp-overlay'),
+      nextCard: (document.getElementById('bp-next') || {}).textContent || null,
       mowPicked: mowPicked, mowBefore: mowBefore, mowAfter: window._smartMowPattern,
       holes: [0, 1, 2].map(function (i) {
         const h = courseHoles[i];
@@ -155,6 +175,19 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     built.mowPicked === 'CHECKERBOARD' && built.holes.every(function (h) { return h.mow.every(function (m) { return m === 'CHECKERBOARD'; }); }) && built.mowAfter === built.mowBefore,
     JSON.stringify({ picked: built.mowPicked, holes: built.holes.map(function (h) { return h.mow; }), before: built.mowBefore, after: built.mowAfter }));
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blueprint-builder-built.png') });
+
+  // the card offering the next step leads to the Omgivning tab
+  const next = await page.evaluate(async function () {
+    const card = document.getElementById('bp-next');
+    if (!card) return { card: false };
+    const go = card.querySelectorAll('button')[0];
+    go.click();
+    await new Promise(function (r) { setTimeout(r, 800); });
+    const st = window.Backdrop && window.Backdrop.state();
+    if (st && window.Backdrop.close) window.Backdrop.close();
+    return { card: true, opened: !!st, cardGone: !document.getElementById('bp-next') };
+  });
+  check('after the build a card offers the next step, and it opens the Omgivning tab', !!built.nextCard && next.card && next.opened && next.cardGone, JSON.stringify([built.nextCard, next]));
 
   // 4. the backdrop map draws the same course: the shared course map module, the built holes on the plate in course colours
   const backdrop = await page.evaluate(async function () {
