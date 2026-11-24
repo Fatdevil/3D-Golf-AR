@@ -550,7 +550,19 @@
                         pend.plan = HG.planFor(pend.par, pend.seed);
                         pend.spot = null;
                         ahead.plan = pend.plan;
+                        // keep the spot found so far (it may be the only legal one, e.g. the hint), scored against the new shape
+                        const keep = best;
                         best = null; ring = 0; lastRing = NEAR_RINGS.length - 1;
+                        const evK = HG.evaluateSite(s.plan, keep.origin, keep.heading, env);
+                        if (evK.ok) {
+                            const rK = Math.hypot(keep.origin.x - pg.x, keep.origin.z - pg.z), scK = score(rK, evK, env);
+                            best = { origin: keep.origin, heading: keep.heading, score: scK.score, good: scK.good, fit: scK.fit };
+                            if (scK.good) {
+                                let k = 0;
+                                while (k < NEAR_RINGS.length - 1 && NEAR_RINGS[k] < rK - 1) k++;
+                                lastRing = Math.min(lastRing, k + 1);
+                            }
+                        }
                         setTimeout(tick, 0);
                         return;
                     }
