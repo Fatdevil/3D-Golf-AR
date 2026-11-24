@@ -572,7 +572,7 @@
         if (!B) return;
         e.preventDefault();
         // a second finger makes it a pinch / two-finger drag of the map: the first finger's drag stops
-        if (B.zoom && B.zoom.pointerDown(e, B.canvas.getBoundingClientRect())) { B.drag = null; return; }
+        if (B.zoom && B.zoom.pointerDown(e, B.canvas.getBoundingClientRect())) { finishDrag(); return; }
         dropStaleSelection();
         const p = toWorld(e), o = hit(p);
         if (o) {
@@ -611,15 +611,19 @@
             draw();
         });
     }
-    function onUp(e) {
-        if (!B) return;
-        if (e && B.zoom && B.zoom.pointerUp(e)) { B.drag = null; return; }
-        if (!B.drag) return;
+    // End a figure drag: a figure that moved is rebuilt, saved and checked against the course (also when a pinch interrupts the drag)
+    function finishDrag() {
+        if (!B || !B.drag) return;
         const moved = B.drag.snapped;
         B.drag = null;
         if (moved && B.sel) { rebuild(B.sel.type); persist(); }
         warnIfCovering(B.sel);
         refresh();
+    }
+    function onUp(e) {
+        if (!B) return;
+        if (e && B.zoom && B.zoom.pointerUp(e)) { B.drag = null; return; }
+        finishDrag();
     }
 
     // Terrain, holes and surround colours may have changed (undo/redo): take the pictures again

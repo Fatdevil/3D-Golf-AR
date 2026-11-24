@@ -690,7 +690,13 @@
         e.preventDefault();
         // a second finger makes it a pinch / two-finger drag of the map: whatever the first finger began is undone
         if (S.zoom.pointerDown(e, S.canvas.getBoundingClientRect())) {
-            if (S.drag && S.drag.undo) { const u = S.drag.undo, sk = S.sketches[u.sel]; if (sk) { sk.origin = u.origin; sk.heading = u.heading; } S.sel = u.sel; queueEval(); }
+            if (S.drag && S.drag.undo) {
+                const u = S.drag.undo;
+                u.placements.forEach(function (pl, k) { const sk = S.sketches[k]; if (sk) { sk.origin = pl.origin; sk.heading = pl.heading; } });
+                S.sel = u.sel;
+                S.sketches.forEach(function (sk, k) { evaluate(k); });
+                refreshUi();
+            }
             S.drag = null;
             return;
         }
@@ -699,8 +705,8 @@
         S.snapToken++; S.note = null; S.noteBad = false;
         const near = function (h) { return h && Math.hypot(p.px - h.x, p.py - h.y) < 24; };
         let s = cur();
-        // what to put back if this turns into a pinch (the tap may move the selected hole, or select another)
-        const undoOrigin = s.origin, undoHeading = s.heading, undoSel = S.sel;
+        // what to put back if this turns into a pinch: the tap may move the selected hole, or select and drag another one
+        const undo = { sel: S.sel, placements: S.sketches.map(function (sk) { return { origin: sk.origin, heading: sk.heading }; }) };
         if (near(S.handles && S.handles.green)) S.drag = { mode: 'rotate' };
         else if (near(S.handles && S.handles.tee) || hitSketch(s, p.x, p.z)) S.drag = { mode: 'move', dx: s.origin.x - p.x, dz: s.origin.z - p.z };
         else {
@@ -710,7 +716,7 @@
             if (hit >= 0) { S.sel = hit; s = cur(); S.drag = { mode: 'move', dx: s.origin.x - p.x, dz: s.origin.z - p.z }; }
             else { S.drag = { mode: 'move', dx: 0, dz: 0 }; s.origin = { x: p.x, z: p.z }; }
         }
-        if (S.drag) S.drag.undo = { sel: undoSel, origin: undoOrigin, heading: undoHeading };
+        if (S.drag) S.drag.undo = undo;
         try { S.canvas.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
         queueEval();
     }

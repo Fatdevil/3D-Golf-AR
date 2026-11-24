@@ -154,10 +154,30 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     await wait(300);
     const originAfter = JSON.stringify(S.sketches[S.sel].origin);
     S.dom.zoomUi.all.click();
-    return { afterPlus: afterPlus, roundTrip: roundTrip, afterWheel: afterWheel, afterPinch: afterPinch, moved: originAfter !== origin0, reset: S.zoom.zoom, busy: S.busy };
+    await wait(100);
+    // the first finger lands on (and drags) a hole that is NOT selected, then a pinch starts: every hole and the selection go back
+    S.sel = 0; window.HoleBlueprint.evaluate(0);
+    await wait(100);
+    const before2 = JSON.stringify(S.sketches.map(function (k) { return [k.origin, k.heading]; }));
+    const other = S.sketches[1], ox = r.left + S.zoom.px(other.origin.x) * r.width / S.C, oy = r.top + S.zoom.pz(other.origin.z) * r.height / S.C;
+    pe('pointerdown', 3, ox, oy);
+    const selDuring = S.sel;
+    pe('pointermove', 3, ox + 40, oy + 30);
+    await wait(50);
+    pe('pointerdown', 4, ox + 80, oy);
+    pe('pointermove', 4, ox + 150, oy);
+    pe('pointerup', 4, ox + 150, oy);
+    pe('pointerup', 3, ox + 40, oy + 30);
+    await wait(300);
+    const after2 = JSON.stringify(S.sketches.map(function (k) { return [k.origin, k.heading]; }));
+    const otherRestored = after2 === before2, selRestored = S.sel === 0, selWasOther = selDuring === 1;
+    S.dom.zoomUi.all.click();
+    return { afterPlus: afterPlus, roundTrip: roundTrip, afterWheel: afterWheel, afterPinch: afterPinch, moved: originAfter !== origin0, reset: S.zoom.zoom, busy: S.busy,
+      otherHole: { grabbed: selWasOther, restored: otherRestored, selection: selRestored } };
   });
-  check('zoom and pan: + / wheel / pinch zoom the map, a pinch leaves the hole where it was, coordinates agree, show-all resets',
-    Math.abs(zoomed.afterPlus - 1.6) < 1e-6 && zoomed.roundTrip < 0.5 && zoomed.afterWheel > zoomed.afterPlus && zoomed.afterPinch > 1.5 && !zoomed.moved && zoomed.reset === 1,
+  check('zoom and pan: + / wheel / pinch zoom the map, a pinch leaves every hole (also one the first finger grabbed) and the selection as they were, coordinates agree, show-all resets',
+    Math.abs(zoomed.afterPlus - 1.6) < 1e-6 && zoomed.roundTrip < 0.5 && zoomed.afterWheel > zoomed.afterPlus && zoomed.afterPinch > 1.5 && !zoomed.moved && zoomed.reset === 1 &&
+    zoomed.otherHole.grabbed && zoomed.otherHole.restored && zoomed.otherHole.selection,
     JSON.stringify(zoomed));
 
   // 2b. the tabs: to Omgivning and back keeps the plan that is not built yet; the Hål tab is the blueprint again
