@@ -91,7 +91,8 @@
     }
     function makeSketch(par) {
         const seed = Math.floor(Math.random() * 1e9);
-        return { par: par, seed: seed, plan: root.HoleGenerator.planFor(par, seed), origin: { x: 0, z: 0 }, heading: 0, ev: null };
+        // shape: what the player asked for with the bend / length buttons (null = random), see HoleGenerator.buildPlan
+        return { par: par, seed: seed, shape: { dogleg: null, len: null }, plan: root.HoleGenerator.planFor(par, seed), origin: { x: 0, z: 0 }, heading: 0, ev: null };
     }
 
     // Where the player walks from to reach sketch i's tee: the green of the hole numbered just before it, a sketch or a built hole.
@@ -280,7 +281,7 @@
             b.type = 'button';
             const bad = sk.ev && !sk.ev.ok;
             const shapedHole = !!(sk.ev && sk.ev.ok && sk.ev.shaped && sk.ev.shaped.length);
-            b.textContent = (bad ? '⛔ ' : (shapedHole ? '⚠️ ' : '')) + tr('bp_hole', 'Hål') + ' ' + holeNo(i) + ' · Par ' + sk.par;
+            b.textContent = (bad ? '⛔ ' : (shapedHole ? '⚠️ ' : '')) + tr('bp_hole', 'Hål') + ' ' + holeNo(i) + ' · Par ' + sk.par + ' · ' + Math.round(sk.plan.length) + ' m';
             const on = i === S.sel;
             b.style.cssText = 'min-height:36px; padding:0 12px; border-radius:18px; font-weight:bold; font-size:13px; cursor:pointer; border:2px solid ' + (on ? '#38bdf8' : '#334155') + '; background:' + (on ? '#0c4a6e' : '#1e293b') + '; color:#f1f5f9;';
             b.onclick = function () { if (!S.busy) { S.sel = i; S.note = null; S.noteBad = false; refreshUi(); } };
@@ -305,6 +306,16 @@
             const on = Number(b.dataset.par) === cur().par;
             b.style.background = on ? '#38bdf8' : '#1e293b';
             b.style.color = on ? '#0f172a' : '#e2e8f0';
+        });
+        const sh = cur().shape || {};
+        S.dom.shapeBtns.forEach(function (b) {
+            const isBend = b.dataset.shapeKey === 'dogleg';
+            b.style.display = (isBend && cur().par === 3) ? 'none' : '';   // a par 3 never bends
+            const on = sh[b.dataset.shapeKey] === b.dataset.shapeVal;
+            b.style.background = on ? '#38bdf8' : '#1e293b';
+            b.style.color = on ? '#0f172a' : '#e2e8f0';
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            b.disabled = !!S.busy;
         });
         enable(S.dom.add, S.sketches.length < S.holes.length && !S.busy);
         S.dom.add.title = S.sketches.length < S.holes.length ? '' : tr('bp_no_more', 'Inga fler tomma hål');
@@ -363,8 +374,14 @@
     function newShape() {
         const s = cur();
         s.seed = Math.floor(Math.random() * 1e9);
-        s.plan = root.HoleGenerator.planFor(s.par, s.seed);
+        s.plan = root.HoleGenerator.planFor(s.par, s.seed, s.shape);
         settle(S.sel);
+    }
+    // Bend (left / straight / right) and length (short / mid / long) buttons: tapping the active one goes back to random
+    function setShape(key, val) {
+        const s = cur();
+        s.shape[key] = s.shape[key] === val ? null : val;
+        newShape();
     }
     function setPar(par) {
         const s = cur();
@@ -479,7 +496,7 @@
                     ring = 0;
                     if (++nearShapes < 5 && Date.now() < deadline) {
                         s.seed = Math.floor(Math.random() * 1e9);
-                        s.plan = HG.planFor(s.par, s.seed);
+                        s.plan = HG.planFor(s.par, s.seed, s.shape);
                     } else step = -1;
                 }
                 if (Date.now() > deadline) step = -1;
@@ -500,7 +517,7 @@
                 if (++round >= 3) return finish(null);
                 step = -1;   // the ring search near the previous green is not repeated: a new shape rarely changes the answer there
                 s.seed = Math.floor(Math.random() * 1e9);
-                s.plan = HG.planFor(s.par, s.seed);
+                s.plan = HG.planFor(s.par, s.seed, s.shape);
             }
             setTimeout(tick, 0);
         };
@@ -592,19 +609,33 @@
     function build() {
         if (!S || S.busy || !S.sketches.every(function (s) { return s.ev && s.ev.ok; })) return;
         const jobs = S.sketches.map(function (s, i) {
-            return { idx: S.holes[i], par: s.par, seed: s.seed, placement: { x: s.origin.x, z: s.origin.z, heading: s.heading } };
+            return { idx: S.holes[i], par: s.par, seed: s.seed, shape: s.shape, placement: { x: s.origin.x, z: s.origin.z, heading: s.heading } };
         });
         const parts = root._hgParts || null;
         close(true);
-        runJobs(jobs, parts, 0, 0);
+        runJobs(jobs, parts, 0, []);
     }
     // One hole at a time, with a pause in between so the progress message can paint
+    // Why a hole could not be built, in words: the blueprint's own reasons for a spot that no longer works, else the kind of failure
+    function failText(f) {
+        if (!f) return tr('bp_fail_unknown', 'okänt fel');
+        if (f.code === 'site' && f.reasons && f.reasons.length) return reasonText(f.reasons[0]);
+        if (f.code === 'error') return tr('bp_fail_error', 'fel i byggaren');
+        if (f.code === 'not_empty') return tr('bp_fail_not_empty', 'hålet har redan delar');
+        return tr('bp_fail_unknown', 'okänt fel');
+    }
+    // failed: [{ no: hole number, why: text }]
     function runJobs(jobs, parts, k, failed) {
         const HG = root.HoleGenerator;
+        failed = failed || [];
         if (k >= jobs.length) {
-            if (jobs.length > 1) {
-                if (typeof root.changeHoleTo === 'function') root.changeHoleTo(jobs[0].idx);
-                toast(failed ? tr('bp_done_some', '⚠️ Några hål kunde inte byggas. Öppna kartan och försök igen.') : tr('bp_done_all', '🗺️ Alla hål byggda! Ångra tar bort ett hål i taget.'), failed ? '#f59e0b' : '#4ade80');
+            root._bpLastBuild = { jobs: jobs.length, failed: failed };   // read by the smoke test and when debugging a report
+            if (jobs.length > 1 || failed.length) {
+                if (typeof root.changeHoleTo === 'function') root.changeHoleTo((failed.length ? jobs.filter(function (j) { return j.idx + 1 === failed[0].no; })[0] : jobs[0]).idx);
+                if (failed.length) {
+                    const list = failed.map(function (f) { return tr('bp_hole', 'Hål') + ' ' + f.no + ': ' + f.why; }).join(' · ');
+                    toast(tr('bp_done_some', '⚠️ Några hål kunde inte byggas. Öppna kartan och försök igen.') + ' (' + list + ')', '#f59e0b');
+                } else toast(tr('bp_done_all', '🗺️ Alla hål byggda! Ångra tar bort ett hål i taget.'), '#4ade80');
             }
             return;
         }
@@ -612,8 +643,9 @@
         toast(jobs.length > 1 ? tr('bp_busy_n', '⏳ Bygger hål {i} av {n}…').replace('{i}', k + 1).replace('{n}', jobs.length) : tr('hg_busy', '⏳ Bygger hålet…'), '#a855f7');
         setTimeout(function () {
             if (typeof root.changeHoleTo === 'function') root.changeHoleTo(job.idx);
-            const r = HG.generate({ par: job.par, seed: job.seed, parts: parts, placement: job.placement, syncPar: true });
-            runJobs(jobs, parts, k + 1, failed + (r ? 0 : 1));
+            const r = HG.generate({ par: job.par, seed: job.seed, shape: job.shape, parts: parts, placement: job.placement, syncPar: true });
+            if (!r) failed.push({ no: job.idx + 1, why: failText(HG.lastFailure && HG.lastFailure()), detail: HG.lastFailure && HG.lastFailure() });
+            runJobs(jobs, parts, k + 1, failed);
         }, 80);
     }
 
@@ -687,6 +719,29 @@
             row1.appendChild(b);
             return b;
         });
+        // the shape of the selected hole: bend and length (random until a button is chosen)
+        const rowShape = document.createElement('div');
+        rowShape.style.cssText = 'width:' + C + 'px; display:flex; gap:4px; align-items:center; justify-content:center;';
+        // a phone has no room for the words on the bend buttons: the arrows alone, the words stay in the tooltip / screen-reader name
+        const compact = C < 440;
+        const bendLabel = function (arrow, key, fb) { return compact ? arrow : arrow + ' ' + tr(key, fb); };
+        const shapeBtns = [
+            ['dogleg', 'left', bendLabel('↰', 'bp_dl_left', 'Vänster'), tr('bp_dl_left_t', 'Kurva åt vänster')],
+            ['dogleg', 'straight', bendLabel('⬆', 'bp_dl_straight', 'Rak'), tr('bp_dl_straight_t', 'Rakt hål')],
+            ['dogleg', 'right', bendLabel('↱', 'bp_dl_right', 'Höger'), tr('bp_dl_right_t', 'Kurva åt höger')],
+            ['len', 'short', tr('bp_len_short', 'Kort'), tr('bp_len_short_t', 'Kort för sitt par')],
+            ['len', 'mid', tr('bp_len_mid', 'Mellan'), tr('bp_len_mid_t', 'Mellanlångt för sitt par')],
+            ['len', 'long', tr('bp_len_long', 'Lång'), tr('bp_len_long_t', 'Långt för sitt par')]
+        ].map(function (d, k) {
+            const b = btn(d[2], function () { if (!S.busy) setShape(d[0], d[1]); }, 'flex:1; padding:0 4px; font-size:12px;' + (k === 3 ? ' margin-left:8px;' : ''));
+            b.dataset.shapeKey = d[0]; b.dataset.shapeVal = d[1];
+            b.title = d[3] + ' · ' + tr('bp_shape_again', 'tryck igen för slump');
+            b.setAttribute('aria-label', d[3]);
+            if (compact && d[0] === 'dogleg') b.style.fontSize = '16px';
+            b.setAttribute('aria-pressed', 'false');
+            rowShape.appendChild(b);
+            return b;
+        });
         const row2 = document.createElement('div');
         row2.style.cssText = 'width:' + C + 'px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:center;';
         const add = btn('➕ ' + tr('bp_add', 'Hål'), addHole);
@@ -702,11 +757,11 @@
         [add, reroll, left, right, earlier, later, remove].forEach(function (b) { row2.appendChild(b); });
         const build_ = btn('', build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
-        [head, help, detail, chips, summary, canvas, row1, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        [head, help, detail, chips, summary, canvas, row1, rowShape, row2, build_].forEach(function (el) { overlay.appendChild(el); });
         document.body.appendChild(overlay);
 
         S = {
-            dom: { overlay: overlay, status: status, detail: detail, summary: summary, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
+            dom: { overlay: overlay, status: status, detail: detail, summary: summary, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, half: half, size: half * 2, mPerPx: half * 2 / C,
             baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
             drag: null, busy: false, snapToken: 0, findToken: 0, raf: 0, note: null, noteBad: false, handles: null

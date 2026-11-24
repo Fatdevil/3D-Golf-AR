@@ -5,7 +5,7 @@
  * Shape planning is pure geometry (no DOM, no THREE) so it can be tested in bulk;
  * applying a plan uses the same builders as hand-built objects, so everything stays editable.
  *
- * Local plan coordinates: f = forward from the back tee, l = lateral (left of the line).
+ * Local plan coordinates: f = forward from the back tee, l = lateral (+l is to the RIGHT of the line as the player faces the green: x forward, y up, z right).
  * ============================================================ */
 (function (root) {
     'use strict';
@@ -123,12 +123,20 @@
     }
 
     // ---- plan ---------------------------------------------------------------
-    function buildPlan(par, rng) {
+    // shape (optional, from the blueprint's buttons): { dogleg: 'left' | 'straight' | 'right', len: 'short' | 'mid' | 'long' }.
+    // Anything missing stays random. The random numbers are drawn the same way either way, so a seed keeps the rest of its shape.
+    // 'left' / 'right' as the player sees it from the tee: +l is to the right of the line of play (x forward, y up, z right).
+    function buildPlan(par, rng, shape) {
         par = clampPar(par);
+        shape = shape || {};
         let R = RULES[par];
-        let L = range(rng, R.len[0], R.len[1]);
+        let third = (R.len[1] - R.len[0]) / 3, lenAt = { short: 0, mid: 1, long: 2 }[shape.len];
+        let lo = lenAt === undefined ? R.len[0] : R.len[0] + third * lenAt, hi = lenAt === undefined ? R.len[1] : lo + third;
+        let L = range(rng, lo, hi);
         let dogleg = rng() < R.doglegChance;
         let side = rng() < 0.5 ? -1 : 1;
+        if (par > 3 && (shape.dogleg === 'left' || shape.dogleg === 'right')) { dogleg = true; side = shape.dogleg === 'right' ? 1 : -1; }
+        if (shape.dogleg === 'straight') dogleg = false;
         let bend = range(rng, 15, 38);
         // The bend sits where the tee shot comes down (a par 4 knee at 165 m was driven straight through); par 5 / 6 may bend at
         // the lay-up instead, or twice (S-shape or a long sweep)
@@ -890,11 +898,11 @@
     }
 
     // The shape for a seed: same seed, same hole shape (what a blueprint sketch stores)
-    function planFor(par, seed) {
+    function planFor(par, seed, shape) {
         let rng = mulberry32(seed);
         let plan = null;
         for (let k = 0; k < 30; k++) {
-            plan = buildPlan(par, rng);
+            plan = buildPlan(par, rng, shape);
             if (!validatePlan(plan).length) return plan;
         }
         return plan;
@@ -1098,18 +1106,27 @@
         return env;
     }
 
+    // Why the last generate() returned null: { code: 'no_hole' | 'not_empty' | 'no_parts' | 'site' | 'no_spot' | 'steep' | 'error',
+    // reasons (site: evaluateSite's reasons), message (error) }, or null after a success. The blueprint's build reports it per hole.
+    let lastFailure = null;
+    function fail(code, extra) {
+        lastFailure = Object.assign({ code: code, hole: root.currentHoleIndex }, extra || {});
+        if (typeof console !== 'undefined' && console.warn) console.warn('HoleGenerator.generate failed', JSON.stringify(lastFailure));
+        return null;
+    }
     function generate(opts) {
         opts = opts || {};
+        lastFailure = null;
         let parts = normalizeParts(opts.parts);
         let hole = root.courseHoles && root.courseHoles[root.currentHoleIndex];
-        if (!hole) return null;
+        if (!hole) return fail('no_hole');
         if (!holeIsEmpty(hole)) {
             toast(t('hg_not_empty', '⚠️ Hålet har redan delar. Gå till ett tomt hål för att slumpa.'), '#f59e0b');
-            return null;
+            return fail('not_empty');
         }
         if (!PART_KEYS.some(function (k) { return parts[k]; })) {
             toast(t('hg_pick_one', '⚠️ Välj minst en del att slumpa.'), '#f59e0b');
-            return null;
+            return fail('no_parts');
         }
         hole.plannedGreen = null;   // the hole is empty here; any older plan is stale
         let par = clampPar(opts.par != null ? opts.par : (hole.par || 4));
@@ -1121,14 +1138,14 @@
         let shaped = null, shapeWork = {}, capMissed = false, cappedFairway = null;
         if (opts.placement && opts.seed != null) {
             // a blueprint sketch: the user already chose the spot, we only re-check it
-            let plan = planFor(par, opts.seed);
+            let plan = planFor(par, opts.seed, opts.shape);
             let pl = opts.placement;
             let ev = evaluateSite(plan, { x: pl.x, z: pl.z }, pl.heading || 0, env);
             res = ev.ok ? { seed: opts.seed, plan: plan, placed: { world: ev.world, origin: { x: pl.x, z: pl.z }, heading: pl.heading || 0 } } : null;
             if (ev.ok && ev.shaped && ev.shaped.length) { shaped = ev.shaped; shapeWork = ev.work || {}; }
             if (!res) {
                 toast(t('bp_site_bad', '⚠️ Platsen fungerar inte längre. Öppna kartan och flytta hålet.'), '#ef4444');
-                return null;
+                return fail('site', { reasons: ev.reasons });
             }
         } else {
             res = generatePlan({ par: par, seed: opts.seed }, env);
@@ -1136,10 +1153,10 @@
         if (!res) {
             if (failedBecauseSteep(env.diag)) {
                 toast(t('hg_fail_steep', '⚠️ Marken är för kuperad för ett helt hål. Prova en plattare plats eller slumpa färre delar.'), '#ef4444');
-                return null;
+                return fail('steep');
             }
             toast(t('hg_fail', '⚠️ Hittade ingen ledig plats för ett helt hål. Försök igen.'), '#ef4444');
-            return null;
+            return fail('no_spot');
         }
         let wp = res.placed.world;
 
@@ -1220,7 +1237,7 @@
             if (typeof console !== 'undefined') console.error('Slumpa hål failed', e);
             toast(t('hg_error', '⚠️ Något gick fel när hålet byggdes. Tryck Ångra och försök igen.'), '#ef4444');
             if (typeof root.updateHoleMenu === 'function') root.updateHoleMenu(true);
-            return null;
+            return fail('error', { message: String((e && e.stack) || e).slice(0, 600) });
         } finally {
             root.saveUndoState = realSave;
         }
@@ -1234,7 +1251,7 @@
 
     root.HoleGenerator = {
         RULES: RULES, CLEARANCE: CLEARANCE, TEE_NEAR: TEE_NEAR, DRIVE: DRIVE, LAYUP: LAYUP, MAX_CARRY: MAX_CARRY, TEE_PITCH: TEE_PITCH, teeSlots: teeSlots, waterCarry: waterCarry, mulberry32: mulberry32, buildPlan: buildPlan, validatePlan: validatePlan,
-        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, obstaclesOf: obstaclesOf, obstaclesSplit: obstaclesSplit, neighbourOthers: neighbourOthers, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, SHAPE: SHAPE, cutDepth: cutDepth, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
+        generatePlan: generatePlan, place: place, evaluateSite: evaluateSite, lastFailure: function () { return lastFailure; }, obstaclesOf: obstaclesOf, obstaclesSplit: obstaclesSplit, neighbourOthers: neighbourOthers, objectsBlock: objectsBlock, wallsBlock: wallsBlock, collectObjects: collectObjects, collectWalls: collectWalls, rememberFootprint: rememberFootprint, planFor: planFor, nearestValidSite: nearestValidSite, siteEnv: siteEnv, footprint: footprint, scoreSite: scoreSite, failedBecauseSteep: failedBecauseSteep, slopeAt: slopeAt, SLOPE: SLOPE, SHAPE: SHAPE, cutDepth: cutDepth, otherHoles: otherHoles, tooCloseToOthers: tooCloseToOthers, coverage: coverage, anyCovered: anyCovered, inPoly: inPoly, worldPlan: worldPlan, generate: generate, holeIsEmpty: holeIsEmpty, normalizeParts: normalizeParts, PART_KEYS: PART_KEYS
     };
     root.generateRandomHole = function (opts) { return generate(opts); };
     // Button entry: show a progress toast first (building is synchronous and can take a few seconds)
