@@ -67,6 +67,10 @@ const centre = function (b) { let x = 0, z = 0; b.forEach(function (p) { x += p.
   check('par 3 over painted OB: refused (ob), where the same pond is a carry', !overOB.ok && overOB.reasons[0] === 'ob', overOB.reasons);
   const thin = HG.evaluateSite(plan, o, 0, Object.assign({}, base, { isOB: function (x, z) { return x > o.x + 60 && x < o.x + 61.5; } }));
   check('a 1.5 m strip of OB across the line of play is found', !thin.ok && thin.reasons[0] === 'ob', thin.reasons);
+  // a small patch wholly inside the green (between the coarse samples, away from every outline and the line of play)
+  const gc = HG.worldPlan(plan, o, 0).greenCenter;
+  const patch = HG.evaluateSite(plan, o, 0, Object.assign({}, base, { isOB: function (x, z) { return Math.hypot(x - gc.x, z - (gc.z + 3)) < 2.5; } }));
+  check('a 5 m OB patch inside the green is found', !patch.ok && patch.reasons[0] === 'ob', patch.reasons);
   const besideOB = HG.evaluateSite(plan, o, 0, Object.assign({}, base, { isOB: function (x, z) { return Math.abs(z) > 120; } }));
   check('OB well off to the side leaves the hole alone', besideOB.ok, besideOB.reasons);
   const wetGreen = HG.evaluateSite(plan, o, 0, pond(plan.length - 60, plan.length - 40));

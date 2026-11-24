@@ -891,9 +891,9 @@
         if (env && env.isOB) {
             // ground painted OB (a starter plate's canyon, a strip the builder marked out): nothing is built there and the line of
             // play does not cross it. Waste is not blocked: a desert plate is painted waste from edge to edge, it is its plain ground.
-            // Coarse pass over everything, then the outlines and the line of play every metre (a thin painted strip has to cross one;
-            // the lookup is remembered per square metre, so the fine pass is cheap).
-            if (anyCovered(wp, 6, 12, env.isOB, false) || anyCovered(wp, 1, 0, env.isOB, false)) return fail('ob');
+            // Coarse pass over everything, then the outlines and the line of play every metre (a thin painted strip has to cross one)
+            // and the insides at the water grid's step (a small patch inside a green); the lookup is remembered per square metre.
+            if (anyCovered(wp, 6, 12, env.isOB, false) || anyCovered(wp, 1, env.waterStep || 2, env.isOB, false)) return fail('ob');
         }
         if (env && env.isWater) {
             // coarse pass first (cheap, rejects most wet spots), then a pass at the water grid's resolution
