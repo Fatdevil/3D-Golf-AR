@@ -393,6 +393,25 @@
         cur().heading += delta;
         settle(S.sel);
     }
+    // The par a new sketch for hole idx starts with. A par the player set on the hole (anything but the default 4) is kept;
+    // otherwise the course gets a mix: the par of 4, 3 and 5 used least on the plate so far (built holes and sketches), not the
+    // same as the hole before it when that ties, preferring 4, then 3, then 5. holes / sketches: the map's lists.
+    function suggestPar(idx, holes, sketches) {
+        const HG = root.HoleGenerator, all = root.courseHoles || [], h = all[idx];
+        if (h && h.par && h.par !== 4) return clamp(h.par, 3, 6);
+        const count = { 3: 0, 4: 0, 5: 0 }, parOf = {};
+        const total = Math.min(root.MAX_HOLES || all.length, all.length);
+        for (let i = 0; i < total; i++) {
+            const k = holes.indexOf(i);
+            if (k >= 0 && k < sketches.length) parOf[i] = sketches[k].par;
+            else if (i !== idx && all[i] && !HG.holeIsEmpty(all[i])) parOf[i] = all[i].par;
+        }
+        Object.keys(parOf).forEach(function (i) { if (count[parOf[i]] !== undefined) count[parOf[i]]++; });
+        const prev = parOf[idx - 1], pref = [4, 3, 5];
+        return pref.slice().sort(function (a, b) {
+            return (count[a] - count[b]) || ((a === prev ? 1 : 0) - (b === prev ? 1 : 0)) || (pref.indexOf(a) - pref.indexOf(b));
+        })[0];
+    }
     // What comes after sketch i in the round: { plan } when the next hole is empty and not sketched yet, { tee } when the next
     // hole is built (its back tee), else null. The next hole's shape is drawn now (S.pending) and kept for when it is added, so
     // the look-ahead tests the very shape that will have to fit.
@@ -400,8 +419,7 @@
         const HG = root.HoleGenerator, next = S.holes[i] + 1, k = S.holes.indexOf(next);
         if (k >= 0) {
             if (k < S.sketches.length) return null;   // already sketched: its own placement takes care of the walk
-            const h = root.courseHoles && root.courseHoles[next];
-            const par = clamp((h && h.par) || 4, 3, 6);
+            const par = suggestPar(next, S.holes, S.sketches);
             S.pending = S.pending || {};
             if (!S.pending[next] || S.pending[next].par !== par) {
                 const seed = Math.floor(Math.random() * 1e9);
@@ -433,7 +451,7 @@
     // Find a good starting spot for sketch i: random tries first, then the closest legal spot around a few
     // anchor points, and finally another shape (a crowded map may only have room for a smaller one).
     // Each step runs in its own timer tick (the page stays responsive and the map can be closed) and the
-    // whole search shares one deadline.
+    // whole search shares one deadline (the open-map fallback gets a few seconds of its own).
     // The search starts next to the previous green: rings outward, and from the first ring with room plus the one after it the best
     // spot wins (short walk, no reshaping, and a green that ends away from the map edge, so the NEXT hole also finds room near it).
     // Look-ahead: when the next hole is still to be planned, a spot only counts as good if a typical hole of the next par still
@@ -444,7 +462,8 @@
     function suggest(i) {
         const HG = root.HoleGenerator, s = S.sketches[i];
         const lim = S.half * 0.55, anchors = [[0, 0], [-lim, -lim], [lim, -lim], [-lim, lim], [lim, lim]];
-        const deadline = Date.now() + 7000, token = ++S.findToken;
+        let deadline = Date.now() + 7000;
+        const token = ++S.findToken;
         // the first hole of an empty course starts at the edge of the map, as from a clubhouse, so the round loops around the
         // plate instead of the first hole taking the middle and leaving no room near its green for the next one
         const edge = S.half * 0.78, starts = [[-edge, 0], [edge, 0], [0, -edge], [0, edge]][Math.floor(Math.random() * 4)];
@@ -456,6 +475,8 @@
             const g = ev.world.greenCenter, room = Math.min(150, S.half - Math.max(Math.abs(g.x), Math.abs(g.z)));
             let sc = r + ((ev.shaped && ev.shaped.length) ? 60 : 0) - 0.6 * room;
             if (ahead && ahead.tee) sc += Math.hypot(g.x - ahead.tee.x, g.z - ahead.tee.z);
+            // the look-ahead is the expensive part: only for a spot that could still beat the best one found so far
+            if (best && sc >= best.score) return { score: sc + NO_NEXT_ROOM, good: false };
             const good = !(ahead && ahead.plan) || nextFits(ahead.plan, ev.world, env);
             return { score: sc + (good ? 0 : NO_NEXT_ROOM), good: good };
         };
@@ -500,6 +521,8 @@
                     } else step = -1;
                 }
                 if (Date.now() > deadline) step = -1;
+                // the open-map search gets time of its own: a slow device must not end with no spot at all
+                if (step === -1) deadline = Math.max(deadline, Date.now() + 4000);
                 setTimeout(tick, 0);
                 return;
             }
@@ -525,9 +548,9 @@
     }
     function addHole() {
         if (S.busy || S.sketches.length >= S.holes.length) return;
-        // keep the par the target hole already has (building syncs the hole to its sketch's par)
-        const idx = S.holes[S.sketches.length], target = root.courseHoles && root.courseHoles[idx];
-        const par = clamp((target && target.par) || 4, 3, 6), sk = makeSketch(par);
+        // the par: see suggestPar (building syncs the hole to its sketch's par)
+        const idx = S.holes[S.sketches.length];
+        const par = suggestPar(idx, S.holes, S.sketches), sk = makeSketch(par);
         // the shape the previous hole's placement already made room for
         const pend = S.pending && S.pending[idx];
         if (pend && pend.par === par) { sk.seed = pend.seed; sk.plan = pend.plan; }
@@ -662,6 +685,7 @@
         window.removeEventListener('keydown', S.keyHandler, true);
         cancelAnimationFrame(S.raf); clearTimeout(S.noteTimer);
         S = null;
+        root._pause3D = false;
         if (fade) { el.style.opacity = '0'; el.style.transform = 'scale(1.06)'; setTimeout(function () { el.remove(); }, 380); }
         else el.remove();
     }
@@ -679,7 +703,7 @@
         if (S) close(false);
         const holes = emptyHolesFrom(root.currentHoleIndex);
         const half = (root.TERRAIN_SIZE || 600) / 2;
-        const par = clamp(hole.par || 4, 3, 6);
+        const par = suggestPar(holes[0], holes, []);
         const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 376, 760)));
         const dpr = Math.min(2, window.devicePixelRatio || 1);
 
@@ -758,7 +782,11 @@
         const build_ = btn('', build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
         [head, help, detail, chips, summary, canvas, row1, rowShape, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        // every overlay row keeps its height: a page taller than the screen scrolls instead of squeezing the status and summary lines
+        Array.prototype.forEach.call(overlay.children, function (el) { el.style.flexShrink = '0'; });
         document.body.appendChild(overlay);
+        // the map covers the whole screen: the 3D scene behind it stops drawing, so the search for good spots gets the time
+        root._pause3D = true;
 
         S = {
             dom: { overlay: overlay, status: status, detail: detail, summary: summary, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, chips: chips, add: add, remove: remove, earlier: earlier, later: later },

@@ -15021,6 +15021,8 @@ window.triggerExplosion = function(x, y, z) {
         // the frame's number; the minimap's box is measured now, before this frame writes to the page (see window.minimapBox)
         window._frameNo = (window._frameNo || 0) + 1;
         if ((appMode === 'PLAY' || appMode === 'TEST') && window.minimapBox) window.minimapBox();
+        // a full-screen overlay (the blueprint map) covers the scene: skip the frame, the overlay's own work gets the time
+        if (window._pause3D) { lastAnimateTime = performance.now(); return; }
         let now = performance.now();
         let dt = (now - lastAnimateTime) / 1000;
         lastAnimateTime = now;
