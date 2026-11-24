@@ -80,6 +80,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const blankRating = (await pool.query('SELECT course_rating::float AS cr, slope_rating AS sr FROM courses WHERE owner_id = $1', [deviceId])).rows[0];
     await page.evaluate(function () { window.HoleGenerator.generate({ par: 4, seed: 12345 }); });
     await wait(2500);
+    // what the generator built (its shapes change with the rules): the reopened course must have the same, not a fixed count
+    const built = await page.evaluate(function () { const h = courseHoles[0]; return { bunkers: (h.bunkers || []).length, fairways: (h.fairways || []).length, teeBoxes: (h.teeBoxes || []).length }; });
     await page.evaluate(function () { return smartSaveDraft(); }); await wait(6000);
     let r = await rows();
     check('draft: saved as one draft on the server', r.length === 1 && r[0].is_draft === true && r[0].name === 'E2E Bana', JSON.stringify(r));
@@ -95,7 +97,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('list: the draft is under My drafts', drafts1.indexOf('E2E Bana v2') >= 0, JSON.stringify(drafts1));
     await open('autorun=edit_build&edit=' + code, 6000);
     let st = await state();
-    check('reopen draft: green, fairway, bunkers and tee boxes are back', st.flag && st.green && st.fairways === 1 && st.bunkers === 2 && st.teeBoxes === 3 && st.name === 'E2E Bana v2', JSON.stringify(st));
+    check('reopen draft: green, fairway, bunkers and tee boxes are back', st.flag && st.green && st.fairways === built.fairways && st.bunkers === built.bunkers && st.teeBoxes === built.teeBoxes && built.bunkers > 0 && st.name === 'E2E Bana v2', JSON.stringify([st, built]));
 
     // 3. publish: the draft becomes the published course (and the working copy knows it by the time publishing is reported done)
     const qd = await page.evaluate(async function () { window._bypassCapture = true; await publishCourse({ isDraft: false }); const d = await ArcadeStorage.loadFullDraft('quick_draft'); return { published: d.edit_is_published, code: d.edit_code }; });
@@ -116,7 +118,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     // 4. the published course reopens in the builder with its definitions; publishing again is a new version of the same course
     await open('autorun=edit_build&edit=' + code, 6000);
     st = await state();
-    check('reopen published: green, fairway, bunkers and tee boxes are back, no Save draft button', st.green && st.fairways === 1 && st.bunkers === 2 && st.teeBoxes === 3 && st.draftBtn === 'none', JSON.stringify(st));
+    check('reopen published: green, fairway, bunkers and tee boxes are back, no Save draft button', st.green && st.fairways === built.fairways && st.bunkers === built.bunkers && st.teeBoxes === built.teeBoxes && built.bunkers > 0 && st.draftBtn === 'none', JSON.stringify([st, built]));
     await pool.query("UPDATE courses SET created_at = now() - interval '10 days' WHERE share_code = $1", [code]); // an old course: published again it must still lead the public list
     await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, created_at) VALUES ($1, 'Newer than mine', 'o', '[]'::jsonb, false, 'someone-else', now() - interval '1 day')", [tag + '-N']);
     await page.evaluate(function () { document.getElementById('course-name-input').value = 'E2E Bana v3'; }); await publish(); await wait(6000);
