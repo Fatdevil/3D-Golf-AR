@@ -992,7 +992,7 @@
     function droppedText(n) { return tr('bp_plan_dropped', '{n} hål i planen har byggts i buildern och togs bort ur planen').replace('{n}', n); }
     function open() {
         const HG = root.HoleGenerator, all = root.courseHoles;
-        if (!HG || !all || !all.length || root._isRangeMode) return;
+        if (!HG || !all || !all.length) return;   // (the top bar's map button is hidden on a range, see planMarkers)
         if (S) close(false, true, true);
         let keep = root._bpKeep ? restorePlan(root._bpKeep) : null;
         root._bpKeep = null;
