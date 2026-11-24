@@ -476,7 +476,7 @@
         const edge = S.half * 0.78, starts = [[-edge, 0], [edge, 0], [0, -edge], [0, edge]][Math.floor(Math.random() * 4)];
         const pg = prevGreen(i) || (S.holes[i] === 0 ? { x: starts[0], z: starts[1] } : null);
         let round = 0, step = pg ? -2 : -1;
-        let ring = 0, cand = 0, best = null, lastRing = NEAR_RINGS.length - 1, nearShapes = 0;
+        let ring = 0, cand = 0, best = null, lastRing = NEAR_RINGS.length - 1, nearShapes = 0, aheadShapes = 0;
         const ahead = lookAhead(i);
         const score = function (r, ev, env) {
             const g = ev.world.greenCenter, room = Math.min(150, S.half - Math.max(Math.abs(g.x), Math.abs(g.z)));
@@ -539,6 +539,21 @@
                 }
                 if (cand < total && Date.now() <= deadline) { setTimeout(tick, 0); return; }
                 ring++; cand = 0;
+                // every spot found leaves the next hole's shape no room near this green: draw the next hole another shape and look
+                // again (a crowded plate fits a shorter or differently bent hole), a few times, before settling for a long walk
+                if (best && !best.good && ring >= NEAR_RINGS.length && ahead && ahead.plan && aheadShapes < 3 && Date.now() < deadline) {
+                    aheadShapes++;
+                    const nextIdx = S.holes[i] + 1, pend = S.pending && S.pending[nextIdx];
+                    if (pend) {
+                        pend.seed = Math.floor(Math.random() * 1e9);
+                        pend.plan = HG.planFor(pend.par, pend.seed);
+                        pend.spot = null;
+                        ahead.plan = pend.plan;
+                        best = null; ring = 0; lastRing = NEAR_RINGS.length - 1;
+                        setTimeout(tick, 0);
+                        return;
+                    }
+                }
                 if (best && (ring > lastRing || Date.now() > deadline)) return finish(best);
                 if (ring >= NEAR_RINGS.length) {
                     ring = 0;
