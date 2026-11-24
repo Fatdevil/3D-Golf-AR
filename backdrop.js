@@ -707,7 +707,7 @@
     function open() {
         if (!root.PlacedObjects || !root.ASSET_REGISTRY) return;
         if (B) close();
-        if (root.HoleBlueprint && root.HoleBlueprint.close) root.HoleBlueprint.close(false);
+        if (root.HoleBlueprint && root.HoleBlueprint.close) root.HoleBlueprint.close(false, true, true);   // a plan on the map is kept
         const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 16, window.innerHeight - 330, 760)));
         const dpr = Math.min(2, window.devicePixelRatio || 1);
 

@@ -4,6 +4,9 @@
  * WHERE it stands. Every position is checked live with HoleGenerator.evaluateSite (water, slope, other holes,
  * other sketches, map edge) and a release on a bad spot glides to the closest good one, so the map is never
  * left invalid. Sketch k belongs to the k-th empty hole from the current one onward.
+ * The map opens from any hole: with every hole built it is an overview of the course. A tap on a built hole offers to edit it in
+ * the builder (the camera flies there). A plan that is not built yet is kept when the map closes (✕, a built hole, "Forma marken
+ * här") and comes back when it opens again; its outlines show in the 3D view meanwhile (planMarkers). "Börja om" throws it away.
  */
 (function (root) {
     'use strict';
@@ -195,6 +198,15 @@
             ctx.beginPath(); ctx.moveTo(cx(g), 0); ctx.lineTo(cx(g), C); ctx.moveTo(0, cz(g)); ctx.lineTo(C, cz(g)); ctx.stroke();
         }
         drawBuiltHoles(ctx);
+        // the built hole tapped on: a sky-blue outline round its parts
+        if (S.builtSel != null) {
+            const h = (root.courseHoles || [])[S.builtSel];
+            if (h) {
+                ctx.save(); ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+                [h.greenData].concat(h.fairways || [], h.teeBoxes || [], h.bunkers || []).forEach(function (o) { if (o && o.points && o.points.length >= 3) { polyPath(ctx, o.points); ctx.stroke(); } });
+                ctx.restore();
+            }
+        }
         // trees, rocks and buildings on the plate (holes keep clear of them): a canopy or a stone with its shadow
         (S.baseEnv.objects || []).forEach(function (o) {
             const big = o.r >= 4, rr = Math.max(2, o.r / S.size * C), x = cx(o.x), y = cz(o.z);
@@ -221,7 +233,8 @@
         }
         ctx.setLineDash([]);
         S.sketches.forEach(function (sk, i) { if (i !== S.sel) drawSketch(ctx, sk, i, false); });
-        drawSketch(ctx, cur(), S.sel, true);
+        S.handles = null;
+        if (S.sketches.length) drawSketch(ctx, cur(), S.sel, true);
         // walk labels on top, so a hole drawn over the line cannot hide them
         ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         labels.forEach(function (l) {
@@ -334,6 +347,16 @@
     }
     function refreshUi() {
         if (!S) return;
+        refreshBuiltCard();
+        if (!S.sketches.length) {
+            // the overview: every hole is built, nothing to plan
+            setStatus(S.note || tr('bp_overview', 'Alla hål är byggda. Tryck på ett hål för att ändra det i buildern.'), null);
+            // why a kept plan is gone: its holes were built in the builder (until the first tap)
+            S.dom.detail.textContent = S.dropNote || '';
+            S.dom.detail.style.color = '#cbd5e1';
+            draw();
+            return;
+        }
         const ev = cur().ev;
         if (S.busy) setStatus(tr('bp_searching', '⏳ Letar bra plats…'), null);
         else if (S.note) setStatus(S.noteBad ? '⛔ ' + S.note : S.note, !S.noteBad);
@@ -364,6 +387,8 @@
         enable(S.dom.add, S.sketches.length < S.holes.length && !S.busy);
         S.dom.add.title = S.sketches.length < S.holes.length ? '' : tr('bp_no_more', 'Inga fler tomma hål');
         enable(S.dom.remove, S.sketches.length > 1 && !S.busy);
+        enable(S.dom.shapeHere, !!(ev && !S.busy));
+        enable(S.dom.restart, !S.busy);
         enable(S.dom.earlier, S.sel > 0 && !S.busy);
         enable(S.dom.later, S.sel < S.sketches.length - 1 && !S.busy);
         // The detail row is reserved space (no layout jump) for what the one-line status cannot say: what a yellow site changes,
@@ -375,6 +400,7 @@
         if (shapedNow) detailText = (cutOff ? stEl.textContent + ': ' : '') + shapeBits(ev);
         else if (cutOff) detailText = stEl.textContent;
         if (carryNow) detailText = (detailText ? detailText + ' · ' : '') + carryText(ev);
+        if (!detailText && S.dropNote) detailText = S.dropNote;   // see open(): a kept plan whose holes were built meanwhile
         S.dom.detail.textContent = detailText;
         S.dom.detail.style.color = shapedNow ? '#fde68a' : (carryNow ? '#7dd3fc' : (ev && !ev.ok && !S.busy ? '#fca5a5' : '#cbd5e1'));
         S.dom.detail.title = detailText;
@@ -703,6 +729,18 @@
         }
         if (S.busy) return;
         const p = toWorldPt(e);
+        S.dropNote = null;
+        // a built hole under the finger (and no sketch of the plan): select it, its card offers to edit it in the builder
+        const onSketch = S.sketches.some(function (sk) { return hitSketch(sk, p.x, p.z); }) ||
+            [S.handles && S.handles.green, S.handles && S.handles.tee].some(function (h) { return h && Math.hypot(p.px - h.x, p.py - h.y) < 24; });
+        const built = onSketch ? -1 : CM.builtHoleAt(p.x, p.z, 14 / pxPerM(), { skip: S.holes });
+        if (built >= 0 || !S.sketches.length) {
+            S.builtSel = built >= 0 ? built : null;
+            S.drag = null;
+            refreshUi();
+            return;
+        }
+        S.builtSel = null;
         S.snapToken++; S.note = null; S.noteBad = false;
         const near = function (h) { return h && Math.hypot(p.px - h.x, p.py - h.y) < 24; };
         let s = cur();
@@ -753,7 +791,7 @@
 
     // ---- build -------------------------------------------------------------------------------------------
     function build() {
-        if (!S || S.busy || !S.sketches.every(function (s) { return s.ev && s.ev.ok; })) return;
+        if (!S || S.busy || !S.sketches.length || !S.sketches.every(function (s) { return s.ev && s.ev.ok; })) return;
         const jobs = S.sketches.map(function (s, i) {
             return { idx: S.holes[i], par: s.par, seed: s.seed, shape: s.shape, mow: S.mow, placement: { x: s.origin.x, z: s.origin.z, heading: s.heading } };
         });
@@ -815,6 +853,92 @@
         }, 80);
     }
 
+    // ---- the map and the builder ------------------------------------------------------------------------------
+    // The card of the built hole that was tapped: "Hål 2 · Par 3 · 152 m" and the way into the builder
+    function refreshBuiltCard() {
+        const card = S.dom.builtCard, i = S.builtSel;
+        const sum = i != null ? CM.holeSummary(i) : null;
+        if (!sum) { card.style.display = 'none'; return; }
+        S.dom.builtText.textContent = tr('bp_hole', 'Hål') + ' ' + sum.number + ' · Par ' + sum.par + (sum.length ? ' · ' + sum.length + ' m' : '');
+        card.style.display = 'flex';
+    }
+    function flyTo(tee, green) {
+        const HG = root.HoleGenerator;
+        if (tee && green && HG && HG.focusCamera) HG.focusCamera({ tee: tee, greenCenter: green });
+    }
+    // Into the builder on built hole i: the map closes (a plan that is not built yet is kept) and the camera flies over the hole
+    function editBuilt(i) {
+        const sum = CM.holeSummary(i), n = S.sketches.length;
+        close(true, true, true);
+        if (typeof root.changeHoleTo === 'function') root.changeHoleTo(i);
+        if (sum) flyTo(sum.tee, sum.green);
+        toast(tr('bp_editing', '✏️ Hål {h}: ändra det i buildern. 🗺️ öppnar kartan igen.').replace('{h}', sum ? sum.number : i + 1) +
+            (n ? ' ' + tr('bp_plan_kept_short', 'Planen ({n} hål) är sparad.').replace('{n}', n) : ''), '#38bdf8');
+    }
+    // "Forma marken här": the map closes with the plan kept and the camera flies to the selected hole's spot; its outline stays in
+    // the 3D view (planMarkers) so a hill or a pond can be built where the plan needs it
+    function shapeGround() {
+        const s = cur(), wp = s && s.ev && s.ev.world, idx = S.holes[S.sel], no = holeNo(S.sel);
+        if (!wp) return;
+        close(true, true, true);
+        if (typeof root.changeHoleTo === 'function') root.changeHoleTo(idx);
+        flyTo(wp.tee, wp.greenCenter);
+        toast(tr('bp_shaping', '⛰️ Forma marken vid hål {h}. Den blå konturen visar planen. 🗺️ öppnar kartan igen.').replace('{h}', no), '#38bdf8');
+    }
+    // "Börja om": the plan is thrown away and the first empty hole gets a new suggestion
+    function restartPlan() {
+        S.findToken++; S.snapToken++;
+        S.pending = null; S.note = null; S.noteBad = false; S.builtSel = null;
+        S.sketches = [makeSketch(suggestPar(S.holes[0], S.holes, []))];
+        S.sel = 0;
+        suggest(0);
+    }
+
+    // ---- the kept plan in the 3D view -------------------------------------------------------------------------
+    // While a plan is kept and the map is closed, the builder shows its holes as sky-blue outlines on the ground (green, fairway,
+    // tee boxes and the line of play), so the ground can be shaped where the plan needs it. Off in play and test, and on a range.
+    let marker = null, markerSig = '', markerAt = 0;
+    function groundY(x, z) { const s = root.localGetTerrainAt ? root.localGetTerrainAt(x, -z) : null; return (s && typeof s.z === 'number' ? s.z : 0) + 0.5; }
+    function planMarkers() {
+        const keep = root._bpKeep, mode = typeof root.getAppMode === 'function' ? root.getAppMode() : 'BUILD';
+        const show = !!(keep && keep.sketches && keep.sketches.length && !S && !root._isRangeMode && mode !== 'PLAY' && mode !== 'TEST');
+        const mapBtn = document.getElementById('topbar-btn-map');
+        if (mapBtn) {
+            mapBtn.style.display = root._isRangeMode ? 'none' : '';
+            const badge = mapBtn.querySelector('.bp-badge');
+            if (badge) badge.style.display = keep && keep.sketches && keep.sketches.length ? '' : 'none';
+        }
+        if (!show) { if (marker) marker.visible = false; return; }
+        if (typeof THREE === 'undefined' || !root._arcadeScene) return;
+        const HG = root.HoleGenerator;
+        const sig = JSON.stringify(keep.sketches.map(function (k) { return [k.seed, k.par, k.origin, k.heading]; }));
+        // the ground under the lines is sampled again now and then: it changes while the builder shapes it
+        if (marker && sig === markerSig && Date.now() - markerAt < 1500) { marker.visible = true; return; }
+        if (marker) { root._arcadeScene.remove(marker); marker.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+        marker = new THREE.Group();
+        marker.name = 'bp-plan-markers';
+        const mat = function (op) { return new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: op, depthTest: false }); };
+        const line = function (pts, closed, op) {
+            if (!pts || pts.length < 2) return;
+            const v = pts.map(function (p) { return new THREE.Vector3(p.x, groundY(p.x, p.z), p.z); });
+            if (closed) v.push(v[0].clone());
+            const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(v), mat(op));
+            l.renderOrder = 997; l.raycast = function () { };
+            marker.add(l);
+        };
+        keep.sketches.forEach(function (k) {
+            const wp = HG.worldPlan(k.plan, k.origin, k.heading);
+            line(wp.green, true, 1);
+            if (wp.fairway) line(wp.fairway, true, 0.85);
+            (wp.teeBoxes || []).forEach(function (b) { line(b, true, 0.9); });
+            line(wp.centerline, false, 0.5);
+        });
+        marker.raycast = function () { };
+        root._arcadeScene.add(marker);
+        markerSig = sig; markerAt = Date.now();
+    }
+    if (typeof setInterval === 'function') setInterval(planMarkers, 700);
+
     // ---- open / close ------------------------------------------------------------------------------------
     function btn(label, onclick, extra) {
         const b = document.createElement('button');
@@ -822,11 +946,14 @@
         b.style.cssText = 'min-height:40px; min-width:34px; padding:0 7px; border:none; border-radius:10px; font-weight:bold; font-size:13px; white-space:nowrap; cursor:pointer; background:#1e293b; color:#e2e8f0;' + (extra || '');
         return b;
     }
-    // keepPlan (switching to the Omgivning tab): the holes planned but not built yet are kept and come back when the Hål tab opens
-    function close(fade, keepPlan) {
+    // keepPlan: the holes planned but not built yet are kept (root._bpKeep) and come back when the map opens again (✕, a tab
+    // switch, editing a built hole, "Forma marken här"); building or "Börja om" end the plan. quiet: no toast about the kept plan.
+    function close(fade, keepPlan, quiet) {
         if (!S) return;
         const el = S.dom.overlay;
-        root._bpKeep = keepPlan ? {
+        const kept = !!(keepPlan && S.sketches.length);
+        if (kept && !quiet) toast(tr('bp_plan_kept', '🗺️ Planen är sparad ({n} hål). Öppna kartan för att fortsätta.').replace('{n}', S.sketches.length), '#38bdf8');
+        root._bpKeep = kept ? {
             holes: S.holes.slice(), sel: S.sel, mow: S.mow, pending: S.pending || null,
             // a spot search that was still running is started again when the plan comes back (its sketch has no good spot yet)
             searching: S.busy && S.searchIdx != null ? S.searchIdx : null,
@@ -845,15 +972,38 @@
         for (let i = start; i < total; i++) if (HG.holeIsEmpty(root.courseHoles[i])) out.push(i);
         return out;
     }
+    // A kept plan for the course as it is now: the sketches whose holes are still empty (a hole built in the builder meanwhile
+    // drops out of the plan), the empty holes they belong to first and every other empty hole after them. With no sketch left it
+    // only says how many dropped out (the map starts a new plan and tells why).
+    function restorePlan(keep) {
+        const HG = root.HoleGenerator, all = root.courseHoles || [];
+        const total = Math.min(root.MAX_HOLES || 3, all.length);
+        const empty = function (i) { return i >= 0 && i < total && !!all[i] && HG.holeIsEmpty(all[i]); };
+        const holes = [], sketches = [], from = {};
+        keep.sketches.forEach(function (sk, k) { const h = keep.holes[k]; if (empty(h)) { from[k] = sketches.length; holes.push(h); sketches.push(sk); } });
+        keep.holes.slice(keep.sketches.length).forEach(function (h) { if (empty(h) && holes.indexOf(h) < 0) holes.push(h); });
+        for (let i = 0; i < total; i++) if (empty(i) && holes.indexOf(i) < 0) holes.push(i);
+        return {
+            holes: holes, sketches: sketches, dropped: keep.sketches.length - sketches.length,
+            sel: from[keep.sel] != null ? from[keep.sel] : 0, searching: keep.searching != null && from[keep.searching] != null ? from[keep.searching] : null,
+            mow: keep.mow, pending: keep.pending
+        };
+    }
+    function droppedText(n) { return tr('bp_plan_dropped', '{n} hål i planen har byggts i buildern och togs bort ur planen').replace('{n}', n); }
     function open() {
-        const HG = root.HoleGenerator;
-        const hole = root.courseHoles && root.courseHoles[root.currentHoleIndex];
-        if (!HG || !hole) return;
-        if (!HG.holeIsEmpty(hole)) { toast(tr('hg_not_empty', '⚠️ Hålet har redan delar. Gå till ett tomt hål för att slumpa.'), '#f59e0b'); return; }
-        if (S) close(false);
-        const holes = emptyHolesFrom(root.currentHoleIndex);
+        const HG = root.HoleGenerator, all = root.courseHoles;
+        if (!HG || !all || !all.length || root._isRangeMode) return;
+        if (S) close(false, true, true);
+        let keep = root._bpKeep ? restorePlan(root._bpKeep) : null;
+        root._bpKeep = null;
+        const dropped = keep ? keep.dropped : 0;
+        if (keep && !keep.sketches.length) keep = null;
+        // the empty holes to plan: from the current hole onward when it is empty, else all of them; none: the overview
+        const curIdx = root.currentHoleIndex || 0;
+        const holes = keep ? keep.holes : (all[curIdx] && HG.holeIsEmpty(all[curIdx]) ? emptyHolesFrom(curIdx) : emptyHolesFrom(0));
+        const overview = !holes.length;
         const half = (root.TERRAIN_SIZE || 600) / 2;
-        const par = suggestPar(holes[0], holes, []);
+        const par = overview ? 4 : suggestPar(holes[0], holes, []);
         // the map plus its 2 px border on each side (+4) fits the screen with the 8 px page padding on each side (+16)
         const C = Math.max(240, Math.floor(Math.min(window.innerWidth - 20, window.innerHeight - 380, 760)));
         const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -871,12 +1021,13 @@
         const statusRow = document.createElement('div');
         statusRow.style.cssText = 'width:' + C + 'px; display:flex;';
         statusRow.appendChild(status);
-        const x = btn('✕', function () { close(true); }, 'min-width:44px; min-height:44px;');
-        x.title = tr('bp_cancel', 'Avbryt');
+        const x = btn('✕', function () { close(true, true); }, 'min-width:44px; min-height:44px;');
+        x.title = tr('bp_close', 'Stäng (planen sparas)');
         head.appendChild(x);
         const help = document.createElement('div');
         help.style.cssText = 'width:' + C + 'px; color:#94a3b8; font-size:12px; line-height:1.35;';
-        help.textContent = tr('bp_help', 'Dra hålet dit du vill ha det. Dra i flaggan för att vrida. Tryck på kartan för att flytta teen dit.');
+        help.textContent = overview ? tr('bp_help_overview', 'Hela banan uppifrån. Tryck på ett hål för att ändra det i buildern.')
+            : tr('bp_help', 'Dra hålet dit du vill ha det. Dra i flaggan för att vrida. Tryck på kartan för att flytta teen dit.');
         // what the builders will do on a yellow site; the height is reserved so the page does not move when it appears
         const detail = document.createElement('div');
         detail.style.cssText = 'width:' + C + 'px; height:32px; box-sizing:border-box; overflow:hidden; color:#fde68a; font-size:12px; line-height:16px;';
@@ -894,6 +1045,18 @@
         mapWrap.appendChild(canvas);
         const zoomUi = CM.zoomButtons(mapWrap, zoom);
         zoomUi.el.style.left = '10px'; zoomUi.el.style.top = '10px';
+        // the card of a built hole that was tapped: its numbers and a way into the builder on that hole
+        const builtCard = document.createElement('div');
+        builtCard.id = 'bp-built-card';
+        builtCard.style.cssText = 'position:absolute; left:10px; right:10px; bottom:12px; z-index:3; display:none; align-items:center; gap:8px; padding:8px 8px 8px 12px; border-radius:12px; background:rgba(15,23,42,0.94); border:1px solid #38bdf8; color:#f1f5f9; font-size:13px; font-weight:bold; box-shadow:0 6px 18px rgba(0,0,0,0.45);';
+        const builtText = document.createElement('span');
+        builtText.style.cssText = 'flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+        const builtEdit = btn('✏️ ' + tr('bp_edit_built', 'Ändra i buildern'), function () { if (S && S.builtSel != null) editBuilt(S.builtSel); }, 'background:#0284c7; color:#fff; min-height:40px;');
+        builtEdit.dataset.role = 'edit-built';
+        const builtX = btn('✕', function () { if (S) { S.builtSel = null; refreshUi(); } }, 'min-width:40px;');
+        builtX.setAttribute('aria-label', tr('bp_cancel', 'Stäng'));
+        [builtText, builtEdit, builtX].forEach(function (el) { builtCard.appendChild(el); });
+        mapWrap.appendChild(builtCard);
         const row1 = document.createElement('div');
         row1.style.cssText = 'width:' + C + 'px; display:flex; gap:6px; align-items:center; justify-content:center;';
         const parBtns = [3, 4, 5, 6].map(function (n) {
@@ -940,7 +1103,14 @@
         left.title = tr('bp_turn_l', 'Vrid åt vänster'); right.title = tr('bp_turn_r', 'Vrid åt höger');
         earlier.title = tr('bp_earlier', 'Flytta tidigare i banan'); later.title = tr('bp_later', 'Flytta senare i banan');
         remove.title = tr('bp_remove', 'Ta bort hålet från kartan');
-        [add, reroll, left, right, earlier, later, remove].forEach(function (b) { row2.appendChild(b); });
+        // leave the map with the plan kept and fly to the selected hole's spot, to raise a hill or dig a pond there first
+        const shapeHere = btn(compact ? '⛰️' : '⛰️ ' + tr('bp_shape_here', 'Forma marken här'), function () { if (S && !S.busy) shapeGround(); }, compact ? 'font-size:18px;' : '');
+        shapeHere.title = tr('bp_shape_here_t', 'Stäng kartan och flyg hit för att forma marken (planen sparas)');
+        shapeHere.setAttribute('aria-label', shapeHere.title);
+        const restart = btn('↺', function () { if (S && !S.busy) restartPlan(); });
+        restart.title = tr('bp_restart', 'Börja om: släng planen och föreslå nya hål');
+        restart.setAttribute('aria-label', restart.title);
+        [add, reroll, left, right, earlier, later, remove, shapeHere, restart].forEach(function (b) { row2.appendChild(b); });
         const build_ = btn('', build, 'margin-bottom:auto; flex:none; width:' + C + 'px; background:linear-gradient(90deg,#16a34a,#22c55e); color:#fff; font-size:16px; min-height:52px;');
         build_.dataset.role = 'build';
         // the course style: one mowing pattern for every fairway and green the map builds (the studios change single holes later)
@@ -972,6 +1142,9 @@
             return b;
         });
         [head, statusRow, help, detail, card, mapWrap, row1, rowShape, rowMow, row2, build_].forEach(function (el) { overlay.appendChild(el); });
+        // the overview has nothing to plan: no scorecard of planned holes, no planning buttons
+        if (overview) [card, row1, rowShape, rowMow, row2].forEach(function (el) { el.style.display = 'none'; });
+        if (overview) { build_.style.visibility = 'hidden'; build_.style.minHeight = '0'; build_.style.height = '0'; }
         // every overlay row keeps its height: a page taller than the screen scrolls instead of squeezing the status and summary lines
         Array.prototype.forEach.call(overlay.children, function (el) { el.style.flexShrink = '0'; });
         document.body.appendChild(overlay);
@@ -980,9 +1153,10 @@
 
         S = {
             zoom: zoom,
-            dom: { zoomUi: zoomUi, overlay: overlay, status: status, detail: detail, card: card, mowBtns: mowBtns, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, add: add, remove: remove, earlier: earlier, later: later },
+            dom: { zoomUi: zoomUi, overlay: overlay, status: status, detail: detail, card: card, mowBtns: mowBtns, shapeBtns: shapeBtns, build: build_, parBtns: parBtns, add: add, remove: remove, earlier: earlier, later: later,
+                shapeHere: shapeHere, restart: restart, builtCard: builtCard, builtText: builtText, builtEdit: builtEdit },
             canvas: canvas, ctx: canvas.getContext('2d'), C: C, dpr: dpr, half: half, size: half * 2, mPerPx: half * 2 / C,
-            baseEnv: null, holes: holes, sketches: [makeSketch(par)], sel: 0,
+            baseEnv: null, holes: holes, sketches: overview ? [] : [makeSketch(par)], sel: 0, builtSel: null,
             mow: MOW_PATTERNS.indexOf(root._bpMow) >= 0 ? root._bpMow : 'STRIPES',
             drag: null, busy: false, snapToken: 0, findToken: 0, raf: 0, note: null, noteBad: false, handles: null
         };
@@ -990,30 +1164,30 @@
         env.others = Array.isArray(env.others) ? { points: env.others, polygons: [] } : (env.others || { points: [], polygons: [] });
         S.baseEnv = env;
         S.terrain = renderTerrain(half);
-        S.keyHandler = function (e) { if (e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'Escape') close(true); e.stopImmediatePropagation(); };
+        S.keyHandler = function (e) { if (e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'Escape') close(true, true); e.stopImmediatePropagation(); };
         window.addEventListener('keydown', S.keyHandler, true);
         canvas.addEventListener('pointerdown', onDown);
         canvas.addEventListener('pointermove', onMove);
         canvas.addEventListener('pointerup', onUp);
         canvas.addEventListener('pointercancel', onUp);
         canvas.addEventListener('wheel', function (e) { if (S) S.zoom.wheel(e, canvas.getBoundingClientRect()); }, { passive: false });
-        // back from the Omgivning tab: the plan that was not built yet, if its holes are still the empty ones planned for
-        const keep = root._bpKeep;
-        root._bpKeep = null;
-        if (keep && keep.holes.length === holes.length && keep.holes.every(function (h, k) { return h === holes[k]; })) {
+        // the plan kept from the last time the map was open (see restorePlan): its holes that are still empty, where they were
+        if (keep) {
             S.sketches = keep.sketches.map(function (k) { return Object.assign(makeSketch(k.par), k); });
             S.sel = clamp(keep.sel, 0, S.sketches.length - 1);
             S.mow = keep.mow || S.mow;
             S.pending = keep.pending;
             S.sketches.forEach(function (sk, k) { evaluate(k); });
+            if (dropped) S.dropNote = droppedText(dropped);
             refreshUi();
             if (keep.searching != null && keep.searching < S.sketches.length) suggest(keep.searching);
             return;
         }
+        if (dropped) S.dropNote = droppedText(dropped);
         refreshUi();
-        suggest(0);
+        if (!overview) suggest(0);
     }
 
     root.openHoleBlueprint = open;
-    root.HoleBlueprint = { keptPlan: function () { return root._bpKeep; }, envFor: function (i) { return envFor(i); }, renderTerrain: renderTerrain, open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
+    root.HoleBlueprint = { keptPlan: function () { return root._bpKeep; }, planMarkers: function () { planMarkers(); return marker; }, editBuilt: function (i) { if (S) editBuilt(i); }, shapeGround: function () { if (S) shapeGround(); }, restart: function () { if (S && !S.busy) restartPlan(); }, envFor: function (i) { return envFor(i); }, renderTerrain: renderTerrain, open: open, close: close, state: function () { return S; }, build: build, addHole: addHole, evaluate: function (i) { evaluate(i); refreshUi(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -254,6 +254,54 @@
         });
     }
 
+    // ---- a built hole under a finger ---------------------------------------------------------------------------
+    function isBuilt(h) { return !!h && (ok(h.greenData) || (h.fairways || []).some(ok) || (h.teeBoxes || []).some(ok) || (h.bunkers || []).some(ok)); }
+    function inside(x, z, pts) {
+        let c = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const a = pts[i], b = pts[j];
+            if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) c = !c;
+        }
+        return c;
+    }
+    function segDist(px, pz, a, b) {
+        const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz;
+        const t = l2 ? Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.z) * dz) / l2)) : 0;
+        return Math.hypot(px - (a.x + dx * t), pz - (a.z + dz * t));
+    }
+    // Where a built hole starts and ends: its back tee (the first tee box) and its flag, or the middle of its green
+    function holeEnds(h) {
+        const tee = (h.teeBoxes || []).filter(ok)[0];
+        const end = (h.flag && typeof h.flag.x === 'number') ? { x: h.flag.x, z: h.flag.z } : (ok(h.greenData) ? centroid(h.greenData.points) : null);
+        return { tee: tee ? centroid(tee.points) : null, green: end };
+    }
+    // The built hole at world (x, z): inside one of its parts, or within tolM metres of the line from its tee to its flag.
+    // Returns its index in courseHoles, or -1. opts.skip: indices to leave out (holes being planned).
+    function builtHoleAt(x, z, tolM, opts) {
+        const skip = (opts && opts.skip) || [], holes = root.courseHoles || [];
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < holes.length; i++) {
+            const h = holes[i];
+            if (skip.indexOf(i) >= 0 || !isBuilt(h)) continue;
+            const parts = [h.greenData].concat(h.fairways || [], h.teeBoxes || [], h.bunkers || []).filter(ok);
+            if (parts.some(function (p) { return inside(x, z, p.points); })) return i;
+            const e = holeEnds(h);
+            if (e.tee && e.green) {
+                const d = segDist(x, z, e.tee, e.green);
+                if (d < tolM && d < bestD) { best = i; bestD = d; }
+            }
+        }
+        return best;
+    }
+    // { par, length (m, back tee to flag; 0 when unknown), number } of a built hole
+    function holeSummary(i) {
+        const h = (root.courseHoles || [])[i];
+        if (!h) return null;
+        const e = holeEnds(h);
+        return { par: h.par || 4, length: e.tee && e.green ? Math.round(Math.hypot(e.green.x - e.tee.x, e.green.z - e.tee.z)) : 0,
+            number: typeof root.holeNumber === 'function' ? root.holeNumber(i) : i + 1, tee: e.tee, green: e.green };
+    }
+
     // ---- map furniture ---------------------------------------------------------------------------------------
     // A scale bar of lenM metres (bottom left) and a north arrow (top right): -z is north on the plate, up on the map
     function drawFurniture(ctx, P, C, lenM) {
@@ -382,33 +430,29 @@
     // Switch to a tab. The map that is open closes first (the blueprint keeps a plan that is not built yet, see blueprint.js)
     function openTab(name) {
         if (name === 'holes') {
-            const idx = firstEmptyHole();
-            if (idx < 0) return false;
+            // the map plans the empty holes and shows the built ones (blueprint.js picks the holes itself)
             if (root.Backdrop && root.Backdrop.close) root.Backdrop.close();
-            if (idx !== root.currentHoleIndex && typeof root.changeHoleTo === 'function') root.changeHoleTo(idx);
             if (typeof root.openHoleBlueprint === 'function') root.openHoleBlueprint();
             return true;
         }
-        if (root.HoleBlueprint && root.HoleBlueprint.state && root.HoleBlueprint.state()) root.HoleBlueprint.close(false, true);
+        if (root.HoleBlueprint && root.HoleBlueprint.state && root.HoleBlueprint.state()) root.HoleBlueprint.close(false, true, true);
         if (typeof root.openBackdropMap === 'function') root.openBackdropMap();
         return true;
     }
-    // A two-button tab strip for a map's header; active: 'holes' | 'surround'. The Hål tab is off when every hole is built.
+    // A two-button tab strip for a map's header; active: 'holes' | 'surround'. The Hål tab always opens: with every hole built it
+    // shows the course to look at, and a tap on a hole takes it to the builder.
     function mapTabs(active) {
         const box = document.createElement('div');
         box.setAttribute('role', 'tablist');
         box.style.cssText = 'display:flex; gap:2px; padding:3px; border-radius:12px; background:#0f172a; border:1px solid #1e293b; flex:1; min-width:0;';
-        const noHole = firstEmptyHole() < 0;
         [['holes', '🗺️ ' + tr('cm_tab_holes', 'Hål')], ['surround', '🏔️ ' + tr('cm_tab_surround', 'Omgivning')]].forEach(function (t) {
             const b = document.createElement('button');
             b.type = 'button';
             b.textContent = t[1];
             b.dataset.tab = t[0];
-            const on = t[0] === active, off = t[0] === 'holes' && !on && noHole;
+            const on = t[0] === active, off = false;
             b.setAttribute('role', 'tab');
             b.setAttribute('aria-selected', on ? 'true' : 'false');
-            b.disabled = off;
-            if (off) b.title = tr('cm_all_built', 'Alla hål på plattan är byggda');
             b.style.cssText = 'flex:1; min-height:38px; border:none; border-radius:9px; font-weight:bold; font-size:14px; white-space:nowrap; cursor:' + (on || off ? 'default' : 'pointer') + ';' +
                 'background:' + (on ? '#14532d' : 'transparent') + '; color:' + (on ? '#f8fafc' : (off ? '#475569' : '#cbd5e1')) + ';';
             if (!on && !off) b.onclick = function () { openTab(t[0]); };
@@ -421,7 +465,8 @@
         TURF: TURF, TEE_COLORS: TEE_COLORS, MOW_PATTERNS: MOW_PATTERNS,
         renderTerrain: renderTerrain, polyPath: polyPath, paintMow: paintMow, turf: turf, sand: sand,
         drawFlag: drawFlag, teeMarker: teeMarker, holeAngle: holeAngle, drawBuiltHole: drawBuiltHole, drawBuiltHoles: drawBuiltHoles,
-        drawFurniture: drawFurniture, makeZoom: makeZoom, zoomButtons: zoomButtons, mapTabs: mapTabs, openTab: openTab, firstEmptyHole: firstEmptyHole
+        drawFurniture: drawFurniture, makeZoom: makeZoom, zoomButtons: zoomButtons, mapTabs: mapTabs, openTab: openTab, firstEmptyHole: firstEmptyHole,
+        isBuilt: isBuilt, builtHoleAt: builtHoleAt, holeSummary: holeSummary
     };
     if (typeof module !== 'undefined' && module.exports) module.exports = root.CourseMap;
 })(typeof window !== 'undefined' ? window : globalThis);
