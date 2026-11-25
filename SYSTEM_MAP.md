@@ -334,7 +334,7 @@ Kullens höjder räknas av en ren funktion, `window.mtnHillField(points, height,
     - På den sista byggda plattan blir knappen **🛠️ Bygg platta 5 →** och går via `new_course.html` i den första plattans miljö.
     - En ny platta som inte är publicerad har → avstängt ("Publicera först"), annars skulle nästa platta ta samma plats.
     - Byte med ändringar som inte finns på servern frågar först, eftersom buildern har en enda arbetskopia på enheten. Flaggan är `window._serverDirty`:
-      - Den sätts av varje ändring (`debounceSaveCourse`, `saveUndoState`, ångra och gör om).
+      - Den sätts av varje ändring (`debounceSaveCourse`, `saveUndoState`, ångra och gör om). Dessutom sätter varje uppräkning av `_editRev` den, eftersom `_editRev` är en egenskap med setter i `arcade.html`. Därmed räknas också ändringar som sparas lokalt direkt, som horisontens rullistor, bakgrundskartan, träden runt banan och par.
       - Den nollställs när banan sparas på servern (Publicera eller Spara utkast, men inte av en spelkopia) och när en bana öppnas från servern (`_loadedServerCopy`).
       - Den automatiska lokala sparningen nollställer `hasUnsavedChanges` men inte den här flaggan.
     - Raden döljs i spel- och testläge.

@@ -10869,6 +10869,13 @@
     
     const undoStack = [];
     // every editing step (sculpt, paint, water, objects, undo, redo) passes the undo stack: count them for the playtest fingerprint
+    // _editRev counts every change to the course (the next-step guide's playtest fingerprint; the horizon dropdowns, the backdrop map, the
+    // trees around the plate and the par count it up as well). A change that counts it up also leaves the course unsaved for the server
+    // (window._serverDirty, cleared by Publish / Save draft and by opening it from the server): switching plate in a collection asks then
+    (function () {
+        let rev = window._editRev || 0;
+        Object.defineProperty(window, '_editRev', { configurable: true, get: function () { return rev; }, set: function (v) { if (v > rev) window._serverDirty = true; rev = v; } });
+    })();
     window._editRev = 0;
     (function () { const push = undoStack.push; undoStack.push = function () { window._editRev++; return push.apply(this, arguments); }; })();
     const redoStack = [];
