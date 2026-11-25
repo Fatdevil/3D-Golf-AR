@@ -1115,6 +1115,10 @@
                 // Ladda tema och färger
                 if (arr.theme_data && typeof arr.theme_data === 'object' && Object.keys(arr.theme_data).length > 0) {
                     let td = arr.theme_data;
+                    // a plate built for a place in a collection: the builder picks its place up again (collection-build.js; only in the builder)
+                    if (td.collectionSlot && window.CollectionBuild && !window.CollectionBuild.get()) {
+                        try { window.CollectionBuild.start(td.collectionSlot.id, td.collectionSlot.slot, { quiet: true }); } catch (e) { /* the numbers stay plain */ }
+                    }
                     if (td.config) {
                         window.CURRENT_BIOME_CONFIG = td.config;
                         if(td.biomeId) {
