@@ -45,6 +45,11 @@ console.log('\n3. Buildern (collection-build.js)');
   const card = { room: 6, filled: 3, plates: [{ code: 'A' }, { code: 'B' }, { code: 'C' }] };
   check('en platta som redan ligger i samlingen behåller sin plats', CB.placeIn(card, 5, 'B') === 1);
   check('en ny platta hamnar direkt efter de plattor som finns (listan har inga luckor), vilken plats den än bad om', CB.placeIn(card, 1, 'X') === 3 && CB.placeIn(card, 5, '') === 3);
+  // a working copy continued without ?edit= in the address: the code arcade-load.js restored into currentEditCode finds the plate's own place
+  const win2 = { location: { search: '?autorun=edit_build' } };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'collection-build.js'), 'utf8'), { window: win2, globalThis: win2, URLSearchParams: URLSearchParams, setTimeout: function () {}, currentEditCode: 'b' });
+  global.resumed = win2.CollectionBuild.start('col9', 0, { card: { name: 'Full', type: '9', room: 3, filled: 3, plates: card.plates, holes: [] }, quiet: true })
+    .then(function (ctx) { return { slot: ctx && ctx.slot, offset: win2._holeNumberOffset }; });
   check('full samling: ingen plats', CB.placeIn({ room: 2, filled: 2, plates: [{ code: 'A' }, { code: 'B' }] }, 0, 'X') === -1);
 }
 {
@@ -58,7 +63,10 @@ console.log('\n3. Buildern (collection-build.js)');
     { plate_code: 'C', holes: [hole(4, 360), hole(3, 160), hole(4, 380)] },
     { plate_code: 'D', holes: [hole(5, 500), hole(4, 340), hole(3, 170)] }
   ]));
-  CB.start('col1', 2, { card: card, quiet: true }).then(function (ctx) {
+  global.resumed.then(function (r) {
+    check('en fortsatt arbetskopia (koden bara i currentEditCode, inte i adressen) behåller sin plats, även i en full samling', r.slot === 1 && r.offset === 3, r);
+    return CB.start('col1', 2, { card: card, quiet: true });
+  }).then(function (ctx) {
     const o = CB.others();
     check('en ny platta som ber om plats 3 när 4 plattor redan finns får plats 5 (hål 13–15)', ctx.slot === 4 && win._holeNumberOffset === 12, [ctx.slot, win._holeNumberOffset]);
     check('de andra plattorna: alla 12 hål före, inga efter', o.before.holes === 12 && o.before.from === 1 && o.before.to === 12 && o.after.holes === 0 && o.size === 18 && o.name === 'Sjöbanan', o);

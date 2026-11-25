@@ -20,7 +20,13 @@
     function headers() { return (root.ArcadeAPI && root.ArcadeAPI._headers) ? root.ArcadeAPI._headers() : { 'Content-Type': 'application/json' }; }
     function query() { try { return new URLSearchParams(root.location ? root.location.search : ''); } catch (e) { return new URLSearchParams(''); } }
     function builderMode() { const a = query().get('autorun'); return a === 'new_build' || a === 'edit_build'; }
-    function editCode() { return String(query().get('edit') || '').toUpperCase(); }
+    // the course being edited: the address (?edit=) or, when a working copy was continued without one (the build page's quick-draft
+    // continuation), the code arcade-load.js restored into arcade.html's currentEditCode
+    function editCode() {
+        let c = query().get('edit');
+        if (!c) { try { c = typeof currentEditCode !== 'undefined' ? currentEditCode : null; } catch (e) { c = null; } }   // eslint-disable-line no-undef
+        return String(c || '').toUpperCase();
+    }
     function validId(id) { return /^[A-Za-z0-9_-]{1,32}$/.test(String(id || '')); }
 
     // The usual mix of pars for a course of n holes (the same as collections-core.js parTargets)
