@@ -401,6 +401,7 @@
             terrain_biomemap: biome,
             terrain_watermask: w_mask,
             theme_data: {
+                collectionSlot: window.CollectionBuild ? window.CollectionBuild.themeData() : undefined,   // the plate's place in a collection (collection-build.js)
                 biomeId: window.ACTIVE_BIOME || 'GLOBAL',
                 config: window.CURRENT_BIOME_CONFIG,
                 particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6,
@@ -838,7 +839,7 @@
                 // a published course's holes keep only what is played; the builder's own definitions go along for its owner
                 builder_holes: options.isDraft ? undefined : window.serializeHolesFull(),
                 is_range: (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode,
-                theme_data: { _playCopy: window._savingPlayCopy ? true : undefined, _playCopyOf: window._savingPlayCopy ? (window._playCopySource || undefined) : undefined, biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR', enableOrganicNoise: window.ENABLE_ORGANIC_NOISE },
+                theme_data: { _playCopy: window._savingPlayCopy ? true : undefined, _playCopyOf: window._savingPlayCopy ? (window._playCopySource || undefined) : undefined, collectionSlot: window.CollectionBuild ? window.CollectionBuild.themeData() : undefined, biomeId: window.ACTIVE_BIOME, config: window.CURRENT_BIOME_CONFIG, particleIntensity: window.ParticleEngine ? window.ParticleEngine.getIntensity() : 0.6, particleSize: window.ParticleEngine ? window.ParticleEngine.getSize() : 1.0, weatherMode: window.ParticleEngine ? window.ParticleEngine.getWeather() : 'CLEAR', enableOrganicNoise: window.ENABLE_ORGANIC_NOISE },
                 owner_id: window.GolfAuth?.userId || null,
                 cover_image: (window.capturedPhotos && window.capturedPhotos.length > 0) 
                     ? window.capturedPhotos[window.coverImageIndex || 0] 
@@ -882,6 +883,10 @@
                     try { await window.saveQuickDraft(true); } catch (e) { console.warn('Quick draft refresh failed:', e); }
                 }
                 
+                // a plate built for a place in a collection goes into its place now that it is published (collection-build.js)
+                if (!options.isDraft && !window._savingPlayCopy && window.CollectionBuild && window.CollectionBuild.get()) {
+                    try { await window.CollectionBuild.afterPublish(data.share_code, payload.name); } catch (e) { /* it says so itself */ }
+                }
                 stat.style.color = '#4ade80';
                 stat.innerHTML = "Saved! Your link:<br><a href='"+href+"' style='color:#38bdf8; word-break: break-all;'>" + href + "</a>";
                 return true;

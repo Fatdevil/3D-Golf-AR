@@ -29,7 +29,10 @@
 
     // ---- sketches ----------------------------------------------------------------------------------------
     function cur() { return S.sketches[S.sel]; }
-    function holeNo(i) { return S.holes[i] + 1; }
+    // the number hole i is shown with: on plate 4 of a collection the first hole is hole 10 (window.holeNumber, collection-build.js)
+    function holeNo(i) { return typeof root.holeNumber === 'function' ? root.holeNumber(S.holes[i]) : S.holes[i] + 1; }
+    // the other plates of the collection this plate is built for (collection-build.js), or null
+    function collectionOthers() { return root.CollectionBuild && root.CollectionBuild.others ? root.CollectionBuild.others() : null; }
     // The base environment plus every OTHER sketch as an obstacle.
     // Neighbours in the round (by hole number, built or sketched) are softer: the previous hole's green may lie
     // HoleGenerator.TEE_NEAR (not CLEARANCE) from this hole's tee boxes, and the next hole's tee boxes that close to this green,
@@ -312,11 +315,34 @@
             { label: 'Par' }, { label: tr('bp_card_len', 'Meter') }, { label: '🚶 ' + tr('bp_card_walk', 'Gång') }
         ];
         let par = 0, len = 0, walk = 0;
+        // a plate built for a place in a collection: the holes of the plates before and after it as one grey column each, and the whole
+        // course (the other plates, this plate's built holes and the planned ones) in a last column
+        const co = collectionOthers();
+        const greyCol = function (row, r, ri, part) {
+            if (!part || !part.holes) return;
+            const txt = r.head ? (part.from === part.to ? String(part.from) : part.from + '–' + part.to) : (ri === 1 ? String(part.par) : (ri === 2 ? String(part.length || '–') : '–'));
+            const c = cell(row, txt, { head: r.head, style: 'width:46px; font-size:11px;' + (r.head ? 'color:#cbd5e1; background:#1f3b2a;' : 'color:#78716c; background:#efe9d6;') });
+            if (r.head) c.title = tr('bp_card_other_plates', 'Hålen på de andra plattorna');
+        };
+        let course = null;
+        if (co) {
+            course = { par: co.before.par + co.after.par, length: co.before.length + co.after.length };
+            const all = root.courseHoles || [];
+            for (let i = 0; i < Math.min(root.MAX_HOLES || 3, all.length); i++) {
+                const k = S.holes.indexOf(i), sk = k >= 0 && k < S.sketches.length ? S.sketches[k] : null;
+                if (sk) { course.par += sk.par; course.length += Math.round(sk.plan.length); }
+                else if (all[i] && root.HoleGenerator && !root.HoleGenerator.holeIsEmpty(all[i])) {
+                    const sum = CM.holeSummary(i);
+                    course.par += all[i].par || 4; course.length += sum ? sum.length : 0;
+                }
+            }
+        }
         rows.forEach(function (r, ri) {
             const tr_ = document.createElement('tr');
             if (r.head) tr_.style.background = '#14532d';
             const lab = cell(tr_, r.label, { head: r.head, style: 'text-align:left; padding-left:8px; width:64px; border-left:none; font-weight:bold;' + (r.head ? 'color:#f8fafc;' : 'color:#3f4d3a;') });
             lab.scope = r.head ? 'col' : 'row';
+            if (co) greyCol(tr_, r, ri, co.before);
             S.sketches.forEach(function (sk, i) {
                 const on = i === S.sel, bad = sk.ev && !sk.ev.ok, warnHole = !!(sk.ev && sk.ev.ok && sk.ev.shaped && sk.ev.shaped.length);
                 const d = walkOf(i);
@@ -339,8 +365,14 @@
                 const td = cell(tr_, text, { style: style + 'cursor:pointer; color:' + (style.indexOf('color:#b91c1c') >= 0 ? '#b91c1c' : '#1f2d1f') + ';' });
                 td.onclick = function () { select(i); };
             });
+            if (co) greyCol(tr_, r, ri, co.after);
             const tot = r.head ? tr('bp_card_total', 'Tot') : (ri === 1 ? String(par) : (ri === 2 ? String(Math.round(len)) : (walk ? String(walk) : '–')));
             cell(tr_, tot, { head: r.head, style: 'width:56px; font-weight:bold;' + (r.head ? 'color:#f8fafc;' : 'background:#ece5cf; color:#1f2d1f;') });
+            if (course) {
+                const ct = r.head ? tr('bp_card_course', 'Bana') : (ri === 1 ? String(course.par) : (ri === 2 ? String(course.length) : '–'));
+                const c = cell(tr_, ct, { head: r.head, style: 'width:56px; font-weight:bold;' + (r.head ? 'color:#fde68a;' : 'background:#e4dcc0; color:#1f2d1f;') });
+                if (r.head) c.title = tr('bp_card_course_t', 'Hela banan: {n} ({h} hål)').replace('{n}', co.name).replace('{h}', co.size);
+            }
             table.appendChild(tr_);
         });
         box.appendChild(table);
@@ -483,6 +515,16 @@
         }
         Object.keys(parOf).forEach(function (i) { if (count[parOf[i]] !== undefined) count[parOf[i]]++; });
         const prev = parOf[idx - 1], pref = [4, 3, 5];
+        // a plate for a place in a collection: the pars of the other plates count too, and the mix aims at the usual one for the whole
+        // course (collection-build.js parTargets: about 4 par 3s, 10 par 4s and 4 par 5s in 18 holes) instead of one of each per plate
+        const co = collectionOthers();
+        if (co && co.size) {
+            co.pars.forEach(function (p) { if (count[p] !== undefined) count[p]++; });
+            const want = root.CollectionBuild.parTargets(co.size);
+            return pref.slice().sort(function (a, b) {
+                return ((want[b] - count[b]) - (want[a] - count[a])) || ((a === prev ? 1 : 0) - (b === prev ? 1 : 0)) || (pref.indexOf(a) - pref.indexOf(b));
+            })[0];
+        }
         return pref.slice().sort(function (a, b) {
             return (count[a] - count[b]) || ((a === prev ? 1 : 0) - (b === prev ? 1 : 0)) || (pref.indexOf(a) - pref.indexOf(b));
         })[0];

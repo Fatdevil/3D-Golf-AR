@@ -86,6 +86,40 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const row2 = (await pool.query('SELECT plates, total_par FROM course_collections WHERE id = $1', [id])).rows[0];
     check('plate 2 is added: total par 11 + 12', r.status === 200 && row2.plates.length === 2 && row2.total_par === 23, JSON.stringify(row2));
 
+    // the scorecard of the whole course (build page, builder): every hole of its plates in order, par and metres, the total
+    r = await api('GET', '/api/collections/' + id + '/card');
+    const cardLens = (r.json.holes || []).map(h => h.no + ':' + h.par + ':' + h.length).join();
+    check('the card lists the six holes in plate order with their lengths, the total and the room left', r.status === 200 && cardLens === '1:4:150,2:4:400,3:4:250,4:4:300,5:4:100,6:4:500' &&
+      r.json.total.par === 24 && r.json.total.length === 1700 && r.json.room === 2 && r.json.filled === 2 && r.json.front === null && r.json.plates[0].code === A && r.json.worlds.join() === 'grass', JSON.stringify(r.json));
+    r = await api('GET', '/api/collections/NOPE00/card');
+    check('the card of a collection that does not exist is 404', r.status === 404, JSON.stringify(r));
+
+    // a plate built for a place (collection-build.js, as the builder runs it): publishing puts it in its place, once
+    {
+      const fs = require('fs'), vm = require('vm');
+      r = await api('POST', '/api/collections', { name: 'Artonhål', author: 'Test', type: '18', plates: [plate(A)] }, owner);
+      const id18 = r.json.id; madeCollections.push(id18);
+      const win = { location: { search: '?autorun=new_build' }, ArcadeAPI: { _headers: function () { return { 'Content-Type': 'application/json', 'x-user-id': owner }; } }, showBuildToast: function (m) { win.lastToast = m; } };
+      const sandbox = { window: win, globalThis: win, URLSearchParams: URLSearchParams, setTimeout: setTimeout, fetch: function (u, o) { return fetch(BASE + u, o); } };
+      vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'collection-build.js'), 'utf8'), sandbox);
+      const CB = win.CollectionBuild;
+      const ctx = await CB.start(id18, 4);
+      check('the builder asks for place 5 of a collection with one plate: it gets place 2 (holes 4-6), the card came from the server', ctx && ctx.slot === 1 && win._holeNumberOffset === 3 && ctx.card && ctx.card.filled === 1, JSON.stringify(ctx && { slot: ctx.slot, off: win._holeNumberOffset }));
+      const added = await CB.afterPublish(B, 'Platta B');
+      const again = await CB.afterPublish(B, 'Platta B');
+      const rowP = (await pool.query('SELECT plates, total_par FROM course_collections WHERE id = $1', [id18])).rows[0];
+      check('publishing puts the plate in its place (once, also when published again) and the server works out the total par', added === true && again === true && rowP.plates.map(p => p.plate_code).join() === A + ',' + B && rowP.total_par === 23, JSON.stringify(rowP));
+      const foreign = await (async function () {
+        const w2 = Object.assign({}, win, { ArcadeAPI: { _headers: function () { return { 'Content-Type': 'application/json', 'x-user-id': 'e2c-stranger-' + tag }; } } });
+        const sb2 = Object.assign({}, sandbox, { window: w2, globalThis: w2 });
+        vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'collection-build.js'), 'utf8'), sb2);
+        await w2.CollectionBuild.start(id18, 2);
+        return w2.CollectionBuild.afterPublish(C, 'Platta C');
+      })();
+      const rowF = (await pool.query('SELECT plates FROM course_collections WHERE id = $1', [id18])).rows[0];
+      check('someone else\'s plate is not put in the collection (the server refuses; the builder says so)', foreign === false && rowF.plates.length === 2, JSON.stringify(rowF));
+    }
+
     // the collection's stroke index and ratings: its six holes as one course (lengths 150 400 250 | 300 100 500: longest = hardest = 1)
     const colRow = (await api('GET', '/api/collections/' + id)).json;
     check('the collection has the stroke index of all six holes together (not 1-3 twice)', JSON.stringify(colRow.stroke_index) === JSON.stringify([5, 2, 4, 3, 6, 1]), JSON.stringify(colRow.stroke_index));

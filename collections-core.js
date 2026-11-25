@@ -64,4 +64,59 @@ function combineHoles(holesByPlate) {
   return out;
 }
 
-module.exports = { HOLES_PER_PLATE, TYPES, plateCode, checkPlateList, checkPlatesExist, combineHoles };
+// ---- the scorecard of a whole collection -----------------------------------------------------------------------------------------
+// The world a plate was built in, from its theme (the builder saves the biome as theme_data.biomeId, older rows as .biome):
+// 'desert' | 'moon' | 'grass'. Plates of different worlds side by side make one course look like several.
+function worldOf(theme) {
+  let t = theme;
+  if (typeof t === 'string') { try { t = JSON.parse(t); } catch (e) { t = null; } }
+  const id = String((t && (t.biomeId || t.biome)) || 'GLOBAL').toUpperCase();
+  if (id.indexOf('DESERT') >= 0) return 'desert';
+  if (id.indexOf('MOON') >= 0) return 'moon';
+  return 'grass';
+}
+// par and length (m, from the back-most tee there is to the flag; 0 when the hole has no tee or flag) of a played hole
+function holeCard(h) {
+  const tees = (h && h.tees) || {};
+  const tee = tees.black || tees.white || tees.yellow || tees.red;
+  const flag = h && h.flag;
+  const ok = tee && flag && typeof tee.x === 'number' && typeof flag.x === 'number';
+  return { par: (h && h.par) || 4, length: ok ? Math.round(Math.hypot(flag.x - tee.x, flag.z - tee.z)) : 0 };
+}
+// The scorecard of a collection of `type` holes from its plates in order, each { plate_code, name, holes, theme_data }:
+// { type, room (plates it has room for), filled (plates it has), holes: [{ no, par, length, plate }], plates: [{ code, name, world }],
+//   front / back (holes 1-9 / 10-18 of an 18 hole course, else null) and total: { par, length, holes } over the holes there are,
+//   worlds: the different worlds of its plates }
+function courseCard(type, plateRows) {
+  const room = Math.floor(parseInt(type, 10) / HOLES_PER_PLATE) || 0;
+  const rows = (plateRows || []).slice(0, room);
+  const holes = [], plates = [], worlds = [];
+  rows.forEach(function (r, k) {
+    let arr = r && r.holes;
+    if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch (e) { arr = []; } }
+    if (!Array.isArray(arr)) arr = [];
+    const w = worldOf(r && r.theme_data);
+    if (worlds.indexOf(w) < 0) worlds.push(w);
+    plates.push({ code: plateCode(r && (r.plate_code || r.share_code)), name: (r && r.name) || '', world: w });
+    for (let i = 0; i < HOLES_PER_PLATE; i++) {
+      const c = holeCard(arr[i]);
+      holes.push({ no: k * HOLES_PER_PLATE + i + 1, par: c.par, length: c.length, plate: k });
+    }
+  });
+  const sum = function (from, to) {
+    const part = holes.filter(function (h) { return h.no >= from && h.no <= to; });
+    return { par: part.reduce(function (a, h) { return a + h.par; }, 0), length: part.reduce(function (a, h) { return a + h.length; }, 0), holes: part.length };
+  };
+  const eighteen = parseInt(type, 10) === 18;
+  return {
+    type: String(type), room: room, filled: rows.length, holes: holes, plates: plates, worlds: worlds,
+    front: eighteen ? sum(1, 9) : null, back: eighteen ? sum(10, 18) : null, total: sum(1, 1e9)
+  };
+}
+// The usual mix of pars for a course of n holes: about 4 par 3s, 10 par 4s and 4 par 5s in 18 (par 72), in proportion for fewer
+function parTargets(n) {
+  const short = Math.round(n * 4 / 18), long = Math.round(n * 4 / 18);
+  return { 3: short, 4: Math.max(0, n - short - long), 5: long };
+}
+
+module.exports = { HOLES_PER_PLATE, TYPES, plateCode, checkPlateList, checkPlatesExist, combineHoles, worldOf, holeCard, courseCard, parTargets };

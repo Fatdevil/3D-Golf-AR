@@ -1103,7 +1103,10 @@
             moon: 'MOON'
         };
         const biome = biomeMap[activeWorld] || 'GLOBAL';
-        const url = `arcade.html?v=${Date.now()}&autorun=new_build&world=${activeWorld}&variant=${activeVariant}&template_id=${activeVariant}&template=${activeVariant}&biome=${biome}&season=${activeSeason}${activeMood ? '&mood=' + activeMood : ''}`;
+        // a plate built for a place in a collection (build page, "Bygg ny"): the builder numbers its holes for that place and puts it there on publish
+        const q = new URLSearchParams(window.location.search), colId = q.get('collection'), colSlot = q.get('slot');
+        const forCollection = colId && /^[A-Za-z0-9_-]{1,32}$/.test(colId) && /^[0-9]{1,2}$/.test(colSlot || '') ? '&collection=' + encodeURIComponent(colId) + '&slot=' + colSlot : '';
+        const url = `arcade.html?v=${Date.now()}&autorun=new_build&world=${activeWorld}&variant=${activeVariant}&template_id=${activeVariant}&template=${activeVariant}&biome=${biome}&season=${activeSeason}${activeMood ? '&mood=' + activeMood : ''}${forCollection}`;
         window.location.href = url;
     }
 

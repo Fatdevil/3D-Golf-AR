@@ -1358,6 +1358,29 @@ app.get('/api/collections/:id', requireDB, optionalAuth, async (req, res) => {
     }
 });
 
+// The scorecard of a whole collection (par and metres of every hole, front / back nine, total) and the worlds of its plates, for the
+// build page and for the builder that builds one of its plates (collections-core.js courseCard). Only published plates are in a collection.
+app.get('/api/collections/:id/card', requireDB, optionalAuth, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name, type, plates FROM course_collections WHERE id = $1', [req.params.id.toUpperCase()]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Collection not found' });
+        const col = result.rows[0];
+        let plates = col.plates;
+        if (typeof plates === 'string') { try { plates = JSON.parse(plates); } catch (e) { plates = []; } }
+        const codes = (Array.isArray(plates) ? plates : []).map(p => collectionsCore.plateCode(p)).filter(Boolean);
+        const byCode = {};
+        if (codes.length > 0) {
+            const rows = await pool.query('SELECT share_code, name, holes, theme_data FROM courses WHERE share_code = ANY($1)', [codes]);
+            rows.rows.forEach(r => { byCode[String(r.share_code).toUpperCase()] = r; });
+        }
+        const ordered = codes.map(c => Object.assign({ plate_code: c }, byCode[c] || {}));
+        res.json(Object.assign({ id: col.id, name: col.name }, collectionsCore.courseCard(col.type, ordered)));
+    } catch (err) {
+        console.error('Collection card error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // Saving a collection reads its plates' holes (for the stroke index and ratings) and writes the result. A plate that is published again at the same
 // moment must not slip in between: the plates are read with a share lock inside the transaction, so a publish that is under way is waited for (and its
 // new holes are what get read), and a publish that comes after waits for this save, then finds the collection and brings it up to date.

@@ -441,6 +441,38 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
   check('"Forma marken här" closes the map with the plan kept, on the planned hole, the camera over its spot', kp.shape.closed && kp.shape.kept && kp.shape.current === kp.holes[0] && kp.shape.camNear !== null && kp.shape.camNear < 5, JSON.stringify(kp.shape));
   check('"Börja om" suggests a new hole', kp.restart.sketches === 1 && kp.restart.newSeed && kp.restart.ok, JSON.stringify(kp.restart));
   check('a planned hole built in the builder meanwhile drops out of the plan (the map says so)', kp.dropped.holes.indexOf(kp.dropped.idx) < 0 && /^1 /.test(kp.dropped.note) && kp.keptAfterClose === null, JSON.stringify(kp.dropped));
+  // a plate built for place 4 of an 18 hole collection (collection-build.js, the card as the server gives it): its holes are numbered 10-12,
+  // the map's scorecard shows the other plates as a grey column and the whole course, and the par suggestion balances the whole course
+  const col = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    const CB = window.CollectionBuild;
+    if (!CB) return { api: false };
+    const holes = [];
+    for (let n = 1; n <= 9; n++) holes.push({ no: n, par: 4, length: 350, plate: Math.floor((n - 1) / 3) });
+    const card = { name: 'Testbanan', type: '18', room: 6, filled: 3, plates: [{ code: 'P1' }, { code: 'P2' }, { code: 'P3' }], holes: holes };
+    const ctx = await CB.start('TST1', 3, { card: card, quiet: true });
+    const out = { api: true, slot: ctx && ctx.slot, num0: window.holeNumber(0), topbar: (document.getElementById('topbar-hole-num') || {}).textContent };
+    window.openHoleBlueprint();
+    const S = window.HoleBlueprint.state();
+    for (let w = 0; w < 300 && S.busy; w++) await wait(100);
+    const rows = S.dom.card.querySelectorAll('tr'), cells = function (r) { return Array.prototype.map.call(rows[r].children, function (c) { return c.textContent.trim(); }); };
+    out.head = cells(0); out.par = cells(1);
+    out.sketchPar = S.sketches[0].par; out.sketchNo = window.holeNumber(S.holes[0]);
+    let platePar = 0;
+    for (let i = 0; i < 3; i++) { const k = S.holes.indexOf(i); platePar += k >= 0 && k < S.sketches.length ? S.sketches[k].par : (window.HoleGenerator.holeIsEmpty(window.courseHoles[i]) ? 0 : window.courseHoles[i].par); }
+    out.wantCourse = 36 + platePar;
+    out.builtPars = [0, 1, 2].map(function (i) { return window.HoleGenerator.holeIsEmpty(window.courseHoles[i]) ? null : window.courseHoles[i].par; });
+    window.HoleBlueprint.close(false);
+    CB.clear();
+    out.after = window.holeNumber(0);
+    return out;
+  });
+  check('a plate for place 4 of an 18 hole collection: its holes are 10-12 (top bar too), and back to 1-3 without the collection',
+    col.api && col.slot === 3 && col.num0 === 10 && /1[0-2]/.test(col.topbar || '') && col.sketchNo >= 10 && col.sketchNo <= 12 && col.after === 1, JSON.stringify(col));
+  check('the map scorecard shows the other plates (1–9) in a grey column and the whole course in a last column',
+    col.api && col.head && col.head[1] === '1–9' && col.head[col.head.length - 1] === 'Bana' && col.par[1] === '36' && Number(col.par[col.par.length - 1]) === col.wantCourse, JSON.stringify(col));
+  check('the par suggestion balances the whole course: nine par 4s on the other plates, so the new hole is a par 3 or 5', col.api && (col.sketchPar === 3 || col.sketchPar === 5), JSON.stringify(col));
+
   // the plate's painted ground: OB keeps the planner away, and the maps take the course's palette (a desert course reads as desert)
   const ground = await page.evaluate(function () {
     const HG = window.HoleGenerator, CM = window.CourseMap, data = window.terrainBiomeData;

@@ -277,6 +277,25 @@
             border-color: rgba(56, 189, 248, 0.4);
             color: #94a3b8;
         }
+        .col-plate-slot.empty .slot-add { flex: 1; min-width: 0; }
+        .col-plate-slot .slot-build {
+            flex: 0 0 auto; min-height: 32px; padding: 0 10px; border-radius: 8px; cursor: pointer;
+            border: 1px solid rgba(56, 189, 248, 0.45); background: rgba(14, 116, 144, 0.25); color: #e0f2fe; font-size: 12px; font-weight: 700;
+        }
+        .col-plate-slot .slot-build:hover { background: rgba(14, 116, 144, 0.45); }
+        /* the scorecard of the whole course (GET /api/collections/:id/card), cream like the one in the builder's map */
+        .col-score { padding: 0 18px 12px; }
+        .col-score-sum { color: #cbd5e1; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+        .col-score-warn { color: #fbbf24; font-size: 12px; font-weight: 700; margin: 4px 0 6px; }
+        .col-score table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; font-variant-numeric: tabular-nums;
+            background: #f7f2e3; color: #1f2d1f; border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
+        .col-score th, .col-score td { padding: 3px 1px; text-align: center; border-left: 1px solid #ddd5bd; }
+        .col-score th { background: #14532d; color: #f8fafc; }
+        .col-score th:first-child, .col-score td:first-child { width: 32px; text-align: left; padding-left: 6px; border-left: none; font-weight: 700; }
+        .col-score .tot { width: 38px; font-weight: 800; background: #ece5cf; }
+        .col-score tr:last-child td { font-size: 9.5px; letter-spacing: -0.3px; }   /* three-digit metres in a narrow column */
+        .col-score th.tot { background: #166534; }
+        .col-score td.none { color: #a8a29e; }
         .col-actions {
             padding: 14px 18px;
             display: flex;
@@ -1052,6 +1071,11 @@
                         <button class="slot-btn" title="Flytta upp" aria-label="Flytta platta ${i + 1} upp" ${i === 0 ? 'disabled' : ''} onclick="movePlate('${col.id}', ${i}, -1)">↑</button>
                         <button class="slot-btn" title="Flytta ner" aria-label="Flytta platta ${i + 1} ner" ${i === plates.length - 1 ? 'disabled' : ''} onclick="movePlate('${col.id}', ${i}, 1)">↓</button>
                         <button class="slot-btn" title="Ta bort plattan" aria-label="Ta bort platta ${i + 1}" onclick="removePlate('${col.id}', ${i})">✕</button></div>`;
+                } else if (i === plates.length) {
+                    // the next place to fill: an existing plate, or a new one built for this place (the builder numbers its holes and
+                    // balances the pars for the whole course, and publishing puts it here)
+                    slotsHtml += `<div class="col-plate-slot empty"><span class="slot-add" onclick="openPlatePicker('${col.id}', ${i})">+ Lägg till platta ${i + 1}</span>
+                        <button class="slot-build" title="Bygg en ny platta för hål ${i * 3 + 1}–${i * 3 + 3}" onclick="buildPlateHere('${col.id}', ${i})">🛠️ Bygg ny</button></div>`;
                 } else {
                     slotsHtml += `<div class="col-plate-slot empty" onclick="openPlatePicker('${col.id}', ${i})">+ Lägg till platta ${i + 1}</div>`;
                 }
@@ -1064,6 +1088,7 @@
                     <div class="col-type-badge">${col.type}H</div>
                 </div>
                 <div class="col-plates">${slotsHtml}</div>
+                <div class="col-score" id="col-score-${escHtml(col.id)}"></div>
                 <div class="col-actions">
                     <button class="col-play-btn" ${!isComplete ? 'disabled title="Fyll alla plattor först"' : ''} onclick="playCollection('${col.id}')">▶ Spela</button>
                     <button class="col-del-btn" onclick="deleteCollection('${col.id}')">🗑️</button>
@@ -1072,6 +1097,64 @@
         });
 
         carousel.innerHTML = html;
+        _myCollections.forEach(function (col) { loadCourseCard(col); });
+    }
+
+    // ---- the scorecard of the whole course ----------------------------------------------------------------------------------------
+    const WORLD_NAMES = { grass: 'gräs', desert: 'öken', moon: 'månen' };
+    let _cards = {};   // collection id -> { sig, card }: fetched again only when its plates change
+    async function loadCourseCard(col) {
+        const sig = JSON.stringify(platesOf(col).map(p => typeof p === 'string' ? p : p.plate_code));
+        const box = document.getElementById('col-score-' + col.id);
+        if (!box) return;
+        if (_cards[col.id] && _cards[col.id].sig === sig) { box.innerHTML = courseCardHtml(_cards[col.id].card); return; }
+        if (platesOf(col).length === 0) { box.innerHTML = ''; return; }
+        try {
+            const res = await fetch(API_BASE + '/api/collections/' + encodeURIComponent(col.id) + '/card', { headers: { 'x-user-id': localStorage.getItem('golf_os_device_id') || '' } });
+            if (!res.ok) return;
+            const card = await res.json();
+            _cards[col.id] = { sig: sig, card: card };
+            const now = document.getElementById('col-score-' + col.id);
+            if (now) now.innerHTML = courseCardHtml(card);
+        } catch (e) { /* no card: the plates list still shows */ }
+    }
+    // a row group of the table: holes from..to (numbers that have no plate yet show a dash), with its own total
+    function cardRows(card, from, to, label, sum) {
+        const byNo = {};
+        card.holes.forEach(h => { byNo[h.no] = h; });
+        let head = '<tr><th scope="col">' + escHtml(label) + '</th>', par = '<tr><td>Par</td>', len = '<tr><td>m</td>';
+        for (let n = from; n <= to; n++) {
+            const h = byNo[n];
+            head += '<th scope="col">' + n + '</th>';
+            par += h ? '<td>' + h.par + '</td>' : '<td class="none">–</td>';
+            len += h ? '<td>' + (h.length || '–') + '</td>' : '<td class="none">–</td>';
+        }
+        head += '<th class="tot" scope="col">' + (sum.label || 'Tot') + '</th></tr>';
+        par += '<td class="tot">' + (sum.holes ? sum.par : '–') + '</td></tr>';
+        len += '<td class="tot">' + (sum.holes ? sum.length : '–') + '</td></tr>';
+        return '<table>' + head + par + len + '</table>';
+    }
+    function courseCardHtml(card) {
+        if (!card || !card.holes) return '';
+        const holes = parseInt(card.type, 10) || card.holes.length;
+        let html = '<div class="col-score-sum">Par ' + card.total.par + ' · ' + card.total.length + ' m' +
+            (card.filled < card.room ? ' · ' + card.filled + ' av ' + card.room + ' plattor' : '') + '</div>';
+        if (card.worlds && card.worlds.length > 1) html += '<div class="col-score-warn">⚠️ Plattorna har olika miljöer (' + card.worlds.map(w => WORLD_NAMES[w] || w).join(', ') + ')</div>';
+        if (holes === 18) {
+            html += cardRows(card, 1, 9, 'Ut', Object.assign({ label: 'Ut' }, card.front));
+            html += cardRows(card, 10, 18, 'In', Object.assign({ label: 'In' }, card.back));
+        } else {
+            html += cardRows(card, 1, holes, 'Hål', card.total);
+        }
+        return html;
+    }
+
+    // A new plate built for the next place of a collection: the new-course page passes the collection and the place on to the builder
+    // (collection-build.js), starting in the world of the plates already there
+    function buildPlateHere(collectionId, slotIndex) {
+        const entry = _cards[collectionId] && _cards[collectionId].card;
+        const world = entry && entry.plates && entry.plates[0] ? entry.plates[0].world : '';
+        location.href = 'new_course.html?collection=' + encodeURIComponent(collectionId) + '&slot=' + slotIndex + (world ? '&world=' + world : '');
     }
 
     // Plate picker state
