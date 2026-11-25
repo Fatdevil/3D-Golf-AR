@@ -367,12 +367,22 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
   const kp = await page.evaluate(async function () {
     const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     const settle = async function (S) { for (let w = 0; w < 300 && S.busy; w++) await wait(100); };
+    // where each built hole's fairway is painted, to see that undo takes the paint away too
+    const HGx = window.HoleGenerator;
+    const fwAt = window.courseHoles.map(function (h) {
+      const f = h && (h.fairways || []).filter(function (o) { return o && o.points && o.points.length >= 3; })[0];
+      return f ? f.points.reduce(function (a, p) { return { x: a.x + p.x / f.points.length, z: a.z + p.z / f.points.length }; }, { x: 0, z: 0 }) : null;
+    });
+    const builtBefore = window.courseHoles.filter(function (h) { return h && !HGx.holeIsEmpty(h); }).length;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true }));
     await wait(1500);
     const empty = window.CourseMap.firstEmptyHole();
+    const builtAfter = window.courseHoles.filter(function (h) { return h && !HGx.holeIsEmpty(h); }).length;
+    const c = fwAt[empty];
+    const undo = { builtBefore: builtBefore, builtAfter: builtAfter, paintBefore: 'FAIRWAY', paintAfter: c ? window.localGetTerrainAt(c.x, -c.z).type : null };
     window.openHoleBlueprint();
     let S = window.HoleBlueprint.state();
-    const out = { empty: empty, holes: S.holes.slice(), sketches: S.sketches.length };
+    const out = { undo: undo, empty: empty, holes: S.holes.slice(), sketches: S.sketches.length };
     await settle(S);
     const at = { x: S.sketches[0].origin.x, z: S.sketches[0].origin.z, h: S.sketches[0].heading, ok: !!(S.sketches[0].ev && S.sketches[0].ev.ok) };
     out.at = at;
@@ -423,6 +433,8 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     out.keptAfterClose = window.HoleBlueprint.keptPlan();
     return out;
   });
+  check('one Ctrl+Z undoes one hole built from the map, and its fairway leaves the ground too (the step keeps the paint whatever tool is active)',
+    kp.undo.builtAfter === kp.undo.builtBefore - 1 && kp.undo.paintAfter !== null && kp.undo.paintAfter !== 'FAIRWAY', JSON.stringify(kp.undo));
   check('undo empties a hole: the map plans it again', kp.empty >= 0 && kp.holes.indexOf(kp.empty) >= 0 && kp.sketches === 1 && kp.at.ok, JSON.stringify(kp));
   check('✕ keeps the plan: its outline shows in the 3D view and the map button has a dot; the map button brings it back where it was (outline hidden while the map is open)',
     kp.kept === 1 && kp.marker && kp.marker.visible && kp.marker.lines >= 3 && kp.badge === true && kp.back && kp.markerHidden, JSON.stringify(kp));

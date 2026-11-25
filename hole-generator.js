@@ -1215,7 +1215,8 @@
         // One undo step for the whole hole: the builders' own undo captures are muted while we build
         // The undo texture patch is sized from the editor's current points, so point it at the whole footprint first
         root.smartGreenPoints = footprint(wp).map(function (p) { return { x: p.x, y: 0, z: p.z }; });
-        root.saveUndoState();
+        // the step keeps the paint under the footprint whatever tool is active (arcade.html saveUndoStateWithPatch)
+        if (typeof root.saveUndoStateWithPatch === 'function') root.saveUndoStateWithPatch(); else root.saveUndoState();
         root.smartGreenPoints = [];
         // a par chosen on the blueprint is part of this one undoable action (the snapshot above still holds the old par)
         if (opts.syncPar && hole.par !== par && typeof root.changeHolePar === 'function') root.changeHolePar(par - hole.par);
