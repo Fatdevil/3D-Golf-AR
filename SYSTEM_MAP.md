@@ -334,10 +334,16 @@ Kullens höjder räknas av en ren funktion, `window.mtnHillField(points, height,
     - På den sista byggda plattan blir knappen **🛠️ Bygg platta 5 →** och går via `new_course.html` i den första plattans miljö.
     - En ny platta som inte är publicerad har → avstängt ("Publicera först"), annars skulle nästa platta ta samma plats.
     - Byte med ändringar som inte finns på servern frågar först, eftersom buildern har en enda arbetskopia på enheten. Flaggan är `window._serverDirty`:
-      - Den sätts av varje ändring (`debounceSaveCourse`, `saveUndoState`, ångra och gör om).
+      - Den sätts av varje ändring (`debounceSaveCourse`, `saveUndoState`, ångra och gör om). Dessutom sätter varje uppräkning av `_editRev` den, eftersom `_editRev` är en egenskap med setter i `arcade.html`. Därmed räknas också ändringar som sparas lokalt direkt, som horisontens rullistor, bakgrundskartan, träden runt banan och par.
       - Den nollställs när banan sparas på servern (Publicera eller Spara utkast, men inte av en spelkopia) och när en bana öppnas från servern (`_loadedServerCopy`).
       - Den automatiska lokala sparningen nollställer `hasUnsavedChanges` men inte den här flaggan.
     - Raden döljs i spel- och testläge.
+  - **En ny platta ärver omgivningen** (`inheritFrom`, `inheritFromPlate`). Från plats 2 hämtar Bygg ny och → Bygg platta föregående platta (`GET /api/courses/:code`) när buildern har laddat klart (`window._levelLoadedAt`). Vad som tas över:
+    - Biomet (årstiden), men bara om den valda världen är densamma. En ökenplatta som valts med flit efter en gräsplatta förblir öken.
+    - Horisontens markfärger och 2D-trädbältet (`surroundConfig`, `surroundVeg` på hålen), men inte om en stämning valdes på sidan Skapa ny bana.
+    - Vädret.
+
+    Ett kort ("🧩 Omgivningen från platta 3 följer med: …") erbjuder **Ta med bakgrundsfigurerna (n)**, alltså föregående plattas objekt utanför plattan, och **Börja från startvalen**, som återställer biom, horisont, träd och väder. Byggsidans Bygg ny och → skickar med föregående plattas värld. Att plattan öppnades som ny läses in när skriptet startar (`OPENED_NEW`), eftersom den första lokala sparningen byter adressen till `edit_build`. Plattorna pusslas inte ihop: varje platta är en egen värld som laddas för sig.
   - **Publicering** lägger in plattan på sin plats (`afterPublish`, och servern kontrollerar listan igen). Det sker en gång, även om plattan publiceras på nytt. En annans samling ändras inte.
   - **Tester:** `tests/test_collection_card.js`, `collections-e2e` (kortet, platsen, publiceringen och en främmande samling) och smoke:builder (hålnummer, gråa kolumner, Bana, parbalans).
 - **Ångra efter ett genererat hål (2026-11):** `HoleGenerator.generate` sparar sitt ångra-steg med `window.saveUndoStateWithPatch` (arcade.html: `captureEditorState(..., { patch: true })`). Steget innehåller då den målade marken under hålets fotavtryck oavsett vilket verktyg som är aktivt. Förut sparades marken bara när Smart Builder var valt, så ett hål byggt från Blueprint försvann vid Ångra medan fairway och green låg kvar målade. Ctrl+Z hanteras av en enda tangentlyssnare. Byggläget hade en egen lyssnare till som också ångrade, så ett tryck tog två steg tillbaka.

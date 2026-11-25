@@ -1150,10 +1150,12 @@
     }
 
     // A new plate built for the next place of a collection: the new-course page passes the collection and the place on to the builder
-    // (collection-build.js), starting in the world of the plates already there
+    // (collection-build.js), starting in the world of the plate before it
     function buildPlateHere(collectionId, slotIndex) {
         const entry = _cards[collectionId] && _cards[collectionId].card;
-        const world = entry && entry.plates && entry.plates[0] ? entry.plates[0].world : '';
+        // the world of the plate before it (the builder takes over that plate's surroundings, collection-build.js)
+        const before = entry && entry.plates ? (entry.plates[slotIndex - 1] || entry.plates[0]) : null;
+        const world = before ? before.world : '';
         location.href = 'new_course.html?collection=' + encodeURIComponent(collectionId) + '&slot=' + slotIndex + (world ? '&world=' + world : '');
     }
 

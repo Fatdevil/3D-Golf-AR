@@ -9,6 +9,9 @@
  *   - on publish puts the plate in its place in the collection (afterPublish)
  * A bar under the top bar names the collection and the place and goes to the plate before and after it (or builds the next one once
  * this plate is in the collection), so a whole 18 hole course can be built in one go (navTargets, renderBar).
+ * A new plate (from place 2 on) starts in the surroundings of the plate before it (inheritFrom): its biome when the world picked is
+ * the same, the horizon's ground colours and the 2D trees around the plate unless a mood was picked, and the weather. A card says so and
+ * offers that plate's backdrop figures (mountains, boats: the objects outside the plate) or a return to the start values.
  * The place is checked against the collection as it is now: a plate already in it keeps its own place, a new one goes right after the
  * plates there are (the list has no gaps), and a full collection drops the context.
  */
@@ -22,6 +25,8 @@
     function headers() { return (root.ArcadeAPI && root.ArcadeAPI._headers) ? root.ArcadeAPI._headers() : { 'Content-Type': 'application/json' }; }
     function query() { try { return new URLSearchParams(root.location ? root.location.search : ''); } catch (e) { return new URLSearchParams(''); } }
     function builderMode() { const a = query().get('autorun'); return a === 'new_build' || a === 'edit_build'; }
+    // the page was opened for a new course: read now, the builder's first local save turns the address into autorun=edit_build
+    const OPENED_NEW = query().get('autorun') === 'new_build';
     // the course being edited: the address (?edit=) or, when a working copy was continued without one (the build page's quick-draft
     // continuation), the code arcade-load.js restored into arcade.html's currentEditCode
     function editCode() {
@@ -82,6 +87,10 @@
         ctx.card = card;
         applyOffset();
         renderBar();
+        // a new plate after others: the surroundings of the plate before it come along (once the builder has laid out the course)
+        if (!opts.card && !opts.quiet && OPENED_NEW && place > 0 && card.plates[place - 1] && !(card.plates[place] && card.plates[place].code === editCode())) {
+            inheritFromPlate(card.plates[place - 1].code, place);
+        }
         if (!opts.quiet) {
             const a = place * PER_PLATE + 1;
             toast(tr('cb_started', '🧩 Platta {p} av {n}: hål {a}–{b}. Publicera så hamnar den på sin plats.')
@@ -142,6 +151,146 @@
         }
     }
 
+    // ---- the surroundings of the plate before ---------------------------------------------------------------------------------------
+    let inherited = null;   // { before, figures, from }: what inheritFrom changed, to go back or to add the figures
+    function plateHalf() { return (root.TERRAIN_SIZE || 600) / 2; }
+    function parse(v) { if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return null; } } return v; }
+    function firstOf(holes, key) { for (let i = 0; i < (holes || []).length; i++) if (holes[i] && holes[i][key]) return JSON.parse(JSON.stringify(holes[i][key])); return null; }
+    function worldOf(id) { id = String(id || 'GLOBAL').toUpperCase(); return id.indexOf('DESERT') >= 0 ? 'desert' : (id.indexOf('MOON') >= 0 ? 'moon' : 'grass'); }
+    function waitForCourse(ms) {
+        return new Promise(function (res) {
+            const t0 = Date.now();
+            (function poll() {
+                if (root._levelLoadedAt && !root._courseLoading) return res(true);
+                if (Date.now() - t0 > ms) return res(false);
+                setTimeout(poll, 200);
+            })();
+        });
+    }
+    async function inheritFromPlate(code, place) {
+        try {
+            const res = await fetch('/api/courses/' + encodeURIComponent(code), { headers: headers() });
+            if (!res.ok) return;
+            const src = await res.json();
+            if (!(await waitForCourse(30000))) return;
+            if (!ctx || ctx.slot !== place) return;
+            const done = inheritFrom(src);
+            if (done) showInheritCard(done, place);
+        } catch (e) { /* the plate starts from the page's own choices */ }
+    }
+    // Take over the surroundings of src (a course as GET /api/courses/:code gives it). Returns what was taken ({ biome, horizon, trees,
+    // weather, figures: number of backdrop figures it has }) or null when there was nothing to take.
+    function inheritFrom(src) {
+        if (!src || !root.courseHoles) return null;
+        const theme = parse(src.theme_data) || {}, holes = parse(src.holes) || [], trees = parse(src.trees) || [];
+        const before = {
+            biome: root.ACTIVE_BIOME, weather: root.ParticleEngine && root.ParticleEngine.getWeather ? root.ParticleEngine.getWeather() : null,
+            holes: root.courseHoles.map(function (h) { return { surroundConfig: h.surroundConfig ? JSON.parse(JSON.stringify(h.surroundConfig)) : null, surroundVeg: h.surroundVeg ? JSON.parse(JSON.stringify(h.surroundVeg)) : null }; })
+        };
+        const took = { biome: false, horizon: false, trees: false, weather: false, figures: 0 };
+        // the biome: only within the world that was picked (a desert plate picked on purpose after a grass one stays desert)
+        const pickedWorld = query().get('world');
+        if (theme.biomeId && theme.biomeId !== root.ACTIVE_BIOME && (!pickedWorld || worldOf(theme.biomeId) === pickedWorld) && typeof root.changeBiome === 'function') {
+            if (theme.biomeId === 'CUSTOM' && theme.config && root.CLOUD_BIOMES) root.CLOUD_BIOMES.CUSTOM = Object.assign({}, theme.config);
+            root.changeBiome(theme.biomeId);
+            took.biome = true;
+        }
+        // the horizon and the trees around the plate: not when a mood was picked (the mood decides what meets the eye)
+        if (!query().get('mood')) {
+            const cfg = firstOf(holes, 'surroundConfig'), veg = firstOf(holes, 'surroundVeg');
+            root.courseHoles.forEach(function (h) {
+                if (cfg) h.surroundConfig = JSON.parse(JSON.stringify(cfg));
+                if (veg) h.surroundVeg = JSON.parse(JSON.stringify(veg));
+            });
+            took.horizon = !!cfg; took.trees = !!veg;
+            if ((cfg || veg) && typeof root.restoreSurrounding === 'function') root.restoreSurrounding();
+        }
+        if (theme.weatherMode && root.ParticleEngine && root.ParticleEngine.setWeather && theme.weatherMode !== before.weather) {
+            root.ParticleEngine.setWeather(theme.weatherMode);
+            took.weather = true;
+        }
+        const half = plateHalf();
+        const figures = trees.filter(function (t) { return t && (Math.abs(t.x) > half || Math.abs(t.z) > half); });
+        took.figures = figures.length;
+        if (!took.biome && !took.horizon && !took.trees && !took.weather && !figures.length) return null;
+        inherited = { before: before, figures: figures };
+        if (typeof root.debounceSaveCourse === 'function') root.debounceSaveCourse();
+        return took;
+    }
+    // the backdrop figures of the plate before (objects outside the plate), added on top of this plate's own
+    function addInheritedFigures() {
+        if (!inherited || !inherited.figures.length || typeof root.createTree !== 'function') return 0;
+        const types = {};
+        inherited.figures.forEach(function (t) {
+            root.createTree(t.type || t.t, t.x, t.z, t.s, t.r, t.c, t.tc, t.yOffset || 0, t.brightness !== undefined ? t.brightness : 1.0, true, t.tilt, t.roll);
+            types[t.type || t.t] = true;
+        });
+        Object.keys(types).forEach(function (k) { if (typeof root.rebuildInstancePool === 'function') root.rebuildInstancePool(k); });
+        const n = inherited.figures.length;
+        inherited.figures = [];
+        if (root.Backdrop && root.Backdrop.refreshFog) root.Backdrop.refreshFog();
+        if (typeof root.debounceSaveCourse === 'function') root.debounceSaveCourse();
+        return n;
+    }
+    // back to what the new-course page gave (the start values), the figures are not touched
+    function revertInherit() {
+        if (!inherited) return false;
+        const b = inherited.before;
+        if (b.biome && b.biome !== root.ACTIVE_BIOME && typeof root.changeBiome === 'function') root.changeBiome(b.biome);
+        (root.courseHoles || []).forEach(function (h, i) { const o = b.holes[i] || {}; h.surroundConfig = o.surroundConfig; h.surroundVeg = o.surroundVeg; });
+        if (typeof root.restoreSurrounding === 'function') root.restoreSurrounding();
+        if (b.weather && root.ParticleEngine && root.ParticleEngine.setWeather) root.ParticleEngine.setWeather(b.weather);
+        inherited = null;
+        if (typeof root.debounceSaveCourse === 'function') root.debounceSaveCourse();
+        return true;
+    }
+    function showInheritCard(took, place) {
+        const doc = root.document;
+        if (!doc || !doc.body) return;
+        const old = doc.getElementById('cb-inherit');
+        if (old) old.remove();
+        const what = [];
+        if (took.biome) what.push(tr('cb_inh_biome', 'miljö'));
+        if (took.horizon) what.push(tr('cb_inh_horizon', 'horisont'));
+        if (took.trees) what.push(tr('cb_inh_trees', 'träden runt banan'));
+        if (took.weather) what.push(tr('cb_inh_weather', 'väder'));
+        const card = doc.createElement('div');
+        card.id = 'cb-inherit';
+        card.setAttribute('role', 'status');
+        card.style.cssText = 'position:fixed; left:50%; bottom:72px; transform:translateX(-50%); z-index:950; display:flex; flex-wrap:wrap; align-items:center; gap:8px; max-width:calc(100vw - 24px); box-sizing:border-box; padding:10px 10px 10px 14px; border-radius:14px; background:#0f172a; border:1px solid #38bdf8; box-shadow:0 8px 24px rgba(0,0,0,0.45); color:#f1f5f9; font-size:13px; font-weight:700; font-family:Inter,system-ui,sans-serif;';
+        const txt = doc.createElement('span');
+        txt.style.cssText = 'flex:1 1 220px; min-width:0; line-height:1.35;';
+        txt.textContent = what.length
+            ? tr('cb_inh_text', '🧩 Omgivningen från platta {p} följer med: {w}.').replace('{p}', place).replace('{w}', what.join(', '))
+            : tr('cb_inh_text_none', '🧩 Platta {p} har bakgrundsfigurer som kan följa med.').replace('{p}', place);
+        const btn = function (label, fn, primary) {
+            const b = doc.createElement('button');
+            b.type = 'button'; b.textContent = label; b.onclick = fn;
+            b.style.cssText = 'min-height:40px; padding:0 12px; border-radius:10px; border:1px solid #334155; font-weight:700; font-size:12px; cursor:pointer; background:' + (primary ? '#0284c7' : '#1e293b') + '; color:#f8fafc;';
+            return b;
+        };
+        card.appendChild(txt);
+        if (took.figures) {
+            const fig = btn(tr('cb_inh_figures', '🏔️ Ta med bakgrundsfigurerna ({n})').replace('{n}', took.figures), function () {
+                const n = addInheritedFigures();
+                fig.remove();
+                toast(tr('cb_inh_figures_done', '🏔️ {n} bakgrundsfigurer följde med.').replace('{n}', n), '#4ade80');
+            }, true);
+            fig.dataset.role = 'cb-inh-figures';
+            card.appendChild(fig);
+        }
+        if (what.length) {
+            const back = btn(tr('cb_inh_revert', 'Börja från startvalen'), function () { revertInherit(); card.remove(); toast(tr('cb_inh_reverted', 'Omgivningen är tillbaka på startvalen.'), '#38bdf8'); });
+            back.dataset.role = 'cb-inh-revert';
+            card.appendChild(back);
+        }
+        const x = btn('✕', function () { card.remove(); });
+        x.setAttribute('aria-label', tr('bp_cancel', 'Stäng'));
+        card.appendChild(x);
+        doc.body.appendChild(card);
+        setTimeout(function () { if (card.parentNode) card.remove(); }, 30000);
+    }
+
     async function refreshCard() {
         if (!ctx) return;
         try { const card = await fetchCard(ctx.id); if (card && ctx) ctx.card = card; } catch (e) { /* the old card stays */ }
@@ -164,7 +313,7 @@
         let next = null;
         if (c.plates[at + 1]) next = edit(at + 1);
         else if (at + 1 < c.room && at + 1 === c.filled && inCollection) {
-            const world = c.plates[0] && c.plates[0].world;
+            const world = c.plates[at] && c.plates[at].world;   // the world of this plate: the new one takes over its surroundings
             next = { slot: at + 1, kind: 'build', url: 'new_course.html?collection=' + encodeURIComponent(ctx.id) + '&slot=' + (at + 1) + (world ? '&world=' + world : '') };
         } else if (at + 1 < c.room && !inCollection) next = { slot: at + 1, kind: 'publish_first' };
         return { prev: prev, next: next, inCollection: inCollection };
@@ -227,7 +376,8 @@
     if (root.addEventListener) root.addEventListener('resize', function () { if (root.document && root.document.getElementById('cb-bar')) renderBar(); });
     if (typeof setInterval === 'function' && root.document) setInterval(function () { const bar = root.document.getElementById('cb-bar'); if (bar) bar.style.display = playing() ? 'none' : 'flex'; }, 800);
 
-    root.CollectionBuild = { start: start, get: function () { return ctx; }, others: others, parTargets: parTargets, themeData: themeData, afterPublish: afterPublish, clear: clear, placeIn: placeIn, navTargets: navTargets, renderBar: renderBar };
+    root.CollectionBuild = { start: start, get: function () { return ctx; }, others: others, parTargets: parTargets, themeData: themeData, afterPublish: afterPublish, clear: clear, placeIn: placeIn, navTargets: navTargets, renderBar: renderBar,
+        inheritFrom: inheritFrom, addInheritedFigures: addInheritedFigures, revertInherit: revertInherit, showInheritCard: showInheritCard };
 
     // a new plate for a place (the new-course page passes it on)
     function fromUrl() {

@@ -494,6 +494,46 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     col.api && col.head && col.head[1] === '1–9' && col.head[col.head.length - 1] === 'Bana' && col.par[1] === '36' && Number(col.par[col.par.length - 1]) === col.wantCourse, JSON.stringify(col));
   check('the par suggestion balances the whole course: nine par 4s on the other plates, so the new hole is a par 3 or 5', col.api && (col.sketchPar === 3 || col.sketchPar === 5), JSON.stringify(col));
 
+  // a new plate takes over the surroundings of the plate before it (collection-build.js inheritFrom): biome, horizon, trees around the
+  // plate, weather; the backdrop figures only on request; and back to the start values
+  const inh = await page.evaluate(async function () {
+    const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    const CB = window.CollectionBuild;
+    if (!CB || !CB.inheritFrom) return { api: false };
+    const types = Object.keys(window.ASSET_REGISTRY || {});
+    const before = { biome: window.ACTIVE_BIOME, N: (window.surroundConfig || {}).N, trees: window.placedTrees.length };
+    const veg = { sides: { N: 'PALMS', E: 'PALMS', S: 'NONE', W: 'NONE' }, density: 1, depth: 200, custom: [], seed: 7, ob: 'NONE' };
+    const src = {
+      theme_data: { biomeId: before.biome === 'AUTUMN' ? 'GLOBAL' : 'AUTUMN' },
+      holes: [{ par: 4, surroundConfig: { N: 'oceanColor', E: 'oceanColor', S: 'horizonColor', W: 'horizonColor' }, surroundVeg: veg }, { par: 3 }],
+      trees: [{ type: types[0] || 'TEST_FIG', x: 480, z: 20, s: 1, r: 0 }, { type: types[0] || 'TEST_FIG', x: 10, z: 10, s: 1, r: 0 }]
+    };
+    const took = CB.inheritFrom(src);
+    await wait(300);
+    const out = { api: true, took: took, biome: window.ACTIVE_BIOME, wantBiome: src.theme_data.biomeId, N: window.surroundConfig.N,
+      vegOnHoles: window.courseHoles.every(function (h) { return h.surroundVeg && h.surroundVeg.sides.N === 'PALMS'; }) };
+    CB.showInheritCard(took, 3);
+    const card = document.getElementById('cb-inherit');
+    out.card = card ? { text: card.textContent, figures: !!card.querySelector('[data-role="cb-inh-figures"]'), revert: !!card.querySelector('[data-role="cb-inh-revert"]') } : null;
+    out.added = CB.addInheritedFigures();
+    const mine = window.placedTrees.filter(function (t) { return t.x === 480 && t.z === 20; });
+    out.treesAfter = window.placedTrees.length - before.trees;
+    out.figureAt = mine.length;
+    // the test figure goes again (it is not part of the course the rest of the test works on)
+    mine.forEach(function (t) { window.placedTrees.splice(window.placedTrees.indexOf(t), 1); });
+    CB.revertInherit();
+    await wait(300);
+    out.back = { biome: window.ACTIVE_BIOME === before.biome, N: window.surroundConfig.N === before.N, veg: window.courseHoles.every(function (h) { return !h.surroundVeg || h.surroundVeg.sides.N !== 'PALMS'; }) };
+    if (card) card.remove();
+    out.hasTypes = types.length > 0;
+    return out;
+  });
+  check('a new plate takes over the biome, the horizon and the trees around the plate of the plate before, and says so (figures offered, a way back)',
+    inh.api && inh.took && inh.took.biome && inh.took.horizon && inh.took.trees && inh.biome === inh.wantBiome && inh.N === 'oceanColor' && inh.vegOnHoles &&
+    inh.card && /3/.test(inh.card.text) && inh.card.figures && inh.card.revert && inh.took.figures === 1, JSON.stringify(inh));
+  check('only the figures outside the plate come along, and only on request', inh.added === 1 && inh.treesAfter === 1 && inh.figureAt === 1, JSON.stringify(inh));
+  check('"Börja från startvalen" puts the biome, the horizon and the trees back', inh.api && inh.back.biome && inh.back.N && inh.back.veg, JSON.stringify(inh.back));
+
   // the plate's painted ground: OB keeps the planner away, and the maps take the course's palette (a desert course reads as desert)
   const ground = await page.evaluate(function () {
     const HG = window.HoleGenerator, CM = window.CourseMap, data = window.terrainBiomeData;

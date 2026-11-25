@@ -125,6 +125,13 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await wait(2500);
     st = await state();
     check('an edit stays unsaved for the server after the local autosave, until it is published or saved as a draft', st.serverDirty === true, JSON.stringify(st));
+    // a change that is saved locally at once (a horizon dropdown) counts too
+    // (as if just saved: a publish here would add a version the checks below count)
+    const clean = await page.evaluate(function () { window._serverDirty = false; return window._serverDirty; });
+    await page.evaluate(function () { const el = document.getElementById('surr-N'); el.value = el.value === 'oceanColor' ? 'roughColor' : 'oceanColor'; el.dispatchEvent(new Event('change')); });
+    await wait(800);
+    st = await state();
+    check('a horizon change (saved locally at once) leaves the course unsaved for the server too', clean === false && st.serverDirty === true, JSON.stringify([clean, st.serverDirty]));
     await pool.query("UPDATE courses SET created_at = now() - interval '10 days' WHERE share_code = $1", [code]); // an old course: published again it must still lead the public list
     await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, created_at) VALUES ($1, 'Newer than mine', 'o', '[]'::jsonb, false, 'someone-else', now() - interval '1 day')", [tag + '-N']);
     await page.evaluate(function () { document.getElementById('course-name-input').value = 'E2E Bana v3'; }); await publish(); await wait(6000);
