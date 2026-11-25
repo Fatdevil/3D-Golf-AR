@@ -38,7 +38,7 @@ console.log('\n2. Parmixen för hela banan');
 
 console.log('\n4. Mellan plattorna (navTargets)');
 {
-  const card = { name: 'Sex', type: '18', room: 6, filled: 4, plates: [{ code: 'A', world: 'desert' }, { code: 'B' }, { code: 'C' }, { code: 'D' }], holes: [] };
+  const card = { name: 'Sex', type: '18', room: 6, filled: 4, plates: [{ code: 'A', world: 'desert' }, { code: 'B' }, { code: 'C' }, { code: 'D', world: 'grass' }], holes: [] };
   const load = function (search) {
     const w = { location: { search: search } };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'collection-build.js'), 'utf8'), { window: w, globalThis: w, URLSearchParams: URLSearchParams, setTimeout: function () {} });
@@ -52,7 +52,7 @@ console.log('\n4. Mellan plattorna (navTargets)');
       const CB2 = load('?autorun=edit_build&edit=D');
       return CB2.start('S1', 0, { card: card, quiet: true }).then(function () {
         const m = CB2.navTargets();
-        check('den sista byggda plattan (D): → bygger platta 5 via sidan Skapa ny bana, i den första plattans miljö', m.next.kind === 'build' && /^new_course\.html\?collection=S1&slot=4&world=desert$/.test(m.next.url), m.next);
+        check('den sista byggda plattan (D): → bygger platta 5 via sidan Skapa ny bana, i D:s miljö (den nya tar över dess omgivning)', m.next.kind === 'build' && /^new_course\.html\?collection=S1&slot=4&world=grass$/.test(m.next.url), m.next);
         const CB3 = load('?autorun=new_build');
         return CB3.start('S1', 1, { card: card, quiet: true }).then(function () {
           const k = CB3.navTargets();

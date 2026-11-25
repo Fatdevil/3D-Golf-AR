@@ -806,6 +806,7 @@
         // before switching plate only when _serverDirty); a new course or a working copy continued from the device is not on the server
         if (window._loadedServerCopy) window._serverDirty = false;
         if (startsNew && typeof saveLevel === 'function') saveLevel(true, true);
+        window._levelLoadedAt = Date.now();   // the course is in place: what comes on top of it (collection-build.js) waits for this
     }
 
     async function loadLevelBody() {
