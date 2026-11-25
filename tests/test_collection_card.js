@@ -36,6 +36,38 @@ console.log('\n2. Parmixen för hela banan');
   check('målen räknar alltid till antalet hål', [3, 6, 9, 12, 15, 18].every(function (n) { const t = C.parTargets(n); return t[3] + t[4] + t[5] === n; }) && t3[3] + t3[4] + t3[5] === 3);
 }
 
+console.log('\n4. Mellan plattorna (navTargets)');
+{
+  const card = { name: 'Sex', type: '18', room: 6, filled: 4, plates: [{ code: 'A', world: 'desert' }, { code: 'B' }, { code: 'C' }, { code: 'D' }], holes: [] };
+  const load = function (search) {
+    const w = { location: { search: search } };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'collection-build.js'), 'utf8'), { window: w, globalThis: w, URLSearchParams: URLSearchParams, setTimeout: function () {} });
+    return w.CollectionBuild;
+  };
+  global.navChecks = Promise.resolve().then(function () {
+    const CB1 = load('?autorun=edit_build&edit=C');
+    return CB1.start('S1', 0, { card: card, quiet: true }).then(function () {
+      const n = CB1.navTargets();
+      check('platta 3 (C) i samlingen: ← öppnar B på plats 2 och → öppnar D på plats 4, med samlingen i adressen', n.inCollection && n.prev.kind === 'edit' && /edit=B&collection=S1&slot=1$/.test(n.prev.url) && n.next.kind === 'edit' && /edit=D&collection=S1&slot=3$/.test(n.next.url), n);
+      const CB2 = load('?autorun=edit_build&edit=D');
+      return CB2.start('S1', 0, { card: card, quiet: true }).then(function () {
+        const m = CB2.navTargets();
+        check('den sista byggda plattan (D): → bygger platta 5 via sidan Skapa ny bana, i den första plattans miljö', m.next.kind === 'build' && /^new_course\.html\?collection=S1&slot=4&world=desert$/.test(m.next.url), m.next);
+        const CB3 = load('?autorun=new_build');
+        return CB3.start('S1', 1, { card: card, quiet: true }).then(function () {
+          const k = CB3.navTargets();
+          check('en ny platta som inte är publicerad (plats 5): ← öppnar D, → kräver att den publiceras först', !k.inCollection && k.prev.slot === 3 && k.next.kind === 'publish_first', k);
+          const CB4 = load('?autorun=edit_build&edit=A');
+          return CB4.start('S1', 0, { card: card, quiet: true }).then(function () {
+            const f = CB4.navTargets();
+            check('den första plattan: inget ←', f.prev === null && f.next.slot === 1, f);
+          });
+        });
+      });
+    });
+  });
+}
+
 console.log('\n3. Buildern (collection-build.js)');
 {
   const win = { location: { search: '' } };
@@ -63,7 +95,7 @@ console.log('\n3. Buildern (collection-build.js)');
     { plate_code: 'C', holes: [hole(4, 360), hole(3, 160), hole(4, 380)] },
     { plate_code: 'D', holes: [hole(5, 500), hole(4, 340), hole(3, 170)] }
   ]));
-  global.resumed.then(function (r) {
+  global.navChecks.then(function () { return global.resumed; }).then(function (r) {
     check('en fortsatt arbetskopia (koden bara i currentEditCode, inte i adressen) behåller sin plats, även i en full samling', r.slot === 1 && r.offset === 3, r);
     return CB.start('col1', 2, { card: card, quiet: true });
   }).then(function (ctx) {

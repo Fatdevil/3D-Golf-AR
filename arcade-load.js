@@ -796,11 +796,15 @@
     async function loadLevel() {
         window._courseLoading = true;
         const startsNew = new URLSearchParams(window.location.search).get('autorun') === 'new_build';
+        window._loadedServerCopy = false;
         try {
             await loadLevelBody();
         } finally {
             window._courseLoading = false;
         }
+        // the course as the server has it (opened with ?edit= / ?course=): nothing to lose by leaving it yet (collection-build.js asks
+        // before switching plate only when _serverDirty); a new course or a working copy continued from the device is not on the server
+        if (window._loadedServerCopy) window._serverDirty = false;
         if (startsNew && typeof saveLevel === 'function') saveLevel(true, true);
     }
 
@@ -909,6 +913,7 @@
                 if(data.share_code) {
                     savedStr = data;
                     isCloud = true;
+                    window._loadedServerCopy = true;
                     // Store course metadata for Round Setup header
                     window._loadedUpdatedAt = String(data.updated_at || data.created_at || 'none'); // which saved revision this page shows
                     window._loadedOwnerId = data.owner_ref || null;   // only 'has an owner': the id of the owner is never sent, can_edit says whether it is you

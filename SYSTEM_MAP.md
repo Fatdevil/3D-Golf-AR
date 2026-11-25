@@ -329,6 +329,15 @@ Kullens höjder räknas av en ren funktion, `window.mtnHillField(points, height,
     - Blueprints scorekort visar de andra plattorna som en grå kolumn per sida och hela banan i kolumnen "Bana".
     - Parförslaget siktar på en vanlig fördelning för hela banan (`parTargets`: ungefär 4 par 3, 10 par 4 och 4 par 5 på 18 hål), med de andra plattornas par medräknade.
     - Platsen sparas som `theme_data.collectionSlot` och kommer tillbaka när plattan öppnas igen. Den stäms av mot samlingen som den är: en platta som redan finns behåller sin plats, en ny hamnar direkt efter de befintliga eftersom listan inte har luckor, och i en full samling tas kopplingen bort.
+  - **Mellan plattorna** (`#cb-bar`, `navTargets`): en rad under toppfältet visar till exempel "🧩 Sjöbanan · platta 4 av 6 (hål 10–12)". På telefon (under 700 px) ligger raden under knappen Placera hålen och visar "4/6 · hål 10–12".
+    - **← Platta 3** och **Platta 5 →** öppnar grannplattan i buildern med samlingen och platsen i adressen.
+    - På den sista byggda plattan blir knappen **🛠️ Bygg platta 5 →** och går via `new_course.html` i den första plattans miljö.
+    - En ny platta som inte är publicerad har → avstängt ("Publicera först"), annars skulle nästa platta ta samma plats.
+    - Byte med ändringar som inte finns på servern frågar först, eftersom buildern har en enda arbetskopia på enheten. Flaggan är `window._serverDirty`:
+      - Den sätts av varje ändring (`debounceSaveCourse`, `saveUndoState`, ångra och gör om).
+      - Den nollställs när banan sparas på servern (Publicera eller Spara utkast, men inte av en spelkopia) och när en bana öppnas från servern (`_loadedServerCopy`).
+      - Den automatiska lokala sparningen nollställer `hasUnsavedChanges` men inte den här flaggan.
+    - Raden döljs i spel- och testläge.
   - **Publicering** lägger in plattan på sin plats (`afterPublish`, och servern kontrollerar listan igen). Det sker en gång, även om plattan publiceras på nytt. En annans samling ändras inte.
   - **Tester:** `tests/test_collection_card.js`, `collections-e2e` (kortet, platsen, publiceringen och en främmande samling) och smoke:builder (hålnummer, gråa kolumner, Bana, parbalans).
 - **Ångra efter ett genererat hål (2026-11):** `HoleGenerator.generate` sparar sitt ångra-steg med `window.saveUndoStateWithPatch` (arcade.html: `captureEditorState(..., { patch: true })`). Steget innehåller då den målade marken under hålets fotavtryck oavsett vilket verktyg som är aktivt. Förut sparades marken bara när Smart Builder var valt, så ett hål byggt från Blueprint försvann vid Ångra medan fairway och green låg kvar målade. Ctrl+Z hanteras av en enda tangentlyssnare. Byggläget hade en egen lyssnare till som också ångrade, så ett tryck tog två steg tillbaka.
