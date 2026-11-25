@@ -452,6 +452,10 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     const card = { name: 'Testbanan', type: '18', room: 6, filled: 3, plates: [{ code: 'P1' }, { code: 'P2' }, { code: 'P3' }], holes: holes };
     const ctx = await CB.start('TST1', 3, { card: card, quiet: true });
     const out = { api: true, slot: ctx && ctx.slot, num0: window.holeNumber(0), topbar: (document.getElementById('topbar-hole-num') || {}).textContent };
+    // the bar between the plates: ← the plate before (3), → waits for this new plate to be published
+    const bar = document.getElementById('cb-bar');
+    const btn = function (role) { const b = bar && bar.querySelector('[data-role="' + role + '"]'); return b ? { text: b.textContent, on: !b.disabled } : null; };
+    out.bar = bar ? { shown: getComputedStyle(bar).display !== 'none', text: bar.textContent, title: (bar.querySelector('span') || {}).title || '', prev: btn('cb-prev'), next: btn('cb-next') } : null;
     window.openHoleBlueprint();
     const S = window.HoleBlueprint.state();
     for (let w = 0; w < 300 && S.busy; w++) await wait(100);
@@ -465,10 +469,13 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     window.HoleBlueprint.close(false);
     CB.clear();
     out.after = window.holeNumber(0);
+    out.barGone = !document.getElementById('cb-bar');
     return out;
   });
   check('a plate for place 4 of an 18 hole collection: its holes are 10-12 (top bar too), and back to 1-3 without the collection',
     col.api && col.slot === 3 && col.num0 === 10 && /1[0-2]/.test(col.topbar || '') && col.sketchNo >= 10 && col.sketchNo <= 12 && col.after === 1, JSON.stringify(col));
+  check('the bar names the collection and the place, ← opens plate 3, → waits until this new plate is published; it goes with the collection',
+    col.api && col.bar && col.bar.shown && /Testbanan/.test(col.bar.title + col.bar.text) && /4 av 6|4 of 6|4\/6/.test(col.bar.text) && col.bar.prev.on && /3/.test(col.bar.prev.text) && !col.bar.next.on && col.barGone, JSON.stringify(col.bar));
   check('the map scorecard shows the other plates (1–9) in a grey column and the whole course in a last column',
     col.api && col.head && col.head[1] === '1–9' && col.head[col.head.length - 1] === 'Bana' && col.par[1] === '36' && Number(col.par[col.par.length - 1]) === col.wantCourse, JSON.stringify(col));
   check('the par suggestion balances the whole course: nine par 4s on the other plates, so the new hole is a par 3 or 5', col.api && (col.sketchPar === 3 || col.sketchPar === 5), JSON.stringify(col));

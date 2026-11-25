@@ -7,6 +7,8 @@
  *   - gives the blueprint map the other plates (GET /api/collections/<id>/card): its scorecard shows them and the whole course, and its
  *     par suggestion balances the whole course (parTargets: about 4 par 3s, 10 par 4s and 4 par 5s in 18 holes)
  *   - on publish puts the plate in its place in the collection (afterPublish)
+ * A bar under the top bar names the collection and the place and goes to the plate before and after it (or builds the next one once
+ * this plate is in the collection), so a whole 18 hole course can be built in one go (navTargets, renderBar).
  * The place is checked against the collection as it is now: a plate already in it keeps its own place, a new one goes right after the
  * plates there are (the list has no gaps), and a full collection drops the context.
  */
@@ -46,6 +48,7 @@
         ctx = null;
         root._buildCollection = null;
         applyOffset();
+        renderBar();
     }
     async function fetchCard(id) {
         const res = await fetch('/api/collections/' + encodeURIComponent(id) + '/card', { headers: headers() });
@@ -78,6 +81,7 @@
         ctx.slot = place;
         ctx.card = card;
         applyOffset();
+        renderBar();
         if (!opts.quiet) {
             const a = place * PER_PLATE + 1;
             toast(tr('cb_started', '🧩 Platta {p} av {n}: hål {a}–{b}. Publicera så hamnar den på sin plats.')
@@ -117,7 +121,7 @@
             if (typeof plates === 'string') plates = JSON.parse(plates);
             plates = Array.isArray(plates) ? plates.slice() : [];
             const codes = plates.map(function (p) { return String(typeof p === 'string' ? p : p.plate_code).toUpperCase(); });
-            if (codes.indexOf(code) >= 0) return true;   // already there (published again)
+            if (codes.indexOf(code) >= 0) { await refreshCard(); return true; }   // already there (published again)
             const room = Math.floor(parseInt(col.type, 10) / PER_PLATE);
             if (plates.length >= room) { toast(tr('cb_no_room', '⚠️ Samlingen är redan full: plattan publicerades men lades inte till.'), '#f59e0b'); return false; }
             const at = Math.min(ctx.slot, plates.length);
@@ -129,6 +133,7 @@
             if (!saved.ok) throw new Error('save refused');
             ctx.slot = at;
             applyOffset();
+            await refreshCard();   // the bar can now offer the next plate
             toast(tr('cb_added', '🧩 Plattan ligger nu på plats {p} i {n}.').replace('{p}', at + 1).replace('{n}', col.name || ''), '#4ade80');
             return true;
         } catch (e) {
@@ -137,7 +142,91 @@
         }
     }
 
-    root.CollectionBuild = { start: start, get: function () { return ctx; }, others: others, parTargets: parTargets, themeData: themeData, afterPublish: afterPublish, clear: clear, placeIn: placeIn };
+    async function refreshCard() {
+        if (!ctx) return;
+        try { const card = await fetchCard(ctx.id); if (card && ctx) ctx.card = card; } catch (e) { /* the old card stays */ }
+        renderBar();
+    }
+
+    // ---- moving between the plates of the collection ------------------------------------------------------------------------------
+    // Where the bar's buttons go: { prev, next } with { slot, url, kind: 'edit' | 'build' } each, or null; next can also be
+    // { slot, kind: 'publish_first' } (the next place is empty and this plate is not in the collection yet: a new plate built now would
+    // take this plate's place). A plate is opened in the builder with its place in the address, so the context comes along.
+    function navTargets() {
+        if (!ctx || !ctx.card) return null;
+        const c = ctx.card, at = ctx.slot, code = editCode();
+        const inCollection = !!(c.plates[at] && c.plates[at].code === code);
+        const edit = function (slot) {
+            return { slot: slot, kind: 'edit', url: 'arcade.html?v=' + Date.now() + '&autorun=edit_build&edit=' + encodeURIComponent(c.plates[slot].code) +
+                '&collection=' + encodeURIComponent(ctx.id) + '&slot=' + slot };
+        };
+        const prev = at > 0 && c.plates[at - 1] ? edit(at - 1) : null;
+        let next = null;
+        if (c.plates[at + 1]) next = edit(at + 1);
+        else if (at + 1 < c.room && at + 1 === c.filled && inCollection) {
+            const world = c.plates[0] && c.plates[0].world;
+            next = { slot: at + 1, kind: 'build', url: 'new_course.html?collection=' + encodeURIComponent(ctx.id) + '&slot=' + (at + 1) + (world ? '&world=' + world : '') };
+        } else if (at + 1 < c.room && !inCollection) next = { slot: at + 1, kind: 'publish_first' };
+        return { prev: prev, next: next, inCollection: inCollection };
+    }
+    // Leaving the plate: the builder keeps one working copy on the device, so changes not saved to the server would be lost
+    function go(url) {
+        if (root.hasUnsavedChanges && typeof root.confirm === 'function' &&
+            !root.confirm(tr('cb_leave_unsaved', 'Plattan har ändringar som inte är sparade (Publicera eller Spara utkast). De försvinner om du byter platta. Byta ändå?'))) return;
+        root.location.href = url;
+    }
+    function playing() { const m = typeof root.getAppMode === 'function' ? root.getAppMode() : 'BUILD'; return m === 'PLAY' || m === 'TEST'; }
+    // "🧩 Sjöbanan · platta 4 av 6 (hål 10–12)" with ← and → beside it, under the top bar; only in the builder, only with a context
+    function renderBar() {
+        const doc = root.document;
+        if (!doc || !doc.body) return;
+        let bar = doc.getElementById('cb-bar');
+        const nav = navTargets();
+        if (!ctx || !ctx.card || !nav) { if (bar) bar.remove(); return; }
+        if (!bar) {
+            bar = doc.createElement('div');
+            bar.id = 'cb-bar';
+            bar.setAttribute('role', 'navigation');
+            bar.style.cssText = 'position:fixed; left:50%; transform:translateX(-50%); z-index:900; display:flex; align-items:center; gap:6px; max-width:calc(100vw - 24px); box-sizing:border-box; padding:4px; border-radius:14px; background:rgba(15,23,42,0.92); border:1px solid rgba(56,189,248,0.45); box-shadow:0 4px 14px rgba(0,0,0,0.45); font-family:Inter,system-ui,sans-serif; pointer-events:auto;';
+            doc.body.appendChild(bar);
+        }
+        bar.setAttribute('aria-label', tr('cb_bar_label', 'Plattorna i samlingen'));
+        // a phone has the hole tools' pill in the second row on the left: the bar goes below it, without the collection's name
+        const narrow = (root.innerWidth || 1000) < 700;
+        bar.style.top = narrow ? '100px' : '56px';
+        bar.textContent = '';
+        const mk = function (label, title, onclick, on) {
+            const b = doc.createElement('button');
+            b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
+            b.disabled = !on;
+            b.style.cssText = 'min-height:32px; padding:0 10px; border-radius:10px; border:1px solid #334155; background:' + (on ? '#1e293b' : 'transparent') + '; color:' + (on ? '#e0f2fe' : '#475569') + '; font-size:12px; font-weight:700; white-space:nowrap; cursor:' + (on ? 'pointer' : 'default') + ';';
+            if (on) b.onclick = onclick;
+            return b;
+        };
+        const plateHoles = function (slot) { const f = slot * PER_PLATE + 1; return tr('cb_holes', 'hål {a}–{b}').replace('{a}', f).replace('{b}', f + PER_PLATE - 1); };
+        const prev = nav.prev
+            ? mk('← ' + tr('cb_plate', 'Platta') + ' ' + (nav.prev.slot + 1), tr('cb_open_plate', 'Öppna platta {p} ({h})').replace('{p}', nav.prev.slot + 1).replace('{h}', plateHoles(nav.prev.slot)), function () { go(nav.prev.url); }, true)
+            : mk('←', tr('cb_first_plate', 'Det här är den första plattan'), null, false);
+        prev.dataset.role = 'cb-prev';
+        const mid = doc.createElement('span');
+        mid.style.cssText = 'color:#f1f5f9; font-size:12px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; padding:0 4px;';
+        const full = '🧩 ' + (ctx.card.name ? ctx.card.name + ' · ' : '') + tr('cb_plate_of', 'platta {p} av {n}').replace('{p}', ctx.slot + 1).replace('{n}', ctx.card.room) + ' (' + plateHoles(ctx.slot) + ')';
+        mid.textContent = narrow ? '🧩 ' + (ctx.slot + 1) + '/' + ctx.card.room + ' · ' + plateHoles(ctx.slot) : full;
+        mid.title = full;
+        let next;
+        if (nav.next && nav.next.kind === 'edit') next = mk(tr('cb_plate', 'Platta') + ' ' + (nav.next.slot + 1) + ' →', tr('cb_open_plate', 'Öppna platta {p} ({h})').replace('{p}', nav.next.slot + 1).replace('{h}', plateHoles(nav.next.slot)), function () { go(nav.next.url); }, true);
+        else if (nav.next && nav.next.kind === 'build') next = mk('🛠️ ' + tr('cb_build_plate', 'Bygg platta {p}').replace('{p}', nav.next.slot + 1) + ' →', tr('cb_build_plate_t', 'Bygg en ny platta för {h}').replace('{h}', plateHoles(nav.next.slot)), function () { go(nav.next.url); }, true);
+        else if (nav.next && nav.next.kind === 'publish_first') next = mk('→', tr('cb_publish_first', 'Publicera den här plattan först: då hamnar den på plats {p} och nästa platta kan byggas').replace('{p}', ctx.slot + 1), null, false);
+        else next = mk('→', tr('cb_last_plate', 'Det här är den sista plattan'), null, false);
+        next.dataset.role = 'cb-next';
+        [prev, mid, next].forEach(function (el) { bar.appendChild(el); });
+        bar.style.display = playing() ? 'none' : 'flex';
+    }
+    // the bar is for the builder: hidden while a round is played or tested
+    if (root.addEventListener) root.addEventListener('resize', function () { if (root.document && root.document.getElementById('cb-bar')) renderBar(); });
+    if (typeof setInterval === 'function' && root.document) setInterval(function () { const bar = root.document.getElementById('cb-bar'); if (bar) bar.style.display = playing() ? 'none' : 'flex'; }, 800);
+
+    root.CollectionBuild = { start: start, get: function () { return ctx; }, others: others, parTargets: parTargets, themeData: themeData, afterPublish: afterPublish, clear: clear, placeIn: placeIn, navTargets: navTargets, renderBar: renderBar };
 
     // a new plate for a place (the new-course page passes it on)
     function fromUrl() {
