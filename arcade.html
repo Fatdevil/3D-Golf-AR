@@ -10743,6 +10743,10 @@
     window.courseHoles = courseHoles;
     window.controls = controls;
     window.saveUndoState = saveUndoState;
+    // An undo step that keeps the painted ground of the current hole and window.smartGreenPoints whatever tool is active: the hole
+    // generator builds a whole hole in one step, also from the blueprint map (where the active tool is not the Smart Builder, and a
+    // plain step kept no paint, so Undo emptied the hole but left its fairway and green painted on the ground)
+    window.saveUndoStateWithPatch = function () { saveUndoState(false, captureEditorState(false, null, { patch: true })); };
     window.saveLevel = saveLevel;
     window.createTeeObject = createTeeObject;
     window.createFlagObject = createFlagObject;
@@ -10974,7 +10978,8 @@
         let texPatch = null;
         // texRect is set when undo/redo captures the opposite state of one that carries a patch: capture
         // the same area even if the user has switched to another tool in the meantime.
-        if (!cCopy && (currentTool === 'SMART_BUILDER' || texRect)) {
+        // opts.patch: a builder that paints a known area whatever tool is active (the hole generator, also from the blueprint map)
+        if (!cCopy && (currentTool === 'SMART_BUILDER' || texRect || (opts && opts.patch))) {
             let r = computeSmartTextureRect(texRect);
             if (r) {
                 try { texPatch = Object.assign({ img: pCtx.getImageData(r.x, r.y, r.w, r.h) }, r); } catch (e) { texPatch = null; }
@@ -13762,10 +13767,9 @@
             return;
         }
 
-          if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-            performUndo();
-            return;
-        }
+        // Ctrl/Cmd+Z is handled once, by the keydown handler further up (it also restores a discarded drawing and does Shift+Z redo):
+        // undoing here as well took two steps back for one press
+        if (e.ctrlKey && e.key.toLowerCase() === 'z') return;
 
         const panSpeed = 2.0;
         
@@ -17704,7 +17708,7 @@ window.triggerExplosion = function(x, y, z) {
 <script src="smart-builder.js?v=69"></script>
 <script src="voice-commands.js?v=3"></script>
 <script src="studio-reanchor.js?v=5"></script>
-<script src="hole-generator.js?v=33"></script>
+<script src="hole-generator.js?v=34"></script>
 <script src="course-map.js?v=4"></script>
 <script src="blueprint.js?v=24"></script>
 <script src="backdrop.js?v=17"></script>
