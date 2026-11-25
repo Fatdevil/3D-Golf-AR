@@ -333,7 +333,10 @@ Kullens höjder räknas av en ren funktion, `window.mtnHillField(points, height,
     - **← Platta 3** och **Platta 5 →** öppnar grannplattan i buildern med samlingen och platsen i adressen.
     - På den sista byggda plattan blir knappen **🛠️ Bygg platta 5 →** och går via `new_course.html` i den första plattans miljö.
     - En ny platta som inte är publicerad har → avstängt ("Publicera först"), annars skulle nästa platta ta samma plats.
-    - Byte med osparade ändringar frågar först, eftersom buildern har en enda arbetskopia på enheten.
+    - Byte med ändringar som inte finns på servern frågar först, eftersom buildern har en enda arbetskopia på enheten. Flaggan är `window._serverDirty`:
+      - Den sätts av varje ändring (`debounceSaveCourse`, `saveUndoState`, ångra och gör om).
+      - Den nollställs när banan sparas på servern (Publicera eller Spara utkast, men inte av en spelkopia) och när en bana öppnas från servern (`_loadedServerCopy`).
+      - Den automatiska lokala sparningen nollställer `hasUnsavedChanges` men inte den här flaggan.
     - Raden döljs i spel- och testläge.
   - **Publicering** lägger in plattan på sin plats (`afterPublish`, och servern kontrollerar listan igen). Det sker en gång, även om plattan publiceras på nytt. En annans samling ändras inte.
   - **Tester:** `tests/test_collection_card.js`, `collections-e2e` (kortet, platsen, publiceringen och en främmande samling) och smoke:builder (hålnummer, gråa kolumner, Bana, parbalans).

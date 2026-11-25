@@ -81,8 +81,10 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     const rangeTee = Array.prototype.some.call(document.querySelectorAll('button, div'), function (e) {
       return e.children.length < 3 && e.offsetParent !== null && /RANGE TEE/i.test(e.textContent || '');
     });
-    return { range: !!window._isRangeMode, rangeTee: rangeTee, mapApi: typeof window.HoleBlueprint === 'object' };
+    return { range: !!window._isRangeMode, rangeTee: rangeTee, mapApi: typeof window.HoleBlueprint === 'object', serverDirty: !!window._serverDirty };
   });
+  // (a course opened from the server starts clean: courses-e2e checks that)
+  check('a brand new course is not on the server yet: switching plate would ask', mode.serverDirty === true, JSON.stringify(mode));
   check('the course builder: not range mode, no Range Tee tool, the blueprint map is there', !mode.range && !mode.rangeTee && mode.mapApi, JSON.stringify(mode));
 
   // 2. plan three holes on the map: each search has to end with a good spot in time
@@ -467,6 +469,16 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     out.wantCourse = 36 + platePar;
     out.builtPars = [0, 1, 2].map(function (i) { return window.HoleGenerator.holeIsEmpty(window.courseHoles[i]) ? null : window.courseHoles[i].par; });
     window.HoleBlueprint.close(false);
+    // leaving the plate after an edit asks first, also once the local autosave has run (it clears hasUnsavedChanges, not _serverDirty)
+    window.debounceSaveCourse(200);
+    await wait(2500);
+    const asked = [], realConfirm = window.confirm, here = location.href;
+    window.confirm = function (m) { asked.push(m); return false; };
+    const prevBtn = document.querySelector('#cb-bar [data-role="cb-prev"]');
+    if (prevBtn) prevBtn.click();
+    await wait(300);
+    window.confirm = realConfirm;
+    out.leave = { autosaved: !window.hasUnsavedChanges, serverDirty: !!window._serverDirty, asked: asked.length, stayed: location.href === here };
     CB.clear();
     out.after = window.holeNumber(0);
     out.barGone = !document.getElementById('cb-bar');
@@ -476,6 +488,8 @@ function check(name, ok, detail) { results.push(!!ok); console.log((ok ? '  PASS
     col.api && col.slot === 3 && col.num0 === 10 && /1[0-2]/.test(col.topbar || '') && col.sketchNo >= 10 && col.sketchNo <= 12 && col.after === 1, JSON.stringify(col));
   check('the bar names the collection and the place, ← opens plate 3, → waits until this new plate is published; it goes with the collection',
     col.api && col.bar && col.bar.shown && /Testbanan/.test(col.bar.title + col.bar.text) && /4 av 6|4 of 6|4\/6/.test(col.bar.text) && col.bar.prev.on && /3/.test(col.bar.prev.text) && !col.bar.next.on && col.barGone, JSON.stringify(col.bar));
+  check('after an edit (and the local autosave) switching plate asks first; saying no stays on the plate',
+    col.api && col.leave && col.leave.autosaved && col.leave.serverDirty && col.leave.asked === 1 && col.leave.stayed, JSON.stringify(col.leave));
   check('the map scorecard shows the other plates (1–9) in a grey column and the whole course in a last column',
     col.api && col.head && col.head[1] === '1–9' && col.head[col.head.length - 1] === 'Bana' && col.par[1] === '36' && Number(col.par[col.par.length - 1]) === col.wantCourse, JSON.stringify(col));
   check('the par suggestion balances the whole course: nine par 4s on the other plates, so the new hole is a par 3 or 5', col.api && (col.sketchPar === 3 || col.sketchPar === 5), JSON.stringify(col));

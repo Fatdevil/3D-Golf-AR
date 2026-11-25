@@ -169,9 +169,10 @@
         } else if (at + 1 < c.room && !inCollection) next = { slot: at + 1, kind: 'publish_first' };
         return { prev: prev, next: next, inCollection: inCollection };
     }
-    // Leaving the plate: the builder keeps one working copy on the device, so changes not saved to the server would be lost
+    // Leaving the plate: the builder keeps one working copy on the device, so changes not saved to the server would be lost. The local
+    // autosave clears hasUnsavedChanges after a moment, so what counts is _serverDirty (set by every edit, cleared by Publish / Save draft)
     function go(url) {
-        if (root.hasUnsavedChanges && typeof root.confirm === 'function' &&
+        if ((root._serverDirty || root.hasUnsavedChanges) && typeof root.confirm === 'function' &&
             !root.confirm(tr('cb_leave_unsaved', 'Plattan har ändringar som inte är sparade (Publicera eller Spara utkast). De försvinner om du byter platta. Byta ändå?'))) return;
         root.location.href = url;
     }

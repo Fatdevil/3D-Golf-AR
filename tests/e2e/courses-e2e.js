@@ -66,7 +66,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
       await page.waitForFunction(function () { return window._courseLoading === false; }, null, { timeout: 120000 });
       await wait(ms || 5000);
     };
-    const state = function () { return page.evaluate(function () { const h = courseHoles[0]; return { code: currentEditCode, published: !!window._editIsPublished, name: document.getElementById('course-name-input').value, flag: !!h.flag, green: !!h.greenData, fairways: (h.fairways || []).length, bunkers: (h.bunkers || []).length, teeBoxes: (h.teeBoxes || []).length, draftBtn: document.getElementById('btn-save-draft').style.display, search: location.search }; }); };
+    const state = function () { return page.evaluate(function () { const h = courseHoles[0]; return { code: currentEditCode, published: !!window._editIsPublished, name: document.getElementById('course-name-input').value, flag: !!h.flag, green: !!h.greenData, fairways: (h.fairways || []).length, bunkers: (h.bunkers || []).length, teeBoxes: (h.teeBoxes || []).length, draftBtn: document.getElementById('btn-save-draft').style.display, search: location.search, serverDirty: !!window._serverDirty }; }); };
     const rows = async function () { return (await pool.query("SELECT share_code, name, is_draft, version, theme_data->>'_playCopy' AS copy FROM courses WHERE owner_id = $1 ORDER BY id", [deviceId])).rows; };
     const cards = function (sel) { return page.evaluate(function (s) { return Array.from(document.querySelectorAll(s + ' .card-title')).map(function (e) { return e.textContent; }); }, sel); };
     const listPage = async function () { await page.goto(BASE + '/build.html', { waitUntil: 'domcontentloaded', timeout: 60000 }); await wait(3500); };
@@ -102,6 +102,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     // 3. publish: the draft becomes the published course (and the working copy knows it by the time publishing is reported done)
     const qd = await page.evaluate(async function () { window._bypassCapture = true; await publishCourse({ isDraft: false }); const d = await ArcadeStorage.loadFullDraft('quick_draft'); return { published: d.edit_is_published, code: d.edit_code }; });
     check('publish: the working copy is marked published before success is reported', qd.published === true && qd.code === code, JSON.stringify(qd));
+    check('publish: nothing is unsaved for the server any more', (await state()).serverDirty === false);
     await wait(1500);
     r = await rows();
     check('publish: the draft became the published course (same record, no copy, version 1)', r.length === 1 && r[0].share_code === code && r[0].is_draft === false && r[0].version === 1, JSON.stringify(r));
@@ -119,6 +120,11 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await open('autorun=edit_build&edit=' + code, 6000);
     st = await state();
     check('reopen published: green, fairway, bunkers and tee boxes are back, no Save draft button', st.green && st.fairways === built.fairways && st.bunkers === built.bunkers && st.teeBoxes === built.teeBoxes && built.bunkers > 0 && st.draftBtn === 'none', JSON.stringify([st, built]));
+    check('reopen published: nothing unsaved for the server (switching plate in a collection does not ask)', st.serverDirty === false, JSON.stringify(st));
+    await page.evaluate(function () { window.debounceSaveCourse(200); });
+    await wait(2500);
+    st = await state();
+    check('an edit stays unsaved for the server after the local autosave, until it is published or saved as a draft', st.serverDirty === true, JSON.stringify(st));
     await pool.query("UPDATE courses SET created_at = now() - interval '10 days' WHERE share_code = $1", [code]); // an old course: published again it must still lead the public list
     await pool.query("INSERT INTO courses (share_code, name, author, holes, is_draft, owner_id, created_at) VALUES ($1, 'Newer than mine', 'o', '[]'::jsonb, false, 'someone-else', now() - interval '1 day')", [tag + '-N']);
     await page.evaluate(function () { document.getElementById('course-name-input').value = 'E2E Bana v3'; }); await publish(); await wait(6000);

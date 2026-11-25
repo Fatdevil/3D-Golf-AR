@@ -448,6 +448,7 @@
     window.debounceSaveCourse = function(delay = 1500) {
         window._editRev = (window._editRev || 0) + 1; // the next-step guide: the course changed since any playtest
         window.hasUnsavedChanges = true;
+        window._serverDirty = true;   // changed since the course was last saved to the server (the local autosave does not clear it)
         let sText = document.getElementById('save-status-text');
         let sIcon = document.getElementById('save-status-icon');
         let sInd = document.getElementById('save-status-indicator');
@@ -857,6 +858,7 @@
                 currentEditCode = data.share_code;
                 window._editIsPublished = !options.isDraft;
                 window.hasUnsavedChanges = false;
+                if (!window._savingPlayCopy) window._serverDirty = false;   // the course itself is on the server now (a play copy is not)
                 
                 // "My drafts" holds drafts only: a published course leaves the list, a draft joins it
                 if (options.isDraft && window._savingPlayCopy) {
