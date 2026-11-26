@@ -37,5 +37,4 @@ Filen behöver kolumner för bollfart, utgångsvinkel, spinn och carry. Startrik
 ## Det banken saknar i dag
 
 - **Slagpar.** Utan dem går det inte att säga hur fel motorn är, eftersom tour-snitt inte är enskilda slag.
-- **Resten av PGA 2024-tabellen:** 3-trä, 5-trä, hybrid samt 3-, 4-, 6- och 8-järn. Indata (bollfart, utgångsvinkel, spinn) finns inte i repot. Lägg in dem från TrackMans tabell, inte ur minnet.
 - **LPGA 2014-raden är skriven ur minnet.** Den rapporteras för sig och avgör ingenting förrän den är kontrollerad.

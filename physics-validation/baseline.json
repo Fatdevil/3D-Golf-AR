@@ -9,6 +9,56 @@
       "landingDeg": 2.6
     }
   },
+  "pga24-3w": {
+    "carryYd": 257.64,
+    "apexYd": 35.04,
+    "landingDeg": 43.99,
+    "absErr": {
+      "carryYd": 8.64,
+      "apexYd": 3.04,
+      "landingDeg": 0.01
+    }
+  },
+  "pga24-5w": {
+    "carryYd": 245.56,
+    "apexYd": 36.62,
+    "landingDeg": 46.21,
+    "absErr": {
+      "carryYd": 9.56,
+      "apexYd": 3.62,
+      "landingDeg": 1.79
+    }
+  },
+  "pga24-hy": {
+    "carryYd": 231.63,
+    "apexYd": 34.76,
+    "landingDeg": 46.02,
+    "absErr": {
+      "carryYd": 0.63,
+      "apexYd": 3.76,
+      "landingDeg": 2.98
+    }
+  },
+  "pga24-3i": {
+    "carryYd": 224.67,
+    "apexYd": 31.54,
+    "landingDeg": 43.98,
+    "absErr": {
+      "carryYd": 6.67,
+      "apexYd": 1.54,
+      "landingDeg": 4.02
+    }
+  },
+  "pga24-4i": {
+    "carryYd": 214.09,
+    "apexYd": 31.26,
+    "landingDeg": 44.78,
+    "absErr": {
+      "carryYd": 5.09,
+      "apexYd": 0.26,
+      "landingDeg": 4.22
+    }
+  },
   "pga24-5i": {
     "carryYd": 203.01,
     "apexYd": 32.14,
@@ -19,6 +69,16 @@
       "landingDeg": 3.56
     }
   },
+  "pga24-6i": {
+    "carryYd": 189.84,
+    "apexYd": 34.74,
+    "landingDeg": 49.46,
+    "absErr": {
+      "carryYd": 1.84,
+      "apexYd": 2.74,
+      "landingDeg": 0.54
+    }
+  },
   "pga24-7i": {
     "carryYd": 173.56,
     "apexYd": 33.71,
@@ -27,6 +87,16 @@
       "carryYd": 2.44,
       "apexYd": 0.29,
       "landingDeg": 0.72
+    }
+  },
+  "pga24-8i": {
+    "carryYd": 161.44,
+    "apexYd": 32.15,
+    "landingDeg": 50.54,
+    "absErr": {
+      "carryYd": 2.56,
+      "apexYd": 0.85,
+      "landingDeg": 0.46
     }
   },
   "pga24-9i": {

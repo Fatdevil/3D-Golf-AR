@@ -493,7 +493,7 @@ Steg 2 av datakvaliteten för träning: ett sätt att mäta hur långt `physics.
   - **Mätningen:** felmått per klubbgrupp och fartband (medianfel, bias, p90), och en uppdelning i kalibrering och test (cirka 70/30, FNV-hash av radens id).
 - **Målen** gäller bara kontrollerade slagpar i testmängden: fullslag 1,5 m, wedgar 20–100 m 1 m, landning 1,5°. Tour-snitt räknas inte, eftersom snittslagets carry inte är snittets carry.
 - **Spärren:** `physics-validation/baseline.json` innehåller dagens fel för tabellraderna. `tests/test_physics_validation.js` misslyckas om en rad blir mer än 0,5 yd eller 0,5° sämre, eller om `docs/physics-validation-report.md` inte är aktuell. Efter en avsiktlig ändring av fysiken körs `node tools/physics-validation.js --update-baseline --write` (eller `npm run physics:validate`).
-- **Det banken saknar:** slagpar, och indata för resten av PGA 2024-tabellen (3-trä, 5-trä, hybrid samt 3-, 4-, 6- och 8-järn). Se `physics-validation/README.md`.
+- **Det banken saknar:** slagpar. PGA-tabellen har alla tolv klubbor, driver till PW (TrackMans egen tabell, skärmdump från användaren). Se `physics-validation/README.md`.
 
 ## Launch monitor-data: saknat är aldrig noll (2026-11)
 Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monitorn inte skickade 0 i bryggan (`|| 0`): saknat spinn blev 0 rpm, alltså en boll utan lyft och helt fel slag, utan varning, och det hamnade i bagen.
