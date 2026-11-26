@@ -9,6 +9,10 @@
 //  Carry and total are worked out by the game's ball physics from what the launch monitor measured (GSPro Open Connect sends no carry);
 //  a shot whose spin the launch monitor did not send flew on an estimate (lm-shot-quality.js): it is marked ≈ and its `estimated` list is
 //  kept, with the club data the launch monitor measured and which launch monitor it was, also in the CSV.
+//  Each launch-monitor shot is reviewed before it is booked (lm-shot-review.js): its carry and total in standard conditions (what the bag
+//  keeps), whether it was a mishit or a misread, and whether it looks like another club of the player's bag. A flagged shot is listed
+//  with ⚠ and left out of the averages, the ellipse and the bag until the player counts it anyway (tap ⚠) or changes its club. The
+//  launch monitor's message as it came (raw) is kept with the shot, so it can be flown again when the physics changes.
 //  The maths (averages, spread, CSV, range frame) has no DOM and is tested in tests/test_range_session.js.
 // ================================================================
 (function (root) {
@@ -60,7 +64,9 @@
 
     // The shots that tell how far a club goes: approach practice shots (to a pin, often a part swing, from a spot other than the tee) are
     // listed with the others but left out of the club averages, the aim billboard's average and the ellipse, as they are out of the bag
-    function fullSwings(shots) { return shots.filter(function (s) { return !s.practice; }); }
+    // Nor do a mishit, a misread or a shot that looks like another club (lm-shot-review.js), unless the player counted it anyway
+    function counted(s) { const R = root.LMShotReview; return R ? R.counts(s) : !(s.review && !s.accepted && (s.review.mishit || s.review.misread || s.review.looksLike)); }
+    function fullSwings(shots) { return shots.filter(function (s) { return !s.practice && counted(s); }); }
 
     // a text cell: commas and quotes would break the row
     function csvText(v) { if (v === null || v === undefined || v === '') return ''; const t = String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; }
@@ -70,18 +76,37 @@
         const head = ['#', 'time', 'club', 'source', 'carry_' + u, 'total_' + u, 'offline_' + u + '(+R)', 'apex_' + u, 'ball_speed_mph', 'club_speed_mph', 'launch_deg', 'start_line_deg', 'spin_rpm', 'spin_axis_deg',
             // added after the first columns (spreadsheets made from older files keep working): the club data, the launch monitor, what was
             // estimated (no spin from the launch monitor), and that carry and total come from the game's physics
-            'club_path_deg', 'face_to_path_deg', 'attack_angle_deg', 'device', 'estimated', 'carry_from'];
+            'club_path_deg', 'face_to_path_deg', 'attack_angle_deg', 'device', 'estimated', 'carry_from',
+            // then the review (lm-shot-review.js): carry and total in standard conditions, the findings, whether the shot counts, and the
+            // launch monitor's message as it came
+            'carry_std_' + u, 'total_std_' + u, 'flags', 'counted', 'raw'];
         const rows = shots.map(function (s, i) {
             return [i + 1, s.t ? new Date(s.t).toISOString() : '', s.club || '', s.source || '',
                 f(num(s.carry) !== null ? s.carry * k : null, 1), f(num(s.total) !== null ? s.total * k : null, 1), f(num(s.offline) !== null ? s.offline * k : null, 1),
                 f(num(s.apex) !== null ? s.apex * k : null, 1), f(s.ballSpeed, 1), f(s.clubSpeed, 1), f(s.launch, 1), f(s.hla, 1), f(s.spin, 0), f(s.spinAxis, 1),
-                f(s.clubPath, 1), f(s.faceToPath, 1), f(s.aoa, 1), csvText(s.device), Array.isArray(s.estimated) ? s.estimated.join(' ') : '', num(s.carry) !== null ? 'physics' : ''].join(',');
+                f(s.clubPath, 1), f(s.faceToPath, 1), f(s.aoa, 1), csvText(s.device), Array.isArray(s.estimated) ? s.estimated.join(' ') : '', num(s.carry) !== null ? 'physics' : '',
+                f(num(s.carryStd) !== null ? s.carryStd * k : null, 1), f(num(s.totalStd) !== null ? s.totalStd * k : null, 1),
+                s.review && s.review.flags.length ? s.review.flags.join(' ') + (s.review.looksLike ? ':' + s.review.looksLike : '') : '',
+                !s.practice && counted(s) ? 'yes' : 'no', s.raw ? csvText(JSON.stringify(s.raw)) : ''].join(',');
         });
         return head.join(',') + '\n' + rows.join('\n') + (rows.length ? '\n' : '');
     }
 
     const api = { CLUBS: CLUBS, FROM_SWING: FROM_SWING, MAX_SHOTS: MAX_SHOTS, mean: mean, sd: sd, rangeFrame: rangeFrame, fromRangeFrame: fromRangeFrame,
-                  clubStats: clubStats, dispersion: dispersion, fullSwings: fullSwings, toCSV: toCSV };
+                  clubStats: clubStats, dispersion: dispersion, fullSwings: fullSwings, counted: counted, toCSV: toCSV, prepare: prepare };
+
+    // A shot before it is booked (lm-shot-review.js): its carry and total in standard conditions, and the review against the player's own
+    // bag (without this shot). `physics` flies the standard shot (window.GolfPhysics in the page); `bagEntries` the player's bag.
+    function prepare(rec, physics, bagEntries) {
+        const R = root.LMShotReview;
+        if (!R || !rec || rec.source !== 'LM') return rec;
+        if (num(rec.carryStd) === null) {
+            const st = R.standard(physics, rec);
+            if (st) { rec.carryStd = st.carry; rec.totalStd = st.total; }
+        }
+        rec.review = R.review(rec, R.ownSpeeds((bagEntries || []).filter(function (e) { return e.t !== rec.t; })));
+        return rec;
+    }
 
     // ── In the page: the panel, the dots and the ellipse ──
     if (typeof document !== 'undefined') {
@@ -94,7 +119,7 @@
                   estimated: 'Launch monitorn skickade inget spinn: carry bygger på ett uppskattat spinn och slaget räknas inte i din bag.',
                   tabApproach: 'Inspel', distance: 'Avstånd', greens: 'Green', toPin: 'Till pinne', best: 'Bäst', toPinNote: 'Snitt och bästa avstånd till pinnen per övat avstånd',
                   tests: 'Inspeltest', last: 'Senast', avg5: 'Snitt 5 senaste', played: 'test', testTip: 'Test {i}: {v} p', rateRange: 'Rangen',
-                  board: 'Topplista på rangen', you: 'Du', of: 'av', pts: 'p' },
+                  board: 'Topplista på rangen', you: 'Du', of: 'av', pts: 'p', flagged: '{n} slag räknas inte i snittet (felträff eller fel klubba). Tryck ⚠ för att räkna ett ändå.' },
             en: { title: 'Session', shots: 'shots', pick: 'Which club are you hitting?', tabShots: 'Shots', tabClubs: 'Clubs', club: 'Club', carry: 'Carry', total: 'Total',
                   offline: 'Offline', n: 'Shots', spread: 'Spread', empty: 'Hit a shot and it shows up here.', csv: 'Export CSV', clear: 'New session',
                   confirmClear: 'Start a new session? The shots of this session are removed.', ellipse: 'The ellipse shows where about 2 in 3 shots with {c} land.',
@@ -103,7 +128,7 @@
                   estimated: 'The launch monitor sent no spin: the carry rests on an estimated spin and the shot does not count in your bag.',
                   tabApproach: 'Approach', distance: 'Distance', greens: 'Greens', toPin: 'To pin', best: 'Best', toPinNote: 'Average and best distance to the pin per practised distance',
                   tests: 'Approach tests', last: 'Latest', avg5: 'Avg of last 5', played: 'tests', testTip: 'Test {i}: {v} pts', rateRange: 'The range',
-                  board: 'Leaderboard on this range', you: 'You', of: 'of', pts: 'pts' }
+                  board: 'Leaderboard on this range', you: 'You', of: 'of', pts: 'pts', flagged: '{n} shots are not counted in the averages (mishit or wrong club). Tap ⚠ to count one anyway.' }
         };
         const COLORS = { Dr: 0xef4444, '3W': 0xf97316, '5W': 0xf59e0b, Hy: 0xeab308, '4i': 0x84cc16, '5i': 0x22c55e, '6i': 0x10b981, '7i': 0x14b8a6,
                          '8i': 0x06b6d4, '9i': 0x0ea5e9, PW: 0x3b82f6, GW: 0x6366f1, SW: 0x8b5cf6, LW: 0xd946ef };
@@ -194,7 +219,7 @@
                         const s = shots[i];
                         h += '<tr' + (i === shots.length - 1 ? ' class="rs-last"' : '') + '><td>' + (i + 1) + '</td><td><select data-shot="' + i + '" aria-label="' + esc(t('club')) + ' ' + (i + 1) + '">' +
                              '<option value="">–</option>' + CLUBS.map(function (c) { return '<option' + (s.club === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
-                             '</select></td><td' + (guessed(s) ? ' class="rs-est" title="' + esc(t('estimated')) + '"' : '') + '>' + (guessed(s) ? '≈' : '') + dist(s.carry) + '</td><td>' + dist(s.total) + '</td><td>' + side(s.offline) + '</td></tr>';
+                             '</select>' + flagHtml(s, i) + '</td><td' + (guessed(s) ? ' class="rs-est" title="' + esc(t('estimated')) + '"' : '') + '>' + (guessed(s) ? '≈' : '') + dist(s.carry) + '</td><td>' + dist(s.total) + '</td><td>' + side(s.offline) + '</td></tr>';
                     }
                     h += '</tbody></table>';
                 } else {
@@ -204,6 +229,8 @@
                              (r.n > 1 ? dist(r.carrySd) : '–') + '</td><td>' + dist(r.total) + '</td><td>' + (r.n > 1 ? '±' + dist(r.offlineSd) : '–') + '</td></tr>';
                     });
                     h += '</tbody></table><div class="rs-unit">' + unit() + '</div>';
+                    const left = shots.filter(function (s) { return !s.practice && !counted(s); }).length;
+                    if (left) h += '<div class="rs-note">' + esc(t('flagged').replace('{n}', left)) + '</div>';
                     h += '<div class="rs-note">' + esc(t('bagNote')) + '</div>';
                 }
                 h += '</div>';
@@ -217,6 +244,15 @@
             panel.classList.toggle('collapsed', !state.open);
         }
 
+        // A flagged shot's mark next to its club: ⚠ when it is left out (tap to count it anyway), ✓ when the player counted it (tap to undo)
+        function flagHtml(s, i) {
+            const R = root.LMShotReview;
+            if (!R || !s.review || !s.review.flags.length) return '';
+            const sv = root.getGolfLanguage && root.getGolfLanguage() === 'sv', why = R.describe(s.review, sv);
+            if (!s.review.mishit && !s.review.misread && !s.review.looksLike) return '';
+            return '<button class="rs-flag' + (s.accepted ? ' accepted' : '') + '" data-accept="' + i + '" title="' + esc(why + (s.accepted ? '' : ' · ' + R.words(sv).accept)) +
+                   '" aria-label="' + esc(why) + '" aria-pressed="' + !!s.accepted + '">' + (s.accepted ? '✓' : '⚠') + '</button>';
+        }
         // A test's leaderboard on this range (RangePractice fetches it): the top five, and the player's own place when they are further down
         function boardHtml(b) {
             if (!b || !b.top || !b.top.length) return '';
@@ -233,6 +269,13 @@
             if (!b) return;
             if (b.dataset.club) { state.club = state.club === b.dataset.club ? null : b.dataset.club; save(); redraw(); return; }
             if (b.dataset.tab) { state.tab = b.dataset.tab; render(); return; }
+            if (b.dataset.accept !== undefined) {
+                const s = state.shots[+b.dataset.accept];
+                if (!s) return;
+                s.accepted = !s.accepted;
+                if (root.PlayerBag && root.PlayerBag.book) root.PlayerBag.book(s);
+                save(); redraw(); return;
+            }
             const act = b.dataset.act;
             if (act === 'toggle') { state.open = !state.open; try { localStorage.setItem('golf_range_session_open', state.open ? '1' : '0'); } catch (err) {} render(); }
             else if (act === 'csv') exportCSV();
@@ -244,6 +287,9 @@
             const s = state.shots[+sel.dataset.shot];
             if (!s) return;
             s.club = sel.value || null;
+            // reviewed again against the new club (a shot that looked like the 5-iron fits once it is the 5-iron), counted or not afresh
+            s.accepted = false;
+            prepare(s, root.GolfPhysics, root.PlayerBag && root.PlayerBag.entries ? root.PlayerBag.entries() : []);
             if (root.PlayerBag && root.PlayerBag.book) root.PlayerBag.book(s);   // the bag follows the corrected club
             save(); redraw();
         }
@@ -332,6 +378,11 @@
         api.record = function (shot) {
             if (!ctx || !shot) return;
             const rec = Object.assign({ t: Date.now() }, shot);
+            prepare(rec, root.GolfPhysics, root.PlayerBag && root.PlayerBag.entries ? root.PlayerBag.entries() : []);
+            if (rec.review && rec.review.looksLike && typeof root.showBuildToast === 'function' && root.LMShotReview) {
+                const sv = root.getGolfLanguage && root.getGolfLanguage() === 'sv';
+                root.showBuildToast(root.LMShotReview.words(sv).wrongToast.replace('{c}', rec.review.looksLike).replace('{p}', rec.club), '#f59e0b');
+            }
             state.shots.push(rec);
             if (root.PlayerBag && root.PlayerBag.book) root.PlayerBag.book(rec);   // launch-monitor shots also go to the player's bag (club suggestions on a course)
             if (state.shots.length > MAX_SHOTS) state.shots.splice(0, state.shots.length - MAX_SHOTS);

@@ -3,7 +3,8 @@
 //  The range session books every shot here (arcade-range-session.js); on a course the aim billboard picks the club whose average total is
 //  nearest to what the shot plays like (the distance to the aim, with what wind and slope add or take, from the shot plan).
 //  Only launch-monitor shots count: a swing-meter or typed shot measures the game's clubs, not the player's. Nor a launch-monitor shot with
-//  an estimated value (a launch monitor that sent no spin, lm-shot-quality.js): its carry rests on a guess. Approach practice shots
+//  an estimated value (a launch monitor that sent no spin, lm-shot-quality.js): its carry rests on a guess. Nor a mishit, a misread or a
+//  shot that looks like another club (lm-shot-review.js), unless the player counted it. Distances are in standard conditions when known. Approach practice shots
 //  (to a pin, often a part swing) do not count either: a 60 m wedge would pull the club's average down. The last 40 shots per club
 //  are kept, so the bag follows the player's game as it changes; a club needs 3 shots before it is suggested.
 //  Kept on this device (localStorage 'golf_bag_v1'). The maths has no DOM and is tested in tests/test_bag.js.
@@ -24,8 +25,17 @@
         const out = list.filter(function (e) { return e.t !== shot.t; });
         // a shot with an estimated value (no spin from the launch monitor: lm-shot-quality.js) flew on a guess: its carry does not count
         const guessed = Array.isArray(shot.estimated) && shot.estimated.length > 0;
-        if (shot.source === 'LM' && shot.club && num(shot.carry) !== null && shot.carry > 0 && !shot.practice && !guessed) {
-            out.push({ t: shot.t, club: shot.club, carry: shot.carry, total: num(shot.total) !== null ? shot.total : shot.carry });
+        // a mishit, a misread or a shot that looks like another club (lm-shot-review.js) does not say how far the club goes, unless the
+        // player counted it anyway
+        const flagged = !!(shot.review && !shot.accepted && (shot.review.mishit || shot.review.misread || shot.review.looksLike));
+        // the distances in standard conditions when the session worked them out (no wind, 15 °C, sea level, flat): the course adds wind
+        // and slope on top (the shot plan), so a shot hit into the wind on the range does not make the club look short
+        const carry = num(shot.carryStd) !== null ? shot.carryStd : shot.carry;
+        const total = num(shot.totalStd) !== null ? shot.totalStd : (num(shot.total) !== null ? shot.total : carry);
+        if (shot.source === 'LM' && shot.club && num(carry) !== null && carry > 0 && !shot.practice && !guessed && !flagged) {
+            const e = { t: shot.t, club: shot.club, carry: carry, total: total };
+            if (num(shot.ballSpeed) !== null) e.ballSpeed = shot.ballSpeed;   // the player's own ball speed per club (the wrong-club check)
+            out.push(e);
         }
         out.sort(function (a, b) { return a.t - b.t; });
         const count = {}, keep = [];
@@ -76,6 +86,7 @@
             try { localStorage.setItem(KEY, JSON.stringify({ shots: cache })); } catch (e) { /* private mode or full: the bag lives on this page */ }
         };
         api.clubs = function () { return stats(load()); };
+        api.entries = function () { return load().slice(); };
         api.suggestFor = function (playsLike) { return suggest(stats(load()), playsLike); };
         api.knownCount = function () { return stats(load()).filter(function (r) { return r.known; }).length; };
     }

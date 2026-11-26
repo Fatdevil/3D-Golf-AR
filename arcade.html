@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=35">
+<link rel="stylesheet" href="arcade.css?v=36">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -4201,8 +4201,9 @@
 <script src="arcade-shot-plan.js?v=1"></script>
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="lm-shot-quality.js?v=2"></script>   <!-- what a launch-monitor shot really measured: refused, measured, estimated, missing -->
-<script src="arcade-bag.js?v=3"></script>
-<script src="arcade-range-session.js?v=11"></script>
+<script src="lm-shot-review.js?v=1"></script>   <!-- a range shot before the bag: standard distances, mishit, misread, wrong club, the raw message -->
+<script src="arcade-bag.js?v=4"></script>
+<script src="arcade-range-session.js?v=12"></script>
 <script src="arcade-range-practice.js?v=8"></script>
 <script src="arcade-range-template.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=2"></script>
@@ -10248,6 +10249,8 @@
         //   Some GSPro variants:     backspin, sidespin (camelCase)
         // Sign convention: positive SideSpin = slice = positive spinAxis (curves right), as on Trackman.
         // This is identical to the conversion in fireShot() (manual UI path).
+        // the launch monitor's message as it came, before anything here reads or fills it in (lm-shot-review.js): kept with a range shot
+        const lmRaw = data && data.isLiveData && window.LMShotReview ? window.LMShotReview.rawOf(data) : null;
         if (data.totalSpinRpm === undefined || data.totalSpinRpm === null) {
             let bs = data.BackSpin ?? data.backspin ?? null;
             let ss = data.SideSpin ?? data.sidespin ?? null;
@@ -10272,6 +10275,7 @@
             }
             data = q.shot;
             data.quality = { measured: q.measured, estimated: q.estimated, missing: q.missing };
+            data.raw = lmRaw;
             if (q.estimated.indexOf('totalSpinRpm') >= 0 && !window._lmSpinEstimateNoted && typeof window.showBuildToast === 'function') {
                 window._lmSpinEstimateNoted = true;   // once a page: every shot of such a launch monitor lacks it
                 window.showBuildToast(sv ? '📡 Launch monitorn skickade inget spinn: spinnet uppskattas ur utgångsvinkeln och slagen räknas inte i din bag'
@@ -10499,7 +10503,8 @@
             spin: data.totalSpinRpm, spinAxis: data.spinAxisDeg || 0,
             // the club data a launch monitor measured (null when it sent none), which launch monitor, and what was estimated
             clubPath: data.clubPathDeg, faceToPath: data.faceToPathDeg, aoa: data.clubAoADeg,
-            device: data.deviceId || null, estimated: data.quality && data.quality.estimated.length ? data.quality.estimated.slice() : undefined
+            device: data.deviceId || null, estimated: data.quality && data.quality.estimated.length ? data.quality.estimated.slice() : undefined,
+            raw: data.raw || undefined
         } : null;
 
         let aimOffsetDeg = 0;
@@ -15958,7 +15963,7 @@ window.triggerExplosion = function(x, y, z) {
                             window.RangeSession.record({ club: window.RangeSession.clubFor(rIn.source, rIn.swingClub), source: rIn.source,
                                 carry: rOut.carry, total: rOut.total, offline: rOut.offline, apex: rOut.apex, landX: rOut.landX, landZ: rOut.landZ,
                                 ballSpeed: rIn.ballSpeed, clubSpeed: rIn.clubSpeed, launch: rIn.launch, hla: rIn.hla, spin: rIn.spin, spinAxis: rIn.spinAxis,
-                                clubPath: rIn.clubPath, faceToPath: rIn.faceToPath, aoa: rIn.aoa, device: rIn.device, estimated: rIn.estimated,
+                                clubPath: rIn.clubPath, faceToPath: rIn.faceToPath, aoa: rIn.aoa, device: rIn.device, estimated: rIn.estimated, raw: rIn.raw,
                                 practice: practice ? { dist: practice.dist, prox: practice.prox, onGreen: practice.onGreen, holed: practice.holed, along: practice.along, across: practice.across, hole: practice.hole, x: practice.x, z: practice.z,
                                            points: practice.points, test: practice.test ? true : undefined } : undefined });
                         }

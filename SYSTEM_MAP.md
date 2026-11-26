@@ -48,6 +48,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `arcade-range-session.js` | Range-session: slaglista, klubbsnitt (gapping), landningsprickar och spridningsellips, CSV (`window.RangeSession`) |
 | `arcade-lm-bridge.js` | WebSocket till Launch Monitor (SkyTrak/GSPro) på ws://localhost:8081 |
 | `lm-shot-quality.js` | Vad ett launch monitor-slag verkligen mätte (`window.LMShotQuality.check`): avvisat, uppmätt, uppskattat, saknat. Ett saknat värde blir aldrig 0 |
+| `lm-shot-review.js` | Ett rangeslag från launch monitorn före bagen (`window.LMShotReview`): rådata som det kom, carry i standardförhållanden, felträffar, felmätningar och fel klubba |
 | `physics.js` | Ballistisk fysikmotor (drag, spin, bounce, roll) |
 | `arcade.css` | Extraherad CSS |
 
@@ -508,6 +509,26 @@ Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monito
   - Bagen (`arcade-bag.js`) tar inte med slag som har uppskattade värden.
   - Panelen säger att carry räknas fram av bollfysiken.
 - **Test:** `tests/test_lm_shot_quality.js`, `tests/test_gspro_bridge.js`, `tests/test_bag.js` och `tests/test_range_session.js`. I smoke-testet avvisas ett slag utan bollfart, och en äldre brygga med spinn 0 ger ett ≈-slag utanför bagen.
+
+## Launch monitor-slag före bagen: standarddistans, felträffar och fel klubba (2026-11)
+Steg 3 av datakvaliteten för träning. Förut kom varje launch monitor-slag på rangen in i bagen med carry från rangens egna förhållanden: ett toppat slag eller ett slag med fel klubba vald drog ner snittet, och ett slag i motvind fick klubban att se kort ut.
+- **Modulen:** `lm-shot-review.js` (`window.LMShotReview`) har ingen DOM. Fysiken skickas in, i sidan `window.GolfPhysics`. Rangesessionen kör `RangeSession.prepare` på varje launch monitor-slag innan det bokas.
+- **Rådata:** `rawOf` sparar meddelandet som det kom, innan `triggerRealShot` räknar om eller fyller i något. `null` förblir `null`, och `measured`, `deviceId` och `shotNumber` följer med. Det sparas på slaget som `raw`, så gamla slag kan flygas om när fysiken blir bättre.
+- **Standardförhållanden:** `standard` flyger slaget igen i vindstilla, 15 °C, vid havsnivå och på plan fairway, och ger `carryStd` och `totalStd`. Det är de bagen sparar. Banans skottplan lägger till vind och lutning ovanpå, så de räknas inte två gånger.
+- **Felträffar** (`review`, flaggor). Gränserna i `LIMITS` är bedömningar, satta brett per klubbtyp:
+  - `topped`: för låg utgångsvinkel, till exempel under 2° med driver, 5° med 7-järn och 10° med wedge.
+  - `thin`: smash factor under klubbtypens gräns.
+  - `short`: bollfart under 80 % av spelarens egen median med klubban, när det finns minst 5 egna slag.
+  - `offline_start`: startriktning mer än 15° ut, alltså shank eller tå.
+- **Felmätning:** `smash_impossible` betyder en smash factor som ingen klubba ger.
+- **Fel klubba:** `wrong_club` med `looksLike` sätts när bollfarten ligger långt från den valda klubbans median (mer än 10 mph eller 3 spridningar) och nära en annan klubba i spelarens bag (inom 4 mph eller 2 spridningar). Spridningen är robust (MAD). En toast säger "Slaget ser ut som ditt 5i, inte 7i".
+- **Vad som inte granskas:** slag under 25 mph (puttar och chippar) och slag från svingmätaren.
+- **Följder:**
+  - Ett flaggat slag listas med ⚠ (förklaring i tooltip) och hålls utanför klubbsnitten, ellipsen, siktskylten och bagen (`counts`, `RangeSession.counted`). Panelen säger hur många slag som inte räknas.
+  - Trycker spelaren på ⚠ räknas slaget ändå (`accepted`, ✓). Byter spelaren klubba i listan granskas slaget igen mot den nya klubban.
+  - Bagen sparar `ballSpeed` per slag, som underlag för kontrollen av fel klubba, och har `PlayerBag.entries()`.
+  - CSV-exporten får fler kolumner efter de gamla: `carry_std_*`, `total_std_*`, `flags` (till exempel `wrong_club:5i`), `counted` och `raw` (som JSON).
+- **Test:** `tests/test_lm_shot_review.js` och `tests/test_range_session.js`. I smoke-testet sparas en äldre bryggas spinn 0 som 0 i rådatan, och ett toppat 7-järn får ⚠, hålls utanför bagen och räknas efter ett tryck.
 
 ## Driving range (2026-10)
 - En range är en bana med `is_range` och en Range Tee (`hole.tees.range`, `rot` = riktning i radianer, slaget går längs `(sin rot, cos rot)` i scenens x/z). `window._isRangeMode` sätts av `loadLevelBody` när adressen har `mode=range` **eller** den sparade banan/snabbutkastet har `is_range` (snabbutkastet sparar `is_range`); `mode=range` läggs då till i adressen. Så förblir en range en range när den öppnas från byggkortet, ett utkast eller efter omladdning.
