@@ -47,6 +47,7 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `arcade-range-practice.js` | Inspel på rangen: utslagsplats på valt avstånd från en greens pinne, resultat mot pinnen, statistik per avstånd, inspeltest med poäng och rekord, spridning runt pinnen (`window.RangePractice`) |
 | `arcade-range-session.js` | Range-session: slaglista, klubbsnitt (gapping), landningsprickar och spridningsellips, CSV (`window.RangeSession`) |
 | `arcade-lm-bridge.js` | WebSocket till Launch Monitor (SkyTrak/GSPro) på ws://localhost:8081 |
+| `lm-shot-quality.js` | Vad ett launch monitor-slag verkligen mätte (`window.LMShotQuality.check`): avvisat, uppmätt, uppskattat, saknat. Ett saknat värde blir aldrig 0 |
 | `physics.js` | Ballistisk fysikmotor (drag, spin, bounce, roll) |
 | `arcade.css` | Extraherad CSS |
 
@@ -477,6 +478,21 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - Efter flygningen: en resultatpaus (600 ms), siktblicken glider till siktpunkten (förut hopp) och linsen går tillbaka till 60°. Gäller bara AUTO-kameran; FREE-kameran är orörd.
 - `tests/test_flight_cam.js` mäter bl.a. att bollen är i bild ≥ 98 % av bildrutorna, vinkelhastighet ≤ 3 rad/s, samma resultat vid 30/60/144 fps, kamerahöjd över marken.
 - **Etapp 2:** fyra slagtyper (`profile`): ground (putt/rollare, gamla kameran), short (chip/pitch, närmare vy, lätt zoom, ingen slow motion), approach (35–140 m, slow motion 0,35×) och long (drivar, 0,45×, bredare båge, zoom ner mot 17°). Kameran håller sig över träd längs flygningen (`buildCameraObstacles` ger upprätta cylindrar `{x, z, r, top}`; bågen får en mjuk lyftning och kameran ligger minst 1,8 m över toppen). Vid approach hålls pinnen i bild efter landning (blicken delvis mot pinnen, något vidare lins). **Hoppa över:** tryck på bilden eller Space/Enter/Esc (`skipFlight`, inte de första 500 ms) lägger bollen i slutet av banan; en liten "TAP TO SKIP"-text visas under flygningen.
+
+## Launch monitor-data: saknat är aldrig noll (2026-11)
+Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monitorn inte skickade 0 i bryggan (`|| 0`): saknat spinn blev 0 rpm, alltså en boll utan lyft och helt fel slag, utan varning, och det hamnade i bagen.
+- **Bryggan** (`gspro-bridge/protocol.js` `normalizeShot`): saknade värden blir `null`. `measured` listar vad meddelandet faktiskt hade, och `deviceId` (`DeviceID`) och `shotNumber` följer med.
+- **Spelet** (`lm-shot-quality.js`, anropas i `triggerRealShot` för slag från launch monitorn):
+  - **Avvisas:** slag utan bollfart eller utgångsvinkel, och slag med orimliga värden (gränser i `LIMITS`, till exempel bollfart 3–235 mph och spinn högst 15 000 rpm). Ett meddelande säger vilket fält det gällde.
+  - **Uppskattas:** saknat spinn uppskattas ur utgångsvinkeln (`spinFromLaunch`, TrackMans tour-snitt: 10° ger 2 600, 16° ger 7 000 och 24° ger 9 300 rpm). Saknad spinnaxel och startriktning blir raka. Värdena listas i `estimated`, och ett meddelande per sida säger att spinnet uppskattas.
+  - **Saknas:** klubbdata som inte skickades förblir `null` och blir inte 0. En orimlig klubbvinkel räknas som saknad men flyger bollen ändå.
+  - **Äldre bryggor** skickar ingen `measured`-lista och 0 där värden saknades. Spinn 0 vid 25 mph eller mer räknas då som saknat (en långsam chip kan verkligen ha nästan inget spinn), och klubbfart 0 betyder ingen klubbdata.
+- **Följder:**
+  - Rangesessionen sparar `estimated`, klubbdata (`clubPath`, `faceToPath`, `aoa`) och `device`. Carry för ett uppskattat slag visas med ≈ och förklaras i en tooltip.
+  - CSV-exporten får nya kolumner efter de gamla: `club_path_deg`, `face_to_path_deg`, `attack_angle_deg`, `device`, `estimated` och `carry_from` (alltid `physics`, eftersom GSPro Open Connect inte skickar någon carry).
+  - Bagen (`arcade-bag.js`) tar inte med slag som har uppskattade värden.
+  - Panelen säger att carry räknas fram av bollfysiken.
+- **Test:** `tests/test_lm_shot_quality.js`, `tests/test_gspro_bridge.js`, `tests/test_bag.js` och `tests/test_range_session.js`. I smoke-testet avvisas ett slag utan bollfart, och en äldre brygga med spinn 0 ger ett ≈-slag utanför bagen.
 
 ## Driving range (2026-10)
 - En range är en bana med `is_range` och en Range Tee (`hole.tees.range`, `rot` = riktning i radianer, slaget går längs `(sin rot, cos rot)` i scenens x/z). `window._isRangeMode` sätts av `loadLevelBody` när adressen har `mode=range` **eller** den sparade banan/snabbutkastet har `is_range` (snabbutkastet sparar `is_range`); `mode=range` läggs då till i adressen. Så förblir en range en range när den öppnas från byggkortet, ett utkast eller efter omladdning.

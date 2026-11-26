@@ -48,6 +48,14 @@ check('CSV: header and one row in metres', csvM.length === 2 && /carry_m/.test(c
 const csvY = R.toCSV(shots.slice(0, 1), false).trim().split('\n');
 check('CSV: yards when the player uses yards', /carry_yd/.test(csvY[0]) && csvY[1].split(',')[4] === (140 * 1.09361).toFixed(1), csvY[1]);
 check('CSV: an empty session is just the header', R.toCSV([], true).split('\n').filter(Boolean).length === 1);
+// the columns added after the first ones: club data, the launch monitor, what was estimated, where carry comes from
+const extra = R.toCSV([{ t: 1, club: '7i', source: 'LM', carry: 140, total: 150, ballSpeed: 120, launch: 16, spin: 7000, clubPath: -1.5, faceToPath: 2, aoa: -4.2,
+  device: 'Garmin, R10', estimated: ['spinAxisDeg', 'azimDeg'] }], true).trim().split('\n');
+const xh = extra[0].split(','), xr = extra[1].match(/("[^"]*"|[^,]*)(,|$)/g).map(function (c) { return c.replace(/,$/, ''); });
+check('CSV: the old columns stay first and in place (carry is column 5)', xh[4] === 'carry_m' && xh[13] === 'spin_axis_deg', extra[0]);
+check('CSV: club path, face to path, attack angle, the launch monitor (quoted when it has a comma), what was estimated, carry from the physics',
+  xh.slice(14).join() === 'club_path_deg,face_to_path_deg,attack_angle_deg,device,estimated,carry_from' && xr[14] === '-1.5' && xr[15] === '2.0' && xr[16] === '-4.2' &&
+  xr[17] === '"Garmin, R10"' && xr[18] === 'spinAxisDeg azimDeg' && xr[19] === 'physics', extra[1]);
 
 const mixed = [{ club: 'PW', carry: 110 }, { club: 'PW', carry: 55, practice: { dist: 60 } }, { club: 'PW', carry: 112 }];
 check('approach practice shots are left out of the club averages (part swings)', R.fullSwings(mixed).length === 2 && Math.round(R.clubStats(R.fullSwings(mixed))[0].carry) === 111);

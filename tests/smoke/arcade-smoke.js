@@ -2189,6 +2189,30 @@ function serve() {
     });
     checks.push({ name: 'range: the launch-monitor shots go to the player\'s bag with their club', ok: bagNow.n === 2 && bagNow.clubs.every(function (c) { return c === '7i'; }) && bagNow.same, detail: JSON.stringify(bagNow) });
     checks.push({ name: 'range: shots raise no page errors (the course turn logic used to run and read the missing flag)', ok: rangeErrors.length === 0, detail: JSON.stringify(rangeErrors) });
+    rangeStep = 'launch monitor data quality';
+    // A missing value is never a zero (lm-shot-quality.js): a shot without ball speed is not played; an older bridge's spin of 0 at full
+    // speed flies on a spin estimated from the launch angle, marked ≈ in the session, and stays out of the bag; its missing club data stays empty
+    const lmq = await rp.evaluate(function () {
+      const before = { strokes: window.players[0].strokes, shots: window.RangeSession.shots().length };
+      window.triggerRealShot({ ballSpeedMph: null, launchAngleDeg: 14, totalSpinRpm: 5000, spinAxisDeg: 0, azimDeg: 0, measured: ['launchAngleDeg', 'totalSpinRpm', 'spinAxisDeg', 'azimDeg'], isLiveData: true });
+      const refused = { strokes: window.players[0].strokes, flying: window.isBallFlying() };
+      window.triggerRealShot({ ballSpeedMph: 90, launchAngleDeg: 18, totalSpinRpm: 0, spinAxisDeg: 0, azimDeg: 0, clubSpeedMph: 0, clubPathDeg: 0, faceToPathDeg: 0, clubAoADeg: 0, isLiveData: true });
+      return { before: before, refused: refused };
+    });
+    await rp.waitForFunction(function (n) { window.skipFlight(); return window.players[0].strokes >= n + 1; }, lmq.before.strokes, { timeout: 120000, polling: 500 });
+    await rp.waitForFunction(function () { window.skipFlight(); return !window.isBallFlying() && playState === 'ROUND_IDLE'; }, null, { timeout: 120000, polling: 500 });
+    await rp.waitForTimeout(300);
+    const lmq2 = await rp.evaluate(function () {
+      const shots = window.RangeSession.shots(), last = shots[shots.length - 1];
+      const bag = JSON.parse(localStorage.getItem('golf_bag_v1') || '{"shots":[]}').shots;
+      const cell = document.querySelector('#range-session tbody tr.rs-last td.rs-est');
+      return { shots: shots.length, estimated: last && last.estimated, spin: last && last.spin, clubPath: last && last.clubPath, clubSpeed: last && last.clubSpeed, carry: last && Math.round(last.carry),
+               bag: bag.length, cell: cell ? cell.textContent : null };
+    });
+    checks.push({ name: 'launch monitor data: a shot without ball speed is not played (no stroke, no flight)', ok: lmq.refused.strokes === lmq.before.strokes && !lmq.refused.flying, detail: JSON.stringify(lmq) });
+    checks.push({ name: 'launch monitor data: an older bridge\'s spin of 0 at 90 mph flies on an estimated spin, is marked ≈ in the session, its club data stays empty and it stays out of the bag',
+      ok: lmq2.shots === lmq.before.shots + 1 && Array.isArray(lmq2.estimated) && lmq2.estimated.indexOf('totalSpinRpm') >= 0 && lmq2.spin > 5000 && lmq2.carry > 30 &&
+          lmq2.clubPath === null && lmq2.clubSpeed === null && lmq2.bag === 2 && /^≈/.test(lmq2.cell || ''), detail: JSON.stringify(lmq2) });
     rangeStep = 'distance unit';
     const units = await rp.evaluate(function () {
       const h = courseHoles.find(function (x) { return x && x.tees && x.tees.range; });
