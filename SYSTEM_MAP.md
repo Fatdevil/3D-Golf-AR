@@ -495,6 +495,15 @@ Steg 2 av datakvaliteten för träning: ett sätt att mäta hur långt `physics.
 - **Spärren:** `physics-validation/baseline.json` innehåller dagens fel för tabellraderna. `tests/test_physics_validation.js` misslyckas om en rad blir mer än 0,5 yd eller 0,5° sämre, eller om `docs/physics-validation-report.md` inte är aktuell. Efter en avsiktlig ändring av fysiken körs `node tools/physics-validation.js --update-baseline --write` (eller `npm run physics:validate`).
 - **Det banken saknar:** slagpar. PGA-tabellen har alla tolv klubbor, driver till PW (TrackMans egen tabell, skärmdump från användaren). Se `physics-validation/README.md`.
 
+## Flight V2: inpassning med korsvalidering (2026-11)
+- **Verktyget:** `tools/physics-fit.js` byter ut luftkoefficienterna i en kopia av `physics.js` i minnet och skriver aldrig filen. Form A med dagens värden ger exakt samma flykt som spelet, vilket `tests/test_physics_fit.js` kontrollerar.
+- **Former:**
+  - A är dagens form.
+  - B har ett lyft som planar ut mjukt, och luftmotstånd med en S- och en S²-term.
+  - C är som B, med ett spinnavtagande som växer med farten.
+- **Kommandon:** `show` visar felen per rad. `fit` passar in en form. `cv` kör korsvalidering med 6 vikningar, där 2 rader hålls utanför i varje. `sweep` jämför dagens fysik med en inpassning, från chippar på 20 mph till drivers på 185 mph, och kontrollerar att carry alltid växer med bollfarten.
+- **Den första analysen** finns i `docs/flight-v2-analysis.md`. De nya formerna är bättre inne i TrackMan-tabellen (medianfelet på carry går från 4,5 till cirka 2,6 yd för utanförhållna rader) men sämre vid kanten (en utanförhållen driver hamnar 16–25 yd för kort). Därför är `physics.js` inte ändrad. Analysen listar också kriterierna för en ändring och vilka data som behövs.
+
 ## Launch monitor-data: saknat är aldrig noll (2026-11)
 Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monitorn inte skickade 0 i bryggan (`|| 0`): saknat spinn blev 0 rpm, alltså en boll utan lyft och helt fel slag, utan varning, och det hamnade i bagen.
 - **Bryggan** (`gspro-bridge/protocol.js` `normalizeShot`): saknade värden blir `null`. `measured` listar vad meddelandet faktiskt hade, och `deviceId` (`DeviceID`) och `shotNumber` följer med.
