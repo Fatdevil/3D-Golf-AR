@@ -1,0 +1,16 @@
+{
+  "id": "trackman-pga-2024",
+  "title": "TrackMan PGA Tour averages 2024",
+  "kind": "average",
+  "verified": true,
+  "source": "TrackMan's own table of the PGA Tour 2024 averages (screenshot from the user, docs/ball-flight-reference-report.md section 0). Inputs as in arcade-swing-engine.js CLUB_PROFILES, targets as in the report's table.",
+  "note": "Tour averages: the average of the launch values next to the average carry. The carry of the average shot is not the average carry (flight is not linear), so a few yards of the difference may be the comparison and not the physics. Only the rows whose inputs are in the repo are here; the 3 wood, 5 wood, hybrid, 3, 4, 6 and 8 iron rows need their ball speed, launch and spin from the table before they can be added.",
+  "conditions": { "temperatureC": 25, "altitudeFeet": 0 },
+  "rows": [
+    { "id": "pga24-driver", "club": "Dr", "ballSpeedMph": 171, "launchDeg": 10.4, "spinRpm": 2545, "carryYd": 282, "apexYd": 35, "landingDeg": 39 },
+    { "id": "pga24-5i", "club": "5i", "ballSpeedMph": 135, "launchDeg": 11.9, "spinRpm": 5280, "carryYd": 199, "apexYd": 33, "landingDeg": 50 },
+    { "id": "pga24-7i", "club": "7i", "ballSpeedMph": 123, "launchDeg": 16.1, "spinRpm": 7124, "carryYd": 176, "apexYd": 34, "landingDeg": 51 },
+    { "id": "pga24-9i", "club": "9i", "ballSpeedMph": 112, "launchDeg": 20.0, "spinRpm": 8793, "carryYd": 152, "apexYd": 32, "landingDeg": 52 },
+    { "id": "pga24-pw", "club": "PW", "ballSpeedMph": 104, "launchDeg": 23.7, "spinRpm": 9316, "carryYd": 142, "apexYd": 32, "landingDeg": 52 }
+  ]
+}

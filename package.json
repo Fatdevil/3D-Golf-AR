@@ -10,7 +10,8 @@
     "smoke": "node tests/smoke/arcade-smoke.js",
     "smoke:shape": "node tests/smoke/shot-shape-smoke.js",
     "smoke:builder": "node tests/smoke/blueprint-builder-smoke.js",
-    "e2e": "node tests/e2e/courses-e2e.js"
+    "e2e": "node tests/e2e/courses-e2e.js",
+    "physics:validate": "node tools/physics-validation.js"
   },
   "repository": {
     "type": "git",

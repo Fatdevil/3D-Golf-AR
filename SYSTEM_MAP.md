@@ -479,6 +479,21 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 - `tests/test_flight_cam.js` mäter bl.a. att bollen är i bild ≥ 98 % av bildrutorna, vinkelhastighet ≤ 3 rad/s, samma resultat vid 30/60/144 fps, kamerahöjd över marken.
 - **Etapp 2:** fyra slagtyper (`profile`): ground (putt/rollare, gamla kameran), short (chip/pitch, närmare vy, lätt zoom, ingen slow motion), approach (35–140 m, slow motion 0,35×) och long (drivar, 0,45×, bredare båge, zoom ner mot 17°). Kameran håller sig över träd längs flygningen (`buildCameraObstacles` ger upprätta cylindrar `{x, z, r, top}`; bågen får en mjuk lyftning och kameran ligger minst 1,8 m över toppen). Vid approach hålls pinnen i bild efter landning (blicken delvis mot pinnen, något vidare lins). **Hoppa över:** tryck på bilden eller Space/Enter/Esc (`skipFlight`, inte de första 500 ms) lägger bollen i slutet av banan; en liten "TAP TO SKIP"-text visas under flygningen.
 
+## Valideringsbanken för bollfysiken (2026-11)
+Steg 2 av datakvaliteten för träning: ett sätt att mäta hur långt `physics.js` ligger från verkliga slag, per klubba och bollfart, innan fysiken byggs om. Detta är något annat än "Fysiklabbet" (inmatning med siffror).
+- **`physics-validation/references/`:**
+  - `trackman-pga-2024.json`: de fem rader vars indata finns i repot (driver, 5-, 7- och 9-järn, PW), kontrollerade.
+  - `lpga-2014.json`: driver, skriven ur minnet, märkt okontrollerad. Den rapporteras för sig och avgör ingenting.
+  - `shots/*.csv`: slagpar från launch monitorernas egna appar (utgångsvärden och deras egen carry). Mappen är tom tills riktiga exporter finns.
+- **`physics-validation/validate.js`:**
+  - **CSV-import:** rubriker känns igen i flera former, med enheter i rubriken eller på en egen rad, semikolon och decimalkomma, backspinn och sidospinn räknas om till totalspinn, och en sidofil `<fil>.json` kan ange `columns`, `units` och `conditions`.
+  - **Vad som avvisas eller hoppas över:** spelets egen export (`carry_from` = `physics`) avvisas, och slag utan spinn hoppas över.
+  - **Fysiken:** varje rad körs i vindstilla på plan fairway i radens förhållanden.
+  - **Mätningen:** felmått per klubbgrupp och fartband (medianfel, bias, p90), och en uppdelning i kalibrering och test (cirka 70/30, FNV-hash av radens id).
+- **Målen** gäller bara kontrollerade slagpar i testmängden: fullslag 1,5 m, wedgar 20–100 m 1 m, landning 1,5°. Tour-snitt räknas inte, eftersom snittslagets carry inte är snittets carry.
+- **Spärren:** `physics-validation/baseline.json` innehåller dagens fel för tabellraderna. `tests/test_physics_validation.js` misslyckas om en rad blir mer än 0,5 yd eller 0,5° sämre, eller om `docs/physics-validation-report.md` inte är aktuell. Efter en avsiktlig ändring av fysiken körs `node tools/physics-validation.js --update-baseline --write` (eller `npm run physics:validate`).
+- **Det banken saknar:** slagpar, och indata för resten av PGA 2024-tabellen (3-trä, 5-trä, hybrid samt 3-, 4-, 6- och 8-järn). Se `physics-validation/README.md`.
+
 ## Launch monitor-data: saknat är aldrig noll (2026-11)
 Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monitorn inte skickade 0 i bryggan (`|| 0`): saknat spinn blev 0 rpm, alltså en boll utan lyft och helt fel slag, utan varning, och det hamnade i bagen.
 - **Bryggan** (`gspro-bridge/protocol.js` `normalizeShot`): saknade värden blir `null`. `measured` listar vad meddelandet faktiskt hade, och `deviceId` (`DeviceID`) och `shotNumber` följer med.
