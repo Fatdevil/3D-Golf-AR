@@ -29,6 +29,18 @@ console.log('1. CSV från launch monitorernas appar');
   check('temperatur i °F och höjd i meter blir °C och fot', t.rows.length === 1 && near(t.rows[0].conditions.temperatureC, 25, 0.01) && near(t.rows[0].conditions.altitudeFeet, 328.08, 0.1), t.rows);
 }
 
+  const cm = V.parseCsv('Ball Speed,Launch Angle,Spin Rate,CarryM,AltitudeM\n120,16,7000,150,100\n', { name: 'cm' });
+  check('enheten i själva rubriken (CarryM, AltitudeM) läses: meter, inte yards eller fot', cm.rows.length === 1 && near(cm.rows[0].carryYd, 150 * V.YD, 0.01) && near(cm.rows[0].conditions.altitudeFeet, 328.08, 0.1), cm.rows);
+  const la = V.parseCsv('Ball Speed,Launch Angle,Spin Rate,Carry (yds),Landing Angle,Apex Height (ft)\n120,16,7000,170,48.5,90\n', { name: 'la' });
+  check('uppmätt landningsvinkel och topphöjd följer med som mål (topphöjd i fot blir yards)', la.rows.length === 1 && la.rows[0].landingDeg === 48.5 && near(la.rows[0].apexYd, 30, 0.01), la.rows);
+  // shot pairs with landing angles can decide the landing goal
+  let lines = 'Club,Ball Speed,Launch Angle,Spin Rate,Carry,Descent Angle\n';
+  for (let i = 0; i < 30; i++) lines += '7i,' + (118 + i % 5) + ',16,7000,170,50\n';
+  const pairs = V.parseCsv(lines, { name: 'pairs' });
+  const pr = V.evaluate({ tables: [], files: [{ name: 'pairs', rows: pairs.rows }] });
+  const landingGoal = V.targetStatus(pr).filter(function (t) { return t.id === 'landing'; })[0];
+  check('slagpar med landningsvinkel ger ett landningsfel och avgör landningsmålet', pr.every(function (r) { return typeof r.err.landingDeg === 'number'; }) && landingGoal.n > 0 && landingGoal.met !== null, landingGoal);
+
 console.log('\n2. Uppdelning och grupper');
 {
   const ids = []; for (let i = 0; i < 2000; i++) ids.push('f:' + i);
@@ -66,7 +78,10 @@ console.log('\n4. Regressionsspärren (baseline.json)');
   const baseline = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'physics-validation', 'baseline.json'), 'utf8'));
   const reg = V.regressions(results, baseline);
   check('ingen tabellrad är sämre än baslinjen (' + V.SLACK.carryYd + ' yd / ' + V.SLACK.landingDeg + '° marginal)', reg.length === 0, reg);
-  check('baslinjen täcker varje tabellrad', results.filter(function (r) { return r.kind === 'average'; }).every(function (r) { return baseline[r.id]; }));
+  check('baslinjen täcker varje kontrollerad tabellrad och ingen okontrollerad', results.filter(function (r) { return r.kind === 'average'; }).every(function (r) { return r.verified ? !!baseline[r.id] : !baseline[r.id]; }), Object.keys(baseline));
+  // a row written from memory never stops a change, even if an older baseline still has it
+  const withLpga = Object.assign({}, V.baselineOf(results), { 'lpga14-driver': { absErr: { carryYd: 0, apexYd: 0, landingDeg: 0 } } });
+  check('en okontrollerad rad stoppar aldrig en ändring, inte ens om en äldre baslinje har den', V.regressions(results, withLpga).length === 0, V.regressions(results, withLpga));
   // the guard itself, against a baseline of today's results (so it holds whatever the physics gives): a row that got 2 yd worse (away from
   // its target) is caught, one that got better is not
   const today = V.baselineOf(results);

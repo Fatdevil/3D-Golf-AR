@@ -83,6 +83,8 @@ const ALIASES = {
   axis: ['spinaxis', 'axis', 'spinaxisdeg'],
   hla: ['launchdirection', 'hla', 'horizontallaunch', 'horizontallaunchangle', 'startline', 'launchh', 'direction'],
   carry: ['carry', 'carrydistance', 'carryyd', 'carryyards', 'carrym', 'carrymeters', 'carrymetres'],
+  landing: ['landingangle', 'descentangle', 'landangle', 'landing', 'descent', 'landingdeg'],
+  apex: ['apex', 'apexheight', 'height', 'maxheight', 'peakheight', 'apexyd', 'apexm', 'apexft'],
   temperature: ['temperature', 'temp', 'airtemp', 'airtemperature'],
   altitude: ['altitude', 'elevation', 'altitudeft', 'altitudem'],
   carryFrom: ['carryfrom']
@@ -100,6 +102,9 @@ function unitOf(header) {
   if (/\bft\b|feet|\(ft\)/.test(h)) return 'ft';
   return null;
 }
+// the unit an accepted alias carries in its own letters ("CarryM", "AltitudeFt"), which unitOf cannot see once the header has no brackets
+const ALIAS_UNIT = { carrym: 'm', carrymeters: 'm', carrymetres: 'm', carryyd: 'yd', carryyards: 'yd', altitudem: 'm', altitudeft: 'ft', ballspeedmph: 'mph',
+  apexm: 'm', apexyd: 'yd', apexft: 'ft', spinrpm: null, landingdeg: null, launchdeg: null };
 function normHeader(h) { return String(h).toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^a-z0-9]/g, ''); }
 function splitLine(line, delim) {
   const out = []; let cur = '', q = false;
@@ -142,7 +147,7 @@ function parseCsv(text, opts) {
   headers.forEach(function (h, i) {
     const n = normHeader(h);
     Object.keys(ALIASES).forEach(function (k) {
-      if (columns[k] === undefined && ALIASES[k].indexOf(n) >= 0) { columns[k] = i; units[k] = unitOf(h) || (unitsRow ? unitOf('(' + second[i] + ')') : null); }
+      if (columns[k] === undefined && ALIASES[k].indexOf(n) >= 0) { columns[k] = i; units[k] = unitOf(h) || ALIAS_UNIT[n] || (unitsRow ? unitOf('(' + second[i] + ')') : null); }
     });
   });
   // a sidecar can name the columns and units outright
@@ -178,8 +183,13 @@ function parseCsv(text, opts) {
     const cond = Object.assign({}, side.conditions || {});
     if (temp !== null) cond.temperatureC = temp;
     if (alt !== null) cond.altitudeFeet = alt;
-    rows.push({ id: name + ':' + (li + 1), club: columns.club !== undefined ? (c[columns.club] || '').trim() : '', ballSpeedMph: bs * speedK, launchDeg: la, spinRpm: spin,
-      spinAxisDeg: axis || 0, hlaDeg: get('hla') || 0, carryYd: carry * carryK, conditions: cond });
+    const row = { id: name + ':' + (li + 1), club: columns.club !== undefined ? (c[columns.club] || '').trim() : '', ballSpeedMph: bs * speedK, launchDeg: la, spinRpm: spin,
+      spinAxisDeg: axis || 0, hlaDeg: get('hla') || 0, carryYd: carry * carryK, conditions: cond };
+    // what the launch monitor also measured, when the file has it: the landing angle and the apex (in yards; feet and metres converted)
+    const landing = get('landing'), apex = get('apex');
+    if (landing !== null) row.landingDeg = landing;
+    if (apex !== null) row.apexYd = apex * ({ m: YD, ft: 1 / 3 }[units.apex] || 1);
+    rows.push(row);
   }
   return { rows: rows, skipped: skipped, refused: null, columns: columns };
 }
@@ -253,10 +263,11 @@ function targetStatus(results) {
 }
 
 // ---- the baseline (regression guard) ----------------------------------------------------------------------------------------------
-// What the physics gives today for the verified table rows: a change to physics.js may make a row better, never worse by more than the slack
+// What the physics gives today for the verified table rows: a change to physics.js may make a row better, never worse by more than the slack.
+// Unverified rows (written from memory) are left out: they must never stop a change that brings the verified rows closer.
 function baselineOf(results) {
   const out = {};
-  results.filter(function (r) { return r.kind === 'average'; }).forEach(function (r) {
+  results.filter(function (r) { return r.kind === 'average' && r.verified; }).forEach(function (r) {
     out[r.id] = { carryYd: +r.engine.carryYd.toFixed(2), apexYd: +r.engine.apexYd.toFixed(2), landingDeg: +r.engine.landingDeg.toFixed(2),
       absErr: { carryYd: +Math.abs(r.err.carryYd).toFixed(2), apexYd: r.err.apexYd === undefined ? null : +Math.abs(r.err.apexYd).toFixed(2), landingDeg: r.err.landingDeg === undefined ? null : +Math.abs(r.err.landingDeg).toFixed(2) } };
   });
@@ -266,7 +277,7 @@ const SLACK = { carryYd: 0.5, apexYd: 0.5, landingDeg: 0.5 };
 // rows whose error grew past the baseline plus the slack: [{ id, measure, was, now }]
 function regressions(results, baseline) {
   const out = [];
-  results.filter(function (r) { return baseline[r.id]; }).forEach(function (r) {
+  results.filter(function (r) { return r.verified && baseline[r.id]; }).forEach(function (r) {
     ['carryYd', 'apexYd', 'landingDeg'].forEach(function (m) {
       const was = baseline[r.id].absErr[m];
       if (was === null || was === undefined || r.err[m] === undefined) return;

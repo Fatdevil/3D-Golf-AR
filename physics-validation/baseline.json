@@ -1,14 +1,4 @@
 {
-  "lpga14-driver": {
-    "carryYd": 212.55,
-    "apexYd": 26.12,
-    "landingDeg": 37.81,
-    "absErr": {
-      "carryYd": 5.45,
-      "apexYd": 1.12,
-      "landingDeg": 0.81
-    }
-  },
   "pga24-driver": {
     "carryYd": 271.82,
     "apexYd": 34.52,

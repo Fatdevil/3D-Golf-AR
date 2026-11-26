@@ -78,8 +78,12 @@ return { text: L.join('\n') + '\n', results: results, regressions: reg };
 module.exports = { buildReport: buildReport, REPORT: REPORT };
 if (require.main !== module) return;
 
-const built = buildReport(), text = built.text, results = built.results, reg = built.regressions;
+// a new baseline first, so the report written next is measured against it (and not against the one it replaces)
+if (args.indexOf('--update-baseline') >= 0) {
+  fs.writeFileSync(BASELINE, JSON.stringify(V.baselineOf(V.evaluate(V.loadBank())), null, 2) + '\n');
+  console.log('Wrote ' + path.relative(ROOT, BASELINE));
+}
+const built = buildReport(), text = built.text, reg = built.regressions;
 console.log(text);
 if (args.indexOf('--write') >= 0) { fs.writeFileSync(REPORT, text); console.log('Wrote ' + path.relative(ROOT, REPORT)); }
-if (args.indexOf('--update-baseline') >= 0) { fs.writeFileSync(BASELINE, JSON.stringify(V.baselineOf(results), null, 2) + '\n'); console.log('Wrote ' + path.relative(ROOT, BASELINE)); }
-process.exit(reg.length && args.indexOf('--update-baseline') < 0 ? 1 : 0);
+process.exit(reg.length ? 1 : 0);
