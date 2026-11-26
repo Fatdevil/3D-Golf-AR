@@ -483,7 +483,7 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monitorn inte skickade 0 i bryggan (`|| 0`): saknat spinn blev 0 rpm, alltså en boll utan lyft och helt fel slag, utan varning, och det hamnade i bagen.
 - **Bryggan** (`gspro-bridge/protocol.js` `normalizeShot`): saknade värden blir `null`. `measured` listar vad meddelandet faktiskt hade, och `deviceId` (`DeviceID`) och `shotNumber` följer med.
 - **Spelet** (`lm-shot-quality.js`, anropas i `triggerRealShot` för slag från launch monitorn):
-  - **Avvisas:** slag utan bollfart eller utgångsvinkel, och slag med orimliga värden (gränser i `LIMITS`, till exempel bollfart 3–235 mph och spinn högst 15 000 rpm). Ett meddelande säger vilket fält det gällde.
+  - **Avvisas:** slag utan bollfart eller utgångsvinkel, och slag med orimliga värden (gränser i `LIMITS`, till exempel bollfart över 0 och högst 235 mph, eftersom en kort putt kan gå under 3 mph, och spinn högst 15 000 rpm). Ett meddelande säger vilket fält det gällde.
   - **Uppskattas:** saknat spinn uppskattas ur utgångsvinkeln (`spinFromLaunch`, TrackMans tour-snitt: 10° ger 2 600, 16° ger 7 000 och 24° ger 9 300 rpm). Saknad spinnaxel och startriktning blir raka. Värdena listas i `estimated`, och ett meddelande per sida säger att spinnet uppskattas.
   - **Saknas:** klubbdata som inte skickades förblir `null` och blir inte 0. En orimlig klubbvinkel räknas som saknad men flyger bollen ändå.
   - **Äldre bryggor** skickar ingen `measured`-lista och 0 där värden saknades. Spinn 0 vid 25 mph eller mer räknas då som saknat (en långsam chip kan verkligen ha nästan inget spinn), och klubbfart 0 betyder ingen klubbdata.

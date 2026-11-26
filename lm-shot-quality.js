@@ -16,10 +16,11 @@
 (function (root) {
     'use strict';
 
-    // what a golf shot can be (mph, degrees, rpm); outside these the launch monitor misread the ball
+    // what a golf shot can be (mph, degrees, rpm); outside these the launch monitor misread the ball. A short putt can be well under
+    // 3 mph (2 mph rolls about 0.7 m), so any positive ball speed counts; 0 is refused as no ball speed
     const LIMITS = {
-        ballSpeedMph: [3, 235], launchAngleDeg: [-20, 80], totalSpinRpm: [0, 15000], spinAxisDeg: [-90, 90], azimDeg: [-60, 60],
-        clubSpeedMph: [3, 160], clubPathDeg: [-30, 30], faceToPathDeg: [-30, 30], clubAoADeg: [-20, 20]
+        ballSpeedMph: [0.1, 235], launchAngleDeg: [-20, 80], totalSpinRpm: [0, 15000], spinAxisDeg: [-90, 90], azimDeg: [-60, 60],
+        clubSpeedMph: [0.1, 160], clubPathDeg: [-30, 30], faceToPathDeg: [-30, 30], clubAoADeg: [-20, 20]
     };
     const BALL = ['ballSpeedMph', 'launchAngleDeg', 'totalSpinRpm', 'spinAxisDeg', 'azimDeg'];
     const CLUB = ['clubSpeedMph', 'clubPathDeg', 'faceToPathDeg', 'clubAoADeg'];

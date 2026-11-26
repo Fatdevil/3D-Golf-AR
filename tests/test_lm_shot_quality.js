@@ -40,6 +40,8 @@ console.log('\n3. Orimliga värden');
   check('bollfart 400 mph: spelas inte, fältet namnges', !fast.ok && fast.reason === 'out_of_range' && fast.field === 'ballSpeedMph', fast);
   const spin = Q.check(gspro({ TotalSpin: 40000 }));
   check('40 000 rpm: spelas inte', !spin.ok && spin.field === 'totalSpinRpm', spin);
+  const putt = Q.check(gspro({ Speed: 2, VLA: 0, TotalSpin: 0, SpinAxis: 0, HLA: 0 }));
+  check('en kort putt på 2 mph spelas, med sitt uppmätta spinn 0', putt.ok && putt.shot.totalSpinRpm === 0 && putt.estimated.length === 0, putt);
   const zero = Q.check(gspro({ Speed: 0 }));
   check('bollfart 0: spelas inte', !zero.ok && zero.reason === 'no_ball_speed', zero);
   const badClub = Q.check(gspro(null, { Speed: 90, Path: 75 }));
