@@ -6,6 +6,9 @@
 //  arcade.html calls start() when a range is played (test mode), stop() in the builder, and record() when a shot has come
 //  to rest (before the ball goes back to the tee). The club of a launch-monitor shot is the one picked in the panel (a launch
 //  monitor does not send it); a swing or typed shot takes the swing engine's club unless one is picked in the panel.
+//  Carry and total are worked out by the game's ball physics from what the launch monitor measured (GSPro Open Connect sends no carry);
+//  a shot whose spin the launch monitor did not send flew on an estimate (lm-shot-quality.js): it is marked ≈ and its `estimated` list is
+//  kept, with the club data the launch monitor measured and which launch monitor it was, also in the CSV.
 //  The maths (averages, spread, CSV, range frame) has no DOM and is tested in tests/test_range_session.js.
 // ================================================================
 (function (root) {
@@ -59,14 +62,20 @@
     // listed with the others but left out of the club averages, the aim billboard's average and the ellipse, as they are out of the bag
     function fullSwings(shots) { return shots.filter(function (s) { return !s.practice; }); }
 
+    // a text cell: commas and quotes would break the row
+    function csvText(v) { if (v === null || v === undefined || v === '') return ''; const t = String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; }
     function toCSV(shots, useMeters) {
         const k = useMeters ? 1 : 1.09361, u = useMeters ? 'm' : 'yd';
         const f = function (v, d) { return num(v) === null ? '' : v.toFixed(d); };
-        const head = ['#', 'time', 'club', 'source', 'carry_' + u, 'total_' + u, 'offline_' + u + '(+R)', 'apex_' + u, 'ball_speed_mph', 'club_speed_mph', 'launch_deg', 'start_line_deg', 'spin_rpm', 'spin_axis_deg'];
+        const head = ['#', 'time', 'club', 'source', 'carry_' + u, 'total_' + u, 'offline_' + u + '(+R)', 'apex_' + u, 'ball_speed_mph', 'club_speed_mph', 'launch_deg', 'start_line_deg', 'spin_rpm', 'spin_axis_deg',
+            // added after the first columns (spreadsheets made from older files keep working): the club data, the launch monitor, what was
+            // estimated (no spin from the launch monitor), and that carry and total come from the game's physics
+            'club_path_deg', 'face_to_path_deg', 'attack_angle_deg', 'device', 'estimated', 'carry_from'];
         const rows = shots.map(function (s, i) {
             return [i + 1, s.t ? new Date(s.t).toISOString() : '', s.club || '', s.source || '',
                 f(num(s.carry) !== null ? s.carry * k : null, 1), f(num(s.total) !== null ? s.total * k : null, 1), f(num(s.offline) !== null ? s.offline * k : null, 1),
-                f(num(s.apex) !== null ? s.apex * k : null, 1), f(s.ballSpeed, 1), f(s.clubSpeed, 1), f(s.launch, 1), f(s.hla, 1), f(s.spin, 0), f(s.spinAxis, 1)].join(',');
+                f(num(s.apex) !== null ? s.apex * k : null, 1), f(s.ballSpeed, 1), f(s.clubSpeed, 1), f(s.launch, 1), f(s.hla, 1), f(s.spin, 0), f(s.spinAxis, 1),
+                f(s.clubPath, 1), f(s.faceToPath, 1), f(s.aoa, 1), csvText(s.device), Array.isArray(s.estimated) ? s.estimated.join(' ') : '', num(s.carry) !== null ? 'physics' : ''].join(',');
         });
         return head.join(',') + '\n' + rows.join('\n') + (rows.length ? '\n' : '');
     }
@@ -81,7 +90,8 @@
                   offline: 'Offline', n: 'Antal', spread: 'Spridning', empty: 'Slå ett slag så hamnar det här.', csv: 'Exportera CSV', clear: 'Ny session',
                   confirmClear: 'Börja en ny session? Slagen i den här sessionen tas bort.', ellipse: 'Ellipsen visar var ungefär 2 av 3 slag med {c} landar.',
                   lmHint: 'Launch monitorn skickar inte klubban: välj den här.',
-                  bagNote: 'Dina launch monitor-slag sparas i din bag (senaste 40 per klubba) och styr klubbförslaget på banan från 3 slag.',
+                  bagNote: 'Dina launch monitor-slag sparas i din bag (senaste 40 per klubba) och styr klubbförslaget på banan från 3 slag. Carry räknas fram av spelets bollfysik ur launch monitorns mätvärden.',
+                  estimated: 'Launch monitorn skickade inget spinn: carry bygger på ett uppskattat spinn och slaget räknas inte i din bag.',
                   tabApproach: 'Inspel', distance: 'Avstånd', greens: 'Green', toPin: 'Till pinne', best: 'Bäst', toPinNote: 'Snitt och bästa avstånd till pinnen per övat avstånd',
                   tests: 'Inspeltest', last: 'Senast', avg5: 'Snitt 5 senaste', played: 'test', testTip: 'Test {i}: {v} p', rateRange: 'Rangen',
                   board: 'Topplista på rangen', you: 'Du', of: 'av', pts: 'p' },
@@ -89,7 +99,8 @@
                   offline: 'Offline', n: 'Shots', spread: 'Spread', empty: 'Hit a shot and it shows up here.', csv: 'Export CSV', clear: 'New session',
                   confirmClear: 'Start a new session? The shots of this session are removed.', ellipse: 'The ellipse shows where about 2 in 3 shots with {c} land.',
                   lmHint: 'The launch monitor does not send the club: pick it here.',
-                  bagNote: 'Your launch monitor shots go to your bag (the last 40 per club) and set the club suggestion on a course from 3 shots.',
+                  bagNote: 'Your launch monitor shots go to your bag (the last 40 per club) and set the club suggestion on a course from 3 shots. Carry is worked out by the game\'s ball physics from what the launch monitor measured.',
+                  estimated: 'The launch monitor sent no spin: the carry rests on an estimated spin and the shot does not count in your bag.',
                   tabApproach: 'Approach', distance: 'Distance', greens: 'Greens', toPin: 'To pin', best: 'Best', toPinNote: 'Average and best distance to the pin per practised distance',
                   tests: 'Approach tests', last: 'Latest', avg5: 'Avg of last 5', played: 'tests', testTip: 'Test {i}: {v} pts', rateRange: 'The range',
                   board: 'Leaderboard on this range', you: 'You', of: 'of', pts: 'pts' }
@@ -106,6 +117,7 @@
 
         const t = function (k) { const L = (root.getGolfLanguage && root.getGolfLanguage() === 'sv') ? TXT.sv : TXT.en; return L[k]; };
         const dist = function (m) { return num(m) === null ? '–' : (root.useMeters ? m : m * 1.09361).toFixed(0); };
+        const guessed = function (s) { return Array.isArray(s.estimated) && s.estimated.length > 0; };   // flew on an estimated value
         const unit = function () { return root.useMeters ? 'm' : 'yd'; };
         const side0 = function (m) { return num(m) === null ? '–' : (root.useMeters ? m : m * 1.09361).toFixed(1); };
         const side = function (m) { if (num(m) === null) return '–'; const a = Math.abs(root.useMeters ? m : m * 1.09361); return a.toFixed(1) + (a < 0.05 ? '' : (m > 0 ? ' R' : ' L')); };
@@ -182,7 +194,7 @@
                         const s = shots[i];
                         h += '<tr' + (i === shots.length - 1 ? ' class="rs-last"' : '') + '><td>' + (i + 1) + '</td><td><select data-shot="' + i + '" aria-label="' + esc(t('club')) + ' ' + (i + 1) + '">' +
                              '<option value="">–</option>' + CLUBS.map(function (c) { return '<option' + (s.club === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
-                             '</select></td><td>' + dist(s.carry) + '</td><td>' + dist(s.total) + '</td><td>' + side(s.offline) + '</td></tr>';
+                             '</select></td><td' + (guessed(s) ? ' class="rs-est" title="' + esc(t('estimated')) + '"' : '') + '>' + (guessed(s) ? '≈' : '') + dist(s.carry) + '</td><td>' + dist(s.total) + '</td><td>' + side(s.offline) + '</td></tr>';
                     }
                     h += '</tbody></table>';
                 } else {

@@ -778,6 +778,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session td { text-align: right; padding: 3px 4px; border-top: 1px solid rgba(255,255,255,0.05); font-weight: 600; }
   #range-session th:first-child, #range-session td:first-child, #range-session th:nth-child(2), #range-session td:nth-child(2) { text-align: left; }
   #range-session tr.rs-last td { color: #38bdf8; font-weight: 800; }
+  #range-session td.rs-est { color: #fbbf24; cursor: help; }   /* the carry rests on an estimated spin (lm-shot-quality.js) */
   #range-session select { background: #1e293b; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; font-size: 11px; font-weight: 700; padding: 1px 2px; }
   #range-session .rs-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   #range-session .rs-empty { color: #94a3b8; padding: 12px 4px; }

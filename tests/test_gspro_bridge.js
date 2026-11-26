@@ -74,7 +74,13 @@ const shot = (n, ball) => ({
   s = P.normalizeShot(shot(6, { Speed: '147.5', VLA: '16.3', TotalSpin: '6250' }));
   check('siffror som text', s && s.ballSpeedMph === 147.5 && s.launchAngleDeg === 16.3 && s.totalSpinRpm === 6250);
   s = P.normalizeShot(shot(7, { Speed: 'abc', HLA: NaN }));
-  check('ogiltiga värden blir 0, inte NaN', s && s.ballSpeedMph === 0 && s.azimDeg === 0);
+  check('ogiltiga värden blir null (saknas), aldrig 0 eller NaN, och räknas inte som uppmätta', s && s.ballSpeedMph === null && s.azimDeg === null && s.measured.indexOf('ballSpeedMph') < 0 && s.measured.indexOf('azimDeg') < 0 && s.measured.indexOf('launchAngleDeg') >= 0, s && JSON.stringify(s));
+  s = P.normalizeShot(shot(9, { TotalSpin: undefined, SpinAxis: undefined }));
+  check('saknat spinn och spinnaxel: null, inte 0', s && s.totalSpinRpm === null && s.spinAxisDeg === null && s.measured.indexOf('totalSpinRpm') < 0, s && JSON.stringify(s));
+  check('utan klubbdata: klubbvärdena är null', s && s.clubSpeedMph === null && s.clubPathDeg === null && s.faceToPathDeg === null && s.clubAoADeg === null);
+  const dev = shot(10); dev.DeviceID = 'Garmin R10 ';
+  s = P.normalizeShot(dev);
+  check('enhetens id och slagnumret följer med', s && s.deviceId === 'Garmin R10' && s.shotNumber === 10, s && JSON.stringify([s.deviceId, s.shotNumber]));
   const withClub = shot(8); withClub.ClubData = { Speed: 100, Path: 2, FaceToTarget: 3, AngleOfAttack: -4 };
   s = P.normalizeShot(withClub);
   check('klubbdata', s && s.clubSpeedMph === 100 && s.clubPathDeg === 2 && s.faceToPathDeg === 1 && s.clubAoADeg === -4);

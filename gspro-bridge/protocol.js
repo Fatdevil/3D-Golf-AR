@@ -1,7 +1,8 @@
 'use strict';
 // GSPro Open Connect v1: the parts of the protocol that need no network, so they can be tested.
 //   createFramer()   cuts the TCP byte stream into JSON messages (several per packet, or one split over several packets)
-//   normalizeShot()  turns a GSPro message into the shot the game's triggerRealShot() takes, or null for heartbeats and non-shots
+//   normalizeShot()  turns a GSPro message into the shot the game's triggerRealShot() takes (missing values null, `measured` = what the
+//                    message had), or null for heartbeats and non-shots
 //   replies()        what the bridge answers to every message
 
 const MAX_BUFFER = 1024 * 1024;   // a message is a few hundred bytes; a megabyte of unfinished text is garbage
@@ -76,17 +77,26 @@ function normalizeShot(data) {
   const path = num(club.Path);
   const faceToTarget = num(club.FaceToTarget);
   const faceToPath = faceToTarget !== undefined ? faceToTarget - (path || 0) : num(club.FaceToPath);
-  return {
-    ballSpeedMph: num(ball.Speed) || 0,
-    launchAngleDeg: num(ball.VLA) || 0,
-    totalSpinRpm: totalSpin || 0,
-    spinAxisDeg: axis || 0,
-    azimDeg: num(ball.HLA) || 0,
-    clubSpeedMph: num(club.Speed) || 0,
-    clubPathDeg: path || 0,
-    faceToPathDeg: faceToPath || 0,
-    clubAoADeg: num(club.AngleOfAttack) || 0
+  // A value the message did not have stays null: it is never a zero (a shot without spin is not a knuckleball). `measured` lists
+  // what the message really had; the game (lm-shot-quality.js) decides what it can fly and what it has to estimate.
+  const shot = {
+    ballSpeedMph: num(ball.Speed),
+    launchAngleDeg: num(ball.VLA),
+    totalSpinRpm: totalSpin,
+    spinAxisDeg: axis,
+    azimDeg: num(ball.HLA),
+    clubSpeedMph: num(club.Speed),
+    clubPathDeg: path,
+    faceToPathDeg: faceToPath,
+    clubAoADeg: num(club.AngleOfAttack)
   };
+  const measured = [];
+  Object.keys(shot).forEach(function (k) { if (shot[k] === undefined) shot[k] = null; else measured.push(k); });
+  shot.measured = measured;
+  // which launch monitor and which of its shots (traceable shot data); absent when the message has none
+  shot.deviceId = typeof data.DeviceID === 'string' && data.DeviceID.trim() ? data.DeviceID.trim().slice(0, 64) : null;
+  shot.shotNumber = num(data.ShotNumber) !== undefined ? num(data.ShotNumber) : null;
+  return shot;
 }
 
 // GSPro wants a receipt for every message or the launch monitor closes the socket; third-party monitors also expect the player info (Code 201).
