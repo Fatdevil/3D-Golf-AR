@@ -483,8 +483,8 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 ## Valideringsbanken för bollfysiken (2026-11)
 Steg 2 av datakvaliteten för träning: ett sätt att mäta hur långt `physics.js` ligger från verkliga slag, per klubba och bollfart, innan fysiken byggs om. Detta är något annat än "Fysiklabbet" (inmatning med siffror).
 - **`physics-validation/references/`:**
-  - `trackman-pga-2024.json`: de fem rader vars indata finns i repot (driver, 5-, 7- och 9-järn, PW), kontrollerade.
-  - `lpga-2014.json`: driver, skriven ur minnet, märkt okontrollerad. Den rapporteras för sig och avgör ingenting.
+  - `trackman-pga-2024.json`: TrackMans PGA-tabell, alla tolv klubbor (driver till PW), kontrollerad.
+  - `trackman-lpga.json`: TrackMans LPGA-tabell, elva klubbor, i meter som tryckt (`carryM`, `apexM`); `loadBank` räknar om till yards. Kontrollerad (skärmdump från användaren). Den ersätter `lpga-2014.json`, en driverrad ur minnet som tabellen inte bekräftar. Förhållandena står inte i tabellen och antas vara PGA-tabellens (25 °C, havsnivå).
   - `shots/*.csv`: slagpar från launch monitorernas egna appar (utgångsvärden och deras egen carry). Mappen är tom tills riktiga exporter finns.
 - **`physics-validation/validate.js`:**
   - **CSV-import:** rubriker känns igen i flera former, med enheter i rubriken eller på en egen rad, semikolon och decimalkomma, backspinn och sidospinn räknas om till totalspinn, och en sidofil `<fil>.json` kan ange `columns`, `units` och `conditions`.

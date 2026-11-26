@@ -1,0 +1,22 @@
+{
+  "id": "trackman-lpga",
+  "title": "TrackMan LPGA Tour averages (meters)",
+  "kind": "average",
+  "verified": true,
+  "source": "TrackMan's own table \"LPGA Tour averages meters\" (screenshot from the user, 2026-11-26; the table states no year). Max height and carry are in metres as printed (apexM, carryM); the bank converts them to yards.",
+  "note": "Tour averages: the average of the launch values next to the average carry, so a few yards of a difference may be the comparison and not the physics. The conditions are not stated on the table: taken as the PGA table's (25 °C, sea level). Ball speeds 88-143 mph: the bank's slower end. Replaces lpga-2014.json, a driver row written from memory (140 mph / 13.2° / 2611 rpm -> 218 yd), which this table does not confirm.",
+  "conditions": { "temperatureC": 25, "altitudeFeet": 0 },
+  "rows": [
+    { "id": "lpga-driver", "club": "Dr", "ballSpeedMph": 143, "launchDeg": 12.6, "spinRpm": 2506, "carryM": 204, "apexM": 24, "landingDeg": 36 },
+    { "id": "lpga-3w", "club": "3W", "ballSpeedMph": 135, "launchDeg": 11.6, "spinRpm": 2595, "carryM": 183, "apexM": 23, "landingDeg": 38 },
+    { "id": "lpga-5w", "club": "5W", "ballSpeedMph": 130, "launchDeg": 12.3, "spinRpm": 4320, "carryM": 173, "apexM": 23, "landingDeg": 43 },
+    { "id": "lpga-hy", "club": "Hy", "ballSpeedMph": 125, "launchDeg": 12.3, "spinRpm": 4504, "carryM": 163, "apexM": 23, "landingDeg": 45 },
+    { "id": "lpga-4i", "club": "4i", "ballSpeedMph": 118, "launchDeg": 13.9, "spinRpm": 4608, "carryM": 160, "apexM": 23, "landingDeg": 43 },
+    { "id": "lpga-5i", "club": "5i", "ballSpeedMph": 114, "launchDeg": 14.6, "spinRpm": 4966, "carryM": 152, "apexM": 23, "landingDeg": 45 },
+    { "id": "lpga-6i", "club": "6i", "ballSpeedMph": 111, "launchDeg": 16.7, "spinRpm": 5904, "carryM": 142, "apexM": 23, "landingDeg": 46 },
+    { "id": "lpga-7i", "club": "7i", "ballSpeedMph": 106, "launchDeg": 18.5, "spinRpm": 6630, "carryM": 131, "apexM": 24, "landingDeg": 47 },
+    { "id": "lpga-8i", "club": "8i", "ballSpeedMph": 102, "launchDeg": 20.8, "spinRpm": 7413, "carryM": 122, "apexM": 25, "landingDeg": 47 },
+    { "id": "lpga-9i", "club": "9i", "ballSpeedMph": 95, "launchDeg": 23.5, "spinRpm": 7605, "carryM": 112, "apexM": 25, "landingDeg": 48 },
+    { "id": "lpga-pw", "club": "PW", "ballSpeedMph": 88, "launchDeg": 25.2, "spinRpm": 8465, "carryM": 101, "apexM": 25, "landingDeg": 48 }
+  ]
+}

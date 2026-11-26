@@ -117,11 +117,10 @@ function fly(G, shot, conditions) {
 }
 
 // the rows a fit uses: every row of the verified tables, with the table's conditions
+// (as the validation bank reads them: a table in metres has its yards worked out)
 function rows() {
-  const dir = path.join(ROOT, 'physics-validation', 'references');
   const out = [];
-  fs.readdirSync(dir).filter(function (f) { return /\.json$/.test(f); }).sort().forEach(function (f) {
-    const t = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+  require('../physics-validation/validate.js').loadBank().tables.forEach(function (t) {
     if (t.verified === false) return;   // a table written from memory never decides anything
     t.rows.forEach(function (r) { out.push(Object.assign({ conditions: t.conditions || {} }, r)); });
   });

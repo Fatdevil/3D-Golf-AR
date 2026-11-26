@@ -57,8 +57,13 @@ console.log('\n3. Referensbanken');
 const bank = V.loadBank();
 const results = V.evaluate(bank);
 {
-  const pga = bank.tables.filter(function (t) { return t.id === 'trackman-pga-2024'; })[0], lpga = bank.tables.filter(function (t) { return t.id === 'lpga-2014'; })[0];
-  check('PGA 2024 är kontrollerad, LPGA 2014 är det inte', pga && pga.verified === true && lpga && lpga.verified === false);
+  const pga = bank.tables.filter(function (t) { return t.id === 'trackman-pga-2024'; })[0], lpga = bank.tables.filter(function (t) { return t.id === 'trackman-lpga'; })[0];
+  check('PGA- och LPGA-tabellerna är kontrollerade (TrackMans egna tabeller), och LPGA-raden ur minnet är borta', pga && pga.verified === true && lpga && lpga.verified === true &&
+    bank.tables.every(function (t) { return t.id !== 'lpga-2014'; }));
+  // the LPGA table is printed in metres: the bank works out the yards and keeps the metres
+  const lb = {}; lpga.rows.forEach(function (r) { lb[r.id] = r; });
+  check('LPGA-tabellen har elva klubbor i meter, och banken räknar om carry och topphöjd till yards', lpga.rows.length === 11 && lb['lpga-driver'].carryM === 204 &&
+    Math.abs(lb['lpga-driver'].carryYd - 204 * V.YD) < 1e-9 && Math.abs(lb['lpga-pw'].apexYd - 25 * V.YD) < 1e-9 && lb['lpga-pw'].ballSpeedMph === 88 && lb['lpga-7i'].spinRpm === 6630, lpga.rows[0]);
   check('varje tabellrad har indata, mål, källa och förhållanden', bank.tables.every(function (t) { return t.source && t.conditions && t.rows.every(function (r) { return r.id && r.ballSpeedMph > 0 && typeof r.launchDeg === 'number' && r.spinRpm > 0 && r.carryYd > 0; }); }));
   // the whole table (driver to PW, 12 clubs) from TrackMan's own screenshot; the driver and PW rows as in the game's club profiles
   const byId = {}; pga.rows.forEach(function (r) { byId[r.id] = r; });
@@ -82,9 +87,11 @@ console.log('\n4. Regressionsspärren (baseline.json)');
   const reg = V.regressions(results, baseline);
   check('ingen tabellrad är sämre än baslinjen (' + V.SLACK.carryYd + ' yd / ' + V.SLACK.landingDeg + '° marginal)', reg.length === 0, reg);
   check('baslinjen täcker varje kontrollerad tabellrad och ingen okontrollerad', results.filter(function (r) { return r.kind === 'average'; }).every(function (r) { return r.verified ? !!baseline[r.id] : !baseline[r.id]; }), Object.keys(baseline));
-  // a row written from memory never stops a change, even if an older baseline still has it
-  const withLpga = Object.assign({}, V.baselineOf(results), { 'lpga14-driver': { absErr: { carryYd: 0, apexYd: 0, landingDeg: 0 } } });
-  check('en okontrollerad rad stoppar aldrig en ändring, inte ens om en äldre baslinje har den', V.regressions(results, withLpga).length === 0, V.regressions(results, withLpga));
+  // a row written from memory never stops a change, even if an older baseline still has it (a made-up unverified table, 30 yd off)
+  const memo = V.evaluate({ tables: [{ id: 'memo', kind: 'average', verified: false, conditions: {}, rows: [{ id: 'memo-driver', club: 'Dr', ballSpeedMph: 150, launchDeg: 12, spinRpm: 2600, carryYd: 300 }] }], files: [] });
+  const withMemo = Object.assign({}, V.baselineOf(results), { 'memo-driver': { absErr: { carryYd: 0, apexYd: 0, landingDeg: 0 } } });
+  check('en okontrollerad rad kommer aldrig in i baslinjen och stoppar aldrig en ändring, inte ens om en äldre baslinje har den',
+    memo.length === 1 && !memo[0].verified && !V.baselineOf(memo)['memo-driver'] && V.regressions(results.concat(memo), withMemo).length === 0, V.regressions(results.concat(memo), withMemo));
   // the guard itself, against a baseline of today's results (so it holds whatever the physics gives): a row that got 2 yd worse (away from
   // its target) is caught, one that got better is not
   const today = V.baselineOf(results);

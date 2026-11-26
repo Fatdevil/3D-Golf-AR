@@ -18,9 +18,12 @@ shots.forEach(function (r) {
 check('form A med dagens värden är exakt physics.js (verktyget mäter samma fysik som spelet)', worst < 1e-9, worst);
 
 const rows = P.rows();
-check('inpassningen använder bara kontrollerade tabeller (LPGA-raden ur minnet är inte med)', rows.length >= 12 && rows.every(function (r) { return r.id.indexOf('lpga') < 0; }), rows.map(function (r) { return r.id; }));
-const f = P.folds(rows.length), seen = [].concat.apply([], f).sort(function (a, b) { return a - b; });
-check('varje rad hålls utanför i exakt en vikning, två rader per vikning, en lång och en kort klubba', seen.length === rows.length && seen.every(function (v, i) { return v === i; }) && f.every(function (x) { return x.length === 2 && x[1] - x[0] === Math.ceil(rows.length / 2); }), f);
+check('inpassningen använder de kontrollerade tabellerna, PGA och LPGA (LPGA i meter, omräknad till yards)', rows.length === 23 && rows.some(function (r) { return r.id === 'lpga-pw' && Math.abs(r.carryYd - 101 * 1.09361) < 1e-9; }) &&
+  rows.some(function (r) { return r.id === 'pga24-driver'; }), rows.map(function (r) { return r.id; }));
+[12, 23].forEach(function (n) {
+  const f = P.folds(n), seen = [].concat.apply([], f).sort(function (a, b) { return a - b; });
+  check('med ' + n + ' rader hålls varje rad utanför i exakt en vikning, högst två per vikning', seen.length === n && seen.every(function (v, i) { return v === i; }) && f.every(function (x) { return x.length >= 1 && x.length <= 2; }), f);
+});
 
 const nm = P.nelderMead(function (x) { return (x[0] - 3) * (x[0] - 3) + 2 * (x[1] + 1) * (x[1] + 1); }, [0, 0], [1, 1], 200);
 check('Nelder-Mead hittar minimum av en enkel kvadratisk funktion', Math.abs(nm.x[0] - 3) < 1e-3 && Math.abs(nm.x[1] + 1) < 1e-3, nm);
