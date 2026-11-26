@@ -60,7 +60,10 @@ const results = V.evaluate(bank);
   const pga = bank.tables.filter(function (t) { return t.id === 'trackman-pga-2024'; })[0], lpga = bank.tables.filter(function (t) { return t.id === 'lpga-2014'; })[0];
   check('PGA 2024 är kontrollerad, LPGA 2014 är det inte', pga && pga.verified === true && lpga && lpga.verified === false);
   check('varje tabellrad har indata, mål, källa och förhållanden', bank.tables.every(function (t) { return t.source && t.conditions && t.rows.every(function (r) { return r.id && r.ballSpeedMph > 0 && typeof r.launchDeg === 'number' && r.spinRpm > 0 && r.carryYd > 0; }); }));
-  check('PGA-radernas indata är spelets klubbprofiler (samma källa)', pga.rows.length === 5 && pga.rows[0].ballSpeedMph === 171 && pga.rows[0].launchDeg === 10.4 && pga.rows[0].spinRpm === 2545);
+  // the whole table (driver to PW, 12 clubs) from TrackMan's own screenshot; the driver and PW rows as in the game's club profiles
+  const byId = {}; pga.rows.forEach(function (r) { byId[r.id] = r; });
+  check('PGA-tabellen har alla tolv klubbor, och drivern och PW stämmer med spelets klubbprofiler', pga.rows.length === 12 && byId['pga24-driver'].ballSpeedMph === 171 && byId['pga24-driver'].launchDeg === 10.4 &&
+    byId['pga24-driver'].spinRpm === 2545 && byId['pga24-pw'].spinRpm === 9316 && byId['pga24-3w'].carryYd === 249 && byId['pga24-8i'].launchDeg === 17.8, pga.rows.map(function (r) { return r.id; }));
   const shotsDir = path.join(V.REF_DIR, 'shots');
   const csvs = fs.readdirSync(shotsDir).filter(function (f) { return /\.csv$/i.test(f); });
   check('slagparsfilerna läses utan att någon avvisas', bank.files.every(function (f) { return !f.refused; }) && bank.files.length === csvs.length, bank.files.map(function (f) { return [f.name, f.refused]; }));
