@@ -54,7 +54,7 @@ const extra = R.toCSV([{ t: 1, club: '7i', source: 'LM', carry: 140, total: 150,
 const xh = extra[0].split(','), xr = extra[1].match(/("[^"]*"|[^,]*)(,|$)/g).map(function (c) { return c.replace(/,$/, ''); });
 check('CSV: the old columns stay first and in place (carry is column 5)', xh[4] === 'carry_m' && xh[13] === 'spin_axis_deg', extra[0]);
 check('CSV: club path, face to path, attack angle, the launch monitor (quoted when it has a comma), what was estimated, carry from the physics',
-  xh.slice(14).join() === 'club_path_deg,face_to_path_deg,attack_angle_deg,device,estimated,carry_from' && xr[14] === '-1.5' && xr[15] === '2.0' && xr[16] === '-4.2' &&
+  xh.slice(14, 20).join() === 'club_path_deg,face_to_path_deg,attack_angle_deg,device,estimated,carry_from' && xh.slice(20).join() === 'carry_std_m,total_std_m,flags,counted,raw' && xr[14] === '-1.5' && xr[15] === '2.0' && xr[16] === '-4.2' &&
   xr[17] === '"Garmin, R10"' && xr[18] === 'spinAxisDeg azimDeg' && xr[19] === 'physics', extra[1]);
 
 const mixed = [{ club: 'PW', carry: 110 }, { club: 'PW', carry: 55, practice: { dist: 60 } }, { club: 'PW', carry: 112 }];
