@@ -33,5 +33,16 @@ check('ett värde vid en gräns rapporteras (formen tänjs i stället för att p
 const s = P.summary([{ carry: -3, apex: 1, landing: 2 }, { carry: 5, apex: -1, landing: -1 }, { carry: 1, apex: 0, landing: 0 }]);
 check('sammanfattningen tar medianen och största felet i absolutbelopp', s.carryMedian === 3 && s.carryMax === 5 && s.landingMedian === 1 && s.landingMax === 2, s);
 
+// a fit may never be a physics with negative drag (Codex on PR #204: the fitted C values gave Cd of -2.2 for a 15 mph ball at 9000 rpm)
+const oldC = [0.1987, 0.0286, 0.4995, -0.4598, 0.3646, 0.1553, 0.0076, 0.0423];
+check('de tidigare inpassade C-värdena avvisas: luftmotståndet föll med mer spinn', P.outside('C', oldC) === true);
+const r0 = P.coefficientRange('A', P.FORMS.A.today);
+check('dagens fysik har positivt luftmotstånd för alla farter och spinn (2-90 m/s, 0-12 000 rpm)', r0.cdMin > 0.15 && r0.cdMax <= 0.65, r0);
+const edge = [0.22, 0.05, 0.3, -0.25, 0.35, 0.15, 0.04];   // the steepest falling square term the slope rule lets through (0.3 - 2 x 0.25 x 0.6 = 0)
+const r1 = P.coefficientRange('B', edge);
+check('även den brantaste tillåtna kvadratiska termen ger aldrig lägre luftmotstånd än utan spinn, inte heller för en långsam boll med mycket spinn (lägst cd0 − cdV, den snabba bollen utan spinn)', !P.outside('B', edge) && r1.cdMin >= 0.22 - 0.05 - 1e-9 && r1.cdMin > 0.15, r1);
+check('varje vikning i korsvalideringen startar från formens egna startvärden, inte från inpassningen på alla rader', /fit\(formId, train, null, iters\)/.test(P.crossValidate.toString()));
+check('form A startar inte från dagens värden (de är inpassade på raderna i tabellen)', P.FORMS.A.start.join() !== P.FORMS.A.today.join());
+
 console.log(failed ? '\n' + failed + ' failed' : '\nAll physics fit checks passed');
 process.exit(failed ? 1 : 0);

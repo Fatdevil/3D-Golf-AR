@@ -29,6 +29,7 @@ if (START < 0 || END < START) throw new Error('physics.js: the AERO section was 
 
 // the slow-ball parts every form keeps: the reverse Magnus effect of a slow ball with little spin, the drag of a slow ball
 const SLOW = `
+    if (typeof window !== 'undefined') window.__fitAero = { cd: function (v, rpm) { return getDragCoefficient(v, rpm); }, cl: function (v, rpm) { return getLiftCoefficient(v, (rpm * 2 * Math.PI / 60) * RADIUS / Math.max(v, 1.0), rpm); } };
     function getLiftCoefficient(vMag, spinParam, spinRateRpm) {
         const cl = liftCurve(spinParam);
         if (!(spinRateRpm > 0)) return cl;
@@ -37,6 +38,8 @@ const SLOW = `
         const w = wSpeed * wSpin;
         return w > 0 ? cl + (-0.10 - cl) * w : cl;
     }`;
+// the largest spin factor of the table's shots is about 0.45 (PW); the drag's spin terms are fitted up to here and held beyond it
+const S_MAX = 0.6;
 const baseCd = `const cdHigh = AERO.cd0 + AERO.cdV * (50 - Math.max(30, Math.min(75, vMag))) / 25;
         const cd = vMag > 30 ? cdHigh : (vMag > 20 ? lerp(AERO.cdLow, AERO.cd0 + AERO.cdV * 0.8, (vMag - 20) / 10) : AERO.cdLow);`;
 
@@ -44,6 +47,8 @@ const FORMS = {
   A: {
     names: ['cd0', 'cdV', 'cdSpin', 'clA', 'clB', 'clMax', 'spinDecay'],
     today: [0.2380, 0.0478, 0.1722, 0.6045, 0.5344, 0.3187, 0.040],
+    // a fit starts from round values, not from today's (which were fitted to rows of this table: a fold would start from its own targets)
+    start: [0.25, 0.05, 0.15, 0.55, 0.5, 0.30, 0.04],
     steps: [0.02, 0.01, 0.03, 0.05, 0.05, 0.03, 0.01],
     bounds: [[0.15, 0.35], [0, 0.12], [0, 0.4], [0.2, 1.2], [0.2, 1.2], [0.2, 0.5], [0.005, 0.08]],
     code: p => `    const AERO = { cd0: ${p[0]}, cdV: ${p[1]}, cdSpin: ${p[2]}, cdLow: 0.40, clA: ${p[3]}, clB: ${p[4]}, clMax: ${p[5]}, spinDecay: ${p[6]} };
@@ -60,11 +65,12 @@ const FORMS = {
     start: [0.23, 0.05, 0.15, 0.0, 0.33, 0.15, 0.04],
     steps: [0.02, 0.01, 0.05, 0.1, 0.04, 0.04, 0.01],
     bounds: [[0.15, 0.35], [0, 0.12], [-0.2, 0.5], [-0.5, 1], [0.2, 0.6], [0.03, 0.6], [0.005, 0.08]],
-    code: p => `    const AERO = { cd0: ${p[0]}, cdV: ${p[1]}, cdSpin: ${p[2]}, cdSpin2: ${p[3]}, cdLow: 0.40, clMax: ${p[4]}, clK: ${p[5]}, spinDecay: ${p[6]}, spinDecayV: ${p[7] || 0} };
+    code: p => `    const AERO = { cd0: ${p[0]}, cdV: ${p[1]}, cdSpin: ${p[2]}, cdSpin2: ${p[3]}, cdLow: 0.40, clMax: ${p[4]}, clK: ${p[5]}, spinDecay: ${p[6]}, spinDecayV: ${p[7] || 0}, sMax: ${S_MAX} };
     function getDragCoefficient(vMag, spinRateRpm) {
         const S = (spinRateRpm * 2 * Math.PI / 60) * RADIUS / Math.max(vMag, 0.1);
         ${baseCd}
-        return Math.min(cd + AERO.cdSpin * S + AERO.cdSpin2 * S * S, 0.65);
+        const Sc = Math.min(S, AERO.sMax);   // the squared term only where it was fitted (a slow ball can have S of 3)
+        return Math.min(cd + AERO.cdSpin * Sc + AERO.cdSpin2 * Sc * Sc, 0.65);
     }${SLOW}
     function liftCurve(spinParam) { return AERO.clMax * (1 - Math.exp(-Math.max(0, spinParam) / AERO.clK)); }
 `
@@ -78,6 +84,7 @@ FORMS.C = Object.assign({}, FORMS.B, {
   patch: src => src.replace('let decayRate = AERO.spinDecay;', 'let decayRate = AERO.spinDecay + AERO.spinDecayV * vecMag(state.vel) / 50;')
 });
 
+let lastAero = null;   // the coefficient functions of the physics built last (coefficientRange)
 // physics.js with a form's coefficients in place of today's (in memory)
 function build(formId, p) {
   const form = FORMS[formId];
@@ -91,6 +98,7 @@ function build(formId, p) {
   const ctx = { window: { GREEN_STIMP: 10, matchSettings: {} }, console: { log: quiet, warn: quiet, error: quiet }, Math: Math, Object: Object, Array: Array, JSON: JSON, isFinite: isFinite, Number: Number };
   vm.createContext(ctx);
   vm.runInContext(src, ctx);
+  lastAero = ctx.window.__fitAero;
   return ctx.window.GolfPhysics;
 }
 
@@ -154,7 +162,24 @@ function nelderMead(f, x0, steps, iters) {
   return { x: S[b], f: fv[b] };
 }
 
-function outside(formId, p) { return FORMS[formId].bounds.some(function (b, i) { return !(p[i] >= b[0] && p[i] <= b[1]); }); }
+// a form's values out of bounds, or a drag that falls with more spin (B and C: the slope cdSpin + 2 cdSpin2 S must stay >= 0 up to
+// S_MAX, so the drag never drops below the no-spin drag): such a fit is refused, whatever it does to the table
+function outside(formId, p) {
+  if (FORMS[formId].bounds.some(function (b, i) { return !(p[i] >= b[0] && p[i] <= b[1]); })) return true;
+  if (formId !== 'A' && (p[2] < 0 || p[2] + 2 * p[3] * S_MAX < 0)) return true;
+  return false;
+}
+// the smallest and largest drag and lift coefficient of a physics over every speed (2-90 m/s) and spin (0-12 000 rpm) a shot can have
+function coefficientRange(formId, p) {
+  build(formId, p);
+  const A = lastAero;
+  let cdMin = Infinity, cdMax = -Infinity, clMin = Infinity, clMax = -Infinity;
+  for (let v = 2; v <= 90; v += 1) for (let rpm = 0; rpm <= 12000; rpm += 250) {
+    const cd = A.cd(v, rpm), cl = A.cl(v, rpm);
+    cdMin = Math.min(cdMin, cd); cdMax = Math.max(cdMax, cd); clMin = Math.min(clMin, cl); clMax = Math.max(clMax, cl);
+  }
+  return { cdMin: cdMin, cdMax: cdMax, clMin: clMin, clMax: clMax };
+}
 // the values at (within 2 % of the range from) a bound: the form is being stretched to fit, not fitting
 function atBounds(formId, p) {
   return FORMS[formId].bounds.map(function (b, i) { return Math.min(p[i] - b[0], b[1] - p[i]) < 0.02 * (b[1] - b[0]) ? FORMS[formId].names[i] : null; }).filter(Boolean);
@@ -169,11 +194,12 @@ function folds(n) {
   for (let k = 0; k < half; k++) out.push([k, k + half].filter(function (i) { return i < n; }));
   return out;
 }
+// Each fold is fitted from the form's own start values: a start from the all-row fit would carry the held-out rows into the fold
 function crossValidate(formId, iters, log) {
   const list = rows(), all = fit(formId, list, null, iters), held = [];
   folds(list.length).forEach(function (out, k) {
     const train = list.filter(function (r, i) { return out.indexOf(i) < 0; });
-    const res = fit(formId, train, all.x, iters);
+    const res = fit(formId, train, null, iters);
     errors(build(formId, res.x), out.map(function (i) { return list[i]; })).forEach(function (e) { held.push(e); });
     if (log) log('fold ' + (k + 1) + ' of ' + folds(list.length).length);
   });
@@ -208,11 +234,11 @@ function sweep(formId, p) {
       for (let v = 15; v <= 190; v += 5) { const c = fly(G, { ballSpeedMph: v, launchDeg: la, spinRpm: sp }).carryYd; if (c < prev - 0.05) falls.push({ launch: la, spin: sp, mph: v }); prev = c; }
     });
   });
-  return { shots: shots, falls: falls };
+  return { shots: shots, falls: falls, range: coefficientRange(formId, p) };
 }
 
 module.exports = { FORMS: FORMS, build: build, fly: fly, rows: rows, errors: errors, cost: cost, nelderMead: nelderMead, fit: fit, folds: folds, crossValidate: crossValidate,
-                   summary: summary, atBounds: atBounds, sweep: sweep, SWEEP: SWEEP };
+                   summary: summary, atBounds: atBounds, sweep: sweep, SWEEP: SWEEP, outside: outside, coefficientRange: coefficientRange, S_MAX: S_MAX };
 if (require.main !== module) return;
 
 // ---- command line ----
@@ -245,4 +271,7 @@ if (cmd === 'show') {
   const r = sweep(formId, params);
   r.shots.forEach(function (s) { console.log(s.label.padEnd(22) + ' today ' + s.todayM.toFixed(1).padStart(6) + ' m   new ' + s.newM.toFixed(1).padStart(6) + ' m   ' + sg(s.diffPct) + ' %'); });
   console.log(r.falls.length ? 'Carry falls with ball speed at: ' + JSON.stringify(r.falls) : 'Carry grows with ball speed everywhere');
+  console.log('Drag coefficient ' + r.range.cdMin.toFixed(3) + ' to ' + r.range.cdMax.toFixed(3) + ', lift ' + r.range.clMin.toFixed(3) + ' to ' + r.range.clMax.toFixed(3) + ' (2-90 m/s, 0-12 000 rpm)' +
+    (r.range.cdMin <= 0 ? '  NEGATIVE DRAG: not a physics' : ''));
+  if (outside(formId, params)) console.log('These values are outside the form\'s bounds or give a drag that falls with spin: a fit would refuse them');
 } else { console.error('Unknown command ' + cmd); process.exit(2); }
