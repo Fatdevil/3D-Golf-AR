@@ -2,7 +2,7 @@
 
 Här mäts hur långt bollfysiken (`physics.js`) ligger från verkliga golfslag, per klubba och per bollfart. Det är grunden för allt fysikarbete: en ändring av fysiken ska göra banken bättre, inte bara en enskild klubba.
 
-- `references/*.json`: tabeller med referensrader. Varje rad har indata (bollfart, utgångsvinkel, spinn) och mål (carry, topphöjd, landningsvinkel), plus källa, om den är kontrollerad och vilka förhållanden som gällde.
+- `references/*.json`: tabeller med referensrader. Just nu finns TrackMans PGA-tabell (tolv klubbor, yards) och LPGA-tabell (elva klubbor, meter, `carryM` och `apexM` som tryckt; banken räknar om till yards). Varje rad har indata (bollfart, utgångsvinkel, spinn) och mål (carry, topphöjd, landningsvinkel), plus källa, om den är kontrollerad och vilka förhållanden som gällde.
 - `references/shots/*.csv`: **slagpar** från launch monitorernas egna appar, alltså utgångsvärdena och den carry launch monitorn mätte för samma slag. Det är den starkaste referensen.
 - `validate.js`: läser banken, kör varje rad genom fysiken och räknar fel.
 - `baseline.json`: vad fysiken ger i dag för tabellraderna. Testet `tests/test_physics_validation.js` misslyckas om en rad blir mer än 0,5 yd eller 0,5° sämre.
@@ -37,4 +37,4 @@ Filen behöver kolumner för bollfart, utgångsvinkel, spinn och carry. Startrik
 ## Det banken saknar i dag
 
 - **Slagpar.** Utan dem går det inte att säga hur fel motorn är, eftersom tour-snitt inte är enskilda slag.
-- **LPGA 2014-raden är skriven ur minnet.** Den rapporteras för sig och avgör ingenting förrän den är kontrollerad.
+- **Långsamma slag.** Tabellerna (PGA och LPGA) går ner till 88 mph bollfart. Under det, för juniorer, nybörjare, pitchar och chippar, finns ingen referens.

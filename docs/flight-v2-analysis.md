@@ -6,7 +6,7 @@ Målet är en bollflykt som stämmer för hela spannet, från barn och nybörjar
 
 ## Underlaget
 
-TrackMans PGA-tabell med alla tolv klubbor, driver till PW (`physics-validation/references/trackman-pga-2024.json`). Bollfarten går från 104 till 171 mph. Det finns inga kontrollerade referenser under 104 mph eller över 171 mph, och inga enskilda slag (slagpar).
+TrackMans PGA-tabell med alla tolv klubbor, driver till PW (`physics-validation/references/trackman-pga-2024.json`). Bollfarten går från 104 till 171 mph. Sedan dess finns även TrackMans LPGA-tabell (88–143 mph, se avsnittet "Med LPGA-tabellen"). Det finns inga kontrollerade referenser under 88 mph eller över 171 mph, och inga enskilda slag (slagpar).
 
 Siffrorna i tabellen är avrundade till hela yards och grader, och de är snitt. Snittslagets carry är inte snittets carry. Ett fel på ungefär 1–2 yd eller 1° går därför inte att skilja från tabellens egen osäkerhet.
 
@@ -63,6 +63,31 @@ Svepet för form C, carry i meter vid 15 °C och havsnivå:
 
 Carry växer med bollfarten överallt, och luftmotståndet är positivt överallt (0,15–0,50). Men långsamma slag flyttas upp till 3–4 % åt båda hållen utan något facit. Det är för mycket att ta in på en gissning.
 
+## Med LPGA-tabellen: 23 rader
+
+TrackMans LPGA-tabell (elva klubbor, 88–143 mph, i meter) ligger nu i banken bredvid PGA-tabellen. Samma korsvalidering har körts på alla 23 rader. Varje vikning håller utanför två rader, och vikningarna startar från formernas egna värden.
+
+| | Carry, utanförhållna rader | Landning, utanförhållna |
+|---|---|---|
+| I dag (ingen inpassning) | 3,4 yd (10,2) | 1,1° (5,4) |
+| A, ny inpassning | 3,5 yd (**19,9**) | 1,1° (4,7) |
+| B | 2,5 yd (**16,8**) | 1,0° (5,8) |
+| C | 2,9 yd (**18,8**) | 1,0° (6,0) |
+
+- **Dagens fysik står sig bra mot LPGA.** Järnen 6–8 ligger inom 1 yd i carry, och medianfelet över alla 23 rader är 3,4 yd. Den sämsta raden är fortfarande PGA-drivern (−10 yd).
+- **Form B är bäst i median (2,5 yd), men kriterierna uppfylls inte:**
+  - en utanförhållen PGA-driver hamnar 17 yd för kort
+  - LPGA 3-träet landar 5,8° för flackt, mot 5,4° i dag
+  - B hamnar fortfarande precis på regeln om att luftmotståndet inte får falla med spinn (lutningen ≈ 0 vid S = 0,6)
+- **LPGA-raderna hjälper inte drivern.** LPGA-drivern (143 mph) passar bra när den hålls utanför (B: +1 yd). PGA-drivern (171 mph) gör det inte. Felet sitter alltså i den snabba änden (76 m/s), där tabellen bara har en rad.
+- **3-trä och hybrider är motsägelsefulla mellan tabellerna:**
+  - PGA-träna går för högt i alla former.
+  - LPGA 3-träet (135 mph, 2 595 rpm) går för lågt och landar 5–6° för flackt.
+  - Ett lyft som bara beror på spinnfaktorn kan inte få båda rätt.
+- **Svepet för B** (inpassad på alla 23 rader) flyttar slag utan referens med upp till 3 %, alltså wedgar på 75 mph och drivers på 110 mph. Ändringen är mindre än med bara PGA, men fortfarande utan facit under 88 mph.
+
+**Slutsats: dagens fysik behålls.** LPGA-tabellen bekräftar att dagens modell håller vid lägre tour-farter. Den nya aerodynamiken uppfyller inte kriterierna nedan.
+
 ## Kriterier för att ändra `physics.js`
 
 1. Korsvalideringen blir bättre än i dag på de utanförhållna raderna, både i median och i största fel. Ingen utanförhållen rad får bli mer än 2 yd eller 1° sämre än i dag.
@@ -74,7 +99,8 @@ Carry växer med bollfarten överallt, och luftmotståndet är positivt överall
 ## Vad som behövs härnäst
 
 - **Slagpar** (CSV från en launch monitors app), helst med långsamma slag: juniorer, nybörjare, wedgar och chippar. Det är där banken är tom, och det är dit en ny modell annars extrapolerar.
-- **En kontrollerad tabell för lägre farter**, till exempel TrackMans LPGA- eller amatörsnitt från en skärmdump. LPGA-raden i banken är skriven ur minnet och räknas inte.
+- **Slag under 88 mph**, som juniorer, nybörjare, pitchar och chippar. LPGA-tabellen täcker 88–143 mph. Under det finns ingen referens, varken tabell eller slagpar.
+- **Fler rader i den snabba änden** (över 160 mph). PGA-drivern är den enda, och den avgör om en form klarar luftmotståndet där.
 - **En form där lyftet beror på både spinnfaktorn och farten** (Reynolds-talet). Det är det enda som kan förklara att drivern och träna skiljer sig åt i tabellen, men formen bör inte provas förrän det finns data som kan avgöra den.
 
 ## Köra verktyget

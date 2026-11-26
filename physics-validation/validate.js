@@ -195,11 +195,20 @@ function parseCsv(text, opts) {
 }
 
 // ---- the bank -----------------------------------------------------------------------------------------------------------------------
+// A table row as the bank uses it: a table in metres (carryM, apexM, as printed) gets its yards worked out; the metres stay on the row
+function tableRow(r) {
+  const out = Object.assign({}, r);
+  if (typeof out.carryYd !== 'number' && typeof out.carryM === 'number') out.carryYd = out.carryM * YD;
+  if (typeof out.apexYd !== 'number' && typeof out.apexM === 'number') out.apexYd = out.apexM * YD;
+  return out;
+}
 // { tables: [{ id, title, kind, verified, source, conditions, rows }], files: [{ name, source, rows, skipped, refused }] }
 function loadBank(dir) {
   dir = dir || REF_DIR;
   const tables = fs.readdirSync(dir).filter(function (f) { return /\.json$/.test(f); }).sort().map(function (f) {
-    return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    const t = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    t.rows = t.rows.map(tableRow);
+    return t;
   });
   const shotDir = path.join(dir, 'shots');
   const files = fs.existsSync(shotDir) ? fs.readdirSync(shotDir).filter(function (f) { return /\.csv$/i.test(f); }).sort().map(function (f) {

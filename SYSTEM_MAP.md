@@ -483,8 +483,8 @@ Begränsningar: en cirkel per skikt, så en lång ensidig krona blir en stor cir
 ## Valideringsbanken för bollfysiken (2026-11)
 Steg 2 av datakvaliteten för träning: ett sätt att mäta hur långt `physics.js` ligger från verkliga slag, per klubba och bollfart, innan fysiken byggs om. Detta är något annat än "Fysiklabbet" (inmatning med siffror).
 - **`physics-validation/references/`:**
-  - `trackman-pga-2024.json`: de fem rader vars indata finns i repot (driver, 5-, 7- och 9-järn, PW), kontrollerade.
-  - `lpga-2014.json`: driver, skriven ur minnet, märkt okontrollerad. Den rapporteras för sig och avgör ingenting.
+  - `trackman-pga-2024.json`: TrackMans PGA-tabell, alla tolv klubbor (driver till PW), kontrollerad.
+  - `trackman-lpga.json`: TrackMans LPGA-tabell, elva klubbor, i meter som tryckt (`carryM`, `apexM`); `loadBank` räknar om till yards. Kontrollerad (skärmdump från användaren). Den ersätter `lpga-2014.json`, en driverrad ur minnet som tabellen inte bekräftar. Förhållandena står inte i tabellen och antas vara PGA-tabellens (25 °C, havsnivå).
   - `shots/*.csv`: slagpar från launch monitorernas egna appar (utgångsvärden och deras egen carry). Mappen är tom tills riktiga exporter finns.
 - **`physics-validation/validate.js`:**
   - **CSV-import:** rubriker känns igen i flera former, med enheter i rubriken eller på en egen rad, semikolon och decimalkomma, backspinn och sidospinn räknas om till totalspinn, och en sidofil `<fil>.json` kan ange `columns`, `units` och `conditions`.
@@ -502,7 +502,7 @@ Steg 2 av datakvaliteten för träning: ett sätt att mäta hur långt `physics.
   - B har ett lyft som planar ut mjukt, och luftmotstånd med en S- och en S²-term.
   - C är som B, med ett spinnavtagande som växer med farten.
 - **Kommandon:** `show` visar felen per rad. `fit` passar in en form. `cv` kör korsvalidering med 6 vikningar, där 2 rader hålls utanför i varje. `sweep` jämför dagens fysik med en inpassning, från chippar på 20 mph till drivers på 185 mph, och kontrollerar att carry alltid växer med bollfarten.
-- **Den första analysen** finns i `docs/flight-v2-analysis.md`. De nya formerna är bättre inne i TrackMan-tabellen (medianfelet på carry går från 4,5 till cirka 3 yd för utanförhållna rader) men sämre vid kanten (en utanförhållen driver hamnar 16–26 yd för kort). Varje vikning startar från formens egna startvärden, och en form vars luftmotstånd faller med spinn avvisas. Därför är `physics.js` inte ändrad. Analysen listar också kriterierna för en ändring och vilka data som behövs.
+- **Den första analysen** finns i `docs/flight-v2-analysis.md`. De nya formerna är bättre inne i TrackMan-tabellen (medianfelet på carry går från 4,5 till cirka 3 yd för utanförhållna rader) men sämre vid kanten (en utanförhållen driver hamnar 16–26 yd för kort). Varje vikning startar från formens egna startvärden, och en form vars luftmotstånd faller med spinn avvisas. Med LPGA-tabellen (23 rader) är form B bäst i median (2,5 yd mot 3,4 i dag), men en utanförhållen PGA-driver hamnar 17 yd för kort. Dagens fysik behålls. Därför är `physics.js` inte ändrad. Analysen listar också kriterierna för en ändring och vilka data som behövs.
 
 ## Launch monitor-data: saknat är aldrig noll (2026-11)
 Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monitorn inte skickade 0 i bryggan (`|| 0`): saknat spinn blev 0 rpm, alltså en boll utan lyft och helt fel slag, utan varning, och det hamnade i bagen.

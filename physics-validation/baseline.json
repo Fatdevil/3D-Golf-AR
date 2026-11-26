@@ -1,4 +1,114 @@
 {
+  "lpga-driver": {
+    "carryYd": 216.83,
+    "apexYd": 25.61,
+    "landingDeg": 36.91,
+    "absErr": {
+      "carryYd": 6.26,
+      "apexYd": 0.64,
+      "landingDeg": 0.91
+    }
+  },
+  "lpga-3w": {
+    "carryYd": 197.38,
+    "apexYd": 20.28,
+    "landingDeg": 32.62,
+    "absErr": {
+      "carryYd": 2.75,
+      "apexYd": 4.87,
+      "landingDeg": 5.38
+    }
+  },
+  "lpga-5w": {
+    "carryYd": 196.21,
+    "apexYd": 26.71,
+    "landingDeg": 41.56,
+    "absErr": {
+      "carryYd": 7.02,
+      "apexYd": 1.56,
+      "landingDeg": 1.44
+    }
+  },
+  "lpga-hy": {
+    "carryYd": 185.61,
+    "apexYd": 24.51,
+    "landingDeg": 40.46,
+    "absErr": {
+      "carryYd": 7.35,
+      "apexYd": 0.64,
+      "landingDeg": 4.54
+    }
+  },
+  "lpga-4i": {
+    "carryYd": 172.08,
+    "apexYd": 23.89,
+    "landingDeg": 40.9,
+    "absErr": {
+      "carryYd": 2.9,
+      "apexYd": 1.26,
+      "landingDeg": 2.1
+    }
+  },
+  "lpga-5i": {
+    "carryYd": 163.46,
+    "apexYd": 23.6,
+    "landingDeg": 41.61,
+    "absErr": {
+      "carryYd": 2.77,
+      "apexYd": 1.55,
+      "landingDeg": 3.39
+    }
+  },
+  "lpga-6i": {
+    "carryYd": 155.5,
+    "apexYd": 26.16,
+    "landingDeg": 45.3,
+    "absErr": {
+      "carryYd": 0.21,
+      "apexYd": 1.01,
+      "landingDeg": 0.7
+    }
+  },
+  "lpga-7i": {
+    "carryYd": 143.89,
+    "apexYd": 25.4,
+    "landingDeg": 46,
+    "absErr": {
+      "carryYd": 0.63,
+      "apexYd": 0.84,
+      "landingDeg": 1
+    }
+  },
+  "lpga-8i": {
+    "carryYd": 134.34,
+    "apexYd": 25.56,
+    "landingDeg": 47.43,
+    "absErr": {
+      "carryYd": 0.92,
+      "apexYd": 1.78,
+      "landingDeg": 0.43
+    }
+  },
+  "lpga-9i": {
+    "carryYd": 120.83,
+    "apexYd": 24.29,
+    "landingDeg": 47.92,
+    "absErr": {
+      "carryYd": 1.66,
+      "apexYd": 3.05,
+      "landingDeg": 0.08
+    }
+  },
+  "lpga-pw": {
+    "carryYd": 106.3,
+    "apexYd": 21.52,
+    "landingDeg": 47.43,
+    "absErr": {
+      "carryYd": 4.16,
+      "apexYd": 5.82,
+      "landingDeg": 0.57
+    }
+  },
   "pga24-driver": {
     "carryYd": 271.82,
     "apexYd": 34.52,
