@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b0f19">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Golf OS">
+<link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
+<script src="/pwa.js"></script>
+<title>Golf OS — Training Lab</title>
+<!-- Training Lab · Club Intelligence: each club of the player's shot bank and how it changes (training-lab.js, training-stats.js) -->
+<style>
+  :root { --bg: #0b0f19; --card: #111827; --line: rgba(255,255,255,0.08); --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --good: #4ade80; --bad: #f87171; --warn: #fbbf24; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  .tl-wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  .tl-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tl-head h1 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: -0.5px; }
+  .tl-head p { margin: 2px 0 0; color: var(--muted); }
+  .tl-back { color: var(--muted); text-decoration: none; font-weight: 700; }
+  .tl-back:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tl-periods, .tl-clubs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+  .tl-periods button, .tl-clubs button { min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: 700 13px/1 inherit; cursor: pointer; }
+  .tl-periods button[aria-pressed="true"], .tl-clubs button[aria-selected="true"] { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+  .tl-clubs button span { margin-left: 6px; font-weight: 400; opacity: 0.75; font-size: 11px; }
+  .tl-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 720px) { .tl-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .tl-kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  .tl-kpi-label { color: var(--muted); font-size: 12px; font-weight: 700; }
+  .tl-src { font-weight: 400; opacity: 0.8; }
+  .tl-kpi-value { font-size: 26px; font-weight: 900; font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
+  .tl-few .tl-kpi-value { color: var(--muted); }
+  .tl-kpi-change { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tl-kpi-change span { font-weight: 400; color: var(--muted); }
+  .tl-good { color: var(--good); } .tl-bad { color: var(--bad); }
+  .tl-kpi-n { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .tl-warn { font-size: 11px; color: var(--warn); margin-top: 4px; }
+  .tl-warn-low { color: #fcd34d; opacity: 0.85; }
+  .tl-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 12px; }
+  .tl-card h2 { margin: 0 0 8px; font-size: 15px; }
+  .tl-trend { width: 100%; height: auto; display: block; }
+  .tl-trend path { stroke: var(--accent); stroke-width: 2.5; }
+  .tl-trend circle { fill: var(--accent); }
+  .tl-trend text { fill: var(--muted); font-size: 11px; }
+  .tl-table-wrap { overflow-x: auto; }
+  .tl-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .tl-table th, .tl-table td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .tl-table th:first-child, .tl-table td:first-child { text-align: left; }
+  .tl-table th { color: var(--muted); font-size: 11px; font-weight: 700; }
+  .tl-row-sel td { background: rgba(56,189,248,0.08); }
+  .tl-few-row td { color: var(--muted); }
+  .tl-unit, .tl-muted { color: var(--muted); font-size: 11px; }
+  .tl-notes { color: var(--muted); font-size: 12px; margin-top: 14px; }
+  .tl-notes p { margin: 4px 0; }
+  .tl-banner { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.35); color: #fde68a; border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+  .tl-error { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.35); color: #fecaca; }
+  .tl-empty { color: var(--muted); padding: 30px 0; }
+</style>
+</head>
+<body>
+<div class="tl-wrap">
+  <header class="tl-head">
+    <div><h1>Training Lab</h1><p id="tl-sub">Ditt spel, klubba för klubba, ur din slagbank på alla dina enheter.</p></div>
+    <a class="tl-back" href="arcade_hub.html" id="tl-back">← Tillbaka</a>
+  </header>
+  <main id="tl-main" aria-live="polite"></main>
+</div>
+<script src="device-token.js"></script>
+<script src="i18n.js"></script>
+<script src="arcade-auth.js"></script>
+<script src="arcade-bag.js?v=5"></script>
+<script src="shot-sync.js?v=2"></script>
+<script src="training-lab.js?v=2"></script>
+<script>
+  (function () {
+    var en = window.getGolfLanguage && window.getGolfLanguage() === 'en', L = window.TrainingLab.TXT[en ? 'en' : 'sv'];
+    document.getElementById('tl-sub').textContent = L.sub;
+    document.getElementById('tl-back').textContent = L.back;
+    document.documentElement.lang = en ? 'en' : 'sv';
+    var go = function () { window.TrainingLab.start(document.getElementById('tl-main')); };
+    Promise.race([window.GolfAuth.init(), new Promise(function (r) { setTimeout(r, 8000); })]).then(go, go);
+  })();
+</script>
+</body>
+</html>

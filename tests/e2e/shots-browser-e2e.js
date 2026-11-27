@@ -171,6 +171,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const legacyRows = rowsA.filter(x => x.range_key === 'OLDRANGE' || x.range_key === 'bag'), firstPass = rowsA.filter(x => x.range_key === 'E2E-RANGE' && (x.club === '7i' || x.club === 'PW'));
     check('gamla slag får inget gissat pass eller version', legacyRows.length === 4 && legacyRows.every(x => x.s === null && x.p === null), JSON.stringify(legacyRows));
     check('slagen före "Ny session" hör till ett och samma pass, med fysikens version', firstPass.length === 5 && new Set(firstPass.map(x => x.s)).size === 1 && firstPass[0].s && firstPass.every(x => x.p === version), JSON.stringify(firstPass));
+    const stdSide = (await pool.query("SELECT count(*)::int AS n FROM shots WHERE player_id = $1 AND range_key = 'E2E-RANGE' AND source = 'LM' AND offline_std IS NOT NULL", [idA])).rows[0].n;
+    check('nya rangeslag får sidled i standardförhållanden (där bollen landar), gamla slag inte', stdSide >= 5 && legacyRows.length === 4, String(stdSide));
     const later = rowsA.filter(x => x.range_key === 'E2E-RANGE' && x.club === '9i');
     check('slagen efter "Ny session" hör till ett annat pass', later.length === 2 && later.every(x => x.s && x.s !== firstPass[0].s), JSON.stringify(later));
 
@@ -204,7 +206,9 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('ett väntande slag som ändras medan lagringen är full: exporten har ändringen', exported && exported.club === '9i', JSON.stringify(exported));
     await pageA.evaluate(() => { Storage.prototype.setItem = window.__origSet; });
     await ctxA.setOffline(false);
+    // back online: the page sends by itself (the online event), and a flush asked for meanwhile waits for it; give a slow machine time
     await pageA.evaluate(() => window.ShotSync.flush());
+    await pageA.waitForFunction(() => window.ShotSync.pending() === 0 && window.ShotSync.status().inMemory === 0, null, { timeout: 60000 }).catch(() => {});
     st7 = await pageA.evaluate(() => window.ShotSync.status());
     check('och det skickas när det går, utan att försvinna', st7.inMemory === 0 && st7.pending === 0 && (await count(idA)) === before7 + 2, JSON.stringify([st7, await count(idA), before7]));
     const editedRow = (await pool.query('SELECT club FROM shots WHERE player_id = $1 AND client_id = $2', [idA, editCid])).rows[0];

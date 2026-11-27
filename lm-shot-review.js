@@ -70,7 +70,15 @@
                 launchAngleDeg: shot.launch, totalSpinRpm: shot.spin, isLiveData: true, isTeeShot: false }, env);
         } catch (e) { r = null; } finally { console.log = log; }
         if (!r || !r.metrics || num(r.metrics.carryMeters) === null) return null;
-        return { carry: r.metrics.carryMeters, total: num(r.metrics.totalMeters) !== null ? Math.max(r.metrics.totalMeters, r.metrics.carryMeters) : r.metrics.carryMeters };
+        // where it came down, across the target line (right +): the side the shot went in standard conditions, at its carry (no wind, no roll)
+        let side = null;
+        if (Array.isArray(r.path)) {
+            let i = 1;
+            while (i < r.path.length && r.path[i].phase === 'flight') i++;
+            const q = r.path[Math.min(i, r.path.length - 1)];
+            if (q && num(q.x) !== null) side = q.x;
+        }
+        return { carry: r.metrics.carryMeters, total: num(r.metrics.totalMeters) !== null ? Math.max(r.metrics.totalMeters, r.metrics.carryMeters) : r.metrics.carryMeters, side: side };
     }
 
     // The player's own ball speeds per club, from their bag entries ({ club, ballSpeed }): { club: { n, median, spread } }

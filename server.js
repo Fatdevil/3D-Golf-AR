@@ -9,6 +9,10 @@ const crypto = require('crypto');
 const collectionsCore = require('./collections-core');
 const ShotBank = require('./shot-bank-core');
 const PlayerBag = require('./arcade-bag');
+const TrainingStats = require('./training-stats');
+// the ball flight's version of this build (physics.js VERSION, recorded with its fingerprint by tests/test_physics_version.js): Training Lab's
+// distances come only from shots of this flight
+const PHYSICS_VERSION = (function () { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'physics-validation', 'physics-version.json'), 'utf8')).version; } catch (e) { return null; } })();
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -317,6 +321,8 @@ async function initDB() {
             // the training session a shot was hit in and the ball flight that worked out its distances (shot-bank-core.js); NULL for older shots
             await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS training_session_id VARCHAR(80);`);
             await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS physics_version VARCHAR(32);`);
+            // across the target line where it came down in standard conditions (lm-shot-review.js standard): the side spread of Training Lab
+            await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS offline_std REAL;`);
             await pool.query(`CREATE INDEX IF NOT EXISTS shots_player_session ON shots (player_id, training_session_id)`);
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS device_links (
@@ -1661,8 +1667,8 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
             await pool.query(`
                 INSERT INTO shots (player_id, client_id, device_id, shot_at, range_key, source, club, ball_speed, club_speed, launch, hla, spin, spin_axis,
                     club_path, face_to_path, aoa, carry, total, offline_m, apex, carry_std, total_std, lm_device, estimated, review, accepted, practice, raw, edited_at,
-                    training_session_id, physics_version)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+                    training_session_id, physics_version, offline_std)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
                 ON CONFLICT (player_id, client_id) DO UPDATE SET
                     range_key = COALESCE(shots.range_key, EXCLUDED.range_key), ball_speed = COALESCE(shots.ball_speed, EXCLUDED.ball_speed),
                     club_speed = COALESCE(shots.club_speed, EXCLUDED.club_speed), launch = COALESCE(shots.launch, EXCLUDED.launch), hla = COALESCE(shots.hla, EXCLUDED.hla),
@@ -1674,6 +1680,7 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
                     practice = COALESCE(shots.practice, EXCLUDED.practice), raw = COALESCE(shots.raw, EXCLUDED.raw),
                     training_session_id = COALESCE(shots.training_session_id, EXCLUDED.training_session_id),
                     physics_version = COALESCE(shots.physics_version, EXCLUDED.physics_version),
+                    offline_std = COALESCE(shots.offline_std, EXCLUDED.offline_std),
                     club = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.club ELSE shots.club END,
                     accepted = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.accepted ELSE shots.accepted END,
                     review = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN COALESCE(EXCLUDED.review, shots.review) ELSE COALESCE(shots.review, EXCLUDED.review) END,
@@ -1681,7 +1688,7 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
                     updated_at = now()`,
                 [account, s.client_id, req.userId, s.shot_at, s.range_key, s.source, s.club, s.ball_speed, s.club_speed, s.launch, s.hla, s.spin, s.spin_axis,
                  s.club_path, s.face_to_path, s.aoa, s.carry, s.total, s.offline_m, s.apex, s.carry_std, s.total_std, s.lm_device, j(s.estimated), j(s.review), s.accepted,
-                 j(s.practice), j(s.raw), s.edited_at, s.training_session_id, s.physics_version]);
+                 j(s.practice), j(s.raw), s.edited_at, s.training_session_id, s.physics_version, s.offline_std]);
             stored.push(s.client_id);
         }
         res.json({ stored: stored, refused: refused });
@@ -1723,6 +1730,24 @@ app.get('/api/bag', requireDB, authMiddleware, async (req, res) => {
         res.json({ shots: PlayerBag.trim(entries) });
     } catch(err) {
         console.error('GET /api/bag error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// Training Lab · Club Intelligence: each club of the player's shot bank (every device), worked out here (training-stats.js), so every device
+// shows the same numbers. period: session (the latest session with each club) | 30d | 90d | all
+app.get('/api/training/clubs', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const account = await accountOf(req.userId);
+        const period = Object.prototype.hasOwnProperty.call(TrainingStats.PERIODS, req.query.period) ? req.query.period : '30d';
+        const now = Date.now();
+        // the period and the one before it (for the change); a session or all: every shot
+        const since = (period === '30d' || period === '90d') ? new Date(now - 2 * TrainingStats.PERIODS[period]) : null;
+        const r = await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND ($2::timestamptz IS NULL OR shot_at > $2) ORDER BY shot_at`, [account, since]);
+        const out = TrainingStats.compute(r.rows.map(ShotBank.toClient), { period: period, now: now, version: PHYSICS_VERSION });
+        out.total = (await pool.query('SELECT count(*)::int AS n FROM shots WHERE player_id = $1', [account])).rows[0].n;
+        res.json(out);
+    } catch(err) {
+        console.error('GET /api/training/clubs error:', err);
         res.status(500).json({ error: 'Database error' });
     }
 });
