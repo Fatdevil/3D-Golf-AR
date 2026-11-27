@@ -206,7 +206,9 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('ett väntande slag som ändras medan lagringen är full: exporten har ändringen', exported && exported.club === '9i', JSON.stringify(exported));
     await pageA.evaluate(() => { Storage.prototype.setItem = window.__origSet; });
     await ctxA.setOffline(false);
+    // back online: the page sends by itself (the online event), and a flush asked for meanwhile waits for it; give a slow machine time
     await pageA.evaluate(() => window.ShotSync.flush());
+    await pageA.waitForFunction(() => window.ShotSync.pending() === 0 && window.ShotSync.status().inMemory === 0, null, { timeout: 60000 }).catch(() => {});
     st7 = await pageA.evaluate(() => window.ShotSync.status());
     check('och det skickas när det går, utan att försvinna', st7.inMemory === 0 && st7.pending === 0 && (await count(idA)) === before7 + 2, JSON.stringify([st7, await count(idA), before7]));
     const editedRow = (await pool.query('SELECT club FROM shots WHERE player_id = $1 AND client_id = $2', [idA, editCid])).rows[0];
