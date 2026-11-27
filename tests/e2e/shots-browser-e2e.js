@@ -130,8 +130,13 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await idle(pageB);
     const code = (await pageA.evaluate(() => window.ShotSync.linkCode())).code;
     await pageB.evaluate(() => { document.querySelector('#range-session [data-act="bank"]').click(); });
-    await pageB.waitForSelector('#rs-bank-input', { timeout: 10000 });
-    await pageB.fill('#rs-bank-input', code.slice(0, 4).toLowerCase() + ' ' + code.slice(4));
+    // the panel opens the bank, then asks the server (the code field is drawn anew meanwhile): typed text must stay through that
+    await pageB.waitForSelector('#rs-bank-input', { timeout: 30000 });
+    await pageB.waitForSelector('#range-session [data-act="bank-link"]:not([disabled])', { timeout: 30000 });   // the bank has answered
+    await pageB.type('#rs-bank-input', code.slice(0, 4).toLowerCase() + ' ' + code.slice(4), { delay: 30 });
+    await pageB.evaluate(() => window.RangeSession.render());   // a redraw (a shot coming in) while the code is typed
+    const kept = await pageB.evaluate(() => document.querySelector('#rs-bank-input').value);
+    check('det inskrivna i kodfältet finns kvar när panelen ritas om', kept === code.slice(0, 4).toLowerCase() + ' ' + code.slice(4), kept);
     await pageB.evaluate(() => { document.querySelector('#range-session [data-act="bank-link"]').click(); });
     await pageB.waitForFunction(() => { const m = document.querySelector('#range-session .rs-bank-msg'); return m && /Kopplad|Linked/.test(m.textContent); }, null, { timeout: 15000 }).catch(() => {});
     const msg = await pageB.evaluate(() => (document.querySelector('#range-session .rs-bank-msg') || {}).textContent || '');

@@ -144,7 +144,7 @@
         const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
 
         let state = { key: null, shots: [], club: null, tab: 'shots', open: true };
-        let bank = { open: false, code: null, msg: null, busy: false };   // the shot bank part of the panel (shot-sync.js)
+        let bank = { open: false, code: null, msg: null, busy: false, typed: '' };   // the shot bank part of the panel (shot-sync.js)
         let ctx = null;              // { scene, tee }
         let panel = null, dots = [], ellipse = null, dotGeo = null;
         let marksShown = true;   // off while practising approaches (the green has its own spread then)
@@ -183,6 +183,7 @@
             panel.id = 'range-session';
             panel.addEventListener('click', onClick);
             panel.addEventListener('change', onChange);
+            panel.addEventListener('input', function (e) { if (e.target && e.target.id === 'rs-bank-input') bank.typed = e.target.value; });
             // the panel's own clicks and keys are not the game's (aim taps, swing keys)
             ['pointerdown', 'pointerup', 'touchstart', 'wheel', 'keydown'].forEach(function (ev) { panel.addEventListener(ev, function (e) { e.stopPropagation(); }, { passive: true }); });
             document.body.appendChild(panel);
@@ -258,7 +259,11 @@
                 h += '<div class="rs-actions"><button data-act="csv"' + (shots.length ? '' : ' disabled') + '>⬇ ' + esc(t('csv')) + '</button><button data-act="clear"' + (shots.length ? '' : ' disabled') + '>' + esc(t('clear')) + '</button>' +
                      (root.ShotSync && root.ShotSync.linkCode ? '<button data-act="bank" aria-expanded="' + bank.open + '">' + esc(t('bank')) + '</button>' : '') + '</div>';
             }
+            // the code field is drawn anew with the panel (a shot coming in, the bank answering): what was typed, and where, stays
+            const field = document.activeElement && document.activeElement.id === 'rs-bank-input' ? document.activeElement : null;
+            const caret = field ? [field.selectionStart, field.selectionEnd] : null;
             panel.innerHTML = h;
+            if (field) { const f = panel.querySelector('#rs-bank-input'); if (f) { f.focus(); try { f.setSelectionRange(caret[0], caret[1]); } catch (e) { /* none */ } } }
             panel.classList.toggle('collapsed', !state.open);
         }
 
@@ -270,14 +275,14 @@
                  (st.pending ? ' · ' + esc(t('bankPending').replace('{n}', st.pending)) : '') + (st.blocked ? ' · ' + esc(t('bankBlocked')) : '') + '</div>';
             h += '<div class="rs-bank-row"><button data-act="bank-code"' + (bank.busy ? ' disabled' : '') + '>' + esc(t('bankShowCode')) + '</button></div>';
             if (bank.code) h += '<div class="rs-bank-code" aria-live="polite"><b>' + esc(bank.code.code.slice(0, 4) + ' ' + bank.code.code.slice(4)) + '</b> ' + esc(t('bankCodeValid')) + '</div>';
-            h += '<div class="rs-bank-row"><label for="rs-bank-input">' + esc(t('bankEnter')) + '</label><input id="rs-bank-input" maxlength="9" autocomplete="off" spellcheck="false" placeholder="ABCD EFGH">' +
+            h += '<div class="rs-bank-row"><label for="rs-bank-input">' + esc(t('bankEnter')) + '</label><input id="rs-bank-input" maxlength="9" autocomplete="off" spellcheck="false" placeholder="ABCD EFGH" value="' + esc(bank.typed) + '">' +
                  '<button data-act="bank-link"' + (bank.busy ? ' disabled' : '') + '>' + esc(t('bankLink')) + '</button></div>';
             if (bank.msg) h += '<div class="rs-bank-msg" role="status">' + esc(bank.msg) + '</div>';
             return h + '</div>';
         }
         async function bankAct(act) {
             const S = root.ShotSync;
-            const input = panel && panel.querySelector('#rs-bank-input'), typed = input ? input.value : '';   // read before the redraw makes a new field
+            const typed = bank.typed;   // what is in the code field (kept across redraws, see render)
             bank.busy = true; bank.msg = null; render();
             try {
                 if (act === 'bank') { bank.open = !bank.open; if (bank.open) { await S.flush(); await S.bankCount(); } }
