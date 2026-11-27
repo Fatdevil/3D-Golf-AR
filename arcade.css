@@ -813,6 +813,18 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session .rs-actions { display: flex; gap: 6px; padding: 8px 12px 10px; }
   #range-session .rs-actions button { flex: 1; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 11px; font-weight: 700; }
   #range-session .rs-actions button:disabled { opacity: 0.4; cursor: default; }
+  /* the shot bank (shot-sync.js): status, a code for another device, a code typed in */
+  #range-session .rs-bank { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+  #range-session .rs-bank-status { font-size: 11px; color: #cbd5e1; }
+  #range-session .rs-bank-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #range-session .rs-bank-row label { font-size: 11px; color: #94a3b8; width: 100%; }
+  #range-session .rs-bank-row input { flex: 1; min-width: 0; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: #0f172a; color: #e2e8f0;
+    font: 700 13px/1 ui-monospace, monospace; letter-spacing: 2px; text-transform: uppercase; padding: 0 8px; }
+  #range-session .rs-bank-row button { height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 11px; font-weight: 700; }
+  #range-session .rs-bank-row button:disabled { opacity: 0.5; }
+  #range-session .rs-bank-code { font-size: 11px; color: #cbd5e1; }
+  #range-session .rs-bank-code b { font: 700 18px/1.2 ui-monospace, monospace; letter-spacing: 3px; color: #fbbf24; }
+  #range-session .rs-bank-msg { font-size: 11px; color: #fbbf24; }
   @media (max-width: 768px) {
       #range-session { top: auto; bottom: 380px; right: 16px; max-height: 40vh; }
   }

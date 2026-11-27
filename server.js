@@ -7,6 +7,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const collectionsCore = require('./collections-core');
+const ShotBank = require('./shot-bank-core');
+const PlayerBag = require('./arcade-bag');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -284,6 +286,44 @@ async function initDB() {
             `);
             await pool.query(`CREATE INDEX IF NOT EXISTS approach_results_board ON approach_results (range_code, test_key, user_id, score DESC)`);
         } catch(e) { console.log('Approach results migration note:', e.message); }
+
+        // The shot bank: every range shot a player has hit, on every device they use (shot-bank-core.js). Never deleted: a new range session
+        // on a device clears only the device's list. One row per player and shot (client_id, made on the device), so a shot sent twice is kept once.
+        // player_id is the account (users.account_id of the device that sent it, or the device itself); device_id the device that sent it first.
+        try {
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_id VARCHAR(80);`);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS shots (
+                    id BIGSERIAL PRIMARY KEY,
+                    player_id VARCHAR(80) NOT NULL,
+                    client_id VARCHAR(80) NOT NULL,
+                    device_id VARCHAR(80),
+                    shot_at TIMESTAMPTZ NOT NULL,
+                    range_key VARCHAR(80),
+                    source VARCHAR(4) NOT NULL,
+                    club VARCHAR(4),
+                    ball_speed REAL, club_speed REAL, launch REAL, hla REAL, spin REAL, spin_axis REAL,
+                    club_path REAL, face_to_path REAL, aoa REAL,
+                    carry REAL, total REAL, offline_m REAL, apex REAL, carry_std REAL, total_std REAL,
+                    lm_device VARCHAR(64),
+                    estimated JSONB, review JSONB, accepted BOOLEAN NOT NULL DEFAULT false, practice JSONB, raw JSONB,
+                    edited_at BIGINT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    UNIQUE (player_id, client_id)
+                );
+            `);
+            await pool.query(`CREATE INDEX IF NOT EXISTS shots_player_time ON shots (player_id, shot_at DESC, id DESC)`);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS device_links (
+                    code_hash VARCHAR(64) PRIMARY KEY,
+                    account_id VARCHAR(80) NOT NULL,
+                    expires_at TIMESTAMPTZ NOT NULL,
+                    used_by VARCHAR(80),
+                    used_at TIMESTAMPTZ
+                );
+            `);
+        } catch(e) { console.log('Shot bank migration note:', e.message); }
 
         console.log("✅ Database schema ready (v3 — HCP system)");
     } catch(err) {
@@ -1591,6 +1631,143 @@ app.post('/api/ranges/:code/approach', requireDB, authMiddleware, async (req, re
     }
 });
 
+// --- THE SHOT BANK (shot-bank-core.js) ---
+// The account a device belongs to: the one it joined with a code (users.account_id), or its own
+async function accountOf(userId) {
+    const r = await pool.query('SELECT account_id FROM users WHERE id = $1', [userId]);
+    return (r.rows.length && r.rows[0].account_id) || userId;
+}
+// a device that uses the shot bank has a row in users (it may be new, or one whose token is not bound yet)
+async function ensureUser(db, id) {
+    await db.query(`INSERT INTO users (id, display_name, auth_provider) VALUES ($1, 'Golfer', 'device') ON CONFLICT (id) DO NOTHING`, [id]);
+}
+// Shots from a device: each checked, then stored once per player and shot. What was measured is written once (a later copy fills in only
+// what is missing); what the player decides (club, counted anyway, the review) follows the copy edited last. Nothing is ever deleted.
+app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const list = req.body && req.body.shots;
+        if (!Array.isArray(list) || list.length > ShotBank.MAX_BATCH) return res.status(400).json({ error: 'shots: a list of at most ' + ShotBank.MAX_BATCH });
+        await ensureUser(pool, req.userId);
+        const account = await accountOf(req.userId), now = Date.now();
+        const stored = [], refused = [];
+        for (const input of list) {
+            const n = ShotBank.normalize(input, now);
+            if (!n.ok) { refused.push({ cid: input && typeof input.cid === 'string' ? input.cid.slice(0, 80) : null, reason: n.reason }); continue; }
+            const s = n.shot, j = v => v === null ? null : JSON.stringify(v);
+            await pool.query(`
+                INSERT INTO shots (player_id, client_id, device_id, shot_at, range_key, source, club, ball_speed, club_speed, launch, hla, spin, spin_axis,
+                    club_path, face_to_path, aoa, carry, total, offline_m, apex, carry_std, total_std, lm_device, estimated, review, accepted, practice, raw, edited_at)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+                ON CONFLICT (player_id, client_id) DO UPDATE SET
+                    range_key = COALESCE(shots.range_key, EXCLUDED.range_key), ball_speed = COALESCE(shots.ball_speed, EXCLUDED.ball_speed),
+                    club_speed = COALESCE(shots.club_speed, EXCLUDED.club_speed), launch = COALESCE(shots.launch, EXCLUDED.launch), hla = COALESCE(shots.hla, EXCLUDED.hla),
+                    spin = COALESCE(shots.spin, EXCLUDED.spin), spin_axis = COALESCE(shots.spin_axis, EXCLUDED.spin_axis), club_path = COALESCE(shots.club_path, EXCLUDED.club_path),
+                    face_to_path = COALESCE(shots.face_to_path, EXCLUDED.face_to_path), aoa = COALESCE(shots.aoa, EXCLUDED.aoa), carry = COALESCE(shots.carry, EXCLUDED.carry),
+                    total = COALESCE(shots.total, EXCLUDED.total), offline_m = COALESCE(shots.offline_m, EXCLUDED.offline_m), apex = COALESCE(shots.apex, EXCLUDED.apex),
+                    carry_std = COALESCE(shots.carry_std, EXCLUDED.carry_std), total_std = COALESCE(shots.total_std, EXCLUDED.total_std),
+                    lm_device = COALESCE(shots.lm_device, EXCLUDED.lm_device), estimated = COALESCE(shots.estimated, EXCLUDED.estimated),
+                    practice = COALESCE(shots.practice, EXCLUDED.practice), raw = COALESCE(shots.raw, EXCLUDED.raw),
+                    club = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.club ELSE shots.club END,
+                    accepted = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.accepted ELSE shots.accepted END,
+                    review = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN COALESCE(EXCLUDED.review, shots.review) ELSE COALESCE(shots.review, EXCLUDED.review) END,
+                    edited_at = GREATEST(shots.edited_at, EXCLUDED.edited_at),
+                    updated_at = now()`,
+                [account, s.client_id, req.userId, s.shot_at, s.range_key, s.source, s.club, s.ball_speed, s.club_speed, s.launch, s.hla, s.spin, s.spin_axis,
+                 s.club_path, s.face_to_path, s.aoa, s.carry, s.total, s.offline_m, s.apex, s.carry_std, s.total_std, s.lm_device, j(s.estimated), j(s.review), s.accepted,
+                 j(s.practice), j(s.raw), s.edited_at]);
+            stored.push(s.client_id);
+        }
+        res.json({ stored: stored, refused: refused });
+    } catch(err) {
+        console.error('POST /api/shots/sync error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// The player's shots, newest first, a page at a time (before: the id of the last shot of the page before). Only the caller's own account.
+app.get('/api/shots', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const account = await accountOf(req.userId), limit = Math.max(1, Math.min(500, parseInt(req.query.limit, 10) || 200));
+        const before = /^\d{1,18}$/.test(String(req.query.before || '')) ? String(req.query.before) : null;
+        const r = await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND ($2::bigint IS NULL OR id < $2::bigint) ORDER BY id DESC LIMIT $3`, [account, before, limit + 1]);
+        const more = r.rows.length > limit, rows = r.rows.slice(0, limit);
+        const total = await pool.query('SELECT count(*)::int AS n FROM shots WHERE player_id = $1', [account]);
+        res.json({ shots: rows.map(ShotBank.toClient), next: more ? String(rows[rows.length - 1].id) : null, total: total.rows[0].n });
+    } catch(err) {
+        console.error('GET /api/shots error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// The player's bag from the whole shot bank, by the same rule as the bag on a device (arcade-bag.js): each club's newest shots that count
+app.get('/api/bag', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const account = await accountOf(req.userId);
+        // the newest launch-monitor shots per club that could count (the rest of the rule is arcade-bag.js's own, applied below)
+        const r = await pool.query(`
+            SELECT * FROM (
+                SELECT s.*, row_number() OVER (PARTITION BY club ORDER BY shot_at DESC, id DESC) AS k FROM shots s
+                WHERE player_id = $1 AND source = 'LM' AND club IS NOT NULL AND practice IS NULL
+            ) x WHERE k <= 400`, [account]);
+        const entries = r.rows.map(ShotBank.toClient).map(PlayerBag.entryOf).filter(Boolean);
+        res.json({ shots: PlayerBag.trim(entries) });
+    } catch(err) {
+        console.error('GET /api/bag error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// Another device joins this player's shot bank: this device asks for a code (valid 10 minutes, once), the other types it in
+app.post('/api/devices/link-code', requireDB, authMiddleware, async (req, res) => {
+    try {
+        await ensureUser(pool, req.userId);
+        const account = await accountOf(req.userId);
+        await pool.query(`DELETE FROM device_links WHERE expires_at < now() - interval '1 day'`);
+        const code = ShotBank.makeCode(crypto.randomBytes(8)), expires = new Date(Date.now() + 10 * 60000);
+        await pool.query('INSERT INTO device_links (code_hash, account_id, expires_at) VALUES ($1, $2, $3)', [tokenHash(code), account, expires]);
+        res.json({ code: code, expires_at: expires.toISOString() });
+    } catch(err) {
+        console.error('POST /api/devices/link-code error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+app.post('/api/devices/link', requireDB, authMiddleware, async (req, res) => {
+    const code = ShotBank.cleanCode(req.body && req.body.code);
+    if (code.length !== 8) return res.status(400).json({ error: 'A code is 8 characters' });
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const l = await client.query(`SELECT * FROM device_links WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now() FOR UPDATE`, [tokenHash(code)]);
+        if (!l.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such code, or it has been used or has run out' }); }
+        const account = l.rows[0].account_id, me = req.userId;
+        // a device others have joined cannot itself join another account (their shots would be left behind)
+        const others = await client.query('SELECT 1 FROM users WHERE account_id = $1 AND id <> $1 LIMIT 1', [me]);
+        if (others.rows.length && account !== me) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Other devices have joined this one: join from them instead' }); }
+        await ensureUser(client, me);
+        await client.query('UPDATE users SET account_id = $2 WHERE id = $1', [me, account === me ? null : account]);
+        // the shots this device had in a bank of its own go with it; a shot already in the account (the same id) is kept as it is there
+        if (account !== me) {
+            await client.query(`UPDATE shots SET player_id = $2, updated_at = now() WHERE player_id = $1 AND client_id NOT IN (SELECT client_id FROM shots WHERE player_id = $2)`, [me, account]);
+            await client.query(`DELETE FROM shots WHERE player_id = $1 AND client_id IN (SELECT client_id FROM shots WHERE player_id = $2)`, [me, account]);
+        }
+        await client.query('UPDATE device_links SET used_by = $2, used_at = now() WHERE code_hash = $1', [tokenHash(code), me]);
+        await client.query('COMMIT');
+        const n = await pool.query('SELECT count(*)::int AS n FROM shots WHERE player_id = $1', [account]);
+        res.json({ success: true, linked: account !== me, shots: n.rows[0].n });
+    } catch(err) {
+        try { await client.query('ROLLBACK'); } catch (e) { /* none */ }
+        console.error('POST /api/devices/link error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally { client.release(); }
+});
+// This device leaves the account it joined: the shots it sent stay in that account's bank (they are the player's), new ones go to its own
+app.post('/api/devices/unlink', requireDB, authMiddleware, async (req, res) => {
+    try {
+        await pool.query('UPDATE users SET account_id = NULL WHERE id = $1', [req.userId]);
+        res.json({ success: true });
+    } catch(err) {
+        console.error('POST /api/devices/unlink error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+
 // --- ASSET MANAGER API ---
 
 // Hämta alla custom assets (Mindre payload, exkluderar den tunga file_data vid lista)
@@ -2157,6 +2334,11 @@ app.use((req, res, next) => {
     next();
 });
 app.use(express.static(__dirname));
+
+// An address under /api that no route has is an error, not the hub page (a client would read a 200 with a page as an answer)
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'No such API' });
+});
 
 // Fallback för allt annat (Catch-all)
 app.use((req, res) => {

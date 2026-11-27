@@ -17,12 +17,11 @@
     function mean(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
     function sd(a) { if (a.length < 2) return 0; const m = mean(a); return Math.sqrt(a.reduce(function (s, v) { return s + (v - m) * (v - m); }, 0) / (a.length - 1)); }
 
-    // The bag after a shot is booked, or its club changed: the entry with the same time is replaced (or dropped when the shot no longer
-    // counts), and each club keeps its newest PER_CLUB shots. A shot counts when it came from a launch monitor, has a club and a carry,
-    // and is not an approach practice shot.
-    function upsert(list, shot, perClub) {
-        perClub = perClub || PER_CLUB;
-        const out = list.filter(function (e) { return e.t !== shot.t; });
+    // The bag entry a shot gives, or null when it does not count: it came from a launch monitor, has a club and a carry, and is not an
+    // approach practice shot, a shot that flew on an estimated value, nor a mishit, misread or shot that looks like another club (unless
+    // the player counted it). Also used by the server (server.js, the bag of the shot bank), so a bag is the same wherever it is built.
+    function entryOf(shot) {
+        if (!shot) return null;
         // a shot with an estimated value (no spin from the launch monitor: lm-shot-quality.js) flew on a guess: its carry does not count
         const guessed = Array.isArray(shot.estimated) && shot.estimated.length > 0;
         // a mishit, a misread or a shot that looks like another club (lm-shot-review.js) does not say how far the club goes, unless the
@@ -32,12 +31,15 @@
         // and slope on top (the shot plan), so a shot hit into the wind on the range does not make the club look short
         const carry = num(shot.carryStd) !== null ? shot.carryStd : shot.carry;
         const total = num(shot.totalStd) !== null ? shot.totalStd : (num(shot.total) !== null ? shot.total : carry);
-        if (shot.source === 'LM' && shot.club && num(carry) !== null && carry > 0 && !shot.practice && !guessed && !flagged) {
-            const e = { t: shot.t, club: shot.club, carry: carry, total: total };
-            if (num(shot.ballSpeed) !== null) e.ballSpeed = shot.ballSpeed;   // the player's own ball speed per club (the wrong-club check)
-            out.push(e);
-        }
-        out.sort(function (a, b) { return a.t - b.t; });
+        if (shot.source !== 'LM' || !shot.club || num(carry) === null || !(carry > 0) || shot.practice || guessed || flagged) return null;
+        const e = { t: shot.t, club: shot.club, carry: carry, total: total };
+        if (num(shot.ballSpeed) !== null) e.ballSpeed = shot.ballSpeed;   // the player's own ball speed per club (the wrong-club check)
+        return e;
+    }
+    // each club's newest perClub entries, oldest first
+    function trim(list, perClub) {
+        perClub = perClub || PER_CLUB;
+        const out = list.slice().sort(function (a, b) { return a.t - b.t; });
         const count = {}, keep = [];
         for (let i = out.length - 1; i >= 0; i--) {
             const c = out[i].club;
@@ -45,6 +47,14 @@
             if (count[c] <= perClub) keep.push(out[i]);
         }
         return keep.reverse();
+    }
+    // The bag after a shot is booked, or its club changed: the entry with the same time is replaced (or dropped when the shot no longer
+    // counts), and each club keeps its newest PER_CLUB shots.
+    function upsert(list, shot, perClub) {
+        const out = list.filter(function (e) { return e.t !== shot.t; });
+        const e = entryOf(shot);
+        if (e) out.push(e);
+        return trim(out, perClub);
     }
 
     // Per club in bag order: shots, average carry and total, spread of carry. known: enough shots to suggest the club
@@ -71,7 +81,7 @@
         return best;
     }
 
-    const api = { CLUBS: CLUBS, PER_CLUB: PER_CLUB, MIN_SHOTS: MIN_SHOTS, upsert: upsert, stats: stats, suggest: suggest };
+    const api = { CLUBS: CLUBS, PER_CLUB: PER_CLUB, MIN_SHOTS: MIN_SHOTS, entryOf: entryOf, trim: trim, upsert: upsert, stats: stats, suggest: suggest };
 
     if (typeof localStorage !== 'undefined') {
         let cache = null;
@@ -84,6 +94,11 @@
             if (!shot || !shot.t) return;
             cache = upsert(load(), shot);
             try { localStorage.setItem(KEY, JSON.stringify({ shots: cache })); } catch (e) { /* private mode or full: the bag lives on this page */ }
+        };
+        // the bag from the shot bank (shot-sync.js: the server's bag with the shots still waiting to go)
+        api.replace = function (list) {
+            cache = trim((list || []).filter(function (e) { return e && e.club && num(e.carry) !== null && typeof e.t === 'number'; }));
+            try { localStorage.setItem(KEY, JSON.stringify({ shots: cache })); } catch (e) { /* private mode or full */ }
         };
         api.clubs = function () { return stats(load()); };
         api.entries = function () { return load().slice(); };
