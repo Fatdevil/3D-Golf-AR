@@ -100,6 +100,20 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/shots/sync', { shots: Array.from({ length: 201 }, () => shot()) }, A);
     check('högst 200 slag per sändning (400)', r.status === 400);
 
+    // the training session and the flight's version: kept as sent, written once, never guessed for a shot without them
+    const sess = shot({ session: 'sessA' + tag, physics: 'flight-2024.1' });
+    await api('POST', '/api/shots/sync', { shots: [sess] }, A);
+    await api('POST', '/api/shots/sync', { shots: [Object.assign({}, sess, { session: 'sessB' + tag, physics: 'flight-2099.9', club: '6i', edited: Date.now() })] }, A);
+    row = (await pool.query('SELECT training_session_id, physics_version, club FROM shots WHERE player_id = $1 AND client_id = $2', [A.id, sess.cid])).rows[0];
+    check('passets id och fysikens version sparas och skrivs aldrig över (klubban kan ändras)', row.training_session_id === 'sessA' + tag && row.physics_version === 'flight-2024.1' && row.club === '6i', JSON.stringify(row));
+    row = (await pool.query('SELECT training_session_id, physics_version FROM shots WHERE player_id = $1 AND client_id = $2', [A.id, a2.cid])).rows[0];
+    check('ett slag utan pass och version får inget gissat (NULL)', row.training_session_id === null && row.physics_version === null, JSON.stringify(row));
+    r = await api('POST', '/api/shots/sync', { shots: [shot({ session: 'no' }), shot({ physics: 'a b' })] }, A);
+    check('ett felaktigt pass-id eller versionsnamn avvisas med orsak', r.json.refused.map(x => x.reason).sort().join() === 'bad_physics,bad_session', JSON.stringify(r.json));
+    r = await api('GET', '/api/shots?limit=500', undefined, A);
+    const back = r.json.shots.filter(x => x.cid === sess.cid)[0];
+    check('slagbanken ger tillbaka pass och version', back && back.session === 'sessA' + tag && back.physics === 'flight-2024.1', JSON.stringify(back));
+
     console.log('\n3. Inget raderar ett slag');
     const before = await count(A.id);
     r = await api('DELETE', '/api/shots', undefined, A);

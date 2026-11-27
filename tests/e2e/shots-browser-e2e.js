@@ -164,6 +164,41 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
       JSON.stringify([st, read, bagRead, await count(idA)]));
     const clubsC = await pageC.evaluate(() => window.PlayerBag.clubs().map(r => r.club).join());
     check('och får inte A:s bag', clubsC.indexOf('7i') < 0 && clubsC.indexOf('4i') < 0, clubsC);
+
+    console.log('\n6. Träningspass och fysikens version');
+    const rowsA = (await pool.query("SELECT club, training_session_id AS s, physics_version AS p, range_key FROM shots WHERE player_id = $1 ORDER BY shot_at", [idA])).rows;
+    const version = await pageA.evaluate(() => window.GolfPhysics.VERSION);
+    const legacyRows = rowsA.filter(x => x.range_key === 'OLDRANGE' || x.range_key === 'bag'), firstPass = rowsA.filter(x => x.range_key === 'E2E-RANGE' && (x.club === '7i' || x.club === 'PW'));
+    check('gamla slag får inget gissat pass eller version', legacyRows.length === 4 && legacyRows.every(x => x.s === null && x.p === null), JSON.stringify(legacyRows));
+    check('slagen före "Ny session" hör till ett och samma pass, med fysikens version', firstPass.length === 5 && new Set(firstPass.map(x => x.s)).size === 1 && firstPass[0].s && firstPass.every(x => x.p === version), JSON.stringify(firstPass));
+    const later = rowsA.filter(x => x.range_key === 'E2E-RANGE' && x.club === '9i');
+    check('slagen efter "Ny session" hör till ett annat pass', later.length === 2 && later.every(x => x.s && x.s !== firstPass[0].s), JSON.stringify(later));
+
+    console.log('\n7. Inget kastas tyst');
+    const before7 = await count(idA);
+    await pageA.evaluate(() => window.ShotSync.enqueue({ cid: 'refused0001', t: Date.now(), source: 'LM', club: '7i', ballSpeed: 999, carry: 150 }));
+    await pageA.waitForFunction(() => window.ShotSync.status().failed === 1 && window.ShotSync.pending() === 0, null, { timeout: 60000 }).catch(() => {});
+    let st7 = await pageA.evaluate(() => window.ShotSync.status());
+    const alert7 = await pageA.evaluate(() => (document.querySelector('#range-session .rs-bank-alert') || {}).textContent || '');
+    const file7 = JSON.parse(await pageA.evaluate(() => window.ShotSync.exportText()));
+    check('ett slag servern avvisar flyttas till felkön (med orsak), syns i panelen och finns i exportfilen', st7.failed === 1 && st7.pending === 0 && /1/.test(alert7) &&
+      file7.failed.length === 1 && file7.failed[0].shot.cid === 'refused0001' && file7.failed[0].reason === 'bad_ballSpeed' && (await count(idA)) === before7, JSON.stringify([st7, alert7, file7.failed]));
+    await pageA.evaluate(() => window.ShotSync.retryFailed());
+    await pageA.waitForFunction(() => window.ShotSync.pending() === 0, null, { timeout: 60000 }).catch(() => {});
+    st7 = await pageA.evaluate(() => window.ShotSync.status());
+    check('"Försök igen" skickar det på nytt; avvisas det igen ligger det kvar i felkön (aldrig borta)', st7.failed === 1 && st7.pending === 0, JSON.stringify(st7));
+    // a full storage: the outbox cannot be written, the shot waits in the page's memory, the panel says so, and it goes when it can
+    await ctxA.setOffline(true);
+    await pageA.evaluate(() => { const orig = Storage.prototype.setItem; window.__origSet = orig; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('golf_shot_out_') === 0) throw new DOMException('full', 'QuotaExceededError'); return orig.call(this, k, v); }; });
+    await hit(pageA, { club: '8i', carry: 140, total: 147, ballSpeed: 116, launch: 18, spin: 7800, clubSpeed: 86 });
+    st7 = await pageA.evaluate(() => window.ShotSync.status());
+    const alertFull = await pageA.evaluate(() => (document.querySelector('#range-session .rs-bank-alert') || {}).textContent || '');
+    check('full lagring: slaget väntar i sidans minne och panelen varnar', st7.inMemory === 1 && st7.storageFull === true && st7.pending === 1 && alertFull.length > 0, JSON.stringify([st7, alertFull]));
+    await pageA.evaluate(() => { Storage.prototype.setItem = window.__origSet; });
+    await ctxA.setOffline(false);
+    await pageA.evaluate(() => window.ShotSync.flush());
+    st7 = await pageA.evaluate(() => window.ShotSync.status());
+    check('och det skickas när det går, utan att försvinna', st7.inMemory === 0 && st7.pending === 0 && (await count(idA)) === before7 + 1, JSON.stringify([st7, await count(idA), before7]));
   } catch (e) {
     console.error(e); failed++;
   }

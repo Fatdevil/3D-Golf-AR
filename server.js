@@ -314,6 +314,10 @@ async function initDB() {
                 );
             `);
             await pool.query(`CREATE INDEX IF NOT EXISTS shots_player_time ON shots (player_id, shot_at DESC, id DESC)`);
+            // the training session a shot was hit in and the ball flight that worked out its distances (shot-bank-core.js); NULL for older shots
+            await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS training_session_id VARCHAR(80);`);
+            await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS physics_version VARCHAR(32);`);
+            await pool.query(`CREATE INDEX IF NOT EXISTS shots_player_session ON shots (player_id, training_session_id)`);
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS device_links (
                     code_hash VARCHAR(64) PRIMARY KEY,
@@ -1656,8 +1660,9 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
             const s = n.shot, j = v => v === null ? null : JSON.stringify(v);
             await pool.query(`
                 INSERT INTO shots (player_id, client_id, device_id, shot_at, range_key, source, club, ball_speed, club_speed, launch, hla, spin, spin_axis,
-                    club_path, face_to_path, aoa, carry, total, offline_m, apex, carry_std, total_std, lm_device, estimated, review, accepted, practice, raw, edited_at)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+                    club_path, face_to_path, aoa, carry, total, offline_m, apex, carry_std, total_std, lm_device, estimated, review, accepted, practice, raw, edited_at,
+                    training_session_id, physics_version)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
                 ON CONFLICT (player_id, client_id) DO UPDATE SET
                     range_key = COALESCE(shots.range_key, EXCLUDED.range_key), ball_speed = COALESCE(shots.ball_speed, EXCLUDED.ball_speed),
                     club_speed = COALESCE(shots.club_speed, EXCLUDED.club_speed), launch = COALESCE(shots.launch, EXCLUDED.launch), hla = COALESCE(shots.hla, EXCLUDED.hla),
@@ -1667,6 +1672,8 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
                     carry_std = COALESCE(shots.carry_std, EXCLUDED.carry_std), total_std = COALESCE(shots.total_std, EXCLUDED.total_std),
                     lm_device = COALESCE(shots.lm_device, EXCLUDED.lm_device), estimated = COALESCE(shots.estimated, EXCLUDED.estimated),
                     practice = COALESCE(shots.practice, EXCLUDED.practice), raw = COALESCE(shots.raw, EXCLUDED.raw),
+                    training_session_id = COALESCE(shots.training_session_id, EXCLUDED.training_session_id),
+                    physics_version = COALESCE(shots.physics_version, EXCLUDED.physics_version),
                     club = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.club ELSE shots.club END,
                     accepted = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.accepted ELSE shots.accepted END,
                     review = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN COALESCE(EXCLUDED.review, shots.review) ELSE COALESCE(shots.review, EXCLUDED.review) END,
@@ -1674,7 +1681,7 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
                     updated_at = now()`,
                 [account, s.client_id, req.userId, s.shot_at, s.range_key, s.source, s.club, s.ball_speed, s.club_speed, s.launch, s.hla, s.spin, s.spin_axis,
                  s.club_path, s.face_to_path, s.aoa, s.carry, s.total, s.offline_m, s.apex, s.carry_std, s.total_std, s.lm_device, j(s.estimated), j(s.review), s.accepted,
-                 j(s.practice), j(s.raw), s.edited_at]);
+                 j(s.practice), j(s.raw), s.edited_at, s.training_session_id, s.physics_version]);
             stored.push(s.client_id);
         }
         res.json({ stored: stored, refused: refused });

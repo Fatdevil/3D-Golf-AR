@@ -825,6 +825,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session .rs-bank-code { font-size: 11px; color: #cbd5e1; }
   #range-session .rs-bank-code b { font: 700 18px/1.2 ui-monospace, monospace; letter-spacing: 3px; color: #fbbf24; }
   #range-session .rs-bank-msg { font-size: 11px; color: #fbbf24; }
+  #range-session .rs-bank-warn { font-size: 11px; color: #fca5a5; }
+  #range-session .rs-bank-why { color: #94a3b8; }
+  #range-session .rs-bank-alert { padding: 4px 12px 0; }
   @media (max-width: 768px) {
       #range-session { top: auto; bottom: 380px; right: 16px; max-height: 40vh; }
   }

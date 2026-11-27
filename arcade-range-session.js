@@ -20,6 +20,14 @@
     const CLUBS = ['Dr', '3W', '5W', 'Hy', '4i', '5i', '6i', '7i', '8i', '9i', 'PW', 'GW', 'SW', 'LW'];
     const FROM_SWING = { DRIVER: 'Dr', W3: '3W', I5: '5i', I7: '7i', I9: '9i', PW: 'PW', SW: 'SW', LW: 'LW' };
     const MAX_SHOTS = 500;
+    // a training session: the shots of one range session on one device, from its start (or "New session") until the player stops for this
+    // long; the next shot after such a break starts a new one. Each shot keeps its session's id (the shot bank), so two sessions compare.
+    const SESSION_GAP_MS = 4 * 3600 * 1000;
+    // the session a shot made at time t belongs to: the current one, or a new one (first shot, or after the break)
+    function sessionFor(cur, t, makeId) {
+        if (cur && cur.id && typeof cur.last === 'number' && t - cur.last <= SESSION_GAP_MS && t >= cur.last - 60000) return { id: cur.id, start: cur.start, last: Math.max(cur.last, t) };
+        return { id: makeId(), start: t, last: t };
+    }
 
     function mean(a) { return a.length ? a.reduce(function (s, v) { return s + v; }, 0) / a.length : 0; }
     // sample standard deviation (0 for fewer than two values)
@@ -93,7 +101,8 @@
     }
 
     const api = { CLUBS: CLUBS, FROM_SWING: FROM_SWING, MAX_SHOTS: MAX_SHOTS, mean: mean, sd: sd, rangeFrame: rangeFrame, fromRangeFrame: fromRangeFrame,
-                  clubStats: clubStats, dispersion: dispersion, fullSwings: fullSwings, counted: counted, toCSV: toCSV, prepare: prepare };
+                  clubStats: clubStats, dispersion: dispersion, fullSwings: fullSwings, counted: counted, toCSV: toCSV, prepare: prepare,
+                  sessionFor: sessionFor, SESSION_GAP_MS: SESSION_GAP_MS };
 
     // A shot before it is booked (lm-shot-review.js): its carry and total in standard conditions, and the review against the player's own
     // bag (without this shot). `physics` flies the standard shot (window.GolfPhysics in the page); `bagEntries` the player's bag.
@@ -122,6 +131,9 @@
                   bank: '☁ Slagbank', bankNote: 'Alla dina rangeslag sparas i din slagbank, på alla dina enheter. En ny session tömmer bara listan här.',
                   bankSaved: '{n} slag i slagbanken', bankPending: '{n} väntar på uppladdning', bankBlocked: 'den här enheten tillhör ett annat konto',
                   bankShowCode: 'Visa kod för en annan enhet', bankCodeValid: '(skriv in den på den andra enheten inom 10 minuter)', bankEnter: 'Kod från din andra enhet',
+                  bankFailed: '{n} slag kunde inte sparas i slagbanken.', bankRetry: 'Försök igen', bankExport: 'Exportera väntande slag',
+                  bankFull: 'Enhetens lagring är full: {n} slag finns bara i den här sidan tills de skickats. Exportera dem nu.',
+                  bankAlert: '{n} slag är inte sparade i slagbanken: öppna ☁ Slagbank',
                   bankLink: 'Koppla', bankLinked: 'Kopplad: slagbanken har {n} slag', bankBadCode: 'Koden finns inte, är använd eller har gått ut', bankError: 'Det gick inte att nå servern. Försök igen.',
                   board: 'Topplista på rangen', you: 'Du', of: 'av', pts: 'p', flagged: '{n} slag räknas inte i snittet (felträff eller fel klubba). Tryck ⚠ för att räkna ett ändå.' },
             en: { title: 'Session', shots: 'shots', pick: 'Which club are you hitting?', tabShots: 'Shots', tabClubs: 'Clubs', club: 'Club', carry: 'Carry', total: 'Total',
@@ -135,6 +147,9 @@
                   bank: '☁ Shot bank', bankNote: 'All your range shots are kept in your shot bank, on all your devices. A new session only clears the list here.',
                   bankSaved: '{n} shots in the shot bank', bankPending: '{n} waiting to upload', bankBlocked: 'this device belongs to another account',
                   bankShowCode: 'Show a code for another device', bankCodeValid: '(type it on the other device within 10 minutes)', bankEnter: 'Code from your other device',
+                  bankFailed: '{n} shots could not be saved in the shot bank.', bankRetry: 'Try again', bankExport: 'Export waiting shots',
+                  bankFull: 'This device\'s storage is full: {n} shots are only in this page until sent. Export them now.',
+                  bankAlert: '{n} shots are not saved in the shot bank: open ☁ Shot bank',
                   bankLink: 'Link', bankLinked: 'Linked: the shot bank has {n} shots', bankBadCode: 'No such code, or it was used or has run out', bankError: 'Could not reach the server. Try again.',
                   board: 'Leaderboard on this range', you: 'You', of: 'of', pts: 'pts', flagged: '{n} shots are not counted in the averages (mishit or wrong club). Tap ⚠ to count one anyway.' }
         };
@@ -143,7 +158,7 @@
         const hex = function (c) { return '#' + ((COLORS[c] === undefined ? 0x94a3b8 : COLORS[c]) >>> 0).toString(16).padStart(6, '0'); };
         const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
 
-        let state = { key: null, shots: [], club: null, tab: 'shots', open: true };
+        let state = { key: null, shots: [], club: null, tab: 'shots', open: true, session: null };
         let bank = { open: false, code: null, msg: null, busy: false, typed: '' };   // the shot bank part of the panel (shot-sync.js)
         let ctx = null;              // { scene, tee }
         let panel = null, dots = [], ellipse = null, dotGeo = null;
@@ -162,7 +177,8 @@
                 const s = JSON.parse(localStorage.getItem(storageKey()) || 'null');
                 state.shots = (s && Array.isArray(s.shots)) ? s.shots.slice(-MAX_SHOTS) : [];
                 state.club = (s && typeof s.club === 'string') ? s.club : null;
-            } catch (e) { state.shots = []; state.club = null; }
+                state.session = (s && s.session && typeof s.session.id === 'string') ? s.session : null;
+            } catch (e) { state.shots = []; state.club = null; state.session = null; }
             // a shot from before the shot bank gets the id shot-sync.js gave it when it sent the old shots, so a later change is the same shot
             if (root.ShotSync && root.ShotSync.cidFor) {
                 let added = false;
@@ -174,7 +190,7 @@
             try { const v = localStorage.getItem('golf_range_session_open'); state.open = v === null ? !phone : v !== '0'; } catch (e) { state.open = !phone; }
         }
         function save() {
-            try { localStorage.setItem(storageKey(), JSON.stringify({ shots: state.shots, club: state.club })); } catch (e) { /* private mode or full: the session lives on this page */ }
+            try { localStorage.setItem(storageKey(), JSON.stringify({ shots: state.shots, club: state.club, session: state.session })); } catch (e) { /* private mode or full: the session lives on this page */ }
         }
 
         function ensurePanel() {
@@ -184,6 +200,8 @@
             panel.addEventListener('click', onClick);
             panel.addEventListener('change', onChange);
             panel.addEventListener('input', function (e) { if (e.target && e.target.id === 'rs-bank-input') bank.typed = e.target.value; });
+            // the outbox changed (a shot sent, refused, waiting): the counts and warnings follow
+            root.addEventListener('shotsync', function () { if (ctx) render(); });
             // the panel's own clicks and keys are not the game's (aim taps, swing keys)
             ['pointerdown', 'pointerup', 'touchstart', 'wheel', 'keydown'].forEach(function (ev) { panel.addEventListener(ev, function (e) { e.stopPropagation(); }, { passive: true }); });
             document.body.appendChild(panel);
@@ -256,6 +274,9 @@
                 if (ell && ellipse && marksShown) h += '<div class="rs-note">' + esc(t('ellipse').replace('{c}', ell)) + '</div>';
                 // a published range: the player's stars for it (ratings.js keeps them, so a redraw shows the same)
                 if (ctx && ctx.rateCode && root.GolfRatings) h += '<div class="rs-rate"><span class="rs-sub">' + esc(t('rateRange')) + '</span>' + root.GolfRatings.widget(ctx.rateCode) + '</div>';
+                // a shot that could not go to the shot bank is always visible, also with the bank part closed
+                const sync = root.ShotSync && root.ShotSync.status ? root.ShotSync.status() : null;
+                if (sync && (sync.failed || sync.storageFull || sync.inMemory)) h += '<div class="rs-bank-warn rs-bank-alert">⚠ ' + esc(t('bankAlert').replace('{n}', sync.failed + sync.inMemory)) + '</div>';
                 h += '<div class="rs-actions"><button data-act="csv"' + (shots.length ? '' : ' disabled') + '>⬇ ' + esc(t('csv')) + '</button><button data-act="clear"' + (shots.length ? '' : ' disabled') + '>' + esc(t('clear')) + '</button>' +
                      (root.ShotSync && root.ShotSync.linkCode ? '<button data-act="bank" aria-expanded="' + bank.open + '">' + esc(t('bank')) + '</button>' : '') + '</div>';
             }
@@ -278,6 +299,16 @@
             h += '<div class="rs-bank-row"><label for="rs-bank-input">' + esc(t('bankEnter')) + '</label><input id="rs-bank-input" maxlength="9" autocomplete="off" spellcheck="false" placeholder="ABCD EFGH" value="' + esc(bank.typed) + '">' +
                  '<button data-act="bank-link"' + (bank.busy ? ' disabled' : '') + '>' + esc(t('bankLink')) + '</button></div>';
             if (bank.msg) h += '<div class="rs-bank-msg" role="status">' + esc(bank.msg) + '</div>';
+            // shots the server refused, or that wait only in this page's memory: shown, exportable, never thrown away by the game
+            if (st.failed) {
+                const reasons = {};
+                root.ShotSync.failed().forEach(function (f) { reasons[f.reason] = (reasons[f.reason] || 0) + 1; });
+                h += '<div class="rs-bank-warn">' + esc(t('bankFailed').replace('{n}', st.failed)) + ' <span class="rs-bank-why">(' +
+                     esc(Object.keys(reasons).map(function (r) { return r + (reasons[r] > 1 ? ' ×' + reasons[r] : ''); }).join(', ')) + ')</span></div>' +
+                     '<div class="rs-bank-row"><button data-act="bank-retry"' + (bank.busy ? ' disabled' : '') + '>' + esc(t('bankRetry')) + '</button></div>';
+            }
+            if (st.storageFull || st.inMemory) h += '<div class="rs-bank-warn">' + esc(t('bankFull').replace('{n}', st.inMemory)) + '</div>';
+            if (st.pending || st.failed || st.inMemory) h += '<div class="rs-bank-row"><button data-act="bank-export">⬇ ' + esc(t('bankExport')) + '</button></div>';
             return h + '</div>';
         }
         async function bankAct(act) {
@@ -287,6 +318,8 @@
             try {
                 if (act === 'bank') { bank.open = !bank.open; if (bank.open) { await S.flush(); await S.bankCount(); } }
                 else if (act === 'bank-code') bank.code = await S.linkCode();
+                else if (act === 'bank-retry') { await S.retryFailed(); await S.bankCount(); }
+                else if (act === 'bank-export') S.exportDownload();
                 else if (act === 'bank-link') {
                     const r = await S.link(typed);
                     bank.msg = t('bankLinked').replace('{n}', r.shots);
@@ -330,10 +363,10 @@
                 save(); redraw(); return;
             }
             const act = b.dataset.act;
-            if (act === 'bank' || act === 'bank-code' || act === 'bank-link') { bankAct(act); return; }
+            if (act === 'bank' || act === 'bank-code' || act === 'bank-link' || act === 'bank-retry' || act === 'bank-export') { bankAct(act); return; }
             if (act === 'toggle') { state.open = !state.open; try { localStorage.setItem('golf_range_session_open', state.open ? '1' : '0'); } catch (err) {} render(); }
             else if (act === 'csv') exportCSV();
-            else if (act === 'clear' && root.confirm(t('confirmClear'))) { state.shots = []; save(); redraw(); }
+            else if (act === 'clear' && root.confirm(t('confirmClear'))) { state.shots = []; state.session = null; save(); redraw(); }   // the next shot starts a new training session
         }
         function onChange(e) {
             const sel = e.target;
@@ -436,7 +469,12 @@
             const rec = Object.assign({ t: Date.now() }, shot);
             rec.range = state.key;
             rec.edited = rec.t;
+            const newId = (root.ShotSync && root.ShotSync.newCid) ? root.ShotSync.newCid : function () { return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); };
             if (root.ShotSync && root.ShotSync.newCid) rec.cid = root.ShotSync.newCid();
+            state.session = sessionFor(state.session, rec.t, newId);
+            rec.session = state.session.id;
+            // the ball flight that worked out this shot's carry, total and standard carry (statistics never mix two flights)
+            if (root.GolfPhysics && root.GolfPhysics.VERSION) rec.physics = root.GolfPhysics.VERSION;
             prepare(rec, root.GolfPhysics, root.PlayerBag && root.PlayerBag.entries ? root.PlayerBag.entries() : []);
             if (rec.review && rec.review.looksLike && typeof root.showBuildToast === 'function' && root.LMShotReview) {
                 const sv = root.getGolfLanguage && root.getGolfLanguage() === 'sv';

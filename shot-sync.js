@@ -2,8 +2,13 @@
 //  SHOT SYNC (window.ShotSync) — the range shots of this device go to the player's shot bank on the server (/api/shots, shot-bank-core.js).
 //
 //  Every shot the range session books is put in an outbox kept on the device and sent from there:
-//  at once when the server can be reached, later when it cannot (offline, the server down, no database). A shot leaves the outbox only
-//  when the server says it stored it (or refused it as not a shot), so nothing is lost on the way. The outbox is one localStorage key per
+//  at once when the server can be reached, later when it cannot (offline, the server down, no database). Nothing is ever dropped quietly:
+//    - a shot leaves the outbox only when the server says it stored it
+//    - a shot the server refuses (a value it cannot take) moves to a failed queue ('golf_shot_failed_<cid>', with the reason), shown in
+//      the range panel with an export and a retry; it is never deleted by the game
+//    - the outbox has no size limit; when the device's storage is full a shot is kept in the page's memory until sent, and the panel says
+//      so and offers the export (a file with every waiting and failed shot)
+//  The outbox is one localStorage key per
 //  shot ('golf_shot_out_<cid>'): two tabs of the same device see each other's writes late (Chromium keeps a copy of localStorage per tab
 //  process), so a single list read, changed and written back by both would lose one tab's shot. Each shot carries an id made on this
 //  device (cid): sending it again (a retry, two tabs) stores it once.
@@ -17,8 +22,8 @@
 // ================================================================
 (function (root) {
     'use strict';
-    const OUTBOX = 'golf_shot_out_', LEGACY = 'golf_shot_legacy_v1', SESSION_PREFIX = 'golf_range_session_', BAG = 'golf_bag_v1';
-    const MAX_OUTBOX = 5000, BATCH = 100;
+    const OUTBOX = 'golf_shot_out_', FAILED = 'golf_shot_failed_', LEGACY = 'golf_shot_legacy_v1', SESSION_PREFIX = 'golf_range_session_', BAG = 'golf_bag_v1';
+    const BATCH = 100;
 
     // FNV-1a, 8 hex digits: a device's mark in the ids of its old shots (not the device id itself)
     function fnv(s) {
@@ -55,21 +60,34 @@
         return out;
     }
 
-    // The outbox: shots waiting for the server, one per cid (a newer copy of the same shot replaces the older), oldest first
+    // The outbox: shots waiting for the server, one per cid (a newer copy of the same shot replaces the older), oldest first. No limit:
+    // a shot is never dropped to make room
     function put(list, shot) {
         const out = list.filter(function (s) { return s.cid !== shot.cid; });
         out.push(shot);
         out.sort(function (a, b) { return a.t - b.t; });
-        return out.length > MAX_OUTBOX ? out.slice(out.length - MAX_OUTBOX) : out;
+        return out;
     }
-    // after the server answered: the shots it stored or refused leave (a copy edited after it was sent stays, to go again)
-    function settle(list, sent, answer) {
-        const done = {};
-        (answer.stored || []).forEach(function (c) { done[c] = true; });
-        (answer.refused || []).forEach(function (r) { if (r && r.cid) done[r.cid] = true; });
-        const sentEdit = {};
-        sent.forEach(function (s) { sentEdit[s.cid] = s.edited || s.t; });
-        return list.filter(function (s) { return !(done[s.cid] && (s.edited || s.t) <= sentEdit[s.cid]); });
+    // What the server's answer means for each shot sent: { stored: [cid], failed: [{ shot, reason }], keep: [shot] }. A shot changed since
+    // it was sent (current is the outbox's copy now) is kept, to go again; a refused one goes to the failed queue with its reason.
+    function settle(current, sent, answer) {
+        const stored = {}, refused = {};
+        ((answer && answer.stored) || []).forEach(function (c) { stored[c] = true; });
+        ((answer && answer.refused) || []).forEach(function (r) { if (r && r.cid) refused[r.cid] = r.reason || 'refused'; });
+        const out = { stored: [], failed: [], keep: [] };
+        sent.forEach(function (x) {
+            const cur = current[x.cid] || x;
+            const changed = (cur.edited || cur.t) > (x.edited || x.t);
+            if (stored[x.cid] && !changed) out.stored.push(x.cid);
+            else if (refused[x.cid] !== undefined && !changed) out.failed.push({ shot: cur, reason: refused[x.cid] });
+            else out.keep.push(cur);   // not answered for (a short answer), or changed meanwhile: it stays
+        });
+        return out;
+    }
+    // The file the player can save: every shot still waiting and every shot the server refused, as they are on this device
+    function exportFile(pending, failed, now) {
+        return JSON.stringify({ kind: 'golf-shot-export', version: 1, exported_at: new Date(now || Date.now()).toISOString(),
+                                pending: pending, failed: failed }, null, 1);
     }
     // the bag: the server's entries with the outbox's shots that count (an outbox shot replaces the server's entry of the same time)
     function mergeBag(serverEntries, outbox, Bag) {
@@ -78,8 +96,8 @@
         return Bag.trim(list);
     }
 
-    const api = { legacyCid: legacyCid, newCid: newCid, legacyShots: legacyShots, put: put, settle: settle, mergeBag: mergeBag, fnv: fnv,
-                  OUTBOX: OUTBOX, LEGACY: LEGACY, BATCH: BATCH, MAX_OUTBOX: MAX_OUTBOX };
+    const api = { legacyCid: legacyCid, newCid: newCid, legacyShots: legacyShots, put: put, settle: settle, mergeBag: mergeBag, exportFile: exportFile, fnv: fnv,
+                  OUTBOX: OUTBOX, FAILED: FAILED, LEGACY: LEGACY, BATCH: BATCH };
 
     // ── In the page ──
     if (typeof localStorage !== 'undefined' && typeof root.fetch === 'function' && typeof document !== 'undefined') {
@@ -90,26 +108,67 @@
             keys: function () { const out = []; try { for (let i = 0; i < localStorage.length; i++) out.push(localStorage.key(i)); } catch (e) { /* none */ } return out; }
         };
         const deviceId = function () { return (root.GolfAuth && root.GolfAuth.userId) || store.get('golf_os_device_id'); };
-        // the outbox: one key per shot (see the top), oldest first
-        const readOne = function (cid) { try { return JSON.parse(store.get(OUTBOX + cid) || 'null'); } catch (e) { return null; } };
+        // the outbox: one key per shot (see the top), oldest first; a shot the full storage could not take waits in memory (this page) instead
+        const memory = {}, memoryFailed = {};
+        const parse = function (k) { try { return JSON.parse(store.get(k) || 'null'); } catch (e) { return null; } };
+        const readOne = function (cid) { return parse(OUTBOX + cid) || memory[cid] || null; };
+        const keysOf = function (prefix) { return store.keys().filter(function (k) { return k && k.indexOf(prefix) === 0; }); };
         const readBox = function () {
-            return store.keys().filter(function (k) { return k && k.indexOf(OUTBOX) === 0; }).map(function (k) { return readOne(k.slice(OUTBOX.length)); })
-                .filter(function (s) { return s && typeof s.t === 'number'; }).sort(function (a, b) { return a.t - b.t; });
+            const byCid = {};
+            keysOf(OUTBOX).forEach(function (k) { const s = parse(k); if (s && typeof s.t === 'number') byCid[s.cid] = s; });
+            Object.keys(memory).forEach(function (c) { if (!byCid[c]) byCid[c] = memory[c]; });
+            return Object.keys(byCid).map(function (c) { return byCid[c]; }).sort(function (a, b) { return a.t - b.t; });
         };
+        const changed = function () { try { root.dispatchEvent(new CustomEvent('shotsync')); } catch (e) { /* none */ } };
         const writeOne = function (s) {
             const old = readOne(s.cid);
             if (old && (old.edited || old.t) > (s.edited || s.t)) return;   // a later edit of this shot is already waiting
-            store.set(OUTBOX + s.cid, JSON.stringify(s));
-            const box = readBox();   // a device that never reaches the server: the oldest go first, at MAX_OUTBOX
-            if (box.length > MAX_OUTBOX) box.slice(0, box.length - MAX_OUTBOX).forEach(function (o) { store.remove(OUTBOX + o.cid); });
+            if (store.set(OUTBOX + s.cid, JSON.stringify(s))) {
+                delete memory[s.cid];
+                if (!Object.keys(memory).length && !Object.keys(memoryFailed).length) status.storageFull = false;
+                return;
+            }
+            memory[s.cid] = s;   // the storage is full: the shot waits in this page's memory, and the panel says so (never dropped)
+            status.storageFull = true;
+        };
+        const removeOne = function (cid) { store.remove(OUTBOX + cid); delete memory[cid]; };
+        // the failed queue: shots the server refused, with the reason; kept until the player sends them again (retry) or exports them
+        const readFailed = function () {
+            const byCid = {};
+            keysOf(FAILED).forEach(function (k) { const f = parse(k); if (f && f.shot) byCid[f.shot.cid] = f; });
+            Object.keys(memoryFailed).forEach(function (c) { if (!byCid[c]) byCid[c] = memoryFailed[c]; });
+            return Object.keys(byCid).map(function (c) { return byCid[c]; }).sort(function (a, b) { return a.shot.t - b.shot.t; });
+        };
+        const writeFailed = function (shot, reason) {
+            const f = { shot: shot, reason: reason, at: Date.now() };
+            if (store.set(FAILED + shot.cid, JSON.stringify(f))) delete memoryFailed[shot.cid];
+            else { memoryFailed[shot.cid] = f; status.storageFull = true; }
         };
         const headers = function () { const h = { 'Content-Type': 'application/json' }, id = deviceId(); if (id) h['x-user-id'] = id; return h; };
         const base = function () { return (root.ArcadeAPI && root.ArcadeAPI.base) || ''; };
-        let busy = false, timer = null, delay = 30000, status = { lastOk: null, lastError: null, bankTotal: null, blocked: false };
+        let busy = false, timer = null, delay = 30000, status = { lastOk: null, lastError: null, bankTotal: null, blocked: false, storageFull: false };
 
         api.cidFor = function (shot) { return shot.cid || legacyCid(deviceId(), shot.t); };
         api.pending = function () { return readBox().length; };
-        api.status = function () { return Object.assign({ pending: readBox().length }, status); };
+        api.status = function () {
+            return Object.assign({ pending: readBox().length, failed: readFailed().length, inMemory: Object.keys(memory).length + Object.keys(memoryFailed).length }, status);
+        };
+        api.failed = function () { return readFailed(); };
+        // the refused shots go back to the outbox, to be sent again (the server's rules may take them now); they stay listed until then
+        api.retryFailed = function () {
+            readFailed().forEach(function (f) { writeOne(Object.assign({}, f.shot)); store.remove(FAILED + f.shot.cid); delete memoryFailed[f.shot.cid]; });
+            changed();
+            return api.flush();
+        };
+        // every waiting and failed shot of this device as a file the player saves (a copy: nothing is removed)
+        api.exportText = function () { return exportFile(readBox(), readFailed()); };
+        api.exportDownload = function () {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([api.exportText()], { type: 'application/json' }));
+            a.download = 'golf-shots-waiting-' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        };
         // a shot booked or changed: into the outbox, then sent when possible
         api.enqueue = function (shot) {
             if (!shot || typeof shot.t !== 'number') return;
@@ -119,6 +178,7 @@
             delete s.landX; delete s.landZ;   // where it landed in this course's scene: no use elsewhere
             writeOne(s);
             api.bagFromOutbox();
+            changed();
             schedule(50);
         };
         // the shots of this device from before the shot bank go in once (the ids make a second time harmless)
@@ -144,12 +204,16 @@
                     if (res.status === 401) { status.blocked = true; status.lastError = 'not_this_device'; return false; }
                     if (!res.ok) { status.lastError = 'server_' + res.status; throw new Error('server ' + res.status); }
                     const answer = await res.json();
-                    // the shots the server stored (or refused) leave, unless this tab or another changed them since they were sent
-                    const keep = settle(sent.map(function (x) { return readOne(x.cid) || x; }), sent, answer);
-                    sent.forEach(function (x) { if (!keep.some(function (k) { return k.cid === x.cid; })) store.remove(OUTBOX + x.cid); });
+                    // stored: out of the outbox; refused: to the failed queue with its reason; changed meanwhile (this tab or another): stays
+                    const current = {};
+                    sent.forEach(function (x) { const c = readOne(x.cid); if (c) current[x.cid] = c; });
+                    const out = settle(current, sent, answer);
+                    out.stored.forEach(removeOne);
+                    out.failed.forEach(function (f) { writeFailed(f.shot, f.reason); removeOne(f.shot.cid); });
                     box = readBox();
+                    changed();
                     status.lastOk = Date.now(); status.lastError = null; status.blocked = false;
-                    if (!answer.stored || (!answer.stored.length && !(answer.refused || []).length)) break;   // nothing moved: do not loop
+                    if (!out.stored.length && !out.failed.length) break;   // nothing moved: do not loop
                 }
                 delay = 30000;
                 await api.refreshBag();

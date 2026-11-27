@@ -552,6 +552,31 @@ Slagbanken är den långsiktiga lagringen av spelarens rangeslag, från alla enh
   - `tests/e2e/shots-e2e.js` (API mot Postgres): åtkomst, dubbletter, mätvärden mot ändringar, koppling, att inget raderas, bagen och storlek.
   - `tests/e2e/shots-browser-e2e.js` (två webbläsarkontexter mot server och Postgres): gamla slag, offline, ny session, två flikar, koppling i panelen, och någon annans id utan nyckel.
 
+## Slagbanken: träningspass, fysikversion och en kö som aldrig kastar slag (2026-11)
+Det här är grunden för träningsstatistiken (Training Lab). Statistiken ska bara bygga på slag som säkert hör ihop.
+- **Träningspass:** varje rangeslag får passets id (`session`, kolumnen `training_session_id`).
+  - Ett pass är en rangesession på en enhet, från första slaget tills spelaren trycker "Ny session" eller gör uppehåll i mer än 4 timmar (`SESSION_GAP_MS`, `RangeSession.sessionFor`). Ett slag med en klocka som gått bakåt mer än en minut börjar också ett nytt pass.
+  - Passet sparas med sessionen i localStorage.
+  - Två flikar på samma range kan få var sitt pass.
+  - Äldre slag har inget pass (NULL), och inget gissas i efterhand.
+- **Fysikens version:**
+  - `physics.js` har `VERSION` (i dag `flight-2024.1`), och varje rangeslag sparar versionen som räknade ut dess carry, total och standardcarry (`physics`, kolumnen `physics_version`). Äldre slag har ingen version.
+  - `tests/test_physics_version.js` flyger fasta slag och jämför med `physics-validation/physics-version.json`. Ändras flykten misslyckas testet tills `VERSION` höjs och fingeravtrycket skrivs om med `--update`.
+  - Pass och version skrivs en gång på servern, med `COALESCE`.
+- **Utkorgen kastar aldrig slag** (`shot-sync.js`):
+  - Kön har ingen gräns.
+  - Ett slag som servern avvisar flyttas till en felkö (`golf_shot_failed_<cid>`) med orsaken. Det syns som en varning i rangepanelen även när "☁ Slagbank" är stängd, kan skickas igen ("Försök igen") och tas aldrig bort av spelet.
+  - Är enhetens lagring full väntar slaget i sidans minne, och panelen varnar och erbjuder export.
+  - "Exportera väntande slag" sparar alla väntande och avvisade slag som en JSON-fil (`exportFile`).
+  - Panelen uppdateras på händelsen `shotsync`.
+- **Tester:**
+  - `tests/test_shot_bank.js`: pass och version i kontrollen, passregeln, felkön, kön utan gräns och exportfilen.
+  - `tests/e2e/shots-e2e.js`: pass och version sparas och skrivs inte över, äldre slag har NULL och felaktiga värden avvisas.
+  - `tests/e2e/shots-browser-e2e.js`:
+    - Gamla slag saknar pass. Slagen före "Ny session" hör till ett pass, och slagen efter till ett annat.
+    - Ett avvisat slag hamnar i felkön, syns i panelen och finns i exporten. "Försök igen" behåller det i felkön.
+    - Full lagring ger en varning, och slaget skickas sedan.
+
 ## Launch monitor-slag före bagen: standarddistans, felträffar och fel klubba (2026-11)
 Steg 3 av datakvaliteten för träning. Förut kom varje launch monitor-slag på rangen in i bagen med carry från rangens egna förhållanden: ett toppat slag eller ett slag med fel klubba vald drog ner snittet, och ett slag i motvind fick klubban att se kort ut.
 - **Modulen:** `lm-shot-review.js` (`window.LMShotReview`) har ingen DOM. Fysiken skickas in, i sidan `window.GolfPhysics`. Rangesessionen kör `RangeSession.prepare` på varje launch monitor-slag innan det bokas.
