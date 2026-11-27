@@ -63,13 +63,28 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
       page.on('dialog', d => d.accept());
       await page.goto(BASE + '/arcade.html', { waitUntil: 'domcontentloaded', timeout: 120000 });
       await page.waitForFunction(() => window.ShotSync && window.RangeSession && window.GolfAuth && window.GolfAuth.isReady, null, { timeout: 120000 });
-      // the range session as on a range (its tee), without playing: the shots go through the same record() the game calls
-      await page.evaluate(() => window.RangeSession.start({ tee: { x: 0, y: 0, z: 0, rot: 0 }, key: 'E2E-RANGE' }));
+      // the page finishes its own load first: it ends in the builder, which stops any range session (setMode('BUILD')). A session started
+      // before that was stopped under the test's feet, now and then, and the next shot was quietly not recorded at all
+      await page.waitForFunction(() => window._courseLoading === false, null, { timeout: 120000 }).catch(() => {});
+      await wait(500);
+      await startSession(page);
       return page;
     }
+    // the range session as on a range (its tee), without playing: the shots go through the same record() the game calls
+    const startSession = page => page.evaluate(() => { window.RangeSession.start({ tee: { x: 0, y: 0, z: 0, rot: 0 }, key: 'E2E-RANGE' }); return window.RangeSession.active(); });
     const outbox = page => page.evaluate(() => window.ShotSync.pending());
     const idle = (page, ms) => page.waitForFunction(() => window.ShotSync.pending() === 0, null, { timeout: ms || 30000 }).then(() => true, () => false);
-    const hit = (page, o) => page.evaluate(o => { window.RangeSession.setClub(o.club); window.RangeSession.record(Object.assign({ source: 'LM', carry: 150, total: 158, ballSpeed: 120, launch: 16, spin: 7000, spinAxis: 0, hla: 1, clubSpeed: 88, offline: 1 }, o)); }, o);
+    // a shot hit, and checked to have been recorded: a test shot that the page did not take must fail here, not look like a lost shot later
+    const hit = async (page, o) => {
+      const n = await page.evaluate(o => {
+        if (!window.RangeSession.active()) return -1;
+        const before = window.RangeSession.shots().length;
+        window.RangeSession.setClub(o.club);
+        window.RangeSession.record(Object.assign({ source: 'LM', carry: 150, total: 158, ballSpeed: 120, launch: 16, spin: 7000, spinAxis: 0, hla: 1, clubSpeed: 88, offline: 1 }, o));
+        return window.RangeSession.shots().length - before;
+      }, o);
+      if (n !== 1) throw new Error('test harness: the range session did not record the shot (' + (n === -1 ? 'session not active' : n + ' recorded') + ')');
+    };
 
     // ---- device A: played before the shot bank ----
     const day = 86400000, t0 = Date.now() - 3 * day;
@@ -90,7 +105,9 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await pageA.evaluate(() => { localStorage.removeItem('golf_shot_legacy_v1'); window.ShotSync.migrate(); return window.ShotSync.flush(); });
     await idle(pageA);
     check('en omladdning, eller de gamla slagen skickade en gång till, lägger inte till något', (await count(idA)) === 4, String(await count(idA)));
-    await pageA.evaluate(() => window.RangeSession.start({ tee: { x: 0, y: 0, z: 0, rot: 0 }, key: 'E2E-RANGE' }));
+    await pageA.waitForFunction(() => window._courseLoading === false, null, { timeout: 120000 }).catch(() => {});
+    await wait(500);
+    await startSession(pageA);
 
     console.log('\n2. Nya slag, offline och ny session');
     await hit(pageA, { club: '7i' }); await hit(pageA, { club: '7i', carry: 152 });
