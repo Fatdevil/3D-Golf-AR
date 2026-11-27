@@ -49,6 +49,8 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `arcade-lm-bridge.js` | WebSocket till Launch Monitor (SkyTrak/GSPro) på ws://localhost:8081 |
 | `lm-shot-quality.js` | Vad ett launch monitor-slag verkligen mätte (`window.LMShotQuality.check`): avvisat, uppmätt, uppskattat, saknat. Ett saknat värde blir aldrig 0 |
 | `lm-shot-review.js` | Ett rangeslag från launch monitorn före bagen (`window.LMShotReview`): rådata som det kom, carry i standardförhållanden, felträffar, felmätningar och fel klubba |
+| `shot-sync.js` | Slagbanken på enheten (`window.ShotSync`): utkorg per slag i localStorage, offline, gamla lokala slag en gång, bagen från servern, koppla en enhet med kod |
+| `shot-bank-core.js` | Slagbanken på servern: vad ett slag får innehålla innan `server.js` sparar det (`normalize`), raden tillbaka till enheten, koderna för en ny enhet |
 | `physics.js` | Ballistisk fysikmotor (drag, spin, bounce, roll) |
 | `arcade.css` | Extraherad CSS |
 
@@ -518,6 +520,37 @@ Steg 1 av datakvaliteten för träning. Förut blev ett värde som launch monito
   - Bagen (`arcade-bag.js`) tar inte med slag som har uppskattade värden.
   - Panelen säger att carry räknas fram av bollfysiken.
 - **Test:** `tests/test_lm_shot_quality.js`, `tests/test_gspro_bridge.js`, `tests/test_bag.js` och `tests/test_range_session.js`. I smoke-testet avvisas ett slag utan bollfart, och en äldre brygga med spinn 0 ger ett ≈-slag utanför bagen.
+
+## Slagbanken: alla rangeslag på servern (2026-11)
+Slagbanken är den långsiktiga lagringen av spelarens rangeslag, från alla enheter. Den är grunden för träningsanalysen och är något annat än sessionen och bagen.
+- **Ett slag raderas aldrig.** "Ny session" tömmer bara listan på enheten. Det finns ingen väg i API:t som raderar slag, och ett okänt `/api`-anrop ger nu 404 i stället för hubbsidan.
+- **Servern** (`server.js`, `shot-bank-core.js`):
+  - Tabellen `shots` har en rad per spelare och slag, med `UNIQUE (player_id, client_id)`. `client_id` görs på enheten, så ett slag som skickas två gånger sparas en gång.
+  - Mätvärden skrivs en gång. En senare kopia av samma slag fyller bara i det som saknas, med `COALESCE`.
+  - Spelarens beslut (klubba, räkna ändå och granskningen) följer den senast gjorda ändringen enligt enhetens `edited`, inte den som kom fram sist.
+  - `normalize` avvisar slag med omöjliga värden, okända flaggor eller för lång rådata, med en orsak per slag. Resten av sändningen sparas.
+- **API** (alla anrop kräver enhetens id och nyckel, `authMiddleware`):
+  - `POST /api/shots/sync` tar högst 200 slag per anrop och svarar med `stored` och `refused`.
+  - `GET /api/shots` ger kontots slag, nyast först, en sida i taget (`before`), med `total`. Det ger aldrig spelar- eller enhets-id, och adressen kan inte peka ut någon annan spelare.
+  - `GET /api/bag` ger bagen ur hela slagbanken enligt samma regel som enheten, `PlayerBag.entryOf` och `trim` från `arcade-bag.js`.
+  - Kroppar på över 1 MB avvisas.
+- **Två enheter:**
+  - `POST /api/devices/link-code` ger en kod på 8 tecken (utan 0/O/1/I/L) som gäller i 10 minuter och bara en gång. Bara en hash av koden sparas, i `device_links`.
+  - `POST /api/devices/link` kopplar enheten till kontot (`users.account_id`). Enhetens egna slag följer med, och ett slag som redan finns i kontot behålls som det är där.
+  - En enhet som andra enheter har kopplat sig till kan inte själv gå med i ett annat konto (409).
+  - `POST /api/devices/unlink`: slagen som skickats stannar i kontot.
+  - `accountOf(id)` avgör vilket konto ett anrop gäller.
+- **Enheten** (`shot-sync.js`, `window.ShotSync`):
+  - Varje rangeslag får ett `cid` (`RangeSession.record`) och läggs i en utkorg i localStorage, en nyckel per slag (`golf_shot_out_<cid>`). Två flikar ser varandras localStorage-skrivningar sent, så en gemensam lista kunde tappa en fliks slag, vilket webbläsartestet visade.
+  - Ett slag lämnar utkorgen först när servern har sparat eller avvisat det. Vid fel försöker enheten igen, med 30 s upp till 5 min mellan försöken, och vid händelsen `online`.
+  - En ändrad klubba eller ett "räkna ändå" skickas igen med ändringens tid.
+  - **Gamla lokala slag** skickas en gång (`migrate`): alla `golf_range_session_*` och bagposter vars session rensats (`range` = `bag`). Deras id räknas fram ur enheten och slagets tid (`legacyCid`), så en andra gång lägger inte till något. Sessionens gamla slag får samma id när de laddas.
+  - Bagen är serverns bag plus de slag som väntar i utkorgen (`mergeBag`, `PlayerBag.replace`).
+- **Panelen:** knappen "☁ Slagbank" i rangesessionen visar antal slag i banken och antal som väntar. Där finns "Visa kod för en annan enhet" och ett fält för att skriva in koden från den andra enheten.
+- **Tester:**
+  - `tests/test_shot_bank.js`: kontrollen, gamla slag, utkorgen och bagregeln.
+  - `tests/e2e/shots-e2e.js` (API mot Postgres): åtkomst, dubbletter, mätvärden mot ändringar, koppling, att inget raderas, bagen och storlek.
+  - `tests/e2e/shots-browser-e2e.js` (två webbläsarkontexter mot server och Postgres): gamla slag, offline, ny session, två flikar, koppling i panelen, och någon annans id utan nyckel.
 
 ## Launch monitor-slag före bagen: standarddistans, felträffar och fel klubba (2026-11)
 Steg 3 av datakvaliteten för träning. Förut kom varje launch monitor-slag på rangen in i bagen med carry från rangens egna förhållanden: ett toppat slag eller ett slag med fel klubba vald drog ner snittet, och ett slag i motvind fick klubban att se kort ut.

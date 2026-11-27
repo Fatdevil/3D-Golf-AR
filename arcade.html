@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=36">
+<link rel="stylesheet" href="arcade.css?v=37">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -4202,8 +4202,9 @@
 <script src="arcade-range-markers.js?v=4"></script>
 <script src="lm-shot-quality.js?v=2"></script>   <!-- what a launch-monitor shot really measured: refused, measured, estimated, missing -->
 <script src="lm-shot-review.js?v=1"></script>   <!-- a range shot before the bag: standard distances, mishit, misread, wrong club, the raw message -->
-<script src="arcade-bag.js?v=4"></script>
-<script src="arcade-range-session.js?v=12"></script>
+<script src="arcade-bag.js?v=5"></script>
+<script src="shot-sync.js?v=1"></script>   <!-- the shot bank: every range shot to the server, offline outbox, the bag from all devices -->
+<script src="arcade-range-session.js?v=14"></script>
 <script src="arcade-range-practice.js?v=8"></script>
 <script src="arcade-range-template.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=2"></script>
@@ -16954,10 +16955,12 @@ window.triggerExplosion = function(x, y, z) {
     if (window.GolfAuth) {
         // the course is read once the device id is known, but never later than a few seconds in: a hung request must not keep the builder from opening
         Promise.race([window.GolfAuth.init(), new Promise(r => setTimeout(r, 8000))]).then(() => {
+            if (window.ShotSync && window.ShotSync.start) window.ShotSync.start();   // the shot bank: old shots once, then the outbox and the bag
             console.log('🔑 Auth initialized, loading level...');
             loadLevel();
         }).catch(() => {
             console.warn('Auth init failed, loading level anyway...');
+            if (window.ShotSync && window.ShotSync.start) window.ShotSync.start();   // offline: the outbox waits for the server
             loadLevel();
         });
     } else {
