@@ -1701,12 +1701,17 @@ app.get('/api/shots', requireDB, authMiddleware, async (req, res) => {
 app.get('/api/bag', requireDB, authMiddleware, async (req, res) => {
     try {
         const account = await accountOf(req.userId);
-        // the newest launch-monitor shots per club that could count (the rest of the rule is arcade-bag.js's own, applied below)
+        // each club's newest shots that count: the rule of arcade-bag.js (entryOf) in SQL, before the per-club limit, so that flagged or
+        // estimated shots never crowd the counted ones out; entryOf then checks each row again (the two must agree, tests/e2e/shots-e2e.js)
         const r = await pool.query(`
             SELECT * FROM (
                 SELECT s.*, row_number() OVER (PARTITION BY club ORDER BY shot_at DESC, id DESC) AS k FROM shots s
                 WHERE player_id = $1 AND source = 'LM' AND club IS NOT NULL AND practice IS NULL
-            ) x WHERE k <= 400`, [account]);
+                  AND COALESCE(carry_std, carry) > 0
+                  AND (estimated IS NULL OR jsonb_array_length(estimated) = 0)
+                  AND (review IS NULL OR accepted OR NOT (COALESCE((review->>'mishit')::boolean, false) OR COALESCE((review->>'misread')::boolean, false)
+                       OR COALESCE(review->>'looksLike', '') <> ''))
+            ) x WHERE k <= $2`, [account, PlayerBag.PER_CLUB]);
         const entries = r.rows.map(ShotBank.toClient).map(PlayerBag.entryOf).filter(Boolean);
         res.json({ shots: PlayerBag.trim(entries) });
     } catch(err) {
@@ -1736,7 +1741,10 @@ app.post('/api/devices/link', requireDB, authMiddleware, async (req, res) => {
         await client.query('BEGIN');
         const l = await client.query(`SELECT * FROM device_links WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now() FOR UPDATE`, [tokenHash(code)]);
         if (!l.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No such code, or it has been used or has run out' }); }
-        const account = l.rows[0].account_id, me = req.userId;
+        // the account the code was made for, as it is now (a device that made a code and then joined another account: that one)
+        const madeFor = l.rows[0].account_id;
+        const now = await client.query('SELECT account_id FROM users WHERE id = $1', [madeFor]);
+        const account = (now.rows.length && now.rows[0].account_id) || madeFor, me = req.userId;
         // a device others have joined cannot itself join another account (their shots would be left behind)
         const others = await client.query('SELECT 1 FROM users WHERE account_id = $1 AND id <> $1 LIMIT 1', [me]);
         if (others.rows.length && account !== me) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Other devices have joined this one: join from them instead' }); }
@@ -1748,6 +1756,8 @@ app.post('/api/devices/link', requireDB, authMiddleware, async (req, res) => {
             await client.query(`DELETE FROM shots WHERE player_id = $1 AND client_id IN (SELECT client_id FROM shots WHERE player_id = $2)`, [me, account]);
         }
         await client.query('UPDATE device_links SET used_by = $2, used_at = now() WHERE code_hash = $1', [tokenHash(code), me]);
+        // the codes this device made for its own bank no longer lead there: it has joined another one
+        if (account !== me) await client.query('UPDATE device_links SET used_at = now() WHERE account_id = $1 AND used_at IS NULL', [me]);
         await client.query('COMMIT');
         const n = await pool.query('SELECT count(*)::int AS n FROM shots WHERE player_id = $1', [account]);
         res.json({ success: true, linked: account !== me, shots: n.rows[0].n });

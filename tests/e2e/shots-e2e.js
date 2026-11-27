@@ -118,6 +118,17 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const dr = r.json.shots.filter(e => e.club === 'Dr');
     check('bagen: standardcarry när den finns, inte uppskattade, inspels- eller svingslag', dr.length === 1 && dr[0].carry === 235 && r.json.shots.some(e => e.club === '6i') && !r.json.shots.some(e => e.club === '5i'), JSON.stringify(r.json.shots));
 
+    // a club whose newest shots are all flagged still has its older counted shots in the bag (the rule before the per-club limit)
+    const older = Array.from({ length: 5 }, (_, i) => shot({ club: 'GW', carry: 95 + i, total: 98 + i, t: T0 - 86400000 + i * 1000 }));
+    const flaggedNewer = Array.from({ length: 45 }, () => shot({ club: 'GW', carry: 50, total: 52, review: { flags: ['thin'], mishit: true, misread: false, looksLike: null } }));
+    const guessedNewer = Array.from({ length: 5 }, () => shot({ club: 'GW', carry: 90, total: 92, estimated: ['totalSpinRpm'] }));
+    await api('POST', '/api/shots/sync', { shots: older.concat(flaggedNewer, guessedNewer) }, A);
+    r = await api('GET', '/api/bag', undefined, A);
+    const gw = r.json.shots.filter(e => e.club === 'GW');
+    check('en klubba vars senaste slag alla är flaggade eller uppskattade behåller sina äldre räknade slag i bagen', gw.length === 5 && gw.every(e => e.carry >= 95), JSON.stringify(gw));
+    const all2 = (await api('GET', '/api/shots?limit=500', undefined, A)).json.shots;
+    check('och serverns bag är fortfarande enhetens regel', JSON.stringify(r.json.shots) === JSON.stringify(Bag.trim(all2.map(Bag.entryOf).filter(Boolean))));
+
     console.log('\n5. Två enheter');
     const bOwn = shot({ club: '9i', carry: 125, total: 130 });
     await api('POST', '/api/shots/sync', { shots: [bOwn, Object.assign({}, a2)] }, B);   // B had a shot of its own, and one with the same id as one of A's
@@ -157,6 +168,23 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/devices/link-code', {}, D);
     r = await api('POST', '/api/devices/link', { code: r.json.code }, A);
     check('en enhet som andra kopplat sig till kan inte själv gå med i ett annat konto (409)', r.status === 409, JSON.stringify(r));
+    // a code made by a device that then joins another account: it leads to that account, never to the bank the device left
+    const E = device('e'), F = device('f'), G = device('g');
+    for (const d of [E, F, G]) await fetch(BASE + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': d.id, 'x-user-token': d.token }, body: JSON.stringify({ device_id: d.id }) });
+    await api('POST', '/api/shots/sync', { shots: [shot({ club: 'LW', carry: 60, total: 61 })] }, E);
+    const eCode = (await api('POST', '/api/devices/link-code', {}, E)).json.code;
+    const fCode = (await api('POST', '/api/devices/link-code', {}, F)).json.code;
+    r = await api('POST', '/api/devices/link', { code: fCode }, E);   // E joins F's bank
+    const rG = await api('POST', '/api/devices/link', { code: eCode }, G);   // G uses the code E made before
+    const gShots = await api('GET', '/api/shots', undefined, G), fShots = await api('GET', '/api/shots', undefined, F);
+    check('en kod från en enhet som sedan gått med i ett annat konto leder inte till den gamla banken: den är ogiltig (404)', r.status === 200 && rG.status === 404 &&
+      gShots.json.total === 0 && fShots.json.total === 1, JSON.stringify([r.status, rG.status, gShots.json.total, fShots.json.total]));
+    // and a code still in the table for such a device (made before this rule) is followed to the account it joined
+    await pool.query('INSERT INTO device_links (code_hash, account_id, expires_at) VALUES ($1, $2, now() + interval \'5 minutes\')', [crypto.createHash('sha256').update('ZZZZ2222').digest('hex'), E.id]);
+    r = await api('POST', '/api/devices/link', { code: 'ZZZZ2222' }, G);
+    const gNow = await api('GET', '/api/shots', undefined, G);
+    check('en äldre kod till en enhet som bytt konto följs till kontot enheten gått med i', r.status === 200 && gNow.json.total === 1 && (await count(F.id)) === 1 && (await count(E.id)) === 0, JSON.stringify([r.status, gNow.json.total]));
+
     // leaving
     r = await api('POST', '/api/devices/unlink', {}, B);
     const after = shot({ club: 'SW', carry: 80, total: 82 });
