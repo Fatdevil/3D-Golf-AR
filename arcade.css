@@ -813,6 +813,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session .rs-actions { display: flex; gap: 6px; padding: 8px 12px 10px; }
   #range-session .rs-actions button { flex: 1; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 11px; font-weight: 700; }
   #range-session .rs-actions button:disabled { opacity: 0.4; cursor: default; }
+  #range-session .rs-actions .rs-lab { flex: 1; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid rgba(56,189,248,0.35);
+    background: #0c2a3a; color: #7dd3fc; font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap; }
   /* the shot bank (shot-sync.js): status, a code for another device, a code typed in */
   #range-session .rs-bank { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
   #range-session .rs-bank-status { font-size: 11px; color: #cbd5e1; }

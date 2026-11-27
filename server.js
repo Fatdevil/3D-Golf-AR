@@ -9,6 +9,10 @@ const crypto = require('crypto');
 const collectionsCore = require('./collections-core');
 const ShotBank = require('./shot-bank-core');
 const PlayerBag = require('./arcade-bag');
+const TrainingStats = require('./training-stats');
+// the ball flight's version of this build (physics.js VERSION, recorded with its fingerprint by tests/test_physics_version.js): Training Lab's
+// distances come only from shots of this flight
+const PHYSICS_VERSION = (function () { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'physics-validation', 'physics-version.json'), 'utf8')).version; } catch (e) { return null; } })();
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -1723,6 +1727,24 @@ app.get('/api/bag', requireDB, authMiddleware, async (req, res) => {
         res.json({ shots: PlayerBag.trim(entries) });
     } catch(err) {
         console.error('GET /api/bag error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// Training Lab · Club Intelligence: each club of the player's shot bank (every device), worked out here (training-stats.js), so every device
+// shows the same numbers. period: session (the latest session with each club) | 30d | 90d | all
+app.get('/api/training/clubs', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const account = await accountOf(req.userId);
+        const period = Object.prototype.hasOwnProperty.call(TrainingStats.PERIODS, req.query.period) ? req.query.period : '30d';
+        const now = Date.now();
+        // the period and the one before it (for the change); a session or all: every shot
+        const since = (period === '30d' || period === '90d') ? new Date(now - 2 * TrainingStats.PERIODS[period]) : null;
+        const r = await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND ($2::timestamptz IS NULL OR shot_at > $2) ORDER BY shot_at`, [account, since]);
+        const out = TrainingStats.compute(r.rows.map(ShotBank.toClient), { period: period, now: now, version: PHYSICS_VERSION });
+        out.total = (await pool.query('SELECT count(*)::int AS n FROM shots WHERE player_id = $1', [account])).rows[0].n;
+        res.json(out);
+    } catch(err) {
+        console.error('GET /api/training/clubs error:', err);
         res.status(500).json({ error: 'Database error' });
     }
 });

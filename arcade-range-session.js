@@ -278,7 +278,8 @@
                 const sync = root.ShotSync && root.ShotSync.status ? root.ShotSync.status() : null;
                 if (sync && (sync.failed || sync.storageFull || sync.inMemory)) h += '<div class="rs-bank-warn rs-bank-alert">⚠ ' + esc(t('bankAlert').replace('{n}', sync.failed + sync.inMemory)) + '</div>';
                 h += '<div class="rs-actions"><button data-act="csv"' + (shots.length ? '' : ' disabled') + '>⬇ ' + esc(t('csv')) + '</button><button data-act="clear"' + (shots.length ? '' : ' disabled') + '>' + esc(t('clear')) + '</button>' +
-                     (root.ShotSync && root.ShotSync.linkCode ? '<button data-act="bank" aria-expanded="' + bank.open + '">' + esc(t('bank')) + '</button>' : '') + '</div>';
+                     (root.ShotSync && root.ShotSync.linkCode ? '<button data-act="bank" aria-expanded="' + bank.open + '">' + esc(t('bank')) + '</button>' : '') +
+                     '<a class="rs-lab" href="training.html" target="_blank" rel="noopener">📈 Training Lab</a></div>';
             }
             // the code field is drawn anew with the panel (a shot coming in, the bank answering): what was typed, and where, stays
             const field = document.activeElement && document.activeElement.id === 'rs-bank-input' ? document.activeElement : null;

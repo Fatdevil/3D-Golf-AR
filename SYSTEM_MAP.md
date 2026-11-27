@@ -51,6 +51,8 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `lm-shot-review.js` | Ett rangeslag från launch monitorn före bagen (`window.LMShotReview`): rådata som det kom, carry i standardförhållanden, felträffar, felmätningar och fel klubba |
 | `shot-sync.js` | Slagbanken på enheten (`window.ShotSync`): utkorg per slag i localStorage, offline, gamla lokala slag en gång, bagen från servern, koppla en enhet med kod |
 | `shot-bank-core.js` | Slagbanken på servern: vad ett slag får innehålla innan `server.js` sparar det (`normalize`), raden tillbaka till enheten, koderna för en ny enhet |
+| `training-stats.js` | Training Lab: statistiken per klubba ur slagbanken (carry, spridning, felträffar, bollfart, spinn, perioder, pass, trend), räknad på servern |
+| `training-lab.js` | Training Lab-sidan (`training.html`): visar statistiken med antal slag, varningar och vad som är uppmätt |
 | `physics.js` | Ballistisk fysikmotor (drag, spin, bounce, roll) |
 | `arcade.css` | Extraherad CSS |
 
@@ -551,6 +553,30 @@ Slagbanken är den långsiktiga lagringen av spelarens rangeslag, från alla enh
   - `tests/test_shot_bank.js`: kontrollen, gamla slag, utkorgen och bagregeln.
   - `tests/e2e/shots-e2e.js` (API mot Postgres): åtkomst, dubbletter, mätvärden mot ändringar, koppling, att inget raderas, bagen och storlek.
   - `tests/e2e/shots-browser-e2e.js` (två webbläsarkontexter mot server och Postgres): gamla slag, offline, ny session, två flikar, koppling i panelen, och någon annans id utan nyckel.
+
+## Training Lab · Club Intelligence (2026-11)
+Spelarens klubbor ur slagbanken, från alla enheter, och hur de utvecklas. Sidan `training.html` nås från rangemenyn i `arcade_hub.html` och från rangepanelen (📈 Training Lab).
+- **Statistiken** (`training-stats.js`, `TrainingStats.compute`) räknas på servern (`GET /api/training/clubs?period=session|30d|90d|all`), så alla enheter visar samma siffror. Fysikversionen läses ur `physics-validation/physics-version.json`.
+- **Vilka slag som räknas:**
+  - Bara launch monitor-slag med klubba utanför inspel räknas. Svingmätarslag, inspelsslag och slag utan klubba räknas för sig och visas i förklaringen.
+  - Slag som ser ut som en annan klubba (`looksLike`) och felmätningar räknas inte alls.
+  - Felträffar räknas i felträffsandelen (felträffar delat med granskade slag) men inte i carry, spridning eller bollfart, om inte spelaren valt att räkna dem ändå.
+  - Uppskattat spinn räknas inte i spinnet, och slaget räknas inte i carry.
+  - Carry (standardcarry) och sidledsspridning (standardavvikelsen av offline) tas bara från slag med dagens fysikversion. Slag med en annan eller okänd version räknas för sig (`otherFlight`) och medelvärdesbildas aldrig in.
+  - Bollfart, utgångsvinkel och spinn är launch monitorns egna värden och tas från alla giltiga slag.
+- **Tillförlitlighet:** varje siffra har sitt antal slag. Under 5 slag får siffran en varning och ingen förändring visas. Under 20 slag märks den som osäker.
+- **Perioder:**
+  - Senaste passet (klubbans senaste `session` jämfört med passet före; slag utan pass bildar inget pass), 30 dagar och 90 dagar (jämfört med lika lång period före), och hela historiken (ingen jämförelse).
+  - Trenden visar medianen av carry vecka för vecka (måndag UTC, ISO-veckonummer på sidan).
+- **Sidan** (`training-lab.js`, `TrainingLab.view`, ingen DOM):
+  - Innehåll: nyckeltalen för den valda klubban (carry, spridning, felträffar, bollfart, spinn, slag), trenden, en tabell över alla klubbor och en förklaring av vad som är uppmätt och vad som kommer från bollflykten.
+  - Spelarens enhet och decimalkomma på svenska.
+  - Innan siffrorna hämtas skickas det som väntar i utkorgen (`ShotSync.flush`), och sidan säger hur många slag som ännu inte är med.
+  - Utan anslutning, eller på en enhet som tillhör ett annat konto, visas ett tydligt meddelande i stället för siffror.
+- **Tester:**
+  - `tests/test_training_stats.js`: kända värden, vilka slag som räknas var, perioder, förändring, pass, trend och klubbornas ordning.
+  - `tests/test_training_lab.js`: vad sidan visar.
+  - `tests/e2e/training-e2e.js`: två enheter mot server och Postgres med offline, dubbletter, för få slag, perioder, samma statistik på båda enheterna och åtkomst.
 
 ## Slagbanken: träningspass, fysikversion och en kö som aldrig kastar slag (2026-11)
 Det här är grunden för träningsstatistiken (Training Lab). Statistiken ska bara bygga på slag som säkert hör ihop.
