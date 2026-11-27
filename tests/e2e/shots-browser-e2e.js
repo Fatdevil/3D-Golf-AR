@@ -194,11 +194,21 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     st7 = await pageA.evaluate(() => window.ShotSync.status());
     const alertFull = await pageA.evaluate(() => (document.querySelector('#range-session .rs-bank-alert') || {}).textContent || '');
     check('full lagring: slaget väntar i sidans minne och panelen varnar', st7.inMemory === 1 && st7.storageFull === true && st7.pending === 1 && alertFull.length > 0, JSON.stringify([st7, alertFull]));
+    // a shot already stored in the outbox and then edited while the storage is full: the edit (in memory) is what goes, not the old copy
+    await pageA.evaluate(() => { Storage.prototype.setItem = window.__origSet; });
+    await hit(pageA, { club: '8i', carry: 141, total: 148, ballSpeed: 116, launch: 18, spin: 7800, clubSpeed: 86 });
+    const editCid = await pageA.evaluate(() => window.RangeSession.shots().slice(-1)[0].cid);
+    await pageA.evaluate(() => { const orig = window.__origSet; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('golf_shot_out_') === 0) throw new DOMException('full', 'QuotaExceededError'); return orig.call(this, k, v); }; });
+    await pageA.evaluate(() => { const sel = document.querySelector('#range-session tbody tr.rs-last select'); sel.value = '9i'; sel.dispatchEvent(new Event('change', { bubbles: true })); });
+    const exported = JSON.parse(await pageA.evaluate(() => window.ShotSync.exportText())).pending.filter(x => x.cid === editCid)[0];
+    check('ett väntande slag som ändras medan lagringen är full: exporten har ändringen', exported && exported.club === '9i', JSON.stringify(exported));
     await pageA.evaluate(() => { Storage.prototype.setItem = window.__origSet; });
     await ctxA.setOffline(false);
     await pageA.evaluate(() => window.ShotSync.flush());
     st7 = await pageA.evaluate(() => window.ShotSync.status());
-    check('och det skickas när det går, utan att försvinna', st7.inMemory === 0 && st7.pending === 0 && (await count(idA)) === before7 + 1, JSON.stringify([st7, await count(idA), before7]));
+    check('och det skickas när det går, utan att försvinna', st7.inMemory === 0 && st7.pending === 0 && (await count(idA)) === before7 + 2, JSON.stringify([st7, await count(idA), before7]));
+    const editedRow = (await pool.query('SELECT club FROM shots WHERE player_id = $1 AND client_id = $2', [idA, editCid])).rows[0];
+    check('och servern får ändringen (9-järn), inte den äldre sparade kopian', editedRow && editedRow.club === '9i', JSON.stringify(editedRow));
   } catch (e) {
     console.error(e); failed++;
   }

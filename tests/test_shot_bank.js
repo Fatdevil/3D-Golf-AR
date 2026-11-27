@@ -92,6 +92,8 @@ check('ett svar utan något sparat tar inte bort något (servern nere, ett felak
 let big = []; for (let i = 0; i < 6000; i++) big = i % 1000 === 0 || i > 5990 ? S.put(big, { cid: 'c' + String(i).padStart(8, '0'), t: i }) : (big.push({ cid: 'c' + String(i).padStart(8, '0'), t: i }), big);
 check('utkorgen har ingen gräns: inget slag tas bort för att ge plats', big.length === 6000 && big[0].t === 0);
 const file = JSON.parse(S.exportFile([{ cid: 'p1234567', t: 1 }], [{ shot: { cid: 'f1234567', t: 2 }, reason: 'bad_spin', at: 3 }], Date.UTC(2026, 10, 27)));
+check('av två kopior av samma slag gäller den senast ändrade (ett byte av klubba medan lagringen var full)', S.newer({ cid: 'a', t: 1, edited: 1, club: '7i' }, { cid: 'a', t: 1, edited: 5, club: '6i' }).club === '6i' &&
+  S.newer({ cid: 'a', t: 1, edited: 9, club: '7i' }, { cid: 'a', t: 1, edited: 5, club: '6i' }).club === '7i' && S.newer(null, { t: 1 }).t === 1 && S.newer({ t: 2 }, undefined).t === 2);
 check('exportfilen har alla väntande och avvisade slag med orsak', file.kind === 'golf-shot-export' && file.pending[0].cid === 'p1234567' && file.failed[0].reason === 'bad_spin' && file.exported_at === '2026-11-27T00:00:00.000Z', file);
 check('id för nya slag är unika och godtas av servern', S.newCid() !== S.newCid() && C.normalize(Object.assign({}, good, { cid: S.newCid() }), NOW).ok);
 

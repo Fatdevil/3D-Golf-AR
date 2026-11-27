@@ -84,6 +84,8 @@
         });
         return out;
     }
+    // Of two copies of the same shot (the stored one and one kept in memory while the storage was full), the one edited last
+    function newer(a, b) { if (!a) return b || null; if (!b) return a; return (b.edited || b.t) > (a.edited || a.t) ? b : a; }
     // The file the player can save: every shot still waiting and every shot the server refused, as they are on this device
     function exportFile(pending, failed, now) {
         return JSON.stringify({ kind: 'golf-shot-export', version: 1, exported_at: new Date(now || Date.now()).toISOString(),
@@ -96,7 +98,7 @@
         return Bag.trim(list);
     }
 
-    const api = { legacyCid: legacyCid, newCid: newCid, legacyShots: legacyShots, put: put, settle: settle, mergeBag: mergeBag, exportFile: exportFile, fnv: fnv,
+    const api = { legacyCid: legacyCid, newCid: newCid, legacyShots: legacyShots, put: put, settle: settle, mergeBag: mergeBag, exportFile: exportFile, newer: newer, fnv: fnv,
                   OUTBOX: OUTBOX, FAILED: FAILED, LEGACY: LEGACY, BATCH: BATCH };
 
     // ── In the page ──
@@ -111,12 +113,12 @@
         // the outbox: one key per shot (see the top), oldest first; a shot the full storage could not take waits in memory (this page) instead
         const memory = {}, memoryFailed = {};
         const parse = function (k) { try { return JSON.parse(store.get(k) || 'null'); } catch (e) { return null; } };
-        const readOne = function (cid) { return parse(OUTBOX + cid) || memory[cid] || null; };
+        const readOne = function (cid) { return newer(parse(OUTBOX + cid), memory[cid]); };
         const keysOf = function (prefix) { return store.keys().filter(function (k) { return k && k.indexOf(prefix) === 0; }); };
         const readBox = function () {
             const byCid = {};
             keysOf(OUTBOX).forEach(function (k) { const s = parse(k); if (s && typeof s.t === 'number') byCid[s.cid] = s; });
-            Object.keys(memory).forEach(function (c) { if (!byCid[c]) byCid[c] = memory[c]; });
+            Object.keys(memory).forEach(function (c) { byCid[c] = newer(byCid[c], memory[c]); });   // an edit kept in memory beats the older stored copy
             return Object.keys(byCid).map(function (c) { return byCid[c]; }).sort(function (a, b) { return a.t - b.t; });
         };
         const changed = function () { try { root.dispatchEvent(new CustomEvent('shotsync')); } catch (e) { /* none */ } };
@@ -136,7 +138,7 @@
         const readFailed = function () {
             const byCid = {};
             keysOf(FAILED).forEach(function (k) { const f = parse(k); if (f && f.shot) byCid[f.shot.cid] = f; });
-            Object.keys(memoryFailed).forEach(function (c) { if (!byCid[c]) byCid[c] = memoryFailed[c]; });
+            Object.keys(memoryFailed).forEach(function (c) { byCid[c] = !byCid[c] || memoryFailed[c].at > byCid[c].at ? memoryFailed[c] : byCid[c]; });
             return Object.keys(byCid).map(function (c) { return byCid[c]; }).sort(function (a, b) { return a.shot.t - b.shot.t; });
         };
         const writeFailed = function (shot, reason) {
