@@ -65,7 +65,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
       await page.waitForFunction(() => window.ShotSync && window.RangeSession && window.GolfAuth && window.GolfAuth.isReady, null, { timeout: 120000 });
       // the page finishes its own load first: it ends in the builder, which stops any range session (setMode('BUILD')). A session started
       // before that was stopped under the test's feet, now and then, and the next shot was quietly not recorded at all
-      await page.waitForFunction(() => window._courseLoading === false, null, { timeout: 120000 }).catch(() => {});
+      await page.waitForFunction(() => window._courseLoading === false, null, { timeout: 120000 });   // never ignored: a page that is not ready must fail the test here
       await wait(500);
       await startSession(page);
       return page;
@@ -105,7 +105,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await pageA.evaluate(() => { localStorage.removeItem('golf_shot_legacy_v1'); window.ShotSync.migrate(); return window.ShotSync.flush(); });
     await idle(pageA);
     check('en omladdning, eller de gamla slagen skickade en gång till, lägger inte till något', (await count(idA)) === 4, String(await count(idA)));
-    await pageA.waitForFunction(() => window._courseLoading === false, null, { timeout: 120000 }).catch(() => {});
+    await pageA.waitForFunction(() => window._courseLoading === false, null, { timeout: 120000 });
     await wait(500);
     await startSession(pageA);
 
