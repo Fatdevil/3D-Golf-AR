@@ -9,6 +9,9 @@
 //    - what the player decides (the club, counting a flagged shot anyway, the review that follows from the club) may change: the copy
 //      edited last (by the device's own clock, `edited`) wins
 //  Each shot has an id the device made (cid), so sending it twice (a retry, two tabs, a lost answer) stores it once.
+//  It also has the training session it was hit in (session: one range session on one device, a new one after "New session" or a long
+//  break) and the version of the ball flight that worked out its distances (physics, physics.js VERSION). Both are written once and never
+//  guessed: a shot from before they existed has neither, and statistics treat it as such.
 //  No DB here: normalize() checks one shot and returns the row server.js writes. Tested in tests/test_shot_bank.js.
 // ================================================================
 'use strict';
@@ -47,8 +50,18 @@ function normalize(input, now) {
     range_key: typeof s.range === 'string' && s.range ? s.range.slice(0, 80) : null,
     lm_device: typeof s.device === 'string' && s.device ? s.device.slice(0, 64) : null,
     accepted: s.accepted === true,
+    training_session_id: null, physics_version: null,
     edited_at: num(s.edited) !== null && s.edited >= t && s.edited <= now + 86400000 ? Math.round(s.edited) : Math.round(t)
   };
+  // the training session and the flight's version: a shot from before them has none; a malformed one is a fault of the device, refused
+  if (s.session !== undefined && s.session !== null) {
+    if (typeof s.session !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(s.session)) return { ok: false, reason: 'bad_session' };
+    out.training_session_id = s.session;
+  }
+  if (s.physics !== undefined && s.physics !== null) {
+    if (typeof s.physics !== 'string' || !/^[A-Za-z0-9._-]{1,32}$/.test(s.physics)) return { ok: false, reason: 'bad_physics' };
+    out.physics_version = s.physics;
+  }
   // the numbers: missing is null; present but impossible refuses the shot (a bad value must not go into the bank)
   const cols = { ballSpeed: 'ball_speed', clubSpeed: 'club_speed', launch: 'launch', hla: 'hla', spin: 'spin', spinAxis: 'spin_axis', clubPath: 'club_path',
                  faceToPath: 'face_to_path', aoa: 'aoa', carry: 'carry', total: 'total', offline: 'offline_m', apex: 'apex', carryStd: 'carry_std', totalStd: 'total_std' };
@@ -106,7 +119,8 @@ function toClient(row) {
     ballSpeed: n(row.ball_speed), clubSpeed: n(row.club_speed), launch: n(row.launch), hla: n(row.hla), spin: n(row.spin), spinAxis: n(row.spin_axis),
     clubPath: n(row.club_path), faceToPath: n(row.face_to_path), aoa: n(row.aoa), carry: n(row.carry), total: n(row.total), offline: n(row.offline_m),
     apex: n(row.apex), carryStd: n(row.carry_std), totalStd: n(row.total_std), estimated: row.estimated || undefined, review: row.review || undefined,
-    accepted: !!row.accepted, practice: row.practice || undefined, raw: row.raw || undefined, edited: n(row.edited_at)
+    accepted: !!row.accepted, practice: row.practice || undefined, raw: row.raw || undefined, edited: n(row.edited_at),
+    session: row.training_session_id || null, physics: row.physics_version || null
   };
 }
 

@@ -1217,7 +1217,13 @@ window.GolfPhysics = (function() {
         return { path: path, metrics: metrics };
     }
 
+    // The version of the ball flight: every carry, total and standard carry the game works out comes from it, and each range shot keeps it
+    // (the shot bank, shot-bank-core.js), so statistics never mix distances of an older flight with a newer one. Change it with any change
+    // that moves a shot: tests/test_physics_version.js flies fixed shots and fails until the version and its fingerprint are updated.
+    const VERSION = 'flight-2024.1';
+
     return {
+        VERSION: VERSION,
         simulateFlight: simulateFlight,
         greenMu: greenMu,
         restSlopeLimitPct: restSlopeLimitPct,
