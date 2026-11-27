@@ -22,7 +22,7 @@
             empty: 'Slå några slag på rangen med en launch monitor och välj klubba i panelen, så syns de här.',
             trend: 'Carry vecka för vecka – {c}', trendFew: 'Trenden visas när det finns giltiga slag från minst två veckor.',
             table: 'Alla klubbor', club: 'Klubba', measured: 'uppmätt', worked: 'spelets bollflykt',
-            notes: 'Carry och sidledsspridning räknas av spelets bollflykt ({v}) i standardförhållanden (vindstilla, 15 °C, havsnivå). Bollfart och spinn är launch monitorns egna värden.',
+            notes: 'Carry och sidledsspridning räknas av spelets bollflykt ({v}) i standardförhållanden (vindstilla, 15 °C, havsnivå, plan mark): sidled är var bollen landar, inte var den stannar på rangen. Bollfart och spinn är launch monitorns egna värden.',
             otherFlight: '{n} slag från en annan eller okänd version av bollflykten räknas inte in i carry och spridning.',
             mishitNote: 'Felträffar (toppade, tunna, korta och shankar) räknas i andelen men inte i carry och spridning, om du inte valt att räkna dem ändå. Slag som ser ut som en annan klubba och felmätningar räknas inte alls.',
             estimatedNote: 'Slag där launch monitorn inte skickade spinn: spinnet och carry räknas inte (de bygger på en uppskattning).',
@@ -42,7 +42,7 @@
             empty: 'Hit some shots on the range with a launch monitor and pick the club in the panel, and they show up here.',
             trend: 'Carry week by week – {c}', trendFew: 'The trend shows once there are valid shots from at least two weeks.',
             table: 'All clubs', club: 'Club', measured: 'measured', worked: 'the game\'s ball flight',
-            notes: 'Carry and side spread are worked out by the game\'s ball flight ({v}) in standard conditions (no wind, 15 °C, sea level). Ball speed and spin are the launch monitor\'s own values.',
+            notes: 'Carry and side spread are worked out by the game\'s ball flight ({v}) in standard conditions (no wind, 15 °C, sea level, flat ground): side is where the ball comes down, not where it stops on the range. Ball speed and spin are the launch monitor\'s own values.',
             otherFlight: '{n} shots from another or unknown version of the ball flight are not in the carry and spread.',
             mishitNote: 'Mishits (topped, thin, short and shanks) count in the rate but not in carry and spread, unless you counted them anyway. Shots that look like another club and misreads do not count at all.',
             estimatedNote: 'Shots where the launch monitor sent no spin: their spin and carry do not count (they rest on an estimate).',
@@ -159,7 +159,7 @@
     // ── In the page ──
     if (typeof document !== 'undefined' && document.getElementById && typeof root.fetch === 'function') {
         const state = { period: '30d', club: null, lang: 'sv', meters: true, pending: 0, error: null };
-        let data = null, el = null;
+        let data = null, el = null, seq = 0;   // seq: the latest load; an answer to an older one (the player picked another period meanwhile) is dropped
         try { const p = localStorage.getItem('golf_training_period'); if (p && TXT.sv.periods[p]) state.period = p; state.club = localStorage.getItem('golf_training_club'); } catch (e) { /* none */ }
         const draw = function () {
             if (!el) return;
@@ -168,20 +168,24 @@
             el.innerHTML = view(data, state);
         };
         api.load = async function () {
+            const mine = ++seq;
             state.error = null; data = null; draw();
             const S = root.ShotSync;
             // what this device still has waiting goes first: a shot hit offline is in the numbers once it is sent
             if (S && S.flush) { try { await S.flush(); } catch (e) { /* the numbers come without them */ } }
+            if (mine !== seq) return;
             state.pending = S && S.pending ? S.pending() : 0;
             if (S && S.status && S.status().blocked) { state.error = 'blocked'; draw(); return; }
             const id = (root.GolfAuth && root.GolfAuth.userId) || (function () { try { return localStorage.getItem('golf_os_device_id'); } catch (e) { return null; } })();
             try {
                 const res = await root.fetch('/api/training/clubs?period=' + encodeURIComponent(state.period), { headers: id ? { 'x-user-id': id } : {} });
+                if (mine !== seq) return;
                 if (res.status === 401) { state.error = 'blocked'; draw(); return; }
                 const j = await res.json();
-                if (!res.ok || !j || !Array.isArray(j.clubs)) throw new Error('no data');
+                if (mine !== seq) return;
+                if (!res.ok || !j || !Array.isArray(j.clubs) || j.period !== state.period) throw new Error('no data');
                 data = j;
-            } catch (e) { state.error = 'offline'; }
+            } catch (e) { if (mine !== seq) return; state.error = 'offline'; }
             draw();
         };
         api.state = function () { return Object.assign({}, state); };

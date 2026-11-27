@@ -10,6 +10,8 @@
 //    - a mishit counts in the club's mishit rate, but not in its carry, ball speed or spread (unless the player counted it anyway)
 //    - a measured value and an estimated one are never mixed: a spin the game estimated (no spin from the launch monitor) is left out of
 //      the spin, and the carry of such a shot (it flew on the estimate) out of the carry
+//    - the side spread is the spread of where shots came down across the line in standard conditions (offlineStd), not where they
+//      stopped on the range: wind, roll and the ground there are not the player's consistency. Shots without it have no side
 //    - distances worked out by the ball flight (carry, spread across the line) are only taken from shots of one flight version (the
 //      current one); shots of another or of no recorded version are counted apart, never averaged in. Ball speed, launch and spin are the
 //      launch monitor's own and do not depend on the flight
@@ -59,7 +61,8 @@
         const flight = function (v) { return v.c.sameFlight && !v.c.guessed; };
         valid.forEach(function (v) { if (!v.c.sameFlight) otherFlight++; });
         const carry = pick(function (s) { return num(s.carryStd) !== null ? s.carryStd : s.carry; }, flight);
-        const offline = pick(function (s) { return s.offline; }, flight);
+        // across the line where it came down in standard conditions (not where it stopped on the range: wind, roll and ground are not the player)
+        const offline = pick(function (s) { return s.offlineStd; }, flight);
         const ball = pick(function (s) { return s.ballSpeed; }, function () { return true; });
         const spin = pick(function (s) { return s.spin; }, function (v) { return v.c.spinMeasured; });
         const launch = pick(function (s) { return s.launch; }, function () { return true; });

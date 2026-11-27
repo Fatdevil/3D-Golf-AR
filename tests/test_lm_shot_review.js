@@ -30,6 +30,8 @@ const shot7 = { source: 'LM', club: '7i', ballSpeed: 123, launch: 16.1, spin: 71
 const st = R.standard(G, shot7);
 check('carry och total räknas i vindstilla vid havsnivå och 15 °C (TrackMans 7-järn: drygt 150 m carry)', st && st.carry > 145 && st.carry < 165 && st.total >= st.carry, st);
 check('samma slag ger samma standardcarry (oberoende av rangens vind och väder)', near(R.standard(G, shot7).carry, st.carry, 1e-9));
+const right = R.standard(G, Object.assign({}, shot7, { hla: 5 })), left = R.standard(G, Object.assign({}, shot7, { hla: -5 })), slice = R.standard(G, Object.assign({}, shot7, { spinAxis: 15 }));
+check('sidled där bollen landar i standardförhållanden: rakt nära 0, höger start eller slice åt höger, vänster start åt vänster', Math.abs(st.side) < 0.5 && right.side > 5 && left.side < -5 && slice.side > 5 && near(right.side, -left.side, 0.5), [st.side, right.side, left.side, slice.side]);
 check('utan fysik eller spinn går det inte att räkna', R.standard(null, shot7) === null && R.standard(G, Object.assign({}, shot7, { spin: null })) === null);
 
 console.log('\n3. Felträffar och felmätningar');

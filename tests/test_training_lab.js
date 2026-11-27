@@ -8,8 +8,8 @@ const T = require('../training-lab.js');
 let failed = 0;
 function check(name, ok, detail) { console.log((ok ? 'PASS  ' : '❌ FAIL  ') + name + (ok ? '' : '  ' + JSON.stringify(detail))); if (!ok) failed++; }
 const V = 'flight-2024.1', NOW = Date.UTC(2026, 10, 27, 12), DAY = 86400000;
-const shot = o => Object.assign({ source: 'LM', club: '7i', t: NOW - DAY, physics: V, carryStd: 150, offline: 0, ballSpeed: 120, spin: 7000, session: 'S2' }, o);
-const shots = Array.from({ length: 20 }, (_, i) => shot({ carryStd: 140 + i, offline: -9.5 + i })).concat(
+const shot = o => Object.assign({ source: 'LM', club: '7i', t: NOW - DAY, physics: V, carryStd: 150, offlineStd: 0, ballSpeed: 120, spin: 7000, session: 'S2' }, o);
+const shots = Array.from({ length: 20 }, (_, i) => shot({ carryStd: 140 + i, offlineStd: -9.5 + i })).concat(
   Array.from({ length: 5 }, (_, i) => shot({ t: NOW - 40 * DAY, carryStd: 130 + i, session: 'S1' })), [shot({ club: 'PW', carryStd: 110 }), shot({ club: 'PW', carryStd: 111 })]);
 const data = Object.assign(S.compute(shots, { period: '30d', now: NOW, version: V }), { total: 27 });
 const sv = T.view(data, { lang: 'sv', meters: true, period: '30d', club: '7i' });

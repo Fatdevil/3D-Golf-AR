@@ -111,7 +111,7 @@
         if (!R || !rec || rec.source !== 'LM') return rec;
         if (num(rec.carryStd) === null) {
             const st = R.standard(physics, rec);
-            if (st) { rec.carryStd = st.carry; rec.totalStd = st.total; }
+            if (st) { rec.carryStd = st.carry; rec.totalStd = st.total; if (num(st.side) !== null) rec.offlineStd = st.side; }
         }
         rec.review = R.review(rec, R.ownSpeeds((bagEntries || []).filter(function (e) { return e.t !== rec.t; })));
         return rec;

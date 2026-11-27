@@ -8,12 +8,12 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : '❌ FAIL  ') + 
 const near = (a, b, e) => a !== null && Math.abs(a - b) <= (e || 1e-9);
 const V = 'flight-2024.1', NOW = Date.UTC(2026, 10, 27, 12), DAY = 86400000;
 let k = 0;
-const shot = o => Object.assign({ cid: 'c' + (++k), source: 'LM', club: '7i', t: NOW - DAY, physics: V, carry: 140, carryStd: 140, offline: 0, ballSpeed: 120, spin: 7000, launch: 16, session: 'S2' }, o);
+const shot = o => Object.assign({ cid: 'c' + (++k), source: 'LM', club: '7i', t: NOW - DAY, physics: V, carry: 140, carryStd: 140, offlineStd: 0, ballSpeed: 120, spin: 7000, launch: 16, session: 'S2' }, o);
 const run = (list, o) => S.compute(list, Object.assign({ period: '30d', now: NOW, version: V }, o || {}));
 
 console.log('1. Kända värden');
 // 20 clean 7-iron shots: carry 140..159, side -9.5..+9.5 (step 1), ball speed 115..124 twice
-const clean = Array.from({ length: 20 }, (_, i) => shot({ carryStd: 140 + i, offline: -9.5 + i, ballSpeed: 115 + (i % 10), spin: 6000 + 100 * i }));
+const clean = Array.from({ length: 20 }, (_, i) => shot({ carryStd: 140 + i, offlineStd: -9.5 + i, ballSpeed: 115 + (i % 10), spin: 6000 + 100 * i }));
 let c = run(clean).clubs[0];
 const sdCarry = Math.sqrt(Array.from({ length: 20 }, (_, i) => (140 + i - 149.5) ** 2).reduce((a, b) => a + b) / 19);
 check('carry: median 149,5, medel 149,5, standardavvikelse som räknat för hand (5,92)', c.now.carry.n === 20 && near(c.now.carry.median, 149.5) && near(c.now.carry.mean, 149.5) && near(c.now.carry.sd, sdCarry) && near(sdCarry, 5.916, 0.001), c.now.carry);
@@ -38,12 +38,15 @@ check('carry: bara giltiga slag med dagens flykt och uppmätt indata (de sex ren
 check('spinnet tar inte med det uppskattade värdet', c.now.spin.n === 9 && c.now.spin.mean === 7000, c.now.spin);
 check('slag med en annan eller ingen fysikversion räknas för sig, aldrig in i carry', c.now.otherFlight === 2, c.now.otherFlight);
 check('bollfarten (launch monitorns egen) tar med alla giltiga slag, oavsett flykt', c.now.ballSpeed.n === 10, c.now.ballSpeed);
+const wind = Array.from({ length: 6 }, (_, i) => shot({ carryStd: 150, offlineStd: i % 2 ? 2 : -2, offline: i % 2 ? 30 : -30 })).concat([shot({ offlineStd: undefined, offline: 50 })]);
+c = run(wind).clubs[0];
+check('sidledsspridningen är där slagen landade i standardförhållanden, inte var de stannade på rangen (vind, rull); slag utan den räknas inte', c.now.side.n === 6 && near(c.now.side.sd, Math.sqrt(6 * 4 / 5)), c.now.side);
 const all = run(mixed);
 check('svingmätarens slag, inspelsslag och slag utan klubba räknas för sig', all.sim === 1 && all.practice === 1 && all.noClub === 1, [all.sim, all.practice, all.noClub]);
 
 console.log('\n3. Perioder och förändring');
-const periods = Array.from({ length: 6 }, (_, i) => shot({ t: NOW - 5 * DAY, carryStd: 150 + i, offline: i % 2 ? 4 : -4 }))
-  .concat(Array.from({ length: 6 }, (_, i) => shot({ t: NOW - 45 * DAY, carryStd: 140 + i, offline: i % 2 ? 8 : -8, session: 'S1', ballSpeed: 118 })))
+const periods = Array.from({ length: 6 }, (_, i) => shot({ t: NOW - 5 * DAY, carryStd: 150 + i, offlineStd: i % 2 ? 4 : -4 }))
+  .concat(Array.from({ length: 6 }, (_, i) => shot({ t: NOW - 45 * DAY, carryStd: 140 + i, offlineStd: i % 2 ? 8 : -8, session: 'S1', ballSpeed: 118 })))
   .concat(Array.from({ length: 3 }, (_, i) => shot({ t: NOW - 100 * DAY, carryStd: 130 + i, session: 'S0' })));
 c = run(periods).clubs[0];
 check('30 dagar: bara de senaste 30 dagarnas slag', c.now.carry.n === 6 && near(c.now.carry.median, 152.5), c.now.carry);

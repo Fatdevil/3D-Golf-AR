@@ -56,12 +56,12 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const DAY = 86400000, now = Date.now(), S1 = 'sessOLD' + crypto.randomBytes(3).toString('hex'), S2 = 'sessNEW' + crypto.randomBytes(3).toString('hex');
     let k = 0;
     const shot = o => Object.assign({ cid: 'tl' + crypto.randomBytes(6).toString('hex') + (++k), t: now - 2 * DAY + k * 1000, source: 'LM', club: '7i', ballSpeed: 120, launch: 16, spin: 7000, clubSpeed: 89,
-                                      carry: 150, total: 158, carryStd: 150, totalStd: 158, offline: 0, physics: VERSION, session: S2 }, o);
+                                      carry: 150, total: 158, carryStd: 150, totalStd: 158, offlineStd: 0, physics: VERSION, session: S2 }, o);
     // the known shots: 15 clean 7-irons now (carry 140..154, side -7..+7, ball speed 118..122), 5 more hit offline (carry 155..159, side ±8, ±9),
     // 5 clean 7-irons 40 days ago (carry 130..134), 2 mishits and a wrong-club shot now, 3 PW shots, a swing-meter shot
-    const now15 = Array.from({ length: 15 }, (_, i) => shot({ carryStd: 140 + i, offline: -7 + i, ballSpeed: 118 + (i % 5) }));
-    const offline5 = [155, 156, 157, 158, 159].map((c, i) => shot({ carryStd: c, offline: [8, -8, 9, -9, 0][i], ballSpeed: 120 }));
-    const old5 = Array.from({ length: 5 }, (_, i) => shot({ t: now - 40 * DAY + i * 1000, carryStd: 130 + i, offline: i % 2 ? 10 : -10, ballSpeed: 116, session: S1 }));
+    const now15 = Array.from({ length: 15 }, (_, i) => shot({ carryStd: 140 + i, offlineStd: -7 + i, ballSpeed: 118 + (i % 5) }));
+    const offline5 = [155, 156, 157, 158, 159].map((c, i) => shot({ carryStd: c, offlineStd: [8, -8, 9, -9, 0][i], ballSpeed: 120 }));
+    const old5 = Array.from({ length: 5 }, (_, i) => shot({ t: now - 40 * DAY + i * 1000, carryStd: 130 + i, offlineStd: i % 2 ? 10 : -10, ballSpeed: 116, session: S1 }));
     const odd = [shot({ carryStd: 60, ballSpeed: 70, review: { flags: ['topped'], mishit: true, misread: false, looksLike: null } }),
                  shot({ carryStd: 90, ballSpeed: 90, review: { flags: ['thin'], mishit: true, misread: false, looksLike: null } }),
                  shot({ carryStd: 175, ballSpeed: 133, review: { flags: ['wrong_club'], mishit: false, misread: false, looksLike: '5i' } }),
@@ -71,14 +71,14 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const A = await device();
     await A.page.evaluate(list => { list.forEach(s => window.ShotSync.enqueue(s)); }, now15.concat(old5, odd));
     await A.page.waitForFunction(() => window.ShotSync.pending() === 0, null, { timeout: 60000 });
-    // offline: five more shots wait; the page shows the numbers without them, and says so
+    // offlineStd: five more shots wait; the page shows the numbers without them, and says so
     await A.ctx.setOffline(true);
     await A.page.evaluate(list => { list.forEach(s => window.ShotSync.enqueue(s)); }, offline5);
     await A.ctx.setOffline(false);
     await A.ctx.setOffline(true);
     await A.page.evaluate(() => window.TrainingLab.load());
     const offText = await A.page.evaluate(() => document.getElementById('tl-main').textContent);
-    check('offline: sidan säger att servern inte nås och att 5 slag väntar', /5 slag väntar/.test(offText) && /Servern går inte att nå/.test(offText), offText.slice(0, 200));
+    check('offlineStd: sidan säger att servern inte nås och att 5 slag väntar', /5 slag väntar/.test(offText) && /Servern går inte att nå/.test(offText), offText.slice(0, 200));
     await A.ctx.setOffline(false);
     await A.page.evaluate(() => window.TrainingLab.load());
     await A.page.waitForFunction(() => window.TrainingLab.data() && window.ShotSync.pending() === 0, null, { timeout: 60000 });
@@ -114,6 +114,15 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await A.page.waitForFunction(() => window.TrainingLab.data() && window.TrainingLab.data().period === 'session', null, { timeout: 30000 });
     p = await A.page.evaluate(() => window.TrainingLab.data().clubs.filter(c => c.club === '7i')[0]);
     check('senaste passet jämförs med passet före (pass-id från slagbanken)', p.session === S2 && p.now.valid === 20 && p.before && p.before.valid === 5 && Math.abs(p.change.carry - 17.5) < 1e-6, JSON.stringify([p.session, p.now.valid, p.before && p.before.valid]));
+    // a slow answer for one period must never show under another: 30 days is answered late, "all" is picked meanwhile
+    await A.page.route(/\/api\/training\/clubs\?period=30d/, async r => { await wait(3000); try { await r.continue(); } catch (e) { /* page moved on */ } });
+    await A.page.click('.tl-periods [data-period="30d"]');
+    await wait(300);
+    await A.page.click('.tl-periods [data-period="all"]');
+    await wait(4500);
+    const shown = await A.page.evaluate(() => ({ period: window.TrainingLab.data() && window.TrainingLab.data().period, pressed: document.querySelector('.tl-periods [aria-pressed="true"]').dataset.period }));
+    check('ett sent svar för en tidigare vald period ersätter aldrig den valda', shown.period === 'all' && shown.pressed === 'all', JSON.stringify(shown));
+    await A.page.unroute(/\/api\/training\/clubs\?period=30d/);
     await A.page.click('.tl-periods [data-period="30d"]');
     await A.page.waitForFunction(() => window.TrainingLab.data() && window.TrainingLab.data().period === '30d', null, { timeout: 30000 });
     await A.page.click('.tl-clubs [data-club="7i"]');

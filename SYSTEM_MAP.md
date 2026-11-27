@@ -562,7 +562,7 @@ Spelarens klubbor ur slagbanken, från alla enheter, och hur de utvecklas. Sidan
   - Slag som ser ut som en annan klubba (`looksLike`) och felmätningar räknas inte alls.
   - Felträffar räknas i felträffsandelen (felträffar delat med granskade slag) men inte i carry, spridning eller bollfart, om inte spelaren valt att räkna dem ändå.
   - Uppskattat spinn räknas inte i spinnet, och slaget räknas inte i carry.
-  - Carry (standardcarry) och sidledsspridning (standardavvikelsen av offline) tas bara från slag med dagens fysikversion. Slag med en annan eller okänd version räknas för sig (`otherFlight`) och medelvärdesbildas aldrig in.
+  - Carry (standardcarry) och sidledsspridning tas bara från slag med dagens fysikversion. Sidledsspridningen är standardavvikelsen av `offlineStd`: var bollen landar i sidled i standardförhållanden (`LMShotReview.standard`, kolumnen `offline_std`). Den räknas inte på var bollen stannade på rangen, eftersom vind, rull och mark inte säger något om spelaren. Äldre slag saknar värdet och ingår därför inte i spridningen. Slag med en annan eller okänd version räknas för sig (`otherFlight`) och medelvärdesbildas aldrig in.
   - Bollfart, utgångsvinkel och spinn är launch monitorns egna värden och tas från alla giltiga slag.
 - **Tillförlitlighet:** varje siffra har sitt antal slag. Under 5 slag får siffran en varning och ingen förändring visas. Under 20 slag märks den som osäker.
 - **Perioder:**
@@ -570,7 +570,7 @@ Spelarens klubbor ur slagbanken, från alla enheter, och hur de utvecklas. Sidan
   - Trenden visar medianen av carry vecka för vecka (måndag UTC, ISO-veckonummer på sidan).
 - **Sidan** (`training-lab.js`, `TrainingLab.view`, ingen DOM):
   - Innehåll: nyckeltalen för den valda klubban (carry, spridning, felträffar, bollfart, spinn, slag), trenden, en tabell över alla klubbor och en förklaring av vad som är uppmätt och vad som kommer från bollflykten.
-  - Spelarens enhet och decimalkomma på svenska.
+  - Spelarens enhet och decimalkomma på svenska. Ett svar för en period som spelaren redan har lämnat kastas (`seq`).
   - Innan siffrorna hämtas skickas det som väntar i utkorgen (`ShotSync.flush`), och sidan säger hur många slag som ännu inte är med.
   - Utan anslutning, eller på en enhet som tillhör ett annat konto, visas ett tydligt meddelande i stället för siffror.
 - **Tester:**

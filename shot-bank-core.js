@@ -27,7 +27,7 @@ const EARLIEST = Date.UTC(2020, 0, 1);
 const NUMBERS = {
   ballSpeed: [0, 250], clubSpeed: [0, 200], launch: [-30, 90], hla: [-90, 90], spin: [0, 20000], spinAxis: [-90, 90],
   clubPath: [-60, 60], faceToPath: [-60, 60], aoa: [-40, 40],
-  carry: [0, 500], total: [0, 600], offline: [-300, 300], apex: [0, 200], carryStd: [0, 500], totalStd: [0, 600]
+  carry: [0, 500], total: [0, 600], offline: [-300, 300], apex: [0, 200], carryStd: [0, 500], totalStd: [0, 600], offlineStd: [-300, 300]
 };
 // the parts of an approach practice shot that are kept (all numbers but the flags)
 const PRACTICE_NUM = { dist: [0, 400], prox: [0, 500], along: [-500, 500], across: [-500, 500], points: [0, 100], hole: [0, 100] };
@@ -64,7 +64,7 @@ function normalize(input, now) {
   }
   // the numbers: missing is null; present but impossible refuses the shot (a bad value must not go into the bank)
   const cols = { ballSpeed: 'ball_speed', clubSpeed: 'club_speed', launch: 'launch', hla: 'hla', spin: 'spin', spinAxis: 'spin_axis', clubPath: 'club_path',
-                 faceToPath: 'face_to_path', aoa: 'aoa', carry: 'carry', total: 'total', offline: 'offline_m', apex: 'apex', carryStd: 'carry_std', totalStd: 'total_std' };
+                 faceToPath: 'face_to_path', aoa: 'aoa', carry: 'carry', total: 'total', offline: 'offline_m', apex: 'apex', carryStd: 'carry_std', totalStd: 'total_std', offlineStd: 'offline_std' };
   for (const k of Object.keys(NUMBERS)) {
     const v = s[k];
     if (v === null || v === undefined) { out[cols[k]] = null; continue; }
@@ -118,7 +118,7 @@ function toClient(row) {
     cid: row.client_id, t: new Date(row.shot_at).getTime(), source: row.source, club: row.club, range: row.range_key, device: row.lm_device,
     ballSpeed: n(row.ball_speed), clubSpeed: n(row.club_speed), launch: n(row.launch), hla: n(row.hla), spin: n(row.spin), spinAxis: n(row.spin_axis),
     clubPath: n(row.club_path), faceToPath: n(row.face_to_path), aoa: n(row.aoa), carry: n(row.carry), total: n(row.total), offline: n(row.offline_m),
-    apex: n(row.apex), carryStd: n(row.carry_std), totalStd: n(row.total_std), estimated: row.estimated || undefined, review: row.review || undefined,
+    apex: n(row.apex), carryStd: n(row.carry_std), totalStd: n(row.total_std), offlineStd: n(row.offline_std), estimated: row.estimated || undefined, review: row.review || undefined,
     accepted: !!row.accepted, practice: row.practice || undefined, raw: row.raw || undefined, edited: n(row.edited_at),
     session: row.training_session_id || null, physics: row.physics_version || null
   };
