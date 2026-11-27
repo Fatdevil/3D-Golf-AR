@@ -155,7 +155,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const ctxC = await device({ golf_os_device_id: idA });   // A's id, but this browser has its own token
     const pageC = await open(ctxC);
     await hit(pageC, { club: 'SW', carry: 70, total: 72 });
-    await wait(2500);
+    // the page sends it as soon as it can (a slow machine: give it time), and the server refuses it
+    await pageC.waitForFunction(() => window.ShotSync.status().blocked === true, null, { timeout: 60000 }).catch(() => {});
     const st = await pageC.evaluate(() => window.ShotSync.status());
     const read = await pageC.evaluate(() => fetch('/api/shots', { headers: { 'x-user-id': window.GolfAuth.userId } }).then(r => r.status));
     const bagRead = await pageC.evaluate(() => fetch('/api/bag', { headers: { 'x-user-id': window.GolfAuth.userId } }).then(r => r.status));
