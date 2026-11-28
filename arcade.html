@@ -3277,6 +3277,30 @@
             return true;
         }
 
+        const SCULPT_FAMILY = ['SCULPT', 'SMOOTH', 'FLATTEN', 'RAMP', 'RIDGE', 'MTN', 'NOISE'];
+        const OBJECTS_FAMILY = ['PROPS', 'COLORIZE', 'BLOCK', 'SPLINE'];
+        const ENV_FAMILY = ['ENV'];
+
+        function syncFlyoutForTool(tool) {
+            const leftFlyout = document.getElementById('left-flyout-toolbar');
+            const flyoutSculpt = document.getElementById('flyout-sculpt-strip');
+            const flyoutObj = document.getElementById('flyout-objects-strip');
+            const flyoutEnv = document.getElementById('flyout-env-strip');
+            const flyoutHoles = document.getElementById('flyout-holes-strip');
+            if (!leftFlyout) return;
+
+            let activeStrip = null;
+            if (SCULPT_FAMILY.includes(tool)) activeStrip = flyoutSculpt;
+            else if (OBJECTS_FAMILY.includes(tool)) activeStrip = flyoutObj;
+            else if (ENV_FAMILY.includes(tool)) activeStrip = flyoutEnv;
+            else if (tool === 'SMART_BUILDER') activeStrip = flyoutHoles;
+
+            leftFlyout.style.display = activeStrip ? 'flex' : 'none';
+            [flyoutSculpt, flyoutObj, flyoutEnv, flyoutHoles].forEach(function(strip) {
+                if (strip) strip.style.display = (strip === activeStrip) ? 'flex' : 'none';
+            });
+        }
+
         function syncBuilderDock(opts) {
             const mode = (typeof window.getAppMode === 'function') ? window.getAppMode() : (typeof appMode !== 'undefined' ? appMode : 'BUILD');
             const tool = (typeof window.currentTool !== 'undefined' && window.currentTool) ? window.currentTool : (typeof currentTool !== 'undefined' ? currentTool : 'SCULPT');
@@ -3284,6 +3308,7 @@
             const drawer = document.getElementById('builder-dock-drawer');
             const rail = document.getElementById('left-toolbar');
             const rightTb = document.getElementById('right-toolbar');
+            const leftFlyout = document.getElementById('left-flyout-toolbar');
             const railToggle = document.getElementById('btn-dock-toggle');
             const titleEl = document.getElementById('builder-dock-title');
 
@@ -3295,6 +3320,7 @@
 
             if (!isBuild) {
                 if (rail) rail.style.display = 'none';
+                if (leftFlyout) leftFlyout.style.display = 'none';
                 if (drawer) {
                     drawer.style.display = 'none';
                     drawer.inert = true;
@@ -3308,6 +3334,7 @@
             if (rail) rail.style.display = 'flex';
             if (drawer) drawer.style.display = 'flex';
             if (rightTb) rightTb.style.display = 'flex';
+            syncFlyoutForTool(tool);
 
             const canShow = toolHasPanel(tool);
             const collapsed = !canShow || userCollapsed;
@@ -12502,9 +12529,7 @@
             camera.position.set(0, 15, 10);
             controls.target.set(0, 0, -30);
             controls.update();
-            if (typeof setTool === 'function' && typeof currentTool === 'string' && currentTool) {
-                setTool(currentTool);
-            } else if (typeof window.syncBuilderDock === 'function') {
+            if (typeof window.syncBuilderDock === 'function') {
                 window.syncBuilderDock();
             }
 

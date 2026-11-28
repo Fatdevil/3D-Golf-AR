@@ -204,6 +204,61 @@ async function setupContext(browser, viewport) {
     modeTransition.backBuild.flyout === 'flex' && !modeTransition.backBuild.collapsed && !modeTransition.backBuild.playUi,
     JSON.stringify(modeTransition));
 
+  currentStep = 'polygon-draft-preservation';
+  // Regression check: returning to BUILD (from TEST or rejected playtest validation) must preserve PAINT & PROPS polygon drafts
+  await page.evaluate(function () {
+    setTool('PAINT');
+    if (typeof setPaintMode === 'function') setPaintMode('POLYGON');
+    camera.position.set(0, 90, 90);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  });
+  await page.mouse.click(760, 360);
+  await page.mouse.click(860, 420);
+  await page.waitForTimeout(200);
+  const paintDraftCheck = await page.evaluate(function () {
+    const before = (window.smartGreenPoints || []).length;
+    setMode('TEST');
+    setMode('BUILD');
+    const after = (window.smartGreenPoints || []).length;
+    return {
+      before,
+      after,
+      paintPanel: getComputedStyle(document.getElementById('paint-tool-panel')).display,
+      flyout: getComputedStyle(document.getElementById('left-flyout-toolbar')).display
+    };
+  });
+  await page.evaluate(function () {
+    // Also verify PROPS polygon draft survives validation-rejected setMode('TEST') bounce back to BUILD
+    courseHoles[0].tees.yellow = null;
+    courseHoles[0].flag = null;
+    setTool('PROPS');
+    if (typeof setPropsMode === 'function') setPropsMode('POLYGON');
+    camera.position.set(0, 90, 90);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  });
+  await page.mouse.click(760, 360);
+  await page.mouse.click(860, 420);
+  await page.waitForTimeout(200);
+  const propsDraftCheck = await page.evaluate(function () {
+    const before = (window.smartGreenPoints || []).length;
+    setMode('TEST'); // rejected by validation gate -> immediately calls setMode('BUILD')
+    const after = (window.smartGreenPoints || []).length;
+    return {
+      before,
+      after,
+      mode: window.getAppMode ? window.getAppMode() : null,
+      flyout: getComputedStyle(document.getElementById('left-flyout-toolbar')).display,
+      objStrip: getComputedStyle(document.getElementById('flyout-objects-strip')).display
+    };
+  });
+  check('PAINT and PROPS polygon drafts survive BUILD -> TEST -> BUILD and rejected playtest validation while restoring dock/strips',
+    paintDraftCheck.before === 2 && paintDraftCheck.after === 2 && paintDraftCheck.paintPanel === 'flex' && paintDraftCheck.flyout === 'none' &&
+    propsDraftCheck.before === 2 && propsDraftCheck.after === 2 && propsDraftCheck.mode === 'BUILD' &&
+    propsDraftCheck.flyout === 'flex' && propsDraftCheck.objStrip === 'flex',
+    JSON.stringify({ paintDraftCheck, propsDraftCheck }));
+
   currentStep = 'ipad-portrait';
   // Verify iPad portrait (768x1024) narrows dock to <= 320px leaving >= 448px free viewport
   await page.setViewportSize({ width: 768, height: 1024 });
