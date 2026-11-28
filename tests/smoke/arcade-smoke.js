@@ -1941,11 +1941,19 @@ function serve() {
     checks.push({ name: 'undo: a water stroke keeps no copy of the water picture; undo and redo restore the ground, the water heights and the water picture',
       ok: waterU.dug && waterU.step === 1 && waterU.whole[1] === waterU.whole[0] && waterU.undone && waterU.redone, detail: JSON.stringify(waterU) });
     undoStep = 'empty clicks';
+    // the clicks below go on the ground: a point where the 3D view is on top, clear of the builder's left dock (rail + open studio drawer,
+    // up to 360 px wide), with the props tool and its drawer open as when the objects are placed
+    const UX = await pu.evaluate(function () {
+      window._propsToolMode = 'SINGLE'; setTool('PROPS');
+      for (let x = 300; x <= 900; x += 20) { const el = document.elementFromPoint(x, 430); if (el && el === renderer.domElement) return x; }
+      return null;
+    });
+    checks.push({ name: 'undo: the clicks of the next steps land on the ground, not on the builder\'s dock', ok: UX !== null, detail: String(UX) });
     const emptyU = {};
     for (const tool of ['ERASER', 'COLORIZE', 'PROPS', 'BLOCK']) {
       await pu.evaluate(function (t) { if (t === 'PROPS') { window._propsToolMode = 'SINGLE'; window.currentNatureType = null; } setTool(t); }, tool);
       const before = await snapU();
-      await pu.mouse.click(300, 430, { button: tool === 'BLOCK' ? 'right' : 'left' }); await pu.waitForTimeout(300);
+      await pu.mouse.click(UX, 430, { button: tool === 'BLOCK' ? 'right' : 'left' }); await pu.waitForTimeout(300);
       const after = await snapU();
       emptyU[tool] = after.undo - before.undo + (after.redo !== before.redo ? 100 : 0);
     }
@@ -1963,15 +1971,15 @@ function serve() {
       });
       const n = function () { return pu.evaluate(function () { return { trees: window.placedTrees.length, undo: undoStack.length, colors: window.placedTrees.map(function (t) { return t.color || ''; }).join(',') }; }); };
       const a = await n();
-      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const placed = await n();
+      await pu.mouse.click(UX, 430); await pu.waitForTimeout(400); const placed = await n();
       await pu.evaluate(function () { setTool('COLORIZE'); window.activeColorizeColor = '#ff0000'; window.activeTrunkColor = '#ffffff'; });
-      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const red = await n();
-      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const redAgain = await n();
+      await pu.mouse.click(UX, 430); await pu.waitForTimeout(400); const red = await n();
+      await pu.mouse.click(UX, 430); await pu.waitForTimeout(400); const redAgain = await n();
       await pu.evaluate(function () { window.activeColorizeColor = '#00ff00'; });
-      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const green = await n();
+      await pu.mouse.click(UX, 430); await pu.waitForTimeout(400); const green = await n();
       await undoU(); const backRed = await n();
       await pu.evaluate(function () { setTool('ERASER'); });
-      await pu.mouse.click(300, 430); await pu.waitForTimeout(400); const erased = await n();
+      await pu.mouse.click(UX, 430); await pu.waitForTimeout(400); const erased = await n();
       await undoU(); const back = await n();
       await pu.evaluate(function () { window.getPlacementParams = window.__gp; window.placedTrees.length = 0; destroyInstancePool('zz_undo'); delete window.customModels.zz_undo; delete window.ASSET_REGISTRY.zz_undo; });
       return { placed: [placed.trees - a.trees, placed.undo - a.undo], red: [red.colors !== placed.colors, red.undo - placed.undo], sameColour: redAgain.undo - red.undo,
