@@ -48,7 +48,7 @@
                   from: 'Slagen från', to: 'till', go: 'Importera och matcha',
                   impNote: 'Ett slag i filen kopplas bara till ett slag i slagbanken när bollfart, utgångsvinkel och spinn (och slagnummer om båda har det) passar exakt ett slag. Osäkra rader sparas inte. Inget slag, ingen poäng och inget test ändras.',
                   result: '{rows} rader: {stored} sparade, {already} fanns redan, {un} inte matchade.', reasons: { no_candidate: 'inget slag med de värdena', ambiguous: 'flera möjliga slag', shared: 'flera rader passar samma slag' },
-                  refused: { unknown_distance_unit: 'Filen anger inte avståndsenhet: välj meter eller yards.', game_export: 'Filen är en export från spelet själv (carry från spelets fysik), inte från launch monitorn.',
+                  refused: { unknown_distance_unit: 'Filen anger inte avståndsenhet: välj meter eller yards.', unsupported_distance_unit: 'Filen anger en avståndsenhet som importen inte tar (bara meter och yards).', game_export: 'Filen är en export från spelet själv (carry från spelets fysik), inte från launch monitorn.',
                              no_columns: 'Filen saknar kolumner för bollfart, utgångsvinkel eller carry.', empty_file: 'Filen är tom.', too_many_rows: 'Filen har för många rader (högst 2000).' },
                   needFile: 'Välj en fil och skriv källan.', failed: 'Importen gick inte att göra. Försök igen när enheten är ansluten.' }
         },
@@ -88,7 +88,7 @@
                   from: 'Shots from', to: 'to', go: 'Import and match',
                   impNote: 'A shot in the file is tied to a shot in the shot bank only when ball speed, launch and spin (and the shot number if both have it) fit exactly one shot. Uncertain rows are not stored. No shot, score or test is changed.',
                   result: '{rows} rows: {stored} stored, {already} already there, {un} not matched.', reasons: { no_candidate: 'no shot with those values', ambiguous: 'several possible shots', shared: 'several rows fit the same shot' },
-                  refused: { unknown_distance_unit: 'The file does not give its distance unit: pick metres or yards.', game_export: 'The file is an export from the game itself (carry from the game\'s physics), not from the launch monitor.',
+                  refused: { unknown_distance_unit: 'The file does not give its distance unit: pick metres or yards.', unsupported_distance_unit: 'The file gives a distance unit the import does not take (only metres and yards).', game_export: 'The file is an export from the game itself (carry from the game\'s physics), not from the launch monitor.',
                              no_columns: 'The file has no columns for ball speed, launch angle or carry.', empty_file: 'The file is empty.', too_many_rows: 'The file has too many rows (at most 2000).' },
                   needFile: 'Pick a file and write the source.', failed: 'The import could not be done. Try again when the device is online.' }
         }

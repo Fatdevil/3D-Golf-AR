@@ -99,7 +99,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
       `;7i;${ms(105)};19,0;7800;0,5;150,0;160,0;2,0 L\n` +
       `${s2.raw.shotNumber};7i;${ms(130)};14,0;6100;2,0;158,4;169,0;1,0 L\n` +
       `99;7i;${ms(150)};11,0;3000;0,0;190,0;210,0;0\n` +
-      `;7i;${ms(101)};20,0;8200;;120,0;;\n`;
+      `77;7i;${ms(101)};20,0;8200;;120,0;;\n`;
     const body = { csv: csv, source: 'Garmin R10 (app)', quality: 'lm_calculated', sideSign: 'right_positive', from: new Date(T0 - 3600000).toISOString(), to: new Date().toISOString() };
     r = await api('POST', '/api/references/import', body, A);
     check('importen läser fem rader och sparar tre säkra matchningar', r.status === 200 && r.json.rows === 5 && r.json.stored === 3 && r.json.matched === 3, JSON.stringify(r.json));
@@ -110,7 +110,7 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('blandade enheter: carry i meter rakt av, sidled i yards blir meter, "3,5 R" är höger', of(s1.cid) && near(of(s1.cid).carry_m, 141.2) && near(of(s1.cid).side_m, 3.5 / 1.09361) &&
       of(s1.cid).orig.side.unit === 'yd' && of(s1.cid).orig.carry.unit === 'm' && near(of(s1.cid).total_m, 150), JSON.stringify(of(s1.cid)));
     check('slagnumret skiljer två slag med samma värden: rätt slag får referensen, "1,0 L" är vänster', of(s2.cid) && near(of(s2.cid).carry_m, 158.4) && of(s2.cid).side_m < 0 && !of(s3.cid) && !of(s4.cid) && !of(s5.cid), JSON.stringify(refs.map(x => x.shot_client_id)));
-    check('ett äldre slag (utan mätlista, äldre bollflykt) får också sin referens', of(older.cid) && near(of(older.cid).carry_m, 120) && of(older.cid).total_m === null);
+    check('ett äldre slag (utan rådata, äldre bollflykt) får sin referens, också från en numrerad rad', of(older.cid) && near(of(older.cid).carry_m, 120) && of(older.cid).total_m === null);
     r = await api('POST', '/api/references/import', body, A);
     check('samma fil igen: inget sparas två gånger', r.status === 200 && r.json.stored === 0 && r.json.already === 3 && (await refsOf(A.id)).length === 4, JSON.stringify(r.json));
     r = await api('POST', '/api/references/import', Object.assign({}, body, { csv: 'Ball Speed,Launch Angle,Spin Rate,Carry\n120,16,7000,150\n' }), A);

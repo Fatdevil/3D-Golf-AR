@@ -47,6 +47,11 @@ const plain = 'Ball Speed,Launch Angle,Spin Rate,Carry (m),Side (m)\n120,16,7000
 check('en sidled utan L/R följer den angivna konventionen', R.parseImport(plain, { sideSign: 'right_positive' }).rows[0].side.value === 5 &&
   R.parseImport(plain, { sideSign: 'left_positive' }).rows[0].side.value === -5);
 check('ett uttryckligt L/R gäller oavsett konvention', R.parseImport(csvYd, { sideSign: 'left_positive' }).rows[0].side.value === 4.2);
+check('en enhet filen anger men importen inte tar (fot) avvisas, också när spelaren valt en reservenhet', R.parseImport('Ball Speed,Launch Angle,Spin Rate,Carry (ft)\n120,16,7000,450\n', { distanceUnit: 'm' }).refused === 'unsupported_distance_unit');
+check('reservenheten gäller bara kolumner utan enhet: carry i yards ur filen, sidled utan enhet i meter', (function () {
+  const x = R.parseImport('Ball Speed,Launch Angle,Spin Rate,Carry (yds),Side\n120,16,7000,165,2 R\n', { distanceUnit: 'm' });
+  return !x.refused && x.rows[0].carry.unit === 'yd' && x.rows[0].side.unit === 'm';
+})());
 check('en export från spelets egen rangesession avvisas (carry från spelets fysik)', R.parseImport('#,carry_m,ball_speed_mph,launch_deg,spin_rpm,carry_from\n1,150,120,16,7000,physics\n', {}).refused === 'game_export');
 check('en fil utan bollfart eller carry avvisas', R.parseImport('Foo,Bar\n1,2\n', {}).refused === 'no_columns');
 check('en tom fil avvisas', R.parseImport('', {}).refused === 'empty_file');
@@ -70,6 +75,8 @@ m = R.match([row(2, 120, 16, 7000, { shotNumber: 7 })], [shot('a', 120, 16, 7000
 check('slagnumret skiljer två slag med samma värden åt', m.matched.length === 1 && m.matched[0].cid === 'a', m);
 m = R.match([row(2, 120, 16, 7000, { shotNumber: 9 })], [shot('a', 120, 16, 7000, { raw: { shotNumber: 8 } })]);
 check('olika slagnummer: inte samma slag', !m.matched.length && m.unmatched[0].reason === 'no_candidate', m);
+m = R.match([row(2, 120, 16, 7000, { shotNumber: 5 })], [shot('a', 120, 16, 7000, { raw: undefined })]);
+check('en numrerad rad mot ett äldre slag utan rådata (inget slagnummer): matchas på värdena', m.matched.length === 1 && m.matched[0].cid === 'a', m);
 m = R.match([row(2, 120, 16, 7000)], [shot('a', 120, 16, 7000, { source: 'SIM' })]);
 check('svingmätarslag matchas aldrig', !m.matched.length);
 m = R.match([row(2, 120, 16, 7000, { hlaDeg: 5 })], [shot('a', 120, 16, 7000, { hla: 1 })]);

@@ -63,7 +63,11 @@ function parseImport(text, opts) {
   const p = V.parseCsv(text, { name: opts.name || 'import' });
   if (p.refused) return { rows: [], skipped: p.skipped, refused: /physics/.test(p.refused) ? 'game_export' : 'no_columns', units: p.units || {} };
   const fallback = UNITS[opts.distanceUnit] ? opts.distanceUnit : null;
-  const unit = function (k) { const u = p.units && p.units[k]; return UNITS[u] ? u : fallback; };
+  // the player's unit is only for a column that says none: a unit the file names but this import does not take (feet, a speed) refuses the file
+  const named = function (k) { return p.columns[k] !== undefined && p.units && p.units[k] ? p.units[k] : null; };
+  const odd = ['carry', 'total', 'side'].filter(function (k) { return named(k) && !UNITS[named(k)]; });
+  if (odd.length) return { rows: [], skipped: p.skipped, refused: 'unsupported_distance_unit', units: { carry: named('carry'), total: named('total'), side: named('side') } };
+  const unit = function (k) { return named(k) || fallback; };
   const units = { carry: unit('carry'), total: p.columns.total !== undefined ? unit('total') : null, side: p.columns.side !== undefined ? unit('side') : null };
   if (!units.carry || (p.columns.total !== undefined && !units.total) || (p.columns.side !== undefined && !units.side)) {
     return { rows: [], skipped: p.skipped, refused: 'unknown_distance_unit', units: units };
@@ -91,7 +95,7 @@ function fits(row, shot) {
       Math.abs(row.spinRpm - shot.spin) > Math.max(TOL.spinAbs, TOL.spinRel * row.spinRpm)) return false;
   if (num(row.hlaDeg) !== null && num(shot.hla) !== null && !(shot.estimated || []).includes('azimDeg') && Math.abs(row.hlaDeg - shot.hla) > TOL.hlaDeg) return false;
   // the launch monitor's own shot number, when both have it, must be the same
-  const sn = shot.raw && num(shot.raw.shotNumber);
+  const sn = shot.raw ? num(shot.raw.shotNumber) : null;   // a shot without its raw message (an older one) has no number: null, never undefined
   if (num(row.shotNumber) !== null && sn !== null && row.shotNumber !== sn) return false;
   return true;
 }
