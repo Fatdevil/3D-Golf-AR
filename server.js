@@ -13,6 +13,7 @@ const TrainingStats = require('./training-stats');
 const CombineCore = require('./combine-core');
 const ServerPhysics = require('./server-physics');
 const ShotReference = require('./shot-reference');
+const ShotDiagnostics = require('./shot-diagnostics');
 // the ball flight's version of this build (physics.js VERSION, recorded with its fingerprint by tests/test_physics_version.js): Training Lab's
 // distances come only from shots of this flight
 const PHYSICS_VERSION = (function () { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'physics-validation', 'physics-version.json'), 'utf8')).version; } catch (e) { return null; } })();
@@ -1847,7 +1848,7 @@ app.get('/api/combine/results', requireDB, authMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Database error' });
     }
 });
-// ---- Golf Combine validation: reference values (shot-reference.js) ----
+// ---- Golf Combine validation: reference values and the diagnosis report (shot-reference.js, shot-diagnostics.js) ----
 async function insertReference(db, account, cid, origin, ref, importId, line) {
     const r = await db.query(`INSERT INTO shot_references (player_id, shot_client_id, origin, source, quality, carry_m, total_m, side_m, orig, import_id, import_line)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (player_id, shot_client_id, origin, source) DO NOTHING RETURNING id`,
@@ -1895,6 +1896,52 @@ app.post('/api/references/import', requireDB, authMiddleware, async (req, res) =
                    from: span.from.toISOString(), to: span.to.toISOString() });
     } catch(err) {
         console.error('POST /api/references/import error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// The validation report (shot-diagnostics.js): this player's launch monitor shots in a time span (or of one Golf Combine test), with the
+// server's own ball flight, the references and the tests. format=csv: one row per shot and reference. It only reads.
+const DIAG_MAX = 3000;
+const diagFlight = { standard: ServerPhysics.standard, landing: ServerPhysics.landing, misread: ServerPhysics.misread, version: ServerPhysics.version };
+app.get('/api/diagnostics', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const account = await accountOf(req.userId);
+        const test = typeof req.query.test === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(req.query.test) ? req.query.test : null;
+        const span = test ? null : spanOf(req.query);
+        if (!test && !span) return res.status(400).json({ error: 'from / to: a time span of at most 400 days, or test' });
+        const r = test
+            ? await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND combine->>'test' = $2 ORDER BY shot_at, id`, [account, test])
+            : await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND source = 'LM' AND shot_at >= $2 AND shot_at <= $3 ORDER BY shot_at, id LIMIT $4`,
+                               [account, span.from, span.to, DIAG_MAX + 1]);
+        const rows = r.rows.slice(0, DIAG_MAX), shots = rows.map(ShotBank.toClient);
+        const cids = shots.map(function (s) { return s.cid; });
+        const refRows = cids.length ? (await pool.query('SELECT * FROM shot_references WHERE player_id = $1 AND shot_client_id = ANY($2) ORDER BY id', [account, cids])).rows : [];
+        const refsBy = {};
+        refRows.forEach(function (x) { (refsBy[x.shot_client_id] = refsBy[x.shot_client_id] || []).push(x); });
+        const diags = shots.map(function (s) { return ShotDiagnostics.shotDiag(s, refsBy[s.cid], diagFlight); });
+        if (req.query.format === 'csv') {
+            res.set('Content-Type', 'text/csv; charset=utf-8');
+            res.set('Content-Disposition', 'attachment; filename="golf-validation-' + new Date().toISOString().slice(0, 10) + '.csv"');
+            return res.send(ShotDiagnostics.toCsv(diags));
+        }
+        // the Golf Combine tests among these shots, worked out again beside what was stored
+        const byTest = {};
+        shots.forEach(function (s) { if (s.combine && s.combine.test) (byTest[s.combine.test] = byTest[s.combine.test] || []).push(s); });
+        const testIds = Object.keys(byTest);
+        const stored = testIds.length ? (await pool.query('SELECT * FROM combine_results WHERE player_id = $1 AND test_id = ANY($2)', [account, testIds])).rows : [];
+        const storedBy = {};
+        stored.forEach(function (x) { storedBy[x.test_id] = combineRow(x); });
+        const tests = testIds.map(function (id) {
+            const list = byTest[id], level = list[0].combine.level;
+            return ShotDiagnostics.testDiag(id, list.filter(function (s) { return s.combine.level === level; }), level, storedBy[id] || null, diagFlight);
+        });
+        const all = (await pool.query('SELECT * FROM combine_results WHERE player_id = $1 ORDER BY finished_at DESC LIMIT 500', [account])).rows.map(combineRow);
+        const now = ServerPhysics.version();
+        res.json({ generated: new Date().toISOString(), physics: now, conventions: ShotDiagnostics.CONVENTIONS,
+                   span: span ? { from: span.from.toISOString(), to: span.to.toISOString() } : null, test: test, truncated: r.rows.length > DIAG_MAX,
+                   summary: ShotDiagnostics.summary(diags, all, now), tests: tests, shots: diags });
+    } catch(err) {
+        console.error('GET /api/diagnostics error:', err);
         res.status(500).json({ error: 'Database error' });
     }
 });

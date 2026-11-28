@@ -55,6 +55,8 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `combine-core.js` | Golf Combine 9: nivåer, mål, poäng, regler för officiellt och omslag, historik (delas av server och sida) |
 | `combine-play.js` | Golf Combine 9 på rangen: nivåval, mål för mål, omslag, resultatkortet |
 | `server-physics.js` | Bollflykten på servern (physics.js i en sandlåda): var ett slag landar i standardförhållanden, för Combine-poängen |
+| `shot-reference.js` | Referensvärden: launch monitorns egen carry, total och sidled, med slaget från bryggan eller importerade ur en CSV från launch monitorns app, och säker matchning mot slagbanken |
+| `shot-diagnostics.js` | Valideringsrapporten: per slag, per Combine-test och över många test, spelets bollflykt mot launch monitorns egna värden (läser bara) |
 | `training-lab.js` | Training Lab-sidan (`training.html`): visar statistiken med antal slag, varningar och vad som är uppmätt |
 | `physics.js` | Ballistisk fysikmotor (drag, spin, bounce, roll) |
 | `arcade.css` | Extraherad CSS |
@@ -595,6 +597,30 @@ Ett standardiserat träningstest med nio fasta mål och poäng 0–100. Resultat
 - **Tester:**
   - `tests/test_combine.js`: kända poäng, regler och historik.
   - `tests/e2e/combine-e2e.js`: servern räknar själv, ett test sparas en gång, omslag, uppskattade värden, åtkomst, två enheter, rangen med offline och resultatkort, och Training Lab.
+
+## Golf Combine – validering mot verkliga slag (2026-11)
+Svarar på frågan hur många meter fel spelets bollflykt räknar vid till exempel 30, 50, 100 och 150 m, med riktiga slag. Bollfysiken, poängmodellen och Combine-reglerna ändras inte. Konventioner och regler i detalj: `docs/combine-validation.md`.
+- **Två delar.** Teknisk validering visar att mätdata kommer fram, att poängen följer reglerna och att inget försvinner. Fysikalisk validering jämför bollflykten med launch monitorns egna värden.
+- **Referensvärden** (`shot-reference.js`, tabellen `shot_references`), sparade för sig och aldrig blandade med spelets egna beräkningar:
+  - **Från bryggan** (`origin = live`): GSPro Open Connect skickar bara utgångsvärden, men har ett valfritt fält `BallData.CarryDistance` (yards). Bryggan (`gspro-bridge/protocol.js`) lägger det i `lmResult`, utanför `measured`. Slaget skickar det som `ref`. Total och sidled finns inte i Open Connect. Vilka launch monitorer som fyller i fältet är inte kontrollerat än.
+  - **Import** (`origin = import`, `POST /api/references/import`): en CSV från launch monitorns app, läst med samma tolk som fysikvalideringen (`physics-validation/validate.js`, utökad med total, sidled och slagnummer). En rad kopplas till ett slag bara när bollfart, utgångsvinkel och spinn (startriktning och slagnummer när båda har dem) passar exakt ett slag, och inget annat slag i filen passar samma slag. Andra rader returneras med skäl: `no_candidate`, `ambiguous` eller `shared`. En avståndsenhet gissas aldrig: filen avvisas om varken rubrik eller spelare anger den. Sidled skrivet som tal utan L/R följer konventionen spelaren väljer.
+  - Varje värde sparas som det kom (värde och enhet) och i meter. Sidled är höger positiv. En referens skrivs en gång per slag, ursprung och källa. En felaktig referens från bryggan hoppas över, men slaget sparas ändå.
+  - **Två kvaliteter**, som aldrig blandas: `lm_calculated` är launch monitorns egen modell av flykten, inte var bollen landade. `measured_landing` är en uppmätt landningspunkt.
+  - Vid koppling av enheter följer referenserna med slagen.
+- **Diagnosen** (`shot-diagnostics.js`, `GET /api/diagnostics?from&to` eller `?test=`, `&format=csv`) läser bara:
+  - **Per slag:** utgångsvärden och bryggans mätlista, vad som inte var uppmätt, felmätning (smash factor), fysikversion (slagets och serverns), serverns egen landning (radiell carry, längs mållinjen, sidled, total) och enhetens egna värden bredvid, som aldrig används. Referenserna visas med skillnad: spelet minus referensen.
+  - **Vad jämförs:** radiell carry mot radiell carry och sidled vid landning mot sidled. Längs mållinjen är Combine-poängens storhet och jämförs inte. Total visas för sig. Bara slag med alla fem utgångsvärden uppmätta och utan felmätning jämförs. Uppskattade värden, slag utan mätlista och felmätningar räknas upp för sig.
+  - **Per Combine-test:** testet räknas om med serverns bollflykt och jämförs med det sparade (total, officiellt, fysikversion). Varje mål visar slagen med roll (räknat, giltigt omslag, extra slag som inte räknas), omslagsmärkningar som inte gäller, saknade mål och vilka värden som gör testet till träning.
+  - **Över många test:** fel per kvalitet och band av referensens carry (0–40, 40–60, 60–80, 80–120, 120–180, 180–250, 250+ m): antal, medel, median, spridning och medel av absolutfelet för carry och sidled. Upprepbarhet per nivå: spridningen av totalen och av varje måls fel över officiella test med dagens fysikversion.
+  - **Export:** JSON (hela rapporten) och CSV (en rad per slag och referens, enheter i rubrikerna). En textcell som börjar med `=`, `+`, `-` eller `@` får en apostrof, så den aldrig blir en formel.
+- **Training Lab** visar kortet Validering av bollflykten med felen per band, det som inte jämförs, upprepbarheten, nedladdning och import (`training-lab.js`, `validationHtml`).
+- **Tester:**
+  - `tests/test_shot_reference.js`: referensen från bryggan, blandade enheter, L/R, okänd enhet och matchningens regler.
+  - `tests/test_shot_diagnostics.js`: rätt storheter jämförs, vad som inte jämförs, banden, ett Combine-test räknat igen, upprepbarhet och CSV.
+  - `tests/test_gspro_bridge.js`: `CarryDistance` blir `lmResult`.
+  - `tests/test_training_lab.js`: kortet.
+  - `tests/e2e/validation-e2e.js`: hela kedjan mot riktig server och Postgres och i `training.html`, inklusive att importen och diagnosen inte ändrar något slag eller resultat.
+  - `arcade-smoke`: referensen följer med ett slag i spelet, skild från rådata.
 
 ## Training Lab · Club Intelligence (2026-11)
 Spelarens klubbor ur slagbanken, från alla enheter, och hur de utvecklas. Sidan `training.html` nås från rangemenyn i `arcade_hub.html` och från rangepanelen (📈 Training Lab).
