@@ -2,7 +2,7 @@
 // GSPro Open Connect v1: the parts of the protocol that need no network, so they can be tested.
 //   createFramer()   cuts the TCP byte stream into JSON messages (several per packet, or one split over several packets)
 //   normalizeShot()  turns a GSPro message into the shot the game's triggerRealShot() takes (missing values null, `measured` = what the
-//                    message had), or null for heartbeats and non-shots
+//                    message had, `lmResult` = the launch monitor's own carry when it sent one), or null for heartbeats and non-shots
 //   replies()        what the bridge answers to every message
 
 const MAX_BUFFER = 1024 * 1024;   // a message is a few hundred bytes; a megabyte of unfinished text is garbage
@@ -96,6 +96,12 @@ function normalizeShot(data) {
   // which launch monitor and which of its shots (traceable shot data); absent when the message has none
   shot.deviceId = typeof data.DeviceID === 'string' && data.DeviceID.trim() ? data.DeviceID.trim().slice(0, 64) : null;
   shot.shotNumber = num(data.ShotNumber) !== undefined ? num(data.ShotNumber) : null;
+  // What the launch monitor itself made of the shot, kept apart from the launch values: Open Connect v1 has an optional BallData.CarryDistance
+  // (yards), the carry the launch monitor's own software worked out. It is a reference for the game's ball flight, never an input to it,
+  // and it is not a measured landing point (the message does not say how it was got). Open Connect has no total and no side. Absent: null.
+  // Not yet checked against messages from real launch monitors: which of them fill it in is to be found out (docs/combine-validation.md).
+  const lmCarry = num(ball.CarryDistance);
+  shot.lmResult = lmCarry !== undefined && lmCarry > 0 ? { source: 'gspro-openconnect', quality: 'lm_calculated', carry: { value: lmCarry, unit: 'yd' } } : null;
   return shot;
 }
 

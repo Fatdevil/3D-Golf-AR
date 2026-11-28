@@ -2220,7 +2220,9 @@ function serve() {
       const last = window.RangeSession.shots().slice(-1)[0];
       const before = { strokes: window.players[0].strokes, shots: window.RangeSession.shots().length, raw: last && last.raw, carryStd: last && last.carryStd };
       window.triggerRealShot({ ballSpeedMph: 70, launchAngleDeg: 1.5, totalSpinRpm: 2500, spinAxisDeg: 0, azimDeg: 0, clubSpeedMph: 75, clubPathDeg: 0, faceToPathDeg: 0, clubAoADeg: -6,
-        measured: ['ballSpeedMph', 'launchAngleDeg', 'totalSpinRpm', 'spinAxisDeg', 'azimDeg', 'clubSpeedMph', 'clubPathDeg', 'faceToPathDeg', 'clubAoADeg'], isLiveData: true });
+        measured: ['ballSpeedMph', 'launchAngleDeg', 'totalSpinRpm', 'spinAxisDeg', 'azimDeg', 'clubSpeedMph', 'clubPathDeg', 'faceToPathDeg', 'clubAoADeg'], isLiveData: true,
+        lmResult: { source: 'gspro-openconnect', quality: 'lm_calculated', carry: { value: 41.5, unit: 'yd' } } });
+      before.prevRef = last ? last.ref : 'none';
       return before;
     });
     await rp.waitForFunction(function (n) { window.skipFlight(); return window.players[0].strokes >= n + 1; }, rv0.strokes, { timeout: 120000, polling: 500 });
@@ -2231,6 +2233,7 @@ function serve() {
       const last = window.RangeSession.shots().slice(-1)[0];
       const flag = document.querySelector('#range-session tbody tr.rs-last .rs-flag');
       const out = { shots: window.RangeSession.shots().length, flags: last && last.review && last.review.flags, carryStd: last && last.carryStd, bag: bagN(),
+                    ref: last && last.ref, rawRef: !!(last && last.raw && last.raw.lmResult),
                     flag: flag ? flag.textContent : null, title: flag ? flag.title : null };
       if (flag) flag.click();
       const after = window.RangeSession.shots().slice(-1)[0], flag2 = document.querySelector('#range-session tbody tr.rs-last .rs-flag');
@@ -2239,6 +2242,9 @@ function serve() {
     });
     checks.push({ name: 'shot review: the launch monitor\'s message is kept as it came (the older bridge\'s spin of 0 stays 0) and the carry in standard conditions is worked out',
       ok: !!rv0.raw && rv0.raw.totalSpinRpm === 0 && rv0.raw.ballSpeedMph === 90 && rv0.raw.measured === undefined && rv0.carryStd > 30, detail: JSON.stringify(rv0) });
+    checks.push({ name: 'reference values: the launch monitor\'s own carry (the bridge\'s lmResult) goes with the shot apart from its raw message, a shot without one has none',
+      ok: rv.ref && rv.ref.carry && rv.ref.carry.value === 41.5 && rv.ref.carry.unit === 'yd' && rv.ref.quality === 'lm_calculated' && !rv.rawRef && rv0.prevRef === undefined,
+      detail: JSON.stringify({ ref: rv.ref, rawRef: rv.rawRef, prev: rv0.prevRef }) });
     checks.push({ name: 'shot review: a topped shot (1.5° with the 7-iron) is listed with ⚠ and kept out of the bag; tapping ⚠ counts it (✓) and books it',
       ok: rv.shots === rv0.shots + 1 && Array.isArray(rv.flags) && rv.flags.indexOf('topped') >= 0 && rv.flag === '⚠' && /topp|Topp|topped/.test(rv.title || '') && rv.bag === 2 &&
           rv.accepted === true && rv.bagAfter === 3 && rv.flag2 === '✓', detail: JSON.stringify(rv) });

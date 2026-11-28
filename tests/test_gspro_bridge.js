@@ -84,6 +84,17 @@ const shot = (n, ball) => ({
   const withClub = shot(8); withClub.ClubData = { Speed: 100, Path: 2, FaceToTarget: 3, AngleOfAttack: -4 };
   s = P.normalizeShot(withClub);
   check('klubbdata', s && s.clubSpeedMph === 100 && s.clubPathDeg === 2 && s.faceToPathDeg === 1 && s.clubAoADeg === -4);
+  // the launch monitor's own carry (Open Connect BallData.CarryDistance, yards): kept apart as a reference, never a launch value
+  s = P.normalizeShot(shot(11, { CarryDistance: 152.4 }));
+  check('CarryDistance blir launch monitorns egen carry (yd, LM-beräknad), inte ett uppmätt utgångsvärde',
+    s && s.lmResult && s.lmResult.carry.value === 152.4 && s.lmResult.carry.unit === 'yd' && s.lmResult.quality === 'lm_calculated' && s.lmResult.source === 'gspro-openconnect' &&
+    s.measured.indexOf('CarryDistance') < 0 && !s.lmResult.total && !s.lmResult.side, s && JSON.stringify(s.lmResult));
+  s = P.normalizeShot(shot(12));
+  check('utan CarryDistance: ingen referens (null), aldrig 0', s && s.lmResult === null);
+  s = P.normalizeShot(shot(13, { CarryDistance: 0 }));
+  check('CarryDistance 0 (inget värde) blir ingen referens', s && s.lmResult === null);
+  s = P.normalizeShot(shot(14, { CarryDistance: '148.0' }));
+  check('CarryDistance som text', s && s.lmResult && s.lmResult.carry.value === 148);
   const rep = P.replies();
   check('kvitto 200 + 201', rep[0].Code === 200 && rep[1].Code === 201);
 }
