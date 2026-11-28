@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=39">
+<link rel="stylesheet" href="arcade.css?v=41">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -4203,8 +4203,10 @@
 <script src="lm-shot-quality.js?v=2"></script>   <!-- what a launch-monitor shot really measured: refused, measured, estimated, missing -->
 <script src="lm-shot-review.js?v=2"></script>   <!-- a range shot before the bag: standard distances, mishit, misread, wrong club, the raw message -->
 <script src="arcade-bag.js?v=5"></script>
-<script src="shot-sync.js?v=2"></script>   <!-- the shot bank: every range shot to the server, offline outbox, the bag from all devices -->
-<script src="arcade-range-session.js?v=17"></script>
+<script src="shot-sync.js?v=2"></script>
+<script src="combine-core.js?v=1"></script>   <!-- Golf Combine 9: targets, score, official rules (shared with the server) -->
+<script src="combine-play.js?v=2"></script>   <!-- Golf Combine 9 in the range panel -->   <!-- the shot bank: every range shot to the server, offline outbox, the bag from all devices -->
+<script src="arcade-range-session.js?v=18"></script>
 <script src="arcade-range-practice.js?v=8"></script>
 <script src="arcade-range-template.js?v=1"></script>
 <script src="arcade-flight-cam.js?v=2"></script>
@@ -6580,8 +6582,10 @@
         if (!window.aimTarget) window.aimTarget = new THREE.Vector3();
         if (resetAim || !window.aimManual) {
             window.aimManual = false;
+            // the pin, a Golf Combine target's distance (combine-play.js), or straight down the range
+            let far = window._combineAimDist > 0 ? window._combineAimDist : 200;
             if (home.aim) window.aimTarget.set(home.aim.x, home.aim.y, home.aim.z);
-            else window.aimTarget.set(home.x + Math.sin(dir) * 200, home.y, home.z + Math.cos(dir) * 200);
+            else window.aimTarget.set(home.x + Math.sin(dir) * far, home.y, home.z + Math.cos(dir) * far);
         }
     };
     // RangePractice tells where the ball is hit from now (null: the Range Tee again): which hole's cup counts, the distance marks (they

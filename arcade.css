@@ -830,6 +830,58 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #range-session .rs-bank-warn { font-size: 11px; color: #fca5a5; }
   #range-session .rs-bank-why { color: #94a3b8; }
   #range-session .rs-bank-alert { padding: 4px 12px 0; }
+  /* Golf Combine 9 (combine-play.js) */
+  #range-session .cb { padding: 6px 4px 10px; display: flex; flex-direction: column; gap: 8px; }
+  #range-session .cb-levels { display: flex; flex-direction: column; gap: 6px; }
+  #range-session .cb-levels button { display: flex; justify-content: space-between; align-items: center; min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 12px; cursor: pointer; }
+  #range-session .cb-levels button[aria-checked="true"] { border-color: #fbbf24; background: #3a2f0b; }
+  #range-session .cb-levels button span { color: #94a3b8; font-size: 11px; }
+  #range-session .cb-actions { display: flex; gap: 6px; }
+  #range-session .cb-actions button { flex: 1; min-height: 32px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: #1e293b; color: #e2e8f0; font-size: 12px; font-weight: 700; cursor: pointer; }
+  #range-session .cb-actions .cb-go { background: #fbbf24; color: #0f172a; border-color: #fbbf24; }
+  #range-session .cb-actions .cb-cancel { color: #94a3b8; font-weight: 400; }
+  #range-session .cb-target { display: flex; justify-content: space-between; align-items: baseline; }
+  #range-session .cb-target span { color: #94a3b8; font-size: 12px; }
+  #range-session .cb-target b { font-size: 26px; font-weight: 900; color: #fbbf24; font-variant-numeric: tabular-nums; }
+  #range-session .cb-dots { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; }
+  #range-session .cb-dot { height: 22px; border-radius: 5px; background: #1e293b; font-size: 10px; display: flex; align-items: center; justify-content: center; color: #e2e8f0; font-variant-numeric: tabular-nums; }
+  #range-session .cb-dot.cb-now { outline: 2px solid #fbbf24; }
+  #range-session .cb-last { font-size: 12px; color: #cbd5e1; }
+  #range-session .cb-warn { font-size: 11px; color: #fca5a5; }
+  #range-session .cb-card { background: #0f172a; border: 1px solid rgba(251,191,36,0.35); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  #range-session .cb-card-head { display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; font-weight: 700; }
+  #range-session .cb-badge { font-size: 10px; padding: 2px 6px; border-radius: 999px; }
+  #range-session .cb-official { background: #14532d; color: #86efac; }
+  #range-session .cb-practice { background: #3f3f46; color: #e4e4e7; }
+  #range-session .cb-total b { font-size: 34px; font-weight: 900; color: #fbbf24; font-variant-numeric: tabular-nums; }
+  #range-session .cb-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+  #range-session .cb-table td, #range-session .cb-table th { padding: 3px 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  #range-session .cb-table td:first-child, #range-session .cb-table th:first-child { text-align: left; }
+  #range-session .cb-table tr.cb-worst td { color: #fca5a5; font-weight: 700; }
+  #range-session .cb-costly { font-size: 12px; color: #fde68a; }
+  #range-session .cb-note { font-size: 11px; color: #94a3b8; }
+  /* the Combine result card over the range (combine-play.js overlay) */
+  #cb-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 200; pointer-events: none; padding: 16px; }
+  #cb-overlay .cb-overlay-box { position: relative; pointer-events: auto; width: min(420px, 100%); max-height: calc(100vh - 32px); overflow-y: auto;
+    background: rgba(15,23,42,0.97); border: 1px solid rgba(251,191,36,0.45); border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.55); padding: 16px;
+    color: #e2e8f0; font-family: 'Inter', sans-serif; font-size: 13px; }
+  #cb-overlay .cb-close { position: absolute; top: 8px; right: 10px; width: 32px; height: 32px; border: none; background: transparent; color: #94a3b8; font-size: 22px; cursor: pointer; }
+  #cb-overlay .cb-card { display: flex; flex-direction: column; gap: 8px; }
+  #cb-overlay .cb-card-head { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #94a3b8; font-weight: 700; padding-right: 32px; }
+  #cb-overlay .cb-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+  #cb-overlay .cb-official { background: #14532d; color: #86efac; }
+  #cb-overlay .cb-practice { background: #3f3f46; color: #e4e4e7; }
+  #cb-overlay .cb-total b { font-size: 52px; font-weight: 900; color: #fbbf24; font-variant-numeric: tabular-nums; line-height: 1; }
+  #cb-overlay .cb-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  #cb-overlay .cb-table td, #cb-overlay .cb-table th { padding: 5px 6px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  #cb-overlay .cb-table td:first-child, #cb-overlay .cb-table th:first-child { text-align: left; }
+  #cb-overlay .cb-table th { color: #94a3b8; font-size: 11px; }
+  #cb-overlay .cb-table tr.cb-worst td { color: #fca5a5; font-weight: 700; }
+  #cb-overlay .cb-costly { font-size: 13px; color: #fde68a; background: rgba(251,191,36,0.08); border-radius: 8px; padding: 8px 10px; }
+  #cb-overlay .cb-note { font-size: 11px; color: #94a3b8; }
+  #cb-overlay .cb-actions { display: flex; gap: 8px; }
+  #cb-overlay .cb-actions button { flex: 1; min-height: 38px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: #1e293b; color: #e2e8f0; font-weight: 700; cursor: pointer; }
+  #cb-overlay button:focus-visible { outline: 2px solid #fbbf24; outline-offset: 2px; }
   @media (max-width: 768px) {
       #range-session { top: auto; bottom: 380px; right: 16px; max-height: 40vh; }
   }

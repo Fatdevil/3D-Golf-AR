@@ -30,7 +30,10 @@
             pending: '{n} slag väntar på uppladdning från den här enheten och ingår inte ännu.',
             offline: 'Servern går inte att nå. Statistiken visas när enheten är ansluten.',
             blocked: 'Den här enheten tillhör ett annat konto: koppla den under ☁ Slagbank på rangen.',
-            loading: 'Hämtar…', back: '← Tillbaka', total: '{n} slag i slagbanken'
+            loading: 'Hämtar…', back: '← Tillbaka', total: '{n} slag i slagbanken',
+            cb: { title: 'Golf Combine 9', none: 'Inget genomfört test ännu. Starta det på rangen, i panelens flik 🏆 Combine.', latest: 'Senaste', best: 'Personbästa', last5: 'De fem senaste',
+                  levels: { beginner: 'Nybörjare', standard: 'Standard', advanced: 'Avancerad' }, costly: 'Kostade mest senast: {list}', practice: '{n} träningsresultat (inte officiella) räknas inte här.',
+                  note: 'Officiella resultat: alla mätvärden uppmätta, poängen räknad av servern. Jämför bara inom samma nivå.' }
         },
         en: {
             title: 'Training Lab', sub: 'Your game, club by club, from your shot bank on all your devices.',
@@ -50,7 +53,10 @@
             pending: '{n} shots are waiting to upload from this device and are not in yet.',
             offline: 'The server cannot be reached. The statistics show when the device is connected.',
             blocked: 'This device belongs to another account: link it under ☁ Shot bank on the range.',
-            loading: 'Loading…', back: '← Back', total: '{n} shots in the shot bank'
+            loading: 'Loading…', back: '← Back', total: '{n} shots in the shot bank',
+            cb: { title: 'Golf Combine 9', none: 'No test finished yet. Start one on the range, in the panel\'s 🏆 Combine tab.', latest: 'Latest', best: 'Personal best', last5: 'The last five',
+                  levels: { beginner: 'Beginner', standard: 'Standard', advanced: 'Advanced' }, costly: 'Cost the most last time: {list}', practice: '{n} practice results (not official) are not counted here.',
+                  note: 'Official results: every value measured, the score worked out by the server. Compare only within one level.' }
         }
     };
     function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -100,6 +106,34 @@
         return 'V' + (1 + Math.round(((d - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7));
     }
 
+    // Golf Combine 9: per level the latest result, the personal best and the last five (official only), from /api/combine/results
+    function combineHtml(cb, L, state) {
+        const T = L.cb, levels = cb && cb.levels ? cb.levels : {}, order = ['beginner', 'standard', 'advanced'];
+        const any = order.some(function (l) { return levels[l] && levels[l].count; });
+        let h = '<section class="tl-card tl-combine" data-tl="combine"><h2>' + esc(T.title) + '</h2>';
+        if (!any) h += '<p class="tl-muted">' + esc(T.none) + '</p>';
+        order.forEach(function (l) {
+            const x = levels[l];
+            if (!x || !x.count) return;
+            const day = function (t) { return new Date(t).toISOString().slice(0, 10); };
+            h += '<div class="tl-cb-level" data-level="' + l + '"><div class="tl-cb-head"><b>' + esc(T.levels[l]) + '</b><span>' + x.count + '</span></div>';
+            h += '<div class="tl-cb-row"><div><span>' + esc(T.latest) + '</span><b data-cb="latest">' + esc(f(x.latest.total, 1)) + '</b><small>' + esc(day(x.latest.finished)) + '</small></div>' +
+                 '<div><span>' + esc(T.best) + '</span><b data-cb="best">' + esc(f(x.best.total, 1)) + '</b><small>' + esc(day(x.best.finished)) + '</small></div></div>';
+            h += '<div class="tl-cb-bars" aria-label="' + esc(T.last5) + '">' + x.last5.map(function (r) {
+                return '<span title="' + esc(day(r.finished) + ': ' + f(r.total, 1)) + '"><i style="height:' + Math.max(4, Math.round(r.total * 0.5)) + 'px"></i><em>' + Math.round(r.total) + '</em></span>';
+            }).join('') + '</div>';
+            if (x.latest.worst && x.latest.worst.length && x.latest.shots) {
+                const k = state.meters ? 1 : YD, u = state.meters ? 'm' : 'yd';
+                h += '<div class="tl-muted" data-cb="costly">' + esc(fill(T.costly, { list: x.latest.worst.map(function (i) { return Math.round(x.latest.shots[i].target * k) + ' ' + u; }).join(', ') })) + '</div>';
+            }
+            h += '</div>';
+        });
+        const practice = (cb && cb.results || []).filter(function (r) { return !r.official; }).length;
+        if (practice) h += '<p class="tl-muted">' + esc(fill(T.practice, { n: practice })) + '</p>';
+        if (any) h += '<p class="tl-muted">' + esc(T.note) + '</p>';
+        return h + '</section>';
+    }
+
     // view(data, state): the page's content. data: /api/training/clubs; state: { lang, meters, club, period, pending, error }
     function view(data, state) {
         const L = state.lang === 'en' ? TXT.en : TXT.sv, k = state.meters ? 1 : YD, u = state.meters ? 'm' : 'yd';
@@ -110,6 +144,7 @@
         if (state.pending) h += '<div class="tl-banner" role="status">' + esc(fill(L.pending, { n: state.pending })) + '</div>';
         if (state.error) return h + '<div class="tl-banner tl-error" role="alert">' + esc(state.error === 'blocked' ? L.blocked : L.offline) + '</div>';
         if (!data) return h + '<div class="tl-empty">' + esc(L.loading) + '</div>';
+        if (state.combine) h += combineHtml(state.combine, L, state);
         const clubs = (data.clubs || []).filter(function (c) { return c.now.shots > 0; });
         if (!clubs.length) return h + '<div class="tl-empty">' + esc(data.total ? L.noData : L.empty) + '</div>';
         const pick = clubs.filter(function (c) { return c.club === state.club; })[0] || clubs.slice().sort(function (a, b) { return b.now.valid - a.now.valid; })[0];
@@ -154,7 +189,7 @@
         return h + '</section>';
     }
 
-    const api = { view: view, trendSvg: trendSvg, weekLabel: weekLabel, TXT: TXT };
+    const api = { view: view, trendSvg: trendSvg, weekLabel: weekLabel, combineHtml: combineHtml, TXT: TXT };
 
     // ── In the page ──
     if (typeof document !== 'undefined' && document.getElementById && typeof root.fetch === 'function') {
@@ -184,6 +219,13 @@
                 const j = await res.json();
                 if (mine !== seq) return;
                 if (!res.ok || !j || !Array.isArray(j.clubs) || j.period !== state.period) throw new Error('no data');
+                // Golf Combine 9 results (the same for every period)
+                try {
+                    const rc = await root.fetch('/api/combine/results', { headers: id ? { 'x-user-id': id } : {} });
+                    const jc = rc.ok ? await rc.json() : null;
+                    if (mine !== seq) return;
+                    state.combine = jc && jc.levels ? jc : null;
+                } catch (e) { state.combine = null; }
                 data = j;
             } catch (e) { if (mine !== seq) return; state.error = 'offline'; }
             draw();

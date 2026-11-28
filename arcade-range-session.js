@@ -223,10 +223,12 @@
                 if (state.tab === 'approach' && !practised.length && !tests.length) state.tab = 'shots';
                 h += '<div class="rs-tabs"><button data-tab="shots" class="' + (state.tab === 'shots' ? 'selected' : '') + '">' + esc(t('tabShots')) + '</button>' +
                      '<button data-tab="clubs" class="' + (state.tab === 'clubs' ? 'selected' : '') + '">' + esc(t('tabClubs')) + '</button>' +
-                     (practised.length || tests.length ? '<button data-tab="approach" class="' + (state.tab === 'approach' ? 'selected' : '') + '">' + esc(t('tabApproach')) + '</button>' : '') + '</div>';
+                     (practised.length || tests.length ? '<button data-tab="approach" class="' + (state.tab === 'approach' ? 'selected' : '') + '">' + esc(t('tabApproach')) + '</button>' : '') +
+                     (root.CombinePlay ? '<button data-tab="combine" class="' + (state.tab === 'combine' ? 'selected' : '') + '">' + esc(root.CombinePlay.TXT[(root.getGolfLanguage && root.getGolfLanguage() === 'en') ? 'en' : 'sv'].tab) + '</button>' : '') + '</div>';
                 h += '<div class="rs-body">';
                 // the shot bank takes the place of the list while it is open (inside the part that scrolls, so it is reachable on a small panel)
                 if (bank.open) h += bankHtml();
+                else if (state.tab === 'combine' && root.CombinePlay) h += root.CombinePlay.html();   // Golf Combine 9 (combine-play.js)
                 else if (state.tab === 'approach') {
                     // the approach tests on this range: how each one's scores go over time (the latest five, the best), then per practised distance
                     if (tests.length) {
@@ -363,6 +365,7 @@
                 if (root.ShotSync && root.ShotSync.enqueue) root.ShotSync.enqueue(s);
                 save(); redraw(); return;
             }
+            if (root.CombinePlay && (b.dataset.cbAct || b.dataset.cbLevel) && root.CombinePlay.click(b, state.shots)) { save(); redraw(); return; }
             const act = b.dataset.act;
             if (act === 'bank' || act === 'bank-code' || act === 'bank-link' || act === 'bank-retry' || act === 'bank-export') { bankAct(act); return; }
             if (act === 'toggle') { state.open = !state.open; try { localStorage.setItem('golf_range_session_open', state.open ? '1' : '0'); } catch (err) {} render(); }
@@ -446,6 +449,7 @@
         function redraw() { drawMarks(); render(); }
 
         api.start = function (opts) {
+            if (root.CombinePlay && root.CombinePlay.setOnChange) root.CombinePlay.setOnChange(function () { if (ctx) render(); });
             if (!opts || !opts.tee) return;
             const key = String(opts.key || 'draft');
             if (key !== state.key) { state.key = key; load(); }
@@ -476,6 +480,9 @@
             rec.session = state.session.id;
             // the ball flight that worked out this shot's carry, total and standard carry (statistics never mix two flights)
             if (root.GolfPhysics && root.GolfPhysics.VERSION) rec.physics = root.GolfPhysics.VERSION;
+            // a shot of a Golf Combine 9 test in progress: which test and target (combine-play.js); not for approach practice shots
+            const cb = root.CombinePlay && !rec.practice ? root.CombinePlay.tag() : null;
+            if (cb) rec.combine = cb;
             prepare(rec, root.GolfPhysics, root.PlayerBag && root.PlayerBag.entries ? root.PlayerBag.entries() : []);
             if (rec.review && rec.review.looksLike && typeof root.showBuildToast === 'function' && root.LMShotReview) {
                 const sv = root.getGolfLanguage && root.getGolfLanguage() === 'sv';
@@ -485,6 +492,7 @@
             if (root.PlayerBag && root.PlayerBag.book) root.PlayerBag.book(rec);   // launch-monitor shots also go to the player's bag (club suggestions on a course)
             // every range shot goes to the player's shot bank (shot-sync.js): kept for good, whatever happens to this session's list
             if (root.ShotSync && root.ShotSync.enqueue) root.ShotSync.enqueue(rec);
+            if (rec.combine && root.CombinePlay) root.CombinePlay.recorded(rec);
             if (state.shots.length > MAX_SHOTS) state.shots.splice(0, state.shots.length - MAX_SHOTS);
             save();
             redraw();

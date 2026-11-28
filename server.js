@@ -10,6 +10,8 @@ const collectionsCore = require('./collections-core');
 const ShotBank = require('./shot-bank-core');
 const PlayerBag = require('./arcade-bag');
 const TrainingStats = require('./training-stats');
+const CombineCore = require('./combine-core');
+const ServerPhysics = require('./server-physics');
 // the ball flight's version of this build (physics.js VERSION, recorded with its fingerprint by tests/test_physics_version.js): Training Lab's
 // distances come only from shots of this flight
 const PHYSICS_VERSION = (function () { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'physics-validation', 'physics-version.json'), 'utf8')).version; } catch (e) { return null; } })();
@@ -323,6 +325,25 @@ async function initDB() {
             await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS physics_version VARCHAR(32);`);
             // across the target line where it came down in standard conditions (lm-shot-review.js standard): the side spread of Training Lab
             await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS offline_std REAL;`);
+            // a shot of a Golf Combine 9 test (combine-core.js), and the finished tests: one row per player and test, written once
+            await pool.query(`ALTER TABLE shots ADD COLUMN IF NOT EXISTS combine JSONB;`);
+            await pool.query(`CREATE INDEX IF NOT EXISTS shots_player_combine ON shots (player_id, (combine->>'test'))`);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS combine_results (
+                    id BIGSERIAL PRIMARY KEY,
+                    player_id VARCHAR(80) NOT NULL,
+                    test_id VARCHAR(80) NOT NULL,
+                    level VARCHAR(12) NOT NULL,
+                    total REAL NOT NULL,
+                    official BOOLEAN NOT NULL,
+                    physics_version VARCHAR(32) NOT NULL,
+                    shots JSONB NOT NULL,
+                    started_at TIMESTAMPTZ NOT NULL,
+                    finished_at TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    UNIQUE (player_id, test_id)
+                );
+            `);
             await pool.query(`CREATE INDEX IF NOT EXISTS shots_player_session ON shots (player_id, training_session_id)`);
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS device_links (
@@ -1667,8 +1688,8 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
             await pool.query(`
                 INSERT INTO shots (player_id, client_id, device_id, shot_at, range_key, source, club, ball_speed, club_speed, launch, hla, spin, spin_axis,
                     club_path, face_to_path, aoa, carry, total, offline_m, apex, carry_std, total_std, lm_device, estimated, review, accepted, practice, raw, edited_at,
-                    training_session_id, physics_version, offline_std)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+                    training_session_id, physics_version, offline_std, combine)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
                 ON CONFLICT (player_id, client_id) DO UPDATE SET
                     range_key = COALESCE(shots.range_key, EXCLUDED.range_key), ball_speed = COALESCE(shots.ball_speed, EXCLUDED.ball_speed),
                     club_speed = COALESCE(shots.club_speed, EXCLUDED.club_speed), launch = COALESCE(shots.launch, EXCLUDED.launch), hla = COALESCE(shots.hla, EXCLUDED.hla),
@@ -1681,6 +1702,10 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
                     training_session_id = COALESCE(shots.training_session_id, EXCLUDED.training_session_id),
                     physics_version = COALESCE(shots.physics_version, EXCLUDED.physics_version),
                     offline_std = COALESCE(shots.offline_std, EXCLUDED.offline_std),
+                    -- which test and target a shot was hit at never changes; a retake mark (void) follows the latest edit
+                    combine = CASE WHEN shots.combine IS NULL THEN EXCLUDED.combine
+                                   WHEN EXCLUDED.combine IS NOT NULL AND EXCLUDED.edited_at > shots.edited_at THEN jsonb_set(shots.combine, '{void}', COALESCE(EXCLUDED.combine->'void', 'null'::jsonb))
+                                   ELSE shots.combine END,
                     club = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.club ELSE shots.club END,
                     accepted = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN EXCLUDED.accepted ELSE shots.accepted END,
                     review = CASE WHEN EXCLUDED.edited_at > shots.edited_at THEN COALESCE(EXCLUDED.review, shots.review) ELSE COALESCE(shots.review, EXCLUDED.review) END,
@@ -1688,7 +1713,7 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
                     updated_at = now()`,
                 [account, s.client_id, req.userId, s.shot_at, s.range_key, s.source, s.club, s.ball_speed, s.club_speed, s.launch, s.hla, s.spin, s.spin_axis,
                  s.club_path, s.face_to_path, s.aoa, s.carry, s.total, s.offline_m, s.apex, s.carry_std, s.total_std, s.lm_device, j(s.estimated), j(s.review), s.accepted,
-                 j(s.practice), j(s.raw), s.edited_at, s.training_session_id, s.physics_version, s.offline_std]);
+                 j(s.practice), j(s.raw), s.edited_at, s.training_session_id, s.physics_version, s.offline_std, j(s.combine)]);
             stored.push(s.client_id);
         }
         res.json({ stored: stored, refused: refused });
@@ -1748,6 +1773,49 @@ app.get('/api/training/clubs', requireDB, authMiddleware, async (req, res) => {
         res.json(out);
     } catch(err) {
         console.error('GET /api/training/clubs error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// Golf Combine 9 (combine-core.js): a finished test is scored here from its shots in the shot bank. Where each shot came down is worked out
+// by the server's own ball flight (server-physics.js) from the shot's launch values; a carry the device sent is never used. A test is
+// stored once per player (asking again returns the stored result), and only when every target has its shot.
+app.post('/api/combine/finish', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const testId = String((req.body && req.body.test_id) || ''), level = String((req.body && req.body.level) || '');
+        if (!/^[A-Za-z0-9_-]{8,80}$/.test(testId) || !CombineCore.LEVELS[level]) return res.status(400).json({ error: 'test_id and level (beginner, standard, advanced)' });
+        const account = await accountOf(req.userId);
+        const done = await pool.query('SELECT * FROM combine_results WHERE player_id = $1 AND test_id = $2', [account, testId]);
+        if (done.rows.length) return res.json(combineRow(done.rows[0]));
+        const r = await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND combine->>'test' = $2 ORDER BY shot_at, id`, [account, testId]);
+        const shots = r.rows.map(ShotBank.toClient).filter(function (s) { return s.combine && s.combine.level === level; });
+        const result = CombineCore.score(shots, level, ServerPhysics.landing);
+        if (!result.complete) return res.status(409).json({ error: 'Not every target has its shot in the shot bank yet', missing: result.missing });
+        const times = shots.map(function (s) { return s.t; });
+        const ins = await pool.query(`INSERT INTO combine_results (player_id, test_id, level, total, official, physics_version, shots, started_at, finished_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (player_id, test_id) DO NOTHING RETURNING *`,
+            [account, testId, level, result.total, result.official, ServerPhysics.version(), JSON.stringify({ shots: result.shots, worst: result.worst }),
+             new Date(Math.min.apply(null, times)), new Date(Math.max.apply(null, times))]);
+        const row = ins.rows[0] || (await pool.query('SELECT * FROM combine_results WHERE player_id = $1 AND test_id = $2', [account, testId])).rows[0];
+        res.json(combineRow(row));
+    } catch(err) {
+        console.error('POST /api/combine/finish error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+function combineRow(r) {
+    return { test_id: r.test_id, level: r.level, total: Number(r.total), official: r.official, physics: r.physics_version, shots: r.shots.shots, worst: r.shots.worst,
+             started: new Date(r.started_at).getTime(), finished: new Date(r.finished_at).getTime() };
+}
+// The player's finished tests, newest first, and per level the latest, the best and the last five official ones
+app.get('/api/combine/results', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const account = await accountOf(req.userId);
+        const r = await pool.query('SELECT * FROM combine_results WHERE player_id = $1 ORDER BY finished_at DESC, id DESC LIMIT 500', [account]);
+        const results = r.rows.map(combineRow), levels = {};
+        Object.keys(CombineCore.LEVELS).forEach(function (l) { levels[l] = CombineCore.history(results, l); });
+        res.json({ results: results, levels: levels, physics: ServerPhysics.version() });
+    } catch(err) {
+        console.error('GET /api/combine/results error:', err);
         res.status(500).json({ error: 'Database error' });
     }
 });

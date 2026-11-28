@@ -1,7 +1,7 @@
 # The tests of tests/README.md, run on every pull request.
 #   unit     every tests/test_*.js (npm test): physics, rules, handicap, collections, the static checks
 #   api      collections, ratings, approach and shots e2e: the real server.js against a real Postgres, over HTTP, no browser
-#   browser  the browser tests in headless Chromium: the smoke test, the shape smoke test (phone and desktop), the blueprint map in the course builder, the courses e2e, the shot bank e2e and the Training Lab e2e (all three also Postgres)
+#   browser  the browser tests in headless Chromium: the smoke test, the shape smoke test (phone and desktop), the blueprint map in the course builder, the courses, shot bank, Training Lab and Golf Combine e2e (all four also Postgres)
 #
 # Actions minutes: unit and api take about a minute each, the browser tests about 40 together. So:
 #   - unit and api run on every pull request (and every push to it)
@@ -93,6 +93,8 @@ jobs:
             command: node tests/e2e/shots-browser-e2e.js
           - name: training-e2e
             command: node tests/e2e/training-e2e.js
+          - name: combine-e2e
+            command: node tests/e2e/combine-e2e.js
     name: browser (${{ matrix.name }})
     services:
       postgres:
