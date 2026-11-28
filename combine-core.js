@@ -37,45 +37,48 @@
         const e = Math.hypot(carry - D, side);
         return { score: Math.round(100 * Math.max(0, 1 - e / radius(D))), error: e, long: carry - D, side: side };
     }
-    // Whether a shot's launch values were all measured: nothing estimated, and (when the bridge says what it measured) each needed one in it
+    // Whether a shot's launch values were all measured: the bridge's own list of what the launch monitor sent (raw.measured, kept as it
+    // came) has every needed value, nothing was estimated, and the numbers are there. Without that list nothing proves a value was measured
+    // (an older bridge sends none): such a shot can be played, never official
     function measured(shot) {
-        if (!shot) return false;
+        if (!shot || shot.source !== 'LM') return false;
         const est = Array.isArray(shot.estimated) ? shot.estimated : [];
         if (est.some(function (f) { return ESTIMABLE.indexOf(f) >= 0; })) return false;
         if (!num(shot.ballSpeed) || !num(shot.launch) || !num(shot.spin) || !num(shot.spinAxis) || !num(shot.hla)) return false;
         const m = shot.raw && Array.isArray(shot.raw.measured) ? shot.raw.measured : null;
-        if (m && NEEDED.some(function (f) { return m.indexOf(f) < 0; })) return false;
-        return shot.source === 'LM';
+        return !!m && NEEDED.every(function (f) { return m.indexOf(f) >= 0; });
     }
-    // Why a shot may be retaken, or null: only when it was not a measurement
-    function voidReason(shot) {
+    // Why a shot may be retaken, or null: only when it was not a measurement. misread(shot) says whether it was a misread; the server passes
+    // its own check (the smash factor from the ball and club speed, server-physics.js), never the device's review; the panel uses the review
+    function voidReason(shot, misread) {
         if (!shot) return null;
-        if (shot.review && shot.review.misread) return 'misread';
+        if (misread ? misread(shot) : !!(shot.review && shot.review.misread)) return 'misread';
         if (!measured(shot) && shot.source === 'LM') return 'missing_value';
         return null;
     }
 
     // A shot set aside for a retake: marked void by the device, and the reason holds for the shot itself (a misread, or a value not measured).
     // A void mark on a shot that was a real measurement does not hold: the shot counts (no free retakes)
-    function voided(s) { return !!(s && s.combine && s.combine.void && voidReason(s)); }
+    function voided(s, misread) { return !!(s && s.combine && s.combine.void && voidReason(s, misread)); }
     // The shot that counts for each target: the first one at that index that is not (rightly) voided; any later shot there is ignored
-    function pick(shots) {
+    function pick(shots, misread) {
         const by = [];
         (shots || []).slice().sort(function (a, b) { return a.t - b.t; }).forEach(function (s) {
             const c = s.combine;
             if (!c || !(c.index >= 0 && c.index < 9) || by[c.index]) return;
-            if (voided(s)) return;
+            if (voided(s, misread)) return;
             by[c.index] = s;
         });
         return by;
     }
 
-    // score(shots, level, landing): the test from its shots. landing(shot) -> { carry, side } in standard conditions (on the server: its own
-    // flight; in the panel: the shot's own preliminary values). { complete, official, total, shots: [...], worst: [three indexes], missing }
-    function score(shots, level, landing) {
+    // score(shots, level, landing, opts): the test from its shots. landing(shot) -> { carry, side } in standard conditions (on the server: its
+    // own flight; in the panel: the shot's own preliminary values); opts.misread: the misread check (see voidReason).
+    // { complete, official, total, shots: [...], worst: [three indexes], missing }
+    function score(shots, level, landing, opts) {
         const targets = LEVELS[level];
         if (!targets) return null;
-        const by = pick(shots), out = [];
+        const by = pick(shots, opts && opts.misread), out = [];
         let sum = 0, n = 0, official = true;
         const missing = [];
         targets.forEach(function (D, i) {
@@ -93,9 +96,10 @@
         return { level: level, complete: complete, official: complete && official, total: complete ? Math.round(10 * sum / n) / 10 : null, shots: out, worst: worst, missing: missing };
     }
 
-    // The history of finished tests at one level: the latest, the best (official only), and the last five (oldest first)
-    function history(results, level) {
-        const mine = (results || []).filter(function (r) { return r.level === level && r.official; }).sort(function (a, b) { return a.finished - b.finished; });
+    // The history of finished tests at one level and one ball flight: the latest, the best (official only), and the last five (oldest first).
+    // Results of another flight version are never compared with these (a new flight moves where shots come down, and so the scores)
+    function history(results, level, physics) {
+        const mine = (results || []).filter(function (r) { return r.level === level && r.official && (!physics || r.physics === physics); }).sort(function (a, b) { return a.finished - b.finished; });
         if (!mine.length) return { latest: null, best: null, last5: [], count: 0 };
         let best = mine[0];
         mine.forEach(function (r) { if (r.total > best.total) best = r; });

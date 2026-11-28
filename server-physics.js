@@ -24,4 +24,11 @@ function landing(shot) {
   const st = f.R.standard(f.G, { ballSpeed: shot.ballSpeed, launch: shot.launch, spin: shot.spin, spinAxis: shot.spinAxis, hla: shot.hla });
   return st && typeof st.side === 'number' ? { carry: st.carry, side: st.side } : null;
 }
-module.exports = { landing: landing, version: version };
+// Whether a shot was a misread, from its own ball and club speed (the review's smash factor limits per kind of club), never from what a device
+// says: the rule for a Golf Combine retake (combine-core.js voidReason)
+function misread(shot) {
+  const f = load();
+  const r = f.R.review({ source: 'LM', club: shot.club, ballSpeed: shot.ballSpeed, clubSpeed: shot.clubSpeed, launch: shot.launch, hla: shot.hla }, {});
+  return !!(r && r.misread);
+}
+module.exports = { landing: landing, version: version, misread: misread };

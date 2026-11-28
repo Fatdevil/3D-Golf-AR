@@ -33,7 +33,8 @@
             loading: 'Hämtar…', back: '← Tillbaka', total: '{n} slag i slagbanken',
             cb: { title: 'Golf Combine 9', none: 'Inget genomfört test ännu. Starta det på rangen, i panelens flik 🏆 Combine.', latest: 'Senaste', best: 'Personbästa', last5: 'De fem senaste',
                   levels: { beginner: 'Nybörjare', standard: 'Standard', advanced: 'Avancerad' }, costly: 'Kostade mest senast: {list}', practice: '{n} träningsresultat (inte officiella) räknas inte här.',
-                  note: 'Officiella resultat: alla mätvärden uppmätta, poängen räknad av servern. Jämför bara inom samma nivå.' }
+                  note: 'Officiella resultat: alla mätvärden uppmätta, poängen räknad av servern. Jämför bara inom samma nivå och samma bollflykt ({v}).',
+                  older: '{n} resultat från en äldre version av bollflykten ({list}) jämförs inte med dessa.' }
         },
         en: {
             title: 'Training Lab', sub: 'Your game, club by club, from your shot bank on all your devices.',
@@ -56,7 +57,8 @@
             loading: 'Loading…', back: '← Back', total: '{n} shots in the shot bank',
             cb: { title: 'Golf Combine 9', none: 'No test finished yet. Start one on the range, in the panel\'s 🏆 Combine tab.', latest: 'Latest', best: 'Personal best', last5: 'The last five',
                   levels: { beginner: 'Beginner', standard: 'Standard', advanced: 'Advanced' }, costly: 'Cost the most last time: {list}', practice: '{n} practice results (not official) are not counted here.',
-                  note: 'Official results: every value measured, the score worked out by the server. Compare only within one level.' }
+                  note: 'Official results: every value measured, the score worked out by the server. Compare only within one level and one ball flight ({v}).',
+                  older: '{n} results from an older version of the ball flight ({list}) are not compared with these.' }
         }
     };
     function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -128,9 +130,11 @@
             }
             h += '</div>';
         });
-        const practice = (cb && cb.results || []).filter(function (r) { return !r.official; }).length;
+        const practice = (cb && cb.results || []).filter(function (r) { return !r.official && (!cb.physics || r.physics === cb.physics); }).length;
         if (practice) h += '<p class="tl-muted">' + esc(fill(T.practice, { n: practice })) + '</p>';
-        if (any) h += '<p class="tl-muted">' + esc(T.note) + '</p>';
+        const older = cb && cb.older ? Object.keys(cb.older) : [];
+        if (older.length) h += '<p class="tl-muted" data-cb="older">' + esc(fill(T.older, { n: older.reduce(function (s, v) { return s + cb.older[v]; }, 0), list: older.join(', ') })) + '</p>';
+        if (any) h += '<p class="tl-muted">' + esc(fill(T.note, { v: cb.physics || '?' })) + '</p>';
         return h + '</section>';
     }
 

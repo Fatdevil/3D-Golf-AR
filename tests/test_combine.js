@@ -22,6 +22,7 @@ const good = { source: 'LM', ballSpeed: 120, launch: 16, spin: 7000, spinAxis: 2
 check('ett slag med allt uppmätt duger för ett officiellt resultat', C.measured(good));
 check('uppskattad spinnaxel eller startriktning (en launch monitor som inte skickade dem) duger inte', !C.measured(Object.assign({}, good, { estimated: ['spinAxisDeg'] })) && !C.measured(Object.assign({}, good, { estimated: ['azimDeg'] })));
 check('ett värde som inte finns i bryggans lista över uppmätta duger inte', !C.measured(Object.assign({}, good, { raw: { measured: ['ballSpeedMph', 'launchAngleDeg', 'totalSpinRpm'] } })));
+check('utan bryggans lista över uppmätta värden (en äldre brygga) bevisar inget att värdena mättes: inte officiellt', !C.measured(Object.assign({}, good, { raw: undefined })) && !C.measured(Object.assign({}, good, { raw: {} })));
 check('svingmätarslag är aldrig officiella', !C.measured(Object.assign({}, good, { source: 'SIM' })));
 
 console.log('\n3. Vilka slag räknas');
@@ -42,6 +43,15 @@ check('ett omslag märkt "felmätning" på ett slag som var en riktig mätning h
 const misread = nine.slice(); misread[4] = at(4, { combine: { void: 'misread' }, shot: { carry: 300, side: 0, review: { flags: ['smash_impossible'], misread: true } } });
 r = C.score(misread.concat([at(4, { tag: 'b', dt: 5, shot: { carry: 110, side: 0 } })]), 'standard', land);
 check('en felmätning (orimlig smash factor) får slås om, med orsaken kvar på slaget', r.shots[4].score === 100 && r.shots[4].shot === 'c4b' && r.total === 100, r.shots[4]);
+// the server's own misread check, not the device's review: a shot the device calls a misread but whose smash factor was fine is not one
+const claimed = nine.slice(); claimed[4] = at(4, { combine: { void: 'misread' }, shot: { carry: 60, side: 0, review: { flags: ['smash_impossible'], misread: true } } });
+const serverSays = s => s.ballSpeed / s.clubSpeed > 1.5;
+const withClubSpeed = claimed.map(x => Object.assign({}, x, { clubSpeed: 90 })).concat([Object.assign(at(4, { tag: 'b', dt: 5, shot: { carry: 110, side: 0 } }), { clubSpeed: 90 })]);
+r = C.score(withClubSpeed, 'standard', land, { misread: serverSays });
+check('servern avgör felmätning själv: en "felmätning" som enheten påstår men där smash factor var rimlig får inte slås om', r.shots[4].shot === 'c4' && r.shots[4].score < 100, r.shots[4]);
+const realMis = withClubSpeed.map(x => x.cid === 'c4' ? Object.assign({}, x, { ballSpeed: 180 }) : x);
+r = C.score(realMis, 'standard', land, { misread: serverSays });
+check('och en verklig felmätning (180 mph på 90 mph klubbfart) får slås om', r.shots[4].shot === 'c4b', r.shots[4]);
 const noAxis = nine.slice(); noAxis[6] = at(6, { combine: { void: 'missing_value' }, shot: { carry: 150, side: 0, estimated: ['spinAxisDeg'] } });
 r = C.score(noAxis.concat([at(6, { tag: 'b', dt: 5, shot: { carry: 150, side: 0 } })]), 'standard', land);
 check('ett slag där ett mätvärde saknades får slås om', r.shots[6].shot === 'c6b' && r.official);
@@ -62,6 +72,9 @@ const res = [{ level: 'standard', official: true, total: 60, finished: 1 }, { le
 const h = C.history(res, 'standard');
 check('senaste, bästa och de fem senaste, bara officiella och bara samma nivå', h.latest.total === 70 && h.best.total === 72 && h.last5.map(x => x.total).join() === '72,65,66,67,70' && h.count === 6, h);
 check('en nivå utan resultat', C.history(res, 'beginner').latest === null);
+const two = [{ level: 'standard', official: true, total: 80, finished: 1, physics: 'flight-2024.1' }, { level: 'standard', official: true, total: 60, finished: 2, physics: 'flight-2027.1' }];
+check('fysikversioner blandas inte: personbästa och historik bara för samma bollflykt', C.history(two, 'standard', 'flight-2027.1').best.total === 60 && C.history(two, 'standard', 'flight-2027.1').count === 1 &&
+  C.history(two, 'standard', 'flight-2024.1').best.total === 80);
 
 console.log(failed ? '\n' + failed + ' failed' : '\nAll combine checks passed');
 process.exit(failed ? 1 : 0);

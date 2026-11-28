@@ -1788,7 +1788,7 @@ app.post('/api/combine/finish', requireDB, authMiddleware, async (req, res) => {
         if (done.rows.length) return res.json(combineRow(done.rows[0]));
         const r = await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND combine->>'test' = $2 ORDER BY shot_at, id`, [account, testId]);
         const shots = r.rows.map(ShotBank.toClient).filter(function (s) { return s.combine && s.combine.level === level; });
-        const result = CombineCore.score(shots, level, ServerPhysics.landing);
+        const result = CombineCore.score(shots, level, ServerPhysics.landing, { misread: ServerPhysics.misread });
         if (!result.complete) return res.status(409).json({ error: 'Not every target has its shot in the shot bank yet', missing: result.missing });
         const times = shots.map(function (s) { return s.t; });
         const ins = await pool.query(`INSERT INTO combine_results (player_id, test_id, level, total, official, physics_version, shots, started_at, finished_at)
@@ -1811,9 +1811,11 @@ app.get('/api/combine/results', requireDB, authMiddleware, async (req, res) => {
     try {
         const account = await accountOf(req.userId);
         const r = await pool.query('SELECT * FROM combine_results WHERE player_id = $1 ORDER BY finished_at DESC, id DESC LIMIT 500', [account]);
-        const results = r.rows.map(combineRow), levels = {};
-        Object.keys(CombineCore.LEVELS).forEach(function (l) { levels[l] = CombineCore.history(results, l); });
-        res.json({ results: results, levels: levels, physics: ServerPhysics.version() });
+        // the history is of this ball flight only; results of another flight are counted apart, never compared
+        const results = r.rows.map(combineRow), levels = {}, now = ServerPhysics.version(), older = {};
+        Object.keys(CombineCore.LEVELS).forEach(function (l) { levels[l] = CombineCore.history(results, l, now); });
+        results.forEach(function (x) { if (x.physics !== now) older[x.physics] = (older[x.physics] || 0) + 1; });
+        res.json({ results: results, levels: levels, physics: now, older: older });
     } catch(err) {
         console.error('GET /api/combine/results error:', err);
         res.status(500).json({ error: 'Database error' });

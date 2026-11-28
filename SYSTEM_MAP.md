@@ -571,7 +571,11 @@ Ett standardiserat träningstest med nio fasta mål och poäng 0–100. Resultat
   - testets poäng är medelvärdet av de nio slagen
 - **Regler:**
   - **Inga gratis omslag.** Det första slaget vid ett mål räknas, även en toppning. Ett slag får bara slås om när det inte var en mätning: en felmätning (`misread`) eller ett värde som launch monitorn inte skickade (`missing_value`). Orsaken sparas på det ogiltiga slaget (`combine.void`). En omslagsmärkning på ett slag som var en riktig mätning gäller inte (`voided`/`voidReason`).
-  - **Officiellt** kräver att bollfart, utgångsvinkel, spinn, spinnaxel och startriktning alla är uppmätta (`measured`). Ett test med ett uppskattat värde räknas som ett träningsresultat, aldrig som officiellt.
+  - **Officiellt** kräver att bryggans egen lista över uppmätta värden (`raw.measured`) innehåller bollfart, utgångsvinkel, spinn, spinnaxel och startriktning, och att inget av dem är uppskattat (`measured`). Utan listan, som från en äldre brygga, bevisar inget att värdena mättes. Ett test med ett uppskattat eller obevisat värde räknas som ett träningsresultat, aldrig som officiellt.
+  - **Servern avgör själv om ett slag var en felmätning** (`ServerPhysics.misread`: smash factor ur boll- och klubbfart, med granskningens gränser). Enhetens egen `review.misread` används aldrig för omslagsregeln.
+  - **Fysikversioner blandas inte.** Historik och personbästa räknas bara inom serverns aktuella bollflykt (`history(results, level, physics)`). Resultat från en äldre version sparas och räknas för sig (`older`).
+  - **Ett sent serversvar** skrivs bara in i det test det gällde. Test och nivå låses när verifieringen startar.
+  - **Startpanelen** säger innan testet vilka fem värden som krävs. Om senaste launch monitor-slaget saknade något av dem varnar panelen redan där för att bara ett träningsresultat är möjligt.
 - **Servern:**
   - `server-physics.js` kör `physics.js` och `lm-shot-review.js` i en egen sandlåda och räknar själv var varje slag landar ur dess utgångsvärden. Den carry som enheten skickade används aldrig.
   - `POST /api/combine/finish` räknar ett test ur slagbanken. Testet sparas en gång per spelare i `combine_results`, och samma fråga igen ger samma resultat. Om något slag saknas svarar servern 409 med de mål som saknas.

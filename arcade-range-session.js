@@ -450,6 +450,7 @@
 
         api.start = function (opts) {
             if (root.CombinePlay && root.CombinePlay.setOnChange) root.CombinePlay.setOnChange(function () { if (ctx) render(); });
+            if (root.CombinePlay) root.CombinePlay._shots = function () { return state.shots; };   // what the launch monitor sent lately (the test's start panel)
             if (!opts || !opts.tee) return;
             const key = String(opts.key || 'draft');
             if (key !== state.key) { state.key = key; load(); }

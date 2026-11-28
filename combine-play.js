@@ -20,6 +20,9 @@
               why: { misread: 'felmätning', missing_value: 'mätvärde saknas' }, cancel: 'Avbryt testet', confirmCancel: 'Avbryta testet? Slagen finns kvar i slagbanken men testet räknas inte.',
               notOfficial: 'Din launch monitor skickade inte alla värden (spinnaxel eller startriktning) för senaste slaget: testet blir ett träningsresultat, inte officiellt.',
               lowSpeed: 'Mål under 60 m slås med bollfarter där spelets bollflykt inte är kontrollerad mot uppmätta slag. Poängen jämför dig med dig själv.',
+              needs: 'Ett officiellt resultat kräver att launch monitorn mäter och skickar alla fem: bollfart, utgångsvinkel, spinn, spinnaxel och startriktning. Saknas något blir testet ett träningsresultat.',
+              cannot: 'Din launch monitor skickade inte alla fem värden i senaste slaget ({missing}): räkna med ett träningsresultat, inte officiellt.',
+              fields: { ballSpeedMph: 'bollfart', launchAngleDeg: 'utgångsvinkel', totalSpinRpm: 'spinn', spinAxisDeg: 'spinnaxel', azimDeg: 'startriktning' },
               result: 'Resultat', official: 'Officiellt', practice: 'Träningsresultat', prelim: 'Preliminärt: verifieras när slagen nått servern', verifying: 'Servern räknar…',
               costly: 'Kostade mest: {list}.', train: 'Träna på de här avstånden.', again: 'Nytt test', retry: 'Försök igen', points: 'p', total: 'Totalt',
               physics: 'Räknat av serverns bollflykt ({v}) i standardförhållanden.', dist: 'Mål', score: 'Poäng', err: 'Längd / sidled', close: 'Stäng' },
@@ -29,6 +32,9 @@
               why: { misread: 'misread', missing_value: 'value missing' }, cancel: 'Cancel the test', confirmCancel: 'Cancel the test? The shots stay in the shot bank but the test does not count.',
               notOfficial: 'Your launch monitor did not send every value (spin axis or start direction) for the last shot: the test becomes a practice result, not official.',
               lowSpeed: 'Targets under 60 m are hit at ball speeds where the game\'s ball flight is not checked against measured shots. The score compares you with yourself.',
+              needs: 'An official result needs the launch monitor to measure and send all five: ball speed, launch, spin, spin axis and start direction. If one is missing the test is a practice result.',
+              cannot: 'Your launch monitor did not send all five values in the last shot ({missing}): expect a practice result, not official.',
+              fields: { ballSpeedMph: 'ball speed', launchAngleDeg: 'launch', totalSpinRpm: 'spin', spinAxisDeg: 'spin axis', azimDeg: 'start direction' },
               result: 'Result', official: 'Official', practice: 'Practice result', prelim: 'Preliminary: verified once the shots reach the server', verifying: 'The server is scoring…',
               costly: 'Cost the most: {list}.', train: 'Practise these distances.', again: 'New test', retry: 'Try again', points: 'pts', total: 'Total',
               physics: 'Worked out by the server\'s ball flight ({v}) in standard conditions.', dist: 'Target', score: 'Points', err: 'Length / side', close: 'Close' }
@@ -114,17 +120,24 @@
         return rec;
     };
     // the finished test scored by the server (after what still waits in the outbox has gone); until then the card is preliminary
+    // The test and level are fixed when the request starts: an answer is written only into that same test, never into one started meanwhile
     api.finish = async function () {
         if (!st || st.index < 9 || busy) return;
+        const testId = st.test, lvl = st.level;
+        const same = function () { return st && st.test === testId && st.level === lvl; };
         busy = true; st.verifying = true; onChange();
+        let result = null, error = null;
         try {
             if (root.ShotSync && root.ShotSync.flush) await root.ShotSync.flush();
             const id = (root.GolfAuth && root.GolfAuth.userId) || localStorage.getItem('golf_os_device_id');
-            const res = await root.fetch('/api/combine/finish', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': id }, body: JSON.stringify({ test_id: st.test, level: st.level }) });
-            if (res.ok) { st.result = await res.json(); st.error = null; }
-            else st.error = res.status === 409 ? 'waiting' : 'server';
-        } catch (e) { st.error = 'offline'; }
-        busy = false; st.verifying = false;
+            const res = await root.fetch('/api/combine/finish', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': id }, body: JSON.stringify({ test_id: testId, level: lvl }) });
+            if (res.ok) { const j = await res.json(); if (j && j.test_id === testId && j.level === lvl) result = j; else error = 'server'; }
+            else error = res.status === 409 ? 'waiting' : 'server';
+        } catch (e) { error = 'offline'; }
+        busy = false;
+        if (!same()) return;   // the player left this test (a new one, or cancelled): the answer is not theirs any more
+        st.verifying = false;
+        if (result) { st.result = result; st.error = null; } else st.error = error;
         changed();
     };
     // when the outbox has sent something: a test waiting for its shots is asked for again
@@ -171,7 +184,16 @@
         const t = L();
         let h = '<div class="cb" data-cb="panel"><div class="rs-sub">' + esc(t.title) + '</div>';
         if (!st) {
-            h += '<div class="rs-note">' + esc(t.pick) + '</div><div class="cb-levels" role="radiogroup">';
+            h += '<div class="rs-note">' + esc(t.pick) + '</div><div class="rs-note" data-cb="needs">' + esc(t.needs) + '</div>';
+            // what the launch monitor sent in the latest launch-monitor shot: when it is known that not all five come, say so before the test
+            const lastLm = (api._shots ? api._shots() : []).filter(function (s) { return s && s.source === 'LM'; }).slice(-1)[0];
+            if (lastLm && !C.measured(lastLm)) {
+                const sent = lastLm.raw && Array.isArray(lastLm.raw.measured) ? lastLm.raw.measured : [];
+                const est = Array.isArray(lastLm.estimated) ? lastLm.estimated : [];
+                const missing = C.NEEDED.filter(function (f) { return sent.indexOf(f) < 0 || est.indexOf(f) >= 0; }).map(function (f) { return t.fields[f]; });
+                h += '<div class="cb-warn" data-cb="cannot">⚠ ' + esc(t.cannot.replace('{missing}', missing.join(', ') || '?')) + '</div>';
+            }
+            h += '<div class="cb-levels" role="radiogroup">';
             Object.keys(C.LEVELS).forEach(function (l) {
                 const ds = C.LEVELS[l];
                 h += '<button role="radio" aria-checked="' + (level === l) + '" data-cb-level="' + l + '"><b>' + esc(t.levels[l]) + '</b><span>' + esc(dist(ds[0]) + ' – ' + dist(ds[8])) + '</span></button>';

@@ -102,14 +102,31 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     const voidRow = (await pool.query('SELECT combine FROM shots WHERE player_id = $1 AND client_id = $2', [A.id, misread.cid])).rows[0];
     check('en felmätning får slås om: omslaget räknas och orsaken finns kvar på det ogiltiga slaget', r.status === 200 && r.json.shots[4].shot === retake.cid && voidRow.combine.void === 'misread', JSON.stringify([r.json.shots && r.json.shots[4], voidRow]));
 
+    // a "misread" the device claims, on a shot whose smash factor was fine: the server checks for itself and the retake does not count
+    const t3b = 'test3b' + tag;
+    let s3b = C.LEVELS.standard.map((D, i) => shotAt(t3b, i));
+    const claimed = shotAt(t3b, 4, { ballSpeed: 60, clubSpeed: 75, review: { flags: ['smash_impossible'], mishit: false, misread: true, looksLike: null }, combine: { test: t3b, level: 'standard', index: 4, void: 'misread' }, t: s3b[4].t });
+    const claimedRetake = shotAt(t3b, 4, { t: s3b[4].t + 500 });
+    s3b[4] = claimed;
+    await api('POST', '/api/shots/sync', { shots: s3b.concat([claimedRetake]) }, A);
+    r = await api('POST', '/api/combine/finish', { test_id: t3b, level: 'standard' }, A);
+    check('servern avgör felmätning själv: en påstådd felmätning med rimlig smash factor får inte slås om', r.status === 200 && r.json.shots[4].shot === claimed.cid, JSON.stringify(r.json.shots && r.json.shots[4]));
+
     console.log('\n3. Uppskattat ger träningsresultat');
     const t4 = 'test4' + tag;
     const s4 = C.LEVELS.standard.map((D, i) => shotAt(t4, i, i === 3 ? { estimated: ['spinAxisDeg'] } : {}));
     await api('POST', '/api/shots/sync', { shots: s4 }, A);
     r = await api('POST', '/api/combine/finish', { test_id: t4, level: 'standard' }, A);
     check('ett slag med uppskattad spinnaxel: testet räknas men som träning, aldrig officiellt', r.status === 200 && r.json.official === false, JSON.stringify(r.json.official));
+    const t5 = 'test5' + tag;
+    await api('POST', '/api/shots/sync', { shots: C.LEVELS.standard.map((D, i) => shotAt(t5, i, { raw: { ballSpeedMph: 100 } })) }, A);
+    r = await api('POST', '/api/combine/finish', { test_id: t5, level: 'standard' }, A);
+    check('slag utan bryggans lista över uppmätta värden (en äldre brygga): bara träning', r.status === 200 && r.json.official === false, JSON.stringify(r.json.official));
+    // a result of an older ball flight stays, but is never compared with this flight's
+    await pool.query(`INSERT INTO combine_results (player_id, test_id, level, total, official, physics_version, shots, started_at, finished_at) VALUES ($1, $2, 'standard', 99, true, 'flight-2023.0', '{"shots":[],"worst":[]}', now(), now())`, [A.id, 'old' + tag]);
     r = await api('GET', '/api/combine/results', undefined, A);
-    check('historiken: senaste och personbästa bara bland officiella på samma nivå', r.json.levels.standard.count === 3 && r.json.results.length === 4 && r.json.levels.advanced.count === 0, JSON.stringify(r.json.levels.standard));
+    check('historiken: bara officiella på samma nivå och samma bollflykt; äldre bollflykt räknas för sig', r.json.levels.standard.count === 4 && r.json.levels.standard.best.total < 99 &&
+      r.json.older['flight-2023.0'] === 1 && r.json.levels.advanced.count === 0, JSON.stringify([r.json.levels.standard.count, r.json.levels.standard.best && r.json.levels.standard.best.total, r.json.older]));
 
     console.log('\n4. Åtkomst och två enheter');
     const u1 = await api('POST', '/api/combine/finish', { test_id: t1, level: 'standard' });
@@ -138,7 +155,11 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     ids.push(P);
     await page.evaluate(() => { window.RangeSession.start({ tee: { x: 0, y: 0, z: 0, rot: 0 }, key: 'E2C-RANGE' }); });
     const clickIn = sel => page.evaluate(s => { const b = document.querySelector('#range-session ' + s); if (!b) throw new Error('no ' + s); b.click(); }, sel);
+    // before the test: what an official result needs; a launch monitor that did not send everything is told before the first shot
+    await page.evaluate(() => { window.RangeSession.setClub('7i'); window.RangeSession.record({ club: '7i', source: 'LM', carry: 140, total: 147, ballSpeed: 120, clubSpeed: 88, launch: 16, spin: 7000, spinAxis: 0, hla: 0, estimated: ['spinAxisDeg', 'azimDeg'], raw: { measured: ['ballSpeedMph', 'launchAngleDeg', 'totalSpinRpm'] } }); });
     await clickIn('[data-tab="combine"]');
+    const pre = await page.evaluate(() => ({ needs: (document.querySelector('#range-session [data-cb="needs"]') || {}).textContent || '', cannot: (document.querySelector('#range-session [data-cb="cannot"]') || {}).textContent || '' }));
+    check('före testet: vilka fem värden som krävs, och att den här launch monitorn inte skickade spinnaxel och startriktning', /spinnaxel/.test(pre.needs) && /spinnaxel/.test(pre.cannot) && /startriktning/.test(pre.cannot), JSON.stringify(pre));
     await clickIn('[data-cb-level="standard"]');
     await clickIn('[data-cb-act="start"]');
     const target = await page.evaluate(() => document.querySelector('#range-session [data-cb="target"] b').textContent);
@@ -149,7 +170,8 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
         const before = window.RangeSession.shots().length;
         window.RangeSession.setClub('7i');
         // the club as the game passes it (arcade.html: RangeSession.clubFor), so the shot's review knows the club
-        window.RangeSession.record(Object.assign({ club: window.RangeSession.clubFor('LM', null), source: 'LM', carry: 100, total: 105, launch: 18, spin: 6500, spinAxis: 0, hla: 0, offline: 0 }, o));
+        window.RangeSession.record(Object.assign({ club: window.RangeSession.clubFor('LM', null), source: 'LM', carry: 100, total: 105, launch: 18, spin: 6500, spinAxis: 0, hla: 0, offline: 0,
+          raw: { measured: ['ballSpeedMph', 'launchAngleDeg', 'totalSpinRpm', 'spinAxisDeg', 'azimDeg', 'clubSpeedMph'] } }, o));
         return window.RangeSession.shots().length - before;
       }, o);
       if (n !== 1) throw new Error('test harness: the range session did not record the shot');
@@ -179,14 +201,34 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     check('resultatkortet visas över rangen, med totalen och de dyraste målen', ov && ov.total.replace(',', '.') === String(card.st.result.total) && ov.costly, JSON.stringify(ov));
     await page.evaluate(() => document.querySelector('#cb-overlay [data-cb-act="close"]').click());
     check('och går att stänga', await page.evaluate(() => !document.querySelector('#cb-overlay')));
-    const voidShot = (await pool.query("SELECT combine FROM shots WHERE player_id = $1 AND combine->>'test' = $2 AND (combine->>'void') IS NOT NULL", [P, card.st.test])).rows;
+    // a late answer never lands in another test: the next test's finish is held back, a new test is started meanwhile
+    const firstTest = card.st.test;
+    await page.route('**/api/combine/finish', async rt => { await wait(3000); try { await rt.continue(); } catch (e) { /* page moved on */ } });
+    await page.evaluate(() => { const s = window.CombinePlay.state(); return s; });
+    await clickIn('[data-cb-act="new"]').catch(() => {});
+    await clickIn('[data-tab="combine"]').catch(() => {});
+    await clickIn('[data-cb-level="standard"]');
+    await clickIn('[data-cb-act="start"]');
+    for (let i = 0; i < 9; i++) await hit({ ballSpeed: speeds[i], clubSpeed: speeds[i] / 1.35 });
+    const testB = await page.evaluate(() => window.CombinePlay.state().test);
+    await page.evaluate(() => document.querySelector('#cb-overlay [data-cb-act="new"]').click());
+    await clickIn('[data-cb-level="beginner"]');
+    await clickIn('[data-cb-act="start"]');
+    const testC = await page.evaluate(() => window.CombinePlay.state().test);
+    await wait(4500);
+    const after = await page.evaluate(() => window.CombinePlay.state());
+    check('ett sent svar för ett test skrivs aldrig in i ett nytt test som startats under tiden', after.test === testC && after.level === 'beginner' && !after.result && after.index === 0 && testB !== testC && firstTest !== testB, JSON.stringify([after.test === testC, after.level, after.result, after.index]));
+    await page.unroute('**/api/combine/finish');
+    const voidShot = (await pool.query("SELECT combine FROM shots WHERE player_id = $1 AND combine->>'test' = $2 AND (combine->>'void') IS NOT NULL", [P, firstTest])).rows;
     check('felmätningen finns kvar i slagbanken, märkt med orsaken', voidShot.length === 1 && voidShot[0].combine.void === 'misread', JSON.stringify(voidShot));
 
     const lab = await ctx.newPage();
     await lab.goto(BASE + '/training.html', { waitUntil: 'domcontentloaded' });
     await lab.waitForFunction(() => document.querySelector('[data-tl="combine"] [data-cb="latest"]'), null, { timeout: 60000 });
     const labTxt = await lab.evaluate(() => ({ latest: document.querySelector('[data-tl="combine"] [data-level="standard"] [data-cb="latest"]').textContent, best: document.querySelector('[data-tl="combine"] [data-level="standard"] [data-cb="best"]').textContent, bars: document.querySelectorAll('[data-tl="combine"] .tl-cb-bars span').length }));
-    check('Training Lab visar senaste, personbästa och de fem senaste', labTxt.latest.replace(',', '.') === String(serverRow.total.toFixed(1)) && labTxt.bars === 1, JSON.stringify(labTxt));
+    const offRows = (await pool.query("SELECT total FROM combine_results WHERE player_id = $1 AND level = 'standard' AND official ORDER BY finished_at", [P])).rows;
+    check('Training Lab visar senaste, personbästa och de fem senaste (de två standardtesten på rangen)', offRows.length === 2 && labTxt.latest.replace(',', '.') === offRows[1].total.toFixed(1) &&
+      labTxt.best.replace(',', '.') === Math.max(offRows[0].total, offRows[1].total).toFixed(1) && labTxt.bars === 2, JSON.stringify([labTxt, offRows]));
   } catch (e) {
     console.error(e); failed++;
   }
