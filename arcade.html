@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=42">
+<link rel="stylesheet" href="arcade.css?v=43">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 <!-- Hämta vår grymma Fysikmotor! -->
-<script src="i18n.js?v=50"></script>
+<script src="i18n.js?v=51"></script>
 <script src="physics.js?v=15"></script>
 <script src="hitbox-fit.js?v=1"></script>
 <script src="prop-collision.js?v=1"></script>
@@ -390,68 +390,121 @@
         <button onclick="clearAllMeasures()" style="background:#ef4444; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; pointer-events:auto;">CLEAR ALL</button>
     </div>
     
-    <!-- UNIFIED TOP BAR: 3 zones (left / center / right) -->
+    <!-- UNIFIED 48PX TOP BAR: 3 zones (left / center / right) -->
     <div id="top-bar">
-        <!-- LEFT: Meny, Sparstatus & Verktyg -->
+        <!-- LEFT: Meny, Bannamn, Sparstatus, Historik/Sudd & Visa-meny -->
         <div class="top-left">
-            <button id="btn-hamburger" class="sys-btn" onclick="toggleMenu()" title="Meny & Inställningar" style="padding:6px 11px;">☰</button>
-            <div id="save-status-indicator" onclick="saveQuickDraft()" style="display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size:11px; color:#4ade80; background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); padding:5px 8px; width:76px; min-width:76px; max-width:76px; border-radius:20px; font-weight:bold; cursor:pointer; pointer-events:auto; transition:all 0.2s; box-sizing:border-box; flex-shrink:0;" title="Banan är sparad (Autosave är aktivt)">
+            <button id="btn-hamburger" type="button" class="ui-btn-icon" onclick="toggleMenu()" title="Meny & Inställningar" aria-label="Meny & Inställningar" aria-expanded="false">
+                <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <button id="topbar-course-name" type="button" onclick="var m=document.getElementById('publish-modal'); if(m){m.style.display='flex'; if(window.updatePublishPreview) updatePublishPreview(); var inp=document.getElementById('course-name-input'); if(inp){ inp.focus(); inp.select(); }}" title="Klicka för att byta namn på banan">Ny bana</button>
+            <div id="save-status-indicator" onclick="saveQuickDraft()" title="Banan är sparad (Autosave är aktivt)">
                 <span id="save-status-icon">✓</span>
                 <span id="save-status-text" data-i18n="saved">Sparad</span>
             </div>
-            <div id="topbar-undo-group" style="display:flex; gap:2px; background:rgba(15,23,42,0.9); padding:3px; border-radius:10px; border:1px solid #334155; pointer-events:auto; align-items:center; flex-shrink:0;">
-                <button id="topbar-btn-undo" onclick="performUndo()" style="background:transparent; color:#f87171; border:none; padding:5px 8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; opacity:0.4; display:flex; align-items:center; gap:4px;" title="Ångra senaste ändring (Cmd+Z / Ctrl+Z)">↶ <span class="btn-label-text" data-i18n="tool_undo">Ångra</span></button>
-                <button id="topbar-btn-redo" onclick="performRedo()" style="background:transparent; color:#38bdf8; border:none; padding:5px 8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; opacity:0.4; display:flex; align-items:center; gap:4px;" title="Gör om ångrad ändring (Cmd+Shift+Z / Ctrl+Y)">↷ <span class="btn-label-text" data-i18n="tool_redo">Gör om</span></button>
-                <div style="width:1px; height:18px; background:#334155; margin:0 2px;"></div>
-                <button id="topbar-btn-eraser" onclick="toggleEraserTool()" style="background:transparent; color:#94a3b8; border:none; padding:5px 8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Radera träd, objekt eller klossar (klicka igen eller tryck Esc för att avbryta)">🗑️ <span class="btn-label-text" data-i18n="tool_eraser">Radera</span></button>
-            </div>
-            <div id="topbar-view-group" style="display:flex; gap:2px; background:rgba(15,23,42,0.9); padding:3px; border-radius:10px; border:1px solid #334155; pointer-events:auto; align-items:center; flex-shrink:0;">
-                <button id="btn-grid-toggle" onclick="cycleTerrainGrid()" style="background:transparent; color:#94a3b8; border:none; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Växla terrängrutnät (100m + 25m / Av) [G]">
-                    <span style="font-size:12px;">📐</span> <span id="grid-btn-label" data-i18n="tool_grid">Rutnät</span>
+            <div class="topbar-divider topbar-name-sep"></div>
+            <div id="topbar-undo-group">
+                <button id="topbar-btn-undo" type="button" class="ui-btn-icon" onclick="performUndo()" style="opacity:0.4;" title="Ångra senaste ändring (Cmd+Z / Ctrl+Z)" aria-label="Ångra">
+                    <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
                 </button>
-                <div style="width:1px; height:18px; background:#334155; margin:0 1px;"></div>
-                <button id="btn-slope-grid-toggle" onclick="cycleGreenSlopeMode()" style="background:transparent; color:#94a3b8; border:none; padding:5px 9px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" title="Växla greenlutning: Av ➔ Gridd & Bollar ➔ Heatmap [L]">
-                    <span style="font-size:12px;">⚡</span> <span id="slope-grid-btn-label">Lutning</span>
+                <button id="topbar-btn-redo" type="button" class="ui-btn-icon" onclick="performRedo()" style="opacity:0.4;" title="Gör om ångrad ändring (Cmd+Shift+Z / Ctrl+Y)" aria-label="Gör om">
+                    <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
+                </button>
+                <div class="topbar-divider"></div>
+                <button id="topbar-btn-eraser" type="button" class="ui-btn-icon" onclick="toggleEraserTool()" aria-pressed="false" title="Suddverktyg – klicka objekt i 3D för att radera (Esc avbryter)" aria-label="Suddverktyg">
+                    <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+                    <span class="eraser-active-label" data-i18n="eraser_active">Suddverktyg</span>
                 </button>
             </div>
-            <button id="btn-mode-build" class="sys-btn" onclick="setMode('BUILD')" style="display:none; background:linear-gradient(135deg, #38bdf8, #0284c7); color:#fff; border:none; padding:7px 14px; border-radius:10px; font-weight:bold; box-shadow:0 4px 12px rgba(56,189,248,0.35);">🔨 <span data-i18n="ed_build_mode">Tillbaka till Bygg</span></button>
+            <div id="topbar-view-group">
+                <button id="btn-view-menu" type="button" class="ui-btn-secondary" onclick="toggleViewMenu()" aria-expanded="false" aria-haspopup="true" title="Visa rutnät &amp; greenlutning">
+                    <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span class="btn-label" data-i18n="topbar_view">Visa</span>
+                    <span id="view-menu-dot" aria-hidden="true"></span>
+                    <svg class="ui-icon ui-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div id="view-dropdown-menu" role="menu">
+                    <button id="btn-grid-toggle" type="button" class="view-menu-item" onclick="cycleTerrainGrid()" title="Växla terrängrutnät (100m + 25m / Av) [G]">
+                        <span class="view-item-left">
+                            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+                            <span id="grid-btn-label" data-i18n="tool_grid">Rutnät</span>
+                        </span>
+                        <span class="kbd-hint">G</span>
+                    </button>
+                    <button id="btn-slope-grid-toggle" type="button" class="view-menu-item" onclick="cycleGreenSlopeMode()" title="Växla greenlutning: Av ➔ Gridd &amp; Bollar ➔ Heatmap [L]">
+                        <span class="view-item-left">
+                            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18 9 11l4 4 9-9"/><path d="M15 6h7v7"/></svg>
+                            <span id="slope-grid-btn-label">Lutning</span>
+                        </span>
+                        <span class="kbd-hint">L</span>
+                    </button>
+                </div>
+            </div>
+            <button id="btn-mode-build" type="button" class="ui-btn-secondary" onclick="setMode('BUILD')" style="display:none;">
+                <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                <span class="btn-label" data-i18n="ed_build_mode">Tillbaka till Bygg</span>
+            </button>
         </div>
         
         <!-- CENTER: Hål-navigator (Huvudfokus centrerat i toppen) -->
         <div class="top-center">
-            <div id="topbar-hole-nav" style="display: flex; align-items: center; gap: 8px; background: rgba(15,23,42,0.95); backdrop-filter: blur(12px); border: 1px solid rgba(74,222,128,0.4); padding: 4px 12px; border-radius: 22px; font-family: 'Inter', sans-serif; pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 14px rgba(74,222,128,0.15);">
-                <button onclick="changeHole(-1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: rgba(255,255,255,0.08); color: #cbd5e1; border: 1px solid #334155; font-weight: 800; font-size: 13px; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" title="Föregående hål" onmouseover="this.style.background='rgba(74,222,128,0.25)'; this.style.color='#4ade80';" onmouseout="this.style.background='rgba(255,255,255,0.08)'; this.style.color='#cbd5e1';">&lt;</button>
+            <div id="topbar-hole-nav">
+                <button type="button" class="hole-nav-step" onclick="changeHole(-1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" title="Föregående hål" aria-label="Föregående hål">
+                    <svg class="ui-icon ui-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
                 <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="font-size: 13px;">⛳</span>
-                    <span id="topbar-hole-num" style="color: #4ade80; font-weight: 900; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase;">HÅL 1</span>
+                    <svg class="ui-icon ui-icon-xs" style="color:#4ade80;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                    <span id="topbar-hole-num" style="color: #f8fafc; font-weight: 800; font-size: 12.5px; letter-spacing: 0.3px;">HÅL 1</span>
                     <span style="color: #475569; font-size: 11px;">•</span>
                     <!-- Interaktiv Par-väljare direkt i topplisten -->
-                    <div style="display: flex; align-items: center; gap: 2px; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">
-                        <button onclick="changeHolePar(-1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: transparent; color: #94a3b8; border: none; font-weight: 900; font-size: 12px; cursor: pointer; padding: 0 3px; line-height: 1;" title="Minska Par">−</button>
+                    <div class="hole-par-pill">
+                        <button type="button" class="hole-par-btn" onclick="changeHolePar(-1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" title="Minska Par" aria-label="Minska Par">−</button>
                         <span id="topbar-hole-par" style="color: #fbbf24; font-weight: 800; font-size: 12px; min-width: 34px; text-align: center;">Par 4</span>
-                        <button onclick="changeHolePar(1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: transparent; color: #94a3b8; border: none; font-weight: 900; font-size: 12px; cursor: pointer; padding: 0 3px; line-height: 1;" title="Öka Par">+</button>
+                        <button type="button" class="hole-par-btn" onclick="changeHolePar(1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" title="Öka Par" aria-label="Öka Par">+</button>
                     </div>
-                    <span style="color: #475569; font-size: 11px;">•</span>
+                    <span class="hole-nav-dist-sep" style="color: #475569; font-size: 11px;">•</span>
                     <span id="topbar-hole-dist" style="color: #38bdf8; font-weight: 800; font-size: 12px; min-width: 38px;" title="Avstånd från aktiv tee till flagga">---m</span>
                 </div>
-                <button onclick="changeHole(1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" style="background: rgba(255,255,255,0.08); color: #cbd5e1; border: 1px solid #334155; font-weight: 800; font-size: 13px; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" title="Nästa hål" onmouseover="this.style.background='rgba(74,222,128,0.25)'; this.style.color='#4ade80';" onmouseout="this.style.background='rgba(255,255,255,0.08)'; this.style.color='#cbd5e1';">&gt;</button>
+                <button type="button" class="hole-nav-step" onclick="changeHole(1); if(typeof updateSBHoleDisplay==='function') updateSBHoleDisplay();" title="Nästa hål" aria-label="Nästa hål">
+                    <svg class="ui-icon ui-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
                 <!-- the course map (blueprint.js): open from any hole; the dot shows a plan that is kept but not built yet -->
-                <button id="topbar-btn-map" type="button" onclick="if (typeof openHoleBlueprint === 'function') openHoleBlueprint();" data-i18n-title="bp_map_btn" title="Banans karta" aria-label="Banans karta" style="position:relative; background: rgba(56,189,248,0.15); color: #e0f2fe; border: 1px solid rgba(56,189,248,0.5); font-size: 14px; cursor: pointer; min-width: 32px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-left: 2px; padding: 0 8px;">🗺️<span class="bp-badge" style="display:none; position:absolute; top:-3px; right:-3px; width:10px; height:10px; border-radius:50%; background:#facc15; border:2px solid #0f172a;"></span></button>
+                <button id="topbar-btn-map" type="button" onclick="if (typeof openHoleBlueprint === 'function') openHoleBlueprint();" data-i18n-title="bp_map_btn" title="Banans karta" aria-label="Banans karta">
+                    <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+                    <span class="bp-badge" style="display:none; position:absolute; top:-3px; right:-3px; width:10px; height:10px; border-radius:50%; background:#facc15; border:2px solid #0f172a;"></span>
+                </button>
             </div>
         </div>
         
-        <!-- RIGHT: Testspela, Publicera & Hub -->
+        <!-- RIGHT: Publicera (sekundär), Spara & spela (enda gröna primärknappen) & Hub -->
         <div class="top-right">
-            <button id="btn-mode-play" class="sys-btn" onclick="saveAndPlay()" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 18px; font-size:13px; font-weight:800; border-radius:10px; box-shadow:0 4px 15px rgba(16,185,129,0.4); display:inline-flex; align-items:center; gap:6px; transition:transform 0.1s;" title="Sparar banan och startar spelet">▶ <span data-i18n="ed_save_play">Spara &amp; spela</span></button>
-            <button id="btn-publish" class="sys-btn" onclick="document.getElementById('publish-modal').style.display='flex'; if(window.updatePublishPreview) updatePublishPreview();" style="border-color:#334155; color:#94a3b8; font-size:12px; padding:7px 12px; border-radius:10px;" title="Dela eller publicera bana">📤 <span data-i18n="ed_publish">Publicera...</span></button>
-            <a href="arcade_hub.html" class="sys-btn" style="text-decoration:none; font-size:15px; padding:7px 11px; border-radius:10px; border-color:#334155; color:#94a3b8;" title="Tillbaka till Hub">🏠</a>
+            <button id="btn-publish" type="button" class="ui-btn-secondary" onclick="document.getElementById('publish-modal').style.display='flex'; if(window.updatePublishPreview) updatePublishPreview();" title="Dela eller publicera bana">
+                <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span class="btn-label" data-i18n="ed_publish">Publicera</span>
+            </button>
+            <button id="btn-mode-play" type="button" class="ui-btn-primary" onclick="saveAndPlay()" title="Sparar banan och startar spelet">
+                <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                <span class="btn-label" data-i18n="ed_save_play">Spara &amp; spela</span>
+            </button>
+            <a id="btn-home" href="arcade_hub.html" class="ui-btn-icon" title="Tillbaka till Hub" aria-label="Tillbaka till Hub">
+                <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </a>
         </div>
     </div>
     
     <div id="dropdown-menu">
-        <button onclick="window.location.href='arcade_hub.html'" style="color:#e2e8f0;">← <span data-i18n="nav_hub">Tillbaka till Hub</span></button>
-        <button id="btn-unit-toggle" onclick="window.setDistanceUnit(!window.useMeters); toggleMenu();">📏 Yards</button>
-        <button onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#ef4444;">🗑️ <span data-i18n="ed_clear">Rensa bana</span></button>
+        <button type="button" onclick="window.location.href='arcade_hub.html'" style="color:#e2e8f0;">
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span class="btn-label" data-i18n="nav_hub">Tillbaka till Hub</span>
+        </button>
+        <button id="btn-unit-toggle" type="button" onclick="window.setDistanceUnit(!window.useMeters); toggleMenu();">
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>
+            <span class="btn-label">Yards</span>
+        </button>
+        <button type="button" onclick="document.getElementById('confirm-modal').style.display='flex'; toggleMenu();" style="color:#f87171;">
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            <span class="btn-label" data-i18n="ed_clear">Rensa bana</span>
+        </button>
         <div style="display:flex; justify-content:center; padding:8px 0; border-top:1px solid #334155; margin-top:4px;">
             <div id="menu-lang-slot"></div>
         </div>
@@ -661,21 +714,80 @@
             if (typeof window.updateSculptDirBtn === 'function') window.updateSculptDirBtn();
         };
 
+        function closeViewMenu() {
+            let vm = document.getElementById('view-dropdown-menu');
+            let vb = document.getElementById('btn-view-menu');
+            if (vm) vm.style.display = 'none';
+            if (vb) vb.setAttribute('aria-expanded', 'false');
+        }
+        function closeMainMenu() {
+            let m = document.getElementById('dropdown-menu');
+            let hb = document.getElementById('btn-hamburger');
+            if (m) m.style.display = 'none';
+            if (hb) hb.setAttribute('aria-expanded', 'false');
+        }
         function toggleMenu() {
             let m = document.getElementById('dropdown-menu');
-            if (m) m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+            if (!m) return;
+            let open = m.style.display !== 'flex';
+            closeViewMenu();
+            m.style.display = open ? 'flex' : 'none';
+            let hb = document.getElementById('btn-hamburger');
+            if (hb) hb.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
+        function toggleViewMenu() {
+            let vm = document.getElementById('view-dropdown-menu');
+            if (!vm) return;
+            let open = vm.style.display !== 'flex';
+            closeMainMenu();
+            vm.style.display = open ? 'flex' : 'none';
+            let vb = document.getElementById('btn-view-menu');
+            if (vb) vb.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        window.toggleMenu = toggleMenu;
+        window.toggleViewMenu = toggleViewMenu;
+        window.closeTopbarMenus = function() { closeMainMenu(); closeViewMenu(); };
+
         document.addEventListener('click', function(e) {
+            let target = e.target;
             let m = document.getElementById('dropdown-menu');
-            if (m && m.style.display === 'flex' && !m.contains(e.target) && e.target.id !== 'btn-hamburger') {
-                m.style.display = 'none';
+            if (m && m.style.display === 'flex' && !m.contains(target) && !(target && target.closest && target.closest('#btn-hamburger'))) {
+                closeMainMenu();
+            }
+            let vm = document.getElementById('view-dropdown-menu');
+            if (vm && vm.style.display === 'flex' && !vm.contains(target) && !(target && target.closest && target.closest('#btn-view-menu'))) {
+                closeViewMenu();
             }
         });
+
+        window.syncTopbarCourseName = function() {
+            let el = document.getElementById('topbar-course-name');
+            if (!el) return;
+            let inp = document.getElementById('course-name-input');
+            let raw = inp ? String(inp.value || '').trim() : '';
+            let isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
+            let fallback = isRange ? 'Driving Range' : (typeof window.t === 'function' && window.t('new_course_placeholder') !== 'new_course_placeholder' ? window.t('new_course_placeholder') : 'Ny bana');
+            el.textContent = raw || fallback;
+            el.title = (raw || fallback) + ' — ' + ((window.getGolfLanguage && window.getGolfLanguage() === 'en') ? 'Click to rename course' : 'Klicka för att byta namn på banan');
+        };
+
+        window.syncViewMenuIndicator = function() {
+            let vb = document.getElementById('btn-view-menu');
+            if (!vb) return;
+            let anyOn = (window._builderGridMode > 0) || (window._greenSlopeMode && window._greenSlopeMode !== 'OFF');
+            vb.classList.toggle('has-active-overlay', !!anyOn);
+        };
+
         // The player's distance unit, used everywhere (HUD, minimap, range marks, session panel) and kept on this device
         try { window.useMeters = localStorage.getItem('golfos_units') === 'm'; } catch (e) { window.useMeters = false; }
         window.syncUnitButtons = function() {
             let label = window.useMeters ? 'Meter' : 'Yards';
-            let dd = document.getElementById('btn-unit-toggle'); if (dd) dd.innerText = '📏 ' + label;
+            let dd = document.getElementById('btn-unit-toggle');
+            if (dd) {
+                let lbl = dd.querySelector('.btn-label');
+                if (lbl) lbl.textContent = label;
+                else dd.innerText = label;
+            }
             let rb = document.getElementById('btn-range-unit'); if (rb) rb.textContent = '📐 ' + label;
             document.querySelectorAll('.unit-btn').forEach(function (b) { b.classList.toggle('selected', (b.dataset.unit === 'm') === !!window.useMeters); });
         };
@@ -691,6 +803,20 @@
         };
         // the club row's distances: each club's full carry from the physics, in the player's unit (arcade-swing-engine.js)
         document.addEventListener('DOMContentLoaded', function () { window.syncUnitButtons(); if (window.SwingEngine && window.SwingEngine.updateClubLabels) window.SwingEngine.updateClubLabels(); });
+        document.addEventListener('DOMContentLoaded', function () {
+            window.syncTopbarCourseName();
+            window.syncViewMenuIndicator();
+            let inp = document.getElementById('course-name-input');
+            if (inp) {
+                inp.addEventListener('input', window.syncTopbarCourseName);
+                inp.addEventListener('change', window.syncTopbarCourseName);
+            }
+        });
+        window.addEventListener('golf_lang_changed', function() {
+            window.syncTopbarCourseName();
+            let tb = document.getElementById('left-toolbar');
+            syncProToggleUI(!!(tb && tb.classList.contains('pro-mode')));
+        });
         window.formatDistStr = function(meters, dec=1) { return window.useMeters ? (meters).toFixed(dec) + ' m' : (meters * 1.09361).toFixed(dec) + ' yds'; };
         window.formatDistRaw = function(meters, dec=0) { return window.useMeters ? (meters).toFixed(dec) : (meters * 1.09361).toFixed(dec); };
 
@@ -710,11 +836,18 @@
             toggleMenu();
         };
         
+        function syncProToggleUI(isPro) {
+            let btn = document.getElementById('btn-pro-toggle');
+            if (!btn) return;
+            let lbl = btn.querySelector('.btn-label');
+            if (lbl) lbl.textContent = isPro ? 'PRO' : 'BASIC';
+            else btn.textContent = isPro ? 'PRO' : 'BASIC';
+            btn.setAttribute('aria-pressed', isPro ? 'true' : 'false');
+        }
         window.toggleProMode = function() {
             let tb = document.getElementById('left-toolbar');
-            let btn = document.getElementById('btn-pro-toggle');
             let isPro = tb.classList.toggle('pro-mode');
-            btn.textContent = isPro ? '⚡ PRO MODE' : '🔧 BASIC MODE';
+            syncProToggleUI(isPro);
             // Sync pro-mode to sub-tool strips and flyout
             ['sculpt-subtool-strip', 'objects-subtool-strip', 'left-flyout-toolbar'].forEach(id => {
                 let strip = document.getElementById(id);
@@ -740,63 +873,74 @@
         // Restore PRO mode from localStorage on boot
         document.addEventListener('DOMContentLoaded', function() {
             if (window.initAutoPerformanceLOD) window.initAutoPerformanceLOD();
-            if (ArcadeStorage.getProMode()) {
-                let tb = document.getElementById('left-toolbar');
-                let btn = document.getElementById('btn-pro-toggle');
+            let isPro = !!ArcadeStorage.getProMode();
+            let tb = document.getElementById('left-toolbar');
+            if (isPro) {
                 if (tb) { tb.classList.add('pro-mode'); }
-                if (btn) { btn.textContent = '⚡ PRO MODE'; }
                 ['sculpt-subtool-strip', 'objects-subtool-strip', 'left-flyout-toolbar'].forEach(id => {
                     let strip = document.getElementById(id);
                     if (strip) strip.classList.add('pro-mode');
                 });
             }
+            syncProToggleUI(isPro);
         });
     </script>
 
-    <!-- PRO UI: VÄNSTER VERKTYGSLISTA (Nivå 1 - Fast vänsterrail) -->
+    <!-- PRO UI: VÄNSTER VERKTYGSLISTA (Nivå 1 - Fast vänsterrail med monokroma SVG-ikoner) -->
     <div id="left-toolbar">
-        <button id="btn-dock-toggle" type="button" onclick="window.toggleBuilderDock && window.toggleBuilderDock()" title="Fäll in / öppna verktygspanel" aria-label="Fäll in / öppna verktygspanel" aria-expanded="true">«</button>
-        <button id="tool-inspect" onclick="setTool('INSPECT')" title="Inspect course safely without modifying terrain (Hotkey: Esc)">
-            <span style="font-size:16px;">👀</span>
-            <span data-i18n="tool_inspect">Markera</span>
+        <button id="btn-dock-toggle" type="button" onclick="window.toggleBuilderDock && window.toggleBuilderDock()" title="Fäll in / öppna verktygspanel" aria-label="Fäll in / öppna verktygspanel" aria-expanded="true">
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
+        </button>
+        <button id="tool-inspect" type="button" class="ui-btn-tool" onclick="setTool('INSPECT')" title="Inspect course safely without modifying terrain (Hotkey: Esc)">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+            <span class="btn-label" data-i18n="tool_inspect">Markera</span>
+        </button>
+        
+        <div class="toolbar-divider"></div>
+        <div class="rail-section-label" data-i18n="rail_sec_course">Bana</div>
+        
+        <button id="tool-hole" type="button" class="ui-btn-tool" onclick="setTool('HOLE'); setHoleItem('TEE_RANGE');" title="Place and turn the Range Tee (where the balls are hit from)" style="display:none;">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+            <span class="btn-label">Range Tee</span>
+        </button>
+        <button id="tool-smartbuilder" type="button" class="ui-btn-tool" onclick="setTool('SMART_BUILDER')" title="Draw Fairways, Greens, Bunkers &amp; Tees">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="5" y1="22" x2="5" y2="15"/></svg>
+            <span class="btn-label" data-i18n="tool_course">Hål</span>
+        </button>
+
+        <div class="toolbar-divider"></div>
+        <div class="rail-section-label" data-i18n="rail_sec_terrain">Terräng</div>
+
+        <button id="tool-sculpt-group" type="button" class="ui-btn-tool active" onclick="setTool('SCULPT')" title="Sculpt, smooth and shape terrain">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+            <span class="btn-label" data-i18n="tool_sculpt">Forma</span>
+        </button>
+        <button id="tool-paint" type="button" class="ui-btn-tool" onclick="setTool('PAINT')" title="Paint grass, fescue, bunker and surfaces">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/></svg>
+            <span class="btn-label" data-i18n="tool_paint">Måla</span>
+        </button>
+        <button id="tool-water" type="button" class="ui-btn-tool" onclick="setTool('WATER')" title="Create lakes and water hazards">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+            <span class="btn-label" data-i18n="tool_water">Vatten</span>
+        </button>
+
+        <div class="toolbar-divider"></div>
+        <div class="rail-section-label" data-i18n="rail_sec_env">Miljö</div>
+
+        <button id="tool-objects-group" type="button" class="ui-btn-tool" onclick="setTool('PROPS')" title="Place trees, bushes, rocks, fences &amp; decorations">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-6 8h4l-4 7h12l-4-7h4z"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+            <span class="btn-label" data-i18n="tool_props">Objekt</span>
+        </button>
+        <button id="tool-env-group" type="button" class="ui-btn-tool" onclick="setTool('ENV')" title="Sky, weather, lighting and surrounding horizon">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+            <span class="btn-label" data-i18n="tool_env">Miljö</span>
         </button>
         
         <div class="toolbar-divider"></div>
         
-        <button id="tool-hole" onclick="setTool('HOLE'); setHoleItem('TEE_RANGE');" title="Place and turn the Range Tee (where the balls are hit from)" style="display:none;">
-            <span style="font-size:16px;">🎯</span>
-            <span>Range Tee</span>
-        </button>
-        <button id="tool-smartbuilder" onclick="setTool('SMART_BUILDER')" title="Draw Fairways, Greens, Bunkers & Tees">
-            <img src="icons/hole_3d.png" style="width:24px; height:24px; object-fit:contain; display:block; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));" alt="Hål">
-            <span data-i18n="tool_course">Hål</span>
-        </button>
-        <button id="tool-sculpt-group" onclick="setTool('SCULPT')" class="active" title="Sculpt, smooth and shape terrain">
-            <span style="font-size:16px;">⛰️</span>
-            <span data-i18n="tool_sculpt">Forma</span>
-        </button>
-        <button id="tool-paint" onclick="setTool('PAINT')" title="Paint grass, fescue, bunker and surfaces">
-            <span style="font-size:16px;">🖌️</span>
-            <span data-i18n="tool_paint">Måla</span>
-        </button>
-        <button id="tool-water" onclick="setTool('WATER')" title="Create lakes and water hazards">
-            <span style="font-size:16px;">💧</span>
-            <span data-i18n="tool_water">Vatten</span>
-        </button>
-        <button id="tool-objects-group" onclick="setTool('PROPS')" title="Place trees, bushes, rocks, fences & decorations">
-            <span style="font-size:16px;">🌴</span>
-            <span data-i18n="tool_props">Objekt</span>
-        </button>
-        <button id="tool-env-group" onclick="setTool('ENV')" title="Sky, weather, lighting and surrounding horizon">
-            <span style="font-size:16px;">🌍</span>
-            <span data-i18n="tool_env">Miljö</span>
-        </button>
-        
-        <div class="toolbar-divider"></div>
-        
-        <button id="btn-pro-toggle" onclick="toggleProMode()" title="Toggle basic vs pro tools">
-            <span style="font-size:13px;">⚡</span>
-            <span data-i18n="tool_pro_mode">PRO</span>
+        <button id="btn-pro-toggle" type="button" class="ui-btn-tool" onclick="toggleProMode()" aria-pressed="false" title="Toggle basic vs pro tools">
+            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            <span class="btn-label">BASIC</span>
         </button>
     </div>
 
@@ -815,7 +959,7 @@
     <section id="builder-dock-drawer" aria-label="Verktygspanel">
         <header id="builder-dock-header">
             <span id="builder-dock-title">Forma</span>
-            <button id="builder-dock-collapse-btn" type="button" onclick="window.setBuilderDockCollapsed && window.setBuilderDockCollapsed(true)" title="Fäll in panel" aria-label="Fäll in panel">«</button>
+            <button id="builder-dock-collapse-btn" type="button" onclick="window.setBuilderDockCollapsed && window.setBuilderDockCollapsed(true)" title="Fäll in panel" aria-label="Fäll in panel"><svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg></button>
         </header>
         <section id="builder-dock-scroll">
     <!-- PRO UI: FLYOUT UNDERKATEGORIER (Nivå 2) -->
@@ -2113,8 +2257,9 @@
                     </div>
 
                     <!-- Primary Action Button: Create Green -->
-                    <button type="button" id="gs-build-green-btn" onclick="window.executeSplineSmartGreen()" style="width:100%; background:linear-gradient(135deg, #4ade80, #22c55e); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(74,222,128,0.25); transition:all 0.2s;">
-                        ⛳ <span id="gs-build-green-btn-text" data-i18n="gs_create_green">Skapa green</span>
+                    <button type="button" id="gs-build-green-btn" class="ui-btn-primary" onclick="window.executeSplineSmartGreen()" style="width:100%;">
+                        <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="5" y1="22" x2="5" y2="15"/></svg>
+                        <span id="gs-build-green-btn-text" class="btn-label" data-i18n="gs_create_green">Skapa green</span>
                     </button>
 
                     <!-- Adoption button for pre-existing green flags -->
@@ -2415,8 +2560,9 @@
                     </div>
 
                     <!-- Primary Action Button: Create Bunker -->
-                    <button type="button" id="sbk-build-bunker-btn" onclick="window.executeSmartBunker()" style="width:100%; background:linear-gradient(135deg, #fbbf24, #f59e0b); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(251,191,36,0.25); transition:all 0.2s;">
-                        🏖️ <span id="sbk-build-bunker-btn-text" data-i18n="sb_build_bunker">Skapa bunker</span>
+                    <button type="button" id="sbk-build-bunker-btn" class="ui-btn-primary" onclick="window.executeSmartBunker()" style="width:100%;">
+                        <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 16c2.5-3 6-4 10-4s7.5 1 10 4"/><path d="M4 19h16"/><circle cx="12" cy="8" r="2"/></svg>
+                        <span id="sbk-build-bunker-btn-text" class="btn-label" data-i18n="sb_build_bunker">Skapa bunker</span>
                     </button>
                 </div>
 
@@ -2649,8 +2795,9 @@
                     </div>
 
                     <!-- Primary Action Button: Create Fairway -->
-                    <button type="button" id="sf-build-fairway-btn" onclick="window.executeSmartFairway()" style="width:100%; background:linear-gradient(135deg, #79b84f, #4ade80); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(125,185,82,0.3); transition:all 0.2s;">
-                        🏌️ <span id="sf-build-fairway-btn-text" data-i18n="sb_build_fairway">Skapa fairway</span>
+                    <button type="button" id="sf-build-fairway-btn" class="ui-btn-primary" onclick="window.executeSmartFairway()" style="width:100%;">
+                        <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20c2-5 4-11 7-16"/><path d="M19 20c-2-5-4-11-7-16"/><path d="M7 16h10"/></svg>
+                        <span id="sf-build-fairway-btn-text" class="btn-label" data-i18n="sb_build_fairway">Skapa fairway</span>
                     </button>
                 </div>
 
@@ -2870,8 +3017,9 @@
                     </div>
 
                     <!-- Primary Action Button: Create Tee Box -->
-                    <button type="button" id="st-build-tee-btn" onclick="window.executeSmartTee()" style="width:100%; background:linear-gradient(135deg, #38bdf8, #0ea5e9); color:#0f172a; border:none; padding:10px 8px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 4px 12px rgba(56,189,248,0.3); transition:all 0.2s;">
-                        🟦 <span id="st-build-tee-btn-text" data-i18n="sb_build_tee">Skapa teebox</span>
+                    <button type="button" id="st-build-tee-btn" class="ui-btn-primary" onclick="window.executeSmartTee()" style="width:100%;">
+                        <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/></svg>
+                        <span id="st-build-tee-btn-text" class="btn-label" data-i18n="sb_build_tee">Skapa teebox</span>
                     </button>
                 </div>
 
@@ -3345,8 +3493,8 @@
                 drawer.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
             }
             if (railToggle) {
-                railToggle.textContent = collapsed ? '»' : '«';
                 railToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                railToggle.title = collapsed ? 'Öppna verktygspanel' : 'Fäll in verktygspanel';
                 railToggle.style.opacity = canShow ? '1' : '0.45';
             }
             if (typeof window.updateBottomHUDLayout === 'function') {
@@ -7253,8 +7401,8 @@
         if (btn) btn.textContent = isSv ? 'Rutnät' : 'Grid';
         if (window._builderGridMode === 0) {
             if (btnEl) {
-                btnEl.style.color = '#94a3b8';
-                btnEl.style.background = 'transparent';
+                btnEl.style.color = '';
+                btnEl.style.background = '';
                 btnEl.classList.remove('active');
             }
             if (legend) legend.style.display = 'none';
@@ -7270,6 +7418,7 @@
             if (typeof window.updateBottomHUDLayout === 'function') window.updateBottomHUDLayout();
             showBuildToast(isSv ? '📐 Terrängrutnät: PÅ (100m + 25m)' : '📐 Terrain Grid: ON (100m + 25m)', '#38bdf8');
         }
+        if (typeof window.syncViewMenuIndicator === 'function') window.syncViewMenuIndicator();
     };
     
     // Dynamically coordinate bottom HUD pills (tool-hints, slope-legend, grid-scale-legend)
@@ -7330,8 +7479,8 @@
         }
         if (topBtnEl) {
             if (mode === 'OFF') {
-                topBtnEl.style.color = '#94a3b8';
-                topBtnEl.style.background = 'transparent';
+                topBtnEl.style.color = '';
+                topBtnEl.style.background = '';
                 topBtnEl.classList.remove('active');
             } else if (mode === 'GRID') {
                 topBtnEl.style.color = '#38bdf8';
@@ -7343,6 +7492,7 @@
                 topBtnEl.classList.add('active');
             }
         }
+        if (typeof window.syncViewMenuIndicator === 'function') window.syncViewMenuIndicator();
 
         // 2. Game HUD Button (Play / Putting mode)
         let gameBtnLabel = document.getElementById('game-slope-btn-label');
@@ -11490,6 +11640,12 @@
             e.preventDefault();
             if (typeof window.performRedo === 'function') window.performRedo();
         } else if (e.key === 'Escape') {
+            let mainMenu = document.getElementById('dropdown-menu');
+            let viewMenu = document.getElementById('view-dropdown-menu');
+            if ((mainMenu && mainMenu.style.display === 'flex') || (viewMenu && viewMenu.style.display === 'flex')) {
+                if (typeof window.closeTopbarMenus === 'function') window.closeTopbarMenus();
+                return;
+            }
             if (window._placingTeeLayout) { window._placingTeeLayout = false; }
             if (window._movingGreenMode || window._movingFlagMode || window._movingFairwayMode || window._movingBunkerMode) {
                 window._movingGreenMode = false;
@@ -12415,10 +12571,10 @@
 
         if(btnBuild) {
             btnBuild.style.display = (mode === 'TEST') ? 'inline-flex' : 'none';
-            btnBuild.style.background = 'linear-gradient(135deg, #38bdf8, #0284c7)';
-            btnBuild.style.color = '#fff';
             let buildText = (typeof window.t === 'function' ? window.t('ed_build_mode') : 'Tillbaka till Bygg');
-            btnBuild.innerHTML = '🔨 ' + buildText;
+            let buildLabel = btnBuild.querySelector('.btn-label');
+            if (buildLabel) buildLabel.textContent = buildText;
+            else btnBuild.textContent = buildText;
             btnBuild.onclick = () => setMode('BUILD');
         }
         
@@ -12426,20 +12582,27 @@
             btnPlay.style.display = (mode === 'TEST' || mode === 'PLAY') ? 'none' : 'inline-flex';
             // a course is played from its saved copy; only the driving range is still tried out right here
             let rangeEditor = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
-            let testText = (typeof window.t === 'function' ? window.t(rangeEditor ? 'ed_test_course' : 'ed_save_play') : (rangeEditor ? 'Testspela' : 'Spara & spela'));
-            btnPlay.innerHTML = '▶ ' + testText;
+            let playKey = rangeEditor ? 'ed_test_course' : 'ed_save_play';
+            let testText = (typeof window.t === 'function' ? window.t(playKey) : (rangeEditor ? 'Testspela' : 'Spara & spela'));
+            let playLabel = btnPlay.querySelector('.btn-label');
+            if (playLabel) {
+                playLabel.setAttribute('data-i18n', playKey);
+                playLabel.textContent = testText;
+            } else {
+                btnPlay.textContent = testText;
+            }
             btnPlay.onclick = rangeEditor ? () => setMode('TEST') : () => window.saveAndPlay();
-            btnPlay.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-            btnPlay.style.color = '#fff';
-            btnPlay.style.border = 'none';
         }
         
         safeSetDisplay('btn-quick-save', mode === 'BUILD' ? 'inline-flex' : 'none');
         if (typeof window.refreshBuilderButtons === 'function') window.refreshBuilderButtons();
         safeSetDisplay('btn-publish', mode === 'BUILD' ? 'inline-flex' : 'none');
+        safeSetDisplay('topbar-course-name', mode === 'BUILD' ? 'inline-block' : 'none');
         safeSetDisplay('save-status-indicator', mode === 'BUILD' ? 'inline-flex' : 'none');
         safeSetDisplay('topbar-undo-group', mode === 'BUILD' ? 'flex' : 'none');
         safeSetDisplay('topbar-view-group', mode === 'BUILD' ? 'flex' : 'none');
+        if (mode !== 'BUILD' && typeof window.closeTopbarMenus === 'function') window.closeTopbarMenus();
+        if (typeof window.syncTopbarCourseName === 'function') window.syncTopbarCourseName();
         
         if (mode === 'BUILD' && typeof window.disableSwingMode === 'function') {
             window.disableSwingMode();
@@ -12782,41 +12945,36 @@
             else if ((window._smartBuilderType === 'TEE' || window._smartBuilderType === 'AIM') && window.TeeStudio) window.TeeStudio.sync();
         }
         
+        const TOOL_ACTIVE_CLASSES = ['active', 'active-green', 'active-yellow', 'active-red'];
+        function setToolBtnState(el, activeClass) {
+            if (!el || !el.classList) return;
+            el.classList.remove.apply(el.classList, TOOL_ACTIVE_CLASSES);
+            if (activeClass) el.classList.add(activeClass);
+        }
+
         let tools = ['inspect', 'sculpt', 'smooth', 'flatten', 'ramp', 'noise', 'water', 'spline', 'paint', 'smartbuilder', 'testputt', 'ridge', 'props', 'block', 'hole', 'measure', 'eraser', 'colorize', 'mtn', 'poly', 'env'];
         
         tools.forEach(t => {
             let btn = document.getElementById('tool-' + t);
-            if(btn) {
-                let isPro = btn.classList.contains('pro-tool');
-                if(t === 'testputt') btn.className = 'sys-btn';
-                else btn.className = isPro ? 'pro-tool' : '';
-            }
+            if (btn) setToolBtnState(btn, null);
         });
         
         let tId = toolName.toLowerCase().replace('_','');
         let activeBtn = document.getElementById('tool-' + tId);
         if (activeBtn) {
-            let isPro = activeBtn.classList.contains('pro-tool');
-            let base = isPro ? 'pro-tool ' : '';
-            if (toolName === 'SMART_BUILDER' || toolName === 'HOLE') activeBtn.className = base + 'active-green';
-            else if (toolName === 'MEASURE') activeBtn.className = base + 'active-yellow';
-            else if (toolName === 'TEST_PUTT') activeBtn.className = 'sys-btn active';
-            else if (toolName === 'ERASER') activeBtn.className = base + 'active-red';
-            else if (toolName === 'MTN') activeBtn.className = base + 'active-yellow';
-            else activeBtn.className = base + 'active';
+            if (toolName === 'SMART_BUILDER' || toolName === 'HOLE') setToolBtnState(activeBtn, 'active-green');
+            else if (toolName === 'MEASURE') setToolBtnState(activeBtn, 'active-yellow');
+            else if (toolName === 'TEST_PUTT') setToolBtnState(activeBtn, 'active');
+            else if (toolName === 'ERASER') setToolBtnState(activeBtn, 'active-red');
+            else if (toolName === 'MTN') setToolBtnState(activeBtn, 'active-yellow');
+            else setToolBtnState(activeBtn, 'active');
         }
 
         const topEraserBtn = document.getElementById('topbar-btn-eraser');
         if (topEraserBtn) {
-            if (toolName === 'ERASER') {
-                topEraserBtn.style.background = '#ef4444';
-                topEraserBtn.style.color = '#ffffff';
-                topEraserBtn.style.boxShadow = '0 2px 10px rgba(239, 68, 68, 0.4)';
-            } else {
-                topEraserBtn.style.background = 'transparent';
-                topEraserBtn.style.color = '#94a3b8';
-                topEraserBtn.style.boxShadow = 'none';
-            }
+            const isEraser = (toolName === 'ERASER');
+            topEraserBtn.classList.toggle('is-active', isEraser);
+            topEraserBtn.setAttribute('aria-pressed', isEraser ? 'true' : 'false');
         }
         
         // --- FLYOUT CONTROLS & GROUP HIGHLIGHTS (Nivå 1 & 2) ---
@@ -12836,10 +12994,10 @@
         let flyoutHolesStrip = document.getElementById('flyout-holes-strip');
 
         if (SCULPT_FAMILY.includes(toolName)) {
-            if (sculptGroupBtn) sculptGroupBtn.className = 'active';
-            if (objectsGroupBtn) objectsGroupBtn.className = '';
-            if (envGroupBtn) envGroupBtn.className = '';
-            if (smartBuilderBtn) smartBuilderBtn.className = '';
+            setToolBtnState(sculptGroupBtn, 'active');
+            setToolBtnState(objectsGroupBtn, null);
+            setToolBtnState(envGroupBtn, null);
+            setToolBtnState(smartBuilderBtn, null);
             if (leftFlyout) leftFlyout.style.display = 'flex';
             if (flyoutSculptStrip) flyoutSculptStrip.style.display = 'flex';
             if (flyoutObjStrip) flyoutObjStrip.style.display = 'none';
@@ -12851,10 +13009,10 @@
             let subBtn = document.getElementById('flyout-sculpt-' + toolName.toLowerCase());
             if (subBtn) subBtn.classList.add('active');
         } else if (OBJECTS_FAMILY.includes(toolName)) {
-            if (objectsGroupBtn) objectsGroupBtn.className = 'active';
-            if (sculptGroupBtn) sculptGroupBtn.className = '';
-            if (envGroupBtn) envGroupBtn.className = '';
-            if (smartBuilderBtn) smartBuilderBtn.className = '';
+            setToolBtnState(objectsGroupBtn, 'active');
+            setToolBtnState(sculptGroupBtn, null);
+            setToolBtnState(envGroupBtn, null);
+            setToolBtnState(smartBuilderBtn, null);
             if (leftFlyout) leftFlyout.style.display = 'flex';
             if (flyoutObjStrip) flyoutObjStrip.style.display = 'flex';
             if (flyoutSculptStrip) flyoutSculptStrip.style.display = 'none';
@@ -12878,10 +13036,10 @@
                 if (btn) btn.classList.add('active');
             }
         } else if (ENV_FAMILY.includes(toolName)) {
-            if (envGroupBtn) envGroupBtn.className = 'active';
-            if (sculptGroupBtn) sculptGroupBtn.className = '';
-            if (objectsGroupBtn) objectsGroupBtn.className = '';
-            if (smartBuilderBtn) smartBuilderBtn.className = '';
+            setToolBtnState(envGroupBtn, 'active');
+            setToolBtnState(sculptGroupBtn, null);
+            setToolBtnState(objectsGroupBtn, null);
+            setToolBtnState(smartBuilderBtn, null);
             if (leftFlyout) leftFlyout.style.display = 'flex';
             if (flyoutEnvStrip) flyoutEnvStrip.style.display = 'flex';
             if (flyoutObjStrip) flyoutObjStrip.style.display = 'none';
@@ -12892,13 +13050,13 @@
             if (window.selectEnvCategory) window.selectEnvCategory(cat);
         } else if (toolName === 'HOLE') {
             // the Range Tee (range builder): its own button (lit above) and the hole panel, not the hole builder and its flyout
-            [smartBuilderBtn, sculptGroupBtn, objectsGroupBtn, envGroupBtn].forEach(function (g) { if (g) g.className = ''; });
+            [smartBuilderBtn, sculptGroupBtn, objectsGroupBtn, envGroupBtn].forEach(function (g) { setToolBtnState(g, null); });
             if (leftFlyout) leftFlyout.style.display = 'none';
         } else if (HOLES_FAMILY.includes(toolName)) {
-            if (smartBuilderBtn) smartBuilderBtn.className = 'active-green';
-            if (sculptGroupBtn) sculptGroupBtn.className = '';
-            if (objectsGroupBtn) objectsGroupBtn.className = '';
-            if (envGroupBtn) envGroupBtn.className = '';
+            setToolBtnState(smartBuilderBtn, 'active-green');
+            setToolBtnState(sculptGroupBtn, null);
+            setToolBtnState(objectsGroupBtn, null);
+            setToolBtnState(envGroupBtn, null);
             if (leftFlyout) leftFlyout.style.display = 'flex';
             if (flyoutHolesStrip) flyoutHolesStrip.style.display = 'flex';
             if (flyoutSculptStrip) flyoutSculptStrip.style.display = 'none';
@@ -12910,10 +13068,10 @@
             let subBtn = document.getElementById('flyout-hole-' + curType.toLowerCase());
             if (subBtn) subBtn.classList.add('active');
         } else {
-            if (sculptGroupBtn) sculptGroupBtn.className = '';
-            if (objectsGroupBtn) objectsGroupBtn.className = '';
-            if (envGroupBtn) envGroupBtn.className = '';
-            if (smartBuilderBtn) smartBuilderBtn.className = '';
+            setToolBtnState(sculptGroupBtn, null);
+            setToolBtnState(objectsGroupBtn, null);
+            setToolBtnState(envGroupBtn, null);
+            setToolBtnState(smartBuilderBtn, null);
             if (flyoutHolesStrip) flyoutHolesStrip.style.display = 'none';
             if (leftFlyout) leftFlyout.style.display = 'none';
         }

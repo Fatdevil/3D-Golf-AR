@@ -666,9 +666,10 @@
         let ok = courseHoles.some(h => h && h.flag && h.tees && (h.tees.yellow || h.tees.white || h.tees.red || h.tees.black));
         if (!ok) { showBuildToast(tr('sp_need_hole', 'Lägg ut minst ett hål med tee och flagga först'), '#ef4444'); return; }
         const btn = document.getElementById('btn-mode-play');
-        const label = btn ? btn.innerHTML : '';
+        const labelEl = btn ? (btn.querySelector('.btn-label') || btn) : null;
+        const prevLabel = labelEl ? labelEl.textContent : '';
         window._savingForPlay = true;
-        if (btn) btn.innerHTML = '⏳ ' + tr('sp_saving', 'Sparar...');
+        if (labelEl) labelEl.textContent = tr('sp_saving', 'Sparar...');
         // a published course is never overwritten by playing it: its edits go to a separate draft copy that is reused each time
         const origCode = currentEditCode;
         const published = !!origCode && !!window._editIsPublished;
@@ -686,7 +687,7 @@
         window._savingForPlay = false;
         window._savingPlayCopy = false;
         if (!saved || !playCode) {
-            if (btn) btn.innerHTML = label;
+            if (labelEl) labelEl.textContent = prevLabel;
             showBuildToast(tr('sp_failed', 'Det gick inte att spara banan. Försök igen.'), '#ef4444');
             return;
         }

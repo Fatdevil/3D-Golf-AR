@@ -563,14 +563,17 @@
                     let areaText = (pts.length >= 3 && area > 0) ? (' (~' + area + ' m²)') : '';
                     let bkNextNum = (bunkers ? bunkers.length + 1 : 1);
                     let btnLabel = (isSv ? `Skapa Bunker ${bkNextNum}` : `Create Bunker ${bkNextNum}`) + areaText;
-                    buildBtn.innerHTML = '🏖️ ' + btnLabel;
+                    let lblEl = buildBtn.querySelector('.btn-label') || buildBtn;
+                    lblEl.textContent = btnLabel;
 
                     if (pts.length >= 3) {
+                        buildBtn.classList.remove('is-disabled');
                         buildBtn.style.opacity = '1';
                         buildBtn.style.cursor = 'pointer';
                         buildBtn.classList.add('pulse-green-btn');
                     } else {
-                        buildBtn.style.opacity = '0.5';
+                        buildBtn.classList.add('is-disabled');
+                        buildBtn.style.opacity = '';
                         buildBtn.style.cursor = 'not-allowed';
                         buildBtn.classList.remove('pulse-green-btn');
                     }

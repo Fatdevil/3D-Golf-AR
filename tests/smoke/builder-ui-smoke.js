@@ -134,6 +134,7 @@ async function setupContext(browser, viewport) {
     camera.position.set(0, 90, 90);
     controls.target.set(0, 0, 0);
     controls.update();
+    camera.updateMatrixWorld(true);
   });
   const beforePanelClick = await page.evaluate(function () { return (window.smartGreenPoints || []).length; });
   await page.mouse.click(210, 320); // well inside the 72..360px left dock drawer
@@ -212,6 +213,7 @@ async function setupContext(browser, viewport) {
     camera.position.set(0, 90, 90);
     controls.target.set(0, 0, 0);
     controls.update();
+    camera.updateMatrixWorld(true);
   });
   await page.mouse.click(760, 360);
   await page.mouse.click(860, 420);
@@ -237,6 +239,7 @@ async function setupContext(browser, viewport) {
     camera.position.set(0, 90, 90);
     controls.target.set(0, 0, 0);
     controls.update();
+    camera.updateMatrixWorld(true);
   });
   await page.mouse.click(760, 360);
   await page.mouse.click(860, 420);
@@ -259,17 +262,126 @@ async function setupContext(browser, viewport) {
     propsDraftCheck.flyout === 'flex' && propsDraftCheck.objStrip === 'flex',
     JSON.stringify({ paintDraftCheck, propsDraftCheck }));
 
+  currentStep = 'pr2-topbar-svg-dropdowns';
+  // PR 2: 48px single-row topbar, course name sync, SVG child clicks inside hamburger & Visa dropdowns, active Suddverktyg + Esc
+  const topbarCheck = await page.evaluate(function () {
+    const bar = document.getElementById('top-bar').getBoundingClientRect();
+    const inp = document.getElementById('course-name-input');
+    inp.value = 'Nordic Links Championship 2026';
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    const syncedName = document.getElementById('topbar-course-name').textContent.trim();
+
+    // Dispatch click directly on <svg> / <path> child nodes inside #btn-hamburger and #btn-view-menu
+    const hbSvg = document.querySelector('#btn-hamburger svg line') || document.querySelector('#btn-hamburger svg');
+    hbSvg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const hbOpenAfterSvgClick = document.getElementById('dropdown-menu').style.display === 'flex';
+    // Clicking outside closes hamburger menu
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const hbClosedAfterOutside = document.getElementById('dropdown-menu').style.display === 'none';
+
+    const viewSvg = document.querySelector('#btn-view-menu svg circle') || document.querySelector('#btn-view-menu svg');
+    viewSvg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const viewOpenAfterSvgClick = document.getElementById('view-dropdown-menu').style.display === 'flex';
+    // Toggle grid & slope via buttons inside Visa dropdown
+    document.getElementById('btn-grid-toggle').click();
+    const dotAfterGrid = document.getElementById('btn-view-menu').classList.contains('has-active-overlay');
+    document.getElementById('btn-grid-toggle').click(); // turn grid back off
+    const dotAfterOff = document.getElementById('btn-view-menu').classList.contains('has-active-overlay');
+    // Escape closes open dropdown
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const viewClosedAfterEsc = document.getElementById('view-dropdown-menu').style.display === 'none';
+
+    // Suddverktyg active state & Escape cancellation
+    const eraserSvg = document.querySelector('#topbar-btn-eraser svg path') || document.querySelector('#topbar-btn-eraser svg');
+    eraserSvg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const eraserActive = currentTool === 'ERASER' &&
+      document.getElementById('topbar-btn-eraser').classList.contains('is-active') &&
+      document.getElementById('topbar-btn-eraser').getAttribute('aria-pressed') === 'true' &&
+      getComputedStyle(document.querySelector('#topbar-btn-eraser .eraser-active-label')).display !== 'none';
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const eraserCancelled = currentTool === 'INSPECT' &&
+      !document.getElementById('topbar-btn-eraser').classList.contains('is-active') &&
+      document.getElementById('topbar-btn-eraser').getAttribute('aria-pressed') === 'false';
+
+    return {
+      barHeight: Math.round(bar.height),
+      syncedName,
+      hbOpenAfterSvgClick,
+      hbClosedAfterOutside,
+      viewOpenAfterSvgClick,
+      dotAfterGrid,
+      dotAfterOff,
+      viewClosedAfterEsc,
+      eraserActive,
+      eraserCancelled
+    };
+  });
+  check('48px topbar syncs course name, handles SVG child clicks on hamburger/Visa/Suddverktyg, and Escape closes menus & cancels Eraser',
+    topbarCheck.barHeight <= 50 && topbarCheck.syncedName === 'Nordic Links Championship 2026' &&
+    topbarCheck.hbOpenAfterSvgClick && topbarCheck.hbClosedAfterOutside &&
+    topbarCheck.viewOpenAfterSvgClick && topbarCheck.dotAfterGrid && !topbarCheck.dotAfterOff &&
+    topbarCheck.viewClosedAfterEsc && topbarCheck.eraserActive && topbarCheck.eraserCancelled,
+    JSON.stringify(topbarCheck));
+
+  currentStep = 'pr2-svg-class-preservation';
+  // PR 2: Verify JS updates (setTool, toggleProMode, setMode, Studios, updateSmartGreenHUD) never erase .ui-btn-tool, SVG icons, or data-i18n
+  const preserveCheck = await page.evaluate(function () {
+    ['SMART_BUILDER', 'SCULPT', 'PAINT', 'WATER', 'PROPS', 'ENV', 'INSPECT'].forEach(function (t) { setTool(t); });
+    const railButtons = ['tool-inspect', 'tool-smartbuilder', 'tool-sculpt-group', 'tool-paint', 'tool-water', 'tool-objects-group', 'tool-env-group'];
+    const railIntact = railButtons.every(function (id) {
+      const el = document.getElementById(id);
+      return !!(el && el.classList.contains('ui-btn-tool') && el.querySelector('svg') && el.querySelector('.btn-label'));
+    });
+
+    // toggleProMode twice must preserve SVG icon and toggle label cleanly
+    toggleProMode();
+    const proOnHasSvg = !!document.querySelector('#btn-pro-toggle svg') && document.querySelector('#btn-pro-toggle .btn-label').textContent === 'PRO';
+    toggleProMode();
+    const proOffHasSvg = !!document.querySelector('#btn-pro-toggle svg') && document.querySelector('#btn-pro-toggle .btn-label').textContent === 'BASIC';
+
+    // setMode('TEST') -> setMode('BUILD') must preserve SVGs and Course 'Spara & spela'
+    courseHoles[0].tees.yellow = { x: 0, y: 0, z: 0, rot: 0 };
+    courseHoles[0].flag = { x: 0, y: 0, z: -120 };
+    setMode('TEST');
+    const buildBtnHasSvg = !!document.querySelector('#btn-mode-build svg') && !!document.querySelector('#btn-mode-build .btn-label');
+    setMode('BUILD');
+    const playBtn = document.getElementById('btn-mode-play');
+    const playBtnIntact = !!(playBtn && playBtn.classList.contains('ui-btn-primary') && playBtn.querySelector('svg') &&
+      playBtn.querySelector('.btn-label') && playBtn.querySelector('.btn-label').getAttribute('data-i18n') === 'ed_save_play');
+
+    // Syncing all 4 studios + updateSmartGreenHUD must preserve SVGs and .btn-label[data-i18n] on build buttons
+    setTool('SMART_BUILDER');
+    if (window.GreenStudio) window.GreenStudio.sync();
+    if (window.TeeStudio) window.TeeStudio.sync();
+    if (window.BunkerStudio) window.BunkerStudio.sync();
+    if (window.FairwayStudio) window.FairwayStudio.sync();
+    if (typeof window.updateSmartGreenHUD === 'function') window.updateSmartGreenHUD();
+    const studioBuildIds = ['gs-build-green-btn', 'st-build-tee-btn', 'sbk-build-bunker-btn', 'sf-build-fairway-btn'];
+    const studiosIntact = studioBuildIds.every(function (id) {
+      const b = document.getElementById(id);
+      const lbl = b && b.querySelector('.btn-label');
+      return !!(b && b.classList.contains('ui-btn-primary') && b.querySelector('svg') && lbl && lbl.getAttribute('data-i18n'));
+    });
+
+    return { railIntact, proOnHasSvg, proOffHasSvg, buildBtnHasSvg, playBtnIntact, studiosIntact };
+  });
+  check('setTool, toggleProMode, setMode, and all 4 Studios preserve .ui-btn-tool/.ui-btn-primary classes, SVGs, and data-i18n spans',
+    preserveCheck.railIntact && preserveCheck.proOnHasSvg && preserveCheck.proOffHasSvg &&
+    preserveCheck.buildBtnHasSvg && preserveCheck.playBtnIntact && preserveCheck.studiosIntact,
+    JSON.stringify(preserveCheck));
+
   currentStep = 'ipad-portrait';
-  // Verify iPad portrait (768x1024) narrows dock to <= 320px leaving >= 448px free viewport
+  // Verify iPad portrait (768x1024) narrows dock to <= 320px leaving >= 448px free viewport AND topbar stays single-row <= 50px
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.waitForTimeout(300);
   const ipadMetrics = await page.evaluate(function () {
     const rail = document.getElementById('left-toolbar').getBoundingClientRect();
     const drawer = document.getElementById('builder-dock-drawer').getBoundingClientRect();
-    return { railW: Math.round(rail.width), drawerRight: Math.round(drawer.right), freeWidth: Math.round(window.innerWidth - drawer.right) };
+    const bar = document.getElementById('top-bar').getBoundingClientRect();
+    return { railW: Math.round(rail.width), drawerRight: Math.round(drawer.right), freeWidth: Math.round(window.innerWidth - drawer.right), barHeight: Math.round(bar.height) };
   });
-  check('iPad portrait (768x1024): dock narrows to <= 320px leaving >= 440px free 3D viewport',
-    ipadMetrics.railW <= 66 && ipadMetrics.drawerRight <= 322 && ipadMetrics.freeWidth >= 440,
+  check('iPad portrait (768x1024): dock narrows to <= 320px leaving >= 440px free 3D viewport and topbar stays 48px',
+    ipadMetrics.railW <= 66 && ipadMetrics.drawerRight <= 322 && ipadMetrics.freeWidth >= 440 && ipadMetrics.barHeight <= 50,
     JSON.stringify(ipadMetrics));
 
   currentStep = 'mobile-390';
@@ -283,6 +395,7 @@ async function setupContext(browser, viewport) {
     camera.position.set(0, 90, 90);
     controls.target.set(0, 0, 0);
     controls.update();
+    camera.updateMatrixWorld(true);
     const rail = document.getElementById('left-toolbar').getBoundingClientRect();
     const drawer = document.getElementById('builder-dock-drawer').getBoundingClientRect();
     const scrollEl = document.getElementById('builder-dock-scroll');
@@ -310,7 +423,7 @@ async function setupContext(browser, viewport) {
   await ctxDesk.close();
 
   currentStep = 'range-mode';
-  // ---- 2. Range Mode: Range Tee panel open in left dock while #left-flyout-toolbar stays display:none ----
+  // ---- 2. Range Mode: Range Tee panel open in left dock while #left-flyout-toolbar stays display:none + Testspela CTA preserved ----
   const ctxRange = await setupContext(browser, { width: 1200, height: 750 });
   const rpage = await ctxRange.newPage();
   rpage.on('pageerror', function (e) { errors.push('[' + currentStep + '] ' + e.message.slice(0, 140) + ' @ ' + String(e.stack || '').split('\n').slice(1, 2).join('').slice(0, 120)); });
@@ -322,18 +435,24 @@ async function setupContext(browser, viewport) {
     document.getElementById('tool-hole').click();
     const drawer = document.getElementById('builder-dock-drawer').getBoundingClientRect();
     const holePanel = document.getElementById('hole-picker-group').getBoundingClientRect();
+    const playBtn = document.getElementById('btn-mode-play');
+    const playLbl = playBtn && playBtn.querySelector('.btn-label');
     return {
       tool: currentTool,
       flyout: getComputedStyle(document.getElementById('left-flyout-toolbar')).display,
       holePanelDisplay: getComputedStyle(document.getElementById('hole-picker-group')).display,
       drawerRight: Math.round(drawer.right),
       holePanelRight: Math.round(holePanel.right),
-      collapsed: document.body.classList.contains('dock-collapsed')
+      collapsed: document.body.classList.contains('dock-collapsed'),
+      rangePlayHasSvg: !!(playBtn && playBtn.querySelector('svg')),
+      rangePlayKey: playLbl ? playLbl.getAttribute('data-i18n') : null,
+      rangeCourseName: document.getElementById('topbar-course-name') ? document.getElementById('topbar-course-name').textContent.trim() : null
     };
   });
-  check('Range Tee opens #hole-picker-group in left dock while #left-flyout-toolbar stays display:none',
+  check('Range Tee opens #hole-picker-group in left dock while #left-flyout-toolbar stays display:none and Testspela CTA keeps SVG',
     rangeCheck.tool === 'HOLE' && rangeCheck.flyout === 'none' && rangeCheck.holePanelDisplay === 'flex' &&
-    !rangeCheck.collapsed && rangeCheck.drawerRight <= 362 && rangeCheck.holePanelRight <= 362,
+    !rangeCheck.collapsed && rangeCheck.drawerRight <= 362 && rangeCheck.holePanelRight <= 362 &&
+    rangeCheck.rangePlayHasSvg && rangeCheck.rangePlayKey === 'ed_test_course' && rangeCheck.rangeCourseName === 'Driving Range',
     JSON.stringify(rangeCheck));
   await rpage.evaluate(function () { window._pause3D = true; });
   await rpage.waitForTimeout(100);

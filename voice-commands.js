@@ -244,19 +244,24 @@
     function mount() {
         if (btn || !SR) return;
         const css = document.createElement('style');
-        css.textContent = '#voice-ctl{position:fixed;right:14px;bottom:96px;z-index:9000;display:none;align-items:center;gap:6px;font-family:Inter,sans-serif}' +
+        css.textContent = '#voice-ctl{position:fixed;right:16px;bottom:24px;z-index:9000;display:none;align-items:center;gap:6px;font-family:Inter,sans-serif;transition:bottom .2s ease}' +
             'body.voice-build #voice-ctl{display:flex}' +
-            '#voice-btn{width:44px;height:44px;border-radius:50%;border:1px solid #334155;background:rgba(15,23,42,.92);color:#cbd5e1;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.35)}' +
+            '#voice-btn{width:40px;height:40px;border-radius:10px;border:1px solid #334155;background:rgba(15,23,42,.94);color:#cbd5e1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.38);transition:background .15s,border-color .15s,color .15s}' +
+            '#voice-btn:hover{background:#273549;border-color:#475569;color:#fff}' +
+            '#voice-btn svg{width:18px;height:18px;pointer-events:none}' +
             '#voice-btn.voice-on{background:#dc2626;border-color:#fecaca;color:#fff;animation:voicePulse 1.4s ease-in-out infinite}' +
-            '#voice-lang{height:28px;min-width:34px;border-radius:14px;border:1px solid #334155;background:rgba(15,23,42,.92);color:#94a3b8;font-size:11px;font-weight:800;cursor:pointer}' +
+            '#voice-lang{height:30px;min-width:36px;padding:0 8px;border-radius:8px;border:1px solid #334155;background:rgba(15,23,42,.94);color:#cbd5e1;font-size:11px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s}' +
+            '#voice-lang:hover{background:#273549;border-color:#475569;color:#fff}' +
             'body.voice-range #voice-chip{right:auto;left:50%;bottom:84px;transform:translateX(-50%);text-align:center;font-weight:700}' +
-            '#voice-chip{position:fixed;right:14px;bottom:146px;max-width:min(78vw,340px);z-index:9000;background:rgba(15,23,42,.92);color:#e2e8f0;border:1px solid #334155;border-radius:10px;padding:6px 10px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none}' +
+            '#voice-chip{position:fixed;right:16px;bottom:74px;max-width:min(78vw,340px);z-index:9000;background:rgba(15,23,42,.94);color:#e2e8f0;border:1px solid #334155;border-radius:10px;padding:6px 10px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none}' +
+            '@media (max-width:599px){body.voice-build:not(.dock-collapsed) #voice-ctl{bottom:calc(44vh + 52px)}body.voice-build:not(.dock-collapsed) #voice-chip{bottom:calc(44vh + 100px)}}' +
             '@keyframes voicePulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.55)}50%{box-shadow:0 0 0 10px rgba(220,38,38,0)}}' +
             '@media (prefers-reduced-motion:reduce){#voice-btn.voice-on{animation:none}}';
         document.head.appendChild(css);
         const wrap = document.createElement('div'); wrap.id = 'voice-ctl';
         langBtn = document.createElement('button'); langBtn.id = 'voice-lang'; langBtn.type = 'button';
-        btn = document.createElement('button'); btn.id = 'voice-btn'; btn.type = 'button'; btn.textContent = '🎙️';
+        btn = document.createElement('button'); btn.id = 'voice-btn'; btn.type = 'button';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>';
         chip = document.createElement('div'); chip.id = 'voice-chip'; chip.setAttribute('aria-live', 'polite');
         wrap.appendChild(langBtn); wrap.appendChild(btn);
         document.body.appendChild(wrap); document.body.appendChild(chip);

@@ -583,13 +583,16 @@ function updateSmartGreenHUD() {
         let gsBuildBtn = document.getElementById('gs-build-green-btn');
         if (gsBuildBtn && window._smartBuilderType === 'GREEN') {
             let areaText = (pts.length >= 3 && area > 0) ? (' (~' + Math.round(area) + ' m²)') : '';
-            gsBuildBtn.innerHTML = '⛳ ' + (isSv ? 'Skapa green' : 'Create Green') + areaText;
+            let gsLbl = gsBuildBtn.querySelector('.btn-label') || gsBuildBtn;
+            gsLbl.textContent = (isSv ? 'Skapa green' : 'Create Green') + areaText;
             if (pts.length >= 3) {
+                gsBuildBtn.classList.remove('is-disabled');
                 gsBuildBtn.style.opacity = '1';
                 gsBuildBtn.style.cursor = 'pointer';
                 gsBuildBtn.classList.add('pulse-green-btn');
             } else {
-                gsBuildBtn.style.opacity = '0.5';
+                gsBuildBtn.classList.add('is-disabled');
+                gsBuildBtn.style.opacity = '';
                 gsBuildBtn.style.cursor = 'not-allowed';
                 gsBuildBtn.classList.remove('pulse-green-btn');
             }
@@ -623,9 +626,11 @@ function updateSmartGreenHUD() {
         let isSv = (window.getGolfLanguage && window.getGolfLanguage() === 'sv');
         let gsBuildBtn = document.getElementById('gs-build-green-btn');
         if (gsBuildBtn && window._smartBuilderType === 'GREEN') {
-            gsBuildBtn.innerHTML = '⛳ ' + (isSv ? 'Skapa green' : 'Create Green');
+            let gsLbl = gsBuildBtn.querySelector('.btn-label') || gsBuildBtn;
+            gsLbl.textContent = isSv ? 'Skapa green' : 'Create Green';
             gsBuildBtn.classList.remove('pulse-green-btn');
-            gsBuildBtn.style.opacity = '0.5';
+            gsBuildBtn.classList.add('is-disabled');
+            gsBuildBtn.style.opacity = '';
             gsBuildBtn.style.cursor = 'not-allowed';
         }
         if (buildBtn && window._smartBuilderType === 'GREEN') {

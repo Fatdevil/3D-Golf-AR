@@ -1027,6 +1027,7 @@
                         window._editIsPublished = data.is_draft !== true;
                         currentEditCode = data.share_code; 
                         if(document.getElementById('course-name-input')) document.getElementById('course-name-input').value = data.name;
+                        if(typeof window.syncTopbarCourseName === 'function') window.syncTopbarCourseName();
                         if(document.getElementById('author-name-input')) document.getElementById('author-name-input').value = data.author;
                         // a published course is updated with Publish (a new version of it); only a draft is saved as a draft
                         if (document.getElementById('btn-save-draft')) document.getElementById('btn-save-draft').style.display = data.is_draft === true ? 'block' : 'none';
@@ -1082,6 +1083,7 @@
                         // the course name and author the builder had typed in
                         let nameEl = document.getElementById('course-name-input'), authorEl = document.getElementById('author-name-input');
                         if (nameEl && fullDraft.name && fullDraft.name !== 'Quick Draft') nameEl.value = fullDraft.name;
+                        if (typeof window.syncTopbarCourseName === 'function') window.syncTopbarCourseName();
                         if (authorEl && fullDraft.author) authorEl.value = fullDraft.author;
                         if (fullDraft.edit_code && !editCode && !courseCode) {
                             currentEditCode = fullDraft.edit_code;
