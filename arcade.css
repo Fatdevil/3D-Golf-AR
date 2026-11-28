@@ -133,117 +133,256 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   .palette-btn { width:100%; height:auto; padding:8px 4px; border-radius:8px; cursor:pointer; border:3px solid transparent; transition:transform 0.1s; font-size:10px; font-weight:800; color:#fff; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,0.6); text-transform:uppercase; letter-spacing:0.5px; }
   .palette-btn.active { border-color:white; transform:scale(1.05); }
   
-  /* SLIM 1-COLUMN PRO UI LAYOUT (Level 1) */
+  /* ============================================================
+   * UNIFIED LEFT STUDIO DOCK (Builder PR 1)
+   * Rail (72px) + single scrollable studio drawer (288px) = 360px max left boundary.
+   * Right side of the 3D viewport stays 100% free of tool panels.
+   * ============================================================ */
+  :root {
+      --builder-topbar-h: 54px;
+      --builder-rail-w: 72px;
+      --builder-drawer-w: 288px;
+      --dock-offset: 360px;
+  }
+  body.dock-collapsed {
+      --dock-offset: 72px;
+  }
+  body.play-ui {
+      --dock-offset: 0px;
+  }
+
+  /* SLIM 1-COLUMN RAIL (Level 1 — pinned flush to left edge under top bar) */
   #left-toolbar {
-      position: absolute;
-      top: 50%; left: 10px;
-      transform: translateY(-50%);
-      background: rgba(15,23,42,0.92);
+      position: fixed;
+      top: var(--builder-topbar-h);
+      left: 0;
+      bottom: 0;
+      transform: none;
+      background: rgba(11, 17, 32, 0.96);
       backdrop-filter: blur(14px);
-      padding: 8px 6px;
-      border-radius: 14px;
-      border: 1px solid #475569;
+      -webkit-backdrop-filter: blur(14px);
+      padding: 8px 4px 10px 4px;
+      border-radius: 0;
+      border: none;
+      border-right: 1px solid #1e293b;
       display: flex;
       flex-direction: column;
-      width: 78px;
-      gap: 5px;
+      width: var(--builder-rail-w);
+      gap: 4px;
       align-items: center;
       pointer-events: auto;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      z-index: 100;
-      max-height: calc(100vh - 120px);
+      box-shadow: none;
+      z-index: 101;
+      max-height: none;
       overflow-y: auto;
       scrollbar-width: none;
+      box-sizing: border-box;
   }
   #left-toolbar::-webkit-scrollbar { display: none; }
   
+  #left-toolbar button[style*="display:none"],
+  #left-toolbar button[style*="display: none"] { display: none !important; }
   #left-toolbar button {
-      background: transparent; color: #94a3b8; border: none; padding: 7px 1px;
+      background: transparent; color: #94a3b8; border: 1px solid transparent; padding: 6px 2px;
       border-radius: 10px; font-weight: 700; cursor: pointer; transition: all 0.15s ease;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-size: 8.5px; width: 66px; min-height: 48px; gap: 2px; text-transform: uppercase;
-      letter-spacing: 0.1px; text-align: center; white-space: nowrap;
+      font-size: 9px; width: 62px; min-height: 46px; gap: 2px; text-transform: uppercase;
+      letter-spacing: 0.15px; text-align: center; white-space: nowrap; flex-shrink: 0;
   }
-  #left-toolbar button:hover { background: rgba(255,255,255,0.08); color: #fff; transform: scale(1.02); }
-  #left-toolbar button.active { background: #38bdf8; color: #0f172a; box-shadow: 0 4px 12px rgba(56,189,248,0.35); }
-  #left-toolbar button.active-green { background: #4ade80; color: #0f172a; box-shadow: 0 4px 12px rgba(74,222,128,0.35); }
-  #left-toolbar button.active-yellow { background: #fbbf24; color: #0f172a; }
-  #left-toolbar button.active-red { background: #ef4444; color: #fff; }
+  #left-toolbar button:hover { background: rgba(255,255,255,0.07); color: #fff; }
+  #left-toolbar button.active { background: rgba(56,189,248,0.18); color: #38bdf8; border-color: #38bdf8; box-shadow: 0 2px 10px rgba(56,189,248,0.2); }
+  #left-toolbar button.active-green { background: rgba(74,222,128,0.18); color: #4ade80; border-color: #4ade80; box-shadow: 0 2px 10px rgba(74,222,128,0.2); }
+  #left-toolbar button.active-yellow { background: rgba(251,191,36,0.18); color: #fbbf24; border-color: #fbbf24; }
+  #left-toolbar button.active-red { background: rgba(239,68,68,0.22); color: #f87171; border-color: #ef4444; }
   #left-toolbar:not(.pro-mode) .pro-tool { display: none !important; }
   #left-toolbar:not(.pro-mode) .pro-divider { display: none !important; }
   #left-toolbar #btn-undo { display: none !important; }
-  .toolbar-divider { height: 1px; background: #334155; width: 80%; margin: 3px 0; }
+  .toolbar-divider { height: 1px; background: #1e293b; width: 78%; margin: 2px 0; flex-shrink: 0; }
+  #btn-dock-toggle {
+      background: rgba(30, 41, 59, 0.85) !important;
+      border: 1px solid #334155 !important;
+      color: #cbd5e1 !important;
+      font-size: 13px !important;
+      min-height: 32px !important;
+      width: 62px !important;
+      padding: 4px !important;
+      margin-bottom: 2px;
+  }
+  #btn-dock-toggle:hover { background: rgba(56, 189, 248, 0.18) !important; border-color: #38bdf8 !important; color: #38bdf8 !important; }
   #btn-pro-toggle {
-      margin-top: 2px;
+      margin-top: auto;
       background: rgba(56, 189, 248, 0.08) !important;
       border: 1px dashed #475569 !important;
       color: #94a3b8 !important;
-      font-size: 9px !important; min-height: 36px !important; width: 66px !important;
-      letter-spacing: 0.5px;
+      font-size: 9px !important; min-height: 36px !important; width: 62px !important;
+      letter-spacing: 0.4px;
   }
   #btn-pro-toggle:hover { background: rgba(56, 189, 248, 0.2) !important; color: #38bdf8 !important; }
   #left-toolbar.pro-mode #btn-pro-toggle { border-color: #38bdf8 !important; color: #38bdf8 !important; background: rgba(56, 189, 248, 0.18) !important; }
 
-  /* SUBCATEGORY FLYOUT DOCK (Level 2) */
-  #left-flyout-toolbar {
-      position: absolute;
-      top: 50%; left: 96px;
-      transform: translateY(-50%);
-      background: rgba(15,23,42,0.95);
+  /* UNIFIED LEFT STUDIO DRAWER (wraps existing #left-flyout-toolbar + #right-toolbar inside a single 288px left column) */
+  #builder-dock-drawer {
+      position: fixed;
+      top: var(--builder-topbar-h);
+      left: var(--builder-rail-w);
+      bottom: 0;
+      width: var(--builder-drawer-w);
+      background: rgba(15, 23, 42, 0.96);
       backdrop-filter: blur(16px);
-      padding: 10px 8px;
-      border-radius: 14px;
-      border: 1px solid #475569;
+      -webkit-backdrop-filter: blur(16px);
+      border-right: 1px solid #1e293b;
+      box-shadow: 6px 0 28px rgba(0, 0, 0, 0.45);
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      z-index: 100;
       pointer-events: auto;
-      box-shadow: 0 12px 35px rgba(0,0,0,0.6);
-      z-index: 99;
-      max-height: calc(100vh - 120px);
-      overflow-y: auto;
-      animation: flyoutSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-sizing: border-box;
+      overflow: hidden;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
   }
-  @keyframes flyoutSlideIn {
-      from { opacity: 0; transform: translateY(-50%) translateX(-10px); }
-      to { opacity: 1; transform: translateY(-50%) translateX(0); }
+  body.dock-collapsed #builder-dock-drawer {
+      transform: translateX(calc(-100% - var(--builder-rail-w)));
+      visibility: hidden;
+      pointer-events: none;
+  }
+  body.play-ui #builder-dock-drawer {
+      display: none !important;
+  }
+
+  #builder-dock-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px 8px 12px;
+      border-bottom: 1px solid #1e293b;
+      background: rgba(11, 17, 32, 0.65);
+      flex-shrink: 0;
+  }
+  #builder-dock-title {
+      color: #f1f5f9;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+  }
+  #builder-dock-collapse-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #cbd5e1;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+  }
+  #builder-dock-collapse-btn:hover {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: #38bdf8;
+      color: #38bdf8;
+  }
+
+  #builder-dock-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-sizing: border-box;
+      scrollbar-width: thin;
+      scrollbar-color: #334155 transparent;
+  }
+
+  /* SUBCATEGORY STRIPS INSIDE LEFT STUDIO DRAWER (formerly floating Level 2 flyout) */
+  #left-flyout-toolbar {
+      position: static;
+      top: auto;
+      left: auto;
+      transform: none;
+      background: rgba(11, 17, 32, 0.6);
+      backdrop-filter: none;
+      padding: 8px;
+      border-radius: 10px;
+      border: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: auto;
+      box-shadow: none;
+      z-index: auto;
+      max-height: none;
+      overflow: visible;
+      width: 100%;
+      box-sizing: border-box;
+      flex-shrink: 0;
+      animation: none;
   }
   .flyout-strip {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
+      width: 100%;
   }
-  /* Hole builder: fixed narrow width so the hint text wraps instead of stretching the menu over the terrain */
-  #flyout-holes-strip { width: 200px; }
-  #flyout-holes-strip .flyout-btn { min-width: 0; }
+  /* Compact 2-column sub-tool grids inside the fixed 288px drawer */
+  #flyout-sculpt-strip,
+  #flyout-objects-strip,
+  #flyout-env-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+  }
+  #flyout-sculpt-strip .flyout-header,
+  #flyout-objects-strip .flyout-header,
+  #flyout-env-strip .flyout-header {
+      grid-column: 1 / -1;
+  }
+  #flyout-holes-strip {
+      width: 100%;
+  }
+  #flyout-holes-strip .flyout-btn { min-width: 0; width: 100%; }
   #hole-next-card { white-space: normal; overflow-wrap: anywhere; }
   #hole-next-card button { white-space: normal; line-height: 1.25; }
   .flyout-header {
       color: #64748b;
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding: 2px 6px 4px 6px;
+      letter-spacing: 0.7px;
+      padding: 0 2px 4px 2px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
-      margin-bottom: 3px;
+      margin-bottom: 2px;
       text-align: left;
   }
   .flyout-btn {
       background: #1e293b;
-      color: #94a3b8;
+      color: #cbd5e1;
       border: 1px solid #334155;
-      padding: 7px 10px;
+      padding: 7px 8px;
       border-radius: 8px;
       font-size: 11px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
-      min-width: 135px;
+      gap: 6px;
+      min-width: 0;
+      width: 100%;
+      box-sizing: border-box;
       transition: all 0.15s ease;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
   }
   .flyout-btn:hover {
       background: rgba(255,255,255,0.08);
@@ -254,13 +393,13 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       background: #38bdf8;
       color: #0f172a;
       border-color: #38bdf8;
-      box-shadow: 0 3px 10px rgba(56,189,248,0.3);
+      box-shadow: 0 2px 8px rgba(56,189,248,0.28);
   }
   .flyout-btn.active-green {
       background: #4ade80;
       color: #0f172a;
       border-color: #4ade80;
-      box-shadow: 0 3px 10px rgba(74,222,128,0.3);
+      box-shadow: 0 2px 8px rgba(74,222,128,0.28);
   }
   #left-flyout-toolbar:not(.pro-mode) .pro-sub {
       display: none !important;
@@ -319,7 +458,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       line-height: 1.2;
   }
   
-  /* SCULPT SUB-TOOL STRIP (in right panel) */
+  /* SCULPT SUB-TOOL STRIP (legacy hidden) */
   .subtool-btn {
       background: #1e293b;
       color: #94a3b8;
@@ -338,7 +477,6 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   }
   .subtool-btn:hover { background: #334155; color: #e2e8f0; border-color: #64748b; }
   .subtool-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
-  /* Hide pro sub-tools when strip is not in pro-mode */
   #sculpt-subtool-strip:not(.pro-mode) .pro-sub { display: none !important; }
   #objects-subtool-strip:not(.pro-mode) .pro-sub { display: none !important; }
   
@@ -390,18 +528,21 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
       border-color: rgba(56,189,248,0.3);
   }
   
-  
+  /* TOOL PROPERTIES STACK (lives inside #builder-dock-scroll — never covers the right side of the course) */
   #right-toolbar {
-      position: absolute;
-      top: 50%; right: 10px;
-      transform: translateY(-50%);
+      position: static;
+      top: auto;
+      right: auto;
+      transform: none;
       display: flex;
       flex-direction: column;
-      gap: 0px;
-      pointer-events: none;
-      z-index: 100;
-      max-height: 85vh;
-      overflow: hidden;
+      gap: 10px;
+      pointer-events: auto;
+      z-index: auto;
+      max-height: none;
+      overflow: visible;
+      width: 100%;
+      box-sizing: border-box;
   }
   
   #right-tabs {
@@ -409,24 +550,36 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   }
   
   #right-toolbar > div[id^="tab-content-"] {
-      overflow-y: auto;
-      overflow-x: hidden;
-      scrollbar-width: thin;
-      scrollbar-color: #475569 transparent;
+      overflow: visible;
       gap: 10px;
+      width: 100%;
+      box-sizing: border-box;
   }
   
   .prop-panel {
-      background: rgba(15,23,42,0.9); padding: 15px; border-radius: 12px;
-      border: 1px solid #475569; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      background: rgba(11, 17, 32, 0.55); padding: 11px; border-radius: 10px;
+      border: 1px solid #1e293b; box-shadow: none;
       pointer-events: auto; display: none; flex-direction: column; gap: 10px;
+      box-sizing: border-box;
+      width: 100% !important;
+      max-width: 100% !important;
+  }
+  .prop-panel input[type="range"] {
+      width: 100% !important;
       box-sizing: border-box;
   }
   
   #top-bar {
-      position: absolute; top: 10px; left: 10px; right: 10px;
+      position: fixed; top: 0; left: 0; right: 0;
+      min-height: var(--builder-topbar-h);
+      padding: 6px 10px;
+      background: rgba(11, 17, 32, 0.95);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid #1e293b;
       display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-      gap: 10px; pointer-events: none; z-index: 101;
+      gap: 10px; pointer-events: auto; z-index: 102;
+      box-sizing: border-box;
   }
   #top-bar .top-left {
       display: flex; gap: 6px; align-items: center; justify-self: start;
@@ -459,10 +612,10 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   .sys-btn:hover { background: #334155; transform: scale(1.03); }
   
   #dropdown-menu {
-      position: absolute; top: 60px; left: 15px; background: rgba(15,23,42,0.95);
-      border: 1px solid #475569; border-radius: 12px; padding: 10px;
+      position: fixed; top: calc(var(--builder-topbar-h) + 6px); left: 10px; background: rgba(15,23,42,0.96);
+      border: 1px solid #334155; border-radius: 12px; padding: 10px;
       display: none; flex-direction: column; gap: 5px; pointer-events: auto;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 102; min-width: 180px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 950; min-width: 180px;
   }
   #dropdown-menu button {
       background: transparent; border: none; color: #e2e8f0; text-align: left;
@@ -471,16 +624,92 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   #dropdown-menu button:hover { background: rgba(255,255,255,0.1); }
   
   #tool-hints {
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: rgba(15,23,42,0.85); padding: 8px 15px; border-radius: 8px;
-      color: #94a3b8; font-size: 12px; font-weight: bold; pointer-events: none; border: 1px solid #475569;
-      transition: bottom 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 999;
+      position: fixed; bottom: 20px; left: calc(var(--dock-offset) + (100vw - var(--dock-offset)) / 2); transform: translateX(-50%);
+      max-width: calc(100vw - var(--dock-offset) - 24px);
+      background: rgba(11, 17, 32, 0.88); backdrop-filter: blur(10px); padding: 8px 15px; border-radius: 10px;
+      color: #cbd5e1; font-size: 12px; font-weight: 600; pointer-events: none; border: 1px solid #334155;
+      transition: bottom 0.25s cubic-bezier(0.4, 0, 0.2, 1), left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 98;
+      box-sizing: border-box;
+      text-align: center;
+  }
+  #grid-scale-legend {
+      left: calc(var(--dock-offset) + (100vw - var(--dock-offset)) / 2) !important;
+      max-width: calc(100vw - var(--dock-offset) - 24px);
+      transition: left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
   #elevation-hud {
       display: flex; gap: 16px; align-items: center;
       background: transparent; padding: 0; border: none;
       pointer-events: none; box-shadow: none;
+  }
+
+  /* RESPONSIVE DOCK: Tablet portrait (600px - 899px) -> narrower 256px drawer overlay */
+  @media (max-width: 899px) and (min-width: 600px) {
+      :root {
+          --builder-rail-w: 64px;
+          --builder-drawer-w: 256px;
+          --dock-offset: 320px;
+      }
+      body.dock-collapsed {
+          --dock-offset: 64px;
+      }
+      #left-toolbar button,
+      #btn-dock-toggle,
+      #btn-pro-toggle {
+          width: 56px !important;
+      }
+  }
+
+  /* RESPONSIVE DOCK: Mobile (< 600px, e.g. 390px phone) -> compact 56px left rail + bottom sheet (max 44vh)
+     so the top half of the 3D viewport always stays open for placing points while draw status remains visible */
+  @media (max-width: 599px) {
+      :root {
+          --builder-topbar-h: 50px;
+          --builder-rail-w: 56px;
+          --builder-drawer-w: 100vw;
+          --dock-offset: 56px;
+      }
+      body.dock-collapsed {
+          --dock-offset: 56px;
+      }
+      #left-toolbar {
+          width: 56px;
+          padding: 6px 2px;
+      }
+      #left-toolbar button,
+      #btn-dock-toggle,
+      #btn-pro-toggle {
+          width: 50px !important;
+          min-height: 42px;
+          font-size: 8px;
+      }
+      #builder-dock-drawer {
+          top: auto;
+          left: 56px;
+          right: 0;
+          bottom: 0;
+          width: auto;
+          max-height: 44vh;
+          border-right: none;
+          border-top: 1px solid #334155;
+          border-top-left-radius: 14px;
+          box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.55);
+      }
+      body.dock-collapsed #builder-dock-drawer {
+          transform: translateY(105%);
+          visibility: hidden;
+          pointer-events: none;
+      }
+      #tool-hints {
+          left: calc(56px + (100vw - 56px) / 2);
+          max-width: calc(100vw - 72px);
+          font-size: 11px;
+          padding: 6px 10px;
+      }
+      body:not(.dock-collapsed):not(.play-ui) #tool-hints {
+          bottom: calc(44vh + 10px) !important;
+      }
   }
   
   #global-loader {

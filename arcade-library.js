@@ -936,6 +936,7 @@
             
             document.getElementById('edit-prop-brightness').value = prop.brightness !== undefined ? prop.brightness : 1.0;
             document.getElementById('edit-prop-brightness-val').textContent = (prop.brightness !== undefined ? prop.brightness : 1.0).toFixed(1) + 'x';
+            if (typeof window.syncBuilderDock === 'function') window.syncBuilderDock({ collapsed: false });
         }
     };
     
@@ -975,6 +976,7 @@
         if (selectRingMesh) selectRingMesh.visible = false;
         const panel = document.getElementById('prop-editor-panel');
         if (panel) panel.style.display = 'none';
+        if (typeof window.syncBuilderDock === 'function') window.syncBuilderDock();
     };
 
     window.updateSelectedProp = function() {

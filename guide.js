@@ -209,8 +209,8 @@
         hidden = readHidden();
         host = document.createElement('div');
         host.id = 'next-step-guide';
-        // top left, under the toolbar row; above the side panels but below modals and the two maps
-        host.style.cssText = 'position:fixed; top:58px; left:10px; z-index:900; display:none; font-family:inherit;';
+        // top left of the free 3D viewport, clear of the left studio dock (--dock-offset); below modals and the two maps
+        host.style.cssText = 'position:fixed; top:calc(var(--builder-topbar-h, 54px) + 10px); left:calc(var(--dock-offset, 0px) + 12px); z-index:900; display:none; font-family:inherit; transition:left 0.2s cubic-bezier(0.16, 1, 0.3, 1);';
         document.body.appendChild(host);
         setInterval(render, 1000);
         window.addEventListener('golf_lang_changed', function () { lastSig = ''; render(); });
