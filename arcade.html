@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png">
 <script src="/pwa.js"></script>
 <title>Golf Arcade Mode 👾</title>
-<link rel="stylesheet" href="arcade.css?v=41">
+<link rel="stylesheet" href="arcade.css?v=42">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -753,8 +753,9 @@
         });
     </script>
 
-    <!-- PRO UI: VÄNSTER VERKTYGSLISTA (Nivå 1 - Slank kolumn) -->
+    <!-- PRO UI: VÄNSTER VERKTYGSLISTA (Nivå 1 - Fast vänsterrail) -->
     <div id="left-toolbar">
+        <button id="btn-dock-toggle" type="button" onclick="window.toggleBuilderDock && window.toggleBuilderDock()" title="Fäll in / öppna verktygspanel" aria-label="Fäll in / öppna verktygspanel" aria-expanded="true">«</button>
         <button id="tool-inspect" onclick="setTool('INSPECT')" title="Inspect course safely without modifying terrain (Hotkey: Esc)">
             <span style="font-size:16px;">👀</span>
             <span data-i18n="tool_inspect">Markera</span>
@@ -799,6 +800,24 @@
         </button>
     </div>
 
+    <div id="memory-budget-ui" style="position:absolute; top:20px; right:120px; background:rgba(15,23,42,0.9); padding:8px 15px; border-radius:8px; border:1px solid #475569; display:none; pointer-events:none; z-index:1000; flex-direction:column; align-items:center;">
+        <div style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Map Size Budget</div>
+        <div style="display:flex; align-items:baseline; gap:5px;">
+            <span id="mem-current" style="color:#4ade80; font-weight:bold; font-size:18px;">0.00</span>
+            <span style="color:#94a3b8; font-size:12px;">/ 20.0 MB</span>
+        </div>
+        <div style="width:100%; background:#1e293b; height:4px; border-radius:2px; margin-top:5px; overflow:hidden;">
+            <div id="mem-bar" style="height:100%; background:#4ade80; width:0%;"></div>
+        </div>
+    </div>
+
+    <!-- UNIFIED LEFT STUDIO DRAWER (Nivå 2 + 3 samlade till vänster; höger 3D-vy alltid fri) -->
+    <section id="builder-dock-drawer" aria-label="Verktygspanel">
+        <header id="builder-dock-header">
+            <span id="builder-dock-title">Forma</span>
+            <button id="builder-dock-collapse-btn" type="button" onclick="window.setBuilderDockCollapsed && window.setBuilderDockCollapsed(true)" title="Fäll in panel" aria-label="Fäll in panel">«</button>
+        </header>
+        <section id="builder-dock-scroll">
     <!-- PRO UI: FLYOUT UNDERKATEGORIER (Nivå 2) -->
     <div id="left-flyout-toolbar" style="display:none;">
         <!-- OBJECTS FLYOUT STRIP -->
@@ -844,18 +863,7 @@
         </div>
     </div>
 
-    <div id="memory-budget-ui" style="position:absolute; top:20px; right:120px; background:rgba(15,23,42,0.9); padding:8px 15px; border-radius:8px; border:1px solid #475569; display:none; pointer-events:none; z-index:1000; flex-direction:column; align-items:center;">
-        <div style="color:#94a3b8; font-size:10px; font-weight:bold; text-transform:uppercase;">Map Size Budget</div>
-        <div style="display:flex; align-items:baseline; gap:5px;">
-            <span id="mem-current" style="color:#4ade80; font-weight:bold; font-size:18px;">0.00</span>
-            <span style="color:#94a3b8; font-size:12px;">/ 20.0 MB</span>
-        </div>
-        <div style="width:100%; background:#1e293b; height:4px; border-radius:2px; margin-top:5px; overflow:hidden;">
-            <div id="mem-bar" style="height:100%; background:#4ade80; width:0%;"></div>
-        </div>
-    </div>
-
-    <!-- PRO UI: HÖGER EGENSKAPSPANEL -->
+    <!-- PRO UI: EGENSKAPSPANEL (nu dockad till vänster i #builder-dock-drawer) -->
     <div id="right-toolbar">
         <div id="tab-content-TOOLS" style="display:flex; flex-direction:column; gap:10px;">
             <!-- SCULPT SUB-TOOL SELECTOR STRIP -->
@@ -3234,6 +3242,135 @@
         </script>
 
     </div>
+        </section> <!-- End #builder-dock-scroll -->
+    </section> <!-- End #builder-dock-drawer -->
+
+    <script>
+    (function() {
+        'use strict';
+        // Single source of truth for the left studio dock's open/collapsed/hidden state in BUILD vs PLAY/TEST modes.
+        let userCollapsed = false;
+
+        function hasVisiblePropEditor() {
+            const p = document.getElementById('prop-editor-panel');
+            return !!(p && p.style.display !== 'none');
+        }
+
+        function dockTitleFor(tool) {
+            const tr = (k, fb) => (typeof window.t === 'function' && window.t(k) !== k) ? window.t(k) : fb;
+            const isRange = (new URLSearchParams(window.location.search)).get('mode') === 'range' || !!window._isRangeMode;
+            if (tool === 'SMART_BUILDER') return tr('flyout_holes_header', 'Hålbyggare');
+            if (tool === 'HOLE') return isRange ? 'Range Tee' : tr('flyout_holes_header', 'Hålbyggare');
+            if (tool === 'PAINT') return tr('tool_paint', 'Måla yta');
+            if (tool === 'WATER') return tr('tool_water', 'Vatten');
+            if (tool === 'PROPS' || tool === 'SPLINE' || tool === 'BLOCK' || tool === 'COLORIZE') return tr('flyout_objects_header', 'Objekt & Dekoration');
+            if (tool === 'ENV') return tr('flyout_env_header', 'Miljö & Atmosfär');
+            if (tool === 'INSPECT') return hasVisiblePropEditor() ? tr('tool_props', 'Redigera objekt') : tr('tool_inspect', 'Markera');
+            if (tool === 'ERASER') return tr('tool_eraser', 'Radera');
+            if (tool === 'MEASURE') return tr('tool_measure', 'Mät');
+            return tr('sculpt_tools_header', 'Forma Terräng');
+        }
+
+        function toolHasPanel(tool) {
+            if (tool === 'INSPECT') return hasVisiblePropEditor();
+            if (tool === 'ERASER' || tool === 'MEASURE') return false;
+            return true;
+        }
+
+        function syncBuilderDock(opts) {
+            const mode = (typeof window.getAppMode === 'function') ? window.getAppMode() : (typeof appMode !== 'undefined' ? appMode : 'BUILD');
+            const tool = (typeof window.currentTool !== 'undefined' && window.currentTool) ? window.currentTool : (typeof currentTool !== 'undefined' ? currentTool : 'SCULPT');
+            const isBuild = (mode === 'BUILD');
+            const drawer = document.getElementById('builder-dock-drawer');
+            const rail = document.getElementById('left-toolbar');
+            const rightTb = document.getElementById('right-toolbar');
+            const railToggle = document.getElementById('btn-dock-toggle');
+            const titleEl = document.getElementById('builder-dock-title');
+
+            if (opts && typeof opts.collapsed === 'boolean') {
+                userCollapsed = opts.collapsed;
+            }
+
+            if (titleEl) titleEl.textContent = dockTitleFor(tool);
+
+            if (!isBuild) {
+                if (rail) rail.style.display = 'none';
+                if (drawer) {
+                    drawer.style.display = 'none';
+                    drawer.inert = true;
+                    drawer.setAttribute('aria-hidden', 'true');
+                }
+                if (rightTb) rightTb.style.display = 'none';
+                document.body.classList.remove('dock-collapsed');
+                return;
+            }
+
+            if (rail) rail.style.display = 'flex';
+            if (drawer) drawer.style.display = 'flex';
+            if (rightTb) rightTb.style.display = 'flex';
+
+            const canShow = toolHasPanel(tool);
+            const collapsed = !canShow || userCollapsed;
+
+            document.body.classList.toggle('dock-collapsed', collapsed);
+            if (drawer) {
+                drawer.inert = collapsed;
+                drawer.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+            }
+            if (railToggle) {
+                railToggle.textContent = collapsed ? '»' : '«';
+                railToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                railToggle.style.opacity = canShow ? '1' : '0.45';
+            }
+            if (typeof window.updateBottomHUDLayout === 'function') {
+                window.updateBottomHUDLayout();
+            }
+            if (window.NextStepGuide && typeof window.NextStepGuide.render === 'function') {
+                window.NextStepGuide.render();
+            }
+        }
+
+        function setBuilderDockCollapsed(collapsed) {
+            const tool = (typeof window.currentTool !== 'undefined' && window.currentTool) ? window.currentTool : 'SCULPT';
+            // If user explicitly opens the dock while in INSPECT with no prop selected, switch to SMART_BUILDER or SCULPT?
+            // Keep current tool unchanged if it already has a panel; otherwise just toggle userCollapsed.
+            userCollapsed = !!collapsed;
+            if (!userCollapsed && !toolHasPanel(tool) && typeof setTool === 'function') {
+                setTool(window._lastPanelTool || 'SMART_BUILDER');
+                return;
+            }
+            syncBuilderDock();
+        }
+
+        function toggleBuilderDock() {
+            const isCollapsed = document.body.classList.contains('dock-collapsed');
+            setBuilderDockCollapsed(!isCollapsed);
+        }
+
+        // Prevent taps/clicks inside the dock or rail from ever reaching canvas/window handlers that place points.
+        document.addEventListener('DOMContentLoaded', function() {
+            ['builder-dock-drawer', 'left-toolbar'].forEach(function(id) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                ['pointerdown', 'mousedown', 'touchstart'].forEach(function(evt) {
+                    el.addEventListener(evt, function(e) { e.stopPropagation(); }, false);
+                });
+            });
+            syncBuilderDock();
+        });
+
+        window.addEventListener('golf_lang_changed', function() { syncBuilderDock(); });
+        window.syncBuilderDock = syncBuilderDock;
+        window.setBuilderDockCollapsed = setBuilderDockCollapsed;
+        window.toggleBuilderDock = toggleBuilderDock;
+        window.BuilderDock = {
+            sync: syncBuilderDock,
+            setCollapsed: setBuilderDockCollapsed,
+            toggle: toggleBuilderDock,
+            isCollapsed: function() { return document.body.classList.contains('dock-collapsed'); }
+        };
+    })();
+    </script>
 
     <!-- 📚 3D LIBRARY MODAL (HIDDEN / RETIRED IN FAVOR OF CURATED ADMIN ASSETS) -->
     <div id="poly-library-panel" style="display:none !important; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(7,10,18,0.75); backdrop-filter:blur(20px); z-index:10000; align-items:center; justify-content:center; pointer-events:auto; flex-direction:row;">
@@ -12285,9 +12422,13 @@
         }
         safeSetDisplay('hb-input-mode', mode === 'BUILD' ? 'none' : 'block');
 
-        safeSetDisplay('left-toolbar', mode === 'BUILD' ? 'flex' : 'none');
         if (mode !== 'BUILD') safeSetDisplay('left-flyout-toolbar', 'none');
-        safeSetDisplay('right-toolbar', mode === 'BUILD' ? 'flex' : 'none');
+        if (typeof window.syncBuilderDock === 'function') {
+            window.syncBuilderDock();
+        } else {
+            safeSetDisplay('left-toolbar', mode === 'BUILD' ? 'flex' : 'none');
+            safeSetDisplay('right-toolbar', mode === 'BUILD' ? 'flex' : 'none');
+        }
         safeSetDisplay('perf-hud', (mode === 'BUILD' && !!window._perfHudEnabled) ? 'flex' : 'none');
         safeSetDisplay('tool-hints', mode === 'BUILD' ? 'block' : 'none');
         safeSetDisplay('lm-status', mode === 'BUILD' ? 'none' : 'flex');
@@ -12361,6 +12502,11 @@
             camera.position.set(0, 15, 10);
             controls.target.set(0, 0, -30);
             controls.update();
+            if (typeof setTool === 'function' && typeof currentTool === 'string' && currentTool) {
+                setTool(currentTool);
+            } else if (typeof window.syncBuilderDock === 'function') {
+                window.syncBuilderDock();
+            }
 
         } else if (mode === 'TEST') {
             // Auto-save complete course snapshot before playtest!
@@ -12935,6 +13081,12 @@
             renderer.domElement.style.cursor = 'crosshair';
         } else {
             renderer.domElement.style.cursor = 'default';
+        }
+        if (toolName !== 'INSPECT' && toolName !== 'ERASER' && toolName !== 'MEASURE') {
+            window._lastPanelTool = toolName;
+        }
+        if (typeof window.syncBuilderDock === 'function') {
+            window.syncBuilderDock((toolName !== 'INSPECT' && toolName !== 'ERASER' && toolName !== 'MEASURE') ? { collapsed: false } : undefined);
         }
     }
 

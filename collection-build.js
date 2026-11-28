@@ -337,13 +337,13 @@
             bar = doc.createElement('div');
             bar.id = 'cb-bar';
             bar.setAttribute('role', 'navigation');
-            bar.style.cssText = 'position:fixed; left:50%; transform:translateX(-50%); z-index:900; display:flex; align-items:center; gap:6px; max-width:calc(100vw - 24px); box-sizing:border-box; padding:4px; border-radius:14px; background:rgba(15,23,42,0.92); border:1px solid rgba(56,189,248,0.45); box-shadow:0 4px 14px rgba(0,0,0,0.45); font-family:Inter,system-ui,sans-serif; pointer-events:auto;';
+            bar.style.cssText = 'position:fixed; left:calc(var(--dock-offset, 0px) + (100vw - var(--dock-offset, 0px)) / 2); transform:translateX(-50%); z-index:900; display:flex; align-items:center; gap:6px; max-width:calc(100vw - var(--dock-offset, 0px) - 24px); box-sizing:border-box; padding:4px; border-radius:14px; background:rgba(15,23,42,0.92); border:1px solid rgba(56,189,248,0.45); box-shadow:0 4px 14px rgba(0,0,0,0.45); font-family:Inter,system-ui,sans-serif; pointer-events:auto; transition:left 0.2s cubic-bezier(0.16, 1, 0.3, 1);';
             doc.body.appendChild(bar);
         }
         bar.setAttribute('aria-label', tr('cb_bar_label', 'Plattorna i samlingen'));
         // a phone has the hole tools' pill in the second row on the left: the bar goes below it, without the collection's name
         const narrow = (root.innerWidth || 1000) < 700;
-        bar.style.top = narrow ? '100px' : '56px';
+        bar.style.top = narrow ? '100px' : '62px';
         bar.textContent = '';
         const mk = function (label, title, onclick, on) {
             const b = doc.createElement('button');
