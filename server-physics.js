@@ -25,6 +25,13 @@ function landing(shot) {
   // scored on where it came down: down the target line (along, not the straight carry, which includes the side) and across it
   return st && typeof st.side === 'number' && typeof st.along === 'number' ? { carry: st.along, side: st.side } : null;
 }
+// Where a shot comes down in standard conditions, all of it: { carry (radial, side included), total, side (+R), along (down the target line) },
+// in metres, or null without launch values. The validation report (shot-diagnostics.js) compares carry and side with a launch monitor's own
+function standard(shot) {
+  const f = load();
+  const st = f.R.standard(f.G, { ballSpeed: shot.ballSpeed, launch: shot.launch, spin: shot.spin, spinAxis: shot.spinAxis, hla: shot.hla });
+  return st && typeof st.carry === 'number' ? { carry: st.carry, total: st.total, side: typeof st.side === 'number' ? st.side : null, along: typeof st.along === 'number' ? st.along : null } : null;
+}
 // Whether a shot was a misread, from its own ball and club speed (the review's smash factor limits per kind of club), never from what a device
 // says: the rule for a Golf Combine retake (combine-core.js voidReason)
 function misread(shot) {
@@ -32,4 +39,4 @@ function misread(shot) {
   const r = f.R.review({ source: 'LM', club: shot.club, ballSpeed: shot.ballSpeed, clubSpeed: shot.clubSpeed, launch: shot.launch, hla: shot.hla }, {});
   return !!(r && r.misread);
 }
-module.exports = { landing: landing, version: version, misread: misread };
+module.exports = { landing: landing, standard: standard, version: version, misread: misread };

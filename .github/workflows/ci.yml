@@ -95,6 +95,8 @@ jobs:
             command: node tests/e2e/training-e2e.js
           - name: combine-e2e
             command: node tests/e2e/combine-e2e.js
+          - name: validation-e2e
+            command: node tests/e2e/validation-e2e.js
     name: browser (${{ matrix.name }})
     services:
       postgres:

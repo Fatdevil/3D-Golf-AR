@@ -12,6 +12,8 @@ const PlayerBag = require('./arcade-bag');
 const TrainingStats = require('./training-stats');
 const CombineCore = require('./combine-core');
 const ServerPhysics = require('./server-physics');
+const ShotReference = require('./shot-reference');
+const ShotDiagnostics = require('./shot-diagnostics');
 // the ball flight's version of this build (physics.js VERSION, recorded with its fingerprint by tests/test_physics_version.js): Training Lab's
 // distances come only from shots of this flight
 const PHYSICS_VERSION = (function () { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'physics-validation', 'physics-version.json'), 'utf8')).version; } catch (e) { return null; } })();
@@ -345,6 +347,25 @@ async function initDB() {
                 );
             `);
             await pool.query(`CREATE INDEX IF NOT EXISTS shots_player_session ON shots (player_id, training_session_id)`);
+            // What a launch monitor itself made of a shot (shot-reference.js): its own carry, total and side, kept apart from the game's ball
+            // flight so the flight can be checked against it (shot-diagnostics.js). origin: live (with the shot, from the bridge) or import (a
+            // file from the launch monitor's app, matched to the shot). Written once per shot, origin and source; it never changes a shot or a score.
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS shot_references (
+                    id BIGSERIAL PRIMARY KEY,
+                    player_id VARCHAR(80) NOT NULL,
+                    shot_client_id VARCHAR(80) NOT NULL,
+                    origin VARCHAR(8) NOT NULL,
+                    source VARCHAR(64) NOT NULL,
+                    quality VARCHAR(20) NOT NULL,
+                    carry_m REAL, total_m REAL, side_m REAL,
+                    orig JSONB NOT NULL,
+                    import_id VARCHAR(40),
+                    import_line INT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    UNIQUE (player_id, shot_client_id, origin, source)
+                );
+            `);
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS device_links (
                     code_hash VARCHAR(64) PRIMARY KEY,
@@ -1714,6 +1735,12 @@ app.post('/api/shots/sync', requireDB, authMiddleware, async (req, res) => {
                 [account, s.client_id, req.userId, s.shot_at, s.range_key, s.source, s.club, s.ball_speed, s.club_speed, s.launch, s.hla, s.spin, s.spin_axis,
                  s.club_path, s.face_to_path, s.aoa, s.carry, s.total, s.offline_m, s.apex, s.carry_std, s.total_std, s.lm_device, j(s.estimated), j(s.review), s.accepted,
                  j(s.practice), j(s.raw), s.edited_at, s.training_session_id, s.physics_version, s.offline_std, j(s.combine)]);
+            // the launch monitor's own values that came with the shot (the bridge's lmResult): a reference, written once; a malformed one is
+            // left out without refusing the shot (the shot is the measurement, the reference only a comparison)
+            if (input.ref !== undefined && input.ref !== null && s.source === 'LM') {
+                const ref = ShotReference.normalizeRef(input.ref);
+                if (ref.ok) await insertReference(pool, account, s.client_id, 'live', ref.ref, null, null);
+            }
             stored.push(s.client_id);
         }
         res.json({ stored: stored, refused: refused });
@@ -1821,6 +1848,103 @@ app.get('/api/combine/results', requireDB, authMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Database error' });
     }
 });
+// ---- Golf Combine validation: reference values and the diagnosis report (shot-reference.js, shot-diagnostics.js) ----
+async function insertReference(db, account, cid, origin, ref, importId, line) {
+    const r = await db.query(`INSERT INTO shot_references (player_id, shot_client_id, origin, source, quality, carry_m, total_m, side_m, orig, import_id, import_line)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (player_id, shot_client_id, origin, source) DO NOTHING RETURNING id`,
+        [account, cid, origin, ref.source, ref.quality, ref.carry_m, ref.total_m, ref.side_m, JSON.stringify(ref.orig), importId, line]);
+    return r.rows.length > 0;
+}
+// a time span from the query or body: from / to as ISO dates or times; to a date alone means the whole day. Default: the last 90 days
+function spanOf(q) {
+    const t = function (v, end) {
+        if (typeof v !== 'string' || !v) return null;
+        const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + (end ? 'T23:59:59.999Z' : 'T00:00:00.000Z') : v);
+        return isNaN(d.getTime()) ? false : d;
+    };
+    const to = t(q.to, true), from = t(q.from, false);
+    if (to === false || from === false) return null;
+    const end = to || new Date(), start = from || new Date(end.getTime() - 90 * 86400000);
+    return start <= end && end - start <= 400 * 86400000 ? { from: start, to: end } : null;
+}
+// Reference values from a launch monitor app's export (CSV), matched to this player's launch monitor shots in a time span. Only a row that fits
+// exactly one shot, and that shot no other row, is stored; the rest is returned with its reason. Nothing else is written: not a shot, not a score.
+app.post('/api/references/import', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const b = req.body || {};
+        const source = ShotReference.cleanSource(b.source);
+        if (!source) return res.status(400).json({ error: 'source: the launch monitor or app, 1-64 letters, digits, spaces or ._:()/-' });
+        if (ShotReference.QUALITIES.indexOf(b.quality) < 0) return res.status(400).json({ error: 'quality: ' + ShotReference.QUALITIES.join(' or ') });
+        if (typeof b.csv !== 'string' || b.csv.length > 900000) return res.status(400).json({ error: 'csv: the file as text, at most 900 kB' });
+        const span = spanOf(b);
+        if (!span) return res.status(400).json({ error: 'from / to: a time span of at most 400 days' });
+        const parsed = ShotReference.parseImport(b.csv, { distanceUnit: b.distanceUnit, sideSign: b.sideSign });
+        if (parsed.refused) return res.status(422).json({ error: 'The file cannot be read', refused: parsed.refused, units: parsed.units, skipped: parsed.skipped });
+        const account = await accountOf(req.userId);
+        const r = await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND source = 'LM' AND shot_at >= $2 AND shot_at <= $3 ORDER BY shot_at`, [account, span.from, span.to]);
+        const m = ShotReference.match(parsed.rows, r.rows.map(ShotBank.toClient));
+        const importId = crypto.randomBytes(8).toString('hex');
+        let stored = 0, already = 0;
+        const refused = [];
+        for (const x of m.matched) {
+            const ref = ShotReference.normalizeRef({ source: source, quality: b.quality, carry: x.row.carry, total: x.row.total, side: x.row.side });
+            if (!ref.ok) { refused.push({ line: x.row.line, reason: ref.reason }); continue; }
+            if (await insertReference(pool, account, x.cid, 'import', ref.ref, importId, x.row.line)) stored++; else already++;
+        }
+        res.json({ import_id: importId, rows: parsed.rows.length, matched: m.matched.length - refused.length, stored: stored, already: already,
+                   unmatched: m.unmatched.concat(refused), skipped: parsed.skipped, units: parsed.units, shots_in_span: r.rows.length,
+                   from: span.from.toISOString(), to: span.to.toISOString() });
+    } catch(err) {
+        console.error('POST /api/references/import error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// The validation report (shot-diagnostics.js): this player's launch monitor shots in a time span (or of one Golf Combine test), with the
+// server's own ball flight, the references and the tests. format=csv: one row per shot and reference. It only reads.
+const DIAG_MAX = 3000;
+const diagFlight = { standard: ServerPhysics.standard, landing: ServerPhysics.landing, misread: ServerPhysics.misread, version: ServerPhysics.version };
+app.get('/api/diagnostics', requireDB, authMiddleware, async (req, res) => {
+    try {
+        const account = await accountOf(req.userId);
+        const test = typeof req.query.test === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(req.query.test) ? req.query.test : null;
+        const span = test ? null : spanOf(req.query);
+        if (!test && !span) return res.status(400).json({ error: 'from / to: a time span of at most 400 days, or test' });
+        const r = test
+            ? await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND combine->>'test' = $2 ORDER BY shot_at, id`, [account, test])
+            : await pool.query(`SELECT * FROM shots WHERE player_id = $1 AND source = 'LM' AND shot_at >= $2 AND shot_at <= $3 ORDER BY shot_at, id LIMIT $4`,
+                               [account, span.from, span.to, DIAG_MAX + 1]);
+        const rows = r.rows.slice(0, DIAG_MAX), shots = rows.map(ShotBank.toClient);
+        const cids = shots.map(function (s) { return s.cid; });
+        const refRows = cids.length ? (await pool.query('SELECT * FROM shot_references WHERE player_id = $1 AND shot_client_id = ANY($2) ORDER BY id', [account, cids])).rows : [];
+        const refsBy = {};
+        refRows.forEach(function (x) { (refsBy[x.shot_client_id] = refsBy[x.shot_client_id] || []).push(x); });
+        const diags = shots.map(function (s) { return ShotDiagnostics.shotDiag(s, refsBy[s.cid], diagFlight); });
+        if (req.query.format === 'csv') {
+            res.set('Content-Type', 'text/csv; charset=utf-8');
+            res.set('Content-Disposition', 'attachment; filename="golf-validation-' + new Date().toISOString().slice(0, 10) + '.csv"');
+            return res.send(ShotDiagnostics.toCsv(diags));
+        }
+        // the Golf Combine tests among these shots, worked out again beside what was stored
+        const byTest = {};
+        shots.forEach(function (s) { if (s.combine && s.combine.test) (byTest[s.combine.test] = byTest[s.combine.test] || []).push(s); });
+        const testIds = Object.keys(byTest);
+        const stored = testIds.length ? (await pool.query('SELECT * FROM combine_results WHERE player_id = $1 AND test_id = ANY($2)', [account, testIds])).rows : [];
+        const storedBy = {};
+        stored.forEach(function (x) { storedBy[x.test_id] = combineRow(x); });
+        const tests = testIds.map(function (id) {
+            const list = byTest[id], level = list[0].combine.level;
+            return ShotDiagnostics.testDiag(id, list.filter(function (s) { return s.combine.level === level; }), level, storedBy[id] || null, diagFlight);
+        });
+        const all = (await pool.query('SELECT * FROM combine_results WHERE player_id = $1 ORDER BY finished_at DESC LIMIT 500', [account])).rows.map(combineRow);
+        const now = ServerPhysics.version();
+        res.json({ generated: new Date().toISOString(), physics: now, conventions: ShotDiagnostics.CONVENTIONS,
+                   span: span ? { from: span.from.toISOString(), to: span.to.toISOString() } : null, test: test, truncated: r.rows.length > DIAG_MAX,
+                   summary: ShotDiagnostics.summary(diags, all, now), tests: tests, shots: diags });
+    } catch(err) {
+        console.error('GET /api/diagnostics error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
 // Another device joins this player's shot bank: this device asks for a code (valid 10 minutes, once), the other types it in
 app.post('/api/devices/link-code', requireDB, authMiddleware, async (req, res) => {
     try {
@@ -1859,6 +1983,10 @@ app.post('/api/devices/link', requireDB, authMiddleware, async (req, res) => {
             // and its finished Golf Combine tests (one per test: a test the account already has is kept as it is there)
             await client.query(`UPDATE combine_results SET player_id = $2 WHERE player_id = $1 AND test_id NOT IN (SELECT test_id FROM combine_results WHERE player_id = $2)`, [me, account]);
             await client.query(`DELETE FROM combine_results WHERE player_id = $1 AND test_id IN (SELECT test_id FROM combine_results WHERE player_id = $2)`, [me, account]);
+            // and the references of its shots (one per shot, origin and source: one the account already has is kept as it is there)
+            await client.query(`UPDATE shot_references r SET player_id = $2 WHERE r.player_id = $1 AND NOT EXISTS (SELECT 1 FROM shot_references a WHERE a.player_id = $2
+                AND a.shot_client_id = r.shot_client_id AND a.origin = r.origin AND a.source = r.source)`, [me, account]);
+            await client.query(`DELETE FROM shot_references WHERE player_id = $1`, [me]);
         }
         await client.query('UPDATE device_links SET used_by = $2, used_at = now() WHERE code_hash = $1', [tokenHash(code), me]);
         // the codes this device made for its own bank no longer lead there: it has joined another one

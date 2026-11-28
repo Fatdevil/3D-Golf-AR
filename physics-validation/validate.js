@@ -87,7 +87,11 @@ const ALIASES = {
   apex: ['apex', 'apexheight', 'height', 'maxheight', 'peakheight', 'apexyd', 'apexm', 'apexft'],
   temperature: ['temperature', 'temp', 'airtemp', 'airtemperature'],
   altitude: ['altitude', 'elevation', 'altitudeft', 'altitudem'],
-  carryFrom: ['carryfrom']
+  carryFrom: ['carryfrom'],
+  // the rest of what a launch monitor app reports for a shot (read for the import of reference values, server.js /api/references/import)
+  total: ['total', 'totaldistance', 'totalyd', 'totalyards', 'totalm', 'totalmeters', 'totalmetres'],
+  side: ['offline', 'carryoffline', 'carrydeviation', 'carrydeviationdistance', 'carryside', 'carrylateral', 'lateral', 'side', 'sidecarry', 'offlinecarry', 'deviation'],
+  shotNumber: ['shot', 'shotnumber', 'shotno', 'shotnum', 'shotid', 'no', 'nr']
 };
 // the unit a header names, if any: "(mph)", "[m/s]", "_yd", "Carry Distance (yds)"
 function unitOf(header) {
@@ -104,6 +108,7 @@ function unitOf(header) {
 }
 // the unit an accepted alias carries in its own letters ("CarryM", "AltitudeFt"), which unitOf cannot see once the header has no brackets
 const ALIAS_UNIT = { carrym: 'm', carrymeters: 'm', carrymetres: 'm', carryyd: 'yd', carryyards: 'yd', altitudem: 'm', altitudeft: 'ft', ballspeedmph: 'mph',
+  totalm: 'm', totalmeters: 'm', totalmetres: 'm', totalyd: 'yd', totalyards: 'yd',
   apexm: 'm', apexyd: 'yd', apexft: 'ft', spinrpm: null, landingdeg: null, launchdeg: null };
 function normHeader(h) { return String(h).toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^a-z0-9]/g, ''); }
 function splitLine(line, delim) {
@@ -127,7 +132,17 @@ function toNum(s, decimalComma) {
   const n = Number(t);
   return t !== '' && isFinite(n) ? n : null;
 }
-// parseCsv(text, sidecar) -> { rows: [shot], skipped: [{ line, reason }], refused: reason | null, columns }
+// A side (across the target line) as apps write it: "3.2 R", "L 4", "4.1 Left", or a plain signed number. { value, explicit } with right
+// positive; explicit: the cell said left or right itself (a plain number's sign depends on the app's convention, which the caller knows)
+function sideNum(s, decimalComma) {
+  const v = toNum(s, decimalComma);
+  if (v === null) return null;
+  const t = String(s).toLowerCase();
+  const left = /(^|[^a-z])(l|left|vänster|v)([^a-z]|$)/.test(t), right = /(^|[^a-z])(r|right|höger|h)([^a-z]|$)/.test(t);
+  if (left !== right) return { value: left ? -Math.abs(v) : Math.abs(v), explicit: true };
+  return { value: v, explicit: false };
+}
+// parseCsv(text, sidecar) -> { rows: [shot], skipped: [{ line, reason }], refused: reason | null, columns, units }
 // shot: { id, club, ballSpeedMph, launchDeg, spinRpm, spinAxisDeg, hlaDeg, carryYd, conditions }
 function parseCsv(text, opts) {
   opts = opts || {};
@@ -189,9 +204,14 @@ function parseCsv(text, opts) {
     const landing = get('landing'), apex = get('apex');
     if (landing !== null) row.landingDeg = landing;
     if (apex !== null) row.apexYd = apex * ({ m: YD, ft: 1 / 3 }[units.apex] || 1);
+    // as the file has them, in the file's own units (units[...], null when it does not say): carry, total, side, and the shot's number
+    row.line = li + 1;
+    row.orig = { carry: carry, total: get('total'), side: columns.side === undefined ? null : sideNum(c[columns.side], decimalComma), hla: get('hla') };
+    const sn = get('shotNumber');
+    if (sn !== null) row.shotNumber = sn;
     rows.push(row);
   }
-  return { rows: rows, skipped: skipped, refused: null, columns: columns };
+  return { rows: rows, skipped: skipped, refused: null, columns: columns, units: units };
 }
 
 // ---- the bank -----------------------------------------------------------------------------------------------------------------------
@@ -297,5 +317,5 @@ function regressions(results, baseline) {
   return out;
 }
 
-module.exports = { fly: fly, splitOf: splitOf, clubGroup: clubGroup, speedBand: speedBand, parseCsv: parseCsv, loadBank: loadBank, evaluate: evaluate,
+module.exports = { sideNum: sideNum, unitOf: unitOf, fly: fly, splitOf: splitOf, clubGroup: clubGroup, speedBand: speedBand, parseCsv: parseCsv, loadBank: loadBank, evaluate: evaluate,
   stats: stats, by: by, targetStatus: targetStatus, TARGETS: TARGETS, baselineOf: baselineOf, regressions: regressions, SLACK: SLACK, YD: YD, REF_DIR: REF_DIR };

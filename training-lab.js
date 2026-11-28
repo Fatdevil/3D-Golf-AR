@@ -34,7 +34,23 @@
             cb: { title: 'Golf Combine 9', none: 'Inget genomfört test ännu. Starta det på rangen, i panelens flik 🏆 Combine.', latest: 'Senaste', best: 'Personbästa', last5: 'De fem senaste',
                   levels: { beginner: 'Nybörjare', standard: 'Standard', advanced: 'Avancerad' }, costly: 'Kostade mest senast: {list}', practice: '{n} träningsresultat (inte officiella) räknas inte här.',
                   note: 'Officiella resultat: alla mätvärden uppmätta, poängen räknad av servern. Jämför bara inom samma nivå och samma bollflykt ({v}).',
-                  older: '{n} resultat från en äldre version av bollflykten ({list}) jämförs inte med dessa.' }
+                  older: '{n} resultat från en äldre version av bollflykten ({list}) jämförs inte med dessa.' },
+            va: { title: 'Validering av bollflykten', intro: 'Hur långt spelets bollflykt ({v}) ligger från launch monitorns egna värden, de senaste 90 dagarna. Plus betyder att spelet flyger bollen längre eller mer åt höger.',
+                  none: 'Inga referensvärden ännu. Bryggan sparar launch monitorns egen carry när den skickar en, och du kan importera en CSV-export från launch monitorns app nedan.',
+                  quality: { lm_calculated: 'Mot launch monitorns egen beräkning (en annan modell, inte uppmätt landning)', measured_landing: 'Mot uppmätt landning' },
+                  band: 'Referensens carry', n: 'Slag', carry: 'Carryfel', side: 'Sidledsfel', abs: 'medel av |fel|',
+                  excluded: 'Jämförs inte: {est} med uppskattade värden, {unp} utan bryggans mätlista, {mis} felmätningar. {none} slag saknar referens.',
+                  few: 'Under 5 slag i ett band: för få för slutsatser.',
+                  repeat: 'Upprepbarhet', repeatRow: '{level}: {n} officiella test, snitt {mean}, spridning ±{sd} ({min}–{max})',
+                  export: 'Ladda ner rapporten', json: 'JSON', csv: 'CSV (kalkylblad)',
+                  imp: 'Importera referensvärden (CSV från launch monitorns app)', file: 'Fil', source: 'Källa (launch monitor eller app)', qualityLabel: 'Vad värdena är',
+                  unit: 'Avståndsenhet om filen inte anger den', unitFile: 'Ur filen', sideSign: 'Sidled som tal utan L/R', right: 'Plus är höger', left: 'Plus är vänster',
+                  from: 'Slagen från', to: 'till', go: 'Importera och matcha',
+                  impNote: 'Ett slag i filen kopplas bara till ett slag i slagbanken när bollfart, utgångsvinkel och spinn (och slagnummer om båda har det) passar exakt ett slag. Osäkra rader sparas inte. Inget slag, ingen poäng och inget test ändras.',
+                  result: '{rows} rader: {stored} sparade, {already} fanns redan, {un} inte matchade.', reasons: { no_candidate: 'inget slag med de värdena', ambiguous: 'flera möjliga slag', shared: 'flera rader passar samma slag' },
+                  refused: { unknown_distance_unit: 'Filen anger inte avståndsenhet: välj meter eller yards.', unsupported_distance_unit: 'Filen anger en avståndsenhet som importen inte tar (bara meter och yards).', game_export: 'Filen är en export från spelet själv (carry från spelets fysik), inte från launch monitorn.',
+                             no_columns: 'Filen saknar kolumner för bollfart, utgångsvinkel eller carry.', empty_file: 'Filen är tom.', too_many_rows: 'Filen har för många rader (högst 2000).' },
+                  needFile: 'Välj en fil och skriv källan.', failed: 'Importen gick inte att göra. Försök igen när enheten är ansluten.' }
         },
         en: {
             title: 'Training Lab', sub: 'Your game, club by club, from your shot bank on all your devices.',
@@ -58,7 +74,23 @@
             cb: { title: 'Golf Combine 9', none: 'No test finished yet. Start one on the range, in the panel\'s 🏆 Combine tab.', latest: 'Latest', best: 'Personal best', last5: 'The last five',
                   levels: { beginner: 'Beginner', standard: 'Standard', advanced: 'Advanced' }, costly: 'Cost the most last time: {list}', practice: '{n} practice results (not official) are not counted here.',
                   note: 'Official results: every value measured, the score worked out by the server. Compare only within one level and one ball flight ({v}).',
-                  older: '{n} results from an older version of the ball flight ({list}) are not compared with these.' }
+                  older: '{n} results from an older version of the ball flight ({list}) are not compared with these.' },
+            va: { title: 'Ball flight validation', intro: 'How far the game\'s ball flight ({v}) is from the launch monitor\'s own values, the last 90 days. Plus means the game flies the ball longer or further right.',
+                  none: 'No reference values yet. The bridge keeps the launch monitor\'s own carry when it sends one, and you can import a CSV export from the launch monitor\'s app below.',
+                  quality: { lm_calculated: 'Against the launch monitor\'s own calculation (another model, not a measured landing)', measured_landing: 'Against measured landings' },
+                  band: 'Reference carry', n: 'Shots', carry: 'Carry error', side: 'Side error', abs: 'mean |error|',
+                  excluded: 'Not compared: {est} with estimated values, {unp} without the bridge\'s list of measured values, {mis} misreads. {none} shots have no reference.',
+                  few: 'Under 5 shots in a band: too few for conclusions.',
+                  repeat: 'Repeatability', repeatRow: '{level}: {n} official tests, mean {mean}, spread ±{sd} ({min}–{max})',
+                  export: 'Download the report', json: 'JSON', csv: 'CSV (spreadsheet)',
+                  imp: 'Import reference values (CSV from the launch monitor\'s app)', file: 'File', source: 'Source (launch monitor or app)', qualityLabel: 'What the values are',
+                  unit: 'Distance unit if the file does not say', unitFile: 'From the file', sideSign: 'Side as a number without L/R', right: 'Plus is right', left: 'Plus is left',
+                  from: 'Shots from', to: 'to', go: 'Import and match',
+                  impNote: 'A shot in the file is tied to a shot in the shot bank only when ball speed, launch and spin (and the shot number if both have it) fit exactly one shot. Uncertain rows are not stored. No shot, score or test is changed.',
+                  result: '{rows} rows: {stored} stored, {already} already there, {un} not matched.', reasons: { no_candidate: 'no shot with those values', ambiguous: 'several possible shots', shared: 'several rows fit the same shot' },
+                  refused: { unknown_distance_unit: 'The file does not give its distance unit: pick metres or yards.', unsupported_distance_unit: 'The file gives a distance unit the import does not take (only metres and yards).', game_export: 'The file is an export from the game itself (carry from the game\'s physics), not from the launch monitor.',
+                             no_columns: 'The file has no columns for ball speed, launch angle or carry.', empty_file: 'The file is empty.', too_many_rows: 'The file has too many rows (at most 2000).' },
+                  needFile: 'Pick a file and write the source.', failed: 'The import could not be done. Try again when the device is online.' }
         }
     };
     function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -138,6 +170,59 @@
         return h + '</section>';
     }
 
+    // The validation of the ball flight (/api/diagnostics, shot-diagnostics.js): per kind of reference and band of carry, how far the game's
+    // carry and side are from the launch monitor's own; repeatability of Golf Combine; the export and the import of reference values
+    function validationHtml(dg, L, state) {
+        const V = L.va, k = state.meters ? 1 : YD, u = state.meters ? 'm' : 'yd';
+        const day = function (t) { return new Date(t).toISOString().slice(0, 10); };
+        let h = '<section class="tl-card tl-validation" data-tl="validation"><h2>' + esc(V.title) + '</h2>';
+        h += '<p class="tl-muted">' + esc(fill(V.intro, { v: (dg && dg.physics) || '?' })) + '</p>';
+        const sm = dg && dg.summary, refs = sm ? sm.references : {};
+        const kinds = ['measured_landing', 'lm_calculated'].filter(function (q) { return refs[q] && refs[q].length; });
+        if (!kinds.length) h += '<p data-va="none">' + esc(V.none) + '</p>';
+        kinds.forEach(function (q) {
+            h += '<h3 class="tl-va-kind" data-va-kind="' + q + '">' + esc(V.quality[q]) + '</h3><div class="tl-table-wrap"><table class="tl-table"><thead><tr><th>' + esc(V.band) + '</th><th>' + esc(V.n) +
+                 '</th><th>' + esc(V.carry) + '</th><th>' + esc(V.abs) + '</th><th>' + esc(V.side) + '</th></tr></thead><tbody>';
+            refs[q].forEach(function (b) {
+                const few = b.carry.n < 5;
+                const lab = b.from === null ? b.band : (b.to === null ? Math.round(b.from * k) + '+ ' + u : Math.round(b.from * k) + '–' + Math.round(b.to * k) + ' ' + u);
+                h += '<tr' + (few ? ' class="tl-few-row"' : '') + ' data-va-band="' + esc(b.band) + '"><td>' + esc(lab) + (few ? ' ⚠' : '') + '</td><td>' + b.carry.n + '</td><td>' +
+                     (num(b.carry.mean) ? sgn(b.carry.mean * k, 1) + (num(b.carry.sd) ? ' ±' + f(b.carry.sd * k, 1) : '') : '–') + '</td><td>' + (num(b.carry.meanAbs) ? f(b.carry.meanAbs * k, 1) : '–') +
+                     '</td><td>' + (num(b.side.mean) ? sgn(b.side.mean * k, 1) + (num(b.side.sd) ? ' ±' + f(b.side.sd * k, 1) : '') : '–') + '</td></tr>';
+            });
+            h += '</tbody></table></div><div class="tl-unit">' + esc(u) + ' · ⚠ ' + esc(V.few) + '</div>';
+        });
+        if (sm) h += '<p class="tl-muted" data-va="excluded">' + esc(fill(V.excluded, { est: sm.excluded.estimated, unp: sm.excluded.unproven, mis: sm.excluded.misread, none: sm.excluded.noReference })) + '</p>';
+        const rep = sm ? sm.repeatability : {}, lv = ['beginner', 'standard', 'advanced'].filter(function (l) { return rep[l]; });
+        if (lv.length) {
+            h += '<h3>' + esc(V.repeat) + '</h3>';
+            lv.forEach(function (l) {
+                const r = rep[l];
+                h += '<p data-va-repeat="' + l + '">' + esc(fill(V.repeatRow, { level: L.cb.levels[l], n: r.tests, mean: f(r.total.mean, 1), sd: num(r.total.sd) ? f(r.total.sd, 1) : '–', min: f(r.total.min, 1), max: f(r.total.max, 1) })) + '</p>';
+            });
+        }
+        h += '<div class="tl-va-export"><span>' + esc(V.export) + ':</span> <button data-diag="json">' + esc(V.json) + '</button> <button data-diag="csv">' + esc(V.csv) + '</button></div>';
+        // the import
+        const now = state.today || Date.now();
+        h += '<details class="tl-va-import"' + (state.importResult ? ' open' : '') + '><summary>' + esc(V.imp) + '</summary><form data-va="import" onsubmit="return false">' +
+             '<label>' + esc(V.file) + ' <input type="file" name="file" accept=".csv,text/csv"></label>' +
+             '<label>' + esc(V.source) + ' <input type="text" name="source" maxlength="64" placeholder="Garmin R10"></label>' +
+             '<label>' + esc(V.qualityLabel) + ' <select name="quality"><option value="lm_calculated">' + esc(V.quality.lm_calculated) + '</option><option value="measured_landing">' + esc(V.quality.measured_landing) + '</option></select></label>' +
+             '<label>' + esc(V.unit) + ' <select name="distanceUnit"><option value="">' + esc(V.unitFile) + '</option><option value="m">m</option><option value="yd">yd</option></select></label>' +
+             '<label>' + esc(V.sideSign) + ' <select name="sideSign"><option value="right_positive">' + esc(V.right) + '</option><option value="left_positive">' + esc(V.left) + '</option></select></label>' +
+             '<label>' + esc(V.from) + ' <input type="date" name="from" value="' + day(now - 30 * 86400000) + '"></label><label>' + esc(V.to) + ' <input type="date" name="to" value="' + day(now) + '"></label>' +
+             '<button data-va-act="import">' + esc(V.go) + '</button></form><p class="tl-muted">' + esc(V.impNote) + '</p>';
+        const ir = state.importResult;
+        if (ir) {
+            if (ir.error) h += '<div class="tl-banner tl-error" role="alert" data-va="import-error">' + esc(ir.refused ? (V.refused[ir.refused] || ir.refused) : (ir.error === 'need' ? V.needFile : (ir.message || V.failed))) + '</div>';
+            else {
+                h += '<div class="tl-banner" role="status" data-va="import-result">' + esc(fill(V.result, { rows: ir.rows, stored: ir.stored, already: ir.already, un: ir.unmatched.length })) + '</div>';
+                if (ir.unmatched.length) h += '<ul class="tl-muted" data-va="unmatched">' + ir.unmatched.slice(0, 20).map(function (x) { return '<li>' + esc('#' + x.line + ': ' + (V.reasons[x.reason] || x.reason)) + '</li>'; }).join('') + '</ul>';
+            }
+        }
+        return h + '</details></section>';
+    }
+
     // view(data, state): the page's content. data: /api/training/clubs; state: { lang, meters, club, period, pending, error }
     function view(data, state) {
         const L = state.lang === 'en' ? TXT.en : TXT.sv, k = state.meters ? 1 : YD, u = state.meters ? 'm' : 'yd';
@@ -149,8 +234,10 @@
         if (state.error) return h + '<div class="tl-banner tl-error" role="alert">' + esc(state.error === 'blocked' ? L.blocked : L.offline) + '</div>';
         if (!data) return h + '<div class="tl-empty">' + esc(L.loading) + '</div>';
         if (state.combine) h += combineHtml(state.combine, L, state);
+        // the validation of the ball flight, last on the page (also when there are no clubs to show)
+        const va = state.diag !== undefined ? validationHtml(state.diag, L, state) : '';
         const clubs = (data.clubs || []).filter(function (c) { return c.now.shots > 0; });
-        if (!clubs.length) return h + '<div class="tl-empty">' + esc(data.total ? L.noData : L.empty) + '</div>';
+        if (!clubs.length) return h + '<div class="tl-empty">' + esc(data.total ? L.noData : L.empty) + '</div>' + va;
         const pick = clubs.filter(function (c) { return c.club === state.club; })[0] || clubs.slice().sort(function (a, b) { return b.now.valid - a.now.valid; })[0];
         h += '<div class="tl-clubs" role="tablist">' + clubs.map(function (c) {
             return '<button role="tab" data-club="' + esc(c.club) + '" aria-selected="' + (c === pick) + '">' + esc(c.club) + '<span>' + c.now.valid + '</span></button>';
@@ -190,10 +277,10 @@
         h += '<p>' + esc(L.mishitNote) + '</p><p>' + esc(L.estimatedNote) + '</p>';
         h += '<p>' + esc(fill(L.others, { sim: data.sim || 0, practice: data.practice || 0, noclub: data.noClub || 0 })) + '</p>';
         if (typeof data.total === 'number') h += '<p>' + esc(fill(L.total, { n: data.total })) + '</p>';
-        return h + '</section>';
+        return h + '</section>' + va;
     }
 
-    const api = { view: view, trendSvg: trendSvg, weekLabel: weekLabel, combineHtml: combineHtml, TXT: TXT };
+    const api = { view: view, trendSvg: trendSvg, weekLabel: weekLabel, combineHtml: combineHtml, validationHtml: validationHtml, TXT: TXT };
 
     // ── In the page ──
     if (typeof document !== 'undefined' && document.getElementById && typeof root.fetch === 'function') {
@@ -230,9 +317,46 @@
                     if (mine !== seq) return;
                     state.combine = jc && jc.levels ? jc : null;
                 } catch (e) { state.combine = null; }
+                // the validation of the ball flight (the last 90 days)
+                try {
+                    const rd = await root.fetch('/api/diagnostics', { headers: headers() });
+                    const jd = rd.ok ? await rd.json() : null;
+                    if (mine !== seq) return;
+                    state.diag = jd && jd.summary ? jd : null;
+                } catch (e) { state.diag = null; }
                 data = j;
             } catch (e) { if (mine !== seq) return; state.error = 'offline'; }
             draw();
+        };
+        const headers = function (extra) {
+            const id = (root.GolfAuth && root.GolfAuth.userId) || (function () { try { return localStorage.getItem('golf_os_device_id'); } catch (e) { return null; } })();
+            return Object.assign(id ? { 'x-user-id': id } : {}, extra || {});
+        };
+        // the report as a file: fetched with the device's id (the page's fetch adds its token), then saved
+        api.download = async function (format) {
+            const res = await root.fetch('/api/diagnostics' + (format === 'csv' ? '?format=csv' : ''), { headers: headers() });
+            if (!res.ok) throw new Error('diagnostics ' + res.status);
+            const blob = format === 'csv' ? await res.blob() : new Blob([JSON.stringify(await res.json(), null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'golf-validation-' + new Date().toISOString().slice(0, 10) + '.' + (format === 'csv' ? 'csv' : 'json');
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+            return blob;
+        };
+        api.importFile = async function (form) {
+            const fd = new FormData(form), file = form.querySelector('input[type=file]').files[0], source = String(fd.get('source') || '').trim();
+            if (!file || !source) { state.importResult = { error: 'need' }; draw(); return state.importResult; }
+            try {
+                const csv = await file.text();
+                const res = await root.fetch('/api/references/import', { method: 'POST', headers: headers({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ csv: csv, source: source, quality: fd.get('quality'), distanceUnit: fd.get('distanceUnit') || undefined, sideSign: fd.get('sideSign'), from: fd.get('from'), to: fd.get('to') }) });
+                const j = await res.json();
+                state.importResult = res.ok ? j : { error: 'refused', refused: j && j.refused, message: res.status === 400 && j && j.error ? j.error : null };
+            } catch (e) { state.importResult = { error: 'failed' }; }
+            if (!state.importResult.error) return api.load().then(function () { return state.importResult; });
+            draw();
+            return state.importResult;
         };
         api.state = function () { return Object.assign({}, state); };
         api.data = function () { return data; };
@@ -241,6 +365,8 @@
             el.addEventListener('click', function (e) {
                 const b = e.target.closest('button');
                 if (!b) return;
+                if (b.dataset.diag) { api.download(b.dataset.diag).catch(function () { state.importResult = { error: 'failed' }; draw(); }); return; }
+                if (b.dataset.vaAct === 'import') { api.importFile(b.closest('form')); return; }
                 if (b.dataset.period) { state.period = b.dataset.period; try { localStorage.setItem('golf_training_period', state.period); } catch (err) { /* none */ } api.load(); }
                 else if (b.dataset.club) { state.club = b.dataset.club; try { localStorage.setItem('golf_training_club', state.club); } catch (err) { /* none */ } draw(); }
             });
