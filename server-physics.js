@@ -22,7 +22,8 @@ function version() { return load().G.VERSION; }
 function landing(shot) {
   const f = load();
   const st = f.R.standard(f.G, { ballSpeed: shot.ballSpeed, launch: shot.launch, spin: shot.spin, spinAxis: shot.spinAxis, hla: shot.hla });
-  return st && typeof st.side === 'number' ? { carry: st.carry, side: st.side } : null;
+  // scored on where it came down: down the target line (along, not the straight carry, which includes the side) and across it
+  return st && typeof st.side === 'number' && typeof st.along === 'number' ? { carry: st.along, side: st.side } : null;
 }
 // Whether a shot was a misread, from its own ball and club speed (the review's smash factor limits per kind of club), never from what a device
 // says: the rule for a Golf Combine retake (combine-core.js voidReason)

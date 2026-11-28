@@ -5,8 +5,8 @@
 //  panel (arcade-range-session.js: the targets, a preliminary score per shot, the result card). No DOM; tested in tests/test_combine.js.
 //
 //  The test: one shot at each of nine targets, shortest first, at one of three levels; distances in metres (yards are only shown).
-//  A shot's score: e = the distance from the target where the ball came down in standard conditions (carry off by along the line, side
-//  across it), R = max(6, 0.20 D), score = round(100 max(0, 1 - e / R)). The test's score: the mean of the nine.
+//  A shot's score: e = the distance from the target where the ball came down in standard conditions (how far down the target line, not
+//  the straight carry which includes the side, off by along the line; side across it), R = max(6, 0.20 D), score = round(100 max(0, 1 - e / R)). The test's score: the mean of the nine.
 //  Rules that make a score trustworthy:
 //    - no free retakes: a topped, thin or sliced shot is part of the test and scores what it scores, also 0
 //    - a shot may only be retaken when it was not a measurement: a misread (a smash factor no club gives) or a launch monitor that did

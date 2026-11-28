@@ -25,7 +25,7 @@
               fields: { ballSpeedMph: 'bollfart', launchAngleDeg: 'utgångsvinkel', totalSpinRpm: 'spinn', spinAxisDeg: 'spinnaxel', azimDeg: 'startriktning' },
               result: 'Resultat', official: 'Officiellt', practice: 'Träningsresultat', prelim: 'Preliminärt: verifieras när slagen nått servern', verifying: 'Servern räknar…',
               costly: 'Kostade mest: {list}.', train: 'Träna på de här avstånden.', again: 'Nytt test', retry: 'Försök igen', points: 'p', total: 'Totalt',
-              physics: 'Räknat av serverns bollflykt ({v}) i standardförhållanden.', dist: 'Mål', score: 'Poäng', err: 'Längd / sidled', close: 'Stäng' },
+              physics: 'Räknat av serverns bollflykt ({v}) i standardförhållanden.', dist: 'Mål', score: 'Poäng', err: 'Längd / sidled', close: 'Stäng', keep: 'Behåll slaget och avsluta' },
         en: { tab: '🏆 Combine', title: 'Golf Combine 9', pick: 'Pick a level. One shot at each of nine targets, shortest first. Results compare only within one level.',
               levels: { beginner: 'Beginner', standard: 'Standard', advanced: 'Advanced' }, start: 'Start the test', target: 'Target {i} of 9', of: 'of',
               last: 'Last shot: {s} pts ({long} {side})', short: 'short', long: 'long', left: 'L', right: 'R', retake: 'Hit again: {why}',
@@ -37,7 +37,7 @@
               fields: { ballSpeedMph: 'ball speed', launchAngleDeg: 'launch', totalSpinRpm: 'spin', spinAxisDeg: 'spin axis', azimDeg: 'start direction' },
               result: 'Result', official: 'Official', practice: 'Practice result', prelim: 'Preliminary: verified once the shots reach the server', verifying: 'The server is scoring…',
               costly: 'Cost the most: {list}.', train: 'Practise these distances.', again: 'New test', retry: 'Try again', points: 'pts', total: 'Total',
-              physics: 'Worked out by the server\'s ball flight ({v}) in standard conditions.', dist: 'Target', score: 'Points', err: 'Length / side', close: 'Close' }
+              physics: 'Worked out by the server\'s ball flight ({v}) in standard conditions.', dist: 'Target', score: 'Points', err: 'Length / side', close: 'Close', keep: 'Keep the shot and finish' }
     };
     const YD = 1.09361;
     function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -95,13 +95,14 @@
     api.recorded = function (rec) {
         if (!api.active() || !rec || !rec.combine || rec.combine.test !== st.test) return;
         const D = C.LEVELS[st.level][st.index];
-        const sc = C.shotScore(D, rec.carryStd, rec.offlineStd);
+        // down the target line where it came down (alongStd), as the server scores it; not the straight carry, which includes the side
+        const sc = C.shotScore(D, typeof rec.alongStd === 'number' ? rec.alongStd : rec.carryStd, rec.offlineStd);
         st.shots.push({ cid: rec.cid, index: st.index, score: sc ? sc.score : null, long: sc ? sc.long : null, side: sc ? sc.side : null,
                         measured: C.measured(rec), why: C.voidReason(rec) });
         st.index++;
         changed();
         // after the ninth shot the server scores the test; a ninth shot that was not a measurement may be hit again first
-        if (st.index >= 9 && !st.shots[st.shots.length - 1].why) api.finish();
+        if (canFinish()) api.finish();
     };
     // the last shot hit again: only when it was not a measurement; the shot is marked void with the reason (shot bank) and its target comes back
     api.retake = function (shots) {
@@ -122,7 +123,7 @@
     // the finished test scored by the server (after what still waits in the outbox has gone); until then the card is preliminary
     // The test and level are fixed when the request starts: an answer is written only into that same test, never into one started meanwhile
     api.finish = async function () {
-        if (!st || st.index < 9 || busy) return;
+        if (!canFinish() || busy) return;
         const testId = st.test, lvl = st.level;
         const same = function () { return st && st.test === testId && st.level === lvl; };
         busy = true; st.verifying = true; onChange();
@@ -140,11 +141,19 @@
         if (result) { st.result = result; st.error = null; } else st.error = error;
         changed();
     };
+    // Whether the test may go to the server by itself: all nine in, and the last shot either a measurement, hit again, or kept by the player
+    // ("count it and finish"). A ninth shot that may be retaken never finishes the test on its own (a sync, back online): the player decides
+    function canFinish() {
+        if (!st || st.index < 9 || st.result) return false;
+        const last = st.shots[st.shots.length - 1];
+        return !(last && last.why && !last.voided && !st.keepLast);
+    }
+    api.canFinish = canFinish;
     // when the outbox has sent something: a test waiting for its shots is asked for again
     root.addEventListener && root.addEventListener('shotsync', function () {
-        if (st && st.index >= 9 && !st.result && !busy && root.ShotSync && root.ShotSync.pending && root.ShotSync.pending() === 0) api.finish();
+        if (canFinish() && !busy && root.ShotSync && root.ShotSync.pending && root.ShotSync.pending() === 0) api.finish();
     });
-    root.addEventListener && root.addEventListener('online', function () { if (st && st.index >= 9 && !st.result) api.finish(); });
+    root.addEventListener && root.addEventListener('online', function () { if (canFinish()) api.finish(); });
 
     // ── The tab's HTML ──
     function prelimTotal() {
@@ -203,7 +212,7 @@
         }
         if (st.index >= 9) {
             const last9 = st.shots[st.shots.length - 1];
-            if (!st.result && last9 && last9.why && !last9.voided) h += '<div class="cb-warn">⚠ ' + esc(t.retake.replace('{why}', t.why[last9.why])) + '</div><div class="cb-actions"><button data-cb-act="retake">' + esc(t.retake.replace('{why}', t.why[last9.why])) + '</button></div>';
+            if (!st.result && last9 && last9.why && !last9.voided && !st.keepLast) h += '<div class="cb-warn" data-cb="last-why">⚠ ' + esc(t.retake.replace('{why}', t.why[last9.why])) + '</div><div class="cb-actions"><button data-cb-act="retake">' + esc(t.retake.replace('{why}', t.why[last9.why])) + '</button><button data-cb-act="keep">' + esc(t.keep) + '</button></div>';
             return h + card(t) + '</div>';
         }
         const D = C.LEVELS[st.level][st.index];
@@ -231,6 +240,7 @@
         else if (act === 'cancel') { if (!root.confirm || root.confirm(L().confirmCancel)) api.cancel(); }
         else if (act === 'retake') api.retake(shots);
         else if (act === 'finish') api.finish();
+        else if (act === 'keep') { if (st) { st.keepLast = true; changed(); api.finish(); } }
         else if (act === 'new') { st = null; save(null); root._combineAimDist = null; onChange(); overlay(); }
         return true;
     };

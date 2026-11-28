@@ -135,6 +135,16 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     r = await api('POST', '/api/combine/finish', { test_id: t1, level: 'standard' }, X);
     const xr = await api('GET', '/api/combine/results', undefined, X);
     check('en annan spelare kan inte räkna eller se A:s test', r.status === 409 && xr.json.results.length === 0, JSON.stringify(r));
+    // a device that finished a test on its own bank, then joins A's: its result goes with it
+    const Y = device('y');
+    await fetch(BASE + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': Y.id, 'x-user-token': Y.token }, body: JSON.stringify({ device_id: Y.id }) });
+    const ty = 'testY' + tag;
+    await api('POST', '/api/shots/sync', { shots: C.LEVELS.standard.map((D, i) => shotAt(ty, i)) }, Y);
+    const yr = await api('POST', '/api/combine/finish', { test_id: ty, level: 'standard' }, Y);
+    const yCode = (await api('POST', '/api/devices/link-code', {}, A)).json.code;
+    await api('POST', '/api/devices/link', { code: yCode }, Y);
+    const afterLink = await api('GET', '/api/combine/results', undefined, A);
+    check('en enhet som gjort ett test och sedan kopplas till kontot tar med sitt resultat', yr.status === 200 && afterLink.json.results.some(x => x.test_id === ty), JSON.stringify(afterLink.json.results.map(x => x.test_id)));
     const code = (await api('POST', '/api/devices/link-code', {}, A)).json.code;
     await api('POST', '/api/devices/link', { code }, B);
     const ra = await api('GET', '/api/combine/results', undefined, A), rb = await api('GET', '/api/combine/results', undefined, B);
@@ -209,7 +219,15 @@ function check(name, ok, detail) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name
     await clickIn('[data-tab="combine"]').catch(() => {});
     await clickIn('[data-cb-level="standard"]');
     await clickIn('[data-cb-act="start"]');
-    for (let i = 0; i < 9; i++) await hit({ ballSpeed: speeds[i], clubSpeed: speeds[i] / 1.35 });
+    for (let i = 0; i < 8; i++) await hit({ ballSpeed: speeds[i], clubSpeed: speeds[i] / 1.35 });
+    // a ninth shot that was a misread: the test does not finish on its own when the shot has gone up (the player may hit it again)
+    await hit({ ballSpeed: 200, clubSpeed: 100 });
+    await page.waitForFunction(() => window.ShotSync.pending() === 0, null, { timeout: 60000 });
+    await wait(1500);
+    const held = await page.evaluate(() => ({ st: window.CombinePlay.state(), keep: !!document.querySelector('#range-session [data-cb-act="keep"]'), retake: !!document.querySelector('#range-session [data-cb-act="retake"]') }));
+    check('ett nionde slag som var en felmätning avslutar inte testet av sig självt när det synkats: "Slå om" och "Behåll" visas', !held.st.result && !held.st.verifying && held.keep && held.retake, JSON.stringify([held.st.result, held.keep, held.retake]));
+    await clickIn('[data-cb-act="retake"]');
+    await hit({ ballSpeed: speeds[8], clubSpeed: speeds[8] / 1.35 });
     const testB = await page.evaluate(() => window.CombinePlay.state().test);
     await page.evaluate(() => document.querySelector('#cb-overlay [data-cb-act="new"]').click());
     await clickIn('[data-cb-level="beginner"]');

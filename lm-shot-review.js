@@ -71,14 +71,16 @@
         } catch (e) { r = null; } finally { console.log = log; }
         if (!r || !r.metrics || num(r.metrics.carryMeters) === null) return null;
         // where it came down, across the target line (right +): the side the shot went in standard conditions, at its carry (no wind, no roll)
-        let side = null;
+        // and how far down the target line (along): carry is the straight distance from the tee, side included; a target is scored on along and side
+        let side = null, along = null;
         if (Array.isArray(r.path)) {
             let i = 1;
             while (i < r.path.length && r.path[i].phase === 'flight') i++;
             const q = r.path[Math.min(i, r.path.length - 1)];
             if (q && num(q.x) !== null) side = q.x;
+            if (q && num(q.y) !== null) along = q.y;
         }
-        return { carry: r.metrics.carryMeters, total: num(r.metrics.totalMeters) !== null ? Math.max(r.metrics.totalMeters, r.metrics.carryMeters) : r.metrics.carryMeters, side: side };
+        return { carry: r.metrics.carryMeters, total: num(r.metrics.totalMeters) !== null ? Math.max(r.metrics.totalMeters, r.metrics.carryMeters) : r.metrics.carryMeters, side: side, along: along };
     }
 
     // The player's own ball speeds per club, from their bag entries ({ club, ballSpeed }): { club: { n, median, spread } }

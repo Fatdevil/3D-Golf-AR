@@ -1856,6 +1856,9 @@ app.post('/api/devices/link', requireDB, authMiddleware, async (req, res) => {
         if (account !== me) {
             await client.query(`UPDATE shots SET player_id = $2, updated_at = now() WHERE player_id = $1 AND client_id NOT IN (SELECT client_id FROM shots WHERE player_id = $2)`, [me, account]);
             await client.query(`DELETE FROM shots WHERE player_id = $1 AND client_id IN (SELECT client_id FROM shots WHERE player_id = $2)`, [me, account]);
+            // and its finished Golf Combine tests (one per test: a test the account already has is kept as it is there)
+            await client.query(`UPDATE combine_results SET player_id = $2 WHERE player_id = $1 AND test_id NOT IN (SELECT test_id FROM combine_results WHERE player_id = $2)`, [me, account]);
+            await client.query(`DELETE FROM combine_results WHERE player_id = $1 AND test_id IN (SELECT test_id FROM combine_results WHERE player_id = $2)`, [me, account]);
         }
         await client.query('UPDATE device_links SET used_by = $2, used_at = now() WHERE code_hash = $1', [tokenHash(code), me]);
         // the codes this device made for its own bank no longer lead there: it has joined another one

@@ -575,6 +575,9 @@ Ett standardiserat träningstest med nio fasta mål och poäng 0–100. Resultat
   - **Servern avgör själv om ett slag var en felmätning** (`ServerPhysics.misread`: smash factor ur boll- och klubbfart, med granskningens gränser). Enhetens egen `review.misread` används aldrig för omslagsregeln.
   - **Fysikversioner blandas inte.** Historik och personbästa räknas bara inom serverns aktuella bollflykt (`history(results, level, physics)`). Resultat från en äldre version sparas och räknas för sig (`older`).
   - **Ett sent serversvar** skrivs bara in i det test det gällde. Test och nivå låses när verifieringen startar.
+  - **Poängen utgår från landningspunkten längs mållinjen** (`along`, `alongStd`) och i sidled, inte från den raka carryn. I den raka carryn ingår sidledet, så ett slag åt sidan fick annars fel längdfel.
+  - **Ett nionde slag som får slås om** avslutar inte testet av sig självt, varken vid synk eller när nätet kommer tillbaka (`canFinish`). Spelaren väljer "Slå om" eller "Behåll slaget och avsluta" (`keepLast`).
+  - **Koppling av enheter:** en enhets färdiga Combine-resultat följer med när den kopplas till ett annat konto. Ett test som redan finns i kontot behålls som det är där.
   - **Startpanelen** säger innan testet vilka fem värden som krävs. Om senaste launch monitor-slaget saknade något av dem varnar panelen redan där för att bara ett träningsresultat är möjligt.
 - **Servern:**
   - `server-physics.js` kör `physics.js` och `lm-shot-review.js` i en egen sandlåda och räknar själv var varje slag landar ur dess utgångsvärden. Den carry som enheten skickade används aldrig.
