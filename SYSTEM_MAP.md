@@ -52,6 +52,9 @@ arcade.html              ← SINGLE SOURCE OF TRUTH: Builder + Play + Test
 | `shot-sync.js` | Slagbanken på enheten (`window.ShotSync`): utkorg per slag i localStorage, offline, gamla lokala slag en gång, bagen från servern, koppla en enhet med kod |
 | `shot-bank-core.js` | Slagbanken på servern: vad ett slag får innehålla innan `server.js` sparar det (`normalize`), raden tillbaka till enheten, koderna för en ny enhet |
 | `training-stats.js` | Training Lab: statistiken per klubba ur slagbanken (carry, spridning, felträffar, bollfart, spinn, perioder, pass, trend), räknad på servern |
+| `combine-core.js` | Golf Combine 9: nivåer, mål, poäng, regler för officiellt och omslag, historik (delas av server och sida) |
+| `combine-play.js` | Golf Combine 9 på rangen: nivåval, mål för mål, omslag, resultatkortet |
+| `server-physics.js` | Bollflykten på servern (physics.js i en sandlåda): var ett slag landar i standardförhållanden, för Combine-poängen |
 | `training-lab.js` | Training Lab-sidan (`training.html`): visar statistiken med antal slag, varningar och vad som är uppmätt |
 | `physics.js` | Ballistisk fysikmotor (drag, spin, bounce, roll) |
 | `arcade.css` | Extraherad CSS |
@@ -553,6 +556,45 @@ Slagbanken är den långsiktiga lagringen av spelarens rangeslag, från alla enh
   - `tests/test_shot_bank.js`: kontrollen, gamla slag, utkorgen och bagregeln.
   - `tests/e2e/shots-e2e.js` (API mot Postgres): åtkomst, dubbletter, mätvärden mot ändringar, koppling, att inget raderas, bagen och storlek.
   - `tests/e2e/shots-browser-e2e.js` (två webbläsarkontexter mot server och Postgres): gamla slag, offline, ny session, två flikar, koppling i panelen, och någon annans id utan nyckel.
+
+## Golf Combine 9 (2026-11)
+Ett standardiserat träningstest med nio fasta mål och poäng 0–100. Resultat går att jämföra över tid inom samma nivå.
+- **Nivåer** (`combine-core.js`, `LEVELS`, i meter):
+  - nybörjare 20–100 m
+  - standard 30–190 m
+  - avancerad 50–250 m
+  Ett slag per mål, kortast först.
+- **Poäng:**
+  - e = avståndet från målet där bollen landar i standardförhållanden (längd och sidled)
+  - R = max(6, 0,20·D)
+  - slagets poäng = round(100·max(0, 1 − e/R))
+  - testets poäng är medelvärdet av de nio slagen
+- **Regler:**
+  - **Inga gratis omslag.** Det första slaget vid ett mål räknas, även en toppning. Ett slag får bara slås om när det inte var en mätning: en felmätning (`misread`) eller ett värde som launch monitorn inte skickade (`missing_value`). Orsaken sparas på det ogiltiga slaget (`combine.void`). En omslagsmärkning på ett slag som var en riktig mätning gäller inte (`voided`/`voidReason`).
+  - **Officiellt** kräver att bryggans egen lista över uppmätta värden (`raw.measured`) innehåller bollfart, utgångsvinkel, spinn, spinnaxel och startriktning, och att inget av dem är uppskattat (`measured`). Utan listan, som från en äldre brygga, bevisar inget att värdena mättes. Ett test med ett uppskattat eller obevisat värde räknas som ett träningsresultat, aldrig som officiellt.
+  - **Servern avgör själv om ett slag var en felmätning** (`ServerPhysics.misread`: smash factor ur boll- och klubbfart, med granskningens gränser). Enhetens egen `review.misread` används aldrig för omslagsregeln.
+  - **Fysikversioner blandas inte.** Historik och personbästa räknas bara inom serverns aktuella bollflykt (`history(results, level, physics)`). Resultat från en äldre version sparas och räknas för sig (`older`).
+  - **Ett sent serversvar** skrivs bara in i det test det gällde. Test och nivå låses när verifieringen startar.
+  - **Poängen utgår från landningspunkten längs mållinjen** (`along`, `alongStd`) och i sidled, inte från den raka carryn. I den raka carryn ingår sidledet, så ett slag åt sidan fick annars fel längdfel.
+  - **Ett nionde slag som får slås om** avslutar inte testet av sig självt, varken vid synk eller när nätet kommer tillbaka (`canFinish`). Spelaren väljer "Slå om" eller "Behåll slaget och avsluta" (`keepLast`).
+  - **Koppling av enheter:** en enhets färdiga Combine-resultat följer med när den kopplas till ett annat konto. Ett test som redan finns i kontot behålls som det är där.
+  - **Startpanelen** säger innan testet vilka fem värden som krävs. Om senaste launch monitor-slaget saknade något av dem varnar panelen redan där för att bara ett träningsresultat är möjligt.
+- **Servern:**
+  - `server-physics.js` kör `physics.js` och `lm-shot-review.js` i en egen sandlåda och räknar själv var varje slag landar ur dess utgångsvärden. Den carry som enheten skickade används aldrig.
+  - `POST /api/combine/finish` räknar ett test ur slagbanken. Testet sparas en gång per spelare i `combine_results`, och samma fråga igen ger samma resultat. Om något slag saknas svarar servern 409 med de mål som saknas.
+  - `GET /api/combine/results` ger resultaten och, per nivå, senaste, personbästa och de fem senaste officiella testen.
+  - Slagen får `combine` (test, nivå, index, void). Vilket test och mål ett slag hör till ändras aldrig, men en omslagsmärkning följer den senaste ändringen.
+- **På rangen** (`combine-play.js`, fliken 🏆 Combine i rangepanelen):
+  - Spelaren väljer nivå, och siktet ställs på målets avstånd (`_combineAimDist` i `placeRangeBall`).
+  - Varje slag får en preliminär poäng, och knappen "Slå om" visas bara efter en felmätning eller ett saknat värde. En varning visas när testet inte kan bli officiellt.
+  - Efter nionde slaget visas resultatkortet över rangen: total, poäng per mål med längd- och sidledsfel, de tre mål som kostade mest och fysikversionen.
+  - Kortet är preliminärt tills servern har räknat. Utan anslutning frågar sidan igen när slagen har skickats (`shotsync`, `online`).
+  - Testet som pågår sparas i `golf_combine_active`.
+  - För mål under 60 m står det att bollflykten där inte är kontrollerad mot uppmätta slag.
+- **Training Lab** visar per nivå senaste, personbästa och de fem senaste officiella testen, och de mål som kostade mest senast. Träningsresultat räknas för sig.
+- **Tester:**
+  - `tests/test_combine.js`: kända poäng, regler och historik.
+  - `tests/e2e/combine-e2e.js`: servern räknar själv, ett test sparas en gång, omslag, uppskattade värden, åtkomst, två enheter, rangen med offline och resultatkort, och Training Lab.
 
 ## Training Lab · Club Intelligence (2026-11)
 Spelarens klubbor ur slagbanken, från alla enheter, och hur de utvecklas. Sidan `training.html` nås från rangemenyn i `arcade_hub.html` och från rangepanelen (📈 Training Lab).

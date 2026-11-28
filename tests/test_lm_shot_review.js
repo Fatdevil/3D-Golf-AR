@@ -32,6 +32,8 @@ check('carry och total räknas i vindstilla vid havsnivå och 15 °C (TrackMans 
 check('samma slag ger samma standardcarry (oberoende av rangens vind och väder)', near(R.standard(G, shot7).carry, st.carry, 1e-9));
 const right = R.standard(G, Object.assign({}, shot7, { hla: 5 })), left = R.standard(G, Object.assign({}, shot7, { hla: -5 })), slice = R.standard(G, Object.assign({}, shot7, { spinAxis: 15 }));
 check('sidled där bollen landar i standardförhållanden: rakt nära 0, höger start eller slice åt höger, vänster start åt vänster', Math.abs(st.side) < 0.5 && right.side > 5 && left.side < -5 && slice.side > 5 && near(right.side, -left.side, 0.5), [st.side, right.side, left.side, slice.side]);
+check('längs mållinjen (along) är inte den raka carryn: ett slag 5° höger landar kortare längs linjen, och along² + sidled² = carry²', right.along < right.carry - 0.3 &&
+  near(Math.hypot(right.along, right.side), right.carry, 0.05) && near(st.along, st.carry, 0.05), [right.along, right.side, right.carry]);
 check('utan fysik eller spinn går det inte att räkna', R.standard(null, shot7) === null && R.standard(G, Object.assign({}, shot7, { spin: null })) === null);
 
 console.log('\n3. Felträffar och felmätningar');

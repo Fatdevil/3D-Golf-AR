@@ -50,7 +50,7 @@ function normalize(input, now) {
     range_key: typeof s.range === 'string' && s.range ? s.range.slice(0, 80) : null,
     lm_device: typeof s.device === 'string' && s.device ? s.device.slice(0, 64) : null,
     accepted: s.accepted === true,
-    training_session_id: null, physics_version: null,
+    training_session_id: null, physics_version: null, combine: null,
     edited_at: num(s.edited) !== null && s.edited >= t && s.edited <= now + 86400000 ? Math.round(s.edited) : Math.round(t)
   };
   // the training session and the flight's version: a shot from before them has none; a malformed one is a fault of the device, refused
@@ -61,6 +61,13 @@ function normalize(input, now) {
   if (s.physics !== undefined && s.physics !== null) {
     if (typeof s.physics !== 'string' || !/^[A-Za-z0-9._-]{1,32}$/.test(s.physics)) return { ok: false, reason: 'bad_physics' };
     out.physics_version = s.physics;
+  }
+  // a shot of a Golf Combine 9 test (combine-core.js): the test, its level, the target's index, and a retake's reason (void)
+  if (s.combine !== undefined && s.combine !== null) {
+    const c = s.combine;
+    if (typeof c !== 'object' || typeof c.test !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(c.test) || ['beginner', 'standard', 'advanced'].indexOf(c.level) < 0 ||
+        !(Number.isInteger(c.index) && c.index >= 0 && c.index < 9) || (c.void !== undefined && c.void !== null && ['misread', 'missing_value'].indexOf(c.void) < 0)) return { ok: false, reason: 'bad_combine' };
+    out.combine = { test: c.test, level: c.level, index: c.index, void: c.void || null };
   }
   // the numbers: missing is null; present but impossible refuses the shot (a bad value must not go into the bank)
   const cols = { ballSpeed: 'ball_speed', clubSpeed: 'club_speed', launch: 'launch', hla: 'hla', spin: 'spin', spinAxis: 'spin_axis', clubPath: 'club_path',
@@ -120,7 +127,7 @@ function toClient(row) {
     clubPath: n(row.club_path), faceToPath: n(row.face_to_path), aoa: n(row.aoa), carry: n(row.carry), total: n(row.total), offline: n(row.offline_m),
     apex: n(row.apex), carryStd: n(row.carry_std), totalStd: n(row.total_std), offlineStd: n(row.offline_std), estimated: row.estimated || undefined, review: row.review || undefined,
     accepted: !!row.accepted, practice: row.practice || undefined, raw: row.raw || undefined, edited: n(row.edited_at),
-    session: row.training_session_id || null, physics: row.physics_version || null
+    session: row.training_session_id || null, physics: row.physics_version || null, combine: row.combine || undefined
   };
 }
 

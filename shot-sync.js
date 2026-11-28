@@ -193,8 +193,16 @@
         };
         function schedule(ms) { clearTimeout(timer); timer = setTimeout(api.flush, ms); }
         // send the outbox, a batch at a time; on any failure it stays and is tried again later (longer and longer, at most 5 minutes)
-        api.flush = async function () {
-            if (busy || !deviceId()) return false;
+        // A flush asked for while another runs waits for that one (and gets its answer), instead of returning at once: a caller such as
+        // Training Lab reads the server after it, and must not read before the shots already on their way have arrived
+        let inflight = null;
+        api.flush = function () {
+            if (!deviceId()) return Promise.resolve(false);
+            if (inflight) return inflight;
+            inflight = flushOnce().finally(function () { inflight = null; });
+            return inflight;
+        };
+        async function flushOnce() {
             busy = true;
             try {
                 let box = readBox();
@@ -225,7 +233,7 @@
                 if (readBox().length) schedule(delay);
                 return false;
             } finally { busy = false; }
-        };
+        }
         // the bag from the shot bank (every device of the player), with what is still in the outbox
         api.refreshBag = async function () {
             if (!deviceId() || !root.PlayerBag || !root.PlayerBag.replace) return false;
